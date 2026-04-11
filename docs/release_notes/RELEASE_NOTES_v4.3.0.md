@@ -11,7 +11,7 @@ Resolved two bugs that together prevented operators from ever appearing as **Act
 **`_completeAuthentication` was incomplete:**
 - `claimOperatorSlot` was never called, leaving operator status as `AVAILABLE` instead of `ACTIVE` or `BOUND`
 - `userService.updateUserOperator` was never called, so the user-level operator record was never updated
-- The VSE relay was passed a plain object instead of a proper `VSOHttpContext` with a `bound_operators` array — VSE rejected it and never subscribed to the heartbeat channel
+- The g8ee relay was passed a plain object instead of a proper `VSOHttpContext` with a `bound_operators` array — g8ee rejected it and never subscribed to the heartbeat channel
 
 **`device_registration_service.js` had the same relay bug:**
 - Both callers now construct a proper `VSOHttpContext` with `BoundOperatorContext` inside `bound_operators`, matching the pattern established by `operator_bind_service.js`
@@ -79,7 +79,7 @@ Added a one-command `drop` script for deploying operators to any Linux system.
 
 ### Pub/Sub — Wire Protocol Constants & Reliability
 
-- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across VSE (Python), VSA (Go), and VSOD (JS)
+- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across g8ee (Python), VSA (Go), and VSOD (JS)
 - `PubSubMessageType` split into `PubSubWireEventType` (`MESSAGE`, `PMESSAGE`, `SUBSCRIBED`) and `PubSubContentType`; backward-compat alias maintained
 - `PubSubMessageType` enum in `channels.py` was missing `MESSAGE`, `PMESSAGE`, `SUBSCRIBED` — the `_ws_reader` referenced these non-existent members, causing `AttributeError` on the first message received and silently killing the reader task. Subscribe ACKs were never processed, causing all `subscribe()` calls to time out after 5 seconds
 - `psubscribe()` race condition fixed: `_subscribed_patterns.add(pattern)` now occurs after `_ensure_ws()` and ACK event setup, preventing double-subscription on reconnect before the ACK handler exists
@@ -131,12 +131,12 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 
 ## Bug Fixes
 
-- **Operator auth** — `_completeAuthentication` now completes the full activation lifecycle (claim slot, update user record, relay to VSE with proper `VSOHttpContext`)
+- **Operator auth** — `_completeAuthentication` now completes the full activation lifecycle (claim slot, update user record, relay to g8ee with proper `VSOHttpContext`)
 - **Tribunal** — Fixed `NameError: name 'types' is not defined` in `_run_generation_pass` and `_run_verifier`; fixed provider mismatch when assistant model belongs to a different provider than the primary
 - **Approvals (HTTP 500)** — `ApprovalRespondRequest` fields `operator_session_id`/`operator_id` were `required: true` but the frontend never sends them (server resolves them). Changed to `default: null`
 - **Approvals (500 on respond)** — `operator_approval_routes.js` accessed `req.services.operatorService` which was never attached. Fixed by constructing `OperatorRelayService` directly in the route constructor
 - **Tribunal (500)** — `tribunal` template was missing from the preload list in `operator-panel.js`, causing a `TypeError` on `templateLoader.cache.get('tribunal')` returning `undefined`
-- **Approvals (double-parse)** — `relayApprovalResponseToVse` called `ApprovalRespondRequest.parse()` on data already validated upstream; removed
+- **Approvals (double-parse)** — `relayApprovalResponseToG8ee` called `ApprovalRespondRequest.parse()` on data already validated upstream; removed
 - **ValidationError on `system_info.interfaces`** — `new SystemInfo(system_info || {})` constructor was used instead of `SystemInfo.parse()`. Constructor applies field defaults for missing/null values but `parse()` properly validates and hydrates the wire object. Fixed in both `operator_auth_service.js` and `operator_slot_service.js`
 - **`llm_command_gen_passes` TypeError** — `max(1, None)` crashed all AI tool calls; `llm_command_gen_passes` now defaults to `3`, `settings_service.py` adds None-guards for all four `command_gen` fields
 - **KV silent failures** — `keys()` and `scan()` on `KVCacheClient` silently returned empty results on failure, causing `_invalidateQueryCache` to no-op and stale query cache entries to serve empty operator lists. Now throw `KVOperationError`
@@ -147,7 +147,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 
 ## Code Quality
 
-- Removed `PendingCommand` model and all associated DB read/write operations from VSE execution path
+- Removed `PendingCommand` model and all associated DB read/write operations from g8ee execution path
 - Removed `OperatorDataService` dependency from `OperatorFileService`, `OperatorFilesystemService`, and `OperatorPortService` — these services no longer touch operator document persistence
 - Removed `operatorSessionService` dependency from `BoundSessionsService`
 - Removed `_reindexOperatorApiKeys` from `operator_slot_service.js` — dead code that re-issued keys for all pre-existing operators on every login
@@ -157,17 +157,17 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - Removed unused `crypto` import from approval routes
 - Removed dead `UserRole` import from `post_login_service.js`
 - Extracted `AIGenerationConfigBuilder` as a stateless config factory, separating config construction from request assembly
-- Added `shared/constants/document_ids.json` — canonical document ID constants shared across VSE and VSOD
+- Added `shared/constants/document_ids.json` — canonical document ID constants shared across g8ee and VSOD
 - Escalated `_invalidateQueryCache` error log from `warn` to `error` with "stale results may be served" message
 
 ## Testing
 
-- VSE: 41 tests in `test_command_generator.py` (was 17) — `TestInferProviderForModel`, `TestResolveProviderAndModel`, `TestIsSystemError`, `TestTribunalSystemError`, `TestPassErrorsCollection`, `TestGenerateCommandSystemError`
-- VSE: 22 tests in `test_pubsub_client.py` (was 8) — wire protocol constants, subscribe/psubscribe ACK, reconnect loop
-- VSE: 20 tests in `test_provider_ssl.py` — cloud vs. internal endpoint cert selection per provider
-- VSE: `test_operator_port_service.py` — expanded with full lifecycle event assertions and error path coverage
-- VSE: `test_agent_execute_tool_call.py` — expanded with command lifecycle event broadcasting assertions
-- VSE: `test_operator_command_service.py` — expanded with typed approval request and execution result assertions
+- G8EE: 41 tests in `test_command_generator.py` (was 17) — `TestInferProviderForModel`, `TestResolveProviderAndModel`, `TestIsSystemError`, `TestTribunalSystemError`, `TestPassErrorsCollection`, `TestGenerateCommandSystemError`
+- G8EE: 22 tests in `test_pubsub_client.py` (was 8) — wire protocol constants, subscribe/psubscribe ACK, reconnect loop
+- G8EE: 20 tests in `test_provider_ssl.py` — cloud vs. internal endpoint cert selection per provider
+- G8EE: `test_operator_port_service.py` — expanded with full lifecycle event assertions and error path coverage
+- G8EE: `test_agent_execute_tool_call.py` — expanded with command lifecycle event broadcasting assertions
+- G8EE: `test_operator_command_service.py` — expanded with typed approval request and execution result assertions
 - VSOD: Regression tests for operator activation, BoundOperatorContext relay structure, approval route fixes, g8e script generation, cert installer error handling
 - VSOD: `shared-pubsub-constants.test.js` — 9 contract tests verifying JS constants against `shared/constants/pubsub.json`
 - VSOD: `terminal-output-rendering.unit.test.js` — terminal output rendering tests
@@ -179,7 +179,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 
 | Component | Changes |
 |-----------|---------|
-| **VSE** | Execution registry redesign, real-time command lifecycle events, typed approval API, Tribunal hardening, LLM SSL isolation, pub/sub reliability, `AIGenerationConfigBuilder`, memory generation |
+| **g8ee** | Execution registry redesign, real-time command lifecycle events, typed approval API, Tribunal hardening, LLM SSL isolation, pub/sub reliability, `AIGenerationConfigBuilder`, memory generation |
 | **VSOD** | Operator activation fix, g8e script, getting started UI, approval route fixes, `resolveBoundOperators` rewrite, race condition fix, `KVOperationError`, terminal output rendering |
 | **VSA** | Pub/sub wire protocol contract tests |
 | **g8e-pod** | VSODB URL port fix, CA cert bootstrap fix, operator binary fetch improvements, sudoers hardening |
@@ -197,7 +197,7 @@ git clone https://github.com/g8e-ai/g8e-ai/g8e.git && cd g8e
 
 v4.3.0 continues the local-first, human-in-the-loop security model. This release hardens the operator activation path and fixes a TLS isolation gap:
 
-- **Operator activation** — Full lifecycle is now completed correctly on auth: slot claimed, user record updated, VSE notified with proper identity context. Operators can no longer be in a permanently inactive state after authentication.
+- **Operator activation** — Full lifecycle is now completed correctly on auth: slot claimed, user record updated, g8ee notified with proper identity context. Operators can no longer be in a permanently inactive state after authentication.
 - **TLS isolation** — Cloud LLM API calls (Gemini, Anthropic, OpenAI) now use the Mozilla CA bundle (`certifi`) instead of the internal platform CA, preventing misconfigured or expired internal CAs from silently breaking AI functionality.
 - **Tribunal integrity** — Infrastructure failures (auth errors, DNS failures, SSL errors) in the Tribunal now raise `TribunalSystemError` instead of silently falling back to the original command. This prevents unvalidated commands from executing when the safety pipeline is misconfigured.
 - **Data integrity** — KV cache client operations now throw `KVOperationError` on failure instead of silently returning empty results, preventing stale query cache entries from serving incorrect data to the frontend.

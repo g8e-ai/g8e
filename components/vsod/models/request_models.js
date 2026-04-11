@@ -15,7 +15,7 @@
  * Request Models for VSOD
  *
  * Aligned with:
- * - components/vse/app/models/investigations.py (InvestigationCreateRequest, etc.)
+ * - components/g8ee/app/models/investigations.py (InvestigationCreateRequest, etc.)
  *
  * Construction from untrusted input (route handlers, API boundaries):
  *   ChatMessageRequest.parse(req.body)
@@ -30,7 +30,7 @@ import { SystemInfo } from './operator_model.js';
 // ---------------------------------------------------------------------------
 // VSOHttpContext
 //
-// Mirror of VSE's VSOHttpContext. Carries session, user, and business context
+// Mirror of g8ee's VSOHttpContext. Carries session, user, and business context
 // across the cluster via X-VSO-* headers.
 // ---------------------------------------------------------------------------
 
@@ -62,8 +62,8 @@ export class VSOHttpContext extends VSOBaseModel {
 //
 // ARCHITECTURE NOTE:
 // Identity/context fields (web_session_id, user_id) are validated here but
-// NOT sent in the outbound body to VSE — they travel via X-VSO-* headers
-// built by buildVSOContext(). forWire() returns only what VSE expects in body.
+// NOT sent in the outbound body to g8ee — they travel via X-VSO-* headers
+// built by buildVSOContext(). forWire() returns only what g8ee expects in body.
 // ---------------------------------------------------------------------------
 
 export class ChatMessageRequest extends VSOBaseModel {
@@ -93,7 +93,7 @@ export class ChatMessageRequest extends VSOBaseModel {
 // ---------------------------------------------------------------------------
 // InvestigationQueryRequest
 //
-// NOTE: user_id is intentionally absent — VSE extracts it from authenticated
+// NOTE: user_id is intentionally absent — g8ee extracts it from authenticated
 // headers (x-vso-user-id). forWire() serializes to query-param-friendly shape.
 // ---------------------------------------------------------------------------
 
@@ -544,7 +544,7 @@ export class SessionAuthResponse extends VSOBaseModel {
 // BoundOperatorContext
 //
 // Typed representation of a single bound operator entry carried in the
-// X-VSO-Bound-Operators header from VSOD to VSE.
+// X-VSO-Bound-Operators header from VSOD to G8EE.
 //
 // Canonical wire shape: shared/models/wire/bound_operator_context.json
 // ---------------------------------------------------------------------------

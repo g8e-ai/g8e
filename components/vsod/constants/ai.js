@@ -45,7 +45,7 @@ export const AITaskId = Object.freeze({
  * Command Error Types
  * error_type values for operator command and file operation failures.
  * Canonical values from shared/constants/status.json command.error.type.
- * Mirrors: components/vse/app/constants.py CommandErrorType
+ * Mirrors: components/g8ee/app/constants.py CommandErrorType
  */
 export const CommandErrorType = Object.freeze({
     VALIDATION_ERROR:              _STATUS['command.error.type']['validation.error'],
@@ -106,8 +106,8 @@ export const Environment = Object.freeze({
 
 /**
  * LLM Provider identifiers
- * Values written to the platform_settings DB document and read by VSE.
- * Must match VSE's LLMProvider enum in app/constants/config.py exactly.
+ * Values written to the platform_settings DB document and read by G8EE.
+ * Must match g8ee's LLMProvider enum in app/constants/config.py exactly.
  */
 export const LLMProvider = Object.freeze({
     OPENAI:    'openai',
@@ -118,7 +118,7 @@ export const LLMProvider = Object.freeze({
 
 /**
  * Gemini model identifiers.
- * Must match VSE's constants/settings.py GEMINI_* constants exactly.
+ * Must match g8ee's constants/settings.py GEMINI_* constants exactly.
  */
 export const GeminiModel = Object.freeze({
     PRO_PREVIEW:        'gemini-3.1-pro-preview',
@@ -128,7 +128,7 @@ export const GeminiModel = Object.freeze({
 
 /**
  * OpenAI model identifiers.
- * Must match VSE's constants/settings.py OPENAI_* constants exactly.
+ * Must match g8ee's constants/settings.py OPENAI_* constants exactly.
  */
 export const OpenAIModel = Object.freeze({
     GPT_5_4:        'gpt-5.4',
@@ -143,7 +143,7 @@ export const OpenAIModel = Object.freeze({
 
 /**
  * Anthropic model identifiers.
- * Must match VSE's constants/settings.py ANTHROPIC_* and CLAUDE_* constants exactly.
+ * Must match g8ee's constants/settings.py ANTHROPIC_* and CLAUDE_* constants exactly.
  */
 export const AnthropicModel = Object.freeze({
     CLAUDE_4_6_OPUS:   'claude-4-6-opus',
@@ -153,7 +153,7 @@ export const AnthropicModel = Object.freeze({
 
 /**
  * Ollama model identifiers.
- * Must match VSE's constants/settings.py GEMMA3_* and GEMMA4 constants exactly.
+ * Must match g8ee's constants/settings.py GEMMA3_* and GEMMA4 constants exactly.
  */
 export const OllamaModel = Object.freeze({
     GEMMA3_27B:         'gemma3:27b',
@@ -173,7 +173,7 @@ export const OllamaModel = Object.freeze({
  * Canonical values from shared/constants/status.json component.name.
  */
 export const SourceComponent = Object.freeze({
-    VSE:  _STATUS['component.name']['vse'],
+    G8EE:  _STATUS['component.name']['g8ee'],
     VSA:  _STATUS['component.name']['vsa'],
     VSOD: _STATUS['component.name']['vsod'],
 });

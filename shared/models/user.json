@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical User document shape. VSOD is the authority — it creates and owns this document in SQLite. VSE reads it via VSODB KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
+  "_comment": "Canonical User document shape. VSOD is the authority — it creates and owns this document in SQLite. g8ee reads it via VSODB KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
 
   "_authority": "VSOD (SQLite)",
-  "_consumers": ["VSE (Python — reads user context from X-VSO-* headers that VSOD populates from this document)", "VSOD internal services (auth, session, API key validation)"],
+  "_consumers": ["g8ee (Python — reads user context from X-VSO-* headers that VSOD populates from this document)", "VSOD internal services (auth, session, API key validation)"],
   "_cache_aside": "VSODB KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {

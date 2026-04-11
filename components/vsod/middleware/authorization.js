@@ -146,7 +146,7 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
     };
 
     /**
-     * Restrict to internal Docker container calls only (VSE, g8e-pod)
+     * Restrict to internal Docker container calls only (g8ee, g8e-pod)
      * 
      * All containers share INTERNAL_AUTH_TOKEN via the Docker network.
      * Localhost health checks are allowed without a token (Docker healthcheck runs inside the container).

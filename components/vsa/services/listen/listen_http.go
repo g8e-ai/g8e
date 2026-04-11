@@ -488,7 +488,7 @@ func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Reque
 //
 // Binaries are served directly from BinaryDir on the local filesystem.
 // The VSODB container has the operator binary baked in at /usr/local/bin,
-// so VSOD and VSE can fetch binaries on demand without any local caching.
+// so VSOD and g8ee can fetch binaries on demand without any local caching.
 //
 // Path format: /binary/linux/amd64, /binary/linux/arm64, /binary/linux/386
 // =============================================================================

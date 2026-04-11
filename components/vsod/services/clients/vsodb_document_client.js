@@ -15,7 +15,7 @@
  * VSODBDocumentClient — VSODB Document Store HTTP client.
  * 
  * Purpose-built client for VSODB document store operations (/db/...).
- * Mirrors VSE's DBClient (components/vse/app/db/client.py) in scope
+ * Mirrors g8ee's DBClient (components/g8ee/app/db/client.py) in scope
  * and responsibility — document CRUD only, no KV, no pub/sub.
  * 
  * VSODB endpoints:

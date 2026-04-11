@@ -2,7 +2,7 @@
 
 g8e is a local-only, air-gapped, portable platform. It runs entirely via `docker-compose` on-premises — no cloud deployment, no SaaS backend, no external network dependency. This document is the deep-reference security guide for the platform, covering every enforcement layer in detail.
 
-For component-level overviews, see: [VSE](../components/vse.md), [VSOD](../components/vsod.md), [VSA](../components/vsa.md).
+For component-level overviews, see: [g8ee](../components/g8ee.md), [VSOD](../components/vsod.md), [VSA](../components/vsa.md).
 
 ---
 
@@ -37,7 +37,7 @@ Browser
 VSOD  (Node.js — web gateway, SSE relay, Operator panel)
   │  Internal HTTP — X-Internal-Auth shared secret (constant-time comparison)
   ▼
-VSE   (Python/FastAPI — AI engine, Sentinel scrubbing, AI safety analysis)
+g8ee   (Python/FastAPI — AI engine, Sentinel scrubbing, AI safety analysis)
   │  HTTP + WebSocket pub/sub
   ▼
 VSODB (VSA binary in --listen mode — document store, KV store, pub/sub broker)
@@ -55,10 +55,10 @@ Host Filesystem / AWS / Target System
 | Boundary | Mechanism |
 |---|---|
 | **Browser → VSOD** | HTTPS/TLS 1.3, FIDO2/WebAuthn passkeys, encrypted `HttpOnly` session cookie, `SameSite=lax` CSRF protection |
-| **VSOD → VSE** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
-| **VSE → VSODB** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by VSODB/VSA in `--listen` mode) |
+| **VSOD → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
+| **g8ee → VSODB** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by VSODB/VSA in `--listen` mode) |
 | **VSOD → VSODB** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by VSODB/VSA in `--listen` mode) |
-| **VSE → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
+| **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
 | **VSOD → VSA** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
 | **Data at Rest (VSODB)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by VSOD before persistence; **internal_auth_token persisted in SSL volume** |
@@ -104,7 +104,7 @@ The `g8e-data-ssl` volume (mounted at `/vsodb/ssl`) is the sole authoritative so
 On the first platform start, **VSODB** (VSA in `--listen` mode) checks if these secrets exist on the volume. If they are missing, VSODB generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
 
 **3. Automatic Discovery**
-VSOD and VSE automatically discover these tokens by reading the files from the shared volume at startup. This enables a "zero-config" secure bootstrap without database dependencies for core identity.
+VSOD and g8ee automatically discover these tokens by reading the files from the shared volume at startup. This enables a "zero-config" secure bootstrap without database dependencies for core identity.
 
 **4. Elimination of DB Storage**
 Unlike other configuration, these secrets are never stored in the `platform_settings` database document. This ensures that even a full database wipe or reset does not compromise the platform's internal authentication or session encryption keys, as long as the SSL volume is preserved.
@@ -143,7 +143,7 @@ g8e operates its own private CA. There is no dependency on any public CA.
 
 - **Algorithm:** ECDSA with P-384. **Protocol:** TLS 1.3 only on all external and Operator-facing endpoints.
 - **Generation:** CA and server certificates are generated at runtime by the VSODB operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8e-data-ssl` volume (`/ssl` inside vsodb). Never baked into any Docker image.
-- **Distribution to services:** The `g8e-data-ssl` named Docker volume is mounted read-only at `/vsodb/ssl` on VSOD, VSE, and g8e-pod. Both services read CA and server certificates from `/vsodb/ssl/`. VSOD's `CertificateService` reads the CA cert and key from `/vsodb/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
+- **Distribution to services:** The `g8e-data-ssl` named Docker volume is mounted read-only at `/vsodb/ssl` on VSOD, g8ee, and g8e-pod. Both services read CA and server certificates from `/vsodb/ssl/`. VSOD's `CertificateService` reads the CA cert and key from `/vsodb/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
 - **Volume isolation:** SSL certs live in a dedicated volume (`g8e-data-ssl`) separate from the SQLite DB volume (`g8e-data-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
 - **CA trust for field operators:** The non-listen VSA binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that VSODB actually generated, not a stale one. Inside the Docker network, the `vsodb-ssl` volume provides the CA at `/vsodb/ca.crt` — no network fetch occurs.
 - **Per-operator client certificates:** Issued dynamically at claim time during Operator bootstrap, transmitted to the Operator exactly once. Not stored in recoverable form by VSOD.
@@ -442,7 +442,7 @@ A heartbeat from an unauthenticated or fingerprint-mismatched Operator is reject
 VSA (every 10s)
     │ WebSocket (mTLS)
     ▼
-VSODB pub/sub → VSE (OperatorHeartbeatService)
+VSODB pub/sub → g8ee (OperatorHeartbeatService)
                     │ write last_heartbeat, latest_heartbeat_snapshot to VSODB
                     │ detect staleness, manage operator status transitions
                     │ publish OPERATOR_HEARTBEAT_RECEIVED internal event
@@ -453,7 +453,7 @@ VSODB pub/sub → VSE (OperatorHeartbeatService)
                   Browser
 ```
 
-VSE is the source of truth for heartbeat data and all operator status transitions. VSOD only invalidates its cache and relays the SSE event — it never writes heartbeat data to VSODB directly.
+g8ee is the source of truth for heartbeat data and all operator status transitions. VSOD only invalidates its cache and relays the SSE event — it never writes heartbeat data to VSODB directly.
 
 ---
 
@@ -532,9 +532,9 @@ Before any command executes on the host, Sentinel scans it against MITRE ATT&CK-
 
 **Blocked threats** are rejected before the approval prompt is shown. **Flagged threats** (elevated risk, potentially legitimate) surface in the approval flow with the specific threat category and MITRE ATT&CK classification shown to the user. Every blocked or flagged attempt is recorded in the LFAA audit vault with tamper-evident logging.
 
-### VSE AI Safety Analysis (Pre-Dispatch)
+### g8ee AI Safety Analysis (Pre-Dispatch)
 
-Before dispatching any command to the Operator, VSE runs its own AI-powered safety analysis — separate from Sentinel, operating at the platform level:
+Before dispatching any command to the Operator, g8ee runs its own AI-powered safety analysis — separate from Sentinel, operating at the platform level:
 
 - **Command risk classification** — classifies proposed commands as LOW / MEDIUM / HIGH using structured LLM output. Fails closed to HIGH if analysis fails.
 - **File operation safety** — automatically blocks writes to system paths (`/etc/`, `/usr/`, `/sys/`, `/proc/`, `/bin/`, `/sbin/`, `/boot/`, `/lib/`), destructive operations on dirty git repositories, and operations that should be backed up first.
@@ -542,7 +542,7 @@ Before dispatching any command to the Operator, VSE runs its own AI-powered safe
 
 ### Tribunal Command Refinement
 
-Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in VSE (`components/vse/app/services/ai/command_generator.py`). The Large LLM is not involved after its initial proposal.
+Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in g8ee (`components/g8ee/app/services/ai/command_generator.py`). The Large LLM is not involved after its initial proposal.
 
 ```
 Large LLM proposes command via ReAct loop
@@ -608,7 +608,7 @@ The KV keys are the authoritative runtime state; the document store is the durab
 4. Fetch the operator document from VSODB for current `status`, `system_info`, `operator_type`.
 5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-VSO-Bound-Operators`.
 
-`X-VSO-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. VSE performs no independent operator lookup to resolve binding state — if `vso_context.bound_operators` is empty, the session has no bound operators.
+`X-VSO-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent operator lookup to resolve binding state — if `vso_context.bound_operators` is empty, the session has no bound operators.
 
 ---
 
@@ -619,8 +619,8 @@ File operation outputs on the Operator follow the LFAA dual-vault model:
 ### Scrubbed Vault (`.g8e/local_state.db`)
 
 - Stores Sentinel-processed command output — credentials, PII, and sensitive patterns replaced with safe placeholders.
-- **AI-accessible on demand** via `fetch_execution_output`. VSE instructs the AI to call this tool when it receives a `stored_locally=true` metadata response from the Operator.
-- The content streams back to VSE ephemerally and is **never persisted on the platform side**.
+- **AI-accessible on demand** via `fetch_execution_output`. g8ee instructs the AI to call this tool when it receives a `stored_locally=true` metadata response from the Operator.
+- The content streams back to g8ee ephemerally and is **never persisted on the platform side**.
 
 ### Raw Vault (`.g8e/raw_vault.db`)
 
@@ -640,7 +640,7 @@ Users can toggle this at any time via the Sentinel Toggle in the UI.
 
 ### File Operation Safety
 
-Before any file write, VSE's `AIResponseAnalyzer` blocks:
+Before any file write, g8ee's `AIResponseAnalyzer` blocks:
 - Writes to system paths: `/etc/`, `/usr/`, `/sys/`, `/proc/`, `/bin/`, `/sbin/`, `/boot/`, `/lib/`.
 - Destructive operations on dirty git repositories.
 - Operations that should be backed up first (when no backup exists).
@@ -663,9 +663,9 @@ The Ledger (`.g8e/data/ledger/`) is a standard Git repository maintained by VSA.
 
 ## Sentinel Output Scrubbing
 
-After any command executes, before its output reaches VSE (and therefore any AI provider), Sentinel replaces sensitive patterns with safe placeholders.
+After any command executes, before its output reaches g8ee (and therefore any AI provider), Sentinel replaces sensitive patterns with safe placeholders.
 
-**Implementation split:** The VSA Go sentinel handles command output scrubbing. The VSE Python scrubber handles user message scrubbing. Threat detection is Go-only (VSA).
+**Implementation split:** The VSA Go sentinel handles command output scrubbing. The g8ee Python scrubber handles user message scrubbing. Threat detection is Go-only (VSA).
 
 ### 27 Scrubbing Patterns (applied sequentially)
 
@@ -689,7 +689,7 @@ After any command executes, before its output reaches VSE (and therefore any AI 
 
 > *"The Platform handles routing. The Operator handles retention."*
 
-When local storage is enabled on an Operator (the default), all tool call outputs are stored in the Operator's working directory (`.g8e/`). VSE receives only metadata (hashes, sizes) with a `stored_locally=true` flag. The AI retrieves full output on demand via `fetch_execution_output` — content streams back ephemerally and is never persisted on the platform side.
+When local storage is enabled on an Operator (the default), all tool call outputs are stored in the Operator's working directory (`.g8e/`). g8ee receives only metadata (hashes, sizes) with a `stored_locally=true` flag. The AI retrieves full output on demand via `fetch_execution_output` — content streams back ephemerally and is never persisted on the platform side.
 
 ### LFAA Components on the Operator
 
@@ -737,7 +737,7 @@ The AI operates through a defined set of tools. Each tool is classified at the p
 
 The user's stated intent in chat is sufficient authorization for read-only activity. Any operation that **changes state** — writing a file, executing a command, modifying cloud permissions — requires an explicit approval action from the user in the UI before it executes.
 
-Automatic Function Calling (AFC) is **permanently disabled** in VSE. The AI cannot chain tool calls through an auto-approve path. Every step of a multi-step operation that touches state surfaces its own approval prompt.
+Automatic Function Calling (AFC) is **permanently disabled** in G8EE. The AI cannot chain tool calls through an auto-approve path. Every step of a multi-step operation that touches state surfaces its own approval prompt.
 
 ### Function Tool Approval Classification
 
@@ -833,7 +833,7 @@ Every service in the g8e stack runs as a dedicated non-root user (`g8e`, UID/GID
 
 | Service | User | UID | GID |
 |---|---|---|---|
-| VSE (`g8e-engine`) | `g8e` | 1001 | 1001 |
+| g8ee (`g8ee`) | `g8e` | 1001 | 1001 |
 | VSOD (`g8e-dashboard`) | `g8e` | 1001 | 1001 |
 | VSODB (`g8e-data`) | `g8e` | 1001 | 1001 |
 | g8e node | `g8e` | 1001 | 1001 |
@@ -842,11 +842,11 @@ No service runs as root. This is the primary container escape mitigation — a c
 
 ### Linux Capabilities
 
-VSE, VSOD, and g8e node use `cap_drop: ALL` and add back only the minimum required. VSODB uses default Docker capabilities:
+g8ee, VSOD, and g8e node use `cap_drop: ALL` and add back only the minimum required. VSODB uses default Docker capabilities:
 
 | Service | Added capabilities | Reason |
 |---|---|---|
-| VSE | none | No privileged operations |
+| g8ee | none | No privileged operations |
 | VSOD | none | No privileged operations |
 | VSODB | default | No `cap_drop` directive |
 | g8e node | none | No privileged operations |

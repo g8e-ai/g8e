@@ -16,7 +16,7 @@ import { _COLLECTIONS } from './shared.js';
 /**
  * DB Collection Names
  * Canonical values loaded from shared/constants/collections.json.
- * That file is the single source of truth shared across VSOD and VSE.
+ * That file is the single source of truth shared across VSOD and G8EE.
  *
  * IMPORTANT: When renaming collections, update:
  * 1. shared/constants/collections.json

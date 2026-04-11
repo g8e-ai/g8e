@@ -449,7 +449,7 @@ describe('InternalHealthResponse [UNIT - PURE LOGIC]', () => {
         expect(response.success).toBe(true);
         expect(response.message).toBe('Health check passed');
         expect(response.vsodb_status).toBe('unknown');
-        expect(response.vse_status).toBe('unknown');
+        expect(response.g8ee_status).toBe('unknown');
         expect(response.vsa_status).toBe('unknown');
         expect(response.uptime_seconds).toBe(0);
         expect(response.memory_usage).toEqual({});
@@ -461,13 +461,13 @@ describe('InternalHealthResponse [UNIT - PURE LOGIC]', () => {
             success: true,
             message: 'All systems operational',
             vsodb_status: 'healthy',
-            vse_status: 'healthy',
+            g8ee_status: 'healthy',
             vsa_status: 'healthy',
             uptime_seconds: 3600,
             memory_usage: memoryUsage,
         });
         expect(response.vsodb_status).toBe('healthy');
-        expect(response.vse_status).toBe('healthy');
+        expect(response.g8ee_status).toBe('healthy');
         expect(response.vsa_status).toBe('healthy');
         expect(response.uptime_seconds).toBe(3600);
         expect(response.memory_usage).toEqual(memoryUsage);

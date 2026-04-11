@@ -66,7 +66,7 @@ def get_internal_auth_token() -> str:
 
 
 # =============================================================================
-# VSODB HTTP client — direct DB/KV access (same as VSE's DBClient)
+# VSODB HTTP client — direct DB/KV access (same as g8ee's DBClient)
 # =============================================================================
 
 def vsodb_request(method: str, path: str, body: Optional[Dict] = None) -> Any:

@@ -70,7 +70,7 @@ type LoadOptions struct {
 type ListenConfig struct {
 	Enabled     bool
 	WSSPort     int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort    int    // TLS/HTTPS port for internal VSE/VSOD traffic (default: 443)
+	HTTPPort    int    // TLS/HTTPS port for internal g8ee/VSOD traffic (default: 443)
 	DataDir     string // Root directory for SQLite database (default: .g8e/data in working directory)
 	SSLDir      string // Directory for TLS certificates (default: DataDir/ssl; override with --ssl-dir)
 	BinaryDir   string // Directory containing platform binaries to serve (default: .g8e/bin in working directory)

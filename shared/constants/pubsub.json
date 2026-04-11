@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical pub/sub wire protocol constants shared across VSE (Python), VSA (Go), and VSOD (JS). These values must match the VSODB broker implementation.",
+  "_comment": "Canonical pub/sub wire protocol constants shared across g8ee (Python), VSA (Go), and VSOD (JS). These values must match the VSODB broker implementation.",
 
   "wire": {
     "actions": {

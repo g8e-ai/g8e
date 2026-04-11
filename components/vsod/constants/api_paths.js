@@ -36,7 +36,7 @@ try {
     // Fallback for tests or environments where shared file isn't available
     _sharedApiPaths = {
         internal_prefix: '/api/internal',
-        vse: {
+        g8ee: {
             chat: '/chat',
             chat_stop: '/chat/stop',
             investigations: '/investigations',
@@ -64,8 +64,8 @@ try {
 
 export const InternalApiPaths = Object.freeze({
     PREFIX: _sharedApiPaths.internal_prefix,
-    vse: Object.fromEntries(
-        Object.entries(_sharedApiPaths.vse).map(([k, v]) => [k, _sharedApiPaths.internal_prefix + v])
+    g8ee: Object.fromEntries(
+        Object.entries(_sharedApiPaths.g8ee).map(([k, v]) => [k, _sharedApiPaths.internal_prefix + v])
     ),
     vsod: Object.fromEntries(
         Object.entries(_sharedApiPaths.vsod).map(([k, v]) => [k, _sharedApiPaths.internal_prefix + v])
@@ -474,23 +474,23 @@ export const InternalPaths = Object.freeze({
 // ---------------------------------------------------------------------------
 
 export const apiPaths = {
-    vse: {
-        chat:                      () => InternalApiPaths.vse.chat,
-        chatStop:                  () => InternalApiPaths.vse.chat_stop,
-        investigations:            () => InternalApiPaths.vse.investigations,
-        investigation:             (id) => InternalApiPaths.vse.investigation.replace('{investigation_id}', id),
-        cases:                     () => InternalApiPaths.vse.cases,
-        case:                      (id) => InternalApiPaths.vse.case.replace('{case_id}', id),
-        operatorsStop:             () => InternalApiPaths.vse.operators_stop,
-        operatorsRegisterSession:   () => InternalApiPaths.vse.operators_register_session,
-        operatorsDeregisterSession: () => InternalApiPaths.vse.operators_deregister_session,
-        operatorDirectCommand:     () => InternalApiPaths.vse.operator_direct_command,
-        operatorApprovalRespond:   () => InternalApiPaths.vse.operator_approval_respond,
-        operatorApprovalPending:   () => InternalApiPaths.vse.operator_approval_pending,
-        health:                    () => InternalApiPaths.vse.health,
-        settingsUser:              () => InternalApiPaths.vse.settings_user,
-        mcpToolsList:              () => InternalApiPaths.vse.mcp_tools_list,
-        mcpToolsCall:              () => InternalApiPaths.vse.mcp_tools_call,
+    g8ee: {
+        chat:                      () => InternalApiPaths.g8ee.chat,
+        chatStop:                  () => InternalApiPaths.g8ee.chat_stop,
+        investigations:            () => InternalApiPaths.g8ee.investigations,
+        investigation:             (id) => InternalApiPaths.g8ee.investigation.replace('{investigation_id}', id),
+        cases:                     () => InternalApiPaths.g8ee.cases,
+        case:                      (id) => InternalApiPaths.g8ee.case.replace('{case_id}', id),
+        operatorsStop:             () => InternalApiPaths.g8ee.operators_stop,
+        operatorsRegisterSession:   () => InternalApiPaths.g8ee.operators_register_session,
+        operatorsDeregisterSession: () => InternalApiPaths.g8ee.operators_deregister_session,
+        operatorDirectCommand:     () => InternalApiPaths.g8ee.operator_direct_command,
+        operatorApprovalRespond:   () => InternalApiPaths.g8ee.operator_approval_respond,
+        operatorApprovalPending:   () => InternalApiPaths.g8ee.operator_approval_pending,
+        health:                    () => InternalApiPaths.g8ee.health,
+        settingsUser:              () => InternalApiPaths.g8ee.settings_user,
+        mcpToolsList:              () => InternalApiPaths.g8ee.mcp_tools_list,
+        mcpToolsCall:              () => InternalApiPaths.g8ee.mcp_tools_call,
     },
     operator: {
         bind:           () => `${Operator.BASE}/${Operator.BIND}`,

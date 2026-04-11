@@ -30,7 +30,7 @@ import {
     DirectCommandResponseEvent,
     LogStreamEvent,
     LogStreamConnectedEvent,
-    VSEPassthroughEvent,
+    G8eePassthroughEvent,
 } from '@vsod/models/sse_models.js';
 
 describe('ConnectionEstablishedEvent [UNIT - PURE LOGIC]', () => {
@@ -814,50 +814,50 @@ describe('LogStreamConnectedEvent [UNIT - PURE LOGIC]', () => {
     });
 });
 
-describe('VSEPassthroughEvent [UNIT - PURE LOGIC]', () => {
+describe('G8eePassthroughEvent [UNIT - PURE LOGIC]', () => {
     it('accepts valid payload with type field', () => {
         const payload = { type: 'llm.chat.iteration', data: { content: 'test' } };
-        const event = VSEPassthroughEvent.parse({ _payload: payload });
+        const event = G8eePassthroughEvent.parse({ _payload: payload });
         expect(event._payload).toEqual(payload);
     });
 
     it('throws when _payload is missing', () => {
-        expect(() => VSEPassthroughEvent.parse({}))
+        expect(() => G8eePassthroughEvent.parse({}))
             .toThrow('_payload is required');
     });
 
     it('throws when _payload is not an object', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: 'not-an-object' }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: 'not-an-object' }))
             .toThrow('_payload must be a plain object');
     });
 
     it('throws when _payload is null', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: null }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: null }))
             .toThrow('_payload is required');
     });
 
     it('throws when _payload.type is missing', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: { data: 'test' } }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: { data: 'test' } }))
             .toThrow('_payload.type must be a non-empty string');
     });
 
     it('throws when _payload.type is not a string', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: { type: 123 } }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: { type: 123 } }))
             .toThrow('_payload.type must be a non-empty string');
     });
 
     it('throws when _payload.type is an empty string', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: { type: '' } }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '' } }))
             .toThrow('_payload.type must be a non-empty string');
     });
 
     it('throws when _payload.type is only whitespace', () => {
-        expect(() => VSEPassthroughEvent.parse({ _payload: { type: '   ' } }))
+        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '   ' } }))
             .toThrow('_payload.type must be a non-empty string');
     });
 
     it('accepts _payload.type with value', () => {
-        const event = VSEPassthroughEvent.parse({
+        const event = G8eePassthroughEvent.parse({
             _payload: { type: 'llm.chat.iteration' },
         });
         expect(event._payload.type).toBe('llm.chat.iteration');
@@ -865,7 +865,7 @@ describe('VSEPassthroughEvent [UNIT - PURE LOGIC]', () => {
 
     it('forWire() returns the inner payload directly', () => {
         const payload = { type: 'llm.chat.iteration', data: { chunk: 'hello' } };
-        const event = VSEPassthroughEvent.parse({ _payload: payload });
+        const event = G8eePassthroughEvent.parse({ _payload: payload });
         const wire = event.forWire();
         expect(wire).toBe(payload);
         expect(wire).not.toBe(event);
@@ -877,7 +877,7 @@ describe('VSEPassthroughEvent [UNIT - PURE LOGIC]', () => {
             data: { chunk: 'test', done: false },
             metadata: { model: 'gemini-2.5-pro' },
         };
-        const event = VSEPassthroughEvent.parse({ _payload: payload });
+        const event = G8eePassthroughEvent.parse({ _payload: payload });
         const wire = event.forWire();
         expect(wire.type).toBe('llm.chat.iteration');
         expect(wire.data.chunk).toBe('test');
@@ -886,9 +886,9 @@ describe('VSEPassthroughEvent [UNIT - PURE LOGIC]', () => {
     });
 
     it('constructor validates _payload', () => {
-        expect(() => new VSEPassthroughEvent({ _payload: { type: 'valid' } }))
+        expect(() => new G8eePassthroughEvent({ _payload: { type: 'valid' } }))
             .not.toThrow();
-        expect(() => new VSEPassthroughEvent({ _payload: {} }))
+        expect(() => new G8eePassthroughEvent({ _payload: {} }))
             .toThrow('_payload.type must be a non-empty string');
     });
 });

@@ -16,7 +16,7 @@ if [ -n "$1" ]; then
     IMAGES=("$1")
 else
     echo "Discovering VSO images..."
-    IMAGES=(vsod vse vso-nginx)
+    IMAGES=(vsod g8ee vso-nginx)
 fi
 
 echo "Container Vulnerability Scan"

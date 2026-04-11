@@ -59,9 +59,9 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
                 operatorCount: boundOperators.length
             });
 
-            const response = await relay.relayApprovalResponseToVse(approvalRequest.forWire(), req.vsoContext);
+            const response = await relay.relayApprovalResponseToG8ee(approvalRequest.forWire(), req.vsoContext);
 
-            logger.info('[OPERATOR-APPROVAL] Sent approval response to VSE via HTTP', {
+            logger.info('[OPERATOR-APPROVAL] Sent approval response to g8ee via HTTP', {
                 approval_id: approvalRequest.approval_id,
                 approved: approvalRequest.approved,
                 success: response.success,
@@ -113,9 +113,9 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
                 operatorId: operatorSession.operator_id
             });
 
-            const response = await relay.relayDirectCommandToVse(directCommandRequest.forWire(), req.vsoContext);
+            const response = await relay.relayDirectCommandToG8ee(directCommandRequest.forWire(), req.vsoContext);
 
-            logger.info('[OPERATOR-DIRECT] Sent direct command to VSE', {
+            logger.info('[OPERATOR-DIRECT] Sent direct command to g8ee', {
                 execution_id,
                 success: response.success,
                 webSessionId: redactWebSessionId(req.webSessionId),
@@ -154,9 +154,9 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
                 operatorCount: boundOperators.length
             });
 
-            const response = await relay.relayPendingApprovalsFromVse(req.vsoContext);
+            const response = await relay.relayPendingApprovalsFromG8ee(req.vsoContext);
 
-            logger.info('[OPERATOR-APPROVAL] Retrieved pending approvals from VSE', {
+            logger.info('[OPERATOR-APPROVAL] Retrieved pending approvals from g8ee', {
                 success: response.success,
                 webSessionId: redactWebSessionId(req.webSessionId)
             });

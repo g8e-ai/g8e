@@ -22,9 +22,9 @@ import { globalContextMiddleware } from '@vsod/middleware/context.js';
 vi.mock('@vsod/services/operator/operator_relay_service.js', () => ({
     OperatorRelayService: vi.fn(function () {
         Object.assign(this, {
-            relayApprovalResponseToVse: vi.fn(),
-            relayDirectCommandToVse: vi.fn(),
-            relayPendingApprovalsFromVse: vi.fn()
+            relayApprovalResponseToG8ee: vi.fn(),
+            relayDirectCommandToG8ee: vi.fn(),
+            relayPendingApprovalsFromG8ee: vi.fn()
         });
     })
 }));
@@ -108,7 +108,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         it('successfully relays approval response via OperatorRelayService', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayApprovalResponseToVse.mockResolvedValue({ success: true });
+            mockRelay.relayApprovalResponseToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app)
                 .post('/api/operator/approval/respond')
@@ -116,22 +116,22 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(mockRelay.relayApprovalResponseToVse).toHaveBeenCalled();
+            expect(mockRelay.relayApprovalResponseToG8ee).toHaveBeenCalled();
         });
 
         it('OperatorRelayService is constructed with internalHttpClient', () => {
             expect(OperatorRelayService).toHaveBeenCalledWith({ internalHttpClient: mockInternalHttpClient });
         });
 
-        it('relay body matches VSE contract (approval_id, approved, reason only)', async () => {
+        it('relay body matches g8ee contract (approval_id, approved, reason only)', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayApprovalResponseToVse.mockResolvedValue({ success: true });
+            mockRelay.relayApprovalResponseToG8ee.mockResolvedValue({ success: true });
 
             await request(app)
                 .post('/api/operator/approval/respond')
                 .send({ ...validBody, reason: 'User approved' });
 
-            const [relayedBody] = mockRelay.relayApprovalResponseToVse.mock.calls[0];
+            const [relayedBody] = mockRelay.relayApprovalResponseToG8ee.mock.calls[0];
             expect(Object.keys(relayedBody).sort()).toEqual(['approval_id', 'approved', 'reason']);
             expect(relayedBody.approval_id).toBe('test-approval-id');
             expect(relayedBody.approved).toBe(true);
@@ -140,13 +140,13 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         it('context fields travel via VSOHttpContext with bound_operators', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayApprovalResponseToVse.mockResolvedValue({ success: true });
+            mockRelay.relayApprovalResponseToG8ee.mockResolvedValue({ success: true });
 
             await request(app)
                 .post('/api/operator/approval/respond')
                 .send(validBody);
 
-            const [, vsoContext] = mockRelay.relayApprovalResponseToVse.mock.calls[0];
+            const [, vsoContext] = mockRelay.relayApprovalResponseToG8ee.mock.calls[0];
             expect(vsoContext.web_session_id).toBe('test-web-session-id');
             expect(vsoContext.user_id).toBe('test-user-id');
             expect(vsoContext.case_id).toBe('test-case-id');
@@ -157,7 +157,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         it('does not depend on req.services (regression)', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayApprovalResponseToVse.mockResolvedValue({ success: true });
+            mockRelay.relayApprovalResponseToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app)
                 .post('/api/operator/approval/respond')
@@ -196,7 +196,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
             mockBindingService.getBoundOperatorSessionIds.mockResolvedValue(['test-op-session-id']);
             mockOperatorSessionService.validateSession.mockResolvedValue({ operator_id: 'test-op-id' });
             mockBindingService.resolveBoundOperators.mockResolvedValue([{ operator_id: 'test-op-id' }]);
-            mockRelay.relayDirectCommandToVse.mockResolvedValue({ success: true });
+            mockRelay.relayDirectCommandToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app)
                 .post('/api/operator/approval/direct-command')
@@ -207,7 +207,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(mockRelay.relayDirectCommandToVse).toHaveBeenCalled();
+            expect(mockRelay.relayDirectCommandToG8ee).toHaveBeenCalled();
         });
 
         it('returns 400 if no bound operator session', async () => {
@@ -232,7 +232,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         it('successfully fetches pending approvals via OperatorRelayService', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayPendingApprovalsFromVse.mockResolvedValue({
+            mockRelay.relayPendingApprovalsFromG8ee.mockResolvedValue({
                 success: true,
                 pending_approvals: {
                     'approval-1': { approval_id: 'approval-1', approved: false, command: 'ls' },
@@ -247,34 +247,34 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.pending_approvals).toBeDefined();
-            expect(mockRelay.relayPendingApprovalsFromVse).toHaveBeenCalled();
+            expect(mockRelay.relayPendingApprovalsFromG8ee).toHaveBeenCalled();
         });
 
         it('passes query params to VSOHttpContext', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayPendingApprovalsFromVse.mockResolvedValue({ success: true, pending_approvals: {} });
+            mockRelay.relayPendingApprovalsFromG8ee.mockResolvedValue({ success: true, pending_approvals: {} });
 
             const res = await request(app)
                 .get('/api/operator/approval/pending')
                 .query({ case_id: 'test-case-id', investigation_id: 'test-inv-id' });
 
             expect(res.status).toBe(200);
-            expect(mockRelay.relayPendingApprovalsFromVse).toHaveBeenCalled();
-            const [vsoContext] = mockRelay.relayPendingApprovalsFromVse.mock.calls[0];
+            expect(mockRelay.relayPendingApprovalsFromG8ee).toHaveBeenCalled();
+            const [vsoContext] = mockRelay.relayPendingApprovalsFromG8ee.mock.calls[0];
             expect(vsoContext.case_id).toBe('test-case-id');
             expect(vsoContext.investigation_id).toBe('test-inv-id');
         });
 
         it('handles missing query params gracefully (nulls)', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayPendingApprovalsFromVse.mockResolvedValue({ success: true, pending_approvals: {} });
+            mockRelay.relayPendingApprovalsFromG8ee.mockResolvedValue({ success: true, pending_approvals: {} });
 
             const res = await request(app)
                 .get('/api/operator/approval/pending');
 
             expect(res.status).toBe(200);
-            expect(mockRelay.relayPendingApprovalsFromVse).toHaveBeenCalled();
-            const [vsoContext] = mockRelay.relayPendingApprovalsFromVse.mock.calls[0];
+            expect(mockRelay.relayPendingApprovalsFromG8ee).toHaveBeenCalled();
+            const [vsoContext] = mockRelay.relayPendingApprovalsFromG8ee.mock.calls[0];
             expect(vsoContext.case_id).toBeNull();
             expect(vsoContext.investigation_id).toBeNull();
         });
@@ -291,14 +291,14 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         it('context includes bound_operators array', async () => {
             mockBindingService.resolveBoundOperators.mockResolvedValue(mockBoundOperators);
-            mockRelay.relayPendingApprovalsFromVse.mockResolvedValue({ success: true, pending_approvals: {} });
+            mockRelay.relayPendingApprovalsFromG8ee.mockResolvedValue({ success: true, pending_approvals: {} });
 
             const res = await request(app)
                 .get('/api/operator/approval/pending');
 
             expect(res.status).toBe(200);
-            expect(mockRelay.relayPendingApprovalsFromVse).toHaveBeenCalled();
-            const calls = mockRelay.relayPendingApprovalsFromVse.mock.calls;
+            expect(mockRelay.relayPendingApprovalsFromG8ee).toHaveBeenCalled();
+            const calls = mockRelay.relayPendingApprovalsFromG8ee.mock.calls;
             expect(calls.length).toBeGreaterThan(0);
             const [vsoContext] = calls[0];
             expect(vsoContext.bound_operators).toEqual(mockBoundOperators);

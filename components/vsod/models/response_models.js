@@ -762,7 +762,7 @@ export class InternalHealthResponse extends VSOBaseModel {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  required: true },
         vsodb_status: { type: F.string,  default: 'unknown' },
-        vse_status: { type: F.string,  default: 'unknown' },
+        g8ee_status: { type: F.string,  default: 'unknown' },
         vsa_status: { type: F.string,  default: 'unknown' },
         uptime_seconds: { type: F.number,  default: 0 },
         memory_usage: { type: F.object,  default: () => ({}) },

@@ -2,7 +2,7 @@
 
 ## Overview
 
-VSOD is the authentication, session management, and dashboard backend for VSO. It serves the browser-facing web UI, manages user sessions, proxies AI interactions to VSE, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
+VSOD is the authentication, session management, and dashboard backend for VSO. It serves the browser-facing web UI, manages user sessions, proxies AI interactions to g8ee, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
 
 > For deep-reference security documentation — internal auth token, SSL/CA handling, web session security, operator session security, operator auth methods, operator binding, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -11,7 +11,7 @@ VSOD is the authentication, session management, and dashboard backend for VSO. I
 - User authentication (passkey/FIDO2/WebAuthn) and session lifecycle
 - WebSession persistence and encryption via VSODB KV
 - Operator binding, status tracking, and heartbeat relay
-- Chat/AI streaming proxy to VSE
+- Chat/AI streaming proxy to g8ee
 - WebSocket proxy — `/ws/pubsub` upgrade requests forwarded to VSODB internally
 - Binary distribution of the g8e Operator (`g8e.operator`)
 - Device Link — secure pre-authorized Operator deployment
@@ -32,13 +32,13 @@ VSOD is the authentication, session management, and dashboard backend for VSO. I
 │                                                         │
 │  Auth & Sessions    Operator Mgmt      Chat Proxy       │
 │  ─────────────────  ──────────────     ────────────     │
-│  passkey auth       bind / unbind      stream → VSE     │
+│  passkey auth       bind / unbind      stream → g8ee     │
 │  WebSession KV      heartbeat relay    stop / cases     │
 │  encrypt fields     device links       audit log        │
 │                                                         │
 │  SSE Service        Internal API       Admin            │
 │  ─────────────      ────────────       ─────            │
-│  fan-out events     VSE ↔ VSOD         console          │
+│  fan-out events     g8ee ↔ VSOD         console          │
 │  session-scoped     cluster-only       settings         │
 │                                                         │
 │  WS Proxy                                               │
@@ -47,7 +47,7 @@ VSOD is the authentication, session management, and dashboard backend for VSO. I
 └─────────────────────────────────────────────────────────┘
           │  HTTP KV / Doc / WSS            │  HTTP
           ▼                                 ▼
-       VSODB                               VSE
+       VSODB                               g8ee
   (Sessions, KV,                    (AI Engine, Operator
    Document Store,                   Heartbeat Source,
    Pub/Sub)                          Command Execution)
@@ -57,7 +57,7 @@ VSOD is the authentication, session management, and dashboard backend for VSO. I
 - VSOD is the single external entry point — browsers and Operators both connect to VSOD on port 443
 - VSOD also owns the HTTP trust bootstrap on port 80 — plain HTTP delivers the workstation CA trust portal, the operator g8e script (`/g8e`), and then hands users off to HTTPS
 - VSOD is stateless between requests — all state lives in VSODB
-- VSE is the source of truth for heartbeat data; VSOD only relays SSE
+- g8ee is the source of truth for heartbeat data; VSOD only relays SSE
 - Frontend never computes operator status — it consumes backend-provided values
 - Runtime configuration flows from VSODB via `SettingsService.getConfig()` after Phase 2b of `initialization.js` — zero `process.env` reads in VSOD production code (only `process.env.VITEST` / `process.env.VITEST_DEBUG` test guards remain, which are vitest framework concerns)
 - WebSocket pub/sub (`/ws/pubsub`) is proxied by VSOD to VSODB — VSODB has no external port bindings
@@ -78,7 +78,7 @@ The following `G8E_*` variables are consumed by `docker-compose.yml` to configur
 | `G8E_INTERNAL_AUTH_TOKEN` | - | Shared secret for VSODB authentication (bootstrap secret) |
 | `G8E_SESSION_ENCRYPTION_KEY` | - | Key for encrypting session fields (bootstrap secret) |
 | `G8E_SSL_DIR` | `/vsodb/ssl` | Directory containing platform certificates and secrets |
-| `G8E_VSE_URL` | `https://vse` | VSE internal URL |
+| `G8EE_URL` | `https://g8ee` | g8ee internal URL |
 | `G8E_PORT` | `443` | Local port for the Express server |
 | `G8E_HTTPS_PORT` | `443` | Public HTTPS port |
 | `G8E_HTTP_PORT` | `80` | Public HTTP port (bootstrap) |
@@ -165,11 +165,11 @@ All services follow the same contract: document store written first, KV invalida
 
 All channel prefix constants are defined in `constants/channels.js` (`PubSubChannel`). The canonical channel listing is in [components/vsodb.md — Channel Naming Convention](vsodb.md#channel-naming-convention).
 
-VSOD subscribes to the `auth.publish:*` channels to handle VSA API key and WebSession authentication requests, and publishes responses on the corresponding `auth.response:*` channels. Command, results, and heartbeat channels are brokered transparently by VSODB between VSE and VSA.
+VSOD subscribes to the `auth.publish:*` channels to handle VSA API key and WebSession authentication requests, and publishes responses on the corresponding `auth.response:*` channels. Command, results, and heartbeat channels are brokered transparently by VSODB between g8ee and VSA.
 
-### Internal HTTP Communication (VSOD → VSE)
+### Internal HTTP Communication (VSOD → g8ee)
 
-VSOD communicates with VSE via direct HTTP using `X-Internal-Auth` for authentication and `VSOHttpContext` headers for routing. Communication is split by concern:
+VSOD communicates with g8ee via direct HTTP using `X-Internal-Auth` for authentication and `VSOHttpContext` headers for routing. Communication is split by concern:
 
 1.  **Generic / Case Management (`InternalHttpClient`):** Chat messages, investigation queries, and case deletions.
 2.  **Operator Orchestration (`OperatorService.relay`):** Operator lifecycle (stop, deregister), approvals, and direct command relays.
@@ -177,8 +177,8 @@ VSOD communicates with VSE via direct HTTP using `X-Internal-Auth` for authentic
 The internal HTTP layer enforces:
 
 - `X-Internal-Auth` is **required** for all calls (shared secret strictly enforced)
-- `web_session_id` is **required** for all VSE calls (via `X-VSO-WebSession-ID`)
-- `user_id` is **required** for all VSE calls (via `X-VSO-User-ID`)
+- `web_session_id` is **required** for all g8ee calls (via `X-VSO-WebSession-ID`)
+- `user_id` is **required** for all g8ee calls (via `X-VSO-User-ID`)
 - Bound operators are resolved via `resolveBoundOperators()` and carried in `VSOHttpContext.bound_operators` for internal relay orchestration
 - `X-VSO-Case-ID` and `X-VSO-Investigation-ID` are always present — real IDs for existing cases, `UNKNOWN_ID` sentinels for new cases
 - Bound operators are sent as a JSON array via `X-VSO-Bound-Operators` (operator_id, operator_session_id (optional), status, hostname, operator_type per entry)
@@ -194,7 +194,7 @@ request body has no case_id
     → sets X-VSO-New-Case: true
     → sets X-VSO-Case-ID: __NEW_CASE__
     → sets X-VSO-Investigation-ID: __NEW_CASE__
-    → VSE creates case + investigation inline
+    → g8ee creates case + investigation inline
     → returns ChatStartedResponse with new case_id + investigation_id
 ```
 
@@ -202,7 +202,7 @@ request body has no case_id
 
 The frontend cannot forge `X-VSO-New-Case: true` — the signal is generated server-side by VSOD based on the authenticated session context, not on any client-supplied header.
 
-The `X-VSO-New-Case` header name is defined in `shared/constants/headers.json` and consumed by both `constants/headers.js` (VSOD) and `app/constants/headers.py` (VSE).
+The `X-VSO-New-Case` header name is defined in `shared/constants/headers.json` and consumed by both `constants/headers.js` (VSOD) and `app/constants/headers.py` (g8ee).
 
 ### MCP Gateway (`/mcp`)
 
@@ -215,8 +215,8 @@ VSOD exposes a single Streamable HTTP MCP endpoint at `POST /mcp` for external M
 | `initialize` | Returns server info and capabilities (`{ tools: {} }`) |
 | `notifications/initialized` | Returns 204 (notification, no body) |
 | `ping` | Returns `{}` |
-| `tools/list` | Proxies to VSE `POST /api/internal/mcp/tools/list` |
-| `tools/call` | Proxies to VSE `POST /api/internal/mcp/tools/call` |
+| `tools/list` | Proxies to g8ee `POST /api/internal/mcp/tools/list` |
+| `tools/call` | Proxies to g8ee `POST /api/internal/mcp/tools/call` |
 
 **Auth:** Supports two authentication methods:
 
@@ -242,7 +242,7 @@ If no operators are bound, `tools/list` returns only non-operator tools (e.g. we
 
 ### Bound Operator Resolution (`buildVSOContext`)
 
-`buildVSOContext` in `routes/platform/chat_routes.js` is the single point where VSOD resolves bound operators before every chat request. It executes at request time — **no cached result** — and its output is the only source VSE uses to identify which operators are available to the AI.
+`buildVSOContext` in `routes/platform/chat_routes.js` is the single point where VSOD resolves bound operators before every chat request. It executes at request time — **no cached result** — and its output is the only source g8ee uses to identify which operators are available to the AI.
 
 **Resolution steps (per chat request):**
 
@@ -255,9 +255,9 @@ If no operators are bound, `tools/list` returns only non-operator tools (e.g. we
 **Accessor:** `getBindingService().resolveBoundOperators(webSessionId)` from `services/auth/bound_sessions_service.js`.
 
 **Contract:**
-- VSE reads `vso_context.bound_operators` (parsed from `X-VSO-Bound-Operators`) as the **exclusive source of truth** for which operators are bound. VSE performs no independent operator lookup to resolve binding state.
-- Only operators with `status == 'bound'` are used by VSE when building chat context and determining workflow type (`OPERATOR_BOUND` vs `OPERATOR_NOT_BOUND`).
-- If `X-VSO-Bound-Operators` is absent or empty, VSE operates in advisory mode — no operator commands are available to the AI.
+- g8ee reads `vso_context.bound_operators` (parsed from `X-VSO-Bound-Operators`) as the **exclusive source of truth** for which operators are bound. g8ee performs no independent operator lookup to resolve binding state.
+- Only operators with `status == 'bound'` are used by g8ee when building chat context and determining workflow type (`OPERATOR_BOUND` vs `OPERATOR_NOT_BOUND`).
+- If `X-VSO-Bound-Operators` is absent or empty, g8ee operates in advisory mode — no operator commands are available to the AI.
 
 ---
 
@@ -525,7 +525,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 **Key rules:**
 - `available` is the default state — operator has never authenticated
-- `stale` is set by VSE when a heartbeat has not been received within the stale threshold (60s); `offline` is a fully offline state
+- `stale` is set by g8ee when a heartbeat has not been received within the stale threshold (60s); `offline` is a fully offline state
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -541,7 +541,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 |------------|----------------|
 | `lifecycle` | CRUD operations, activation, stopping, and history trail management. |
 | `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8e_pod` subtype if no existing live operator already has it, ensuring exactly one g8e-pod operator per user regardless of slot ordering. |
-| `relay` | Outbound communication to VSE (Stop, Direct Command, Heartbeat Registration). |
+| `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration). |
 | `notifications` | SSE event broadcasting and user-level operator list updates. |
 
 Route handlers and other services interact with these via the main `OperatorDataService` coordinator.
@@ -552,7 +552,7 @@ When the browser establishes a new SSE connection, `SSEService.onConnectionEstab
 
 1. **Operator list broadcast** — reads all user operators, repairs any stale `BOUND` web session links, then pushes the full operator list to the new session via `OperatorDataService.broadcastOperatorListToSession()`.
 2. **LLM config push** — reads user/platform settings to determine the active provider, then assembles provider-specific `primary_models` and `assistant_models` lists from `USER_SETTINGS` and publishes a `LLMConfigEvent` so both UI model dropdowns populate without a separate HTTP call.
-3. **Investigation list push** — queries VSE via `InternalHttpClient` and publishes an `InvestigationListEvent` for case navigation.
+3. **Investigation list push** — queries g8ee via `InternalHttpClient` and publishes an `InvestigationListEvent` for case navigation.
 
 Each branch is independently error-isolated — a failure in one does not affect the others. The route handler calls this method with a fire-and-forget `.catch()` — the SSE connection is not blocked on initialization completion.
 
@@ -562,15 +562,15 @@ Each branch is independently error-isolated — a failure in one does not affect
 
 ### Heartbeat Architecture
 
-VSA sends heartbeats every 30 seconds directly to VSODB pub/sub. VSE subscribes, validates, persists to VSODB document store, detects staleness, and manages all operator status transitions. VSE then notifies VSOD via HTTP POST. VSOD's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to VSODB and does **not** run its own stale detection.
+VSA sends heartbeats every 30 seconds directly to VSODB pub/sub. g8ee subscribes, validates, persists to VSODB document store, detects staleness, and manages all operator status transitions. g8ee then notifies VSOD via HTTP POST. VSOD's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to VSODB and does **not** run its own stale detection.
 
 ```
 VSA (every 30s)
     │ WebSocket
     ▼
-VSODB pub/sub  →  VSE (OperatorHeartbeatService)
+VSODB pub/sub  →  g8ee (OperatorHeartbeatService)
                       │ write last_heartbeat, latest_heartbeat_snapshot to VSODB
-                      │ detect staleness, set offline status (VSE is source of truth)
+                      │ detect staleness, set offline status (g8ee is source of truth)
                       │ HTTP POST /api/internal/operators/:id/heartbeat
                       ▼
                     VSOD
@@ -582,23 +582,23 @@ VSODB pub/sub  →  VSE (OperatorHeartbeatService)
                       └── uses data.status + data.status_class directly
 ```
 
-**VSODB document store fields (managed by VSE):**
+**VSODB document store fields (managed by g8e):**
 - `last_heartbeat` — timestamp of most recent heartbeat
 - `heartbeat_history` — rolling buffer of last 10 heartbeats
 - `latest_heartbeat_snapshot` — most recent metrics for UI
 - `system_info` — static system data
 
-**Heartbeat payload fields (from VSE to VSOD):** `operator_id`, `timestamp`, `heartbeat_type`, `status`, `system_identity` (hostname, os, arch, cpu_count, memory_mb), `performance_metrics` (cpu_percent, memory_percent, disk_percent, network_latency), `network_info`, `uptime_info`, `os_details`, `user_details`, `environment`, `disk_details`, `memory_details`
+**Heartbeat payload fields (from g8ee to VSOD):** `operator_id`, `timestamp`, `heartbeat_type`, `status`, `system_identity` (hostname, os, arch, cpu_count, memory_mb), `performance_metrics` (cpu_percent, memory_percent, disk_percent, network_latency), `network_info`, `uptime_info`, `os_details`, `user_details`, `environment`, `disk_details`, `memory_details`
 
 ### Batch Command Approval
 
 When a command targets multiple operators, VSOD shows a **unified approval dialog** — one approval covers all impacted systems.
 
 **Flow:**
-1. VSE sends approval request with `target_systems` array and `is_batch_execution=True`
+1. g8ee sends approval request with `target_systems` array and `is_batch_execution=True`
 2. VSOD displays a single approval UI listing all impacted hostnames
 3. User clicks "Approve for N Systems" — single POST to `/api/operator/approval/respond`
-4. VSE executes the command on each operator sequentially
+4. g8ee executes the command on each operator sequentially
 
 ### Anchored Operator Terminal
 
@@ -609,11 +609,11 @@ The chat interface includes a persistent terminal anchored at the bottom of the 
 User types command
     → POST /api/operator/approval/direct-command
     → VSOD validates session, gets bound operator
-    → **`OperatorService.relay.relayDirectCommandToVse()`**
-    → POST to VSE `/api/internal/operator/direct-command`
-    → VSE publishes to VSODB pub/sub cmd:{operator_id}:{session_id}
+    → **`OperatorService.relay.relayDirectCommandToG8ee()`**
+    → POST to g8ee `/api/internal/operator/direct-command`
+    → g8ee publishes to VSODB pub/sub cmd:{operator_id}:{session_id}
     → VSA executes command
-    → result → VSE → HTTP POST to VSOD → SSE → terminal
+    → result → g8ee → HTTP POST to VSOD → SSE → terminal
 ```
 
 All operator events (approval requests, execution output, intent results) are routed to the anchored terminal via `chat.js` event routing methods.
@@ -861,7 +861,7 @@ For the full deep-reference security documentation covering internal auth token,
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/chat/send` | POST | Send chat message to VSE; returns case/investigation IDs immediately; AI response delivered via SSE |
+| `/api/chat/send` | POST | Send chat message to g8ee; returns case/investigation IDs immediately; AI response delivered via SSE |
 | `/api/chat/stop` | POST | Stop active AI processing |
 | `/api/chat/cases/:caseId` | DELETE | Delete case and all related data |
 | `/api/chat/investigations` | GET | Query investigations for current user |
@@ -942,7 +942,7 @@ All guarded by `requireInternalOrigin` which validates `X-Internal-Auth` using `
 
 | Route | Method | Purpose |
 |-------|--------|---------|
-| `/api/internal/sse/push` | POST | VSE pushes SSE events to VSOD |
+| `/api/internal/sse/push` | POST | g8ee pushes SSE events to VSOD |
 | `/api/internal/health` | GET | Internal API health |
 | `/api/internal/operators/user/:userId` | GET | List user operators |
 | `/api/internal/operators/user/:userId/initialize-slots` | POST | Initialize operator slots |
@@ -1082,12 +1082,12 @@ Component-specific styles go in dedicated CSS files (`chat.css`, `operator-panel
 
 ### File Attachments
 
-VSOD uses a **local-first attachment model**. Files are read as base64 on the client and stored in VSODB KV by VSOD. Only metadata (with VSODB key references) is forwarded to VSE.
+VSOD uses a **local-first attachment model**. Files are read as base64 on the client and stored in VSODB KV by VSOD. Only metadata (with VSODB key references) is forwarded to G8EE.
 
 **Flow:**
 1. Client reads file via `FileReader` as base64; image previews use `data:` URIs (CSP-compliant — no `blob:` URLs)
-2. On send: VSOD receives base64, stores in VSODB KV via `AttachmentService`, forwards only metadata + `vsodb_key` to VSE
-3. VSE retrieves base64 from VSODB KV on demand for LLM processing
+2. On send: VSOD receives base64, stores in VSODB KV via `AttachmentService`, forwards only metadata + `vsodb_key` to g8ee
+3. g8ee retrieves base64 from VSODB KV on demand for LLM processing
 
 **Security controls:**
 - Type whitelist, 10 MB per file, 30 MB total per investigation

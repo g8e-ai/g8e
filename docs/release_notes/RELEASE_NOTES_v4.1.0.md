@@ -6,13 +6,13 @@ Focused on improving AI interaction reliability, execution tracing, and VSA list
 
 ### AI & Execution
 - **Gemini Streaming & Multi-turn** - Fixed function call streaming and state management for complex multi-turn conversations.
-- **Tool Call & Declaration Cleanup** - Standardized tool definitions across VSE for more reliable and predictable model interactions.
+- **Tool Call & Declaration Cleanup** - Standardized tool definitions across g8ee for more reliable and predictable model interactions.
 - **Execution ID Tracing** - Implemented consistent `execution_id` generation and propagation across all components for a complete audit trail.
 - **Strict Payload Typing** - New model definitions for execution results and command payloads to prevent runtime type mismatches.
 
 ### Component Improvements
 - **VSA (Virtual Security Agent)** - Enhanced listen mode testability and hardened internal auth token handling.
-- **VSE (Virtual Execution Engine)** - Optimized DB client token loading and synchronized settings definitions.
+- **g8ee (Virtual Execution Engine)** - Optimized DB client token loading and synchronized settings definitions.
 - **VSOD (Virtual Security Operations Dashboard)** - Improved diagram generation for infrastructure visualization and aligned internal API endpoints.
 
 ### CI/CD & DX

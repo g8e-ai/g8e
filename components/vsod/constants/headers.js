@@ -16,7 +16,7 @@ import { _HEADERS } from './shared.js';
 /**
  * VSOHeaders - X-VSO-* HTTP header name constants.
  * Canonical values loaded from shared/constants/headers.json.
- * That file is the single source of truth shared across VSE, VSA, and VSOD.
+ * That file is the single source of truth shared across g8ee, VSA, and VSOD.
  *
  * All internal cluster-to-cluster HTTP requests use these header names to
  * propagate VSOHttpContext (session, identity, business context) between

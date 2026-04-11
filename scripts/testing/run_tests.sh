@@ -63,11 +63,11 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: ./run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: all, vse, vsod, vsa, security"
+            echo "Components: all, g8ee, vsod, vsa, security"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
-            echo "  --pyright                 Run pyright strict gate (VSE only)"
+            echo "  --pyright                 Run pyright strict gate (g8ee only)"
             echo ""
             echo "LLM Options (enables ai_integration tests):"
             echo "  -p, --llm-provider        LLM provider (gemini, openai, anthropic, ollama)"
@@ -134,7 +134,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(all|vse|vsod|vsa|security)$ ]]; then
+            if [[ "$1" =~ ^(all|g8ee|vsod|vsa|security)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -204,9 +204,9 @@ verify_container_infrastructure() {
 # Component Runners
 # =============================================================================
 
-run_vse() {
-    log_header "Running VSE tests on g8e-pod"
-    cd "$PROJECT_ROOT/components/vse"
+run_g8ee() {
+    log_header "Running g8ee tests on g8e-pod"
+    cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
     fi
@@ -258,10 +258,10 @@ run_vsa() {
 
 run_component() {
     case "$COMPONENT" in
-        vse) run_vse ;;
+        g8ee) run_g8ee ;;
         vsod) run_vsod ;;
         vsa) run_vsa ;;
-        all) run_vse; run_vsod; run_vsa ;;
+        all) run_g8ee; run_vsod; run_vsa ;;
     esac
 }
 

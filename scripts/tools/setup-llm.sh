@@ -218,7 +218,7 @@ case "$COMMAND" in
         _header "Restarting LLM Services"
         # Since we are on the host, we can call docker compose if available, 
         # but the standard way in this repo is via build.sh
-        bash "$REPO_ROOT/scripts/core/build.sh" restart vsod vse
+        bash "$REPO_ROOT/scripts/core/build.sh" restart vsod g8ee
         exit 0
         ;;
 esac
@@ -254,7 +254,7 @@ _cur_anthropic_key=""
 
 _header "g8e LLM Setup"
 echo
-_info "Configures the AI provider for VSE (command generation, investigations, assistant)."
+_info "Configures the AI provider for g8ee (command generation, investigations, assistant)."
 echo
 
 if [[ -n "$_cur_provider" ]]; then

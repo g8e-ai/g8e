@@ -252,7 +252,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
             const { operatorId } = req.params;
 
             // Direct DB/Cache lookup for the operator document.
-            // This is used by VSE for bootstrap/validation.
+            // This is used by g8ee for bootstrap/validation.
             const operator = await operatorService.getOperator(operatorId);
 
             if (!operator) {

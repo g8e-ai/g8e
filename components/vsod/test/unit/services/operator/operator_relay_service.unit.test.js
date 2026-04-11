@@ -45,11 +45,11 @@ describe('OperatorRelayService', () => {
         }]
     });
 
-    describe('relayStopCommandToVse', () => {
+    describe('relayStopCommandToG8ee', () => {
         it('should relay stop request with correct parameters', async () => {
-            await service.relayStopCommandToVse(context);
+            await service.relayStopCommandToG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorsStop(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsStop(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -61,15 +61,15 @@ describe('OperatorRelayService', () => {
         });
 
         it('should throw if vsoContext is missing', async () => {
-            await expect(service.relayStopCommandToVse(null)).rejects.toThrow('ENFORCEMENT VIOLATION');
+            await expect(service.relayStopCommandToG8ee(null)).rejects.toThrow('ENFORCEMENT VIOLATION');
         });
     });
 
-    describe('deregisterOperatorSessionInVse', () => {
+    describe('deregisterOperatorSessionInG8ee', () => {
         it('should relay deregistration request', async () => {
-            await service.deregisterOperatorSessionInVse(context);
+            await service.deregisterOperatorSessionInG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorsDeregisterSession(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsDeregisterSession(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -80,16 +80,16 @@ describe('OperatorRelayService', () => {
         });
     });
 
-    describe('relayDirectCommandToVse', () => {
+    describe('relayDirectCommandToG8ee', () => {
         it('should relay direct command request', async () => {
             const commandData = {
                 command: 'ls',
                 execution_id: 'exec-123'
             };
 
-            await service.relayDirectCommandToVse(commandData, context);
+            await service.relayDirectCommandToG8ee(commandData, context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorDirectCommand(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorDirectCommand(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     command: 'ls',
@@ -100,11 +100,11 @@ describe('OperatorRelayService', () => {
         });
     });
 
-    describe('relayRegisterOperatorSessionToVse', () => {
+    describe('relayRegisterOperatorSessionToG8ee', () => {
         it('should relay registration request', async () => {
-            await service.relayRegisterOperatorSessionToVse(context);
+            await service.relayRegisterOperatorSessionToG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorsRegisterSession(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsRegisterSession(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -115,7 +115,7 @@ describe('OperatorRelayService', () => {
         });
     });
 
-    describe('relayApprovalResponseToVse', () => {
+    describe('relayApprovalResponseToG8ee', () => {
         it('should relay approval response', async () => {
             const approvalData = {
                 approval_id: 'app-123',
@@ -129,9 +129,9 @@ describe('OperatorRelayService', () => {
                 task_id: 't-123'
             };
 
-            await service.relayApprovalResponseToVse(approvalData, context);
+            await service.relayApprovalResponseToG8ee(approvalData, context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorApprovalRespond(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalRespond(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     approval_id: 'app-123',
@@ -155,25 +155,25 @@ describe('OperatorRelayService', () => {
                 task_id: 't-456'
             };
 
-            await service.relayApprovalResponseToVse(wireData, context);
+            await service.relayApprovalResponseToG8ee(wireData, context);
 
             const callArgs = mockHttpClient.request.mock.calls[0][2];
             expect(callArgs.body).toBe(wireData);
         });
     });
 
-    describe('relayPendingApprovalsFromVse', () => {
-        it('should fetch pending approvals from VSE', async () => {
-            await service.relayPendingApprovalsFromVse(context);
+    describe('relayPendingApprovalsFromG8ee', () => {
+        it('should fetch pending approvals from g8ee', async () => {
+            await service.relayPendingApprovalsFromG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorApprovalPending(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
                 method: 'GET',
                 vsoContext: context
             }));
         });
 
         it('should throw if vsoContext is missing', async () => {
-            await expect(service.relayPendingApprovalsFromVse(null)).rejects.toThrow('ENFORCEMENT VIOLATION');
+            await expect(service.relayPendingApprovalsFromG8ee(null)).rejects.toThrow('ENFORCEMENT VIOLATION');
         });
 
         it('should pass context with case_id and investigation_id', async () => {
@@ -188,9 +188,9 @@ describe('OperatorRelayService', () => {
                 }]
             });
 
-            await service.relayPendingApprovalsFromVse(contextWithIds);
+            await service.relayPendingApprovalsFromG8ee(contextWithIds);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('vse', apiPaths.vse.operatorApprovalPending(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
                 method: 'GET',
                 vsoContext: contextWithIds
             }));

@@ -9,16 +9,16 @@
 #   ./g8e platform wipe                    # Clear app data; preserve SSL certs, platform settings, auth token
 #   ./g8e platform reset                   # Wipe DB data volumes + rebuild from scratch (SSL certs preserved)
 #   ./g8e platform clean                   # Full Docker cleanup: containers, images, volumes, networks
-#   ./g8e test vse                         # Run tests (never rebuilds)
+#   ./g8e test g8ee                         # Run tests (never rebuilds)
 #
 # Volume layout:
 #   g8e-data-data  — SQLite DB only (/data inside vsodb, wiped by reset)
 #   g8e-data-ssl   — TLS certs only (/ssl inside vsodb, NEVER wiped by reset or wipe)
-#   g8e-engine-data — VSE app data
+#   g8ee-data — g8ee app data
 #   g8e-dashboard-data — VSOD app data
 #
 # Profiles:
-#   (default)      - vsodb, vse, vsod, g8e-pod
+#   (default)      - vsodb, g8ee, vsod, g8e-pod
 #   g8e-pod       - g8e-pod (never touched unless explicitly rebuilt or cleaned)
 #   development    - includes source bind mounts for hot reload
 #
@@ -33,14 +33,14 @@ services:
   # Core Components
   # =============================================================================
 
-  # g8e-engine (VSE) - AI backend
-  g8e-engine:
+  # g8ee (g8ee) - AI backend
+  g8ee:
     build:
       context: .
-      dockerfile: ./components/vse/Dockerfile
+      dockerfile: ./components/g8ee/Dockerfile
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-engine
+    container_name: g8ee
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
@@ -53,7 +53,7 @@ services:
       - G8E_INTERNAL_AUTH_TOKEN
     volumes:
       - ./shared:/app/shared:ro
-      - vse-data:/data:noexec,nosuid,nodev
+      - g8ee-data:/data:noexec,nosuid,nodev
       - vsodb-ssl:/vsodb:ro
     read_only: true
     tmpfs:
@@ -74,7 +74,7 @@ services:
     networks:
       g8e-network:
         aliases:
-          - vse
+          - g8ee
     healthcheck:
       test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
       interval: 30s
@@ -229,7 +229,7 @@ services:
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY
     volumes:
-      - ./components/vse:/app/components/vse
+      - ./components/g8ee:/app/components/g8ee
       - ./components/vsod:/app/components/vsod
       - vsod-node-modules:/app/components/vsod/node_modules
       - ./components/vsa:/app/components/vsa
@@ -276,8 +276,8 @@ networks:
     driver: bridge
 
 volumes:
-  vse-data:
-    name: g8e-engine-data
+  g8ee-data:
+    name: g8ee-data
     labels:
       - "io.g8e.managed=true"
   vsod-data:

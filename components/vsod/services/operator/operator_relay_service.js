@@ -38,7 +38,7 @@ export class OperatorRelayService {
         }
     }
 
-    async relayStopCommandToVse(vsoContext) {
+    async relayStopCommandToG8ee(vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
@@ -46,7 +46,7 @@ export class OperatorRelayService {
         const boundOperator = vsoContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for stop command');
         
-        logger.info('[OPERATOR-RELAY] Relaying stop command to VSE', {
+        logger.info('[OPERATOR-RELAY] Relaying stop command to g8ee', {
             operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...'
         });
@@ -57,14 +57,14 @@ export class OperatorRelayService {
             user_id: vsoContext.user_id,
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorsStop(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsStop(), {
             method: 'POST',
             body: request.forWire(),
             vsoContext
         });
     }
 
-    async deregisterOperatorSessionInVse(vsoContext) {
+    async deregisterOperatorSessionInG8ee(vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
@@ -72,7 +72,7 @@ export class OperatorRelayService {
         const boundOperator = vsoContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for deregistration');
 
-        logger.info('[OPERATOR-RELAY] Deregistering operator session heartbeat subscription in VSE', {
+        logger.info('[OPERATOR-RELAY] Deregistering operator session heartbeat subscription in g8ee', {
             operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...',
         });
@@ -82,14 +82,14 @@ export class OperatorRelayService {
             operator_session_id: boundOperator.operator_session_id,
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorsDeregisterSession(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsDeregisterSession(), {
             method: 'POST',
             body: request.forWire(),
             vsoContext,
         });
     }
 
-    async relayDirectCommandToVse(commandData, vsoContext) {
+    async relayDirectCommandToG8ee(commandData, vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
@@ -99,19 +99,19 @@ export class OperatorRelayService {
         
         const directCommandRequest = DirectCommandRequest.parse(commandData);
 
-        logger.info('[OPERATOR-RELAY] Relaying direct command to operator via VSE', {
+        logger.info('[OPERATOR-RELAY] Relaying direct command to operator via g8ee', {
             executionId: directCommandRequest.execution_id,
             operatorId: boundOperator.operator_id
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorDirectCommand(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
             method: 'POST',
             body: directCommandRequest.forWire(),
             vsoContext
         });
     }
 
-    async relayRegisterOperatorSessionToVse(vsoContext) {
+    async relayRegisterOperatorSessionToG8ee(vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
@@ -119,7 +119,7 @@ export class OperatorRelayService {
         const boundOperator = vsoContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for registration');
 
-        logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in VSE', {
+        logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in g8ee', {
             operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 20) + '...',
         });
@@ -130,42 +130,42 @@ export class OperatorRelayService {
             operator_session_id: boundOperator.operator_session_id,
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorsRegisterSession(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
             method: 'POST',
             body: request.forWire(),
             vsoContext,
         });
     }
 
-    async relayApprovalResponseToVse(approvalData, vsoContext) {
+    async relayApprovalResponseToG8ee(approvalData, vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        logger.info('[OPERATOR-RELAY] Relaying operator approval response to VSE', {
+        logger.info('[OPERATOR-RELAY] Relaying operator approval response to g8ee', {
             approvalId: approvalData.approval_id,
             approved: approvalData.approved,
             caseId: vsoContext.case_id
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorApprovalRespond(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorApprovalRespond(), {
             method: 'POST',
             body: approvalData,
             vsoContext
         });
     }
 
-    async relayPendingApprovalsFromVse(vsoContext) {
+    async relayPendingApprovalsFromG8ee(vsoContext) {
         this._validateContext(vsoContext);
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        logger.info('[OPERATOR-RELAY] Fetching pending approvals from VSE', {
+        logger.info('[OPERATOR-RELAY] Fetching pending approvals from g8ee', {
             caseId: vsoContext.case_id,
             investigationId: vsoContext.investigation_id
         });
 
-        return httpClient.request('vse', ApiPaths.vse.operatorApprovalPending(), {
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorApprovalPending(), {
             method: 'GET',
             vsoContext
         });
@@ -173,7 +173,7 @@ export class OperatorRelayService {
 
     _validateContext(vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
     }
 }

@@ -358,7 +358,7 @@ class CacheAsideService {
     /**
      * Evict a single document's cache key.
      *
-     * Use when an external writer (e.g. VSE) has updated the document directly in the
+     * Use when an external writer (e.g. g8ee) has updated the document directly in the
      * DB and VSOD needs the next read to re-populate from the authoritative source.
      * Does not touch the DB.
      *

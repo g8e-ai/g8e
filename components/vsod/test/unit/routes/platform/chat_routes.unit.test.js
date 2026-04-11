@@ -164,14 +164,14 @@ describe('Chat Routes [UNIT]', () => {
                 body: { message: 'fail', case_id: 'c', investigation_id: 'i' }
             });
             const res = createMockRes();
-            mockInternalHttpClient.sendChatMessage.mockRejectedValue(new Error('VSE timeout'));
+            mockInternalHttpClient.sendChatMessage.mockRejectedValue(new Error('g8ee timeout'));
 
             await getRoute()(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.success).toBe(false);
-            expect(responseData.error).toBe('VSE timeout');
+            expect(responseData.error).toBe('g8ee timeout');
         });
     });
 
@@ -202,14 +202,14 @@ describe('Chat Routes [UNIT]', () => {
         it('should handle query failures with typed error response', async () => {
             const req = createMockReq({ query: { case_id: 'case_123' } });
             const res = createMockRes();
-            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('VSE query failed'));
+            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('g8ee query failed'));
 
             await getRoute()(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.success).toBe(false);
-            expect(responseData.error).toBe('VSE query failed');
+            expect(responseData.error).toBe('g8ee query failed');
         });
 
         it('should handle empty investigation array response', async () => {
@@ -272,13 +272,13 @@ describe('Chat Routes [UNIT]', () => {
                 body: { investigation_id: 'inv_123', reason: 'user_cancel' }
             });
             const res = createMockRes();
-            mockInternalHttpClient.stopAIProcessing.mockRejectedValue(new Error('VSE stop failed'));
+            mockInternalHttpClient.stopAIProcessing.mockRejectedValue(new Error('g8ee stop failed'));
 
             await getRoute()(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
             const responseData = res.json.mock.calls[0][0];
-            expect(responseData.error).toBe('VSE stop failed');
+            expect(responseData.error).toBe('g8ee stop failed');
         });
 
         it('should include investigation_id and was_active in response data', async () => {
@@ -403,7 +403,7 @@ describe('Chat Routes [UNIT]', () => {
         it('should return health status with typed ChatHealthResponse', async () => {
             const req = createMockReq();
             const res = createMockRes();
-            const mockHealthStatus = { vse: 'healthy', vsodb: 'healthy' };
+            const mockHealthStatus = { g8ee: 'healthy', vsodb: 'healthy' };
             mockInternalHttpClient.healthCheck.mockResolvedValue(mockHealthStatus);
 
             await getRoute()(req, res);

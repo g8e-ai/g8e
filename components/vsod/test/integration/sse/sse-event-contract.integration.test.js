@@ -34,7 +34,7 @@ import { fileURLToPath } from 'url';
 import { EventType } from '@vsod/constants/events.js';
 import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
 import {
-    VSEPassthroughEvent,
+    G8eePassthroughEvent,
     ConnectionEstablishedEvent,
     KeepaliveEvent,
 } from '@vsod/models/sse_models.js';
@@ -161,7 +161,7 @@ describe('SSE Event Contract Tests [INTEGRATION]', () => {
                 const testService = makeSSEService();
                 await testService.registerConnection(WEB_SESSION_ID, testResponse);
 
-                await testService.publishEvent(WEB_SESSION_ID, new VSEPassthroughEvent({
+                await testService.publishEvent(WEB_SESSION_ID, new G8eePassthroughEvent({
                     _payload: {
                         ...fixture.data,
                         type: fixture.type,

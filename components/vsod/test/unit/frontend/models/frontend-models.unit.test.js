@@ -369,8 +369,8 @@ describe('InvestigationModel [UNIT]', () => {
     });
 });
 
-describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
-    it('parses VSE ConversationHistoryMessage wire shape (user chat)', () => {
+describe('InvestigationHistoryEntry — g8ee wire shape compat [UNIT]', () => {
+    it('parses g8ee ConversationHistoryMessage wire shape (user chat)', () => {
         const wire = {
             id: 'msg-1',
             sender: EventType.EVENT_SOURCE_USER_CHAT,
@@ -386,7 +386,7 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
         expect(entry.content).toBe('Help me with docker');
     });
 
-    it('parses VSE ConversationHistoryMessage wire shape (AI response)', () => {
+    it('parses g8ee ConversationHistoryMessage wire shape (AI response)', () => {
         const wire = {
             id: 'msg-2',
             sender: EventType.EVENT_SOURCE_AI_PRIMARY,
@@ -400,7 +400,7 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
         expect(entry.summary).toBe('Docker version is 24.0.7');
     });
 
-    it('parses VSE ConversationHistoryMessage wire shape (system message)', () => {
+    it('parses g8ee ConversationHistoryMessage wire shape (system message)', () => {
         const wire = {
             id: 'msg-3',
             sender: EventType.EVENT_SOURCE_SYSTEM,
@@ -444,7 +444,7 @@ describe('InvestigationHistoryEntry — VSE wire shape compat [UNIT]', () => {
         expect(entry.event_type).toBe(EventType.INVESTIGATION_CHAT_MESSAGE_USER);
     });
 
-    it('parseConversationHistory handles array of VSE wire messages', () => {
+    it('parseConversationHistory handles array of g8ee wire messages', () => {
         const history = [
             { sender: EventType.EVENT_SOURCE_USER_CHAT, content: 'hello', metadata: {} },
             { sender: EventType.EVENT_SOURCE_AI_PRIMARY, content: 'hi there', metadata: {} },

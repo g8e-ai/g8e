@@ -16,7 +16,7 @@
  *
  * Aligned with:
  * - components/vsa/models/ (Go structs)
- * - components/vse/app/models/ (Python/Pydantic)
+ * - components/g8ee/app/models/ (Python/Pydantic)
  *
  * Construction from untrusted data (DB read, wire payload):
  *   OperatorDocument.parse(raw)   — validates, coerces, strips unknown fields

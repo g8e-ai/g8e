@@ -13,7 +13,7 @@
 
 /**
  * VSODB KV Key Constants
- * Single source of truth for ALL KV store keys used across the platform (VSOD + VSE).
+ * Single source of truth for ALL KV store keys used across the platform (VSOD + g8ee).
  *
  * All keys are built via KVKey.* functions. Never construct key strings manually.
  *

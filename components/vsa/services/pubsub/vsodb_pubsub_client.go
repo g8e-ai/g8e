@@ -42,9 +42,9 @@ type PubSubClient interface {
 // It provides Subscribe (receive) and Publish (send) over the channel
 // naming convention:
 //
-//	cmd:{operator_id}:{operator_session_id}       (VSE → Operator)
-//	results:{operator_id}:{operator_session_id}    (Operator → VSE)
-//	heartbeat:{operator_id}:{operator_session_id}  (Operator → VSE)
+//	cmd:{operator_id}:{operator_session_id}       (g8ee → Operator)
+//	results:{operator_id}:{operator_session_id}    (Operator → g8ee)
+//	heartbeat:{operator_id}:{operator_session_id}  (Operator → g8ee)
 type VSODBPubSubClient struct {
 	baseURL    string // e.g. "wss://g8e.local"
 	logger     *slog.Logger

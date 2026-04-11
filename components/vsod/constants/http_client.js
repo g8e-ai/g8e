@@ -13,7 +13,7 @@
 
 /**
  * HTTP Client Constants
- * Configuration for all outbound HTTP/WebSocket clients: VSOD→VSE internal
+ * Configuration for all outbound HTTP/WebSocket clients: VSOD→g8ee internal
  * client, VSOD→VSODB HTTP client, and VSODB PubSub WebSocket client.
  * Also includes CORS origins that bypass the ALLOWED_ORIGINS env var check.
  */
@@ -21,12 +21,12 @@
 // ---------------------------------------------------------------------------
 // Internal Cluster URLs - VSODB uses ports 9000 (HTTPS) and 9001 (WSS)
 // ---------------------------------------------------------------------------
-export const VSE_INTERNAL_URL = 'https://vse';
+export const G8EE_INTERNAL_URL = 'https://g8ee';
 export const VSOD_INTERNAL_URL = 'https://vsod';
 export const VSODB_INTERNAL_HTTP_URL = 'https://vsodb:9000';
 
 // ---------------------------------------------------------------------------
-// Internal HTTP Client (VSOD -> VSE)
+// Internal HTTP Client (VSOD -> g8ee)
 // ---------------------------------------------------------------------------
 export const INTERNAL_HTTP_TIMEOUT_MS = 5000;
 export const INTERNAL_HTTP_CLIENT_USER_AGENT = 'vsod-internal-client/1.0';
@@ -37,7 +37,7 @@ export const NEW_CASE_ID = 'new-case-via-vsod';
  * These are internal docker-compose service-to-service origins.
  */
 export const CORS_INTERNAL_ORIGINS = Object.freeze([
-    'https://vse',
+    'https://g8ee',
     'https://vsod',
     'https://localhost',
 ]);

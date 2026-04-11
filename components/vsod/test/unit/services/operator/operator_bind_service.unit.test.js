@@ -33,7 +33,7 @@ describe('BindOperatorsService', () => {
             operatorService: {
                 getOperator: vi.fn(),
                 getOperatorWithSessionContext: vi.fn(),
-                relayRegisterOperatorSessionToVse: vi.fn().mockResolvedValue({ success: true }),
+                relayRegisterOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
                 broadcastOperatorListToSession: vi.fn().mockResolvedValue(),
                 operatorDataService: {
                     updateOperator: vi.fn(),
@@ -89,7 +89,7 @@ describe('BindOperatorsService', () => {
             expect(result.errors[0].error).toBe(DeviceLinkError.OPERATOR_WRONG_USER);
         });
 
-        it('should successfully bind and relay to VSE', async () => {
+        it('should successfully bind and relay to g8ee', async () => {
             const operator = new OperatorDocument({ 
                 operator_id: 'op-123', 
                 user_id: 'u-123', 
@@ -101,7 +101,7 @@ describe('BindOperatorsService', () => {
             
             const vsoContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(vsoContextWrapper);
-            mocks.operatorService.relayRegisterOperatorSessionToVse.mockResolvedValue({ success: true });
+            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
             mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
@@ -119,12 +119,12 @@ describe('BindOperatorsService', () => {
                 web_session_id: 'ws-123'
             });
             expect(mocks.bindingService.bind).toHaveBeenCalledWith('os-123', 'ws-123', 'u-123', 'op-123');
-            expect(mocks.operatorService.relayRegisterOperatorSessionToVse).toHaveBeenCalledWith(expect.any(VSOHttpContext));
+            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(VSOHttpContext));
         });
     });
 
     describe('unbindOperators', () => {
-        it('should unbind and relay to VSE', async () => {
+        it('should unbind and relay to g8ee', async () => {
             const operator = new OperatorDocument({
                 operator_id: 'op-123',
                 user_id: 'u-123',
@@ -137,7 +137,7 @@ describe('BindOperatorsService', () => {
             
             const vsoContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(vsoContextWrapper);
-            mocks.operatorService.relayRegisterOperatorSessionToVse.mockResolvedValue({ success: true });
+            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
             mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({ 
@@ -155,7 +155,7 @@ describe('BindOperatorsService', () => {
                 web_session_id: null
             });
             expect(mocks.bindingService.unbind).toHaveBeenCalledWith('os-123', 'ws-123', 'op-123');
-            expect(mocks.operatorService.relayRegisterOperatorSessionToVse).toHaveBeenCalledWith(expect.any(VSOHttpContext));
+            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(VSOHttpContext));
         });
     });
 
@@ -632,7 +632,7 @@ describe('BindOperatorsService', () => {
     });
 
     describe('relay and broadcast failure handling', () => {
-        it('should continue bind when relayRegisterOperatorSessionToVse fails', async () => {
+        it('should continue bind when relayRegisterOperatorSessionToG8ee fails', async () => {
             const operator = new OperatorDocument({
                 operator_id: 'op-relay-fail',
                 user_id: 'u-123',
@@ -644,7 +644,7 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-relay-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.relayRegisterOperatorSessionToVse.mockRejectedValue(new Error('VSE unreachable'));
+            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
             mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
@@ -688,7 +688,7 @@ describe('BindOperatorsService', () => {
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalled();
         });
 
-        it('should continue unbind when relayRegisterOperatorSessionToVse fails', async () => {
+        it('should continue unbind when relayRegisterOperatorSessionToG8ee fails', async () => {
             const operator = new OperatorDocument({
                 operator_id: 'op-unbind-relay-fail',
                 user_id: 'u-123',
@@ -699,7 +699,7 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-relay-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.relayRegisterOperatorSessionToVse.mockRejectedValue(new Error('VSE unreachable'));
+            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
             mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
@@ -766,7 +766,7 @@ describe('BindOperatorsService', () => {
 
             expect(result.success).toBe(true);
             expect(result.bound_count).toBe(1);
-            expect(mocks.operatorService.relayRegisterOperatorSessionToVse).not.toHaveBeenCalled();
+            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).not.toHaveBeenCalled();
         });
 
         it('should handle null context wrapper in unbind without error', async () => {
@@ -790,7 +790,7 @@ describe('BindOperatorsService', () => {
 
             expect(result.success).toBe(true);
             expect(result.unbound_count).toBe(1);
-            expect(mocks.operatorService.relayRegisterOperatorSessionToVse).not.toHaveBeenCalled();
+            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).not.toHaveBeenCalled();
         });
     });
 });

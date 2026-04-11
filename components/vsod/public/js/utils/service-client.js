@@ -41,7 +41,7 @@ class RateLimitError extends Error {
 }
 
 const SERVICE_URLS = {
-    [ServiceName.VSE]: ServiceUrl.VSE,
+    [ServiceName.G8EE]: ServiceUrl.G8EE,
 };
 
 class ServiceClient {
@@ -54,7 +54,7 @@ class ServiceClient {
         };
 
         this.currentEndpointIndex = {
-            [ServiceName.VSE]: 0,
+            [ServiceName.G8EE]: 0,
             [ServiceName.VSOD]: 0,
         };
 
@@ -114,7 +114,7 @@ class ServiceClient {
 
     async initializeConfiguration() {
         devLogger.log('[ServiceClient] Service URLs:', {
-            [ServiceName.VSE]: SERVICE_URLS[ServiceName.VSE],
+            [ServiceName.G8EE]: SERVICE_URLS[ServiceName.G8EE],
             [ServiceName.VSOD]: window.location.origin,
         });
         this.configLoaded = true;

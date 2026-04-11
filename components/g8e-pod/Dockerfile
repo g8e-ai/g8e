@@ -6,7 +6,7 @@
 #
 # Usage:
 #   docker compose run g8e-pod              # Run all tests
-#   docker compose run g8e-pod vse          # Run VSE tests only
+#   docker compose run g8e-pod g8ee          # Run g8ee tests only
 #   docker compose run g8e-pod vsod -v      # Run VSOD tests with verbose
 
 FROM ubuntu:24.04
@@ -126,7 +126,7 @@ RUN mkdir -p /var/log/supervisor \
     && chown -R g8e:g8e /var/log/supervisor
 
 # Copy dependency files first for layer caching
-COPY components/vse/requirements.txt /app/components/vse/
+COPY components/g8ee/requirements.txt /app/components/g8ee/
 COPY components/vsod/package.json components/vsod/package-lock.json /app/components/vsod/
 COPY components/vsod/vitest.config.js /app/vsod-vitest.config.js
 COPY components/vsa/go.mod components/vsa/go.sum /app/components/vsa/
@@ -136,7 +136,7 @@ COPY components/vsa/vendor/ /app/components/vsa/vendor/
 ENV VENV_PATH="/opt/venv"
 ENV PATH="${VENV_PATH}/bin:${PATH}"
 RUN python3 -m venv ${VENV_PATH} \
-    && pip install --no-cache-dir -r /app/components/vse/requirements.txt
+    && pip install --no-cache-dir -r /app/components/g8ee/requirements.txt
 
 # Install VSOD Node.js dependencies
 RUN npm config set update-notifier false \

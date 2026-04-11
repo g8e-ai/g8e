@@ -93,7 +93,7 @@ export class BindOperatorsService {
                 // 3. Link sessions in KV & Durability
                 await this.bindingService.bind(operatorSessionId, webSessionId, userId, operatorId);
 
-                // 4. Relay to VSE
+                // 4. Relay to g8ee
                 const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
                 if (contextWrapper) {
                     const vsoContext = VSOHttpContext.parse({
@@ -113,7 +113,7 @@ export class BindOperatorsService {
                             })
                         ]
                     });
-                    await this.operatorService.relayRegisterOperatorSessionToVse(vsoContext).catch(() => {});
+                    await this.operatorService.relayRegisterOperatorSessionToG8ee(vsoContext).catch(() => {});
                 }
                 bound.push(operatorId);
 
@@ -196,7 +196,7 @@ export class BindOperatorsService {
                     await this.bindingService.unbind(operatorSessionId, webSessionId, operatorId);
                 }
                 
-                // 4. Relay to VSE
+                // 4. Relay to g8ee
                 const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
                 if (contextWrapper) {
                     const vsoContext = VSOHttpContext.parse({
@@ -216,7 +216,7 @@ export class BindOperatorsService {
                             })
                         ]
                     });
-                    await this.operatorService.relayRegisterOperatorSessionToVse(vsoContext).catch(() => {});
+                    await this.operatorService.relayRegisterOperatorSessionToG8ee(vsoContext).catch(() => {});
                 }
                 
                 unbound.push(operatorId);

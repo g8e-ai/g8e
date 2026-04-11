@@ -118,16 +118,16 @@ describe('OperatorService', () => {
     });
 
     describe('Lifecycle & Relay Orchestration', () => {
-        it('should relay stop command to VSE', async () => {
+        it('should relay stop command to g8ee', async () => {
             const operator = new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE });
             const context = OperatorWithSessionContext.create(operator);
             
-            vi.spyOn(service.relay, 'relayStopCommandToVse').mockResolvedValue(true);
+            vi.spyOn(service.relay, 'relayStopCommandToG8ee').mockResolvedValue(true);
 
-            const result = await service.relayStopCommandToVse(context);
+            const result = await service.relayStopCommandToG8ee(context);
 
             expect(result).toBe(true);
-            expect(service.relay.relayStopCommandToVse).toHaveBeenCalledWith(context);
+            expect(service.relay.relayStopCommandToG8ee).toHaveBeenCalledWith(context);
         });
     });
 
@@ -271,30 +271,30 @@ describe('OperatorService', () => {
     describe('Relay Methods', () => {
         const vsoContext = { operator_id: 'op-1' };
 
-        it('should delegate deregisterOperatorSessionInVse to relay subservice', async () => {
-            vi.spyOn(service.relay, 'deregisterOperatorSessionInVse').mockResolvedValue(true);
-            await service.deregisterOperatorSessionInVse(vsoContext);
-            expect(service.relay.deregisterOperatorSessionInVse).toHaveBeenCalledWith(vsoContext);
+        it('should delegate deregisterOperatorSessionInG8ee to relay subservice', async () => {
+            vi.spyOn(service.relay, 'deregisterOperatorSessionInG8ee').mockResolvedValue(true);
+            await service.deregisterOperatorSessionInG8ee(vsoContext);
+            expect(service.relay.deregisterOperatorSessionInG8ee).toHaveBeenCalledWith(vsoContext);
         });
 
-        it('should delegate relayDirectCommandToVse to relay subservice', async () => {
-            vi.spyOn(service.relay, 'relayDirectCommandToVse').mockResolvedValue(true);
+        it('should delegate relayDirectCommandToG8ee to relay subservice', async () => {
+            vi.spyOn(service.relay, 'relayDirectCommandToG8ee').mockResolvedValue(true);
             const cmd = { command: 'ls' };
-            await service.relayDirectCommandToVse(cmd, vsoContext);
-            expect(service.relay.relayDirectCommandToVse).toHaveBeenCalledWith(cmd, vsoContext);
+            await service.relayDirectCommandToG8ee(cmd, vsoContext);
+            expect(service.relay.relayDirectCommandToG8ee).toHaveBeenCalledWith(cmd, vsoContext);
         });
 
-        it('should delegate relayRegisterOperatorSessionToVse to relay subservice', async () => {
-            vi.spyOn(service.relay, 'relayRegisterOperatorSessionToVse').mockResolvedValue(true);
-            await service.relayRegisterOperatorSessionToVse(vsoContext);
-            expect(service.relay.relayRegisterOperatorSessionToVse).toHaveBeenCalledWith(vsoContext);
+        it('should delegate relayRegisterOperatorSessionToG8ee to relay subservice', async () => {
+            vi.spyOn(service.relay, 'relayRegisterOperatorSessionToG8ee').mockResolvedValue(true);
+            await service.relayRegisterOperatorSessionToG8ee(vsoContext);
+            expect(service.relay.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(vsoContext);
         });
 
-        it('should delegate relayApprovalResponseToVse to relay subservice', async () => {
-            vi.spyOn(service.relay, 'relayApprovalResponseToVse').mockResolvedValue(true);
+        it('should delegate relayApprovalResponseToG8ee to relay subservice', async () => {
+            vi.spyOn(service.relay, 'relayApprovalResponseToG8ee').mockResolvedValue(true);
             const approval = { approved: true };
-            await service.relayApprovalResponseToVse(approval, vsoContext);
-            expect(service.relay.relayApprovalResponseToVse).toHaveBeenCalledWith(approval, vsoContext);
+            await service.relayApprovalResponseToG8ee(approval, vsoContext);
+            expect(service.relay.relayApprovalResponseToG8ee).toHaveBeenCalledWith(approval, vsoContext);
         });
     });
 

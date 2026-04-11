@@ -17,7 +17,7 @@
  * Features:
  * - Case creation and loading
  * - Case dropdown management
- * - Integration with VSE backend
+ * - Integration with g8ee backend
  * - Event-driven architecture
  * - URL-based session persistence (investigation ID in URL query param)
  * 
@@ -266,7 +266,7 @@ export class CasesManager {
     }
 
     /**
-     * Load user investigations from VSE via HTTP - SINGLE CALL ONLY
+     * Load user investigations from g8ee via HTTP - SINGLE CALL ONLY
      */
     async loadUserCases() {
         // Prevent duplicate loading

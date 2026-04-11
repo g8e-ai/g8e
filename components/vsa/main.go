@@ -124,7 +124,7 @@ func main() {
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
 	flag.IntVar(&listenWSSPort, "wss-listen-port", 443, "WSS/TLS port for operator pub/sub connections (default: 443)")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", 443, "HTTPS port for internal VSE/VSOD service traffic (default: 443)")
+	flag.IntVar(&listenHTTPPort, "http-listen-port", 443, "HTTPS port for internal g8ee/VSOD service traffic (default: 443)")
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&listenSSLDir, "ssl-dir", "", "Directory for TLS certificates (default: data-dir/ssl)")
 	flag.StringVar(&listenBinaryDir, "binary-dir", "", "Directory containing operator binaries to serve (default: .g8e/bin in working directory)")
@@ -167,7 +167,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
 		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: 443)\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal VSE/VSOD traffic (default: 443)\n")
+		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/VSOD traffic (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --ssl-dir <dir>             Directory for TLS certificates (default: data-dir/ssl)\n")
 		fmt.Fprintf(os.Stderr, "  --binary-dir <dir>          Directory containing operator binaries to serve (default: .g8e/bin in working directory)\n")
@@ -493,7 +493,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // persistence (VSODB) and pub/sub broker. In this mode, the Operator does
 // NOT execute commands, initiate outbound connections, or perform
 // authentication against a remote hub. It is strictly an inbound service
-// for VSE, VSOD, and Outbound Operators.
+// for g8ee, VSOD, and Outbound Operators.
 func runListenMode(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPath, tlsKeyPath string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
@@ -634,7 +634,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 // runOpenClawMode starts the Operator as an OpenClaw Node Host.
 // The Operator connects to the OpenClaw Gateway via WebSocket, advertises
 // system.run and system.which, and executes shell commands on demand.
-// No g8e infrastructure (VSE, VSOD) is required.
+// No g8e infrastructure (g8ee, VSOD) is required.
 func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {

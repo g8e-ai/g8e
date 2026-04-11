@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical Conversation document shape. VSOD is the authority — it creates and stores this document in SQLite keyed by web_session_id. VSE reads it via VSOD context headers (X-VSO-*) to build AI stream context. A field mismatch breaks session routing, investigation linkage, and sentinel mode propagation.",
+  "_comment": "Canonical Conversation document shape. VSOD is the authority — it creates and stores this document in SQLite keyed by web_session_id. g8ee reads it via VSOD context headers (X-VSO-*) to build AI stream context. A field mismatch breaks session routing, investigation linkage, and sentinel mode propagation.",
 
   "_authority": "VSOD (SQLite)",
-  "_consumers": ["VSE (Python — reads context from X-VSO-* headers that VSOD builds from this document)"],
+  "_consumers": ["g8ee (Python — reads context from X-VSO-* headers that VSOD builds from this document)"],
   "_key": "Stored in VSOD SQLite conversations collection, keyed by web_session_id",
 
   "conversation": {

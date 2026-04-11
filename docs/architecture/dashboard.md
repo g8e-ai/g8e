@@ -587,7 +587,7 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 | VSOD | Always healthy (self-check) | uptime (seconds), heap used (MB), PID |
 | VSODB KV | `GET __console_health_check__` via Redis client | round-trip latency ms |
 | VSODB DB | `getDocument(COMPONENTS, 'platform_settings')` | round-trip latency ms |
-| VSE | `GET /health` via internal HTTP client | reported status from VSE response |
+| g8ee | `GET /health` via internal HTTP client | reported status from g8ee response |
 
 Overall status: `healthy` if all components healthy; `unhealthy` if any is unhealthy; `degraded` otherwise.
 

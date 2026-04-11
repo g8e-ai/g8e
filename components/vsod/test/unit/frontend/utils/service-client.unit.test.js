@@ -87,12 +87,12 @@ function makeErrorResponse(status, statusText, body = null) {
 
 describe('service-client-constants contract [UNIT]', () => {
     it('ServiceName values are correct', () => {
-        expect(ServiceName.VSE).toBe('vse');
+        expect(ServiceName.G8EE).toBe('g8ee');
         expect(ServiceName.VSOD).toBe('vsod');
     });
 
-    it('ServiceUrl.VSE is the expected internal URL', () => {
-        expect(ServiceUrl.VSE).toBe('https://vse');
+    it('ServiceUrl.G8EE is the expected internal URL', () => {
+        expect(ServiceUrl.G8EE).toBe('https://g8ee');
     });
 
     it('RequestTimeout values are positive integers', () => {
@@ -274,9 +274,9 @@ describe('ServiceClient.getServiceEndpoints [UNIT - jsdom]', () => {
         expect(endpoints).toEqual(['https://g8e.local']);
     });
 
-    it('returns ServiceUrl.VSE for VSE', () => {
-        const endpoints = client.getServiceEndpoints(ServiceName.VSE);
-        expect(endpoints).toEqual([ServiceUrl.VSE]);
+    it('returns ServiceUrl.G8EE for g8ee', () => {
+        const endpoints = client.getServiceEndpoints(ServiceName.G8EE);
+        expect(endpoints).toEqual([ServiceUrl.G8EE]);
     });
 
     it('throws for an unknown service name', () => {
@@ -373,10 +373,10 @@ describe('ServiceClient.sendRequest — URL and fetch [UNIT - jsdom]', () => {
         );
     });
 
-    it('constructs URL from VSE origin + path', async () => {
-        await client.sendRequest(ServiceName.VSE, '/api/internal/health');
+    it('constructs URL from g8ee origin + path', async () => {
+        await client.sendRequest(ServiceName.G8EE, '/api/internal/health');
         expect(fetch).toHaveBeenCalledWith(
-            `${ServiceUrl.VSE}/api/internal/health`,
+            `${ServiceUrl.G8EE}/api/internal/health`,
             expect.any(Object)
         );
     });

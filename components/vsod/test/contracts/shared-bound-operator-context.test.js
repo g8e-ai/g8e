@@ -18,7 +18,7 @@
  * wire shape defined in shared/models/wire/bound_operator_context.json.
  *
  * Prevents desynchronization between VSOD's BoundOperatorContext.forWire()
- * output and VSE's BoundOperator parsing logic.
+ * output and g8ee's BoundOperator parsing logic.
  */
 
 import { describe, it, expect } from 'vitest';

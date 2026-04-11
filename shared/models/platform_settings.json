@@ -3,7 +3,7 @@
 
   "_authority": "VSODB (Secrets) / VSOD (Config)",
   "_consumers": [
-    "VSE (Python — reads at startup and on cache miss to build base Settings)",
+    "g8ee (Python — reads at startup and on cache miss to build base Settings)",
     "VSOD (JS — reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
@@ -16,7 +16,7 @@
       "internal_auth_token": {
         "type": "string",
         "required": true,
-        "description": "Cryptographically secure token for internal service-to-service authentication (VSE <-> VSODB, VSOD <-> VSODB)."
+        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> VSODB, VSOD <-> VSODB)."
       },
       "session_encryption_key": {
         "type": "string",

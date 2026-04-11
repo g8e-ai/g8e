@@ -8,10 +8,10 @@
     "shared_constants_dir": "/app/shared/constants",
     "shared_models_dir": "/app/shared/models"
   },
-  "vse": {
-    "app_dir": "/app/components/vse",
-    "config_dir": "/app/components/vse/config",
-    "tests_dir": "/app/components/vse/tests"
+  "g8ee": {
+    "app_dir": "/app/components/g8ee",
+    "config_dir": "/app/components/g8ee/config",
+    "tests_dir": "/app/components/g8ee/tests"
   },
   "vsod": {
     "app_dir": "/app/components/vsod",
