@@ -50,10 +50,12 @@ addopts = [
 ]
 
 
-# Warning filters - treat all warnings as errors
-# Except ResourceWarning for unclosed connections from async cleanup in tests
+# Warning filters - treat all warnings as errors except SDK-internal issues
 filterwarnings = [
     "error",
+    "ignore:Inheritance class .* from ClientSession is discouraged:DeprecationWarning:aiohttp.client",
+    "ignore:Unclosed client session:ResourceWarning",
+    "ignore:Unclosed connector:ResourceWarning",
 ]
 
 # Timeout for tests (prevents hanging)

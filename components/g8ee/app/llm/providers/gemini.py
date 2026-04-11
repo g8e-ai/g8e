@@ -40,6 +40,7 @@ Temperature (Gemini 3):
     set it below 1.0 for Gemini 3 models.
 """
 
+import asyncio
 import base64
 import logging
 from collections.abc import AsyncGenerator
@@ -80,6 +81,8 @@ from app.models.model_configs import get_model_config
 from ..provider import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+_STREAM_END = object()
 
 
 # =============================================================================
@@ -354,21 +357,6 @@ class GeminiProvider(LLMProvider):
         self._client = genai.Client(api_key=api_key)
         logger.info("Gemini provider initialized")
 
-    async def close(self):
-        """Clean up the genai SDK's internal aiohttp session to prevent resource leaks."""
-        try:
-            api_client = getattr(self._client, '_api_client', None)
-            if api_client:
-                session = getattr(api_client, '_aiohttp_session', None)
-                if session and not getattr(session, 'closed', True):
-                    connector = getattr(session, 'connector', None)
-                    await session.close()
-                    if connector and not getattr(connector, 'closed', True):
-                        await connector.close()
-        except Exception as e:
-            logger.warning("Error closing Gemini provider: %s", e)
-        logger.info("Gemini provider closed")
-
     @staticmethod
     def _build_thinking_config_gemini3(tc, genai_types):
         """Build ThinkingConfig for Gemini 3 models.
@@ -567,13 +555,39 @@ class GeminiProvider(LLMProvider):
         gen_config = self._build_genai_config_lite(lite_llm_settings, model)
         return GenaiRequestKwargs(model=model, contents=genai_contents, config=gen_config)
 
-    async def _open_stream_attempt(self, kwargs: GenaiRequestKwargs):
-        """Open the SDK stream, retrying on transient errors before any data is read.
+    def _parse_response(self, response) -> GenerateContentResponse:
+        """Convert an SDK GenerateContentResponse to canonical form."""
+        parts: list[Part] = []
+        finish_reason: str | None = None
+        if response.candidates:
+            candidate = response.candidates[0]
+            parts = _parts_from_sdk_candidate(candidate)
+            finish_reason = _finish_reason_from_candidate(candidate)
 
-        Returns the live async iterator. Only the connection-open step is retried;
-        once the stream is open, chunks are yielded immediately by the caller.
-        """
-        return await self._client.aio.models.generate_content_stream(**kwargs.flatten_for_llm())
+        usage: UsageMetadata | None = None
+        if response.usage_metadata:
+            usage = _usage_from_sdk(response.usage_metadata)
+
+        grounding_raw: SdkGroundingRawData | None = None
+        if response.candidates:
+            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=finish_reason,
+            )],
+            usage_metadata=usage,
+            grounding_raw=grounding_raw,
+        )
+
+    def _sync_generate(self, kwargs: GenaiRequestKwargs):
+        """Blocking generate_content via the sync SDK (uses httpx, not aiohttp)."""
+        return self._client.models.generate_content(**kwargs.flatten_for_llm())
+
+    def _sync_stream(self, kwargs: GenaiRequestKwargs):
+        """Blocking generate_content_stream via the sync SDK (uses httpx, not aiohttp)."""
+        return self._client.models.generate_content_stream(**kwargs.flatten_for_llm())
 
     async def generate_content_stream_primary(
         self,
@@ -583,7 +597,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
 
-        stream = None
+        stream_iter = None
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(self._is_retryable),
             stop=stop_after_attempt(4),
@@ -591,10 +605,13 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                stream = await self._open_stream_attempt(kwargs)
+                stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
 
-        assert stream is not None
-        async for sdk_chunk in stream:
+        assert stream_iter is not None
+        while True:
+            sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
+            if sdk_chunk is _STREAM_END:
+                break
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
 
@@ -614,33 +631,10 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
+                response = await asyncio.to_thread(self._sync_generate, kwargs)
 
         assert response is not None
-
-        parts: list[Part] = []
-        finish_reason: str
-        if response.candidates:
-            candidate = response.candidates[0]
-            parts = _parts_from_sdk_candidate(candidate)
-            finish_reason = _finish_reason_from_candidate(candidate)
-
-        usage: UsageMetadata
-        if response.usage_metadata:
-            usage = _usage_from_sdk(response.usage_metadata)
-
-        grounding_raw: SdkGroundingRawData
-        if response.candidates:
-            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=finish_reason,
-            )],
-            usage_metadata=usage,
-            grounding_raw=grounding_raw,
-        )
+        return self._parse_response(response)
 
     async def generate_content_stream_assistant(
         self,
@@ -650,7 +644,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
 
-        stream = None
+        stream_iter = None
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(self._is_retryable),
             stop=stop_after_attempt(4),
@@ -658,10 +652,13 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                stream = await self._open_stream_attempt(kwargs)
+                stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
 
-        assert stream is not None
-        async for sdk_chunk in stream:
+        assert stream_iter is not None
+        while True:
+            sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
+            if sdk_chunk is _STREAM_END:
+                break
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
 
@@ -681,33 +678,10 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
+                response = await asyncio.to_thread(self._sync_generate, kwargs)
 
         assert response is not None
-
-        parts: list[Part] = []
-        finish_reason: str
-        if response.candidates:
-            candidate = response.candidates[0]
-            parts = _parts_from_sdk_candidate(candidate)
-            finish_reason = _finish_reason_from_candidate(candidate)
-
-        usage: UsageMetadata
-        if response.usage_metadata:
-            usage = _usage_from_sdk(response.usage_metadata)
-
-        grounding_raw: SdkGroundingRawData
-        if response.candidates:
-            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=finish_reason,
-            )],
-            usage_metadata=usage,
-            grounding_raw=grounding_raw,
-        )
+        return self._parse_response(response)
 
     async def generate_content_stream_lite(
         self,
@@ -717,7 +691,7 @@ class GeminiProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
 
-        stream = None
+        stream_iter = None
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(self._is_retryable),
             stop=stop_after_attempt(4),
@@ -725,10 +699,13 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                stream = await self._open_stream_attempt(kwargs)
+                stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
 
-        assert stream is not None
-        async for sdk_chunk in stream:
+        assert stream_iter is not None
+        while True:
+            sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
+            if sdk_chunk is _STREAM_END:
+                break
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
 
@@ -748,30 +725,7 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
+                response = await asyncio.to_thread(self._sync_generate, kwargs)
 
         assert response is not None
-
-        parts: list[Part] = []
-        finish_reason: str
-        if response.candidates:
-            candidate = response.candidates[0]
-            parts = _parts_from_sdk_candidate(candidate)
-            finish_reason = _finish_reason_from_candidate(candidate)
-
-        usage: UsageMetadata
-        if response.usage_metadata:
-            usage = _usage_from_sdk(response.usage_metadata)
-
-        grounding_raw: SdkGroundingRawData
-        if response.candidates:
-            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=finish_reason,
-            )],
-            usage_metadata=usage,
-            grounding_raw=grounding_raw,
-        )
+        return self._parse_response(response)
