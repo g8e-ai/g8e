@@ -60,11 +60,11 @@ _PROBED_CAPABILITIES = {
 
 async def _probe_llm_capabilities(settings):
     """Probe the LLM for thinking and tool support."""
-    from app.llm import get_llm_provider
+    from app.llm.factory import get_llm_provider, get_llm_settings
     from app.llm import llm_types as types
     from app.constants import ThinkingLevel
 
-    llm = getattr(settings, 'llm', None)
+    llm = get_llm_settings()
     if not _has_llm_credentials(llm):
         return
 
@@ -313,7 +313,7 @@ async def _load_settings_from_g8es(timeout: float = 5.0) -> G8eePlatformSettings
 
 def pytest_configure(config):
     import asyncio
-    from app.llm.factory import set_settings
+    from app.llm.factory import set_settings, set_llm_settings, set_search_settings
 
     logger.info("Pytest configure started.")
 
@@ -325,23 +325,26 @@ def pytest_configure(config):
         from app.services.infra.settings_service import SettingsService
         settings = SettingsService().get_local_settings()
 
+    set_settings(settings)
+
     env_llm = _llm_settings_from_env()
     if env_llm is not None:
-        logger.info(f"Overriding settings from env: provider={env_llm.provider}")
-        object.__setattr__(settings, 'llm', env_llm)
+        logger.info(f"Overriding LLM settings from env: provider={env_llm.provider}")
+        set_llm_settings(env_llm)
 
     env_search = _web_search_settings_from_env()
     if env_search is not None:
         logger.info("Overriding web search settings from env")
-        object.__setattr__(settings, 'search', env_search)
+        set_search_settings(env_search)
 
-    set_settings(settings)
     # Probing is now deferred to the 'probed_capabilities' fixture to avoid startup latency.
 
 
 def pytest_collection_modifyitems(config, items):
-    from app.llm.factory import get_settings
+    from app.llm.factory import get_settings, get_llm_settings, get_search_settings
     settings = get_settings()
+    llm = get_llm_settings()
+    search_settings = get_search_settings()
 
     # NOTE: This hook runs before fixtures like 'probed_capabilities'.
     # It relies on _PROBED_CAPABILITIES which starts with optimistic defaults.
@@ -351,15 +354,14 @@ def pytest_collection_modifyitems(config, items):
     # will now fail later during execution rather than being skipped here,
     # unless they are explicitly marked with capabilities.
 
-    llm = getattr(settings, 'llm', None) if settings else None
     has_llm_credentials = _has_llm_credentials(llm)
-    has_vertex_search = settings.search.enabled if settings else False
+    has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (
-        settings.search.enabled
-        and bool(settings.search.project_id)
-        and bool(settings.search.engine_id)
-        and bool(settings.search.api_key)
-    ) if settings else False
+        search_settings.enabled
+        and bool(search_settings.project_id)
+        and bool(search_settings.engine_id)
+        and bool(search_settings.api_key)
+    ) if search_settings else False
 
     logger.info(f"Collection: settings={settings is not None}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
     if llm:
@@ -569,7 +571,8 @@ async def probed_capabilities(test_settings):
     better visibility.
     """
     import asyncio
-    if _has_llm_credentials(getattr(test_settings, 'llm', None)):
+    from app.llm.factory import get_llm_settings
+    if _has_llm_credentials(get_llm_settings()):
         try:
             # Apply a 30s timeout to the entire probing session
             async with asyncio.timeout(30.0):
@@ -747,27 +750,6 @@ def provider_config():
     )
 
 
-@pytest.fixture
-def real_provider_config(test_settings):
-    """GenerateContentConfig that exactly mirrors the platform's LLM configuration.
-    
-    This is an enhanced version of provider_config that includes all relevant
-    settings from the platform configuration, intended for tests that need to
-    verify the provider behaves correctly with actual configured values.
-    Use this fixture when you need to test with real platform settings.
-    """
-    from app.llm.llm_types import GenerateContentConfig
-    
-    llm_settings = getattr(test_settings, 'llm', None)
-    if llm_settings is None:
-        pytest.skip("No LLM settings configured")
-    
-    config = GenerateContentConfig(
-        temperature=llm_settings.llm_temperature,
-        max_output_tokens=llm_settings.llm_max_tokens,
-    )
-    
-    return config
 
 
 # ---------------------------------------------------------------------------
@@ -876,9 +858,8 @@ async def db_service(test_settings, cache_aside_service):
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def llm_provider():
     """Returns a configured LLMProvider instance for the session."""
-    from app.llm.factory import get_llm_provider, get_settings
-    settings = get_settings()
-    llm = getattr(settings, 'llm', None)
+    from app.llm.factory import get_llm_provider, get_llm_settings
+    llm = get_llm_settings()
     if llm is None:
         pytest.skip("No LLM settings configured")
     provider = get_llm_provider(llm)

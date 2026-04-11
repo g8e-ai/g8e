@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from app.constants import AgentMode, EventType, OperatorStatus
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
-from app.llm.factory import get_llm_provider
+from app.llm.factory import get_llm_provider, get_llm_settings
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
@@ -90,13 +90,12 @@ async def test_agent_accuracy(
     chat_pipeline = all_services['chat_pipeline']
 
     try:
-        from app.llm.factory import get_settings
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm_settings = get_llm_settings()
+        if not llm_settings or not llm_settings.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # The Assistant Model is being tested
-        model_name = settings.llm.assistant_model
+        model_name = llm_settings.assistant_model
 
         # Prepare the context based on the scenario's agent mode
         agent_mode_str = scenario["agent_mode"]
@@ -153,7 +152,7 @@ async def test_agent_accuracy(
         # Enable web search for scenarios that expect it
         from app.models.settings import SearchSettings
         search_settings = SearchSettings(enabled="g8e_web_search" in scenario.get("expected_tools", []))
-        user_settings = G8eeUserSettings(llm=settings.llm, search=search_settings)
+        user_settings = G8eeUserSettings(llm=llm_settings, search=search_settings)
         task_manager = ChatTaskManager()
 
         logger.info(f"[EVAL] Running scenario {scenario['id']} with model {model_name}")
@@ -168,8 +167,8 @@ async def test_agent_accuracy(
             g8e_context=g8e_context,
             attachments=[],
             sentinel_mode=True,
-            llm_primary_model=settings.llm.primary_model,
-            llm_assistant_model=settings.llm.assistant_model,
+            llm_primary_model=llm_settings.primary_model,
+            llm_assistant_model=llm_settings.assistant_model,
             _task_manager=task_manager,
             user_settings=user_settings,
             _track_task=False,  # Don't track task for eval tests
@@ -194,7 +193,7 @@ async def test_agent_accuracy(
         logger.info(f"[EVAL] AI response length: {len(ai_response_text)} chars")
 
         # Step 5: Grade with EvalJudge (Primary Model grades Assistant Model)
-        judge = EvalJudge(provider=get_llm_provider(settings.llm), model=settings.llm.primary_model)
+        judge = EvalJudge(provider=get_llm_provider(llm_settings), model=llm_settings.primary_model)
 
         # Build interaction trace for the judge
         trace_lines = [
