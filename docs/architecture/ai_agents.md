@@ -1,0 +1,843 @@
+# g8e AI Agents — VSE Deep Dive
+
+VSE AI agent architecture — investigation context, dynamic system prompts, memory, operation recording, chat turn flow, service breakdown, prompts, tools, LLM providers, and configuration.
+
+---
+
+## Hierarchy
+
+```
+Case
+└── Investigation  (1:1 with Case today)
+    ├── ConversationHistory  (array of ConversationHistoryMessage)
+    └── InvestigationMemory  (AI-generated, per-investigation, persisted separately)
+```
+
+- **Case** — top-level issue container; owns `case_id`, title, description, priority, severity
+- **Investigation** — the active chat session; owns conversation history, sentinel mode, operator binding state
+- **ConversationHistory** — append-only message log; senders are `USER_CHAT`, `AI_PRIMARY`, `AI_ASSISTANT`, `USER_TERMINAL`, `SYSTEM`
+- **InvestigationMemory** — AI-extracted preferences and summaries; keyed by `investigation_id`; injected into the system prompt on each turn
+
+---
+
+## High-Level Overview
+
+The VSE agent is a high-reasoning ReAct streaming loop. Each user message goes through a fixed pipeline orchestrated by `ChatPipelineService`:
+
+```mermaid
+flowchart TD
+    Start([User Message]) --> Context[Context Enrichment<br/>Investigation + Operator + Memory]
+    Context --> Triage{Triage Assistant}
+    
+    Triage -- Simple/Low Confidence --> FollowUp[Follow-up Question]
+    Triage -- Simple/High Confidence --> Asst[Assistant Model]
+    Triage -- Complex --> Primary[Primary Reasoning Agent]
+    
+    FollowUp --> SSE
+    Asst --> Loop
+    Primary --> Loop
+    
+    subgraph Loop [ReAct Streaming Loop]
+        direction TB
+        Reason[LLM Reasoning & Thinking] --> Action{Action Required?}
+        Action -- No --> Finish[Final Response]
+        Action -- Yes --> Tool[Tool Execution]
+        
+        Tool --> Command{Is Operator Command?}
+        Command -- Yes --> Tribunal[Tribunal Consensus<br/>Generation + Vote + Verifier]
+        Command -- No --> Exec[Direct Execution]
+        
+        Tribunal --> Approval{User Approval}
+        Approval -- Denied --> FeedBack[Tool Error/Cancel]
+        Approval -- Approved --> Exec
+        
+        Exec --> FeedBack[Append Tool Result to History]
+        FeedBack --> Reason
+    end
+    
+    Finish --> SSE[SSE Delivery to Browser]
+    SSE --> Post[Post-Turn Processing]
+    
+    subgraph Post [Background Tasks]
+        direction LR
+        Audit[LFAA Audit Logging]
+        Mem[Memory Analysis & Update]
+    end
+```
+
+1. **Context assembly** — `InvestigationService` resolves the investigation, enriches it with bound operator metadata, retrieved memory, and triage classification.
+2. **LLM Proposer call** — The **High Reasoning Agent** (Primary model) performs deep logical pathfinding using high thinking levels.
+3. **Tool execution** — Tool calls are dispatched sequentially through `AIToolService`. 
+4. **Tribunal Refinement** — Operator commands pass through a **Voting Swarm** and **Final Verifier** for syntactic precision before approval.
+5. **SSE delivery** — Chunks are translated and forwarded to the browser via VSOD in real time.
+6. **Persistence** — Results are saved to VSODB via authenticated HTTP calls (`X-Internal-Auth`); background memory update tasks are fired.
+
+All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in VSODB (KV) or on the Operator (VSA via LFAA). All platform-side interactions with VSODB are strictly authenticated via the `X-Internal-Auth` shared secret.
+
+---
+
+## Investigation Context
+
+### Pull and Enrichment
+
+`InvestigationService` (`components/vse/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the agent receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+
+**Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times (default 3) with configurable per-attempt delays (100ms, 200ms, 300ms) to handle propagation lag.
+
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the agent proceeds without it.
+
+**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `vso_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
+
+**Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, public IP, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields (type, subtype, intents).
+
+The resulting `EnrichedInvestigationContext` carries:
+- `operator_documents` — list of live `OperatorDocument` records from the cache.
+- `memory` — the attached `InvestigationMemory` (or `None`).
+- `bound_operators` — `BoundOperator` instances from `VSOHttpContext`.
+- `operator_session_token` — transient operator session token for authorization validation.
+
+### Security
+
+`get_investigation_context` logs a security warning if `user_id` is not provided — all user-facing queries must be scoped by `user_id` for tenant isolation.
+
+---
+
+## Dynamic System Prompts
+
+`build_modular_system_prompt` (`components/vse/app/llm/prompts.py`) assembles the system prompt from independently loaded sections each turn. The composition varies based on workflow and runtime state.
+
+### Fixed Sections (always included)
+
+| Section | File | Description |
+|---|---|---|
+| `identity` | `prompts_data/core/identity.txt` | Agent persona, role, core directives |
+| `safety` | `prompts_data/core/safety.txt` | Hard safety constraints, approval requirements |
+| `response_constraints` | `prompts_data/system/response_constraints.txt` | Response length limits, formatting guidance |
+
+### Mode Sections (loaded by `load_mode_prompts`)
+
+Mode is determined by two flags: `operator_bound` (bool) and `is_cloud_operator` (bool). Three mode directories exist:
+
+| Mode | Directory | Loaded When |
+|---|---|---|
+| Operator bound (standard) | `prompts_data/modes/operator_bound/` | Operator connected, not cloud type |
+| Cloud operator bound | `prompts_data/modes/cloud_operator_bound/` | Operator connected, cloud type. g8e-pod subtypes receive a specialized prompt for direct system access. |
+| Not bound | `prompts_data/modes/operator_not_bound/` | No operator connected |
+
+Each mode directory provides up to three sections: `capabilities`, `execution`, and `tools`. The `tools` section is only included when `operator_bound` is true or `search_web` is available.
+
+### Dynamic Sections (runtime-injected)
+
+**`<system_context>`** — built inline in `build_modular_system_prompt` from the `OperatorContext`. Includes operator type, OS, hostname, username, working directory, architecture, network, disk, memory, and container/init-system details. Cloud operators additionally emit `granted_intents`. Container environments emit a `systemd` unavailability warning when the init system is not systemd.
+
+**`sentinel_mode`** — `prompts_data/system/sentinel_mode.txt` is appended when `investigation.sentinel_mode is True`. Sentinel mode instructs the agent to scrub PII and secrets before any data leaves the Operator.
+
+**`<investigation_context>`** — built by `build_investigation_context_section`; injects case title, description, status, priority, severity, message counts, command execution stats, latest user request, and per-operator details (hostname, OS, arch, type, session ID prefix).
+
+**`<learned_context>`** — built by `build_learned_context_section` from `user_memories` and `case_memories`; injects communication preferences, technical background, response style, problem-solving approach, interaction style (from user-scoped memories) and investigation summaries (from case-scoped memories).
+
+### Section Order
+
+```
+1. core/identity.txt
+2. core/safety.txt
+3. modes/<mode>/capabilities.txt
+4. modes/<mode>/execution.txt
+5. modes/<mode>/tools.txt          (conditional)
+6. <system_context>                (when operator present)
+7. system/sentinel_mode.txt        (when sentinel_mode=True)
+8. <investigation_context>         (always when investigation present)
+9. system/response_constraints.txt
+10. <learned_context>              (when memories exist)
+```
+
+---
+
+## Memory
+
+### InvestigationMemory Fields
+
+| Field | Description |
+|---|---|
+| `investigation_summary` | What was investigated and outcome — no hostnames, IPs, or identifiers |
+| `communication_preferences` | How the user likes to receive information |
+| `technical_background` | Inferred skill level and domain expertise |
+| `response_style` | Preferred verbosity, tone, format |
+| `problem_solving_approach` | How the user approaches debugging / troubleshooting |
+| `interaction_style` | Level of autonomy the user prefers |
+
+### Update Lifecycle
+
+1. After the AI response is persisted to DB, `_persist_ai_response` (`chat_pipeline.py`) fires `_background_memory_update` as an `asyncio.create_task` — non-blocking, does not delay the SSE response.
+2. `MemoryGenerationService.update_memory_from_conversation` fetches or creates the `InvestigationMemory` document, then calls `_ai_update_memory`.
+3. `_ai_update_memory` takes the last 20 messages (skipping thinking messages), sends them with `build_memory_analysis_system_instruction` as the system prompt and `build_memory_analysis_request` as the closing user turn. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
+4. Non-null fields from the AI response overwrite the existing memory fields; existing values are preserved when the AI returns null.
+5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to VSODB KV via authenticated HTTP).
+
+### Injection on the Next Turn
+
+`chat_pipeline._prepare_chat_context` fetches both:
+- `get_user_memories(user_id)` — all memories for the user
+- `get_case_memories(case_id, user_id)` — all memories for the case (excluding `NEW_CASE_ID`)
+
+User memories contribute preference fields (communication, technical background, response style, etc.). Case memories contribute `investigation_summary`. Both are injected into the system prompt inside `<learned_context>` tags.
+
+---
+
+## Operation Actions — How They Are Recorded
+
+Every operator-bound action produces an audit trail via LFAA (Local-First Audit Architecture). The audit path runs through `OperatorCommandService.send_lfaa_audit_event`.
+
+### User Message Audit
+
+Before the LLM call, for every bound operator, an `OPERATOR_AUDIT_USER_RECORDED` event is sent carrying the raw user message, `operator_id`, `operator_session_id`, `web_session_id`, `case_id`, and `investigation_id`. This event travels to VSA via pub/sub and is written to the local audit log on the operator machine.
+
+### AI Response Audit
+
+After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sent for each bound operator carrying the full response text. Same routing as the user audit.
+
+### Command Execution Audit
+
+When the agent proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via VSOD SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, VSA executes the command locally, audits the result, and returns it through VSOD back to VSE. The result is then fed back into the agent's ReAct loop as a function response.
+
+---
+
+## Chat Turn Flow
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant VSOD
+    participant VSE_Pipeline as ChatPipelineService
+    participant CtxMgr as InvestigationService
+    participant Triage
+    participant Prompt as build_modular_system_prompt
+    participant Agent as g8e agent
+    participant Provider as LLMProvider
+    participant Tools as AIToolService
+    participant Tribunal as Tribunal
+    participant VSA
+
+    Browser->>VSOD: POST /api/chat {message}
+    VSOD->>VSE_Pipeline: run_chat(message, vso_context)
+
+    VSE_Pipeline->>CtxMgr: get_investigation_context(investigation_id)
+    CtxMgr->>CtxMgr: _attach_memory_context
+    CtxMgr->>CtxMgr: get_enriched_investigation_context (operators + memory)
+    CtxMgr-->>VSE_Pipeline: EnrichedInvestigationContext
+
+    VSE_Pipeline->>Triage: triage_message(message, agent_mode)
+    Triage-->>VSE_Pipeline: TriageResult
+
+    VSE_Pipeline->>VSE_Pipeline: persist user message to DB
+    VSE_Pipeline->>VSE_Pipeline: get_user_memories + get_case_memories
+    VSE_Pipeline->>Prompt: build_modular_system_prompt(...)
+    Prompt-->>VSE_Pipeline: system_instructions
+
+    VSE_Pipeline->>VSE_Pipeline: build_contents_from_history
+    VSE_Pipeline->>Agent: run_with_sse(contents, config, model, ...)
+
+    loop ReAct loop
+        Agent->>Provider: generate_content_stream(model, contents, config)
+        Provider-->>Agent: StreamChunkFromModel stream
+        Agent->>Agent: process_provider_turn (thinking state machine)
+
+        opt Tool calls present
+            Agent->>Tools: execute_turn_tool_calls
+            opt run_commands tool
+                Tools->>Tribunal: generate_command (N passes + verifier)
+                Tribunal-->>Tools: CommandGenerationResult
+                end
+                Tools->>VSOD: approval request SSE event
+                VSOD->>Browser: g8e.v1.operator.command.approval.requested
+                Browser->>VSOD: approve
+                VSOD->>VSA: pub/sub command dispatch
+                VSA-->>VSE_Pipeline: command result
+            end
+            Tools-->>Agent: ToolCallResponse list
+            Agent->>Agent: append model + tool responses to contents
+        end
+    end
+
+    Agent->>VSOD: g8e.v1.ai.llm.chat.iteration.text.completed (via EventService)
+    VSOD->>Browser: SSE stream
+
+    VSE_Pipeline->>VSE_Pipeline: persist AI response to DB
+    VSE_Pipeline->>VSE_Pipeline: asyncio.create_task(_background_memory_update)
+    VSE_Pipeline->>VSA: LFAA audit (user + AI messages)
+```
+
+---
+
+## SSE Event Flow Architecture
+
+The SSE (Server-Sent Events) system provides real-time event delivery from VSE to the browser through VSOD. The flow is unidirectional: VSE → VSOD → Frontend.
+
+### End-to-End Flow
+
+```mermaid
+flowchart LR
+    subgraph VSE [VSE Component]
+        A[ChatPipelineService / Agent] --> B[deliver_via_sse]
+        B --> C[EventService.publish_investigation_event]
+        C --> D[HTTP POST to VSOD /internal/sse/push]
+    end
+
+    subgraph VSOD [VSOD Component]
+        D --> E[internal_sse_routes.js]
+        E --> F{Special Event?}
+        F -- OPERATOR_PANEL_LIST_UPDATED --> G[OperatorService.getUserOperators]
+        G --> H[Replace with full operator list]
+        F -- LLM_CHAT_ITERATION_CITATIONS_RECEIVED --> I[normalizeCitationNums]
+        I --> J[Normalize citation numbers]
+        F -- Other --> K[VSEPassthroughEvent wrapper]
+        H --> L[SSEService.publishEvent]
+        J --> L
+        K --> L
+        L --> M[SSE connection sendToLocal]
+    end
+
+    subgraph Frontend [Browser]
+        M --> N[SSEConnectionManager.onmessage]
+        N --> O[handleSSEEvent]
+        O --> P{Infrastructure Event?}
+        P -- Yes --> Q[Silently consumed]
+        P -- No --> R[_validateEventPayload]
+        R --> S{Valid?}
+        S -- No --> T[Log error, drop event]
+        S -- Yes --> U[eventBus.emit]
+        U --> V[Component handlers]
+    end
+```
+
+### VSE Event Publishing
+
+VSE publishes events using `EventType` constants defined in `components/vse/app/constants/events.py`. Events are published via:
+
+**`deliver_via_sse`** (`components/vse/app/services/ai/agent_sse.py`)
+- Translates `StreamChunkFromModel` objects into VSOD EventService pub/sub calls
+- Maps stream chunk types to EventType constants:
+  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`
+  - `THINKING` → `LLM_CHAT_ITERATION_THINKING_STARTED`
+  - `TOOL_CALL` → Tool-specific events (e.g., `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
+  - `COMPLETE` → `LLM_CHAT_ITERATION_TEXT_COMPLETED` or `LLM_CHAT_ITERATION_FAILED`
+
+**`EventService.publish_investigation_event`** (`components/vse/app/services/infra/vsod_event_service.py`)
+- HTTP POST to VSOD internal endpoint `/internal/sse/push`
+- Payload includes: `web_session_id`, `user_id`, `event_type`, `payload`, routing fields (`case_id`, `investigation_id`)
+
+### VSOD Event Receiving and Transformation
+
+**`internal_sse_routes.js`** (`components/vsod/routes/internal/internal_sse_routes.js`)
+- Internal HTTP endpoint that receives SSE push requests from VSE
+- Applies special transformations for specific event types:
+
+| Event Type | Transformation | Purpose |
+|---|---|---|
+| `OPERATOR_PANEL_LIST_UPDATED` | Replaces VSE's single-operator payload with VSOD's full operator list via `OperatorService.getUserOperators()` | Frontend needs complete operator panel state, not just the changed operator |
+| `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` | Normalizes `citation_num` values to sequential 1-based integers via `normalizeCitationNums()` | VSE may emit non-sequential citation numbers; frontend requires sequential display |
+
+- Fallback behavior: If operator list fetch fails, logs error and falls back to original VSE event (prevents silent data loss)
+- Wraps all other events in `VSEPassthroughEvent` for passthrough delivery
+
+**`SSEService.publishEvent`** (`components/vsod/services/platform/sse_service.js`)
+- Publishes events to local SSE connections
+- Fire-and-forget design: returns `true` even when no connection exists
+- Logs warning when no active SSE connection exists for a session (includes event type for debugging)
+
+### Frontend Event Handling
+
+**`SSEConnectionManager`** (`components/vsod/public/js/utils/sse-connection-manager.js`)
+- Establishes SSE connection to VSOD `/sse/events` endpoint
+- Receives events via `EventSource.onmessage`
+- Parses JSON and calls `handleSSEEvent(data)`
+
+**`handleSSEEvent`** processing:
+1. Validates event type is present and is a string
+2. Checks if event is infrastructure event (`PLATFORM_SSE_CONNECTION_ESTABLISHED`, `PLATFORM_SSE_KEEPALIVE_SENT`) — silently consumed
+3. Drops events with no `data` field (logs warning with event type)
+4. **Validates payload** via `_validateEventPayload()`:
+   - Ensures payload is an object
+   - For known event types, validates required fields exist
+   - Returns error message if validation fails
+5. Emits validated events to event bus
+
+**Payload validation** (`_validateEventPayload` and `_getRequiredFieldsForEventType`):
+- Validates required fields for VSE chat pipeline events:
+  - `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`: `web_session_id`, `content`
+  - `LLM_CHAT_ITERATION_TEXT_COMPLETED`: `web_session_id`
+  - `LLM_CHAT_ITERATION_CITATIONS_RECEIVED`: `web_session_id`, `grounding_metadata`
+  - `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`: `web_session_id`, `execution_id`, `query`
+  - `OPERATOR_NETWORK_PORT_CHECK_REQUESTED`: `web_session_id`, `execution_id`, `port`
+- Unknown event types pass through without validation (forward compatibility)
+- Validation failures are logged with event type and error details, event is dropped
+
+### Event Type Constants
+
+**Single source of truth**: `shared/constants/events.json`
+- VSE loads from `components/vse/app/constants/events.py` (Python `EventType` enum)
+- VSOD loads from `components/vsod/constants/events.js` (via `shared.js` → `events.json`)
+- Frontend loads from `components/vsod/public/js/constants/events.js`
+- All components use identical event type strings
+
+### Frontend Event Handlers
+
+**`chat-sse-handlers.js`** (`components/vsod/public/js/components/chat-sse-handlers.js`)
+- Mixin that registers event bus listeners for all VSE chat pipeline events
+- Maps each event type to a handler method:
+  - `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` → `handleAITextChunk`
+  - `LLM_CHAT_ITERATION_TEXT_COMPLETED` → `handleResponseComplete`
+  - `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` → `handleCitationsReady`
+  - `LLM_CHAT_ITERATION_FAILED` → `handleChatError`
+  - `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` → `handleSearchWebIndicator`
+  - `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` → `handleNetworkPortCheckIndicator`
+
+**`thinking.js`** (`components/vsod/public/js/components/thinking.js`)
+- Handles `LLM_CHAT_ITERATION_THINKING_STARTED` events
+- Displays thinking indicator in the UI
+
+### Error Handling and Resilience
+
+**VSE side**:
+- `deliver_via_sse` catches exceptions during streaming:
+  - `CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with fixed error message, re-raises
+  - `VSOError` subclasses (OperationError, NetworkError, RateLimitError): Populates `payload.error` with `str(e)`
+  - Generic `Exception`: Logs error, publishes `LLM_CHAT_ITERATION_FAILED`, does not re-raise
+- Retry loop for transient errors (429, 503) with exponential backoff
+
+**VSOD side**:
+- `internal_sse_routes.js`: Returns 500 on publish failures, logs error details
+- `SSEService.publishEvent`: Fire-and-forget design — logs warning when no connection exists
+- Fallback for operator list fetch: Logs error, sends original event to prevent data loss
+
+**Frontend side**:
+- `SSEConnectionManager`: Validates payloads before emitting to event bus
+- Drops malformed events with error logging (includes event type)
+- Infrastructure events are silently consumed (not errors)
+- Reconnection logic with exponential backoff for connection failures
+
+### Testing
+
+**VSE integration tests** (`components/vse/tests/integration/test_sse_event_contract_integration.py`):
+- Verifies VSE events match shared fixture structures
+- Tests event contract compliance for all VSE chat pipeline events
+- Validates routing fields (`web_session_id`, `investigation_id`, `case_id`)
+
+**VSOD unit tests** (`components/vsod/test/unit/routes/internal/internal_sse_routes.unit.test.js`):
+- Tests citation normalization for `LLM_CHAT_ITERATION_CITATIONS_RECEIVED`
+- Tests operator list replacement for `OPERATOR_PANEL_LIST_UPDATED`
+- Tests fallback behavior when operator list fetch fails
+- Tests malformed event payload handling
+
+**Frontend unit tests** (`components/vsod/test/unit/frontend/sse/sse-connection-manager.unit.test.js`):
+- Tests event payload validation for all VSE chat pipeline event types
+- Tests infrastructure event handling
+- Tests malformed payload rejection
+- Tests event bus dispatch fidelity
+
+---
+
+## Service Breakdown
+
+| Service | File | Responsibility |
+|---|---|---|
+| `ChatPipelineService` | `components/vse/app/services/ai/chat_pipeline.py` | Top-level orchestrator — assembles context, calls agent, persists results |
+| `g8e agent` | `components/vse/app/services/ai/agent.py` | ReAct streaming loop — retry logic, function loop, SSE delivery |
+| `InvestigationService` | `components/vse/app/services/investigation/investigation_service.py` | (Domain Layer) Investigation fetch, operator enrichment, memory attachment, history orchestration |
+| `InvestigationDataService` | `components/vse/app/services/investigation/investigation_data_service.py` | (Data Layer) Pure CRUD for investigations and chat message persistence |
+| `AIToolService` | `components/vse/app/services/ai/tool_service.py` | Tool registration, declaration building, tool call dispatch |
+| `MemoryGenerationService` | `components/vse/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update |
+| `MemoryDataService` | `components/vse/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
+| `triage_message` | `components/vse/app/services/ai/triage.py` | Route to main vs assistant model |
+| `process_provider_turn` | `components/vse/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
+| `execute_turn_tool_calls` | `components/vse/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch + grounding merge |
+| `execute_tool_call` | `components/vse/app/services/ai/agent_tool_loop.py` | Single function dispatch — Tribunal gate for `run_commands` |
+| `deliver_via_sse` | `components/vse/app/services/ai/agent_sse.py` | StreamChunkFromModel → VSOD SSE event translation |
+| `generate_command` | `components/vse/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier |
+| `EventService` | `components/vse/app/services/infra/vsod_event_service.py` | VSE → VSOD HTTP event push |
+| `AIRequestBuilder` | `components/vse/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts |
+| `AIGenerationConfigBuilder` | `components/vse/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction |
+| `AIResponseAnalyzer` | `components/vse/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
+---
+
+## Prompts
+
+### Architecture
+
+Prompts are plain text files loaded at runtime by `components/vse/app/prompts_data/loader.py`. Nothing is hardcoded in Python except the composition logic in `build_modular_system_prompt`. The `PromptFile` enum maps logical names to file paths. `load_prompt` reads and caches by filename. `load_mode_prompts` loads all sections for the resolved mode directory.
+
+### Prompt Files
+
+```
+components/vse/app/prompts_data/
+  core/
+    identity.txt              — agent persona and role
+    safety.txt                — hard safety constraints and approval rules
+  system/
+    response_constraints.txt  — response length and formatting guidance
+    sentinel_mode.txt         — PII/secret scrubbing instructions
+  modes/
+    operator_bound/           — standard operator connected mode
+    cloud_operator_bound/     — cloud operator (AWS/GCP/Azure) mode
+    operator_not_bound/       — advisory-only mode, no command execution
+  tools/
+    run_commands_with_operator.txt
+    file_create_on_operator.txt
+    file_write_on_operator.txt
+    file_read_on_operator.txt
+    file_update_on_operator.txt
+    list_files_and_directories_with_detailed_metadata.txt
+    check_port_status.txt
+    g8e_web_search.txt
+    read_file_content.txt
+    grant_intent_permission.txt
+    revoke_intent_permission.txt
+    fetch_execution_output.txt
+    fetch_session_history.txt
+    fetch_file_history.txt
+    fetch_file_diff.txt
+    restore_file.txt
+```
+
+Function prompt files are used as `FunctionDeclaration.description` values passed directly to the LLM in the tool schema.
+
+### Memory Analysis Prompts
+
+Memory prompts are built inline in `components/vse/app/llm/prompts.py`:
+- `build_memory_analysis_system_instruction(case_title)` — system role, instructs the model to infer user preferences; explicitly excludes hostnames, IPs, and system identifiers from `investigation_summary`
+- `build_memory_analysis_request()` — closing user-role turn that triggers field population; returns a `MemoryAnalysis` JSON object validated against the Pydantic schema
+
+### Triage Prompt
+
+`_TRIAGE_PROMPT_TEMPLATE` in `components/vse/app/services/ai/triage.py` — a structured JSON classifier. Inlined, not file-backed. Takes `{conversation_tail}` and `{message}` substitutions. Returns a JSON object with `complexity` (simple/complex), `intent` (information/action/unknown), confidence ratings, and an optional `follow_up_question`.
+
+---
+
+## Tools
+
+`AIToolService` (`components/vse/app/services/ai/tool_service.py`) registers all tools at construction time. Each tool is a pair of `(FunctionDeclaration, executor)` stored in `_tool_declarations` and `_tool_executors` dicts keyed by `OperatorToolName`.
+
+Tool declarations are served to the LLM via `get_tools(agent_mode, model_name)`. Models that do not support tools (checked via `get_model_config`) receive an empty list.
+
+### Tool Set by Workflow
+
+**`OPERATOR_NOT_BOUND`** — `search_web` only (when `VERTEX_SEARCH_ENABLED` is set and credentials are present).
+
+**`OPERATOR_BOUND`** — all tools below plus `search_web` when configured.
+
+### Tool Reference
+
+| Tool (`OperatorToolName`) | Category | Description |
+|---|---|---|
+| `run_commands_with_operator` | Execution | Run a shell command on the bound operator — passes through Tribunal + user approval |
+| `file_create_on_operator` | File ops | Create a new file with content |
+| `file_write_on_operator` | File ops | Overwrite an existing file |
+| `file_read_on_operator` | File ops | Read file content from the operator |
+| `file_update_on_operator` | File ops | Find-and-replace edit within a file |
+| `list_files_and_directories_with_detailed_metadata` | File ops | List directory contents with metadata |
+| `check_port_status` | Network | TCP port reachability check — always available when operator is bound |
+| `grant_intent_permission` | Cloud | Grant a least-privilege cloud API intent to a cloud operator |
+| `revoke_intent_permission` | Cloud | Revoke a previously granted cloud API intent |
+| `fetch_file_history` | File ops | Retrieve the version history of a file on the operator |
+| `fetch_file_diff` | File ops | Retrieve a diff between two versions of a file on the operator |
+| `g8e_web_search` | Search | Web search via Vertex AI Search — available in both bound and unbound workflows when configured |
+
+Note: `restore_file`, `read_file_content`, `fetch_execution_output`, `fetch_session_history` are referenced in display metadata but are not currently registered as active tools in `AIToolService`.
+
+### `search_web` Tool
+
+`search_web` is conditionally registered. At startup, `AIToolService.__init__` checks whether a `WebSearchProvider` was injected. If `VERTEX_SEARCH_ENABLED` is set and GCP credentials are present, `WebSearchProvider` is constructed and passed in; otherwise the tool is omitted entirely.
+
+After `search_web` executes, `agent_tool_loop` calls `web_search_provider.build_search_web_grounding` to construct a `GroundingMetadata` object. If `grounding_used` is true, it is merged into the turn's grounding metadata and emitted as a `CITATIONS` chunk at the end of the turn.
+
+### Tool and Function Call Semantics
+
+VSE distinguishes between **Tool Declarations** (the schema provided to the LLM) and **Tool Calls** (the request from the LLM to execute a tool).
+
+- **ToolDeclaration** (`app.llm.llm_types.ToolDeclaration`) — A container for one or more `ToolDeclarations` (function schemas) and built-in capabilities like `google_search`. This aligns with the Google GenAI SDK `types.Tool` structure.
+- **ToolDeclarations** (`app.llm.llm_types.ToolDeclarations`) — The definition of a specific function, including its name, description, and JSON schema parameters.
+- **ToolCall** (`app.llm.llm_types.ToolCall`) — An instance of a model requesting a tool execution, containing the tool `name`, `args`, and a unique `id` (crucial for Gemini 3 multi-turn reliability).
+
+### `run_commands` and the Tribunal
+
+When the LLM calls `run_commands_with_operator`, `execute_tool_call` intercepts it. The command passes through the Tribunal (`components/vse/app/services/ai/command_generator.py`) to ensure syntactic precision and cross-model consensus.
+
+#### Target Operator Resolution
+
+Before Tribunal processing, the system resolves the target operator for command generation using `extract_operator_context_by_target()`. The `target_operator` parameter can be:
+
+- **Operator ID** (e.g., "op-linux") - Exact match on operator identifier
+- **Hostname** (e.g., "server-01") - Match on operator hostname  
+- **Index** (e.g., "0", "1", "2") - Position in bound operators list
+- **Unspecified** - Falls back to first operator (backward compatibility)
+
+The resolved operator's OS context (OS name, shell, working directory) is passed to the Tribunal for command refinement, ensuring the generated command is appropriate for the target system. Event broadcasting also uses the resolved operator_id and operator_session_id for accurate audit trails.
+
+#### Tribunal Model Resolution
+
+The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **inferred from the model name** so that the correct API endpoint and credentials are used. This decouples the Tribunal model from the primary chat provider: e.g. a user with `provider=gemini` and `assistant_model=gemma3:1b` will route Tribunal calls to the Ollama endpoint, not Gemini.
+
+The Tribunal implements a **Stochastic Multi-Agent Consensus** pattern using three distinct roles:
+
+```mermaid
+flowchart TD
+    In([Operator Command Proposed]) --> Enabled{Is Tribunal Enabled?}
+    
+    Enabled -- No --> Fallback[Fallback: Original Command]
+    Enabled -- Yes --> Provider{Provider OK?}
+    
+    Provider -- No --> Fallback
+    Provider -- Yes --> Gen[Parallel Generation Phase]
+    
+    subgraph Gen [Stochastic Voting Swarm]
+        direction LR
+        P1[Axiom<br/>Pass 0 - Temp 0.5]
+        P2[Concord<br/>Pass 1 - Temp 0.7]
+        P3[Variance<br/>Pass 2 - Temp 1.2]
+    end
+    
+    Gen --> Vote[Weighted Majority Vote]
+    Vote --> Winner{Consensus Winner?}
+    
+    Winner -- No --> Fallback
+    Winner -- Yes --> VerifierEnabled{Is Verifier Enabled?}
+    
+    VerifierEnabled -- No --> OutVote[Final: Vote Winner]
+    VerifierEnabled -- Yes --> Verify[Final Verifier SLM<br/>Temp 0.0]
+    
+    Verify --> Review{Verdict}
+    Review -- OK --> OutVote
+    Review -- Error/Empty --> OutVote
+    Review -- Revised --> OutRev[Final: Revised Command]
+    
+    Fallback --> OutFall[Final: Original Command]
+```
+
+#### 1. The Proposer (Primary Agent)
+- **Role**: Heavy lifting, generating initial complex code or architectural plans.
+- **Thinking Level**: Set to high for deep logical exploration.
+- **Temperature**: Governed by platform defaults (typically 1.0) to allow optimal pathfinding.
+
+#### 2. The Voting Swarm (Validators / Skeptics)
+- **Role**: Inducing sampling diversity to catch hallucinations and edge cases.
+- **Thinking Level**: Set to lowest supported (minimal/low) to save compute/latency while relying on aggregate accuracy.
+- **Temperature**: Spanned across the swarm to induce diversity, sourced from shared/constants/agents.json:
+    - **Axiom** (Pass 0): 0.0 (Fully deterministic, statistical probability and resource efficiency)
+    - **Concord** (Pass 1): 0.4 (Moderate determinism with ethical flexibility)
+    - **Variance** (Pass 2): 0.8 (High creativity and intentional unpredictability)
+
+#### 3. The Final Verifier (Consensus Orchestrator)
+- **Role**: Deterministic arbitration and final verdict formatting.
+- **Thinking Level**: Set to low or off to avoid overthinking penalties.
+- **Temperature**: Strictly **0.0** (greedy decoding) for absolute reliability.
+
+#### Configuration
+
+| Setting | DB Key | Default | Description |
+|---|---|---|---|
+| `LLM_COMMAND_GEN_ENABLED` | `llm_command_gen_enabled` | `true` | Master switch — `false` skips the Tribunal entirely |
+| `LLM_COMMAND_GEN_PASSES` | `llm_command_gen_passes` | `3` | Number of parallel generation passes |
+| `LLM_COMMAND_GEN_VERIFIER` | `llm_command_gen_verifier` | `true` | Enable/disable the verifier pass |
+
+#### Pipeline Stages
+
+**Stage 1 — Generation (`_run_generation_pass`)**
+
+`LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member (Axiom, Concord, or Variance) with its specific temperature. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
+
+Raw output is normalised by `_normalise_command`: strips surrounding whitespace, trailing newlines, and any ` ```bash `, ` ```shell `, ` ```sh `, or ` ``` ` fences. Each pass emits a `TRIBUNAL_VOTING_PASS_COMPLETED` SSE event carrying the `pass_index`, the normalised candidate (or `None`), and a `success` flag.
+
+Thinking is enabled for models that support it but forced to the lowest available level (`get_lowest_thinking_level`) with `include_thoughts=False` — minimises latency on this fast-path.
+
+**Stage 2 — Weighted Majority Vote (`_weighted_vote`)**
+
+```
+weight[candidate] += 1 / (pass_index + 1)
+```
+
+Each pass `i` (0-indexed) contributes `1/(i+1)` to its candidate's aggregate weight. This means:
+- Pass 0 contributes `1.0`
+- Pass 1 contributes `0.5`
+- Pass 2 contributes `0.333`
+
+Candidates that are identical (after normalisation) accumulate weight. The string with the highest aggregate weight is the vote winner. The normalised score is `winner_weight / total_weight` — a value between 0 and 1 representing how dominant the winner was.
+
+If all passes produce unique strings, every candidate has equal weight and the earliest pass (pass 0) wins by tiebreak (Python `max` with stable ordering). If no candidates were produced (all passes failed), `_weighted_vote` returns `(None, 0.0)` and the pipeline falls back.
+
+A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying `vote_winner`, `vote_score`, `num_candidates`, and `original_command`.
+
+**Stage 3 — Verification (`_run_verifier`)**
+
+Skipped when `LLM_COMMAND_GEN_VERIFIER=false`. Otherwise, a single SLM call at temperature `0.0` evaluates the vote winner against `_VERIFIER_PROMPT_TEMPLATE`. The verifier receives the intent, OS, and the candidate command, and must respond with exactly one of:
+
+- `ok` — command is syntactically correct and fulfils the intent
+- A corrected command string — if there is a syntax error, wrong quoting, wrong escaping, or a missing flag
+
+The verifier emits `TRIBUNAL_VOTING_REVIEW_STARTED` before the call and `TRIBUNAL_VOTING_REVIEW_COMPLETED` after, carrying a `VerifierReason`:
+
+| `VerifierReason` | Meaning |
+|---|---|
+| `ok` | Verifier returned `"ok"` — command approved as-is |
+| `revised` | Verifier returned a different command — revision adopted |
+| `empty_response` | Verifier returned nothing — treated as passed |
+| `no_valid_revision` | Verifier returned non-ok but revision equals original or is empty — treated as passed |
+| `verifier_error` | Verifier call threw an exception — treated as passed |
+
+Any failure mode of the verifier is treated as a pass — it never blocks the pipeline.
+
+**Stage 4 — Outcome**
+
+The `CommandGenerationResult` carries `original_command`, `final_command`, `outcome`, `candidates`, `vote_winner`, `vote_score`, `verifier_passed`, and optionally `verifier_revision`.
+
+| `CommandGenerationOutcome` | Condition |
+|---|---|
+| `VERIFIED` | Verifier enabled and approved (or found issues but produced no valid revision) |
+| `VERIFICATION_FAILED` | Verifier enabled and produced a revision — `final_command` is the verifier's output |
+| `CONSENSUS` | Verifier disabled — `final_command` is the vote winner |
+| `FALLBACK` | Provider unavailable, all passes failed (non-system), or no vote winner — `final_command` is `original_command` unchanged |
+| `DISABLED` | Tribunal disabled via `LLM_COMMAND_GEN_ENABLED=false` |
+| `SYSTEM_ERROR` | All generation passes failed due to system errors (auth, network, config) — command execution is **halted**, not silently fallen back |
+
+If `final_command != original_command` the tribunal refined the command. `agent_tool_loop` updates `tool_args["command"]` with the refined value before passing to `AIToolService.execute_tool_call`.
+
+A `TRIBUNAL_SESSION_COMPLETED` SSE event (or `TRIBUNAL_SESSION_FALLBACK_TRIGGERED`) is emitted at the end of every pipeline run.
+
+#### Fallback and Error Reasons
+
+| Type | Reason | Trigger |
+|---|---|---|
+| Fallback | `disabled` | `LLM_COMMAND_GEN_ENABLED=false` |
+| Fallback | `all_passes_failed` | Every generation pass returned `None` (non-system errors) |
+| Error | `provider_unavailable` | No LLM Provider configuration — raises `TribunalProviderUnavailableError` |
+| Error | `all_passes_failed` | Every generation pass failed (non-system) — raises `TribunalGenerationFailedError` |
+| Error | `verifier_failed` | Verifier malfunction (empty, no revision, exception) — raises `TribunalVerifierFailedError` |
+| Error | `system_error` | All passes failed due to system errors (401, connection refused, DNS, SSL, etc.) — raises `TribunalSystemError` |
+
+The `TribunalFallbackPayload` includes `pass_errors: list[str] | None` for diagnostic visibility into individual pass failure messages.
+
+The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is attached to the function args before dispatch. This ID is used for `fetch_execution_output` lookups and audit correlation.
+
+---
+
+## LLM Providers
+
+The provider abstraction lives in `components/vse/app/llm/provider.py` (`LLMProvider` ABC). The factory (`components/vse/app/llm/factory.py`) constructs a fresh provider per request from the resolved `LLMSettings`. All providers translate between VSE's canonical `llm_types` and their SDK-native types.
+
+### Gemini (`components/vse/app/llm/providers/gemini.py`)
+
+- **SDK:** `google-genai`
+- **Provider value:** `gemini`
+- **Key:** `GEMINI_API_KEY`
+- **Recommended models:** `gemini-3.1-pro-preview` (primary), `gemini-3.1-flash-lite-preview` (high-performance), `gemini-3-flash-preview` (assistant)
+- **Thinking API:** Gemini 3 and 3.1 use `thinking_config` (`include_thoughts` + `thinking_level`). The provider applies the correct API shape based on model generation.
+- **Thought signatures:** Required on every `tool_call` Part (400 if omitted). Stored as base64 string in canonical types; inbound SDK bytes are encoded on receipt.
+- **Function Calling:** Gemini 3 requires unique `id` mapping for `function_call` and `function_response` parts. Tool/Function response parts are mapped to the `user` role for multi-turn reliability.
+- **Temperature:** Default 1.0 (strongly recommended for Gemini 3).
+- **SSL/TLS:** Uses `certifi` CA bundle for secure connection to Google APIs.
+- **Retry:** Uses `tenacity` with `AsyncRetrying`, exponential backoff, `retry_if_exception` for transient errors (500, 503, 429).
+
+### Anthropic (`components/vse/app/llm/providers/anthropic.py`)
+
+- **SDK:** `anthropic`
+- **Provider value:** `anthropic`
+- **Key:** `ANTHROPIC_API_KEY`
+- **Recommended models:** `claude-opus-4-5` (primary), `claude-haiku-4-5` (assistant)
+- **Message translation:** `_contents_to_anthropic` maps `model` role → `assistant`, `user` role → `user`. Thinking parts emit `{"type": "thinking", "thinking": ..., "signature": ...}`. Tool calls emit `tool_use` blocks; tool responses emit `tool_result` blocks.
+- **System prompt:** Passed as a top-level `system` parameter, not embedded in the messages array.
+
+### OpenAI-Compatible (`components/vse/app/llm/providers/openai_compatible.py`)
+
+- **SDK:** `openai` (AsyncOpenAI) for non-Ollama endpoints, direct HTTP calls for Ollama
+- **Provider values:** `openai` (OpenAI and vLLM) or `ollama` (remote Ollama server)
+- **Key:** `LLM_API_KEY`; Ollama uses `ollama` as a placeholder key
+- **Endpoint:** `LLM_ENDPOINT` - `https://api.openai.com/v1` for OpenAI, remote Ollama endpoint for Ollama, user-supplied for vLLM
+- **Recommended models (OpenAI):** `gpt-4o` (primary), `gpt-4o-mini` (assistant)
+- **Recommended models (Ollama):** `qwen3.5:4b` (primary), `qwen3.5:4b` (assistant) - thinking-enabled models
+- **Message translation:** `_contents_to_messages` injects system instructions as the first `{"role": "system"}` message. Tool calls become `tool_calls` arrays on `assistant` messages. Function responses become `{"role": "tool"}` messages.
+- **Ollama Thinking Support:** When an Ollama endpoint is detected (contains 'ollama' or '11434'), the provider automatically:
+  - Uses direct HTTP calls to Ollama's `/api/chat` endpoint instead of the OpenAI client
+  - Sends `think: true` parameter to enable Ollama's thinking feature
+  - Handles the `thinking` field in responses and streams it as `thought=True` chunks
+  - Converts OpenAI-style `/v1` endpoints to Ollama's `/api` endpoints
+- **SSL strategy:** Cloud providers (Gemini, Anthropic, OpenAI) use `certifi` (Mozilla's public CA bundle) to bypass the global `G8E_SSL_CERT_FILE` env var that points to the internal platform CA. Internal endpoints (Ollama, self-hosted vLLM) use the platform CA cert via `ca_cert_path`. The factory passes `ca_cert_path` only to providers that may use internal endpoints; each provider's `_is_internal_endpoint()` selects the correct verify source.
+
+---
+
+## Using `scripts/tools/setup-llm.sh`
+
+`setup-llm.sh` configures the LLM provider for VSE. It writes settings directly to the platform DB via `manage-vsodb.py settings` running inside the `g8e-pod` container. Settings take effect on the next platform restart — no rebuild required.
+
+Run via the `g8e` CLI:
+
+```bash
+./g8e llm setup       # interactive
+```
+
+### Interactive Mode
+
+Running without arguments launches an interactive prompt. The script reads the current provider and model from the platform DB and presents them as defaults.
+
+```
+1) Gemini       (Google — recommended, most tested)
+2) Anthropic    (Claude)
+3) OpenAI       (GPT)
+4) Ollama       (remote, OpenAI-compatible endpoint)
+5) vLLM         (self-hosted OpenAI-compatible)
+```
+
+Each provider prompts for its required credentials and model names.
+
+### Non-Interactive Mode
+
+Pass `--provider` to bypass prompts. All flags:
+
+| Flag | Required By | Description |
+|---|---|---|
+| `--provider` | all | `gemini` \| `anthropic` \| `openai` \| `ollama` \| `vllm` |
+| `--model` | all | Primary model name |
+| `--asst-model` | optional | Assistant model name (defaults to provider default) |
+| `--gemini-key` | Gemini | `GEMINI_API_KEY` |
+| `--anthropic-key` | Anthropic | `ANTHROPIC_API_KEY` |
+| `--api-key` | OpenAI (required), vLLM (optional) | `LLM_API_KEY` |
+| `--endpoint` | Ollama, vLLM | API base URL |
+
+Examples:
+
+```bash
+# Gemini
+./g8e llm setup --provider gemini --gemini-key AIza...
+
+# Anthropic
+./g8e llm setup --provider anthropic --anthropic-key sk-ant-...
+
+# OpenAI
+./g8e llm setup --provider openai --api-key sk-... --model gpt-4o --asst-model gpt-4o-mini
+
+# Ollama (remote)
+./g8e llm setup --provider ollama --endpoint https://your-ollama-host:11434/v1 --model gemma3:1b --asst-model gemma3:1b
+
+# vLLM (self-hosted)
+./g8e llm setup --provider vllm --endpoint https://your-host:443/v1 --model your-model
+```
+
+### What Gets Written to DB
+
+The script calls `manage-vsodb.py settings set` inside the running `g8e-pod` container with these keys:
+
+| DB Key | Maps To |
+|---|---|
+| `llm_provider` | `LLM_PROVIDER` (`gemini`, `anthropic`, `openai`, or `ollama`) |
+| `llm_model` | `LLM_MODEL` |
+| `llm_assistant_model` | `LLM_ASSISTANT_MODEL` |
+| `llm_endpoint` | `LLM_ENDPOINT` (OpenAI, Ollama, and vLLM) |
+| `llm_api_key` | `LLM_API_KEY` (OpenAI and vLLM; Ollama uses placeholder) |
+| `gemini_api_key` | `GEMINI_API_KEY` (Gemini only) |
+| `anthropic_api_key` | `ANTHROPIC_API_KEY` (Anthropic only) |
+
+If the platform is running, the script writes via the VSOD internal API. If VSOD is unavailable, it falls back to writing directly to VSODB. If the platform is not running at all, the DB write is skipped and a warning is printed.
+
+Apply settings without a full rebuild:
+
+```bash
+./g8e platform restart
+```

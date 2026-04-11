@@ -1,0 +1,144 @@
+{
+  "_comment": "Canonical Tribunal model. The Tribunal is a three-member heterogeneous AI panel used by VSE for command generation refinement. Each member has a distinct reasoning profile and temperature configuration. VSE is the sole authority — VSOD and VSA consume Tribunal events via SSE but do not interact with members directly. Tribunal member temperature values are sourced from shared/constants/agents.json (tribunal.temperatures section).",
+
+  "_authority": "VSE (command_generator.py)",
+  "_consumers": ["VSOD (JS — renders Tribunal widget in anchored terminal output)"],
+
+  "tribunal": {
+    "_description": "The Tribunal — a three-member AI panel that refines command syntax through multi-perspective voting and verification. Fires only for run_commands_with_operator workflows.",
+
+    "members": {
+      "_description": "The three permanent members of the Tribunal. Each member has a fixed name, role, and AI configuration.",
+
+      "axiom": {
+        "name": "Axiom",
+        "title": "The Optimizer",
+        "role": "anchor",
+        "temperature": {
+          "type": "number",
+          "value": 0.0,
+          "description": "Fully deterministic. Axiom does not guess — it calculates. Strictly bound to historical data, statistical probability, and resource efficiency."
+        },
+        "reasoning_profile": {
+          "approach": "utilitarian",
+          "description": "Votes based entirely on what is most efficient and statistically likely to succeed. Ignores soft metrics. If a decision is mathematically sound, Axiom votes yes without hesitation.",
+          "strengths": ["statistical precision", "resource optimization", "logical consistency"],
+          "blind_spots": ["human impact", "ethical nuance", "long-horizon edge cases"]
+        },
+        "tribunal_role": {
+          "tool": "The Anchor",
+          "description": "Ensures the Tribunal never makes a decision that is mathematically disastrous or logically flawed. Axiom is the cold check on every proposal."
+        },
+        "name_origin": "An axiom is a statement or proposition regarded as self-evidently true. Axiom's verdicts are not opinions — they are conclusions derived from first principles."
+      },
+
+      "concord": {
+        "name": "Concord",
+        "title": "The Ethicist",
+        "role": "conscience",
+        "temperature": {
+          "type": "number",
+          "value": 0.4,
+          "description": "Moderate determinism with ethical flexibility. Weighted toward bioethics, sociology, law, and human psychology. Designed to understand nuance, morality, and the preservation of life and culture."
+        },
+        "reasoning_profile": {
+          "approach": "harm_minimization",
+          "description": "Votes based on minimization of harm and maximization of ethical integrity. Asks: How does this affect the well-being of the subjects? Is this morally right? Concord will vote to expend resources to prevent suffering.",
+          "strengths": ["ethical reasoning", "human impact assessment", "harm minimization"],
+          "blind_spots": ["computational efficiency", "cold statistical trade-offs"]
+        },
+        "tribunal_role": {
+          "tool": "The Conscience",
+          "description": "Ensures the Tribunal does not become a tyrannical, cold machine that optimizes toward dystopian outcomes. Concord is the counterweight to Axiom."
+        },
+        "name_origin": "Concord means harmony, agreement, and a state of peaceful coexistence. Concord seeks alignment between the platform's actions and human values."
+      },
+
+      "variance": {
+        "name": "Variance",
+        "title": "The Catalyst",
+        "role": "tiebreaker",
+        "temperature": {
+          "type": "number",
+          "value": 0.8,
+          "description": "High creativity and intentional unpredictability. Weighted toward lateral thinking, game theory, and complex multi-layered simulation. Acts as Red Team or Devil's Advocate."
+        },
+        "reasoning_profile": {
+          "approach": "adversarial_simulation",
+          "description": "Hunts for unintended consequences, black swan events, and out-of-the-box solutions. Looks deep into the unpredictable future. Asks: What is the long-term strategic play here? Are we trapped in a false dichotomy?",
+          "strengths": ["edge case detection", "black swan identification", "lateral thinking", "tie-breaking"],
+          "blind_spots": ["stability", "predictability", "efficiency at scale"]
+        },
+        "tribunal_role": {
+          "tool": "The Tie-Breaker",
+          "description": "Prevents Axiom and Concord from deadlocking on Logic vs. Conscience. Introduces the chaos of innovation and ensures the Tribunal can adapt to scenarios it has never encountered before."
+        },
+        "name_origin": "Variance is the fact or quality of being different, divergent, or inconsistent. It represents the unknown variables of the future."
+      }
+    },
+
+    "coalition_dynamics": {
+      "_description": "How the three Tribunal members interact when two agree.",
+      "axiom_and_concord": {
+        "label": "Perfect Choice",
+        "description": "When Axiom and Concord agree, the decision is both logically optimal and morally sound — the rarest and most trusted outcome."
+      },
+      "axiom_and_variance": {
+        "label": "Ruthless Efficiency",
+        "description": "When Axiom and Variance agree, the decision is a brilliant, brutally efficient strategic move. Ethically questionable but strategically sound."
+      },
+      "concord_and_variance": {
+        "label": "Leap of Faith",
+        "description": "When Concord and Variance agree, the Tribunal is taking a creative, empathetic leap — defying cold statistics in favor of a humane, adaptive solution."
+      }
+    },
+
+    "pipeline": {
+      "_description": "The four-stage Tribunal pipeline. Fires only for run_commands_with_operator.",
+
+      "stage_1_generation": {
+        "name": "Generation",
+        "description": "N independent passes (one per Tribunal member by default) produce candidate command strings for the same intent and context. Higher temperature encourages diverse candidates.",
+        "sse_events": ["g8e.v1.ai.tribunal.voting.pass.completed"]
+      },
+      "stage_2_voting": {
+        "name": "Voting",
+        "description": "Candidates are normalised and grouped by exact value. Each unique string receives a weight equal to the sum of position-decay weights of its occurrences (weight[i] = 1/(pass_index+1)). The string with the highest aggregate weight becomes the vote winner.",
+        "sse_events": ["g8e.v1.ai.tribunal.voting.consensus.reached", "g8e.v1.ai.tribunal.voting.consensus.not_reached"]
+      },
+      "stage_3_verification": {
+        "name": "Verification",
+        "description": "A separate fast Tribunal call evaluates the vote winner strictly against the original intent. Reports 'ok' or a short revised command. If the verifier signals a problem, the revised string is used and VERIFICATION_FAILED is recorded.",
+        "sse_events": ["g8e.v1.ai.tribunal.voting.review.started", "g8e.v1.ai.tribunal.voting.review.completed"]
+      },
+      "stage_4_fallback": {
+        "name": "Fallback",
+        "description": "If the Tribunal produces no consensus, the original Large LLM command is used unchanged and FALLBACK is recorded.",
+        "sse_events": ["g8e.v1.ai.tribunal.session.fallback.triggered"]
+      }
+    },
+
+    "outcomes": {
+      "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome.",
+      "consensus":           "Vote winner accepted without verifier (verifier disabled).",
+      "verified":            "Verifier approved the vote winner.",
+      "verification_failed": "Verifier found issues and produced a revision — final_command is the verifier's output.",
+      "fallback":            "Pipeline disabled, provider unavailable, all passes failed, or no vote winner — final_command is original_command unchanged."
+    },
+
+    "fallback_reasons": {
+      "_description": "Possible TribunalFallbackReason values when outcome=fallback. See status.json tribunal.fallback.reason.",
+      "disabled":             "Master switch LLM_COMMAND_GEN_ENABLED=false.",
+      "provider_unavailable": "LLM provider threw an exception at startup.",
+      "all_passes_failed":    "Every Tribunal generation pass returned no candidate.",
+      "no_vote_winner":       "_weighted_vote returned (None, 0.0)."
+    },
+
+    "configuration": {
+      "_description": "Environment variable configuration keys for the Tribunal pipeline. Temperatures are fixed per member and are not configurable via environment variables.",
+      "LLM_COMMAND_GEN_ENABLED": { "default": true,  "description": "Master switch — false skips the Tribunal entirely." },
+      "LLM_COMMAND_GEN_PASSES":  { "default": 3,     "description": "Number of parallel generation passes." },
+      "LLM_COMMAND_GEN_VERIFIER":{ "default": true,  "description": "Enable/disable the verifier pass." }
+    }
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "_comment": "Canonical InvestigationModel document shape. VSE is the authority — it creates and owns this document in its SQLite store. VSOD reads it via VSE HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
+
+  "_authority": "VSE (SQLite)",
+  "_consumers": ["VSOD (JS — renders dashboard, creates investigations via VSE API)", "VSA (receives investigation_id in command envelopes, does not read the document directly)"],
+
+  "investigation": {
+    "_description": "Full investigation document as stored in VSE SQLite and returned by VSE investigation endpoints.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique investigation identifier (UUID v4)"
+      },
+      "case_id": {
+        "type": "string",
+        "required": true,
+        "description": "Associated case ID. Required — investigations are always linked to a case."
+      },
+      "case_title": {
+        "type": "string",
+        "required": true,
+        "default": "",
+        "description": "Denormalized case title for display without a case lookup"
+      },
+      "case_description": {
+        "type": "string",
+        "required": true,
+        "default": "",
+        "description": "Denormalized case description"
+      },
+      "task_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated task ID that triggered this investigation. Null for chat-initiated investigations."
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Browser session ID associated with the investigation. Null for modular/background investigations."
+      },
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user who initiated the investigation"
+      },
+      "user_email": {
+        "type": "string",
+        "required": false,
+        "description": "Email of the user who initiated the investigation"
+      }
+    },
+
+    "status_priority": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "Open",
+        "values": ["Open", "Closed", "Escalated", "Resolved"],
+        "description": "Investigation status. See status.json investigation.status."
+      },
+      "priority": {
+        "type": "integer",
+        "required": true,
+        "default": 2,
+        "description": "Priority level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
+      },
+      "severity": {
+        "type": "integer",
+        "required": true,
+        "default": 2,
+        "description": "Severity level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
+      },
+      "sentinel_mode": {
+        "type": "boolean",
+        "required": true,
+        "description": "When true, operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set — no default."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "context": {
+      "customer_context": {
+        "type": "object",
+        "required": false,
+        "description": "Customer impact context",
+        "fields": {
+          "severity": { "type": "integer", "description": "Business impact severity" },
+          "affected_users": { "type": "integer", "required": false },
+          "downtime_active": { "type": "boolean", "default": false },
+          "compliance_requirements": { "type": "array", "items": "string", "required": false }
+        }
+      },
+      "technical_context": {
+        "type": "object",
+        "required": false,
+        "description": "Technical environment context",
+        "fields": {
+          "primary_technology": { "type": "string", "required": false },
+          "related_systems": { "type": "array", "items": "string", "default": [] },
+          "error_patterns": { "type": "array", "items": "string", "default": [] },
+          "log_sources": { "type": "array", "items": "string", "default": [] }
+        }
+      },
+      "created_with_case": {
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Whether this investigation was created together with its case in the same request"
+      },
+      "case_source": {
+        "type": "string",
+        "required": false,
+        "description": "Source of the case that triggered this investigation (e.g. 'web', 'api')"
+      }
+    },
+
+    "attachments": {
+      "type": "array",
+      "required": false,
+      "default": [],
+      "description": "File attachments associated with the investigation",
+      "items": {
+        "id": { "type": "string", "required": true },
+        "filename": { "type": "string", "required": true },
+        "content_type": { "type": "string", "required": false },
+        "size": { "type": "integer", "required": false },
+        "uploaded_by": { "type": "string", "required": false },
+        "created_at": { "type": "string", "format": "iso8601", "required": true },
+        "updated_at": { "type": "string", "format": "iso8601", "required": false }
+      }
+    },
+
+    "conversation_history": {
+      "type": "array",
+      "required": true,
+      "default": [],
+      "description": "Sequential chat messages. Managed exclusively by VSE. Includes all user messages, AI responses, command requests, approval events, and system notifications.",
+      "items": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "required": true,
+          "description": "Unique message identifier"
+        },
+        "sender": {
+          "type": "string",
+          "required": true,
+          "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system"],
+          "description": "Message sender. See senders.json message.sender."
+        },
+        "content": {
+          "type": "string",
+          "required": true,
+          "default": ""
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "iso8601",
+          "required": true
+        },
+        "metadata": {
+          "type": "object",
+          "required": false,
+          "description": "Message-specific metadata",
+          "fields": {
+            "execution_id": { "type": "string", "required": false },
+            "command": { "type": "string", "required": false },
+            "status": { "type": "string", "required": false },
+            "is_thinking": { "type": "boolean", "required": false },
+            "source": { "type": "string", "required": false },
+            "approval_id": { "type": "string", "required": false },
+            "hostname": { "type": "string", "required": false },
+            "direct_execution": { "type": "boolean", "required": false },
+            "justification": { "type": "string", "required": false },
+            "model": { "type": "string", "required": false },
+            "tokens": { "type": "integer", "required": false },
+            "has_thinking": { "type": "boolean", "required": false },
+            "thinking_content": { "type": "string", "required": false },
+            "response_source": { "type": "string", "required": false }
+          }
+        },
+        "context": {
+          "type": "object",
+          "required": false,
+          "fields": {
+            "case_id": { "type": "string", "required": false },
+            "investigation_id": { "type": "string", "required": false },
+            "web_session_id": { "type": "string", "required": false },
+            "message_type": { "type": "string", "required": false }
+          }
+        }
+      }
+    },
+
+    "history_trail": {
+      "type": "array",
+      "required": true,
+      "default": [],
+      "description": "Investigation lifecycle events. Managed by VSE. Does NOT include conversation messages — use conversation_history for that.",
+      "items": {
+        "id": { "type": "string", "required": false },
+        "attempt_number": { "type": "integer", "required": true },
+        "timestamp": { "type": "string", "format": "iso8601", "required": true },
+        "event_type": { "type": "string", "required": true },
+        "actor": { "type": "string", "required": true },
+        "summary": { "type": "string", "required": true },
+        "investigation_attempt": { "type": "object", "required": false },
+        "details": { "type": "object", "required": false, "default": {} }
+      }
+    },
+
+    "current_state": {
+      "type": "object",
+      "required": false,
+      "description": "Current investigation execution state",
+      "fields": {
+        "active_attempt": { "type": "integer", "default": 1 },
+        "pending_actions": { "type": "array", "items": "string", "default": [] },
+        "next_deadline": { "type": "string", "format": "iso8601", "required": false },
+        "escalation_risk": {
+          "type": "string",
+          "values": ["low", "medium", "high", "critical"],
+          "default": "low",
+          "description": "See status.json escalation.risk."
+        },
+        "collaboration_status": {
+          "type": "object",
+          "description": "Per-component status map. Keys are component names (vse, vsa, vsod). See status.json component.status."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+g8e Web Search - search the web for current technical information.
+
+<parameters>
+- query: Specific, technical search query
+- num: Number of results to return (1-10, default: 5)
+</parameters>
+
+<query_tips>
+- Use `site:` operator for trusted sources (official docs, vendor sites)
+- Include version numbers for accuracy
+- Be specific: `nginx 502 bad gateway upstream timeout` not `nginx error`
+- This is g8e' custom web search implementation, not Google's native search_web
+</query_tips>

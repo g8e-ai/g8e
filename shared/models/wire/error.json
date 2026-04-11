@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "ErrorResponse",
+  "description": "Standardized VSO Error Response Envelope",
+  "type": "object",
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "category", "severity", "timestamp"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string" },
+        "severity": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "component": { "type": ["string", "null"] },
+        "source": { "type": ["string", "null"] },
+        "details": { "type": ["object", "null"] },
+        "trace_id": { "type": ["string", "null"] },
+        "execution_id": { "type": ["string", "null"] },
+        "retry_suggested": { "type": "boolean", "default": false },
+        "remediation_steps": { "type": "array", "items": { "type": "string" } },
+        "cause": {
+          "type": ["object", "null"],
+          "properties": {
+            "cause_message": { "type": "string" },
+            "cause_stack_trace": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "trace_id": { "type": ["string", "null"] },
+    "execution_id": { "type": ["string", "null"] }
+  }
+}

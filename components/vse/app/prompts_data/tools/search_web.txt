@@ -1,0 +1,11 @@
+Search the web for current technical information.
+
+<parameters>
+- query: Specific, technical search query
+</parameters>
+
+<query_tips>
+- Use `site:` Operator for trusted sources (official docs, vendor sites)
+- Include version numbers for accuracy
+- Be specific: `nginx 502 bad gateway upstream timeout` not `nginx error`
+</query_tips>

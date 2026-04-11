@@ -1,0 +1,31 @@
+{
+    "enabled": false,
+    "version": "1.0.0",
+    "description": "Command blacklist for Operator execution - DISABLED BY DEFAULT. Enable via config when ready for per-operator assignment.",
+    "forbidden_commands": [
+        {"value": "sudo", "reason": "Privilege escalation is never permitted"},
+        {"value": "su", "reason": "User impersonation or escalation is disallowed"},
+        {"value": "reboot", "reason": "Rebooting production systems without change control is prohibited"},
+        {"value": "shutdown", "reason": "Shutting down systems violates availability SLOs"}
+    ],
+    "forbidden_binaries": [
+        {"value": "/usr/bin/sudo", "reason": "Privilege escalation is never permitted"},
+        {"value": "/bin/su", "reason": "User impersonation or escalation is disallowed"}
+    ],
+    "forbidden_substrings": [
+        {"value": "rm -rf", "reason": "Recursive deletion is destructive"},
+        {"value": "dd if=", "reason": "Raw disk writes are destructive"},
+        {"value": "mkfs", "reason": "Filesystem formatting is destructive"},
+        {"value": "passwd", "reason": "Credential manipulation is disallowed"}
+    ],
+    "forbidden_arguments": [
+        {"value": "--privileged", "reason": "Privileged containers are disallowed"},
+        {"value": "--recursive", "reason": "Recursive destructive operations are disallowed"}
+    ],
+    "forbidden_patterns": [
+        {"value": "(?i)\\bsudo\\b", "reason": "Reject any sudo invocation"},
+        {"value": "(?i)rm\\s+(-[rf]|-fr)", "reason": "Prevent recursive force deletions"},
+        {"value": "(?i)\\bdd\\b.*of=", "reason": "Prevent raw disk writes"},
+        {"value": "(?i)\\bchown\\b.*\\s+-R", "reason": "Recursive ownership changes are high risk"}
+    ]
+}

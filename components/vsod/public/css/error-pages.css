@@ -1,0 +1,73 @@
+/* Error page styles (404, 500, etc.) */
+
+.error-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+    padding: 2rem;
+    background-color: var(--bg-primary, #0a0a0a);
+}
+
+.error-code {
+    font-size: 8rem;
+    font-weight: 700;
+    color: var(--primary-color, #0a59a8);
+    line-height: 1;
+    margin-bottom: 1rem;
+    font-family: var(--font-primary);
+}
+
+.error-title {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-primary, #c9d1d9);
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    font-size: 1.125rem;
+    color: var(--text-secondary, #7d8590);
+    margin-bottom: 2rem;
+    max-width: 500px;
+}
+
+.error-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.error-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.error-btn-primary {
+    background: var(--primary-color, #0a59a8);
+    color: white;
+}
+
+.error-btn-primary:hover {
+    background: var(--primary-hover, #528bc4);
+    transform: translateY(-1px);
+}
+
+.error-btn-secondary {
+    background: var(--surface-color, #161b22);
+    color: var(--text-primary, #c9d1d9);
+    border: 1px solid var(--border-color, #30363d);
+}
+
+.error-btn-secondary:hover {
+    background: var(--surface-hover, #30363d);
+}

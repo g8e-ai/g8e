@@ -1,0 +1,20 @@
+Create a new file on the g8e Operator system.
+
+PREFERRED over run_commands_with_operator for any file creation task.
+Use this tool instead of shell commands (echo, cat, tee, heredoc, redirect) when creating:
+- Shell scripts (.sh)
+- Configuration files (.conf, .yaml, .json, .env, .ini)
+- Cron jobs, systemd units, logrotate configs
+- Any new file with known content
+
+<parameters>
+- file_path, content, justification: REQUIRED
+- target_operator: REQUIRED when multiple operators bound
+</parameters>
+
+<behavior>
+- Creates parent directories automatically
+- Fails if file already exists (use file_write_on_operator to overwrite)
+- Preserves exact content formatting (no shell escaping issues)
+- Automatically tracked in file history for auditing and rollback
+</behavior>

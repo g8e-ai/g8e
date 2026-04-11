@@ -1,0 +1,197 @@
+
+/* Button Components */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md, 8px);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: var(--transition-fast, 150ms ease);
+    white-space: nowrap;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Card Components */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg, 12px);
+    overflow: hidden;
+}
+
+/* Loading Spinner */
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 0.25rem;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Alert Components */
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid;
+    margin: 8px 0;
+}
+
+/* Utility Classes */
+
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+
+/* Connection Status Component */
+
+
+.connection-status.visible {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.connection-status.error .connection-status-indicator {
+    background: #ef4444;
+    animation: connection-pulse-error 1s infinite;
+}
+
+.connection-status.failed .connection-status-indicator {
+    background: #f59e0b;
+    animation: none;
+}
+
+.connection-status.offline .connection-status-indicator {
+    background: #6b7280;
+    animation: none;
+}
+
+.connection-status.reconnecting .connection-status-indicator {
+    background: #3b82f6;
+    animation: connection-pulse-reconnect 1.5s infinite;
+}
+
+@keyframes connection-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes connection-pulse-error {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+@keyframes connection-pulse-reconnect {
+    0%, 100% { opacity: 0.5; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+/* Hidden state - use instead of style="display: none;" */
+.initially-hidden {
+    display: none !important;
+}
+
+/* Visible state with opacity transition */
+.visible {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Citation hover card visibility states - CSP compliant */
+.citation-card-hidden {
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+.citation-card-visible {
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: var(--card-transform, translateX(-50%));
+}
+
+/* Button disabled visual state - CSP compliant replacement for inline opacity */
+.btn-disabled-visual {
+    opacity: 0.5 !important;
+}
+
+/* Material icon sizes */
+.icon-14 {
+    font-size: 14px;
+}
+
+.icon-16 {
+    font-size: 16px;
+}
+
+.icon-18 {
+    font-size: 18px;
+    vertical-align: middle;
+}
+
+/* ==========================================================================
+   TOS Modal User Info Component
+   ========================================================================== */
+
+
+.tos-user-avatar-placeholder .material-symbols-outlined {
+    color: #4facfe;
+}
+
+/* ==========================================================================
+   Message Context Component
+   ========================================================================== */
+
+.message-context {
+    font-size: 0.8em;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* Utility Classes (CSP-compliant replacements for inline styles) */
+
+.text-accent-green { color: var(--accent-green); }
+.flex-wrap { flex-wrap: wrap; }
+
+/* Content Typography for Public Pages */
+
+
+.content-text {
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+/* Terminal Mockup - Always Dark (theme-invariant) */
+
+
+.terminal-mockup-dot.red { background-color: var(--accent-red); }
+.terminal-mockup-dot.yellow { background-color: var(--accent-yellow); }
+.terminal-mockup-dot.green { background-color: var(--accent-green); }
+
+/* Code Elements */
+.inline-code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 0.125rem 0.375rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}

@@ -1,0 +1,82 @@
+{
+  "_comment": "Canonical agent definitions and metadata shared across VSE (Python) and VSOD (JS).",
+  "triage.complexity": {
+    "simple": "simple",
+    "complex": "complex"
+  },
+  "triage.confidence": {
+    "high": "high",
+    "low": "low"
+  },
+  "triage.intent": {
+    "information": "information",
+    "action": "action",
+    "unknown": "unknown"
+  },
+  "tribunal.members": {
+    "axiom": "axiom",
+    "concord": "concord",
+    "variance": "variance"
+  },
+  "tribunal.temperatures": {
+    "axiom": 0.0,
+    "concord": 0.4,
+    "variance": 0.8
+  },
+  "agent.metadata": {
+    "triage": {
+      "id": "triage",
+      "display_name": "Triage Agent",
+      "icon": "filter",
+      "description": "Routes user messages based on complexity and intent."
+    },
+    "primary": {
+      "id": "primary",
+      "display_name": "Primary Agent",
+      "icon": "cpu",
+      "description": "Main reasoning agent for complex tasks."
+    },
+    "assistant": {
+      "id": "assistant",
+      "display_name": "Assistant Agent",
+      "icon": "zap",
+      "description": "Fast-path agent for simple tasks."
+    },
+    "tribunal": {
+      "id": "tribunal",
+      "display_name": "Tribunal",
+      "icon": "users",
+      "description": "Syntactic refinement and validation for shell commands."
+    },
+    "verifier": {
+      "id": "verifier",
+      "display_name": "Verifier",
+      "icon": "shield-check",
+      "description": "Deterministic command verification."
+    },
+    "title_generator": {
+      "id": "title_generator",
+      "display_name": "Title Generator",
+      "icon": "type",
+      "description": "Generates concise case titles."
+    },
+    "axiom": {
+      "id": "axiom",
+      "display_name": "Axiom",
+      "icon": "anchor",
+      "description": "The Optimizer - Fully deterministic Tribunal member that calculates based on statistical probability and resource efficiency."
+    },
+    "concord": {
+      "id": "concord",
+      "display_name": "Concord",
+      "icon": "heart",
+      "description": "The Ethicist - Tribunal member that evaluates based on harm minimization and ethical integrity."
+    },
+    "variance": {
+      "id": "variance",
+      "display_name": "Variance",
+      "icon": "shuffle",
+      "description": "The Catalyst - Tribunal member that hunts for edge cases through adversarial simulation."
+    }
+  }
+}

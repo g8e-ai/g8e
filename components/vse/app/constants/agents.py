@@ -1,0 +1,48 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from enum import Enum
+from app.constants.shared import _AGENTS
+
+
+class TriageComplexityClassification(str, Enum):
+    __str__ = lambda self: self.value
+    SIMPLE  = _AGENTS["triage.complexity"]["simple"]
+    COMPLEX = _AGENTS["triage.complexity"]["complex"]
+
+
+class TriageConfidence(str, Enum):
+    """Confidence level for triage classifications (both complexity and intent)."""
+    __str__ = lambda self: self.value
+    HIGH    = _AGENTS["triage.confidence"]["high"]
+    LOW     = _AGENTS["triage.confidence"]["low"]
+
+
+class TriageIntentClassification(str, Enum):
+    __str__ = lambda self: self.value
+    INFORMATION = _AGENTS["triage.intent"]["information"]
+    ACTION      = _AGENTS["triage.intent"]["action"]
+    UNKNOWN     = _AGENTS["triage.intent"]["unknown"]
+
+
+class TribunalMember(str, Enum):
+    """The three permanent members of the Tribunal.
+
+    Each member has a fixed name, role, and AI temperature that defines its
+    reasoning profile. The ordering is canonical: Axiom (pass 0), Concord (pass 1),
+    Variance (pass 2). When more than 3 passes are configured the members cycle.
+    """
+    __str__ = lambda self: self.value
+    AXIOM   = _AGENTS["tribunal.members"]["axiom"]
+    CONCORD = _AGENTS["tribunal.members"]["concord"]
+    VARIANCE = _AGENTS["tribunal.members"]["variance"]

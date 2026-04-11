@@ -1,0 +1,144 @@
+{
+  "_comment": "Canonical Heartbeat wire payload published by VSA to the heartbeat:{operator_id}:{operator_session_id} pub/sub channel. This is the full message shape — it IS the envelope (VSA does not wrap heartbeats in a VSOMessage). Consumers: VSE (Python VSAHeartbeatPayload in pubsub_messages.py → OperatorHeartbeat.from_wire), VSOD (JS HeartbeatSnapshot.fromHeartbeat + SystemInfo.mergeFromHeartbeat).",
+
+  "heartbeat": {
+    "_description": "Full heartbeat message published by VSA. Contains both the routing envelope fields and the telemetry payload inline.",
+
+    "envelope_fields": {
+      "_comment": "Top-level fields that serve as the message envelope.",
+      "event_type": {
+        "type": "string",
+        "required": true,
+        "value": "g8e.v1.operator.heartbeat.sent",
+        "description": "Always g8e.v1.operator.heartbeat.sent. See events.json operator.heartbeat."
+      },
+      "source_component": {
+        "type": "string",
+        "required": true,
+        "value": "vsa",
+        "description": "Always vsa."
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator identifier"
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Current operator session identifier"
+      },
+      "case_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated case identifier at time of heartbeat"
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated investigation identifier at time of heartbeat"
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "UTC timestamp when heartbeat was created"
+      },
+      "heartbeat_type": {
+        "type": "string",
+        "required": true,
+        "values": ["automatic", "bootstrap", "requested"],
+        "description": "Why this heartbeat was sent. See status.json heartbeat.type."
+      }
+    },
+
+    "system_identity": {
+      "_description": "Static host identity. Same fields every heartbeat; consumers merge into stored SystemInfo.",
+      "hostname": { "type": "string" },
+      "os": { "type": "string", "description": "e.g. linux" },
+      "architecture": { "type": "string", "description": "e.g. amd64, arm64" },
+      "pwd": { "type": "string", "description": "Current working directory of the operator process" },
+      "current_user": { "type": "string" },
+      "cpu_count": { "type": "integer" },
+      "memory_mb": { "type": "integer" }
+    },
+
+    "network_info": {
+      "_description": "Current network state of the operator host.",
+      "public_ip": { "type": "string" },
+      "interfaces": {
+        "type": "array",
+        "items": "string",
+        "description": "Interface name strings"
+      },
+      "connectivity_status": {
+        "type": "array",
+        "description": "Active interface details",
+        "items": {
+          "name": { "type": "string" },
+          "ip": { "type": "string" },
+          "mtu": { "type": "integer" }
+        }
+      }
+    },
+
+    "version_info": {
+      "_description": "VSA binary version metadata.",
+      "operator_version": { "type": "string", "description": "Semver version string of the VSA binary" },
+      "status": {
+        "type": "string",
+        "values": ["stable", "beta", "dev"],
+        "description": "Version stability. See status.json version.stability."
+      }
+    },
+
+    "uptime_info": {
+      "_description": "Operator process uptime.",
+      "uptime": { "type": "string", "description": "Human-readable uptime string (e.g. 2h34m)" },
+      "uptime_seconds": { "type": "integer", "description": "Uptime in seconds" }
+    },
+
+    "performance_metrics": {
+      "_description": "Real-time resource utilization at time of heartbeat.",
+      "cpu_percent": { "type": "number", "description": "CPU usage 0-100" },
+      "memory_percent": { "type": "number", "description": "Memory usage 0-100" },
+      "disk_percent": { "type": "number", "description": "Disk usage 0-100" },
+      "network_latency": { "type": "number", "description": "Network latency in milliseconds" },
+      "memory_used_mb": { "type": "integer" },
+      "memory_total_mb": { "type": "integer" },
+      "disk_used_gb": { "type": "number" },
+      "disk_total_gb": { "type": "number" }
+    },
+
+    "os_details": { "$ref": "system_info.json#system_info/fields/os_details" },
+
+    "user_details": { "$ref": "system_info.json#system_info/fields/user_details" },
+
+    "disk_details": { "$ref": "system_info.json#system_info/fields/disk_details" },
+
+    "memory_details": { "$ref": "system_info.json#system_info/fields/memory_details" },
+
+    "environment": { "$ref": "system_info.json#system_info/fields/environment" },
+
+    "capability_flags": {
+      "_description": "Operator capability flags indicating available features on this host.",
+      "local_storage_enabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "True when local vault (Project Chronos) storage is active"
+      },
+      "git_available": {
+        "type": "boolean",
+        "default": false,
+        "description": "True when git is available on the operator host"
+      },
+      "ledger_enabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "True when LFAA ledger mirroring is active"
+      }
+    }
+  },
+
+  "_comment.field_mapping": "VSE validates payload as VSAHeartbeatPayload (pubsub_messages.py) then calls OperatorHeartbeat.from_wire: performance_metrics -> performance, uptime_info.uptime -> uptime.uptime_display, network_info -> network, capability_flags -> local_storage_enabled/git_available/ledger_enabled. VSOD's HeartbeatSnapshot.fromHeartbeat reads performance_metrics and uptime_info directly. SystemInfo.mergeFromHeartbeat reads system_identity and network_info."
+}

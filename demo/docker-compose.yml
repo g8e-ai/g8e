@@ -1,0 +1,134 @@
+# Broken Web App Fleet Demo - 10 Nginx Nodes
+# Each node runs nginx proxying to a Flask backend app.
+# Various nodes have different misconfigurations for g8e to discover and fix.
+#
+# Node Profiles:
+#   node-01 to 05: Healthy - nginx → Flask, everything works
+#   node-06:       Bad Upstream - proxy_pass points to wrong port → 502
+#   node-07:       SSL Expired - self-signed cert, HTTPS-only with bad cert
+#   node-08:       Wrong Root - document root points to nonexistent dir → 404/403
+#   node-09:       High Load - tiny proxy buffers and short timeouts → 504s
+#   node-10:       Crashed - nginx config syntax error, nginx won't start
+
+networks:
+  fleet-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.210.0.0/24
+  g8e-network:
+    external: true
+
+x-web-node: &web-node
+  build:
+    context: ./containers/web-node
+    dockerfile: Dockerfile
+  networks:
+    - fleet-net
+    - g8e-network
+  expose:
+    - "22"
+    - "5000"
+    - "8181"
+    - "8443"
+  stdin_open: true
+  tty: true
+  labels:
+    - "demo.service=web-node"
+
+services:
+  node-01:
+    <<: *web-node
+    container_name: web-node-01
+    hostname: node-01
+    environment:
+      NODE_ID: node-01
+      NODE_PROFILE: healthy
+
+  node-02:
+    <<: *web-node
+    container_name: web-node-02
+    hostname: node-02
+    environment:
+      NODE_ID: node-02
+      NODE_PROFILE: healthy
+
+  node-03:
+    <<: *web-node
+    container_name: web-node-03
+    hostname: node-03
+    environment:
+      NODE_ID: node-03
+      NODE_PROFILE: healthy
+
+  node-04:
+    <<: *web-node
+    container_name: web-node-04
+    hostname: node-04
+    environment:
+      NODE_ID: node-04
+      NODE_PROFILE: healthy
+
+  node-05:
+    <<: *web-node
+    container_name: web-node-05
+    hostname: node-05
+    environment:
+      NODE_ID: node-05
+      NODE_PROFILE: healthy
+
+  node-06:
+    <<: *web-node
+    container_name: web-node-06
+    hostname: node-06
+    environment:
+      NODE_ID: node-06
+      NODE_PROFILE: bad_upstream
+
+  node-07:
+    <<: *web-node
+    container_name: web-node-07
+    hostname: node-07
+    environment:
+      NODE_ID: node-07
+      NODE_PROFILE: ssl_expired
+
+  node-08:
+    <<: *web-node
+    container_name: web-node-08
+    hostname: node-08
+    environment:
+      NODE_ID: node-08
+      NODE_PROFILE: wrong_root
+
+  node-09:
+    <<: *web-node
+    container_name: web-node-09
+    hostname: node-09
+    environment:
+      NODE_ID: node-09
+      NODE_PROFILE: high_load
+
+  node-10:
+    <<: *web-node
+    container_name: web-node-10
+    hostname: node-10
+    environment:
+      NODE_ID: node-10
+      NODE_PROFILE: crashed
+
+  dashboard:
+    build:
+      context: ./containers/dashboard
+      dockerfile: Dockerfile
+    container_name: fleet-dashboard
+    hostname: dashboard
+    networks:
+      - fleet-net
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./containers/dashboard/server.js:/app/server.js
+      - ./containers/dashboard/public:/app/public
+    labels:
+      - "demo.service=dashboard"

@@ -1,0 +1,193 @@
+{
+  "_comment": "Canonical CaseModel document shape. VSE is the authority — it creates and owns this document in its SQLite store. VSOD reads it via VSE HTTP API to render case lists and the dashboard. A field mismatch breaks case creation, status updates, and investigation linkage.",
+
+  "_authority": "VSE (SQLite)",
+  "_consumers": ["VSOD (JS — renders case list/detail, creates cases via VSE API)"],
+
+  "case": {
+    "_description": "Full case document as stored in VSE SQLite and returned by VSE case endpoints.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique case identifier (UUID v4). Always generated server-side by VSE — never accepted from client."
+      },
+      "title": {
+        "type": "string",
+        "required": true,
+        "description": "Case title. AI-generated from initial_message. 1-500 chars."
+      },
+      "description": {
+        "type": "string",
+        "required": true,
+        "description": "Case description. Derived from initial_message."
+      },
+      "user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User who created the case. Injected server-side by VSOD from authenticated session."
+      },
+      "user_email": {
+        "type": "string",
+        "required": false,
+        "description": "Email of the user who created the case. Injected by VSOD from session."
+      }
+    },
+
+    "status_priority": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "New",
+        "values": ["New", "Triage", "Escalated", "WaitingForCustomer", "Investigate", "HumanReview", "Resolved", "Closed"],
+        "description": "Case lifecycle status. See status.json case.status."
+      },
+      "priority": {
+        "type": "integer",
+        "required": true,
+        "default": 2,
+        "description": "Priority level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
+      },
+      "severity": {
+        "type": "integer",
+        "required": true,
+        "default": 2,
+        "description": "Severity level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
+      }
+    },
+
+    "session_context": {
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Browser session ID at time of case creation. Injected by VSOD."
+      },
+      "source": {
+        "type": "string",
+        "required": false,
+        "default": "g8e.ai",
+        "description": "Source system or channel that originated the case"
+      }
+    },
+
+    "relationships": {
+      "assignee": {
+        "type": "string",
+        "required": false,
+        "description": "User or component currently assigned to this case"
+      },
+      "related_case_ids": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": [],
+        "description": "IDs of related cases"
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated investigation ID. Set when an investigation is created for this case."
+      },
+      "tags": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": []
+      }
+    },
+
+    "metadata": {
+      "metadata": {
+        "type": "object",
+        "required": false,
+        "default": {},
+        "description": "Additional unstructured metadata"
+      },
+      "last_processed_by": {
+        "type": "string",
+        "required": false,
+        "description": "Name of the last component to process this case (e.g. vse, vsod)"
+      },
+      "attachments": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": [],
+        "description": "List of Google Cloud Storage URLs for files attached to the case"
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "history_trail": {
+      "type": "array",
+      "required": false,
+      "default": [],
+      "description": "Chronological log of key case events",
+      "items": {
+        "timestamp": { "type": "string", "format": "iso8601", "required": true },
+        "event_type": {
+          "type": "string",
+          "required": true,
+          "description": "Event type string. See events.json case.*."
+        },
+        "source_component": {
+          "type": "string",
+          "required": true,
+          "description": "Component that initiated the event. See status.json component.name."
+        },
+        "summary": { "type": "string", "required": true },
+        "actor_id": { "type": "string", "required": false },
+        "related_ids": { "type": "object", "required": false },
+        "details": { "type": "object", "required": false }
+      }
+    }
+  },
+
+  "case_create_request": {
+    "_description": "Request body for POST /api/cases (VSOD → VSE). Fields marked server-injected are populated by VSOD from the authenticated session before forwarding to VSE.",
+
+    "client_provided": {
+      "initial_message": {
+        "type": "string",
+        "required": true,
+        "description": "The user's initial message. VSE generates title and description from this."
+      },
+      "attachments": {
+        "type": "array",
+        "required": false,
+        "default": [],
+        "description": "Attachment metadata objects"
+      },
+      "sentinel_mode": {
+        "type": "boolean",
+        "required": false,
+        "default": true
+      }
+    },
+    "server_injected_by_vsod": {
+      "user_id": { "type": "string", "required": true },
+      "user_email": { "type": "string", "required": false },
+      "web_session_id": { "type": "string", "required": true },
+      "organization_id": { "type": "string", "required": false }
+    },
+    "server_defaults": {
+      "priority": { "type": "integer", "default": 2 },
+      "severity": { "type": "integer", "default": 2 },
+      "source": { "type": "string", "default": "g8e.ai" }
+    }
+  }
+}

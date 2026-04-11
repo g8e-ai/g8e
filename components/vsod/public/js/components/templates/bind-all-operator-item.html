@@ -1,0 +1,19 @@
+<div class="bind-all-operator-item" data-operator-id="{{!operatorId}}">
+    <div class="bind-all-operator-icon">
+        <span class="material-symbols-outlined">terminal</span>
+    </div>
+    <div class="bind-all-operator-content">
+        <div class="bind-all-operator-hostname">{{hostname}}</div>
+        <div class="bind-all-operator-details">
+            <span class="bind-all-operator-detail">
+                <span class="material-symbols-outlined">dns</span>
+                <span>{{os}}</span>
+            </span>
+            <span class="bind-all-operator-detail">
+                <span class="material-symbols-outlined">{{{ipIcon}}}</span>
+                <span>{{ip}}</span>
+            </span>
+        </div>
+    </div>
+    <div class="bind-all-operator-status {{!statusClass}}">{{statusLabel}}</div>
+</div>

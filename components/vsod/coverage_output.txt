@@ -1,0 +1,236 @@
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ./g8e test vsod -- test/unit/services/operator/operator_auth_service.unit.test.js test/unit/services/operator/operator_bind_service.unit.test.js --coverage
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  run_tests.sh vsod -- test/unit/services/operator/operator_auth_service.unit.test.js test/unit/services/operator/operator_bind_service.unit.test.js --coverage
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[0;32m[OK][0m Platform CA cert set (G8E_SSL_CERT_FILE=/vsodb/ca.crt)
+[0;32m[OK][0m G8E_INTERNAL_AUTH_TOKEN loaded from /vsodb
+[0;32m[OK][0m G8E_SESSION_ENCRYPTION_KEY loaded from /vsodb
+[0;32m[OK][0m VSODB connected
+
+[0;34m==== Running VSOD Tests ====[0m
+
+
+[1m[46m RUN [49m[22m [36mv4.1.2 [39m[90m/app/components/vsod[39m
+      [2mCoverage enabled with [22m[33mv8[39m
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperator[2m > [22m[2mshould return alreadyBound if operator is already bound to same session
+[22m[39m2026-03-31T12:21:26.294Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Operator already bound to session | extra={"operator_id":"op-123","web_session_id":"ws-123..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaDeviceLink[2m > [22m[2mshould fail if session is invalid
+[22m[39m2026-03-31T12:21:26.294Z - vsod - WARN - [OPERATOR-AUTH] WebSession auth failed - invalid or expired session | extra={"session_id_prefix":"invalid-sess..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperator[2m > [22m[2mshould unbind previous session if same operator rebinds from different session
+[22m[39m2026-03-31T12:21:26.298Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Same operator rebinding after restart | extra={"operator_id":"op-123","old_operator_session":"os-old...","new_operator_session":"os-new..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperator[2m > [22m[2mshould unbind previous session if same operator rebinds from different session
+[22m[39m2026-03-31T12:21:26.298Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Operator bound to web session | extra={"operator_id":"op-123","user_id":"u-123","web_session_id":"ws-123..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaDeviceLink[2m > [22m[2mshould fail if user not found
+[22m[39m2026-03-31T12:21:26.299Z - vsod - ERROR - [OPERATOR-AUTH] User not found for session | extra={"user_id":"u-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaDeviceLink[2m > [22m[2mshould return bootstrap config on success
+[22m[39m2026-03-31T12:21:26.300Z - vsod - INFO - [OPERATOR-AUTH] WebSession auth resolved identity | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaDeviceLink[2m > [22m[2mshould return bootstrap config on success
+[22m[39m2026-03-31T12:21:26.300Z - vsod - INFO - [OPERATOR-AUTH] WebSession auth complete - returning bootstrap config | extra={"operatorSessionId":"valid-session","operator_id":"op-123","user_id":"u-123","has_api_key":true}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperator[2m > [22m[2mshould successfully bind an active operator
+[22m[39m2026-03-31T12:21:26.301Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Operator bound to web session | extra={"operator_id":"op-123","user_id":"u-123","web_session_id":"ws-123..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if api key is missing
+[22m[39m2026-03-31T12:21:26.302Z - vsod - WARN - [OPERATOR-AUTH] Missing Authorization: Bearer token in request
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if api key validation fails
+[22m[39m2026-03-31T12:21:26.302Z - vsod - ERROR - [OPERATOR-AUTH] API key validation failed | extra={"api_key_prefix":"invalid...","error":"Invalid key"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if download-only key is used
+[22m[39m2026-03-31T12:21:26.303Z - vsod - ERROR - [OPERATOR-AUTH] Download-only API key used for Operator auth | extra={"api_key_prefix":"download-k...","user_id":"u-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if system fingerprint is missing
+[22m[39m2026-03-31T12:21:26.304Z - vsod - INFO - [OPERATOR-AUTH] API key validated successfully | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if system fingerprint is missing
+[22m[39m2026-03-31T12:21:26.304Z - vsod - ERROR - [OPERATOR-AUTH] Missing system fingerprint | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperators (bulk)[2m > [22m[2mshould bind multiple operators and broadcast list
+[22m[39m2026-03-31T12:21:26.304Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Starting bulk bind | extra={"user_id":"u-123","operator_count":2,"web_session_id":"ws-123..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if operator does not belong to user
+[22m[39m2026-03-31T12:21:26.305Z - vsod - INFO - [OPERATOR-AUTH] API key validated successfully | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould fail if operator does not belong to user
+[22m[39m2026-03-31T12:21:26.305Z - vsod - ERROR - [OPERATOR-AUTH] Operator does not belong to user | extra={"operator_id":"op-123","operator_user_id":"u-456","authenticated_user_id":"u-123","api_key_prefix":"key..."}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2mbindOperators (bulk)[2m > [22m[2mshould bind multiple operators and broadcast list
+[22m[39m2026-03-31T12:21:26.305Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Bulk bind completed | extra={"user_id":"u-123","bound_count":2,"failed_count":0}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould handle type immutability violation
+[22m[39m2026-03-31T12:21:26.306Z - vsod - INFO - [OPERATOR-AUTH] API key validated successfully | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould handle type immutability violation
+[22m[39m2026-03-31T12:21:26.306Z - vsod - ERROR - [OPERATOR-AUTH] Operator type mismatch - type is immutable | extra={"existing_type":"cloud","requested_type":"system"}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2munbindOperator[2m > [22m[2mshould successfully unbind by operatorId
+[22m[39m2026-03-31T12:21:26.306Z - vsod - INFO - [OPERATOR-BIND-SERVICE] DB-based unbind for operator | extra={"operator_id":"op-123","status":"bound"}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2munbindOperator[2m > [22m[2mshould successfully unbind by operatorId
+[22m[39m2026-03-31T12:21:26.306Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Operator unbound from web session | extra={"web_session_id":"ws-123...","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.307Z - vsod - INFO - [OPERATOR-AUTH] API key validated successfully | extra={"user_id":"u-123","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.307Z - vsod - INFO - [OPERATOR-AUTH] Operator session created | extra={"operatorSessionId":"os-123","operator_id":"op-123","user_id":"u-123","is_claiming_slot":true}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.307Z - vsod - INFO - [OPERATOR-AUTH] Operator slot claimed successfully | extra={"operator_id":"op-123","user_id":"u-123","has_cert":false}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.308Z - vsod - INFO - [OPERATOR-AUTH] Operator activated | extra={"operator_id":"op-123","user_id":"u-123","is_claiming_slot":true}
+
+[90mstdout[2m | test/unit/services/operator/operator_bind_service.unit.test.js[2m > [22m[2mBindOperatorsService[2m > [22m[2munbindOperator[2m > [22m[2mshould successfully unbind current session if no operatorId provided
+[22m[39m2026-03-31T12:21:26.308Z - vsod - INFO - [OPERATOR-BIND-SERVICE] Operator unbound from web session | extra={"web_session_id":"ws-123...","operator_id":"op-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.308Z - vsod - INFO - [OPERATOR-AUTH] No active user web sessions to broadcast Operator state change | extra={"operator_id":"op-123","user_id":"u-123"}
+
+[90mstdout[2m | test/unit/services/operator/operator_auth_service.unit.test.js[2m > [22m[2mOperatorAuthService[2m > [22m[2m_authenticateViaApiKey[2m > [22m[2mshould complete authentication for new slot
+[22m[39m2026-03-31T12:21:26.308Z - vsod - INFO - [OPERATOR-AUTH] Operator authenticated and bootstrapped successfully | extra={"operatorSessionId":"os-123","operatorSessionIdFull":"os-123","user_id":"u-123","operator_id":"op-123"}
+
+[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m[33m[39m[32m·[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m20 passed[39m[22m[90m (20)[39m
+[2m   Start at [22m 12:21:25
+[2m   Duration [22m 2.39s[2m (transform 1.45s, setup 79ms, import 577ms, tests 1.83s, environment 0ms)[22m
+
+[34m % [39m[2mCoverage report from [22m[33mv8[39m
+-------------------|---------|----------|---------|---------|-------------------
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+-------------------|---------|----------|---------|---------|-------------------
+All files          |    8.26 |     4.52 |    9.16 |    8.47 |                   
+ middleware        |       0 |        0 |       0 |       0 |                   
+  api_key_auth.js  |       0 |        0 |       0 |       0 | 12-128            
+  ...entication.js |       0 |        0 |       0 |       0 | 22-353            
+  authorization.js |       0 |        0 |       0 |       0 | 23-171            
+  csp_nonce.js     |       0 |      100 |       0 |       0 | 12-13             
+  error_handler.js |       0 |        0 |       0 |       0 | 23-67             
+  rate-limit.js    |       0 |        0 |       0 |       0 | 42-557            
+  ..._timestamp.js |       0 |        0 |       0 |       0 | 31-269            
+ models            |   27.47 |     7.28 |   30.93 |   28.25 |                   
+  ...ment_model.js |   66.66 |      100 |       0 |   66.66 | 16                
+  auth_models.js   |   31.91 |        0 |   25.92 |   33.33 | ...29,242,266-270 
+  base.js          |   29.16 |    29.41 |   52.63 |   27.94 | ...91-299,323-328 
+  ...tion_model.js |       0 |        0 |       0 |       0 | 18-62             
+  kv_models.js     |   10.14 |        0 |   19.23 |   11.86 | ...10,118,124-142 
+  ...ator_model.js |   21.81 |        0 |    57.5 |   22.85 | ...55-564,576-605 
+  ...tion_model.js |    4.34 |        0 |       0 |    4.44 | 33,46-294         
+  pubsub_models.js |   30.76 |        0 |       0 |   30.76 | ...39,56-57,75-76 
+  ...est_models.js |    27.5 |        0 |   65.85 |    29.2 | ...62,534,563-585 
+  ...nse_models.js |    67.9 |      100 |       0 |    67.9 | ...18,655,667,704 
+  ...ding_model.js |      25 |      100 |       0 |      25 | 26-28             
+  sse_models.js    |   45.23 |        0 |    5.26 |   45.23 | ...13,235,261-273 
+  user_model.js    |   14.28 |      100 |       0 |   14.28 | 23-24,38-61       
+ routes/auth       |       0 |        0 |       0 |       0 |                   
+  auth_routes.js   |       0 |        0 |       0 |       0 | 30-171            
+  ...ink_routes.js |       0 |        0 |       0 |       0 | 24-183            
+  ...ing_routes.js |       0 |        0 |       0 |       0 | 26-56             
+  ...key_routes.js |       0 |        0 |       0 |       0 | 21-244            
+  setup_routes.js  |       0 |        0 |       0 |       0 | 18-128            
+ routes/internal   |       0 |        0 |       0 |       0 |                   
+  ...ink_routes.js |       0 |        0 |       0 |       0 | 31-178            
+  ...tor_routes.js |       0 |        0 |       0 |       0 | 19-338            
+  ...nal_routes.js |       0 |      100 |       0 |       0 | 53-98             
+  ...ion_routes.js |       0 |        0 |       0 |       0 | 25-130            
+  ...ngs_routes.js |       0 |        0 |       0 |       0 | 25-98             
+  ...sse_routes.js |       0 |        0 |       0 |       0 | 26-110            
+  ...ser_routes.js |       0 |        0 |       0 |       0 | 32-415            
+ routes/operator   |       0 |        0 |       0 |       0 |                   
+  ...key_routes.js |       0 |        0 |       0 |       0 | 20-99             
+  ...val_routes.js |       0 |        0 |       0 |       0 | 23-183            
+  ...uth_routes.js |       0 |        0 |       0 |       0 | 19-111            
+  ...ind_routes.js |       0 |        0 |       0 |       0 | 19-97             
+  ...tor_routes.js |       0 |        0 |       0 |       0 | 27-217            
+  ...tus_routes.js |       0 |        0 |       0 |       0 | 28-146            
+ routes/platform   |       0 |        0 |       0 |       0 |                   
+  audit_routes.js  |       0 |        0 |       0 |       0 | 27-161            
+  chat_routes.js   |       0 |        0 |       0 |       0 | 29-242            
+  ...ole_routes.js |       0 |        0 |       0 |       0 | 25-234            
+  docs_routes.js   |       0 |        0 |       0 |       0 | 15-104            
+  health_routes.js |       0 |        0 |       0 |       0 | 20-176            
+  ...ics_routes.js |       0 |        0 |       0 |       0 | 20-53             
+  ...ngs_routes.js |       0 |        0 |       0 |       0 | 20-72             
+  sse_routes.js    |       0 |        0 |       0 |       0 | 21-176            
+  system_routes.js |       0 |        0 |       0 |       0 | 29-85             
+  user_routes.js   |       0 |        0 |       0 |       0 | 16-63             
+ services          |   22.04 |        0 |    2.08 |   24.73 |                   
+  error_service.js |       0 |        0 |       0 |       0 | 11-142            
+  ...ialization.js |   24.21 |        0 |    2.63 |   27.49 | 98-565            
+ services/auth     |    0.69 |        0 |       0 |    0.72 |                   
+  ...ta_service.js |       0 |        0 |       0 |       0 | 20-82             
+  ...ey_service.js |       0 |        0 |       0 |       0 | 22-149            
+  ...on_service.js |       0 |        0 |       0 |       0 | 21-202            
+  ...ns_service.js |       0 |        0 |       0 |       0 | 35-233            
+  ...nk_service.js |       0 |        0 |       0 |       0 | 32-520            
+  ...on_service.js |       0 |        0 |       0 |       0 | 13-183            
+  ...th_service.js |       0 |        0 |       0 |       0 | 18-134            
+  ...ty_service.js |    4.45 |        0 |       0 |    4.63 | 28-426            
+  ...on_service.js |       0 |        0 |       0 |       0 | 37-407            
+  ...th_service.js |    0.78 |        0 |       0 |    0.87 | 39-336            
+  ...in_service.js |       0 |        0 |       0 |       0 | 19-87             
+  ...h_listener.js |       0 |        0 |       0 |       0 | 20-104            
+  ...on_service.js |       0 |        0 |       0 |       0 | 37-608            
+ services/cache    |    0.69 |        0 |       0 |     0.7 |                   
+  ...de_service.js |    0.69 |        0 |       0 |     0.7 | 49-571            
+ services/clients  |    0.85 |        0 |    4.31 |    0.93 |                   
+  ...ttp_client.js |    0.77 |        0 |       0 |    0.81 | 48-485,496-499    
+  db_client.js  |       0 |        0 |       0 |       0 |                   
+  ...ent_client.js |    3.47 |        0 |    23.8 |    3.88 | 38-61,74-252      
+  ...ttp_client.js |       0 |        0 |       0 |       0 | 22-161            
+  ..._kv_cache_client.js |       0 |        0 |       0 |       0 | 46-430            
+  ...sub_client.js |       0 |        0 |       0 |       0 | 31-189            
+ services/operator |   29.32 |    26.64 |   12.12 |   30.75 |                   
+  ...th_service.js |   70.18 |    56.48 |      80 |   71.42 | ...55-556,564-580 
+  ...nd_service.js |   59.68 |    47.69 |      80 |   61.11 | ...89,203,246-306 
+  ...ad_service.js |       0 |        0 |       0 |       0 | 20-108            
+  ...le_service.js |       0 |        0 |       0 |       0 | 14-130            
+  ...on_service.js |       0 |        0 |       0 |       0 | 13-100            
+  ...ay_service.js |       0 |        0 |       0 |       0 | 16-112            
+  ...or_service.js |       0 |        0 |       0 |       0 | 43-343            
+  ...ot_service.js |       0 |        0 |       0 |       0 | 16-266            
+ services/platform |    1.41 |        0 |    1.38 |    1.23 |                   
+  ...nt_service.js |       0 |        0 |       0 |       0 | 19-254            
+  audit_service.js |       0 |        0 |       0 |       0 | 9-101             
+  ...te_service.js |    1.31 |        0 |       0 |    1.31 | 31-260            
+  ...oordinator.js |       0 |        0 |       0 |       0 | 34-196            
+  ...cs_service.js |    1.74 |        0 |       0 |     1.8 | 21,32,44-451      
+  ...or_service.js |       0 |        0 |       0 |       0 | 48-269            
+  ...gs_service.js |    5.55 |        0 |   10.52 |    4.28 | 224-290,484-782   
+  setup_service.js |       0 |        0 |       0 |       0 | 9-45              
+  sse_service.js   |       0 |        0 |       0 |       0 | 24-255            
+  user_service.js  |       0 |        0 |       0 |       0 | 45-454            
+  ...lob_client.js |    1.72 |        0 |       0 |    1.85 | 29-179            
+ utils             |   21.81 |    17.98 |   14.89 |    23.5 |                   
+  cache_metrics.js |   13.46 |        0 |    7.69 |   14.58 | 29-178            
+  ...installers.js |       0 |        0 |       0 |       0 | 20-95             
+  logger.js        |      44 |    38.88 |   38.46 |   46.37 | ...52,155,192-200 
+  request.js       |       0 |        0 |       0 |       0 | 5                 
+  security.js      |   17.14 |    13.79 |   33.33 |   18.75 | 82-143,155,160    
+  sse.js           |       0 |        0 |       0 |       0 | 15-20             
+  timestamp.js     |    6.25 |        0 |       0 |    7.69 | ...95-127,144-145 
+  version.js       |       0 |        0 |       0 |       0 | 14-35             
+-------------------|---------|----------|---------|---------|-------------------
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Error [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: ENOENT: no such file or directory, lstat '/home/g8e/coverage-reports/vsod/.tmp'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ errno: -2, code: 'ENOENT', syscall: 'lstat', path: '/home/g8e/coverage-reports/vsod/.tmp' }[39m
+
+
+

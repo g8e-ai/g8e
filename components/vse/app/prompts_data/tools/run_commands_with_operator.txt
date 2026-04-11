@@ -1,0 +1,29 @@
+Execute shell commands on the connected system through the g8e Operator.
+
+<parameters>
+- command, justification: REQUIRED
+- target_operator: hostname, operator_id, or index ("0","1") — REQUIRED when multiple operators bound
+- target_operators: run same command on multiple simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
+- timeout_seconds: default 300 | expected_output_lines: for UI sizing
+</parameters>
+
+<batch_execution>
+target_operators=["all"] runs on all bound operators in parallel. Use for fleet-wide operations.
+</batch_execution>
+
+<data_sovereignty>
+LFAA: Output is available in result fields after execution — already Sentinel-scrubbed.
+Do NOT call fetch_execution_output after every command. Only use it when you need raw unredacted output or the user explicitly requests it. Raw output is stored on the Operator's local storage for data sovereignty.
+</data_sovereignty>
+
+<sentinel_scrubbing>
+All output is processed by g8e Sentinel before transmission. Sensitive data replaced with placeholders:
+- Network: [IP_ADDR], [HOST], [URL], [MAC_ADDR]
+- Credentials: [JWT], [AWS_KEY], [GITHUB_TOKEN], [SLACK_TOKEN], [OKTA_TOKEN], [CREDENTIAL], [BEARER_TOKEN]
+- Cloud: [AWS_RESOURCE], [ACCOUNT_ID], [GCP_API_KEY], [AZURE_SECRET]
+- PII: [EMAIL], [PHONE], [PII]
+- Identifiers: [UUID], [PATH], [CONN_STRING]
+- Data: [DATA_ROW], [JSON_DATA], [VALUE], [ENCODED_DATA]
+
+Treat placeholders as indicators of data presence. Ask the user to provide specific values when needed. Structure hints, error types, and exit codes are preserved.
+</sentinel_scrubbing>

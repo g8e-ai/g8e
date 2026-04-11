@@ -1,0 +1,25 @@
+{
+  "infra": {
+    "db_path": "/data/g8e.db",
+    "ca_cert_path": "/vsodb/ca.crt",
+    "ssl_dir": "/vsodb",
+    "docs_dir": "/docs",
+    "shared_dir": "/app/shared",
+    "shared_constants_dir": "/app/shared/constants",
+    "shared_models_dir": "/app/shared/models"
+  },
+  "vse": {
+    "app_dir": "/app/components/vse",
+    "config_dir": "/app/components/vse/config",
+    "tests_dir": "/app/components/vse/tests"
+  },
+  "vsod": {
+    "app_dir": "/app/components/vsod",
+    "views_dir": "/app/components/vsod/views",
+    "node_modules_dir": "/app/components/vsod/node_modules"
+  },
+  "g8e_pod": {
+    "scripts_dir": "/app/components/g8e-pod/scripts",
+    "reports_dir": "/reports"
+  }
+}

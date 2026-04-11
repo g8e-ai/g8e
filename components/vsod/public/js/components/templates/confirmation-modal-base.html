@@ -1,0 +1,19 @@
+<div class="download-menu-overlay confirmation-modal-overlay">
+    <div class="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="confirmation-modal-header">
+            <span class="material-symbols-outlined confirmation-modal-icon {{iconClass}}">{{icon}}</span>
+            <h3 class="confirmation-modal-title" id="modal-title">{{title}}</h3>
+        </div>
+        <div class="confirmation-modal-body">
+            <p class="confirmation-modal-message {{descriptionClass}}">{{message}}</p>
+            <!-- htmlContent will be injected here via JS if provided -->
+        </div>
+        <div class="confirmation-modal-actions">
+            <button class="confirmation-modal-btn confirmation-modal-cancel" data-action="cancel">Cancel</button>
+            <button class="confirmation-modal-btn confirmation-modal-confirm {{confirmClass}}" data-action="confirm">
+                <span class="material-symbols-outlined">{{confirmIcon}}</span>
+                <span>{{confirmLabel}}</span>
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,593 @@
+{
+  "_comment": "Canonical outbound result payload shapes published by VSA to the results:{operator_id}:{operator_session_id} pub/sub channel. These payloads are embedded in the `payload` field of the VSA ResultMessage envelope (see envelope.json). Consumers: VSE (Python, processes results), VSOD (JS, forwards to frontend via SSE).",
+
+  "_comment.wire_format": "VSA wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. VSE and VSOD read `event_type` from the envelope to select the correct payload deserializer.",
+
+  "execution_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.command.completed | g8e.v1.operator.command.failed. Final result of a command execution.",
+    "_event_types": ["g8e.v1.operator.command.completed", "g8e.v1.operator.command.failed"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier matching the originating command request"
+      },
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Command that was executed"
+      },
+      "status": {
+        "type": "string",
+        "required": true,
+        "values": ["completed", "failed", "timeout", "cancelled"],
+        "description": "Final execution status. See status.json execution.status."
+      },
+      "duration_seconds": {
+        "type": "number",
+        "required": true,
+        "description": "Wall-clock execution duration in seconds"
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator that executed the command"
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator session at time of execution"
+      },
+      "stdout": {
+        "type": "string",
+        "required": false,
+        "description": "Standard output. May be Sentinel-scrubbed depending on vault mode."
+      },
+      "stderr": {
+        "type": "string",
+        "required": false,
+        "description": "Standard error. May be Sentinel-scrubbed."
+      },
+      "stdout_size": {
+        "type": "integer",
+        "required": true,
+        "description": "Size of stdout in bytes before any truncation"
+      },
+      "stderr_size": {
+        "type": "integer",
+        "required": true,
+        "description": "Size of stderr in bytes before any truncation"
+      },
+      "stdout_hash": {
+        "type": "string",
+        "required": false,
+        "description": "SHA256 hash of raw stdout for integrity verification"
+      },
+      "stderr_hash": {
+        "type": "string",
+        "required": false,
+        "description": "SHA256 hash of raw stderr for integrity verification"
+      },
+      "stored_locally": {
+        "type": "boolean",
+        "required": true,
+        "description": "True when full output is stored in the operator local vault"
+      },
+      "return_code": {
+        "type": "integer",
+        "required": false,
+        "description": "Process exit code. Absent for timeout or cancellation."
+      },
+      "error_message": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable error description if status is failed or timeout"
+      },
+      "error_type": {
+        "type": "string",
+        "required": false,
+        "description": "Machine-readable error classification"
+      }
+    }
+  },
+
+  "execution_status": {
+    "_description": "Payload for event_type: g8e.v1.operator.command.status.updated.queued | g8e.v1.operator.command.status.updated.running. Intermediate progress update for a long-running command.",
+    "_event_types": ["g8e.v1.operator.command.status.updated.queued", "g8e.v1.operator.command.status.updated.running"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier"
+      },
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Command being executed"
+      },
+      "status": {
+        "type": "string",
+        "required": true,
+        "values": ["pending", "executing"],
+        "description": "Current execution status. See status.json execution.status."
+      },
+      "process_alive": {
+        "type": "boolean",
+        "required": true,
+        "description": "True if the underlying process is still running"
+      },
+      "elapsed_seconds": {
+        "type": "number",
+        "required": true,
+        "description": "Elapsed time since execution started"
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true
+      },
+      "new_output": {
+        "type": "string",
+        "required": false,
+        "description": "New stdout lines since last status update"
+      },
+      "new_stderr": {
+        "type": "string",
+        "required": false,
+        "description": "New stderr lines since last status update"
+      },
+      "message": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable status message"
+      },
+      "stored_locally": {
+        "type": "boolean",
+        "required": false,
+        "description": "True when output is being stored in the operator local vault"
+      }
+    }
+  },
+
+  "cancellation_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.command.cancelled.",
+    "_event_types": ["g8e.v1.operator.command.cancelled"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier of the cancelled command"
+      },
+      "status": {
+        "type": "string",
+        "required": true,
+        "value": "cancelled"
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true
+      },
+      "error_message": {
+        "type": "string",
+        "required": false
+      },
+      "error_type": {
+        "type": "string",
+        "required": false
+      }
+    }
+  },
+
+  "file_edit_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.edit.completed | g8e.v1.operator.file.edit.failed. Result of a file operation.",
+    "_event_types": ["g8e.v1.operator.file.edit.completed", "g8e.v1.operator.file.edit.failed"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier"
+      },
+      "operation": {
+        "type": "string",
+        "required": true,
+        "values": ["read", "write", "replace", "insert", "delete", "patch"],
+        "description": "File operation that was performed"
+      },
+      "file_path": {
+        "type": "string",
+        "required": true,
+        "description": "Absolute path of the target file"
+      },
+      "status": {
+        "type": "string",
+        "required": true,
+        "values": ["completed", "failed", "timeout"],
+        "description": "Operation status. See status.json execution.status."
+      },
+      "duration_seconds": {
+        "type": "number",
+        "required": true
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true
+      },
+      "content": {
+        "type": "string",
+        "required": false,
+        "description": "File content returned for read operations"
+      },
+      "stdout_size": {
+        "type": "integer",
+        "required": true
+      },
+      "stderr_size": {
+        "type": "integer",
+        "required": true
+      },
+      "stdout_hash": {
+        "type": "string",
+        "required": false
+      },
+      "stderr_hash": {
+        "type": "string",
+        "required": false
+      },
+      "stored_locally": {
+        "type": "boolean",
+        "required": true
+      },
+      "bytes_written": {
+        "type": "integer",
+        "required": false,
+        "description": "Bytes written to file for write/replace/insert operations"
+      },
+      "lines_changed": {
+        "type": "integer",
+        "required": false,
+        "description": "Number of lines modified"
+      },
+      "backup_path": {
+        "type": "string",
+        "required": false,
+        "description": "Path to backup file if create_backup was true"
+      },
+      "error_message": {
+        "type": "string",
+        "required": false
+      },
+      "error_type": {
+        "type": "string",
+        "required": false
+      }
+    }
+  },
+
+  "fs_list_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.list.completed | g8e.v1.operator.filesystem.list.failed.",
+    "_event_types": ["g8e.v1.operator.filesystem.list.completed", "g8e.v1.operator.filesystem.list.failed"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true
+      },
+      "path": {
+        "type": "string",
+        "required": true,
+        "description": "Resolved absolute path that was listed"
+      },
+      "status": {
+        "type": "string",
+        "required": true,
+        "values": ["completed", "failed"]
+      },
+      "total_count": {
+        "type": "integer",
+        "required": true,
+        "description": "Total number of entries found before truncation"
+      },
+      "truncated": {
+        "type": "boolean",
+        "required": true,
+        "description": "True if results were capped at max_entries"
+      },
+      "duration_seconds": {
+        "type": "number",
+        "required": true
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true
+      },
+      "entries": {
+        "type": "array",
+        "required": false,
+        "description": "Directory entries. Absent on failure.",
+        "items": {
+          "name": { "type": "string", "description": "File or directory name" },
+          "path": { "type": "string", "description": "Full absolute path" },
+          "is_dir": { "type": "boolean" },
+          "size": { "type": "integer", "description": "Size in bytes. 0 for directories." },
+          "mode": { "type": "string", "description": "Permission mode as octal string e.g. 0755" },
+          "mod_time": { "type": "integer", "description": "Unix timestamp of last modification" },
+          "is_symlink": { "type": "boolean", "required": false },
+          "symlink_target": { "type": "string", "required": false },
+          "owner": { "type": "string", "required": false },
+          "group": { "type": "string", "required": false },
+          "inode": { "type": "integer", "required": false },
+          "nlink": { "type": "integer", "required": false }
+        }
+      },
+      "stdout_size": { "type": "integer", "required": true },
+      "stderr_size": { "type": "integer", "required": true },
+      "stdout_hash": { "type": "string", "required": false },
+      "stderr_hash": { "type": "string", "required": false },
+      "stored_locally": { "type": "boolean", "required": true },
+      "error_message": { "type": "string", "required": false },
+      "error_type": { "type": "string", "required": false }
+    }
+  },
+
+  "fetch_logs_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.completed | g8e.v1.operator.logs.fetch.failed. Contains stored execution output retrieved from the operator local vault.",
+    "_event_types": ["g8e.v1.operator.logs.fetch.completed", "g8e.v1.operator.logs.fetch.failed"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Execution identifier whose logs were fetched"
+      },
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Original command string"
+      },
+      "exit_code": {
+        "type": "integer",
+        "required": false
+      },
+      "duration_ms": {
+        "type": "integer",
+        "required": true,
+        "description": "Original execution duration in milliseconds"
+      },
+      "stdout": {
+        "type": "string",
+        "required": true,
+        "description": "Stored stdout content (may be Sentinel-scrubbed)"
+      },
+      "stderr": {
+        "type": "string",
+        "required": true,
+        "description": "Stored stderr content (may be Sentinel-scrubbed)"
+      },
+      "stdout_size": { "type": "integer", "required": true },
+      "stderr_size": { "type": "integer", "required": true },
+      "timestamp": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the original command was executed"
+      },
+      "operator_id": { "type": "string", "required": true },
+      "operator_session_id": { "type": "string", "required": true },
+      "sentinel_mode": {
+        "type": "string",
+        "required": false,
+        "description": "Vault scrubbing mode used for stored output"
+      },
+      "error": {
+        "type": "string",
+        "required": false,
+        "description": "Error description if fetch failed"
+      }
+    }
+  },
+
+  "file_diff_entry": {
+    "_description": "Single file diff record. Used as items in fetch_file_diff_result and fetch_file_history_result.",
+    "fields": {
+      "id": { "type": "string", "required": true },
+      "timestamp": { "type": "string", "format": "iso8601", "required": true },
+      "file_path": { "type": "string", "required": true },
+      "operation": { "type": "string", "required": true },
+      "ledger_hash_before": { "type": "string", "required": true },
+      "ledger_hash_after": { "type": "string", "required": true },
+      "diff_stat": { "type": "string", "required": true },
+      "diff_content": { "type": "string", "required": false },
+      "diff_size": { "type": "integer", "required": true },
+      "operator_session_id": { "type": "string", "required": true }
+    }
+  },
+
+  "fetch_file_diff_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.diff.fetch.completed | g8e.v1.operator.file.diff.fetch.failed.",
+    "_event_types": ["g8e.v1.operator.file.diff.fetch.completed", "g8e.v1.operator.file.diff.fetch.failed"],
+    "fields": {
+      "success": { "type": "boolean", "required": true },
+      "diffs": {
+        "type": "array",
+        "required": false,
+        "description": "Array of file_diff_entry objects. Present when fetching multiple diffs.",
+        "items": "$ref:file_diff_entry"
+      },
+      "diff": {
+        "type": "object",
+        "required": false,
+        "description": "Single file_diff_entry object. Present when fetching by diff_id.",
+        "ref": "file_diff_entry"
+      },
+      "total": { "type": "integer", "required": false },
+      "operator_session_id": { "type": "string", "required": false },
+      "error": { "type": "string", "required": false }
+    }
+  },
+
+  "port_check_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.network.port.check.completed | g8e.v1.operator.network.port.check.failed.",
+    "_event_types": ["g8e.v1.operator.network.port.check.completed", "g8e.v1.operator.network.port.check.failed"],
+    "fields": {
+      "execution_id": { "type": "string", "required": true },
+      "status": { "type": "string", "required": true },
+      "operator_id": { "type": "string", "required": true },
+      "operator_session_id": { "type": "string", "required": true },
+      "results": {
+        "type": "array",
+        "required": false,
+        "items": {
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "open": { "type": "boolean" },
+          "latency_ms": { "type": "number", "required": false },
+          "error": { "type": "string", "required": false }
+        }
+      },
+      "error_message": { "type": "string", "required": false },
+      "error_type": { "type": "string", "required": false }
+    }
+  },
+
+  "fetch_history_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.history.fetch.completed | g8e.v1.operator.history.fetch.failed. Contains audit session history retrieved from the operator local vault.",
+    "_event_types": ["g8e.v1.operator.history.fetch.completed", "g8e.v1.operator.history.fetch.failed"],
+    "fields": {
+      "success": { "type": "boolean", "required": true },
+      "operator_session_id": { "type": "string", "required": false, "description": "Operator session ID that was queried" },
+      "web_session": {
+        "type": "object",
+        "required": false,
+        "description": "WebSession metadata. Absent if session not found.",
+        "fields": {
+          "id": { "type": "string", "required": true },
+          "title": { "type": "string", "required": true },
+          "created_at": { "type": "string", "format": "iso8601", "required": false },
+          "user_identity": { "type": "string", "required": true }
+        }
+      },
+      "events": {
+        "type": "array",
+        "required": false,
+        "description": "Audit events for the session. Absent on failure.",
+        "items": {
+          "id": { "type": "integer", "required": true },
+          "operator_session_id": { "type": "string", "required": true },
+          "timestamp": { "type": "string", "format": "iso8601", "required": false },
+          "type": {
+            "type": "string",
+            "required": true,
+            "values": ["USER_MSG", "AI_MSG", "CMD_EXEC", "FILE_MUTATION"],
+            "description": "Audit event type"
+          },
+          "content_text": { "type": "string", "required": false },
+          "command_raw": { "type": "string", "required": false },
+          "command_exit_code": { "type": "integer", "required": false },
+          "command_stdout": { "type": "string", "required": false },
+          "command_stderr": { "type": "string", "required": false },
+          "execution_duration_ms": { "type": "integer", "required": false },
+          "stored_locally": { "type": "boolean", "required": true },
+          "stdout_truncated": { "type": "boolean", "required": true },
+          "stderr_truncated": { "type": "boolean", "required": true },
+          "file_mutations": {
+            "type": "array",
+            "required": false,
+            "description": "File mutations linked to this event. Only present for FILE_MUTATION events.",
+            "items": {
+              "id": { "type": "integer", "required": true },
+              "filepath": { "type": "string", "required": true },
+              "operation": { "type": "string", "required": true, "values": ["WRITE", "DELETE", "CREATE"] },
+              "ledger_hash_before": { "type": "string", "required": false },
+              "ledger_hash_after": { "type": "string", "required": false },
+              "diff_stat": { "type": "string", "required": false }
+            }
+          }
+        }
+      },
+      "total": { "type": "integer", "required": false, "description": "Total number of events returned" },
+      "limit": { "type": "integer", "required": false },
+      "offset": { "type": "integer", "required": false },
+      "error": { "type": "string", "required": false }
+    }
+  },
+
+  "fetch_file_history_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.history.fetch.completed | g8e.v1.operator.file.history.fetch.failed. Contains ledger commit history for a specific file.",
+    "_event_types": ["g8e.v1.operator.file.history.fetch.completed", "g8e.v1.operator.file.history.fetch.failed"],
+    "fields": {
+      "success": { "type": "boolean", "required": true },
+      "file_path": { "type": "string", "required": false, "description": "Absolute path of the file queried" },
+      "history": {
+        "type": "array",
+        "required": false,
+        "description": "Commit history entries for the file. Absent on failure.",
+        "items": {
+          "commit_hash": { "type": "string", "required": true, "description": "Git commit hash" },
+          "timestamp": { "type": "string", "format": "iso8601", "required": false },
+          "message": { "type": "string", "required": true, "description": "Commit message" }
+        }
+      },
+      "error": { "type": "string", "required": false }
+    }
+  },
+
+  "restore_file_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.restore.completed | g8e.v1.operator.file.restore.failed. Result of restoring a file to a prior git commit via the ledger.",
+    "_event_types": ["g8e.v1.operator.file.restore.completed", "g8e.v1.operator.file.restore.failed"],
+    "fields": {
+      "success": { "type": "boolean", "required": true },
+      "file_path": { "type": "string", "required": false, "description": "Absolute path of the restored file" },
+      "commit_hash": { "type": "string", "required": false, "description": "Git commit hash the file was restored to" },
+      "error": { "type": "string", "required": false }
+    }
+  },
+
+  "fs_read_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.read.completed | g8e.v1.operator.filesystem.read.failed. Result of reading a file.",
+    "_event_types": ["g8e.v1.operator.filesystem.read.completed", "g8e.v1.operator.filesystem.read.failed"],
+    "fields": {
+      "execution_id": { "type": "string", "required": true, "description": "Unique execution identifier matching the originating request" },
+      "path": { "type": "string", "required": true, "description": "Absolute path of the file read" },
+      "status": { "type": "string", "required": true, "values": ["completed", "failed"], "description": "Operation status" },
+      "content": { "type": "string", "required": false, "description": "File content. Absent on failure." },
+      "size_bytes": { "type": "integer", "required": true, "description": "Size of content returned in bytes" },
+      "truncated": { "type": "boolean", "required": true, "description": "Whether content was truncated due to max_size limit" },
+      "duration_seconds": { "type": "number", "required": true, "description": "Wall-clock read duration in seconds" },
+      "operator_id": { "type": "string", "required": true },
+      "operator_session_id": { "type": "string", "required": true },
+      "error_message": { "type": "string", "required": false },
+      "error_type": { "type": "string", "required": false }
+    }
+  },
+
+  "lfaa_error": {
+    "_description": "Payload for LFAA error responses from VSA when a request cannot be processed.",
+    "fields": {
+      "success": {
+        "type": "boolean",
+        "required": true,
+        "value": false
+      },
+      "error": {
+        "type": "string",
+        "required": true,
+        "description": "Human-readable error description"
+      },
+      "operator_id": { "type": "string", "required": true },
+      "operator_session_id": { "type": "string", "required": true }
+    }
+  }
+}

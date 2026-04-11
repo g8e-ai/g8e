@@ -1,0 +1,57 @@
+<button class="download-menu-back">
+    <span class="download-menu-back-icon">←</span>
+    <span>Back</span>
+</button>
+<div class="download-section">
+    <!-- 1. Device Link (Recommended) -->
+    <div class="device-link-info-section">
+        <div class="device-link-info-header">
+            <span class="material-symbols-outlined">link</span>
+            <span>Device Link (Recommended)</span>
+        </div>
+        <p class="device-link-info-text">
+            Click <strong>Back</strong>, then click the <span class="material-symbols-outlined inline-icon">terminal</span> button on an operator to generate a Device Link command. Paste it on your target system and authorize when prompted.
+        </p>
+    </div>
+
+    <!-- 2. Curl Command with $G8E_OPERATOR_API_KEY -->
+    <div class="curl-command-section">
+        <div class="curl-command-label">Download Command</div>
+        <div class="curl-command-box">
+            <div class="curl-command-text">{{curlCommand}}</div>
+        </div>
+        <button class="curl-copy-btn">
+            <span class="copy-icon material-symbols-outlined">content_copy</span>
+            <span>Copy</span>
+        </button>
+    </div>
+
+    <!-- 3. API Key (obfuscated) -->
+    <div class="api-key-section">
+        <div class="api-key-label">API Key</div>
+        <div class="api-key-box">
+            <div class="api-key-text obfuscated">{{apiKey}}</div>
+        </div>
+        <div class="api-key-controls">
+            <button class="api-key-toggle-btn">
+                <span class="toggle-icon material-symbols-outlined">visibility</span>
+                <span class="toggle-text">Show</span>
+            </button>
+            <button class="api-key-copy-btn">
+                <span class="copy-icon material-symbols-outlined">content_copy</span>
+                <span>Copy</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. Download Button -->
+    <div class="download-button-section">
+        <button class="download-direct-btn" data-os="{{os}}" data-arch="{{arch}}">
+            <span class="material-symbols-outlined">download</span>
+            <span>Download for {{osName}} • {{archLabel}}</span>
+        </button>
+        <div class="download-platform-info">
+            <span class="material-symbols-outlined download-platform-icon platform-icon" data-logo="{{logoName}}">{{platformIcon}}</span>
+        </div>
+    </div>
+</div>

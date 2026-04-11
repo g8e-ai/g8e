@@ -1,0 +1,88 @@
+{
+  "_comment": "Canonical wire envelope for all pub/sub messages crossing component boundaries. VSE publishes VSOMessage (vse component), VSA publishes ResultMessage (vsa component). Both follow this shape. Consumers: VSE (Python), VSA (Go), VSOD (JS).",
+
+  "envelope": {
+    "_description": "Outer envelope wrapping every pub/sub message on any channel.",
+    "fields": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique message identifier (UUID v4)"
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "UTC creation timestamp (RFC3339Nano / ISO 8601)"
+      },
+      "source_component": {
+        "type": "string",
+        "required": true,
+        "values": ["vse", "vsa", "vsod"],
+        "description": "Component that published this message. See status.json component.name."
+      },
+      "event_type": {
+        "type": "string",
+        "required": true,
+        "description": "Event type string. Must be a value from events.json."
+      },
+      "operator_id": {
+        "type": "string",
+        "required": false,
+        "description": "Operator identifier. Required for all VSA-originated messages."
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Operator session identifier. Required for all VSA-originated messages."
+      },
+      "case_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated case identifier."
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated investigation identifier."
+      },
+      "task_id": {
+        "type": "string",
+        "required": false,
+        "description": "Associated task identifier."
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Browser session identifier. Required when message is targeted to a specific frontend tab."
+      },
+      "instance_id": {
+        "type": "string",
+        "required": false,
+        "description": "Source component instance identifier. VSE-only, optional."
+      },
+      "system_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA256 fingerprint of the operator host system. VSA-only, included in VSA-originated messages."
+      },
+      "payload": {
+        "type": "object",
+        "required": true,
+        "description": "Event-specific payload. Shape is defined by event_type. See result_payloads.json and command_payloads.json.",
+        "default": {}
+      },
+      "metadata": {
+        "type": "object",
+        "required": false,
+        "description": "Auxiliary routing metadata (e.g. reply_to_topic). Not used by VSA.",
+        "default": {}
+      }
+    }
+  },
+
+  "_comment.vsa": "VSA's ResultMessage uses `payload` as a raw JSON blob (json.RawMessage). Fields `instance_id` and `metadata` are absent in VSA-originated messages. Fields `system_fingerprint` and `source_component` are always present in VSA messages.",
+  "_comment.vse": "VSE's VSOMessage uses `payload` as a typed dict. Fields `system_fingerprint` is absent in VSE-originated messages.",
+  "_comment.channels": "Messages are published to channels defined in channels.json. The envelope is the same regardless of channel."
+}

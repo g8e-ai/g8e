@@ -1,0 +1,444 @@
+{
+  "_comment": "Canonical AI tool result shapes returned by VSE tool executor functions. These are the typed result models that flow through the operator → tool_executor → agent stack. Authority: VSE. Consumers: VSE (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
+
+  "_comment.scope": "These models are VSE-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes VSA publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the agent after translating the wire payload.",
+
+  "operation_error_base": {
+    "_description": "Common error fields inherited by all tool result models. Every tool result includes these fields.",
+    "fields": {
+      "success": { "type": "boolean", "required": true, "description": "Whether the tool operation succeeded" },
+      "error": { "type": "string", "required": false, "description": "Human-readable error description" },
+      "error_type": {
+        "type": "string",
+        "required": false,
+        "description": "Machine-readable error classification. See shared/constants/status.json command.error.type.",
+        "values_ref": "shared/constants/status.json#command.error.type"
+      },
+      "execution_id": { "type": "string", "required": false, "description": "Execution identifier from the originating operator command" },
+      "available_operators": { "type": "integer", "required": false, "description": "Number of bound operators at time of failure. Present when error is operator-availability-related." },
+      "timeout_seconds": { "type": "integer", "required": false, "description": "Timeout value that was in effect. Present when error_type is operation.timeout." },
+      "status": {
+        "type": "string",
+        "required": false,
+        "description": "Execution status when failure is status-driven (e.g. timeout). See shared/constants/status.json execution.status.",
+        "values_ref": "shared/constants/status.json#execution.status"
+      }
+    }
+  },
+
+  "file_edit_result": {
+    "_description": "Result returned by file_create_on_operator, file_write_on_operator, file_read_on_operator, and file_update_on_operator tool calls. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator"],
+    "extends": "operation_error_base",
+    "fields": {
+      "file_path": { "type": "string", "required": false, "description": "Absolute path of the target file" },
+      "operation": {
+        "type": "string",
+        "required": false,
+        "description": "File operation performed. See shared/constants/status.json file.operation.",
+        "values_ref": "shared/constants/status.json#file.operation"
+      },
+      "content": { "type": "string", "required": false, "description": "File content returned for read operations" },
+      "backup_path": { "type": "string", "required": false, "description": "Path to backup file when create_backup was true" },
+      "bytes_written": { "type": "integer", "required": false, "description": "Bytes written for write/create/replace operations" },
+      "lines_changed": { "type": "integer", "required": false, "description": "Number of lines modified" },
+      "duration_seconds": { "type": "number", "required": false, "description": "Wall-clock duration of the file operation" },
+      "approved": { "type": "boolean", "required": false, "description": "Whether the operation received user approval" },
+      "blocking_issues": { "type": "array", "required": false, "description": "List of issues that blocked the operation (e.g. system file, dirty repo)" },
+      "risk_analysis": {
+        "type": "object",
+        "required": false,
+        "description": "Risk analysis result. Present when file operation risk analysis was performed.",
+        "ref": "file_operation_risk_analysis"
+      }
+    }
+  },
+
+  "file_operation_risk_analysis": {
+    "_description": "Risk analysis result for file operations. Embedded in file_edit_result.",
+    "fields": {
+      "risk_level": {
+        "type": "string",
+        "required": true,
+        "description": "Classified risk level. See shared/constants/status.json risk.level.",
+        "values_ref": "shared/constants/status.json#risk.level"
+      },
+      "is_system_file": { "type": "boolean", "required": false, "description": "Whether the target path is a system file" },
+      "safe_to_proceed": { "type": "boolean", "required": true, "default": true, "description": "Whether the operation is safe to proceed" },
+      "blocking_issues": { "type": "array", "required": true, "default": [], "description": "Issues that block the operation" },
+      "approval_prompt": { "type": "string", "required": false, "description": "Human-readable prompt shown to the user for approval" }
+    }
+  },
+
+  "port_check_tool_result": {
+    "_description": "Result returned by the check_port_status tool call. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["check_port_status"],
+    "extends": "operation_error_base",
+    "fields": {
+      "host": { "type": "string", "required": false, "description": "Host that was checked" },
+      "port": { "type": "integer", "required": false, "description": "Port number that was checked" },
+      "protocol": {
+        "type": "string",
+        "required": false,
+        "description": "Protocol used. See shared/constants/status.json network.protocol.",
+        "values_ref": "shared/constants/status.json#network.protocol"
+      },
+      "is_open": { "type": "boolean", "required": false, "description": "Whether the port is open/reachable" },
+      "latency_ms": { "type": "number", "required": false, "description": "Round-trip latency in milliseconds" }
+    }
+  },
+
+  "fs_list_tool_result": {
+    "_description": "Result returned by the list_files_and_directories_with_detailed_metadata tool call. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["list_files_and_directories_with_detailed_metadata"],
+    "extends": "operation_error_base",
+    "fields": {
+      "path": { "type": "string", "required": false, "description": "Resolved absolute path that was listed" },
+      "entries": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Directory entries. See wire/result_payloads.json fs_list_result entries items for the per-entry shape."
+      },
+      "total_count": { "type": "integer", "required": true, "default": 0, "description": "Total number of entries found" },
+      "truncated": { "type": "boolean", "required": true, "default": false, "description": "True if results were capped at max_entries" }
+    }
+  },
+
+  "fs_read_tool_result": {
+    "_description": "Result returned by file_read_on_operator when data is returned directly (not stored locally). Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["file_read_on_operator"],
+    "extends": "operation_error_base",
+    "fields": {
+      "path": { "type": "string", "required": false, "description": "Absolute path of the file read" },
+      "content": { "type": "string", "required": false, "description": "File content" },
+      "size": { "type": "integer", "required": true, "default": 0, "description": "Size of content in bytes" },
+      "truncated": { "type": "boolean", "required": true, "default": false, "description": "True if content was truncated" }
+    }
+  },
+
+  "fetch_logs_tool_result": {
+    "_description": "Result returned by the fetch_execution_output tool call. Contains stored command output retrieved from the operator local vault. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["fetch_execution_output"],
+    "extends": "operation_error_base",
+    "fields": {
+      "command": { "type": "string", "required": false, "description": "Original command string whose output was fetched" },
+      "exit_code": { "type": "integer", "required": false, "description": "Exit code of the original command" },
+      "stdout": { "type": "string", "required": false, "description": "Stored stdout content (may be Sentinel-scrubbed)" },
+      "stderr": { "type": "string", "required": false, "description": "Stored stderr content (may be Sentinel-scrubbed)" },
+      "stdout_size": { "type": "integer", "required": true, "default": 0, "description": "Size of stdout in bytes" },
+      "stderr_size": { "type": "integer", "required": true, "default": 0, "description": "Size of stderr in bytes" },
+      "duration_ms": { "type": "integer", "required": false, "description": "Original execution duration in milliseconds" },
+      "timestamp": { "type": "string", "format": "iso8601", "required": false, "description": "When the original command was executed" }
+    }
+  },
+
+  "audit_session_metadata": {
+    "_description": "WebSession metadata embedded in fetch_history_tool_result. Typed model for the session object returned by fetch_session_history. Canonical wire shape: wire/result_payloads.json fetch_history_result.session.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, pending_command.py)"],
+    "fields": {
+      "id": { "type": "string", "required": true, "description": "WebSession identifier" },
+      "title": { "type": "string", "required": true, "description": "Human-readable session title" },
+      "created_at": { "type": "string", "format": "iso8601", "required": false, "description": "WebSession creation timestamp" },
+      "user_identity": { "type": "string", "required": true, "description": "Identity of the user who owns the session" }
+    }
+  },
+
+  "fs_list_entry": {
+    "_description": "A single directory entry returned by an fs_list operation. Items in fs_list_tool_result.entries. Canonical wire shape: wire/result_payloads.json fs_list_result entries items.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "fields": {
+      "name": { "type": "string", "required": true, "description": "File or directory name" },
+      "path": { "type": "string", "required": true, "description": "Full absolute path" },
+      "is_dir": { "type": "boolean", "required": true },
+      "size": { "type": "integer", "required": true, "default": 0, "description": "Size in bytes. 0 for directories." },
+      "mode": { "type": "string", "required": true, "default": "", "description": "Permission mode as octal string e.g. 0755" },
+      "mod_time": { "type": "integer", "required": true, "default": 0, "description": "Unix timestamp of last modification" },
+      "is_symlink": { "type": "boolean", "required": true, "default": false },
+      "symlink_target": { "type": "string", "required": false },
+      "owner": { "type": "string", "required": false },
+      "group": { "type": "string", "required": false },
+      "inode": { "type": "integer", "required": false },
+      "nlink": { "type": "integer", "required": false }
+    }
+  },
+
+  "audit_file_mutation": {
+    "_description": "A single file mutation record embedded in an AuditEvent. Canonical wire shape: wire/result_payloads.json fetch_history_result events file_mutations items.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py)"],
+    "fields": {
+      "id": { "type": "integer", "required": true },
+      "filepath": { "type": "string", "required": true },
+      "operation": { "type": "string", "required": true, "values": ["WRITE", "DELETE", "CREATE"] },
+      "ledger_hash_before": { "type": "string", "required": false },
+      "ledger_hash_after": { "type": "string", "required": false },
+      "diff_stat": { "type": "string", "required": false }
+    }
+  },
+
+  "audit_event": {
+    "_description": "A single audit event record returned by fetch_session_history. Items in fetch_history_tool_result.events. Canonical wire shape: wire/result_payloads.json fetch_history_result events items.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "fields": {
+      "id": { "type": "integer", "required": true },
+      "web_session_id": { "type": "string", "required": true },
+      "timestamp": { "type": "string", "format": "iso8601", "required": false },
+      "type": { "type": "string", "required": true, "values": ["USER_MSG", "AI_MSG", "CMD_EXEC", "FILE_MUTATION"] },
+      "content_text": { "type": "string", "required": false },
+      "command_raw": { "type": "string", "required": false },
+      "command_exit_code": { "type": "integer", "required": false },
+      "command_stdout": { "type": "string", "required": false },
+      "command_stderr": { "type": "string", "required": false },
+      "execution_duration_ms": { "type": "integer", "required": false },
+      "stored_locally": { "type": "boolean", "required": true, "default": false },
+      "stdout_truncated": { "type": "boolean", "required": true, "default": false },
+      "stderr_truncated": { "type": "boolean", "required": true, "default": false },
+      "file_mutations": { "type": "array", "required": true, "default": [], "description": "File mutations linked to this event.", "items": "$ref:audit_file_mutation" }
+    }
+  },
+
+  "file_history_entry": {
+    "_description": "A single commit history entry returned by fetch_file_history. Items in fetch_file_history_tool_result.history. Canonical wire shape: wire/result_payloads.json fetch_file_history_result history items.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "fields": {
+      "commit_hash": { "type": "string", "required": true, "description": "Git commit hash" },
+      "timestamp": { "type": "string", "format": "iso8601", "required": false },
+      "message": { "type": "string", "required": true, "description": "Commit message" }
+    }
+  },
+
+  "file_edit_pending_result": {
+    "_description": "Typed result for file_edit operations. VSE-internal only — never crosses a wire boundary.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (pending_command.py, command_results.py, file_edit_ops.py)"],
+    "fields": {
+      "file_path": { "type": "string", "required": true },
+      "operation": { "type": "string", "required": true, "description": "File operation performed", "values_ref": "shared/constants/status.json#file.operation" },
+      "content": { "type": "string", "required": false, "description": "File content returned for read operations" },
+      "backup_path": { "type": "string", "required": false },
+      "bytes_written": { "type": "integer", "required": false },
+      "lines_changed": { "type": "integer", "required": false },
+      "duration_seconds": { "type": "number", "required": false }
+    }
+  },
+
+  "file_diff_entry": {
+    "_description": "Single file diff record from the operator ledger. Used as items in fetch_file_diff_tool_result and as the diff field in fetch_file_diff_tool_result. Canonical wire shape: wire/result_payloads.json file_diff_entry.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, pending_command.py, pubsub_messages.py)"],
+    "fields": {
+      "id": { "type": "string", "required": true, "description": "Unique diff record identifier" },
+      "timestamp": { "type": "string", "format": "iso8601", "required": true, "description": "When the file mutation occurred" },
+      "file_path": { "type": "string", "required": true, "description": "Absolute path of the mutated file" },
+      "operation": { "type": "string", "required": true, "description": "Mutation operation type" },
+      "ledger_hash_before": { "type": "string", "required": true, "description": "Ledger hash before the mutation" },
+      "ledger_hash_after": { "type": "string", "required": true, "description": "Ledger hash after the mutation" },
+      "diff_stat": { "type": "string", "required": true, "description": "Git-style diff stat summary" },
+      "diff_content": { "type": "string", "required": false, "description": "Full diff content. May be absent when not requested." },
+      "diff_size": { "type": "integer", "required": true, "description": "Size of diff content in bytes" },
+      "web_session_id": { "type": "string", "required": true, "description": "Audit session that produced this mutation" }
+    }
+  },
+
+  "token_usage": {
+    "_description": "Token usage reported by the LLM for a streaming response. Embedded in StreamChunkData and ConversationMessageMetadata.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, agent.py, investigations.py)"],
+    "fields": {
+      "input_tokens": { "type": "integer", "required": true, "default": 0, "description": "Number of input/prompt tokens" },
+      "output_tokens": { "type": "integer", "required": true, "default": 0, "description": "Number of output/completion tokens" },
+      "total_tokens": { "type": "integer", "required": true, "default": 0, "description": "Total tokens (input + output)" },
+      "estimated": { "type": "boolean", "required": false, "description": "True when the count is estimated rather than exact" },
+      "error": { "type": "string", "required": false, "description": "Error message if token counting failed" }
+    }
+  },
+
+  "fetch_history_tool_result": {
+    "_description": "Result returned by the fetch_session_history tool call. Contains audit session history from the operator local vault. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["fetch_session_history"],
+    "extends": "operation_error_base",
+    "fields": {
+      "web_session_id": { "type": "string", "required": false, "description": "WebSession ID that was queried" },
+      "web_session": {
+        "type": "object",
+        "required": false,
+        "description": "WebSession metadata. Typed as AuditSessionMetadata. See audit_session_metadata for the shape.",
+        "ref": "audit_session_metadata"
+      },
+      "events": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Audit events. See wire/result_payloads.json fetch_history_result events items for the per-event shape."
+      },
+      "total": { "type": "integer", "required": true, "default": 0, "description": "Total events returned" },
+      "limit": { "type": "integer", "required": true, "default": 50, "description": "Limit that was applied" },
+      "offset": { "type": "integer", "required": true, "default": 0, "description": "Offset that was applied" }
+    }
+  },
+
+  "fetch_file_history_tool_result": {
+    "_description": "Result returned by the fetch_file_history tool call. Contains ledger commit history for a file. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["fetch_file_history"],
+    "extends": "operation_error_base",
+    "fields": {
+      "file_path": { "type": "string", "required": false, "description": "Absolute path of the file queried" },
+      "history": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Commit history entries. See wire/result_payloads.json fetch_file_history_result history items for the per-entry shape."
+      }
+    }
+  },
+
+  "restore_file_tool_result": {
+    "_description": "Result returned by the restore_file tool call. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["restore_file"],
+    "extends": "operation_error_base",
+    "fields": {
+      "file_path": { "type": "string", "required": false, "description": "Absolute path of the restored file" },
+      "commit_hash": { "type": "string", "required": false, "description": "Git commit hash the file was restored to" },
+      "message": { "type": "string", "required": false, "description": "Human-readable confirmation message" }
+    }
+  },
+
+  "fetch_file_diff_tool_result": {
+    "_description": "Result returned by the fetch_file_diff tool call. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["fetch_file_diff"],
+    "extends": "operation_error_base",
+    "fields": {
+      "diff": {
+        "type": "object",
+        "required": false,
+        "description": "Single diff entry when fetching by diff_id. Typed as FileDiffEntry.",
+        "ref": "file_diff_entry"
+      },
+      "diffs": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Multiple diff entries when fetching by web_session_id. Items are FileDiffEntry.",
+        "items": "$ref:file_diff_entry"
+      },
+      "total": { "type": "integer", "required": true, "default": 0, "description": "Total diffs returned" },
+      "web_session_id": { "type": "string", "required": false, "description": "WebSession ID that was queried" }
+    }
+  },
+
+  "intent_permission_result": {
+    "_description": "Result returned by grant_intent_permission and revoke_intent_permission tool calls. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["grant_intent_permission", "revoke_intent_permission"],
+    "extends": "operation_error_base",
+    "fields": {
+      "approved": { "type": "boolean", "required": false, "description": "Whether the user approved the intent request" },
+      "intent_name": { "type": "string", "required": false, "description": "Single intent name or comma-separated list that was requested" },
+      "all_intents": { "type": "array", "required": true, "default": [], "description": "Expanded list of all intents (including dependencies) that were processed" },
+      "operation_context": { "type": "string", "required": false, "description": "High-level operation context shown to the user during approval" },
+      "message": { "type": "string", "required": false, "description": "Human-readable result message" },
+      "approval_id": { "type": "string", "required": false, "description": "Unique approval tracking identifier" },
+      "feedback": { "type": "boolean", "required": true, "default": false, "description": "True when the user provided feedback/clarification rather than approve/deny" },
+      "requested_intents": { "type": "array", "required": false, "description": "Intents that were originally requested" },
+      "invalid_intents": { "type": "array", "required": false, "description": "Intents that were not recognized as valid" },
+      "successful_intents": { "type": "array", "required": false, "description": "Intents that were successfully granted or revoked" },
+      "failed_intents": { "type": "array", "required": false, "description": "Intents that failed during IAM policy attachment/detachment" },
+      "iam_results": { "type": "array", "required": false, "description": "Per-intent IAM operation results" },
+      "stderr": { "type": "string", "required": false, "description": "Stderr from the IAM attach/detach command if run" },
+      "output": { "type": "string", "required": false, "description": "Stdout from the IAM attach/detach command if run" },
+      "exit_code": { "type": "integer", "required": false, "description": "Exit code from the IAM attach/detach command if run" },
+      "pending_command": { "type": "string", "required": false, "description": "AWS CLI command that was executed automatically after approval" },
+      "pending_command_result": { "type": "object", "required": false, "description": "Result of the pending_command execution" },
+      "timestamp": { "type": "string", "format": "iso8601", "required": false, "description": "When the permission grant/revoke was processed" },
+      "revoked_intents": { "type": "array", "required": false, "description": "Intents that were successfully revoked (revoke_intent_permission only)" }
+    }
+  },
+
+  "web_search_result_item": {
+    "_description": "A single result item from the Google Custom Search API. Embedded as items in search_web_result.results.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (tool_results.py, tool_executor.py)"],
+    "fields": {
+      "title": { "type": "string", "required": true, "default": "", "description": "Page title returned by the search API" },
+      "link": { "type": "string", "required": true, "default": "", "description": "Canonical URL of the search result" },
+      "snippet": { "type": "string", "required": true, "default": "", "description": "Short text excerpt from the page" }
+    }
+  },
+
+  "search_web_result": {
+    "_description": "Result returned by the search_web tool call. VSE-only: executed directly against Google Custom Search API, never crosses a VSA wire boundary. Extends operation_error_base.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_tool_names": ["search_web"],
+    "extends": "operation_error_base",
+    "fields": {
+      "query": { "type": "string", "required": false, "description": "The search query that was submitted" },
+      "results": {
+        "type": "array",
+        "required": false,
+        "description": "Search result items from Google Custom Search API. Items are WebSearchResultItem.",
+        "items": "$ref:web_search_result_item"
+      },
+      "total_results": { "type": "string", "required": false, "description": "Total result count string from Google searchInformation.totalResults" }
+    }
+  },
+
+  "command_risk_analysis": {
+    "_description": "Risk analysis result for shell commands. Produced by the AI assistant model before command dispatch.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (command_executor.py, agent.py)"],
+    "fields": {
+      "risk_level": {
+        "type": "string",
+        "required": true,
+        "description": "Classified risk level. See shared/constants/status.json risk.level.",
+        "values_ref": "shared/constants/status.json#risk.level"
+      }
+    }
+  },
+
+  "error_analysis_result": {
+    "_description": "Error analysis result produced by the AI assistant model after a command fails. Drives auto-fix vs escalation decision.",
+    "_authority": "VSE",
+    "_consumers": ["VSE (command_executor.py)"],
+    "fields": {
+      "error_category": {
+        "type": "string",
+        "required": true,
+        "values": ["dependency", "permission", "syntax", "network", "system", "configuration", "unknown"],
+        "description": "Broad category of the error"
+      },
+      "root_cause": { "type": "string", "required": true, "description": "Brief root cause analysis" },
+      "can_auto_fix": { "type": "boolean", "required": true, "description": "Whether the error can be automatically fixed by re-running a corrected command" },
+      "suggested_fix": { "type": "string", "required": false, "description": "Description of the suggested fix" },
+      "suggested_command": { "type": "string", "required": false, "description": "Exact command to fix the issue" },
+      "should_escalate": { "type": "boolean", "required": true, "description": "Whether to escalate to human intervention" },
+      "reasoning": { "type": "string", "required": true, "description": "Explanation of the auto-fix vs escalate decision" },
+      "user_message": { "type": "string", "required": true, "description": "Brief message to show the user" }
+    }
+  }
+}

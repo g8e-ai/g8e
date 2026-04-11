@@ -1,0 +1,41 @@
+{
+  "_comment": "Canonical request payload shapes for internal API communication between VSE and VSOD. These models ensure wire compatibility for internal management and event delivery operations.",
+  
+  "sse_push": {
+    "_description": "Payload for POST /api/internal/sse/push. VSE pushes an SSE event to VSOD for delivery to a web session.",
+    "fields": {
+      "web_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Target web session ID for the event"
+      },
+      "event": {
+        "type": "object",
+        "required": true,
+        "description": "The SSE event payload to be delivered"
+      }
+    }
+  },
+
+  "intent_request": {
+    "_description": "Payload for granting or revoking intents for an operator.",
+    "fields": {
+      "intent": {
+        "type": "string",
+        "required": true,
+        "description": "The name of the intent (e.g., 'filesystem.read')"
+      }
+    }
+  },
+
+  "unlock_account": {
+    "_description": "Payload for unlocking a user account.",
+    "fields": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user to unlock"
+      }
+    }
+  }
+}

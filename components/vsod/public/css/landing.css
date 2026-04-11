@@ -1,0 +1,1074 @@
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.25rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn .material-symbols-outlined {
+    font-size: 1.25rem;
+}
+
+
+/* Operator Types Grid */
+
+
+.operator-type-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.operator-type-icon .material-symbols-outlined {
+    font-size: 22px;
+}
+
+.commands-label .material-symbols-outlined {
+    font-size: 14px;
+}
+
+/* Platform Flow Diagram */
+
+
+.platform-flow-icon .material-symbols-outlined {
+    font-size: 26px;
+}
+
+.platform-flow-arrow .material-symbols-outlined {
+    font-size: 20px;
+}
+
+/* Light theme for landing content */
+
+
+.component-icon .material-symbols-outlined {
+    font-size: 1.75rem;
+    color: var(--text-secondary);
+}
+
+.interface-box .component-icon .material-symbols-outlined {
+    color: var(--accent-green);
+}
+
+.brain-icon .material-symbols-outlined {
+    color: var(--accent-blue) !important;
+}
+
+.operator-box .component-icon .material-symbols-outlined {
+    color: var(--accent-amber);
+}
+
+.option-tag.primary {
+    background: rgba(var(--accent-blue-solid-rgb), 0.2);
+    color: var(--accent-blue-light);
+}
+
+.option-tag.secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.option-tag.cloud {
+    background: rgba(var(--accent-orange-solid-rgb), 0.2);
+    color: var(--accent-orange);
+}
+
+.connector-line .material-symbols-outlined {
+    font-size: 1.5rem;
+}
+
+/* Configuration Examples */
+
+
+.config-name .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: var(--accent-blue);
+}
+
+.config-name span:not(.material-symbols-outlined):not(.cloud-badge) {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flow-item.core {
+    background: rgba(var(--accent-blue-solid-rgb), 0.2);
+    color: var(--accent-blue-light);
+    font-weight: 600;
+}
+
+.flow-item.alt {
+    background: rgba(var(--accent-purple-rgb), 0.2);
+    color: var(--accent-purple);
+}
+
+.flow-item.cloud {
+    background: rgba(var(--accent-orange-solid-rgb), 0.2);
+    color: var(--accent-orange);
+}
+
+/* Features Section */
+
+
+.feature-icon .material-symbols-outlined {
+    font-size: 1.5rem;
+    color: var(--text-bright);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+
+    .hero-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .btn {
+        width: 100%;
+        max-width: 280px;
+        justify-content: center;
+    }
+
+    .features-section {
+        padding: 2rem 1rem;
+    }
+
+    .cta-section {
+        padding: 2rem 1rem;
+    }
+
+    .cta-title {
+        font-size: 1.5rem;
+    }
+
+}
+
+/* Light theme overrides */
+
+
+[data-theme="light"] .option-tag.secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-dim);
+}
+
+/* ========================================
+   Interactive Configuration Builder
+   ======================================== */
+
+
+.selector-option.active {
+    background: rgba(var(--accent-blue-solid-rgb), 0.1);
+    border-color: var(--accent-blue);
+}
+
+.selector-option .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+}
+
+.selector-option.active .material-symbols-outlined {
+    color: var(--accent-blue);
+}
+
+.selector-option .option-badge.primary {
+    background: rgba(var(--accent-blue-solid-rgb), 0.2);
+    color: var(--accent-blue-light);
+}
+
+.selector-option .option-badge.secondary {
+    background: rgba(var(--accent-purple-rgb), 0.15);
+    color: var(--accent-purple-dark);
+}
+
+.selector-option .option-badge.cloud {
+    background: rgba(var(--accent-orange-rgb), 0.2);
+    color: var(--accent-orange);
+}
+
+.selector-option .option-badge.pro {
+    background: rgba(var(--accent-purple-rgb), 0.2);
+    color: var(--accent-purple);
+}
+
+/* AI Badge in center */
+
+
+.ai-badge-inner .material-symbols-outlined {
+    font-size: 1.5rem;
+}
+
+/* Selection Summary - 3 Boxes */
+
+
+@keyframes selectionPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.selection-icon .material-symbols-outlined {
+    font-size: 1.75rem;
+    color: var(--accent-blue);
+}
+
+.selection-box--ai .selection-icon .material-symbols-outlined {
+    color: var(--accent-purple);
+}
+
+.selection-connector .material-symbols-outlined {
+    font-size: 1.25rem;
+}
+
+/* Feature Comparison Grid */
+
+
+.config-feature-row.changed {
+    background: rgba(var(--accent-blue-solid-rgb), 0.15);
+    border-color: rgba(var(--accent-blue-solid-rgb), 0.4);
+}
+
+.config-feature-row.changed + .config-feature-row {
+    border-top-color: rgba(var(--accent-blue-solid-rgb), 0.4);
+}
+
+.feature-label .material-symbols-outlined {
+    font-size: 1.125rem;
+    opacity: 0.7;
+}
+
+.config-feature-row.changed .value-text {
+    color: var(--accent-blue-light);
+}
+
+/* Use Cases */
+
+
+.summary-use-cases .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.summary-cta .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1.75rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+}
+
+.summary-cta .btn .material-symbols-outlined {
+    font-size: 1.125rem;
+}
+
+/* Config Builder Responsive */
+@media (max-width: 768px) {
+    .config-builder {
+        padding: 1.5rem 1rem;
+        margin-top: 2rem;
+    }
+
+    .config-selector-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .config-selector {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    .config-ai-badge {
+        padding: 1rem 0;
+    }
+
+    .config-summary {
+        padding: 1.5rem 1rem;
+    }
+
+    .summary-header h4 {
+        font-size: 1.25rem;
+    }
+
+    .config-feature-row {
+        grid-template-columns: 100px 1fr;
+        padding: 0.875rem 1rem;
+    }
+
+    .feature-label {
+        font-size: 0.7rem;
+    }
+
+    .feature-value .value-text {
+        font-size: 0.9rem;
+    }
+
+    .feature-value .value-detail {
+        font-size: 0.75rem;
+    }
+
+    .summary-use-cases {
+        padding: 0.875rem 1rem;
+    }
+
+    .summary-cta {
+        flex-direction: column;
+    }
+
+    .summary-cta .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* Light theme - Config Builder */
+
+
+[data-theme="light"] .selector-option.active {
+    background: rgba(var(--accent-blue-solid-rgb), 0.1);
+    border-color: var(--accent-blue);
+}
+
+[data-theme="light"] .selector-option .material-symbols-outlined {
+    color: var(--text-dim);
+}
+
+[data-theme="light"] .config-feature-row.changed {
+    background: rgba(var(--accent-blue-solid-rgb), 0.08);
+    border-color: rgba(var(--accent-blue-solid-rgb), 0.3);
+}
+
+/* ============================================
+   Enterprise CTA Button
+   ============================================ */
+
+
+.plans-cta-enterprise-copy .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.plans-cta-enterprise-copy.copied {
+    background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-dark) 100%);
+    box-shadow: 0 4px 16px rgba(var(--accent-green-rgb), 0.4);
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.initially-hidden {
+    display: none !important;
+}
+
+/* ============================================
+   Hero Image Modal
+   ============================================ */
+
+
+.hero-image-expand-hint .material-symbols-outlined {
+    font-size: 16px;
+    color: var(--accent-green);
+}
+
+/* ========================================
+   Use Cases Section
+   ======================================== */
+
+
+.use-case-icon .material-symbols-outlined {
+    font-size: 22px;
+}
+
+/* Use Cases Tips */
+
+
+.use-case-tip .material-symbols-outlined {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.use-case-tip--security .material-symbols-outlined {
+    color: var(--accent-green);
+}
+
+.use-case-tip--info .material-symbols-outlined {
+    color: var(--accent-blue-solid);
+}
+
+/* ========================================
+   Hero Feature Tabs
+   ======================================== */
+
+
+.hero-tab .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+.hero-tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+.hero-tab-arrow .material-symbols-outlined,
+.hero-tab-pause .material-symbols-outlined {
+    font-size: 1.125rem;
+}
+
+.hero-feature-panel.active {
+    display: block;
+    animation: featureFadeIn 0.3s ease;
+}
+
+@keyframes featureFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive - Hero Feature Tabs */
+@media (max-width: 768px) {
+    .hero-tabs-nav {
+        flex-direction: column;
+        padding: 0;
+    }
+    
+    .hero-tabs {
+        width: 100%;
+        padding: 0 0.5rem;
+    }
+    
+    .hero-tab {
+        padding: 0.625rem 0.75rem;
+        font-size: 0.75rem;
+    }
+    
+    .hero-tab span:not(.material-symbols-outlined) {
+        display: none;
+    }
+    
+    .hero-tab .material-symbols-outlined {
+        font-size: 1.125rem;
+    }
+    
+    .hero-tabs-controls {
+        padding: 0.625rem;
+    }
+    
+    .hero-feature-panels {
+        padding: 1.5rem;
+        min-height: 320px;
+    }
+    
+    .feature-panel-title {
+        font-size: 1.25rem;
+    }
+    
+    .feature-panel-desc {
+        font-size: 0.9rem;
+    }
+}
+
+/* Light theme - Hero Feature Tabs */
+
+
+[data-theme="light"] .hero-tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+/* Data Transparency Section */
+
+
+.transparency-category > .material-symbols-outlined {
+    color: var(--text-secondary);
+    font-size: 1.25rem;
+}
+
+[data-theme="light"] .transparency-category > .material-symbols-outlined {
+    color: var(--text-muted);
+}
+
+/* Data Badges */
+
+
+.data-badge.local {
+    background: rgba(var(--accent-green-rgb), 0.15);
+    color: var(--accent-green);
+}
+
+.data-badge.cloud {
+    background: rgba(var(--accent-blue-solid-rgb), 0.15);
+    color: var(--accent-blue-solid);
+}
+
+.data-badge.never {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.data-badge.scrubbed {
+    background: rgba(var(--accent-amber-rgb), 0.15);
+    color: var(--accent-amber);
+}
+
+[data-theme="light"] .data-badge.local {
+    background: rgba(var(--accent-green-rgb), 0.1);
+    color: var(--accent-green);
+}
+
+[data-theme="light"] .data-badge.cloud {
+    background: rgba(var(--accent-blue-solid-rgb), 0.1);
+    color: var(--accent-blue);
+}
+
+[data-theme="light"] .data-badge.never {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .data-badge.scrubbed {
+    background: rgba(var(--accent-amber-rgb), 0.1);
+    color: var(--accent-amber-dark);
+}
+
+.data-badge.warning {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+[data-theme="light"] .data-badge.warning {
+    background: var(--bg-tertiary);
+    color: var(--text-dim);
+}
+
+.transparency-link .material-symbols-outlined {
+    font-size: 1.125rem;
+}
+
+/* NSA ZIG Compliance Section */
+
+
+.zig-compliance-icon .material-symbols-outlined {
+    font-size: 28px;
+    color: white;
+}
+
+.zig-compliance-link .material-symbols-outlined {
+    font-size: 18px;
+}
+
+/* About / Trust Signals Section */
+
+
+.trust-learn-more .material-symbols-outlined {
+    font-size: 18px;
+}
+
+/* Docs Panel Tab */
+
+
+.docs-panel-tab .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.docs-panel-tab span:not(.material-symbols-outlined) {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Safety Screenshots Showcase */
+
+
+.safety-showcase-expand-hint .material-symbols-outlined {
+    font-size: 18px;
+    color: var(--text-bright);
+}
+
+/* Safety Showcase Lightbox */
+
+
+.safety-showcase-lightbox.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.safety-showcase-lightbox.active .safety-lightbox-content {
+    transform: scale(1);
+}
+
+.safety-lightbox-close .material-symbols-outlined {
+    font-size: 20px;
+}
+
+/* ========================================
+   Mobile Responsive (480px) - All Sections
+   ======================================== */
+@media (max-width: 480px) {
+    /* Landing Main Wrapper */
+    .landing-main-wrapper {
+        padding: 0 1rem;
+    }
+
+    /* Hero Section */
+    .hero-title {
+        font-size: 1.5rem;
+    }
+
+    .hero-subtitle {
+        font-size: 0.875rem;
+    }
+
+    .btn {
+        padding: 0.625rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    .btn-large {
+        padding: 0.75rem 1.5rem;
+        font-size: 1rem;
+    }
+
+    /* Security Section Header */
+    .security-section-title {
+        font-size: 1.375rem;
+    }
+
+    .security-section-subtitle {
+        font-size: 0.875rem;
+    }
+
+    /* ZIG Compliance Banner */
+    .zig-compliance-banner.zig-bordered {
+        width: 100%;
+        padding: 0.75rem 0 1rem 0;
+    }
+
+    .zig-compliance-desc {
+        font-size: 0.85rem;
+    }
+
+    /* ZIG Compliance Links */
+    .zig-compliance-links {
+        max-width: 100%;
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .zig-compliance-link {
+        font-size: 0.8rem;
+    }
+
+    /* Safety Showcase */
+    .safety-showcase-thumb img {
+        height: 150px;
+        padding: 0.5rem;
+    }
+
+    .safety-showcase-caption {
+        padding: 0.75rem 1rem;
+    }
+
+    .safety-showcase-caption h3 {
+        font-size: 0.85rem;
+    }
+
+    .safety-showcase-caption p {
+        font-size: 0.75rem;
+    }
+
+    /* Data Transparency Section */
+    .data-transparency-section {
+        margin-top: 2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .landing-transparency-table th,
+    .landing-transparency-table td {
+        padding: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .transparency-category {
+        gap: 0.5rem;
+    }
+
+    .transparency-category > .material-symbols-outlined {
+        font-size: 1rem;
+    }
+
+    .category-name {
+        font-size: 0.8rem;
+    }
+
+    .category-desc {
+        font-size: 0.65rem;
+    }
+
+    .badge-detail {
+        font-size: 0.625rem;
+    }
+
+    .ciso-table td:not(:first-child) {
+        min-width: 120px;
+    }
+
+    /* SSH Comparison */
+    .ssh-comparison-section {
+        margin: 1rem 0;
+        padding: 1rem 0;
+    }
+
+    .ssh-comparison-table td:not(:first-child) {
+        min-width: 90px;
+    }
+
+    .ssh-comparison-table .category-name {
+        font-size: 0.75rem;
+    }
+
+    .billing-toggle {
+        gap: 0.35rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    .billing-toggle-label {
+        font-size: 0.8rem;
+    }
+
+    /* TOS Notice */
+    .tos-notice {
+        font-size: 0.7rem;
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Trust Section */
+    .about-trust-section {
+        margin-top: 2rem;
+        padding: 1.5rem 0;
+    }
+
+    .trust-signal {
+        padding: 1.25rem;
+    }
+
+    .trust-signal h3 {
+        font-size: 1rem;
+    }
+
+    .trust-signal p {
+        font-size: 0.825rem;
+    }
+
+    .trust-badge .vosb-badge {
+        height: 32px;
+    }
+
+    .trust-badge span {
+        font-size: 0.75rem;
+    }
+
+    .trust-learn-more {
+        font-size: 0.85rem;
+    }
+
+    /* Landing Section Titles */
+    .landing-section-title {
+        font-size: 1.125rem;
+    }
+
+    .landing-section-subtitle {
+        font-size: 0.85rem;
+    }
+
+    .landing-section-reference {
+        font-size: 0.7rem;
+    }
+
+    /* Operator Types Grid */
+    .operator-type-card {
+        padding: 1rem;
+    }
+
+    .operator-type-title h3 {
+        font-size: 0.9rem;
+    }
+
+    .operator-type-desc {
+        font-size: 0.8rem;
+    }
+
+    /* Platform Flow */
+    .platform-flow {
+        padding: 1rem;
+    }
+
+    .platform-flow-item {
+        padding: 0.75rem 1rem;
+        min-width: 120px;
+    }
+
+    .platform-flow-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .platform-flow-icon .material-symbols-outlined {
+        font-size: 22px;
+    }
+
+    .platform-flow-label {
+        font-size: 0.8rem;
+    }
+
+    .platform-flow-desc {
+        font-size: 0.7rem;
+    }
+
+    /* Component Row */
+    .component-box {
+        padding: 1.25rem;
+        max-width: 100%;
+    }
+
+    .component-icon {
+        width: 48px;
+        height: 48px;
+    }
+
+    .component-box h3 {
+        font-size: 1rem;
+    }
+
+    .component-box p {
+        font-size: 0.8rem;
+    }
+
+    /* Section Title */
+    .section-title {
+        font-size: 1.5rem;
+    }
+
+    .section-subtitle {
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Config Builder */
+    .config-builder {
+        padding: 1rem 0.75rem;
+    }
+
+    .config-builder .config-title {
+        font-size: 1.25rem;
+    }
+
+    .config-builder .config-subtitle {
+        font-size: 0.85rem;
+    }
+
+    .selector-option {
+        padding: 0.75rem 0.875rem;
+        font-size: 0.8rem;
+    }
+
+    /* Selection Summary */
+    .selection-box {
+        min-height: 150px;
+        padding: 1.25rem 1.5rem;
+        max-width: 180px;
+    }
+
+    .selection-name {
+        font-size: 0.8rem;
+    }
+
+    .selection-desc {
+        font-size: 0.7rem;
+    }
+
+    /* Workflow Description */
+    .workflow-description {
+        padding: 0.875rem 1rem;
+    }
+
+    .workflow-title {
+        font-size: 1.125rem;
+    }
+
+    .workflow-subtitle {
+        font-size: 0.8rem;
+    }
+
+    /* Hero Feature Tabs */
+    .hero-feature-panels {
+        padding: 1rem;
+        min-height: 280px;
+    }
+
+    .feature-panel-title {
+        font-size: 1.125rem;
+    }
+
+    .feature-panel-desc {
+        font-size: 0.825rem;
+    }
+
+    .feature-panel-secondary {
+        font-size: 0.8rem;
+    }
+
+    .feature-tag {
+        padding: 0.3rem 0.625rem;
+        font-size: 0.7rem;
+    }
+
+    /* Enterprise Bar */
+    .enterprise-bar-index {
+        padding: 0.75rem 1rem;
+    }
+
+    .enterprise-name {
+        font-size: 0.95rem;
+    }
+
+    .enterprise-desc {
+        font-size: 0.8rem;
+    }
+
+    /* Use Cases */
+    .use-cases-section .landing-main-wrapper {
+        padding: 1rem 1.25rem;
+    }
+
+    .use-case-card {
+        padding: 1rem;
+    }
+
+    .use-case-title {
+        font-size: 0.9rem;
+    }
+
+    .use-case-challenge,
+    .use-case-solution {
+        font-size: 0.8rem;
+    }
+
+    .use-case-tip {
+        padding: 0.75rem 1rem;
+    }
+
+    .use-case-tip p {
+        font-size: 0.8rem;
+    }
+
+    /* How It Works Title */
+    .how-it-works-title {
+        font-size: 1.5rem;
+    }
+
+    .how-it-works-section-title {
+        font-size: 1.1rem;
+    }
+
+    .how-it-works-subtitle {
+        font-size: 0.875rem;
+    }
+
+    /* Hero How It Works */
+    .hero-how-it-works .landing-main-wrapper {
+        padding: 1.25rem;
+    }
+
+    /* Features Section */
+    .features-section {
+        padding: 1.5rem 0.75rem;
+    }
+
+    .features-grid {
+        gap: 1.25rem;
+    }
+
+    .feature-card {
+        padding: 1.5rem;
+    }
+
+    .feature-title {
+        font-size: 1.1rem;
+    }
+
+    .feature-description {
+        font-size: 0.875rem;
+    }
+
+    /* CTA Section */
+    .cta-section {
+        padding: 1.5rem 0.75rem;
+    }
+
+    .cta-title {
+        font-size: 1.25rem;
+    }
+
+    .cta-description {
+        font-size: 1rem;
+    }
+
+    /* Config Table */
+    .config-table th {
+        padding: 0.625rem 0.75rem;
+        font-size: 0.7rem;
+    }
+
+    .config-table td {
+        padding: 0.75rem;
+    }
+
+    .config-name .material-symbols-outlined {
+        font-size: 1rem;
+    }
+
+    .config-desc {
+        font-size: 0.8rem;
+    }
+
+    /* Docs Panel Tab */
+    .docs-panel-tab {
+        padding: 8px 6px;
+    }
+
+    .docs-panel-tab .material-symbols-outlined {
+        font-size: 18px;
+    }
+}

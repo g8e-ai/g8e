@@ -1,0 +1,24 @@
+{
+  "_comment": "Canonical wire format for bound operator context carried in X-VSO-Bound-Operators header from VSOD to VSE. This model ensures wire compatibility and enforces consistency across components.",
+
+  "bound_operator_context": {
+    "_description": "Single bound operator entry in the X-VSO-Bound-Operators header array. VSOD resolves this from the database (BoundSessionsDocument + operator docs) and VSE parses it from the HTTP header.",
+    "fields": {
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Durable operator identifier"
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Operator session identifier for this binding"
+      },
+      "status": {
+        "type": "string",
+        "required": false,
+        "description": "Operator status (e.g., 'bound', 'active', 'available'). Consumers should validate against their own enum values."
+      }
+    }
+  }
+}

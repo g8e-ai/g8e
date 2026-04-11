@@ -1,0 +1,156 @@
+/**
+ * Markdown Table Styles for AI Chat Messages
+ * Clean, modern table rendering with proper theming
+ */
+
+/* Table wrapper with overflow handling */
+.markdown-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin: 1rem 0;
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Base table styles */
+.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+/* Table header */
+.markdown-table-head {
+    background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+    border-bottom: 2px solid rgba(var(--accent-green-rgb), 0.4);
+}
+
+/* Header cells */
+.markdown-table-header-cell {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: rgba(var(--accent-green-rgb), 0.95);
+    border-right: 1px solid rgba(148, 163, 184, 0.2);
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    min-width: 120px;
+}
+
+.markdown-table-header-cell:last-child {
+    border-right: none;
+}
+
+/* Table body */
+.markdown-table-body {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+/* Table rows */
+.markdown-table-row {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    transition: background-color 0.2s ease;
+}
+
+.markdown-table-row:last-child {
+    border-bottom: none;
+}
+
+.markdown-table-body .markdown-table-row:hover {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+/* Table cells */
+.markdown-table-cell {
+    padding: 0.75rem 1rem;
+    color: var(--text-primary);
+    border-right: 1px solid rgba(148, 163, 184, 0.1);
+    vertical-align: top;
+}
+
+.markdown-table-cell:last-child {
+    border-right: none;
+}
+
+/* Alternate row styling for better readability */
+.markdown-table-body .markdown-table-row:nth-child(even) {
+    background: rgba(15, 23, 42, 0.3);
+}
+
+/* Handle text alignment */
+.markdown-table-cell[style*="text-align: center"],
+.markdown-table-header-cell[style*="text-align: center"] {
+    text-align: center;
+}
+
+.markdown-table-cell[style*="text-align: right"],
+.markdown-table-header-cell[style*="text-align: right"] {
+    text-align: right;
+}
+
+/* Responsive table handling */
+@media (max-width: 768px) {
+    .markdown-table-wrapper {
+        margin: 0.75rem 0;
+    }
+    
+    .markdown-table {
+        font-size: 0.85rem;
+    }
+    
+    .markdown-table-header-cell,
+    .markdown-table-cell {
+        padding: 0.5rem 0.75rem;
+    }
+}
+
+/* Light theme overrides */
+[data-theme="light"] .markdown-table {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
+[data-theme="light"] .markdown-table-head {
+    background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.12) 0%, rgba(5, 150, 105, 0.08) 100%);
+    border-bottom-color: rgba(var(--accent-green-rgb), 0.5);
+}
+
+[data-theme="light"] .markdown-table-header-cell {
+    color: rgba(5, 150, 105, 0.95);
+}
+
+[data-theme="light"] .markdown-table-body {
+    background: rgba(248, 250, 252, 0.8);
+}
+
+[data-theme="light"] .markdown-table-row {
+    border-bottom-color: rgba(148, 163, 184, 0.25);
+}
+
+[data-theme="light"] .markdown-table-body .markdown-table-row:hover {
+    background: rgba(59, 130, 246, 0.06);
+}
+
+[data-theme="light"] .markdown-table-cell {
+    border-right-color: rgba(148, 163, 184, 0.2);
+}
+
+[data-theme="light"] .markdown-table-body .markdown-table-row:nth-child(even) {
+    background: rgba(241, 245, 249, 0.8);
+}
+
+/* Compact table variant for dense data */
+.markdown-table.compact .markdown-table-header-cell,
+.markdown-table.compact .markdown-table-cell {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+

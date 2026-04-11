@@ -1,0 +1,142 @@
+{
+  "_comment": "Canonical PlatformSettings document shape. VSODB (VSA) is the initial authority for security secrets, while VSOD is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
+
+  "_authority": "VSODB (Secrets) / VSOD (Config)",
+  "_consumers": [
+    "VSE (Python — reads at startup and on cache miss to build base Settings)",
+    "VSOD (JS — reads to serve internal settings API and UI dashboard)"
+  ],
+  "_collection": "settings",
+  "_document_id": "platform_settings",
+
+  "platform_settings": {
+    "_description": "Platform-wide configuration document. Stored flat under a 'settings' key.",
+
+    "settings": {
+      "internal_auth_token": {
+        "type": "string",
+        "required": true,
+        "description": "Cryptographically secure token for internal service-to-service authentication (VSE <-> VSODB, VSOD <-> VSODB)."
+      },
+      "session_encryption_key": {
+        "type": "string",
+        "required": true,
+        "description": "Key used for encrypting session cookies and sensitive data at rest."
+      },
+      "llm_command_gen_enabled": {
+        "type": "boolean",
+        "required": false,
+        "default": true
+      },
+      "llm_command_gen_verifier": {
+        "type": "boolean",
+        "required": false,
+        "default": true
+      },
+      "llm_command_gen_passes": {
+        "type": "integer",
+        "required": false,
+        "default": 3
+      },
+      "llm_command_gen_temp": {
+        "type": "number",
+        "required": false,
+        "default": 0.0
+      },
+      "google_search_enabled": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+      },
+      "google_search_api_key": {
+        "type": "string",
+        "required": false
+      },
+      "google_search_engine_id": {
+        "type": "string",
+        "required": false
+      },
+      "vertex_search_enabled": {
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Whether Vertex AI Search is enabled platform-wide."
+      },
+      "vertex_search_project_id": {
+        "type": "string",
+        "required": false
+      },
+      "vertex_search_engine_id": {
+        "type": "string",
+        "required": false
+      },
+      "vertex_search_location": {
+        "type": "string",
+        "required": false,
+        "default": "global"
+      },
+      "vertex_search_api_key": {
+        "type": "string",
+        "required": false
+      },
+      "enable_command_whitelisting": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+      },
+      "enable_command_blacklisting": {
+        "type": "boolean",
+        "required": false,
+        "default": false
+      },
+      "g8e_api_key": {
+        "type": "string",
+        "required": false
+      },
+      "passkey_rp_name": {
+        "type": "string",
+        "required": false,
+        "default": "g8e"
+      },
+      "passkey_rp_id": {
+        "type": "string",
+        "required": false,
+        "default": "localhost"
+      },
+      "passkey_origin": {
+        "type": "string",
+        "required": false,
+        "default": "https://localhost"
+      },
+      "app_url": {
+        "type": "string",
+        "required": false,
+        "default": "https://localhost"
+      },
+      "allowed_origins": {
+        "type": "string",
+        "required": false,
+        "default": ""
+      },
+      "supervisor_port": {
+        "type": "integer",
+        "required": false,
+        "default": 443,
+        "description": "Port for Supervisor XML-RPC interface inside containers."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      }
+    }
+  }
+}

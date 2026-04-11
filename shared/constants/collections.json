@@ -1,0 +1,24 @@
+{
+  "_comment": "Canonical database collection names shared across VSE (Python) and VSOD (JS).",
+
+  "collections": {
+    "users": "users",
+    "web_sessions": "web_sessions",
+    "operator_sessions": "operator_sessions",
+    "login_audit": "login_audit",
+    "auth_admin_audit": "auth_admin_audit",
+    "account_locks": "account_locks",
+    "api_keys": "api_keys",
+    "organizations": "organizations",
+    "operators": "operators",
+    "operator_usage": "operator_usage",
+    "cases": "cases",
+    "investigations": "investigations",
+    "tasks": "tasks",
+    "memories": "memories",
+    "settings": "settings",
+    "console_audit": "console_audit",
+    "bound_sessions": "bound_sessions",
+    "passkey_challenges": "passkey_challenges"
+  }
+}

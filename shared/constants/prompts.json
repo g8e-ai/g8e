@@ -1,0 +1,71 @@
+{
+  "_comment": "Canonical prompt file paths and agent mode constants for VSE AI system. All values are relative to the prompts_data/ directory. Consumers: VSE (Python).",
+
+  "agent.mode": {
+    "g8e.bound": "operator_bound",
+    "g8e.not.bound": "operator_not_bound",
+    "cloud.operator.bound": "cloud_operator_bound"
+  },
+
+  "prompt.section": {
+    "identity": "identity",
+    "safety": "safety",
+    "capabilities": "capabilities",
+    "execution": "execution",
+    "tools": "tools",
+    "docs": "docs",
+    "system.context": "system_context",
+    "sentinel.mode": "sentinel_mode",
+    "investigation.context": "investigation_context",
+    "response.constraints": "response_constraints",
+    "learned.context": "learned_context"
+  },
+
+  "prompt.file": {
+    "core": {
+      "identity": "core/identity.txt",
+      "safety": "core/safety.txt"
+    },
+    "system": {
+      "response.constraints": "system/response_constraints.txt",
+      "sentinel.mode": "system/sentinel_mode.txt"
+    },
+    "modes": {
+      "g8e.bound": {
+        "capabilities": "modes/operator_bound/capabilities.txt",
+        "execution": "modes/operator_bound/execution.txt",
+        "tools": "modes/operator_bound/tools.txt"
+      },
+      "g8e.not.bound": {
+        "capabilities": "modes/operator_not_bound/capabilities.txt",
+        "execution": "modes/operator_not_bound/execution.txt",
+        "tools": "modes/operator_not_bound/tools.txt",
+        "capabilities.no.search": "modes/operator_not_bound/capabilities_no_search.txt",
+        "execution.no.search": "modes/operator_not_bound/execution_no_search.txt"
+      },
+      "cloud.operator.bound": {
+        "capabilities": "modes/cloud_operator_bound/capabilities.txt",
+        "execution": "modes/cloud_operator_bound/execution.txt",
+        "tools": "modes/cloud_operator_bound/tools.txt"
+      }
+    },
+    "tools": {
+      "run.commands": "tools/run_commands_with_operator.txt",
+      "file.create": "tools/file_create_on_operator.txt",
+      "file.write": "tools/file_write_on_operator.txt",
+      "file.read": "tools/file_read_on_operator.txt",
+      "file.update": "tools/file_update_on_operator.txt",
+      "g8e.web.search": "tools/g8e_web_search.txt",
+      "check.port": "tools/check_port_status.txt",
+      "list.files": "tools/list_files_and_directories_with_detailed_metadata.txt",
+      "grant.intent": "tools/grant_intent_permission.txt",
+      "revoke.intent": "tools/revoke_intent_permission.txt",
+      "fetch.execution.output": "tools/fetch_execution_output.txt",
+      "fetch.session.history": "tools/fetch_session_history.txt",
+      "fetch.file.history": "tools/fetch_file_history.txt",
+      "restore.file": "tools/restore_file.txt",
+      "fetch.file.diff": "tools/fetch_file_diff.txt",
+      "read.file.content": "tools/read_file_content.txt"
+    }
+  }
+}

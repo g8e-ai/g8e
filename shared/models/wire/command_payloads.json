@@ -1,0 +1,417 @@
+{
+  "_comment": "Canonical inbound command payload shapes published by VSE to the cmd:{operator_id}:{operator_session_id} pub/sub channel. VSA deserializes these from the channel. Each payload is the `data` field inside the pub/sub message. Consumers: VSE (Python, publishes), VSA (Go models/commands.go, consumes).",
+
+  "_comment.wire_format": "VSE publishes a JSON object with fields: event_type, payload (one of the schemas below), plus routing fields (operator_id, operator_session_id, case_id, investigation_id, web_session_id). VSA reads event_type to select the correct payload deserializer.",
+
+  "command": {
+    "_description": "Payload for event_type: g8e.v1.operator.command.requested. VSA executes a shell command.",
+    "_event_types": ["g8e.v1.operator.command.requested"],
+    "fields": {
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Shell command string to execute"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier for tracking and cancellation"
+      },
+      "justification": {
+        "type": "string",
+        "required": false,
+        "description": "AI-provided justification for why this command is being run"
+      },
+      "sentinel_mode": {
+        "type": "string",
+        "required": false,
+        "description": "Vault scrubbing mode for output storage. See status.json vault.mode."
+      },
+      "timeout_seconds": {
+        "type": "integer",
+        "required": false,
+        "description": "Execution timeout override. Defaults to operator runtime_config value."
+      }
+    }
+  },
+
+  "command_cancel": {
+    "_description": "Payload for event_type: g8e.v1.operator.command.cancel.requested. VSA cancels an in-flight execution.",
+    "_event_types": ["g8e.v1.operator.command.cancel.requested"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "execution_id of the running command to cancel"
+      }
+    }
+  },
+
+  "file_edit": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.edit.requested. VSA performs a file operation.",
+    "_event_types": ["g8e.v1.operator.file.edit.requested"],
+    "fields": {
+      "file_path": {
+        "type": "string",
+        "required": true,
+        "description": "Absolute path to the target file on the operator host"
+      },
+      "operation": {
+        "type": "string",
+        "required": true,
+        "values": ["read", "write", "replace", "insert", "delete", "patch"],
+        "description": "File operation type"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier"
+      },
+      "sentinel_mode": {
+        "type": "string",
+        "required": false,
+        "description": "Vault scrubbing mode. See status.json vault.mode."
+      },
+      "justification": {
+        "type": "string",
+        "required": false,
+        "description": "AI-provided justification"
+      },
+      "content": {
+        "type": "string",
+        "required": false,
+        "description": "Full file content (write operation)"
+      },
+      "old_content": {
+        "type": "string",
+        "required": false,
+        "description": "Exact content to find and replace (replace operation)"
+      },
+      "new_content": {
+        "type": "string",
+        "required": false,
+        "description": "Replacement content (replace operation)"
+      },
+      "insert_content": {
+        "type": "string",
+        "required": false,
+        "description": "Content to insert (insert operation)"
+      },
+      "insert_position": {
+        "type": "integer",
+        "required": false,
+        "description": "1-indexed line number for insertion point (insert operation)"
+      },
+      "start_line": {
+        "type": "integer",
+        "required": false,
+        "description": "1-indexed start line (delete or read range operation)"
+      },
+      "end_line": {
+        "type": "integer",
+        "required": false,
+        "description": "1-indexed end line inclusive (delete or read range operation)"
+      },
+      "patch_content": {
+        "type": "string",
+        "required": false,
+        "description": "Unified diff format patch content (patch operation)"
+      },
+      "create_backup": {
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Create a backup before modifying"
+      },
+      "create_if_missing": {
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Create the file if it does not exist (write operation)"
+      }
+    }
+  },
+
+  "fs_list": {
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.list.requested. VSA lists directory contents.",
+    "_event_types": ["g8e.v1.operator.filesystem.list.requested"],
+    "fields": {
+      "path": {
+        "type": "string",
+        "required": false,
+        "default": ".",
+        "description": "Directory path to list. Defaults to current working directory."
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier"
+      },
+      "max_depth": {
+        "type": "integer",
+        "required": false,
+        "default": 0,
+        "description": "Recursion depth. 0 = current directory only. Max 3."
+      },
+      "max_entries": {
+        "type": "integer",
+        "required": false,
+        "default": 100,
+        "description": "Maximum number of entries to return. Max 500."
+      }
+    }
+  },
+
+  "fs_read": {
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.read.requested. VSA reads a file and returns its content.",
+    "_event_types": ["g8e.v1.operator.filesystem.read.requested"],
+    "fields": {
+      "path": {
+        "type": "string",
+        "required": true,
+        "description": "Absolute or relative path to the file to read"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier"
+      },
+      "max_size": {
+        "type": "integer",
+        "required": false,
+        "default": 102400,
+        "description": "Maximum number of bytes to read. Defaults to 100 KiB."
+      }
+    }
+  },
+
+  "fetch_logs": {
+    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.requested. VSA fetches stored execution output from its local vault.",
+    "_event_types": ["g8e.v1.operator.logs.fetch.requested"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "execution_id of the stored execution to fetch logs for"
+      },
+      "sentinel_mode": {
+        "type": "string",
+        "required": false,
+        "description": "Vault scrubbing mode to use when reading. See status.json vault.mode."
+      }
+    }
+  },
+
+  "fetch_history": {
+    "_description": "Payload for event_type: g8e.v1.operator.history.fetch.requested. VSA returns a list of past execution IDs.",
+    "_event_types": ["g8e.v1.operator.history.fetch.requested"],
+    "fields": {}
+  },
+
+  "fetch_file_history": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.history.fetch.requested. VSA returns file edit history for a path.",
+    "_event_types": ["g8e.v1.operator.file.history.fetch.requested"],
+    "fields": {
+      "file_path": {
+        "type": "string",
+        "required": true,
+        "description": "Absolute path to the file to retrieve edit history for"
+      }
+    }
+  },
+
+  "fetch_file_diff": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.diff.fetch.requested. VSA returns diff entries from the scrubbed vault.",
+    "_event_types": ["g8e.v1.operator.file.diff.fetch.requested"],
+    "fields": {
+      "diff_id": {
+        "type": "string",
+        "required": false,
+        "description": "Specific diff entry ID to fetch"
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Fetch all diffs for an operator session"
+      },
+      "file_path": {
+        "type": "string",
+        "required": false,
+        "description": "Filter diffs by file path"
+      },
+      "limit": {
+        "type": "integer",
+        "required": false,
+        "description": "Maximum number of diff entries to return"
+      }
+    }
+  },
+
+  "restore_file": {
+    "_description": "Payload for event_type: g8e.v1.operator.file.restore.requested. VSA restores a file to a prior git commit.",
+    "_event_types": ["g8e.v1.operator.file.restore.requested"],
+    "fields": {
+      "file_path": {
+        "type": "string",
+        "required": true,
+        "description": "Absolute path of the file to restore"
+      },
+      "commit_hash": {
+        "type": "string",
+        "required": true,
+        "description": "Git commit hash to restore the file to"
+      }
+    }
+  },
+
+  "port_check": {
+    "_description": "Payload for event_type: g8e.v1.operator.network.port.check.requested. VSA checks whether a network port is reachable on a specified host.",
+    "_event_types": ["g8e.v1.operator.network.port.check.requested"],
+    "fields": {
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier for tracking the result"
+      },
+      "host": {
+        "type": "string",
+        "required": false,
+        "default": "localhost",
+        "description": "Host to check (IP address or hostname). Defaults to 'localhost'."
+      },
+      "port": {
+        "type": "integer",
+        "required": true,
+        "description": "Port number to check (1-65535)"
+      },
+      "protocol": {
+        "type": "string",
+        "required": false,
+        "default": "tcp",
+        "values": ["tcp", "udp"],
+        "description": "Protocol to use for the check"
+      }
+    }
+  },
+
+  "shutdown": {
+    "_description": "Payload for event_type: g8e.v1.operator.shutdown.requested. VSA initiates a graceful shutdown.",
+    "_event_types": ["g8e.v1.operator.shutdown.requested"],
+    "fields": {
+      "reason": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable reason for the shutdown request"
+      }
+    }
+  },
+
+  "heartbeat_request": {
+    "_description": "Payload for event_type: g8e.v1.operator.heartbeat.requested. VSA immediately sends a heartbeat.",
+    "_event_types": ["g8e.v1.operator.heartbeat.requested"],
+    "fields": {}
+  },
+
+  "audit_user_msg": {
+    "_description": "Payload for event_type: g8e.v1.operator.audit.user.recorded. VSA stores a user chat message in its local audit log.",
+    "_event_types": ["g8e.v1.operator.audit.user.recorded"],
+    "fields": {
+      "content": {
+        "type": "string",
+        "required": true,
+        "description": "Message content to audit"
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session identifier"
+      }
+    }
+  },
+
+  "audit_ai_msg": {
+    "_description": "Payload for event_type: g8e.v1.operator.audit.ai.recorded. VSA stores an AI response in its local audit log.",
+    "_event_types": ["g8e.v1.operator.audit.ai.recorded"],
+    "fields": {
+      "content": {
+        "type": "string",
+        "required": true,
+        "description": "AI response content to audit"
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session identifier"
+      }
+    }
+  },
+
+  "audit_direct_cmd": {
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.recorded. VSE sends this when a user runs a command directly from the anchored terminal.",
+    "_event_types": ["g8e.v1.operator.audit.direct.command.recorded"],
+    "fields": {
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Command issued from the anchored terminal"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier"
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session identifier"
+      }
+    }
+  },
+
+  "audit_direct_exec_result": {
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.result.recorded. VSE sends the Sentinel-scrubbed result of a direct terminal command.",
+    "_event_types": ["g8e.v1.operator.audit.direct.command.result.recorded"],
+    "fields": {
+      "command": {
+        "type": "string",
+        "required": true,
+        "description": "Command that was executed"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": false,
+        "description": "Unique execution identifier"
+      },
+      "exit_code": {
+        "type": "integer",
+        "required": false,
+        "description": "Process exit code"
+      },
+      "status": {
+        "type": "string",
+        "required": false,
+        "description": "Execution status. See status.json execution.status."
+      },
+      "output": {
+        "type": "string",
+        "required": false,
+        "description": "Sentinel-scrubbed stdout"
+      },
+      "stderr": {
+        "type": "string",
+        "required": false,
+        "description": "Sentinel-scrubbed stderr"
+      },
+      "execution_time_seconds": {
+        "type": "number",
+        "required": false,
+        "description": "Execution duration in seconds"
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session identifier"
+      }
+    }
+  }
+}
