@@ -209,7 +209,7 @@ class TestGetOperatorCache:
             await get_g8ee_operator_cache(mock_request)
 
 
-class TestGetG8eeVsaOperatorService:
+class TestGetOperatorCommandService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
         mock_request.app.state.operator_command_service = mock_service

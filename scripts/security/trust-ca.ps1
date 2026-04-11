@@ -49,7 +49,7 @@ if ($existing.Count -gt 0) {
 
 Write-Host ""
 Write-Host "[2/3] Fetching CA cert from ${Server}..."
-$certPem = ssh $Server "docker exec g8e-pod cat /vsodb/ssl/ca.crt"
+$certPem = ssh $Server "docker exec g8ep cat /vsodb/ssl/ca.crt"
 
 if (-not $certPem) {
     Write-Error "No certificate data received from ${Server}. Is the platform running?"

@@ -369,7 +369,7 @@ class SearchWebResult(VSOBaseModel):
 
 
 class CommandExecutionResult(VSOBaseModel):
-    """Typed result returned by _execute_vsa_command through the entire call chain.
+    """Typed result returned by _execute_g8eo_command through the entire call chain.
 
     Replaces all Dict[str, Any] returns from command_executor -> tool_executor -> agent.
     """

@@ -79,7 +79,7 @@ Added a one-command `drop` script for deploying operators to any Linux system.
 
 ### Pub/Sub — Wire Protocol Constants & Reliability
 
-- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across g8ee (Python), VSA (Go), and VSOD (JS)
+- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across g8ee (Python), g8eo (Go), and VSOD (JS)
 - `PubSubMessageType` split into `PubSubWireEventType` (`MESSAGE`, `PMESSAGE`, `SUBSCRIBED`) and `PubSubContentType`; backward-compat alias maintained
 - `PubSubMessageType` enum in `channels.py` was missing `MESSAGE`, `PMESSAGE`, `SUBSCRIBED` — the `_ws_reader` referenced these non-existent members, causing `AttributeError` on the first message received and silently killing the reader task. Subscribe ACKs were never processed, causing all `subscribe()` calls to time out after 5 seconds
 - `psubscribe()` race condition fixed: `_subscribed_patterns.add(pattern)` now occurs after `_ensure_ws()` and ACK event setup, preventing double-subscription on reconnect before the ACK handler exists
@@ -117,11 +117,11 @@ Extracted `_initializeSlotsAndActivateG8eNode(user, session, context)` that sequ
 
 ### LLM CLI Flags for AI Integration Testing
 
-Added `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, and `--llm-api-key` flags to `./g8e test`. These pass `TEST_LLM_*` environment variables into the g8e-pod container, allowing `ai_integration` tests to run against a real LLM without writing anything to VSODB.
+Added `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, and `--llm-api-key` flags to `./g8e test`. These pass `TEST_LLM_*` environment variables into the g8ep container, allowing `ai_integration` tests to run against a real LLM without writing anything to VSODB.
 
 ### Getting Started UI
 
-Replaced the plain CLI reference text in the operator deployment panel with a structured three-step onboarding guide: **Bind an Operator** → **Start a Conversation** → **Deploy to More Systems**. Includes the built-in g8e-pod operator note so new users know where to start. Getting started content now also appears in the empty chat view when no conversation exists.
+Replaced the plain CLI reference text in the operator deployment panel with a structured three-step onboarding guide: **Bind an Operator** → **Start a Conversation** → **Deploy to More Systems**. Includes the built-in g8ep operator note so new users know where to start. Getting started content now also appears in the empty chat view when no conversation exists.
 
 ### SSL Certificate Trust Script Improvements
 
@@ -142,7 +142,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - **KV silent failures** — `keys()` and `scan()` on `KVCacheClient` silently returned empty results on failure, causing `_invalidateQueryCache` to no-op and stale query cache entries to serve empty operator lists. Now throw `KVOperationError`
 - **Build tag display** — `build.sh` was not displaying the correct git tag in the build output
 - **VSODB URL port** — `fetch-key-and-run.sh` was missing port 9000 on the `VSODB_URL`; now correctly uses port 9000
-- **g8e-pod CA cert** — `fetch-key-and-run.sh` was passing `--ca-url` to the operator, which forced a network CA fetch — a chicken-and-egg TLS problem. Removed; operator discovers the CA cert from the local `/vsodb/ca.crt` mount
+- **g8ep CA cert** — `fetch-key-and-run.sh` was passing `--ca-url` to the operator, which forced a network CA fetch — a chicken-and-egg TLS problem. Removed; operator discovers the CA cert from the local `/vsodb/ca.crt` mount
 - **Operator launch** — `fetch-key-and-run.sh` improved with binary download from blob store, architecture auto-detection, and retry logic for transient VSODB unavailability
 
 ## Code Quality
@@ -173,7 +173,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - VSOD: `terminal-output-rendering.unit.test.js` — terminal output rendering tests
 - VSOD: `cache_aside_service.unit.test.js` — `_invalidateQueryCache` tests for `KVOperationError` non-propagation
 - VSOD: `vsodb_kv_cache_client.unit.test.js` — updated for `KVOperationError` throw behavior
-- VSA: `TestSharedPubSubWireMatchesGoConstants` — Go contract tests against `shared/constants/pubsub.json`
+- G8EO: `TestSharedPubSubWireMatchesGoConstants` — Go contract tests against `shared/constants/pubsub.json`
 
 ## Component Summary
 
@@ -181,8 +181,8 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 |-----------|---------|
 | **g8ee** | Execution registry redesign, real-time command lifecycle events, typed approval API, Tribunal hardening, LLM SSL isolation, pub/sub reliability, `AIGenerationConfigBuilder`, memory generation |
 | **VSOD** | Operator activation fix, g8e script, getting started UI, approval route fixes, `resolveBoundOperators` rewrite, race condition fix, `KVOperationError`, terminal output rendering |
-| **VSA** | Pub/sub wire protocol contract tests |
-| **g8e-pod** | VSODB URL port fix, CA cert bootstrap fix, operator binary fetch improvements, sudoers hardening |
+| **g8eo** | Pub/sub wire protocol contract tests |
+| **g8ep** | VSODB URL port fix, CA cert bootstrap fix, operator binary fetch improvements, sudoers hardening |
 
 ## Quick Start
 

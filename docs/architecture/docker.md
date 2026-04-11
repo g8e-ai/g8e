@@ -39,7 +39,7 @@ Web frontend and single external entry point. Node.js.
 - **Internal Auth:** Discovers authoritative token from VSODB/SSL volume (`vsodb-ssl:/vsodb:ro`) at runtime. No `G8E_INTERNAL_AUTH_TOKEN` environment variable.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls, read-only root filesystem
 
-### VSODB (`g8e-data`)
+### VSODB (`g8es`)
 
 Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--listen` mode.
 
@@ -47,7 +47,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** none (no `cap_drop` or `cap_add` directives in compose)
 - **Writable volumes:** `vsodb-data:/data`, `vsodb-ssl:/ssl`
-- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8e-data-ssl` volume.
+- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
 - **Security:** read-only root filesystem (no `cap_drop`, `no-new-privileges`, or `sysctls` directives in compose)
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
 
@@ -58,7 +58,7 @@ Unified test environment with Python, Node, and Go. Always running alongside cor
 - **User:** `g8e` (uid 1001, gid 1001)
 - **Base image:** `ubuntu:24.04`
 - **Read-only filesystem:** no — test and build workflows write to `/app/components` and Go build cache
-- **Bind mounts:** `components/g8ee/`, `components/vsod/`, `components/vsa/`, `components/g8e-pod/scripts/`, `shared/`, `scripts/` — the full repo root is not mounted
+- **Bind mounts:** `components/g8ee/`, `components/vsod/`, `components/g8eo/`, `components/g8ep/scripts/`, `shared/`, `scripts/` — the full repo root is not mounted
 - **Capabilities:** `cap_drop: ALL` — no capabilities added back
 - **Security:** `cap_drop: ALL`, `no-new-privileges: true` (no `sysctls` directives in compose)
 - **Docker socket:** see [Docker Socket Threat Model](#docker-socket-threat-model) below
@@ -92,7 +92,7 @@ RUN addgroup -g 1001 g8e && \
 USER g8e
 ```
 
-**Ubuntu (Drop Pod) — `ubuntu:24.04` base:**
+**Ubuntu (g8ep) — `ubuntu:24.04` base:**
 ```dockerfile
 RUN groupadd -g 1001 g8e && \
     useradd -u 1001 -g g8e -m -s /bin/bash g8e
@@ -105,7 +105,7 @@ USER g8e
 
 All services implement physical resource limits to prevent Denial of Service (DoS) from compromised or runaway processes:
 
-- **Memory Limits:** Ranging from 512MB (VSODB) to 4GB (Drop Pod).
+- **Memory Limits:** Ranging from 512MB (VSODB) to 4GB (g8ep).
 - **PID Limits:** Restricts the number of concurrent processes to prevent fork bombs.
 
 ### Volume Security Options
@@ -149,7 +149,7 @@ cap_drop:
   - ALL
 ```
 
-Drop Pod drops all capabilities with no additions.
+g8ep drops all capabilities with no additions.
 
 VSODB does not have a `cap_drop` directive in compose.
 
@@ -166,7 +166,7 @@ tmpfs:
 
 Applied to: **g8ee**, **VSOD**, **VSODB**
 
-Not applied to: **Drop Pod** (build and test workflows require writes throughout the container).
+Not applied to: **g8ep** (build and test workflows require writes throughout the container).
 
 ## Docker Socket Threat Model
 
@@ -176,13 +176,13 @@ One service mounts `/var/run/docker.sock`: g8e node.
 
 **Why g8e node needs it:**
 
-Drop Pod uses `docker exec` to run test suites and operator workflows against live service containers. It is a dev/test tool, never public-facing.
+g8ep uses `docker exec` to run test suites and operator workflows against live service containers. It is a dev/test tool, never public-facing.
 
 Mitigation: g8e node runs as uid 1001 (not root). The `group_add: ${DOCKER_GID}` directive adds the host docker group to the container user, granting socket access without requiring root.
 
 **How VSOD manages the g8e node operator (without the socket):**
 
-VSOD's `G8ENodeOperatorService` manages operator processes inside the g8e-pod container via Supervisor XML-RPC over the internal network — it does not use `docker exec` or mount the Docker socket. The XML-RPC interaction is:
+VSOD's `G8ENodeOperatorService` manages operator processes inside the g8ep container via Supervisor XML-RPC over the internal network — it does not use `docker exec` or mount the Docker socket. The XML-RPC interaction is:
 
 - Isolated to a single internal service (`G8ENodeOperatorService`)
 - Never triggered by unauthenticated requests — operator sessions require a valid authenticated user session
@@ -203,10 +203,10 @@ Volumes are categorized by write requirement:
 | `vsod-node-modules:/app/components/vsod/node_modules` | read-write | g8e node |
 | `./components/g8ee:/app/components/g8ee` | read-write | g8e node |
 | `./components/vsod:/app/components/vsod` | read-write | g8e node |
-| `./components/vsa:/app/components/vsa` | read-write | g8e node |
-| `./components/g8e-pod/scripts:/app/components/g8e-pod/scripts` | read-write | g8e node |
+| `./components/g8eo:/app/components/g8eo` | read-write | g8e node |
+| `./components/g8ep/scripts:/app/components/g8ep/scripts` | read-write | g8e node |
 | `./scripts:/app/scripts` | read-write | g8e node |
-| `./components/g8e-pod/reports:/reports` | read-write | g8e node |
+| `./components/g8ep/reports:/reports` | read-write | g8e node |
 | `./shared:/app/shared` | read-only | g8ee |
 | `./shared:/app/shared` | read-write | g8e node |
 | `./shared:/shared` | read-only | VSOD |
@@ -225,7 +225,7 @@ All Dockerfiles use the repo root as the build context (`context: .` in compose)
 
 - **g8ee** — `components/g8ee/`, `shared/`
 - **VSOD** — `components/vsod/`, `shared/`
-- **VSODB** — `components/vsa/`, `components/vsodb/` (pre-built operator binaries for linux/amd64, arm64, 386 are generated during build)
-- **Drop Pod** — `components/g8ee/`, `components/vsod/`, `components/vsa/`, `components/g8e-pod/`
+- **VSODB** — `components/g8eo/`, `components/vsodb/` (pre-built operator binaries for linux/amd64, arm64, 386 are generated during build)
+- **g8ep** — `components/g8ee/`, `components/vsod/`, `components/g8eo/`, `components/g8ep/`
 
 No `.dockerignore` file exists at the repo root; the full build context (minus `.gitignore` patterns) is sent to the daemon.

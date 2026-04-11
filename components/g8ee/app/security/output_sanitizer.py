@@ -86,7 +86,7 @@ class SanitizationResult(VSOBaseModel):
     sanitized_length: int
 
 
-def sanitize_vsa_output(
+def sanitize_g8eo_output(
     output: str,
     context: str,
     max_length: int = MAX_OUTPUT_LENGTH
@@ -112,7 +112,7 @@ def sanitize_vsa_output(
         truncated = True
         was_modified = True
         logger.warning(
-            "VSA output truncated from %d to %d characters",
+            "g8eo output truncated from %d to %d characters",
             original_length, max_length,
             extra={"context": context}
         )
@@ -123,7 +123,7 @@ def sanitize_vsa_output(
 
     if suspicious_patterns:
         logger.warning(
-            "Suspicious patterns detected in VSA output: %s",
+            "Suspicious patterns detected in g8eo output: %s",
             suspicious_patterns,
             extra={
                 "context": context,

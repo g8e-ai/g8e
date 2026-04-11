@@ -35,7 +35,7 @@ from app.models.operators import (
     CommandExecutingBroadcastEvent,
     TargetSystem,
 )
-from app.models.pubsub_messages import VSOMessage, VSAResultEnvelope
+from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileHistoryToolResult,
@@ -190,7 +190,7 @@ class OperatorCommandService:
             vsod_client=internal_http_client,
         )
 
-        async def _on_vsa_result(envelope: VSAResultEnvelope) -> None:
+        async def _on_g8eo_result(envelope: G8eoResultEnvelope) -> None:
             payload = envelope.payload
             if payload is None:
                 return
@@ -199,7 +199,7 @@ class OperatorCommandService:
                 return
             execution_registry.complete(execution_id, envelope)
 
-        pubsub_service.subscribe_results(_on_vsa_result)
+        pubsub_service.subscribe_results(_on_g8eo_result)
 
         return cls(
             pubsub_service=pubsub_service,

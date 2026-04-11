@@ -63,12 +63,12 @@ To ensure long-term maintainability and strict separation of concerns, all compo
 ## Quick Start
 
 ```bash
-# First-time setup — builds g8e-pod, generates SSL certs, compiles the Operator binary,
+# First-time setup — builds g8ep, generates SSL certs, compiles the Operator binary,
 # then builds and starts all platform services
 ./g8e platform setup
 ```
 
-Only Docker required. `platform setup` is the all-inclusive first-run command: it builds the g8e-pod image, generates TLS certificates if missing, compiles the Operator binary, and does a full no-cache rebuild of all platform services (VSODB, g8ee, VSOD).
+Only Docker required. `platform setup` is the all-inclusive first-run command: it builds the g8ep image, generates TLS certificates if missing, compiles the Operator binary, and does a full no-cache rebuild of all platform services (VSODB, g8ee, VSOD).
 
 After `platform setup` completes, open `https://localhost` — on first run you will be redirected to the setup wizard. The wizard lets you trust the CA certificate (download button + per-OS instructions built in), register your admin account, configure the platform hostname, and set up your LLM provider.
 
@@ -169,7 +169,7 @@ To remove the configuration:
 
 ## SSL Setup
 
-g8e runs over HTTPS. VSODB (g8e-data) generates the CA and server certificates automatically on first start and stores them in its data volume (`g8e-data-data`). You only need to interact with cert management to trust the CA in your browser (once, to eliminate warnings) or to force regeneration after a `reset` or `clean` (both destroy the vsodb volume). `wipe` preserves certs — it only clears the g8ee and vsod app data volumes.
+g8e runs over HTTPS. VSODB (g8es) generates the CA and server certificates automatically on first start and stores them in its data volume (`g8es-data`). You only need to interact with cert management to trust the CA in your browser (once, to eliminate warnings) or to force regeneration after a `reset` or `clean` (both destroy the vsodb volume). `wipe` preserves certs — it only clears the g8ee and vsod app data volumes.
 
 ### 1. Check Certificate Status
 
@@ -255,7 +255,7 @@ Manual equivalent (Administrator PowerShell):
 Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like '*g8e*' } | Remove-Item
 
 # Fetch and save
-ssh admin@10.0.0.2 "docker exec g8e-pod cat /vsodb/ssl/ca.crt" | Out-File -Encoding ascii $env:USERPROFILE\Downloads\g8e-ca.crt
+ssh admin@10.0.0.2 "docker exec g8ep cat /vsodb/ssl/ca.crt" | Out-File -Encoding ascii $env:USERPROFILE\Downloads\g8e-ca.crt
 
 # Import
 Import-Certificate -FilePath "$env:USERPROFILE\Downloads\g8e-ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
@@ -274,7 +274,7 @@ docker-compose.yml
 ├── vsodb       # Persistence + pub/sub (g8e.operator --listen)
 ├── g8ee         # AI engine (Python/FastAPI)
 ├── vsod        # Web frontend + Gateway Protocol (Node.js/Express)
-└── g8e-pod    # Unified test/security/build environment
+└── g8ep    # Unified test/security/build environment
 ```
 
 ```bash
@@ -288,7 +288,7 @@ docker-compose.yml
 
 | Profile | Services Added | Purpose |
 |---------|---------------|---------|
-| *(none)* | `g8e-pod` | Unified test/security/build environment — no Docker profile; runs alongside core services but excluded from managed `up`/`rebuild`/`wipe`/`clean` operations unless explicitly targeted (e.g. `./g8e platform rebuild g8e-pod`) |
+| *(none)* | `g8ep` | Unified test/security/build environment — no Docker profile; runs alongside core services but excluded from managed `up`/`rebuild`/`wipe`/`clean` operations unless explicitly targeted (e.g. `./g8e platform rebuild g8ep`) |
 
 ### Configuration and Environment Variables
 
@@ -311,7 +311,7 @@ Never use `.env` files for secrets.
 
 `INTERNAL_AUTH_TOKEN` and `SESSION_ENCRYPTION_KEY` follow a volume-only lifecycle:
 
-1.  On first start, **VSODB** (`g8e.operator --listen`) checks for these secrets on its SSL volume (`g8e-data-ssl`, mounted at `/ssl` in the container).
+1.  On first start, **VSODB** (`g8e.operator --listen`) checks for these secrets on its SSL volume (`g8es-ssl`, mounted at `/ssl` in the container).
 2.  If missing, VSODB generates cryptographically secure 32-byte hex values and writes them to `/ssl/internal_auth_token` and `/ssl/session_encryption_key`.
 3.  **VSOD** and **g8ee** mount the same volume at `/vsodb/ssl` and read these secrets directly from the filesystem at startup.
 4.  These secrets are **never stored in the database** and cannot be managed via the UI. This ensures platform identity and session encryption are decoupled from the database lifecycle, surviving full database wipes or resets as long as the SSL volume is preserved.
@@ -345,7 +345,7 @@ To rotate these secrets, manually delete the files from the volume and restart t
 
 The only hard prerequisite for running and managing the full platform is Docker. No Go, Python, openssl, or other tools are required on the host.
 
-The `g8e` bash script is the authoritative router — host commands (platform, operator build/deploy, llm) run directly on the host; in-pod commands (test, security, data) `docker exec` into the g8e-pod exactly once. The Operator binary is never built automatically — run `./g8e platform setup` explicitly before using any operator functionality.
+The `g8e` bash script is the authoritative router — host commands (platform, operator build/deploy, llm) run directly on the host; in-pod commands (test, security, data) `docker exec` into the g8ep exactly once. The Operator binary is never built automatically — run `./g8e platform setup` explicitly before using any operator functionality.
 
 ```bash
 ./g8e platform setup              # Build all images, generate certs, and build operator (alias: setup)
@@ -367,10 +367,10 @@ The `g8e` bash script is the authoritative router — host commands (platform, o
 ./g8e --help                     # Full command reference
 ```
 
-### Building VSA
+### Building g8eo
 
 ```bash
-# From components/vsa/
+# From components/g8eo/
 make build-local-all  # All Linux platforms (amd64, arm64, 386) — release build
 make build-local      # Linux amd64 only — fast, uploads to local VSODB
 ```
@@ -379,7 +379,7 @@ make build-local      # Linux amd64 only — fast, uploads to local VSODB
 
 ## Testing
 
-See [testing.md](testing.md) for complete testing documentation — shared principles, g8e-pod environment, test infrastructure, fixtures, mocks, CI workflows, and component-specific guidelines.
+See [testing.md](testing.md) for complete testing documentation — shared principles, g8ep environment, test infrastructure, fixtures, mocks, CI workflows, and component-specific guidelines.
 
 ---
 
@@ -387,7 +387,7 @@ See [testing.md](testing.md) for complete testing documentation — shared princ
 
 ### Universal Rules
 
-These apply to every component — VSA, g8ee, VSOD — without exception.
+These apply to every component — g8eo, g8ee, VSOD — without exception.
 
 - **No emojis** in application code, comments, log messages, or any runtime strings (markdown docs only)
 - **No inline styles** in HTML — use proper CSS, leverage existing definitions before creating new ones
@@ -441,11 +441,11 @@ These apply to every component — VSA, g8ee, VSOD — without exception.
 | `case.json` | g8ee |
 | `conversation_message.json` | g8ee (publisher), VSOD (consumer) |
 | `tool_results.json` | g8ee (publisher), VSOD (consumer) |
-| `wire/envelope.json` | VSA (publisher), g8ee/VSOD (consumers) |
-| `wire/heartbeat.json` | VSA (publisher), g8ee/VSOD (consumers) |
-| `wire/result_payloads.json` | VSA (publisher), g8ee/VSOD (consumers) |
-| `wire/command_payloads.json` | VSOD/g8ee (publishers), VSA (consumer) |
-| `wire/system_info.json` | VSA (publisher), VSOD (consumer) |
+| `wire/envelope.json` | g8eo (publisher), g8ee/VSOD (consumers) |
+| `wire/heartbeat.json` | g8eo (publisher), g8ee/VSOD (consumers) |
+| `wire/result_payloads.json` | g8eo (publisher), g8ee/VSOD (consumers) |
+| `wire/command_payloads.json` | VSOD/g8ee (publishers), g8eo (consumer) |
+| `wire/system_info.json` | g8eo (publisher), VSOD (consumer) |
 
 **Rule:** When adding or renaming a field on any shared model, update `shared/models/` first. Then update all component implementations in the same change. A field mismatch between the JSON definition and a component struct is a wire-protocol breaking change.
 
@@ -453,21 +453,21 @@ These apply to every component — VSA, g8ee, VSOD — without exception.
 
 The three components use different consumption mechanisms suited to their language and runtime:
 
-#### VSA (Go) — compile-time mirroring
+#### g8eo (Go) — compile-time mirroring
 
-VSA is a compiled binary. It does not load the shared JSON at runtime. Instead, the Go constants in `constants/` **duplicate** the shared JSON values as typed Go constants. The values are hardcoded at compile time and must exactly match the JSON source of truth.
+g8eo is a compiled binary. It does not load the shared JSON at runtime. Instead, the Go constants in `constants/` **duplicate** the shared JSON values as typed Go constants. The values are hardcoded at compile time and must exactly match the JSON source of truth.
 
 Contract tests in `contracts/` are the enforcement mechanism:
 
 | Test file | What it verifies |
 |-----------|-----------------|
 | `contracts/shared_constants_test.go` | Reads `shared/constants/*.json` at test time and asserts every Go constant in `constants/events.go`, `constants/status.go`, `constants/channels.go`, and `constants/headers.go` exactly matches the corresponding JSON value |
-| `contracts/shared_wire_models_test.go` | Reads `shared/models/wire/*.json` at test time and asserts every `json:` struct tag in the VSA wire model structs (`models/wire.go`, `models/commands.go`, etc.) exactly matches the field names defined in the JSON schema |
-| `contracts/constants_enforcement_test.go` | Uses Go's AST parser to scan VSA source files in `services/`, `models/`, and `config/` for raw string literals that match any enforced constant value — fails if any raw string duplicates a constant that should be referenced by name |
+| `contracts/shared_wire_models_test.go` | Reads `shared/models/wire/*.json` at test time and asserts every `json:` struct tag in the g8eo wire model structs (`models/wire.go`, `models/commands.go`, etc.) exactly matches the field names defined in the JSON schema |
+| `contracts/constants_enforcement_test.go` | Uses Go's AST parser to scan g8eo source files in `services/`, `models/`, and `config/` for raw string literals that match any enforced constant value — fails if any raw string duplicates a constant that should be referenced by name |
 
-**Access path:** `contracts/` resolves `shared/` via `filepath.Abs(filepath.Join(vsaRoot, "../../shared/..."))` — two levels up from `components/vsa/` to the repo root.
+**Access path:** `contracts/` resolves `shared/` via `filepath.Abs(filepath.Join(g8eoRoot, "../../shared/..."))` — two levels up from `components/g8eo/` to the repo root.
 
-When a shared JSON value changes: update the JSON, then update the matching Go constant, then run `./g8e test vsa -- ./contracts/...` to verify.
+When a shared JSON value changes: update the JSON, then update the matching Go constant, then run `./g8e test g8eo -- ./contracts/...` to verify.
 
 #### g8ee (Python) — selective runtime loading
 
@@ -550,7 +550,7 @@ Three contract test files enforce correctness:
 g8ee and VSOD are the two halves of the g8e backend. Every user action that reaches g8ee originates in VSOD. Every SSE event the browser receives originates in g8ee and is routed through VSOD. The integration surface is the set of HTTP calls between them, the shared constant and model definitions that both sides must agree on, and the `VSOHttpContext` headers that carry identity and business context across the boundary.
 
 ```
-Browser ←→ VSOD (Node.js/Express) ←→ g8ee (Python/FastAPI) ←→ VSA (Go operator binary)
+Browser ←→ VSOD (Node.js/Express) ←→ g8ee (Python/FastAPI) ←→ g8eo (Go operator binary)
                 ↕                           ↕
               VSODB (pub/sub + document store)
 ```
@@ -561,8 +561,8 @@ Browser ←→ VSOD (Node.js/Express) ←→ g8ee (Python/FastAPI) ←→ VSA (G
 |-----------|-----------|---------|
 | VSOD → g8ee | HTTP (`InternalHttpClient`) | Chat, operator lifecycle, approval, direct command, MCP gateway |
 | g8ee → VSOD | HTTP (`InternalHttpClient `) | SSE push, intent grant/revoke, heartbeat broadcast, operator context update |
-| g8ee → VSA | VSODB pub/sub | Command dispatch, shutdown |
-| VSA → g8ee | VSODB pub/sub | Execution results, heartbeats |
+| g8ee → g8eo | VSODB pub/sub | Command dispatch, shutdown |
+| g8eo → g8ee | VSODB pub/sub | Execution results, heartbeats |
 
 ### Integration Surface Map
 
@@ -756,7 +756,7 @@ Defaults must be declared in exactly one place: the `LLMSettings` field definiti
 
 ## Component Code Quality
 
-### VSA (Go)
+### g8eo (Go)
 
 #### Constants
 
@@ -775,14 +775,14 @@ Defaults must be declared in exactly one place: the `LLMSettings` field definiti
 | `constants/exit_codes.go` | All process exit codes and `ExitCodeFromError` |
 | `constants/network.go` | Default operator endpoint hostname constant |
 
-**Enforcement:** `contracts/constants_enforcement_test.go` uses Go's AST parser to scan for raw string literals that match any enforced constant value. `contracts/shared_constants_test.go` asserts that every VSA constant value exactly matches the corresponding shared JSON entry. `contracts/shared_wire_models_test.go` verifies every VSA wire struct JSON tag matches `shared/models/wire/`.
+**Enforcement:** `contracts/constants_enforcement_test.go` uses Go's AST parser to scan for raw string literals that match any enforced constant value. `contracts/shared_constants_test.go` asserts that every g8eo constant value exactly matches the corresponding shared JSON entry. `contracts/shared_wire_models_test.go` verifies every g8eo wire struct JSON tag matches `shared/models/wire/`.
 
 #### Models
 
 - Never use `map[string]interface{}` or `json.RawMessage` for a known structured payload — always define a typed struct with JSON tags.
 - All inbound payload types live in `models/commands.go`. All outbound result types live in `models/wire.go`, `models/file_edit.go`, or `models/fs_list.go`.
 - Internal structs use `*time.Time` pointer fields set to UTC. Wire models use RFC3339Nano strings.
-- VSA does not own any document models — it never writes to the VSODB document store directly.
+- g8eo does not own any document models — it never writes to the VSODB document store directly.
 
 #### Services and Error Handling
 
@@ -795,7 +795,7 @@ Defaults must be declared in exactly one place: the `LLMSettings` field definiti
 
 #### Pub/Sub Services
 
-VSA's operator runtime is built around a pub/sub dispatch loop. All inbound commands and outbound results flow through the `services/pubsub/` package.
+g8eo's operator runtime is built around a pub/sub dispatch loop. All inbound commands and outbound results flow through the `services/pubsub/` package.
 
 **Core types**
 
@@ -842,7 +842,7 @@ A `nil` field in `CommandServiceConfig` is treated as disabled — the service p
 
 #### Tests
 
-See [testing.md — VSA](testing.md#vsa--go) for test infrastructure, `testutil/` helpers, mock locations, and how to run tests.
+See [testing.md — g8eo](testing.md#g8eo--go) for test infrastructure, `testutil/` helpers, mock locations, and how to run tests.
 
 - Always use typed constants in test assertions — never raw strings; the contract test enforces this in application code and the same discipline applies in test code.
 - Call `defer svc.Close()` for every service that holds a database connection.
@@ -1071,7 +1071,7 @@ Every value that crosses an inbound wire boundary (DB read, pub/sub message, HTT
 
 #### Operator Document Ownership
 
-g8ee owns all operator document writes after initial operator authentication. VSOD writes only during the auth/lifecycle flow (create, activate, bind, stop). Heartbeat payloads from VSA are forwarded by VSOD to pub/sub as a gateway — VSOD never writes to the operator document from a heartbeat. g8ee processes heartbeats, updates `latest_heartbeat_snapshot`, `last_heartbeat`, and all other operator activity fields, then sends the processed data back to VSOD via HTTP for SSE broadcast to the frontend only. VSOD does not persist any of that data.
+g8ee owns all operator document writes after initial operator authentication. VSOD writes only during the auth/lifecycle flow (create, activate, bind, stop). Heartbeat payloads from g8eo are forwarded by VSOD to pub/sub as a gateway — VSOD never writes to the operator document from a heartbeat. g8ee processes heartbeats, updates `latest_heartbeat_snapshot`, `last_heartbeat`, and all other operator activity fields, then sends the processed data back to VSOD via HTTP for SSE broadcast to the frontend only. VSOD does not persist any of that data.
 
 #### Service Architecture and Dependency Injection
 
@@ -1227,7 +1227,7 @@ See [testing.md — VSOD](testing.md#vsod--nodejs) for test infrastructure, fixt
 │   ├── constants/      # Canonical wire-protocol strings (events, status, channels, etc.)
 │   └── models/         # Canonical document schemas (operator, user, conversation, wire payloads)
 ├── components/
-│   ├── vsa/            # Operator binary source (Go)
+│   ├── g8eo/            # Operator binary source (Go)
 │   ├── g8ee/            # AI engine (Python/FastAPI)
 │   │   └── app/
 │   │       ├── db/             # SQLite coordination store
@@ -1251,7 +1251,7 @@ See [testing.md — VSOD](testing.md#vsod--nodejs) for test infrastructure, fixt
 │   │   ├── views/          # EJS templates
 │   │   └── public/         # Static assets (JS, CSS)
 │   ├── vsodb/          # VSODB Dockerfile (runs g8e.operator --listen)
-├── scripts/            # Internal build, test, and security scripts (run via g8e-pod)
+├── scripts/            # Internal build, test, and security scripts (run via g8ep)
 ├── docs/               # Full documentation
 └── docker-compose.yml  # Single deployment configuration
 ```
@@ -1264,7 +1264,7 @@ Full index at [index.md](index.md).
 
 | Category | Location |
 |----------|---------|
-| **Components** | [components/](components/) — VSA, g8ee, VSOD, VSODB, g8e node (authoritative component reference) |
+| **Components** | [components/](components/) — g8eo, g8ee, VSOD, VSODB, g8e node (authoritative component reference) |
 | **Architecture** | [architecture/ai_agents.md](architecture/ai_agents.md) — AI agent pipeline; [architecture/storage.md](architecture/storage.md) — storage and data flows; [architecture/security.md](architecture/security.md) — security architecture |
-| **Testing** | [testing.md](testing.md) — shared principles, g8e-pod environment, component test guides, CI workflow |
+| **Testing** | [testing.md](testing.md) — shared principles, g8ep environment, component test guides, CI workflow |
 | **Glossary** | [glossary.md](glossary.md) — all platform terminology |

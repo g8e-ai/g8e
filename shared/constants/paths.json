@@ -19,7 +19,7 @@
     "node_modules_dir": "/app/components/vsod/node_modules"
   },
   "g8e_pod": {
-    "scripts_dir": "/app/components/g8e-pod/scripts",
+    "scripts_dir": "/app/components/g8ep/scripts",
     "reports_dir": "/reports"
   }
 }

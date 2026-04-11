@@ -31,12 +31,12 @@ Usage:
     python manage-vsodb.py audit --db-path /path/to/g8e.db export --session SESSION_ID
 
     # Auto-discover from a running Docker container (normal-mode operator)
-    python manage-vsodb.py audit --container g8e-data sessions
-    python manage-vsodb.py audit --container g8e-data events --session SESSION_ID --limit 20
-    python manage-vsodb.py audit --container g8e-data stats
+    python manage-vsodb.py audit --container g8es sessions
+    python manage-vsodb.py audit --container g8es events --session SESSION_ID --limit 20
+    python manage-vsodb.py audit --container g8es stats
 
     # Docker volume
-    python manage-vsodb.py audit --volume g8e-data-data sessions
+    python manage-vsodb.py audit --volume g8es-data sessions
 """
 
 import argparse
@@ -560,12 +560,12 @@ Examples:
   python manage-vsodb.py audit --db-path /opt/g8e/.g8e/data/g8e.db export --session SESSION_ID --out audit.json
 
   # Docker container (normal-mode operator)
-  python manage-vsodb.py audit --container g8e-data sessions
-  python manage-vsodb.py audit --container g8e-data events --session SESSION_ID --limit 20
-  python manage-vsodb.py audit --container g8e-data stats
+  python manage-vsodb.py audit --container g8es sessions
+  python manage-vsodb.py audit --container g8es events --session SESSION_ID --limit 20
+  python manage-vsodb.py audit --container g8es stats
 
   # Docker volume
-  python manage-vsodb.py audit --volume g8e-data-data sessions
+  python manage-vsodb.py audit --volume g8es-data sessions
         """
     )
 

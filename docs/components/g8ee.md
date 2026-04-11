@@ -36,8 +36,8 @@ graph LR
     Browser -- "HTTPS / SSE" --> VSOD
     VSOD -- "HTTP (Internal)" --> g8ee
     g8ee -- "HTTP / WebSocket" --> VSODB
-    VSOD -- "WebSocket (mTLS)" --> VSA
-    VSA -- "Pub/Sub" --> g8ee
+    VSOD -- "WebSocket (mTLS)" --> g8eo
+    g8eo -- "Pub/Sub" --> g8ee
 ```
 
 - **VSOD** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
@@ -46,7 +46,7 @@ graph LR
     - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
     - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
     - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
-- **VSA** -- Operator daemon running on target systems; executes commands and manages local audit storage.
+- **g8eo** -- Operator daemon running on target systems; executes commands and manages local audit storage.
 
 ---
 
@@ -211,12 +211,12 @@ For the full list of call behaviors and TTL strategies, see [architecture/storag
 
 ### Operator Bound
 
-Activated when at least one VSA Operator has `status=bound`.
+Activated when at least one g8eo Operator has `status=bound`.
 
 - **Full tool suite** — command execution, file operations, directory listing, port checks, web search (if configured).
 - **Human-in-the-loop** — all state-changing operations require explicit user approval before execution.
 - **Thinking** — enabled for models that declare `supports_thinking=True`; uses the highest supported thinking level from the model's config.
-- **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8e-pod operators (`cloud_subtype=g8e_pod`) are a special type of cloud operator that provide direct system access and bypass the intent system.
+- **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8e_pod`) are a special type of cloud operator that provide direct system access and bypass the intent system.
 - **Multi-operator** — multiple operators may be bound simultaneously; the AI selects the target per command using `target_operator` (hostname, operator ID, or index). Batch operations use `target_operators` for unified single-approval execution across N systems.
 
 ### Operator Not Bound
@@ -347,7 +347,7 @@ Approval responses use `handle_approval_response(OperatorApprovalResponse)` — 
 | `OperatorPubSubService` | Pub/sub lifecycle, channel subscription, command dispatch, result waiting |
 | `OperatorApprovalService` | Human-in-the-loop approval request, poll, and response flow (first-class on `app.state`) |
 | `OperatorExecutionService` | Command validation, risk analysis, batch execution, pub/sub command dispatch |
-| `OperatorResultHandlerService` | Inbound result parsing from VSA pub/sub messages |
+| `OperatorResultHandlerService` | Inbound result parsing from g8eo pub/sub messages |
 | `OperatorFileService` | File create/write/update/read operations on the operator |
 | `OperatorFilesystemService` | Directory listing (`fs_list`) and file read (`fs_read`) |
 | `OperatorIntentService` | AWS intent permission grant and revocation |
@@ -363,7 +363,7 @@ g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{o
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs AI-powered safety analysis: command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety (blocks writes to system paths and destructive ops on dirty git repos), and error analysis with auto-fix (maximum 2 retries before escalating to the user). See [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-vsa) for full details.
+Before dispatching any state-changing operation, g8ee runs AI-powered safety analysis: command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety (blocks writes to system paths and destructive ops on dirty git repos), and error analysis with auto-fix (maximum 2 retries before escalating to the user). See [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -412,7 +412,7 @@ g8ee tracks all operator-related actions and results to maintain a continuous pi
 The `add_operator_activity` method in `OperatorDataService` records high-level events (command execution, file edits, approvals) to the operator's `activity_log` array in VSODB. These entries use the `ConversationHistoryMessage` model and are primarily used for UI visibility into what the AI has done on a specific system.
 
 #### Command History
-All command results are appended to `command_results_history` on the `OperatorDocument` via `append_command_result`. VSA results are processed by `OperatorResultHandlerService` and routed to this history.
+All command results are appended to `command_results_history` on the `OperatorDocument` via `append_command_result`. g8eo results are processed by `OperatorResultHandlerService` and routed to this history.
 
 #### Local Retention (LFAA)
 While VSODB stores a summary of recent activity, the **Operator remains the system of record** via LFAA. g8ee dispatches audit events to the operator's local vault for long-term retention and cryptographic verification.
@@ -421,9 +421,9 @@ While VSODB stores a summary of recent activity, the **Operator remains the syst
 
 ## Cloud Operator & AWS Intents
 
-The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`. g8e-pod operators (`cloud_subtype=g8e_pod`) have direct system access and do not use the intent system.
+The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`. g8ep operators (`cloud_subtype=g8e_pod`) have direct system access and do not use the intent system.
 
-Cloud Operators for AWS implement a **Zero Standing Privileges** model. The Operator is started with `--cloud --provider aws` — either automatically on the g8e-pod sidecar (local dev, credentials from `~/.aws`) or deployed to an EC2 instance in the customer's VPC (credentials from IAM instance profile). In both cases the AI launches with only bootstrap permissions (STS identity, IAM role introspection) and dynamically requests additional permissions through the intent system.
+Cloud Operators for AWS implement a **Zero Standing Privileges** model. The Operator is started with `--cloud --provider aws` — either automatically on the g8ep sidecar (local dev, credentials from `~/.aws`) or deployed to an EC2 instance in the customer's VPC (credentials from IAM instance profile). In both cases the AI launches with only bootstrap permissions (STS identity, IAM role introspection) and dynamically requests additional permissions through the intent system.
 
 ### Intent Workflow
 
@@ -555,7 +555,7 @@ Key LFAA components on the Operator:
 - **Audit Vault** — Local SQLite database (`{workdir}/.g8e/data/g8e.db`) storing all events: user messages, command executions, file mutations, and AI responses. Sensitive fields encrypted at rest.
 - **Ledger** — Local Git repository (`{workdir}/.g8e/data/ledger`) providing cryptographic version history for every file the AI has modified.
 
-For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [architecture/storage.md — VSA Operator Storage](../architecture/storage.md#vsa--operator-storage).
+For complete schema DDL, exact table/column definitions, vault encryption details (AES-256-GCM envelope encryption, KEK derivation, DEK wrapping), and data flow specifics, see [architecture/storage.md — g8eo Operator Storage](../architecture/storage.md#g8eo--operator-storage).
 
 ---
 
@@ -564,10 +564,10 @@ For complete schema DDL, exact table/column definitions, vault encryption detail
 Sentinel is a dual-purpose security system that performs data scrubbing and pre-execution threat detection in a single scan pass.
 
 - **g8ee Python scrubber** — scrubs sensitive data from user messages before they reach the AI (27 patterns: service tokens, cloud credentials, PII, connection strings, private keys).
-- **VSA Go sentinel** — scrubs command output before it leaves the Operator, and performs pre-execution threat detection mapped to MITRE ATT&CK categories. Threat detection is Go-only.
-- **`sentinel_mode`** on an investigation controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary — never pass the raw bool to VSA payloads. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for the conversion mapping.
+- **g8eo Go sentinel** — scrubs command output before it leaves the Operator, and performs pre-execution threat detection mapped to MITRE ATT&CK categories. Threat detection is Go-only.
+- **`sentinel_mode`** on an investigation controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary — never pass the raw bool to g8eo payloads. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for the conversion mapping.
 
-For the full pattern list, threat categories, and scrubbed-vs-preserved data breakdown, see [architecture/security.md — Sentinel Output Scrubbing](../architecture/security.md#sentinel-output-scrubbing) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-vsa).
+For the full pattern list, threat categories, and scrubbed-vs-preserved data breakdown, see [architecture/security.md — Sentinel Output Scrubbing](../architecture/security.md#sentinel-output-scrubbing) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo).
 
 ---
 
@@ -888,7 +888,7 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `command_gen_passes` | `3` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
-Temperatures are fixed per Tribunal member and are not configurable. Values are sourced from shared/constants/agents.json (single source of truth across g8ee, VSOD, and VSA): Axiom → 0.0, Concord → 0.4, Variance → 0.8.
+Temperatures are fixed per Tribunal member and are not configurable. Values are sourced from shared/constants/agents.json (single source of truth across g8ee, VSOD, and g8eo): Axiom → 0.0, Concord → 0.4, Variance → 0.8.
 
 **Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
 

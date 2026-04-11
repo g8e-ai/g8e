@@ -15,7 +15,7 @@
  * Shared Constants Loader
  * Loads canonical wire-protocol values from shared/constants/*.json.
  * These JSON files are the single source of truth shared across g8ee (Python),
- * VSA (Go), and VSOD (JavaScript).
+ * g8eo (Go), and VSOD (JavaScript).
  *
  * Usage: import { _EVENTS, _STATUS, _MSG, _COLLECTIONS, _KV, _INTENTS } from './shared.js';
  * Single source of truth for all canonical wire-protocol values.

@@ -174,6 +174,6 @@ export const OllamaModel = Object.freeze({
  */
 export const SourceComponent = Object.freeze({
     G8EE:  _STATUS['component.name']['g8ee'],
-    VSA:  _STATUS['component.name']['vsa'],
+    G8EO:  _STATUS['component.name']['g8eo'],
     VSOD: _STATUS['component.name']['vsod'],
 });

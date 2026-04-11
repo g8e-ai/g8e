@@ -26,7 +26,7 @@ from app.models.operators import (
     OperatorHeartbeat,
     OperatorPanelListUpdatedPayload,
 )
-from app.models.pubsub_messages import VSAHeartbeatPayload
+from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
 from .operator_data_service import OperatorDataService
@@ -128,7 +128,7 @@ class OperatorHeartbeatService:
                 logger.warning("[HEARTBEAT] Missing operator_id or operator_session_id in channel: %s", channel)
                 return
             raw = data if isinstance(data, dict) else json.loads(data)
-            payload = VSAHeartbeatPayload.model_validate(raw)
+            payload = G8eoHeartbeatPayload.model_validate(raw)
             if (operator_id, operator_session_id) not in self._active_sessions:
                 await self.register_operator_session(operator_id, operator_session_id)
             success = await self.process_heartbeat_message(operator_id, operator_session_id, payload)
@@ -141,7 +141,7 @@ class OperatorHeartbeatService:
         self,
         operator_id: str,
         operator_session_id: str,
-        payload: VSAHeartbeatPayload,
+        payload: G8eoHeartbeatPayload,
     ) -> bool:
         ts_result = self._validate_heartbeat_timestamp(payload)
         if not ts_result.is_valid:
@@ -157,7 +157,7 @@ class OperatorHeartbeatService:
             return False
 
         logger.info(
-            "Heartbeat service received message from VSA",
+            "Heartbeat service received message from g8eo",
             extra={
                 "event_type": payload.event_type,
                 "operator_session_id": operator_session_id,
@@ -202,7 +202,7 @@ class OperatorHeartbeatService:
         )
         return True
 
-    def _validate_heartbeat_timestamp(self, payload: VSAHeartbeatPayload) -> RequestValidationResult:
+    def _validate_heartbeat_timestamp(self, payload: G8eoHeartbeatPayload) -> RequestValidationResult:
         ts_result = validate_timestamp(payload.timestamp)
         if not ts_result.is_valid:
             return RequestValidationResult(
@@ -215,7 +215,7 @@ class OperatorHeartbeatService:
     def _validate_operator_identity(
         self,
         channel_operator_id: str,
-        payload: VSAHeartbeatPayload,
+        payload: G8eoHeartbeatPayload,
         operator_session_id: str,
     ) -> bool:
         if payload.operator_id and payload.operator_id != channel_operator_id:
@@ -235,7 +235,7 @@ class OperatorHeartbeatService:
         self,
         operator_id: str,
         operator_session_id: str,
-        payload: VSAHeartbeatPayload,
+        payload: G8eoHeartbeatPayload,
     ) -> OperatorDocument | None:
         operator: OperatorDocument | None = await self.operator_data_service.get_operator(operator_id)
 
@@ -281,7 +281,7 @@ class OperatorHeartbeatService:
     async def _push_heartbeat_sse(
         self,
         sse_payload: HeartbeatSSEPayload,
-        payload: VSAHeartbeatPayload,
+        payload: G8eoHeartbeatPayload,
         operator: OperatorDocument,
     ) -> None:
         web_session_id = operator.web_session_id

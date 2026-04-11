@@ -13,7 +13,7 @@
 
 """Operator Port Service
 
-Port check operations via VSA operators. No approval required.
+Port check operations via g8eo operators. No approval required.
 Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
@@ -44,7 +44,7 @@ from app.models.command_payloads import CheckPortArgs
 from app.models.http_context import VSOHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import PortCheckResultPayload, VSAResultEnvelope, VSOMessage
+from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, VSOMessage
 from app.models.tool_results import PortCheckToolResult
 from app.utils.timestamp import now, to_timestamp
 
@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 
 class OperatorPortService:
-    """Port check diagnostic operations via VSA operators."""
+    """Port check diagnostic operations via g8eo operators."""
 
     def __init__(
         self,
@@ -208,7 +208,7 @@ class OperatorPortService:
 
             envelope = self.execution_registry.get_result(execution_id)
 
-            if isinstance(envelope, VSAResultEnvelope) and isinstance(envelope.payload, PortCheckResultPayload):
+            if isinstance(envelope, G8eoResultEnvelope) and isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 

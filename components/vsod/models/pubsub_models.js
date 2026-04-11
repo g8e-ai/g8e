@@ -34,7 +34,7 @@ export class PubSubSubscribeMessage extends VSOBaseModel {
 
 // ---------------------------------------------------------------------------
 // PubSubPublishMessage  (publish wire message — data is a plain object, serialized
-// as json.RawMessage by the VSODB broker; see components/vsa/services/listen/listen_pubsub.go)
+// as json.RawMessage by the VSODB broker; see components/g8eo/services/listen/listen_pubsub.go)
 // ---------------------------------------------------------------------------
 
 export class PubSubPublishMessage extends VSOBaseModel {

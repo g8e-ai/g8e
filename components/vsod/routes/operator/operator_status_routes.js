@@ -37,32 +37,32 @@ export function createOperatorStatusRouter({
     router.post(OperatorPaths.G8E_GATEWAY_REAUTH, requireAuth, async (req, res, next) => {
         const userId = req.userId;
 
-        logger.info('[G8E-POD-REAUTH] g8e-pod operator reauth requested', { user_id: userId });
+        logger.info('[g8ep-REAUTH] g8ep operator reauth requested', { user_id: userId });
 
         try {
             const result = await g8eNodeOperatorService.relaunchG8ENodeOperatorForUser(userId);
 
             if (!result.success) {
-                logger.warn('[G8E-POD-REAUTH] g8e-pod operator reauth failed', {
+                logger.warn('[g8ep-REAUTH] g8ep operator reauth failed', {
                     user_id: userId,
                     error: result.error,
                 });
                 return res.status(404).json(new ErrorResponse({ error: result.error }).forClient());
             }
 
-            logger.info('[G8E-POD-REAUTH] g8e-pod operator reauth completed', {
+            logger.info('[g8ep-REAUTH] g8ep operator reauth completed', {
                 user_id: userId,
                 operator_id: result.operator_id,
             });
 
             return res.json({
                 success: true,
-                message: 'g8e-pod reauth initiated',
+                message: 'g8ep reauth initiated',
                 operator_id: result.operator_id
             });
 
         } catch (error) {
-            logger.error('[G8E-POD-REAUTH] g8e-pod operator reauth error', {
+            logger.error('[g8ep-REAUTH] g8ep operator reauth error', {
                 user_id: userId,
                 error: error.message,
             });

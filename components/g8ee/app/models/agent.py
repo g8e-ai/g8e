@@ -45,7 +45,7 @@ from app.constants import (
     StreamChunkFromModelType,
 )
 class OperatorCommandArgs(TargetedOperatorArgs):
-    """Typed input for _execute_vsa_command, replacing the raw tool_args dict.
+    """Typed input for _execute_g8eo_command, replacing the raw tool_args dict.
 
     Constructed at the application barrier (tool_executor) from
     the AI model's raw dict, then passed typed through the rest of the stack.

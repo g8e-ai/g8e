@@ -473,7 +473,7 @@ class PubSubClient:
         self._pmessage_handlers.setdefault(pattern, []).append(handler)
 
     # =========================================================================
-    # Domain pub/sub — VSA Operator command/result/heartbeat channels
+    # Domain pub/sub — g8eo Operator command/result/heartbeat channels
     # =========================================================================
 
     async def publish_command(

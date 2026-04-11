@@ -17,7 +17,7 @@ Internal API Router for g8ee
 Cluster-internal HTTP endpoints for direct communication from other VSO components.
 NOT exposed via Ingress - only accessible from pods within the Kubernetes cluster.
 
-Note: VSA Operator commands still use PubSub (external agent communication).
+Note: g8eo Operator commands still use PubSub (external agent communication).
 """
 
 import asyncio

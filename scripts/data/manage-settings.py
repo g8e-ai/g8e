@@ -15,7 +15,7 @@
 Platform Settings Script
 
 Read and write effective platform settings via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Runs inside g8ep and communicates with g8e-dashboard over the internal network.
 Secret values (API keys, tokens) are never returned by the internal endpoint.
 
 The --direct flag bypasses VSOD and writes straight to VSODB. Use this when

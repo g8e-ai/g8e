@@ -400,9 +400,9 @@ class TestCacheAsideService:
         svc = CacheAsideService(
             kv=KVService(mock_kv_cache_client),
             db=DBService(mock_db_client),
-            component_name=ComponentName.VSA,
+            component_name=ComponentName.G8EO,
         )
-        assert svc.component_name == ComponentName.VSA
+        assert svc.component_name == ComponentName.G8EO
 
     async def test_cache_document_writes_to_kv(self, service, mock_kv_cache_client):
         data = {"id": "user-20", "name": "Direct"}

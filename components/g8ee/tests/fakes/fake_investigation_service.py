@@ -71,7 +71,7 @@ class FakeInvestigationService:
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
-        actor: ComponentName = ComponentName.VSA,
+        actor: ComponentName = ComponentName.G8EO,
     ) -> InvestigationModel:
         self.command_results.append({
             "investigation_id": investigation_id,

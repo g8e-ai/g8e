@@ -53,7 +53,7 @@ const Seg = {
         STOP:            'stop',
         API_KEY:         'api-key',
         REFRESH_API_KEY: 'refresh-api-key',
-        G8E_POD:        'g8e-pod',
+        G8E_POD:        'g8ep',
         REAUTH:          'reauth',
     },
     auth: {

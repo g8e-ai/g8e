@@ -17,7 +17,7 @@ from .operator_command_validator import OperatorCommandValidator
 from .output_sanitizer import (
     SanitizationResult,
     sanitize_file_content,
-    sanitize_vsa_output,
+    sanitize_g8eo_output,
 )
 from .request_timestamp import (
     NONCE_TTL_SECONDS,
@@ -56,7 +56,7 @@ __all__ = [
     "TimestampValidationResult",
     "get_sentinel_scrubber",
     "sanitize_file_content",
-    "sanitize_vsa_output",
+    "sanitize_g8eo_output",
     "scrub_user_message",
     "validate_message_timestamp",
     "validate_request_timestamp",

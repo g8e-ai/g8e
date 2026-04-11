@@ -2,7 +2,7 @@
 # =============================================================================
 # g8e TLS Certificate Management
 # =============================================================================
-# Manages the platform TLS certificates owned by VSODB (g8e-data).
+# Manages the platform TLS certificates owned by VSODB (g8es).
 #
 # VSODB generates the CA and server certificates automatically on first start
 # and stores them in its data volume at /data/ssl/. This script orchestrates
@@ -16,13 +16,13 @@
 #               this is a no-op. If certs are missing, restarts VSODB to
 #               trigger generation and waits for it to become healthy.
 #   rotate      Force-regenerate all certs. Wipes /data/ssl/ inside the
-#               g8e-data container, then restarts VSODB so it generates
+#               g8es container, then restarts VSODB so it generates
 #               a fresh CA and server cert. Run ./g8e platform rebuild
 #               afterwards to re-embed the new CA into the operator binary.
 #   status      Show cert expiry, subject, and SANs for the CA and server
 #               cert currently live in the vsodb-data volume.
 #   trust       Install the platform CA certificate into the host OS trust
-#               store. Streams the CA from the g8e-pod container (which mounts
+#               store. Streams the CA from the g8ep container (which mounts
 #               vsodb-data read-only at /vsodb) — no file is written to the host.
 #               Use --ca-file to supply a cert directly (used by the g8e CLI).
 #
@@ -63,8 +63,8 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_TMP="$PROJECT_ROOT/tmp"
 [[ -d "$PROJECT_TMP" ]] || mkdir -p "$PROJECT_TMP"
 
-CONTAINER="g8e-data"
-CERT_CONTAINER="g8e-pod"
+CONTAINER="g8es"
+CERT_CONTAINER="g8ep"
 CERT_SSL_DIR="/vsodb/ssl"
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yml"
 
@@ -122,7 +122,7 @@ _cert_info() {
         else
             echo \"    STATUS: valid (\${days} days remaining)\"
         fi
-    " 2>/dev/null || echo "    (openssl not available — is g8e-pod running?)"
+    " 2>/dev/null || echo "    (openssl not available — is g8ep running?)"
 }
 
 # -----------------------------------------------------------------------------
@@ -157,8 +157,8 @@ exec_rotate() {
     echo ""
     docker compose -f "$COMPOSE_FILE" stop vsodb
     docker compose -f "$COMPOSE_FILE" rm -f vsodb
-    docker run --rm -v g8e-data-ssl:/ssl busybox sh -c "rm -rf /ssl/*" \
-        || die "Failed to wipe g8e-data-ssl volume"
+    docker run --rm -v g8es-ssl:/ssl busybox sh -c "rm -rf /ssl/*" \
+        || die "Failed to wipe g8es-ssl volume"
     docker compose -f "$COMPOSE_FILE" up -d vsodb
     _wait_healthy
     log "New certificates generated."
@@ -178,7 +178,7 @@ exec_status() {
 # Trust — install the CA into the host OS certificate store
 # -----------------------------------------------------------------------------
 
-# Stream the CA cert PEM from g8e-pod to stdout. No files written to the host.
+# Stream the CA cert PEM from g8ep to stdout. No files written to the host.
 _stream_ca_pem() {
     docker exec "$CERT_CONTAINER" cat "${CERT_SSL_DIR}/ca.crt" 2>/dev/null \
         || die "Failed to read CA cert from ${CERT_CONTAINER}. Is the platform running? Run: ./g8e security certs generate"
@@ -255,7 +255,7 @@ _trust_local_macos() {
 
 _print_remote_instructions() {
     local server_host="$1" ws_os="$2"
-    local fetch_cmd="ssh ${server_host} \"docker exec g8e-pod cat /vsodb/ssl/ca.crt\""
+    local fetch_cmd="ssh ${server_host} \"docker exec g8ep cat /vsodb/ssl/ca.crt\""
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -304,7 +304,7 @@ _print_remote_instructions() {
             echo "    Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object { \$_.Subject -like '*g8e*' } | Remove-Item"
             echo ""
             echo "    # Fetch and save"
-            echo "    ssh ${server_host} \"docker exec g8e-pod cat /vsodb/ssl/ca.crt\" | Out-File -Encoding ascii \$env:USERPROFILE\\Downloads\\g8e-ca.crt"
+            echo "    ssh ${server_host} \"docker exec g8ep cat /vsodb/ssl/ca.crt\" | Out-File -Encoding ascii \$env:USERPROFILE\\Downloads\\g8e-ca.crt"
             echo ""
             echo "    # Import"
             echo "    Import-Certificate -FilePath \"\$env:USERPROFILE\\Downloads\\g8e-ca.crt\" -CertStoreLocation Cert:\\LocalMachine\\Root"

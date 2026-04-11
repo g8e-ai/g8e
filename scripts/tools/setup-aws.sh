@@ -1,7 +1,7 @@
 #!/bin/bash
 # g8e AWS Setup
 #
-# Mounts your AWS credentials into g8e-pod so the operator can interact
+# Mounts your AWS credentials into g8ep so the operator can interact
 # with AWS services. Run once; re-run to change the credentials path.
 #
 # Non-interactive usage:
@@ -65,7 +65,7 @@ _info()   { echo -e "  ${CYAN}$1${NC}"; }
 
 _header "AWS Credentials Configuration"
 echo
-_info "g8e-pod mounts your AWS credentials so the operator can access AWS services."
+_info "g8ep mounts your AWS credentials so the operator can access AWS services."
 _info "The mounted directory is configured in docker-compose.yml as \${HOME}/.aws."
 echo
 _info "  Default: ~/.aws  — uses your existing AWS CLI credentials and config"
@@ -96,7 +96,7 @@ fi
 _ok "AWS directory exists: $AWS_DIR"
 
 echo
-_info "g8e-pod mounts \${HOME}/.aws from docker-compose.yml."
+_info "g8ep mounts \${HOME}/.aws from docker-compose.yml."
 _info "If you need a custom path, update the aws volume mount in docker-compose.yml"
 _info "and run: ./g8e platform restart"
 echo

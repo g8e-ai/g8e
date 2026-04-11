@@ -140,27 +140,27 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     router.post('/user/:userId/reauth', requireInternalOrigin, async (req, res, next) => {
         const { userId } = req.params;
 
-        logger.info('[INTERNAL-HTTP] g8e-pod operator reauth requested', { user_id: userId });
+        logger.info('[INTERNAL-HTTP] g8ep operator reauth requested', { user_id: userId });
 
         try {
             const result = await g8eNodeOperatorService.relaunchG8ENodeOperatorForUser(userId);
 
             if (!result.success) {
-                logger.warn('[INTERNAL-HTTP] g8e-pod operator reauth failed', {
+                logger.warn('[INTERNAL-HTTP] g8ep operator reauth failed', {
                     user_id: userId,
                     error: result.error,
                 });
                 return res.status(404).json(new ErrorResponse({ error: result.error }).forWire());
             }
 
-            logger.info('[INTERNAL-HTTP] g8e-pod operator reauth completed', {
+            logger.info('[INTERNAL-HTTP] g8ep operator reauth completed', {
                 user_id: userId,
                 operator_id: result.operator_id,
             });
 
             return res.json({ success: true, user_id: userId, operator_id: result.operator_id });
         } catch (error) {
-            logger.error('[INTERNAL-HTTP] g8e-pod operator reauth error', {
+            logger.error('[INTERNAL-HTTP] g8ep operator reauth error', {
                 error: error.message,
                 user_id: userId,
             });

@@ -31,7 +31,7 @@ git checkout -b feature/your-feature-name
 
 ## Development Environment
 
-g8e runs as a set of Docker containers with source code volume-mounted for hot reload. Only Docker is required on the host — all toolchain operations run inside g8e-pod.
+g8e runs as a set of Docker containers with source code volume-mounted for hot reload. Only Docker is required on the host — all toolchain operations run inside g8ep.
 
 ```bash
 ./g8e platform rebuild      # Rebuild all services + restart
@@ -48,7 +48,7 @@ Edit source files directly -- changes are reflected without rebuilding. Rebuild 
 ./g8e test           # All components
 ./g8e test g8ee       # AI engine (Python/pytest)
 ./g8e test vsod      # Dashboard (Node/Vitest)
-./g8e test vsa       # Operator (Go)
+./g8e test g8eo       # Operator (Go)
 ```
 
 All tests must pass before submitting a PR.
@@ -57,7 +57,7 @@ All tests must pass before submitting a PR.
 
 - **Python (g8ee):** Follow existing patterns. Type hints required. Use Pydantic models for data structures.
 - **Node.js (VSOD):** Follow existing Express patterns. Use JSDoc where helpful.
-- **Go (VSA/Operator):** Standard `gofmt`. Follow existing package structure.
+- **Go (g8eo/Operator):** Standard `gofmt`. Follow existing package structure.
 - **Shell scripts:** `set -euo pipefail`. ShellCheck clean.
 
 ## Submitting Changes
@@ -78,7 +78,7 @@ component: short description of change
 Longer explanation if needed. Reference issues with #123.
 ```
 
-Prefix with the component name: `g8ee:`, `vsod:`, `vsa:`, `vsodb:`, `docs:`, `ci:`, `scripts:`.
+Prefix with the component name: `g8ee:`, `vsod:`, `g8eo:`, `vsodb:`, `docs:`, `ci:`, `scripts:`.
 
 ### PR Guidelines
 

@@ -8,11 +8,11 @@ The `g8e` script in the project root is the single entry point for all platform 
 
 **Location:** `g8e` (project root)
 
-The `g8e` script is the single entry point for managing every aspect of the g8e platform. It requires only Docker — no Go, Python, or any other toolchain on the host. Commands that operate on Docker services run directly on the host; commands that require the internal toolchain (`test`, `security`, `data`) are transparently forwarded into the g8e-pod container via `docker exec`.
+The `g8e` script is the single entry point for managing every aspect of the g8e platform. It requires only Docker — no Go, Python, or any other toolchain on the host. Commands that operate on Docker services run directly on the host; commands that require the internal toolchain (`test`, `security`, `data`) are transparently forwarded into the g8ep container via `docker exec`.
 
 ### Bootstrap
 
-No manual setup steps are required. On `docker compose up` (including Docker Desktop), g8e-pod starts and its entrypoint builds the operator binary natively if absent. All other services follow in dependency order.
+No manual setup steps are required. On `docker compose up` (including Docker Desktop), g8ep starts and its entrypoint builds the operator binary natively if absent. All other services follow in dependency order.
 
 The `./g8e` CLI provides the same experience via `./g8e platform start` and adds orchestration helpers for rebuilds, reset, and wipes.
 
@@ -23,7 +23,7 @@ The `./g8e` CLI provides the same experience via `./g8e platform start` and adds
 ./g8e --help
 ```
 
-Running `./g8e` with no arguments or `--help` runs `g8e.operator do --help` inside g8e-pod, printing the Operator's command reference.
+Running `./g8e` with no arguments or `--help` runs `g8e.operator do --help` inside g8ep, printing the Operator's command reference.
 
 ### Commands
 
@@ -39,7 +39,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 ./g8e platform stop                     # Stop all containers (data preserved)
 ./g8e platform restart                  # Restart all containers (no rebuild)
 ./g8e platform rebuild                  # No-cache rebuild of all services + restart
-./g8e platform rebuild vsod             # Rebuild a single service: vsodb | g8ee | vsod | g8e-pod
+./g8e platform rebuild vsod             # Rebuild a single service: vsodb | g8ee | vsod | g8ep
 ./g8e platform wipe                     # Wipe all data volumes and restart fresh
 ./g8e platform clean                    # Full Docker cleanup: containers, images, volumes, networks (this project only)
 ./g8e platform logs [service]           # Tail service logs
@@ -47,13 +47,13 @@ Manages the Docker Compose services. All subcommands run on the host.
 
 | Subcommand | Delegates to | Notes |
 |------------|-------------|-------|
-| `settings` | `scripts/data/manage-vsodb.py settings show` (inside g8e-pod) | Displays effective non-secret platform settings from the live internal API |
+| `settings` | `scripts/data/manage-vsodb.py settings show` (inside g8ep) | Displays effective non-secret platform settings from the live internal API |
 | `update` | `scripts/core/build.sh rebuild` | Pulls latest from `origin/main` with confirmation, then rebuilds |
 | `status` | `scripts/core/build.sh status` | |
 | `start` | `scripts/core/build.sh up` | |
 | `stop` | `scripts/core/build.sh down` | |
 | `restart` | `scripts/core/build.sh restart` | |
-| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`, `drop`. Accepts optional component names: `vsodb g8ee vsod g8e-pod` |
+| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`, `drop`. Accepts optional component names: `vsodb g8ee vsod g8ep` |
 | `reset` | `scripts/core/build.sh reset` | Wipe ALL data volumes and rebuild from scratch (destructive) |
 | `wipe` | `scripts/core/build.sh wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
 | `clean` | `scripts/core/build.sh clean` | Remove all managed resources scoped to this project |
@@ -63,40 +63,40 @@ Manages the Docker Compose services. All subcommands run on the host.
 Manages the Operator binary build and deployment.
 
 ```bash
-./g8e operator init                          # Build the operator binary inside g8e-pod (first time)
-./g8e operator build                         # Rebuild the operator binary inside g8e-pod
+./g8e operator init                          # Build the operator binary inside g8ep (first time)
+./g8e operator build                         # Rebuild the operator binary inside g8ep
 ./g8e operator deploy <user@host>            # Copy operator to remote host via scp (alias: drop)
 ./g8e operator stream <host...>              # Stream-inject operator to one or more remote hosts
 ./g8e operator ssh-config                    # Configure ~/.ssh/config for high-concurrency streaming
-./g8e operator reauth --user-id <id>         # Kill and relaunch the g8e-pod operator for a user
+./g8e operator reauth --user-id <id>         # Kill and relaunch the g8ep operator for a user
 ```
 
 | Subcommand | Delegates to | Notes |
 |------------|-------------|-------|
-| `init` | `docker exec g8e-pod go build ...` | Builds operator binary natively inside running g8e-pod |
-| `build` | `docker exec g8e-pod go build ...` | Explicit rebuild of operator binary inside g8e-pod |
+| `init` | `docker exec g8ep go build ...` | Builds operator binary natively inside running g8ep |
+| `build` | `docker exec g8ep go build ...` | Explicit rebuild of operator binary inside g8ep |
 | `deploy` | `scp` + optional `ssh` | Alias: `drop`. Supports `--arch`, `--dest`, `--endpoint`, `--device-token`, `--key`, `--no-git` |
-| `stream` | `docker exec g8e-pod /home/g8e/g8e.operator stream` | Zero local disk footprint. Supports `--arch`, `--hosts`, `--concurrency`, `--timeout`, `--endpoint`, `--device-token`, `--key`, `--no-git`, `--ssh-config` |
+| `stream` | `docker exec g8ep /home/g8e/g8e.operator stream` | Zero local disk footprint. Supports `--arch`, `--hosts`, `--concurrency`, `--timeout`, `--endpoint`, `--device-token`, `--key`, `--no-git`, `--ssh-config` |
 | `ssh-config` | `scripts/tools/setup-ssh.sh` | Configures multiplexing. Supports `--print`, `--force` |
 | `reauth` | Internal API | Requires `--user-id <id>` or `--email <email>` |
 
 #### test
-Runs tests for platform components. Runs inside g8e-pod.
+Runs tests for platform components. Runs inside g8ep.
 
 ```bash
 ./g8e test                          # Run all component test suites
 ./g8e test g8ee                      # AI engine (Python/pytest)
 ./g8e test vsod                     # Dashboard (Node/Vitest)
-./g8e test vsa                      # Operator (Go)
+./g8e test g8eo                      # Operator (Go)
 ./g8e test security                 # Security scanning
 ./g8e test g8ee --coverage           # Generate coverage report
 ./g8e test g8ee --llm openai         # Run with a specific LLM provider
 ./g8e test g8ee --m <model>          # Override the LLM model for the run
-./g8e test vsa -- TestFoo           # Pass extra args to the underlying test runner
+./g8e test g8eo -- TestFoo           # Pass extra args to the underlying test runner
 ```
 
 #### security
-Security validation and certificate management. Runs inside g8e-pod.
+Security validation and certificate management. Runs inside g8ep.
 
 ```bash
 ./g8e security certs                # Show TLS certificate status (default)
@@ -111,7 +111,7 @@ Security validation and certificate management. Runs inside g8e-pod.
 ```
 
 #### data
-Data management. All subcommands route through `manage-vsodb.py` inside g8e-pod.
+Data management. All subcommands route through `manage-vsodb.py` inside g8ep.
 
 ```bash
 ./g8e data users list                        # List users
@@ -179,10 +179,10 @@ Builds and runs the local VSO environment. Manages Docker Compose services in de
 | Command | Description |
 |---------|-------------|
 | `status` | Show container status and component versions |
-| `up [component...]` | Start managed services without building. Default: `vsodb g8ee vsod g8e-pod`. Auto-builds the operator binary inside g8e-pod if absent. |
-| `down` | Stop managed containers (`vsodb`, `g8ee`, `vsod`, `g8e-pod`) |
+| `up [component...]` | Start managed services without building. Default: `vsodb g8ee vsod g8ep`. Auto-builds the operator binary inside g8ep if absent. |
+| `down` | Stop managed containers (`vsodb`, `g8ee`, `vsod`, `g8ep`) |
 | `rebuild [component...]` | No-cache rebuild + restart. Default: `vsodb g8ee vsod` |
-| `wipe` | Remove data volumes for `vsodb`, `g8ee`, `vsod`, `g8e-pod` and restart. Auto-builds operator binary after restart. |
+| `wipe` | Remove data volumes for `vsodb`, `g8ee`, `vsod`, `g8ep` and restart. Auto-builds operator binary after restart. |
 | `clean` | Remove all managed Docker resources (containers, images, volumes) |
 
 ---
@@ -191,7 +191,7 @@ Builds and runs the local VSO environment. Manages Docker Compose services in de
 
 **Location:** `scripts/testing/run_tests.sh`
 
-Runs tests for VSO components inside the `g8e-pod` Docker container. Infrastructure must already be running.
+Runs tests for VSO components inside the `g8ep` Docker container. Infrastructure must already be running.
 
 ### Usage
 
@@ -205,7 +205,7 @@ Runs tests for VSO components inside the `g8e-pod` Docker container. Infrastruct
 |-----------|---------------|--------------|
 | `g8ee` | pytest | g8ee Python service |
 | `vsod` | vitest / npm test | VSOD Node.js service |
-| `vsa` | `gotestsum` | VSA Go binary |
+| 'g8eo' | `gotestsum` | g8eo Go binary |
 | `security` | `security-validate.sh` | Operator binary security |
 | `all` | All of the above | Full suite (default) |
 
@@ -216,7 +216,7 @@ Runs tests for VSO components inside the `g8e-pod` Docker container. Infrastruct
 | `--coverage` | Generate coverage reports (HTML + JSON + terminal) |
 | `--llm PROVIDER` | Override LLM provider: `openai`, `anthropic`, `gemini` |
 | `--m MODEL` | Override LLM model name only |
-| `-v` | Verbose output for VSA (`go test -v`) |
+| `-v` | Verbose output for g8eo (`go test -v`) |
 
 ---
 
@@ -298,7 +298,7 @@ Generate, list, and revoke device link tokens.
 
 ### VSODB Document Store (`store`)
 
-Query the VSODB document store and KV store via the HTTP API. Runs inside g8e-pod and communicates with VSODB directly.
+Query the VSODB document store and KV store via the HTTP API. Runs inside g8ep and communicates with VSODB directly.
 
 ```bash
 ./g8e data store stats                                    # VSODB statistics
@@ -380,7 +380,7 @@ The `-Server` parameter accepts a `user@host`, bare hostname, or SSH config alia
 ### mTLS Verification (`mtls-test.sh`)
 **Location:** `scripts/security/mtls-test.sh`
 
-Verifies mTLS configuration for VSA ↔ VSODB communication.
+Verifies mTLS configuration for g8eo ↔ VSODB communication.
 
 ```bash
 ./scripts/security/mtls-test.sh

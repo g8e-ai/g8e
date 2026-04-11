@@ -76,12 +76,12 @@ g8e.operator --listen --tls-cert /path/cert.pem --tls-key /path/key.pem
 
 ## TLS / Certificate Management
 
-VSODB manages its own private CA and server certificate when started without explicit TLS flags. All certificate logic lives in `components/vsa/services/listen/listen_certs.go` (`CertStore`).
+VSODB manages its own private CA and server certificate when started without explicit TLS flags. All certificate logic lives in `components/g8eo/services/listen/listen_certs.go` (`CertStore`).
 
 This CA is not only for internal service trust. It is the root of trust for the entire platform:
 - VSOD uses the VSODB-generated server certificate for browser HTTPS on port 443
 - VSOD reads the CA from `/vsodb/ssl/ca.crt` to power the workstation trust portal on port 80
-- Field Operators discover the CA locally from the `vsodb-ssl` volume when running inside the Docker network (e.g., g8e-pod at `/vsodb/ca.crt`), or fetch it over HTTPS from `https://<endpoint>/ssl/ca.crt` as a fallback for remote deployments
+- Field Operators discover the CA locally from the `vsodb-ssl` volume when running inside the Docker network (e.g., g8ep at `/vsodb/ca.crt`), or fetch it over HTTPS from `https://<endpoint>/ssl/ca.crt` as a fallback for remote deployments
 
 ### Auto-Generated Certificates (default)
 
@@ -133,7 +133,7 @@ GET /ssl/ca.crt   (HTTPS port 443)
 ← 503     {"error": "certificates not initialized"}  (external cert mode)
 ```
 
-VSOD and g8ee also access the CA via the `g8e-data-ssl` Docker volume, which is mounted read-only at `/vsodb/ssl` on both services. Field Operators use a local-first strategy — scanning well-known volume mount paths before falling back to `https://<endpoint>/ssl/ca.crt`. Inside the Docker network, the CA is discovered locally at `/vsodb/ca.crt` without any network fetch. See [architecture/security.md — CA Trust Bootstrap](../architecture/security.md#ca-trust-bootstrap-and-the-tls-kill-switch) for the full discovery sequence.
+VSOD and g8ee also access the CA via the `g8es-ssl` Docker volume, which is mounted read-only at `/vsodb/ssl` on both services. Field Operators use a local-first strategy — scanning well-known volume mount paths before falling back to `https://<endpoint>/ssl/ca.crt`. Inside the Docker network, the CA is discovered locally at `/vsodb/ca.crt` without any network fetch. See [architecture/security.md — CA Trust Bootstrap](../architecture/security.md#ca-trust-bootstrap-and-the-tls-kill-switch) for the full discovery sequence.
 
 For browser users, VSOD turns that same CA into a workstation trust flow:
 - `GET https://<host>` serves the public CA trust portal
@@ -150,7 +150,7 @@ vsodb:
   build:
     context: .
     dockerfile: ./components/vsodb/Dockerfile
-  container_name: g8e-data
+  container_name: g8es
   restart: unless-stopped
   volumes:
     - vsodb-data:/data
@@ -168,10 +168,10 @@ vsodb:
 ```
 
 **Volume layout:** Two separate named volumes:
-- `g8e-data-data` — SQLite DB only, mounted at `/data`. Wiped by `platform reset`.
-- `g8e-data-ssl` — TLS certs only, mounted at `/ssl`. **Never wiped** by `reset` or `wipe` — survives all lifecycle operations except `platform clean`.
+- `g8es-data` — SQLite DB only, mounted at `/data`. Wiped by `platform reset`.
+- `g8es-ssl` — TLS certs only, mounted at `/ssl`. **Never wiped** by `reset` or `wipe` — survives all lifecycle operations except `platform clean`.
 
-**Security:** The container runs as a non-root `g8e` user. VSODB has no external port bindings — it is only reachable within the internal Docker network by VSOD and G8EE. The `g8e-data-ssl` volume is mounted read-only at `/vsodb/ssl` on VSOD, g8ee, and g8e-pod so they can read the platform CA and server certificates without direct HTTP. VSOD is the only public-facing service: it converts the VSODB-generated certificates into the browser HTTPS endpoint and the HTTP certificate-trust bootstrap flow.
+**Security:** The container runs as a non-root `g8e` user. VSODB has no external port bindings — it is only reachable within the internal Docker network by VSOD and G8EE. The `g8es-ssl` volume is mounted read-only at `/vsodb/ssl` on VSOD, g8ee, and g8ep so they can read the platform CA and server certificates without direct HTTP. VSOD is the only public-facing service: it converts the VSODB-generated certificates into the browser HTTPS endpoint and the HTTP certificate-trust bootstrap flow.
 
 ## API Reference
 
@@ -193,7 +193,7 @@ Serves the PEM-encoded platform CA certificate. Available only when VSODB is man
 
 ### Operator Binary Distribution
 
-Operator binaries are stored in the VSODB blob store under the `operator-binary` namespace. All 3 architectures (amd64, arm64, 386) are cross-compiled and UPX-compressed at VSODB image build time and baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads them to the blob store automatically. The `./g8e operator build` and `./g8e operator build-all` commands in g8e-pod can override these by uploading fresh builds.
+Operator binaries are stored in the VSODB blob store under the `operator-binary` namespace. All 3 architectures (amd64, arm64, 386) are cross-compiled and UPX-compressed at VSODB image build time and baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads them to the blob store automatically. The `./g8e operator build` and `./g8e operator build-all` commands in g8ep can override these by uploading fresh builds.
 
 VSOD fetches binaries on demand from the blob store — no local disk cache, no filesystem serving.
 
@@ -331,10 +331,10 @@ All channel prefix constants are defined in `components/vsod/constants/channels.
 
 | Channel | Direction | Purpose |
 |---------|-----------|--------|
-| `auth.publish:{api_key_hash}` | VSA → VSOD | API key auth request |
-| `auth.publish:session:{session_hash}` | VSA → VSOD | WebSession auth request |
-| `auth.response:{api_key_hash}` | VSOD → VSA | API key auth response |
-| `auth.response:session:{hash}` | VSOD → VSA | WebSession auth response |
+| `auth.publish:{api_key_hash}` | g8eo → VSOD | API key auth request |
+| `auth.publish:session:{session_hash}` | g8eo → VSOD | WebSession auth request |
+| `auth.response:{api_key_hash}` | VSOD → g8eo | API key auth response |
+| `auth.response:session:{hash}` | VSOD → g8eo | WebSession auth response |
 | `cmd:{operator_id}:{operator_session_id}` | g8ee → Operator | Command dispatch |
 | `results:{operator_id}:{operator_session_id}` | Operator → g8ee | Command results |
 | `heartbeat:{operator_id}:{operator_session_id}` | Operator → g8ee | Health telemetry |
@@ -427,13 +427,13 @@ All HTTP clients share `VSODBHttpClient` (`vsodb_http_client.js`) as a base with
 
 ## SQLite Schema
 
-Single database at `/data/g8e.db`. Four tables: `documents`, `kv_store`, `sse_events`, and `blobs`. The canonical schema is `components/vsodb/schema.sql`, which is mirrored in `components/vsa/services/listen/listen_db.go`.
+Single database at `/data/g8e.db`. Four tables: `documents`, `kv_store`, `sse_events`, and `blobs`. The canonical schema is `components/vsodb/schema.sql`, which is mirrored in `components/g8eo/services/listen/listen_db.go`.
 
 For the full DDL with column definitions, indexes, upsert behavior, and SQLite PRAGMA configuration, see [architecture/storage.md — VSODB SQLite Schema](../architecture/storage.md#vsodb-sqlite-schema).
 
 ## Management Script
 
-`scripts/data/manage-vsodb.py` — Unified data management CLI. Dispatches to individual resource scripts in `scripts/data/`. Runs inside `g8e-pod` and communicates with VSODB directly via the HTTP API.
+`scripts/data/manage-vsodb.py` — Unified data management CLI. Dispatches to individual resource scripts in `scripts/data/`. Runs inside `g8ep` and communicates with VSODB directly via the HTTP API.
 
 The `store` subcommand provides read-only inspection of the document store and KV store. Other subcommands (`users`, `operators`, `settings`, `device-links`, `audit`) manage their respective resources via the VSOD internal API. See [architecture/scripts.md — Data Management](../architecture/scripts.md#data-management) for the full CLI reference.
 

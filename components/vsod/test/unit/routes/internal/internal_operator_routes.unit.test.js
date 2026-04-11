@@ -160,7 +160,7 @@ describe('Internal Operator Routes [UNIT]', () => {
             return layer.route.stack[layer.route.stack.length - 1].handle;
         };
 
-        it('should relaunch g8e-pod operator for user', async () => {
+        it('should relaunch g8ep operator for user', async () => {
             const req = createMockReq({ params: { userId: 'user_123' } });
             const res = createMockRes();
 

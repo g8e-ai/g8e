@@ -37,7 +37,7 @@ class PubSubWireEventType(str, Enum):
 PubSubMessageType = PubSubWireEventType
 
 class PubSubChannel(str, Enum):
-    VSA_RESULTS = "vsa_results"
+    G8EO_RESULTS = "g8eo_results"
     OPERATOR_HEARTBEATS = "operator_heartbeats"
     SSE_EVENTS = "sse_events"
     SYSTEM_EVENTS = "system_events"

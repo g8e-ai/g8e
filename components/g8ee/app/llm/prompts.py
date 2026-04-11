@@ -242,7 +242,7 @@ def build_modular_system_prompt(
             if ctx.operator_type:
                 if ctx.operator_type == OperatorType.CLOUD:
                     if ctx.cloud_subtype == CloudSubtype.G8E_POD:
-                        system_parts.append("Operator Type: g8e-pod Cloud Operator - Direct system access via G8E_POD")
+                        system_parts.append("Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD")
                     elif ctx.cloud_subtype:
                         system_parts.append(f"Operator Type: Cloud Operator for {ctx.cloud_subtype.upper()} - Least-privilege intent-based access")
                     else:

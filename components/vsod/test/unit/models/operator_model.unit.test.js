@@ -288,10 +288,10 @@ describe('HistoryEntry [UNIT - PURE LOGIC]', () => {
         const entry = HistoryEntry.parse({
             event_type: HistoryEventType.BOUND,
             summary: 'Operator bound',
-            actor: SourceComponent.VSA,
+            actor: SourceComponent.G8EO,
             details: { web_session_id: 'ws-123' },
         });
-        expect(entry.actor).toBe(SourceComponent.VSA);
+        expect(entry.actor).toBe(SourceComponent.G8EO);
         expect(entry.details).toEqual({ web_session_id: 'ws-123' });
     });
 
@@ -505,7 +505,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.operator_id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
-        expect(doc.component).toBe(SourceComponent.VSA);
+        expect(doc.component).toBe(SourceComponent.G8EO);
         expect(doc.name).toBe('Test Operator');
         expect(doc.system_info).toBe(systemInfo);
         expect(doc.system_fingerprint).toBe(systemInfo.system_fingerprint);

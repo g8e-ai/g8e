@@ -164,10 +164,10 @@ _read_env() {
 }
 
 _exec_in_pod() {
-    if docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
-        docker exec -i g8e-pod "$@"
+    if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
+        docker exec -i g8ep "$@"
     else
-        _err "Platform not running — g8e-pod is required (run ./g8e platform start)"
+        _err "Platform not running — g8ep is required (run ./g8e platform start)"
         exit 1
     fi
 }
@@ -570,18 +570,18 @@ _build_db_args() {
 _write_to_db() {
     _build_db_args
 
-    if ! docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
+    if ! docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
         _warn "Platform not running — DB write skipped (run ./g8e platform start)"
         return 1
     fi
 
-    if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
+    if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
         _ok "LLM settings written to DB (via VSOD)"
         return 0
     fi
 
     _info "VSOD unavailable — writing directly to VSODB"
-    if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
+    if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
         _ok "LLM settings written to DB (direct)"
         return 0
     fi

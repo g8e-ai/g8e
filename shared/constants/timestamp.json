@@ -1,5 +1,5 @@
 {
-  "_description": "Canonical timestamp format for all VSO platform components (g8ee, VSA, VSOD).",
+  "_description": "Canonical timestamp format for all VSO platform components (g8ee, g8eo, VSOD).",
 
   "format": "RFC3339Nano",
   "precision": "nanoseconds",
@@ -18,7 +18,7 @@
 
   "consumers": {
     "g8ee": "app/utils/timestamp.py — now_iso() emits RFC3339Nano (microsecond precision, always present when non-zero)",
-    "VSA": "services/sqliteutil/timestamp.go — TimestampFormat = time.RFC3339Nano, NowTimestamp() / FormatTimestamp()",
+    "g8eo": "services/sqliteutil/timestamp.go — TimestampFormat = time.RFC3339Nano, NowTimestamp() / FormatTimestamp()",
     "VSOD": "utils/timestamp.js — nowISOString() emits RFC3339Nano (millisecond precision via Date)"
   }
 }

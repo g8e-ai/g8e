@@ -138,7 +138,7 @@ describe('Audit Routes [UNIT]', () => {
         });
 
         it('should handle errors from internal services', async () => {
-            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('VSA Down'));
+            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('g8eo Down'));
 
             const req = createMockReq();
             const res = createMockRes();
@@ -148,7 +148,7 @@ describe('Audit Routes [UNIT]', () => {
 
             expect(next).toHaveBeenCalledWith(expect.any(Error));
             const error = next.mock.calls[0][0];
-            expect(error.message).toBe('VSA Down');
+            expect(error.message).toBe('g8eo Down');
         });
     });
 

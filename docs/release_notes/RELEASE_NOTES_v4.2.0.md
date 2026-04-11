@@ -17,7 +17,7 @@ Removed the `EventSource` abstraction entirely from the platform. All event rout
 
 Redesigned how operator binaries are distributed across the platform. Binaries are now cross-compiled for all three architectures (amd64, arm64, 386) with UPX compression at VSODB image build time and stored in the VSODB blob store.
 
-- g8e-pod fetches the operator binary from the blob store on startup via `fetch-key-and-run.sh`
+- g8ep fetches the operator binary from the blob store on startup via `fetch-key-and-run.sh`
 - Retry logic with exponential backoff for transient VSODB unavailability
 - Architecture auto-detection for correct binary selection
 - Idempotent blob store upload on every VSODB container start
@@ -49,7 +49,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 - **Text completion** -- Fixed frontend handling of completed text events
 - **VSOD/VSODB client** -- Fixed client communication and alignment issues
 - **Initialization handlers** -- Fixed service initialization ordering bugs
-- **g8e-pod CA certificate** -- Fixed chicken-and-egg TLS problem; operator now discovers CA cert from local mount instead of network fetch
+- **g8ep CA certificate** -- Fixed chicken-and-egg TLS problem; operator now discovers CA cert from local mount instead of network fetch
 - **Logger** -- Fixed Date objects rendering as `{}` in log output; `redactPii` now skips non-plain objects
 - **Duplicate API key issuance** -- Eliminated double key issuance during operator slot initialization
 - **Redundant KV lookup** -- Removed dead per-event operator resolution from SSE route
@@ -68,7 +68,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 
 - VSOD test suite restructured and expanded
 - g8ee integration test suite expanded (SSE error paths, retry loop coverage)
-- VSA test fixes and listen mode improvements
+- g8eo test fixes and listen mode improvements
 - Full documentation audit with corrections across security, architecture, and component docs
 
 ## Component Summary
@@ -77,9 +77,9 @@ The operator binary now reports the correct platform version instead of `dev`. V
 |-----------|---------|
 | **g8ee** | 304 files, dual model selection, EventType cleanup, integration tests |
 | **VSOD** | 170 files, EventSource elimination, SSE fixes, test restructuring |
-| **VSA** | 31 files, test fixes, CA cert path discovery |
+| **g8eo** | 31 files, test fixes, CA cert path discovery |
 | **VSODB** | Multi-arch cross-compile, blob store binary upload on startup |
-| **g8e-pod** | Binary fetch from blob store, retry logic, CA cert fix |
+| **g8ep** | Binary fetch from blob store, retry logic, CA cert fix |
 
 ## Quick Start
 

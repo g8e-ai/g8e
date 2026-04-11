@@ -42,7 +42,7 @@ const TEST_TEMPLATE = `<div class="opdeploy">
     </div>
     <div class="opdeploy__footer">
         <span class="material-symbols-outlined opdeploy__footer-icon">info</span>
-        <span class="opdeploy__footer-text">Your g8e-pod operator is already authenticated.</span>
+        <span class="opdeploy__footer-text">Your g8ep operator is already authenticated.</span>
     </div>
 </div>`;
 

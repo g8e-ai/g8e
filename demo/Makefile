@@ -87,19 +87,19 @@ up: build
 	@echo "========================================"
 
 setup-streaming:
-	@echo "Configuring g8e-pod for operator streaming..."
-	@docker exec g8e-pod mkdir -p /home/g8e/.ssh
-	@cat ./.demo-key | docker exec -i g8e-pod bash -c "cat > /home/g8e/.ssh/id_ed25519"
+	@echo "Configuring g8ep for operator streaming..."
+	@docker exec g8ep mkdir -p /home/g8e/.ssh
+	@cat ./.demo-key | docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/id_ed25519"
 	@echo "Host web-node-* node-*" > ./.ssh-config
 	@echo "    User appuser" >> ./.ssh-config
 	@echo "    IdentityFile /home/g8e/.ssh/id_ed25519" >> ./.ssh-config
 	@echo "    StrictHostKeyChecking accept-new" >> ./.ssh-config
-	@cat ./.ssh-config | docker exec -i g8e-pod bash -c "cat > /home/g8e/.ssh/config"
-	@docker exec g8e-pod chmod 700 /home/g8e/.ssh
-	@docker exec g8e-pod chmod 600 /home/g8e/.ssh/id_ed25519
-	@docker exec g8e-pod chmod 600 /home/g8e/.ssh/config
+	@cat ./.ssh-config | docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/config"
+	@docker exec g8ep chmod 700 /home/g8e/.ssh
+	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519
+	@docker exec g8ep chmod 600 /home/g8e/.ssh/config
 	@rm ./.ssh-config
-	@cat ./hosts | docker exec -i g8e-pod bash -c "cat > /home/g8e/demo-hosts"
+	@cat ./hosts | docker exec -i g8ep bash -c "cat > /home/g8e/demo-hosts"
 	@echo "  Done."
 
 down:
@@ -177,15 +177,15 @@ stream:
 	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make stream DEVICE_TOKEN=dlk_xxx" && exit 1)
 	@test -f ./.demo-key || (echo "Run 'make ssh-key' first to extract the SSH key" && exit 1)
 	@echo "Preparing SSH streaming..."
-	@docker exec g8e-pod mkdir -p /home/g8e/.ssh
-	@docker cp ./.demo-key g8e-pod:/home/g8e/.ssh/id_ed25519
-	@docker exec g8e-pod chmod 600 /home/g8e/.ssh/id_ed25519
+	@docker exec g8ep mkdir -p /home/g8e/.ssh
+	@docker cp ./.demo-key g8ep:/home/g8e/.ssh/id_ed25519
+	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519
 	@echo "SSH streaming operators to all 10 nodes..."
-	@docker exec g8e-pod /home/g8e/g8e.operator stream \
+	@docker exec g8ep /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
 		--device-token "$(DEVICE_TOKEN)" \
 		--ssh-config /dev/null \
-		--binary-dir /app/components/vsa/build \
+		--binary-dir /app/components/g8eo/build \
 		appuser@web-node-01 appuser@web-node-02 appuser@web-node-03 \
 		appuser@web-node-04 appuser@web-node-05 appuser@web-node-06 \
 		appuser@web-node-07 appuser@web-node-08 appuser@web-node-09 \

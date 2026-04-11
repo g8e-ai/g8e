@@ -14,7 +14,7 @@
 """Typed fake for PubSubServiceProtocol."""
 
 from typing import Any, Callable, Coroutine
-from app.models.pubsub_messages import VSOMessage, VSAResultEnvelope
+from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
 from app.services.protocols import PubSubServiceProtocol
 
 
@@ -34,13 +34,13 @@ class FakePubSubService:
         self.deregistered_sessions: list[tuple[str, str]] = []
         self.published_commands: list[VSOMessage] = []
         self._pubsub_client: object
-        self._result_handlers: list[Callable[[VSAResultEnvelope], Coroutine[object, object, None]]] = []
+        self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
 
-    def subscribe_results(self, handler: Callable[[VSAResultEnvelope], Coroutine[object, object, None]]) -> None:
+    def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
         if handler not in self._result_handlers:
             self._result_handlers.append(handler)
 
-    def set_result_handler(self, handler: Callable[[VSAResultEnvelope], Coroutine[object, object, None]]) -> None:
+    def set_result_handler(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
         self._result_handlers = [handler]
 
     @property

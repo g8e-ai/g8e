@@ -86,7 +86,7 @@ class TestOpenAICompatibleProviderSSL:
         assert is_internal_endpoint("https://localhost:11434/v1") is True
         assert is_internal_endpoint("https://127.0.0.1:11434/v1") is True
         assert is_internal_endpoint("https://vsod:3000/api") is True
-        assert is_internal_endpoint("https://vsa:9000/api") is True
+        assert is_internal_endpoint("https://g8eo:9000/api") is True
         assert is_internal_endpoint("https://my-server.local:8080") is True
         assert is_internal_endpoint("https://api.openai.com/v1") is False
         assert is_internal_endpoint("https://generativelanguage.googleapis.com") is False

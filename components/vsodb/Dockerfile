@@ -1,4 +1,4 @@
-# g8e-data (VSODB) - Platform persistence + pub/sub broker
+# g8es (VSODB) - Platform persistence + pub/sub broker
 # Runs the Operator binary in --listen mode. That's it.
 # Build context is the repo root (docker-compose.yml context: .)
 #
@@ -10,15 +10,15 @@
 
 ARG GO_VERSION=1.24.1
 
-FROM golang:${GO_VERSION}-alpine3.21 AS g8e-data-builder
+FROM golang:${GO_VERSION}-alpine3.21 AS g8es-builder
 
 RUN apk add --no-cache upx
 
 WORKDIR /build
 
-COPY components/vsa/go.mod components/vsa/go.sum ./
-COPY components/vsa/vendor/ ./vendor/
-COPY components/vsa/ ./
+COPY components/g8eo/go.mod components/g8eo/go.sum ./
+COPY components/g8eo/vendor/ ./vendor/
+COPY components/g8eo/ ./
 
 ARG VERSION=v0.0.0
 
@@ -43,8 +43,8 @@ RUN set -ex; \
     && addgroup -g 1001 g8e \
     && adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 
-COPY --from=g8e-data-builder /out/linux-amd64/g8e.operator /usr/local/bin/g8e.operator
-COPY --from=g8e-data-builder /out/ /opt/operator-binaries/
+COPY --from=g8es-builder /out/linux-amd64/g8e.operator /usr/local/bin/g8e.operator
+COPY --from=g8es-builder /out/ /opt/operator-binaries/
 
 RUN chmod +x /usr/local/bin/g8e.operator \
     && chmod -R +r /opt/operator-binaries/ \

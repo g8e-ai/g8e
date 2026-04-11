@@ -157,7 +157,7 @@ describe('OperatorSlotService', () => {
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
         });
 
-        it('should assign G8E_POD subtype to the first created slot when no g8e-pod exists', async () => {
+        it('should assign G8E_POD subtype to the first created slot when no g8ep exists', async () => {
             mocks.operatorDataService.queryOperators.mockResolvedValueOnce([]);
 
             const calls = [];

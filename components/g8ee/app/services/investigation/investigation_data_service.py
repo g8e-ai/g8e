@@ -275,7 +275,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         return await self.add_history_entry(
             investigation_id=investigation_id,
             event_type=EventType.OPERATOR_COMMAND_EXECUTION,
-            actor=ComponentName.VSA,
+            actor=ComponentName.G8EO,
             summary=summary,
             details=details,
         )
@@ -302,7 +302,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         return await self.add_history_entry(
             investigation_id=investigation_id,
             event_type=event_type,
-            actor=ComponentName.VSA,
+            actor=ComponentName.G8EO,
             summary=summary,
             details=details,
         )

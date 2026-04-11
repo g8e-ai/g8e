@@ -13,7 +13,7 @@
 
 """Operator PubSub Service
 
-Owns all VSA pub/sub lifecycle state:
+Owns all g8eo pub/sub lifecycle state:
   - pubsub_client reference
   - _pubsub_ready flag
   - _active_operator_sessions_set
@@ -48,8 +48,8 @@ from app.models.pubsub_messages import (
     PortCheckResultPayload,
     RestoreFileResultPayload,
     ShutdownAckPayload,
-    VSAResultEnvelope,
-    VSAResultPayload,
+    G8eoResultEnvelope,
+    G8eoResultPayload,
     VSOMessage,
 )
 from app.services.mcp.adapter import parse_tool_call_result
@@ -86,7 +86,7 @@ _PAYLOAD_MODELS = {
 }
 
 
-def _parse_vsa_payload(event_type_raw: object, payload_raw: dict[str, object]) -> VSAResultPayload:
+def _parse_g8eo_payload(event_type_raw: object, payload_raw: dict[str, object]) -> G8eoResultPayload:
     event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw
 
     if event_type == EventType.OPERATOR_SHUTDOWN_ACKNOWLEDGED:
@@ -138,7 +138,7 @@ def _parse_vsa_payload(event_type_raw: object, payload_raw: dict[str, object]) -
 
 
 class OperatorPubSubService:
-    """Owns all VSA pub/sub lifecycle state and result dispatch.
+    """Owns all g8eo pub/sub lifecycle state and result dispatch.
 
     Consumers call wait_for_result(execution_id, timeout) instead of spinning
     on asyncio.sleep(). Before publishing a command, call allocate_event(id).
@@ -153,16 +153,16 @@ class OperatorPubSubService:
         self.pubsub_client: PubSubClient
         self._pubsub_ready: bool = False
         self._active_operator_sessions_set: set[tuple[str, str]] = set()
-        self._result_handlers: list[Callable[[VSAResultEnvelope], Coroutine[object, object, None]]] = []
+        self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
 
-    def subscribe_results(self, handler: Callable[[VSAResultEnvelope], Coroutine[object, object, None]]) -> None:
-        """Register a callback for inbound VSA result messages."""
+    def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
+        """Register a callback for inbound g8eo result messages."""
         if handler not in self._result_handlers:
             self._result_handlers.append(handler)
 
     def set_pubsub_client(self, client: PubSubClient) -> None:
         if not client:
-            raise ValidationError("client is required for VSA command communication", component="g8ee")
+            raise ValidationError("client is required for g8eo command communication", component="g8ee")
         self.pubsub_client = client
         logger.info("[PUBSUB] Pub/sub client configured")
 
@@ -281,8 +281,8 @@ class OperatorPubSubService:
             for id_field in ("case_id", "investigation_id", "task_id"):
                 if not raw.get(id_field) and payload_raw.get(id_field):
                     raw[id_field] = payload_raw[id_field]
-            payload = _parse_vsa_payload(event_type_raw, payload_raw)
-            envelope = VSAResultEnvelope.model_validate({
+            payload = _parse_g8eo_payload(event_type_raw, payload_raw)
+            envelope = G8eoResultEnvelope.model_validate({
                 **raw,
                 "operator_id": operator_id,
                 "operator_session_id": operator_session_id,

@@ -42,7 +42,7 @@ docs/
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
 ├── architecture/         # Cross-component internals: storage, security, AI agents
-├── components/           # Per-component reference: VSA, g8ee, VSOD, VSODB, g8e-pod
+├── components/           # Per-component reference: g8eo, g8ee, VSOD, VSODB, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
 
@@ -51,26 +51,26 @@ docs/
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
 - Every new doc file must be added to `docs/index.md`.
-- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, g8e-pod — belongs exclusively in `testing.md`. Never duplicate these across the two files.
+- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, g8ep — belongs exclusively in `testing.md`. Never duplicate these across the two files.
 
 **Authoritative ownership — facts with a single home:**
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/vsodb.md` | `vsod.md`, `g8ee.md`, `vsa.md`, `testing.md` |
+| Pub/sub channel names and wire format | `docs/components/vsodb.md` | `vsod.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
 | KV key namespace and patterns | `docs/components/vsodb.md` | `vsod.md`, `g8ee.md` |
 | `VSOHttpContext` internal HTTP header full listing | `docs/components/vsod.md` | `g8ee.md` cross-references; do not restate in other component docs |
 | `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `vsodb.md`, `g8ee.md`, `vsod.md` |
-| Heartbeat end-to-end flow | `docs/components/vsod.md` | `vsa.md`, `g8ee.md` |
+| Heartbeat end-to-end flow | `docs/components/vsod.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
 | Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
-| Testing principles, g8e-pod environment, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
+| Testing principles, g8ep environment, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
 | Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
 | AI agent cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
-| g8e-pod container definition, volume mounts, SSH deployment | `docs/components/g8e-pod.md` | `docs/testing.md` for how to run tests |
-| Coverage goals per VSA package | `docs/components/vsa.md` | do not restate in `testing.md` |
+| g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | `docs/testing.md` for how to run tests |
+| Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 
 ---
 
@@ -100,12 +100,12 @@ One or two sentence summary of what this document covers and who it is for.
 
 ## Writing Style
 
-- Write in the present tense — "VSA sends a heartbeat every 30 seconds", not "VSA will send".
+- Write in the present tense — "g8eo sends a heartbeat every 30 seconds", not "g8eo will send".
 - Use active voice — "VSOD validates the session", not "the session is validated by VSOD".
 - Be direct and specific — avoid vague terms like "handles", "manages", "deals with".
 - No filler phrases — "Note that", "Please be aware", "It is important to".
 - No emojis anywhere in documentation.
-- Refer to components by their canonical names: VSA, g8ee, VSOD, VSODB.
+- Refer to components by their canonical names: g8eo, g8ee, VSOD, VSODB.
 
 ---
 

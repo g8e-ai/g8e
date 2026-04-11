@@ -167,7 +167,7 @@ def test_build_modular_system_prompt_g8e_pod_cloud_operator(mock_loader):
         investigation=None  # type: ignore[arg-type]
     )
 
-    assert "Operator Type: g8e-pod Cloud Operator - Direct system access via G8E_POD" in prompt
+    assert "Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD" in prompt
     assert "Least-privilege" not in prompt
 
 

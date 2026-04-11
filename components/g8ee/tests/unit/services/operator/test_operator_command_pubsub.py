@@ -324,12 +324,12 @@ class TestHandlePubSubResultMessage:
         )
 
 
-class TestParseVsaPayloadMCPReconstruction:
-    """Test MCP payload reconstruction in _parse_vsa_payload."""
+class TestParseG8eoPayloadMCPReconstruction:
+    """Test MCP payload reconstruction in _parse_g8eo_payload."""
 
     async def test_reconstructs_port_check_payload_from_mcp_metadata(self):
         """Test reconstructs PortCheckResultPayload from MCP metadata."""
-        from app.services.operator.pubsub_service import _parse_vsa_payload
+        from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import PortCheckResultPayload
 
         # MCP result with structured metadata (Smell #1 Fix pattern)
@@ -353,7 +353,7 @@ class TestParseVsaPayloadMCPReconstruction:
             }
         }
 
-        result = _parse_vsa_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
         assert isinstance(result, PortCheckResultPayload)
         assert result.execution_id == "exec-123"
         assert result.host == "192.168.1.1"
@@ -361,7 +361,7 @@ class TestParseVsaPayloadMCPReconstruction:
 
     async def test_reconstructs_fs_list_payload_from_mcp_metadata(self):
         """Test reconstructs FsListResultPayload from MCP metadata."""
-        from app.services.operator.pubsub_service import _parse_vsa_payload
+        from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import FsListResultPayload
 
         original_payload = {
@@ -393,7 +393,7 @@ class TestParseVsaPayloadMCPReconstruction:
             }
         }
 
-        result = _parse_vsa_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
         assert isinstance(result, FsListResultPayload)
         assert len(result.entries) == 2
         assert result.entries[0].name == "file1.txt"
@@ -401,7 +401,7 @@ class TestParseVsaPayloadMCPReconstruction:
 
     async def test_falls_back_to_execution_results_on_missing_metadata(self):
         """Test falls back to ExecutionResultsPayload when metadata is missing."""
-        from app.services.operator.pubsub_service import _parse_vsa_payload
+        from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import ExecutionResultsPayload
 
         # MCP result with non-JSON text content and NO metadata
@@ -413,13 +413,13 @@ class TestParseVsaPayloadMCPReconstruction:
             }
         }
 
-        result = _parse_vsa_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
         assert isinstance(result, ExecutionResultsPayload)
         assert result.stdout == "Plain text output"
 
     async def test_handles_mcp_error_with_stderr(self):
         """Test MCP errors are routed to stderr in ExecutionResultsPayload."""
-        from app.services.operator.pubsub_service import _parse_vsa_payload
+        from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import ExecutionResultsPayload
 
         payload_raw = {
@@ -430,7 +430,7 @@ class TestParseVsaPayloadMCPReconstruction:
             }
         }
 
-        result = _parse_vsa_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
         assert isinstance(result, ExecutionResultsPayload)
         assert result.status == ExecutionStatus.FAILED
         assert "Tool execution failed" in result.stderr

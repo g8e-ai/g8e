@@ -113,7 +113,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             await service.launchG8ENodeOperator('sk-test-key');
 
             expect(fetch).toHaveBeenCalledWith(
-                'http://g8e-pod:9999/RPC2',
+                'http://g8ep:9999/RPC2',
                 expect.any(Object)
             );
         });
@@ -182,13 +182,13 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             );
         });
 
-        it('returns failure when no g8e-pod slot found', async () => {
+        it('returns failure when no g8ep slot found', async () => {
             operatorService.queryOperators.mockResolvedValue([]);
 
             const result = await service.relaunchG8ENodeOperatorForUser('user_123');
 
             expect(result.success).toBe(false);
-            expect(result.error).toMatch(/no g8e-pod operator slot/i);
+            expect(result.error).toMatch(/no g8ep operator slot/i);
         });
 
         it('returns failure when reset has no API key', async () => {
@@ -237,8 +237,8 @@ describe('G8ENodeOperatorService [UNIT]', () => {
         });
     });
 
-    describe('g8e-pod script validation', () => {
-        const scriptsDir = path.resolve('/app/components/g8e-pod/scripts');
+    describe('g8ep script validation', () => {
+        const scriptsDir = path.resolve('/app/components/g8ep/scripts');
         const vsodbUrlPattern = /https:\/\/vsodb(?::(\d+))?/g;
 
         function extractVsodbUrls(filePath) {

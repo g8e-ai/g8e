@@ -16,7 +16,7 @@ Sentinel Scrubber for g8ee - Data Sovereignty for User Chat Messages.
 
 This module scrubs sensitive data from user chat messages before they are sent
 to the LLM provider. It implements the same zero-trust principles as the
-VSA Sentinel (Go implementation) but for the g8ee Python side.
+g8eo Sentinel (Go implementation) but for the g8ee Python side.
 
 Sentinel scrubs ONLY actual sensitive data:
   - Credentials (API keys, tokens, passwords, private keys)

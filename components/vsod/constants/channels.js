@@ -16,13 +16,13 @@ import { _CHANNELS, _PUBSUB } from './shared.js';
 /**
  * Pub/Sub Constants
  * Canonical values loaded from shared/constants/channels.json and shared/constants/pubsub.json.
- * These files are the single source of truth shared across g8ee, VSA, and VSOD.
+ * These files are the single source of truth shared across g8ee, g8eo, and VSOD.
  *
  * Auth channels:
- *   auth.publish:{api_key_hash}               - VSA → VSOD API key auth request
- *   auth.publish:session:{session_hash}       - VSA → VSOD session auth request
- *   auth.response:{api_key_hash}              - VSOD → VSA API key auth response
- *   auth.response:session:{hash}              - VSOD → VSA session auth response
+ *   auth.publish:{api_key_hash}               - g8eo → VSOD API key auth request
+ *   auth.publish:session:{session_hash}       - g8eo → VSOD session auth request
+ *   auth.response:{api_key_hash}              - VSOD → g8eo API key auth response
+ *   auth.response:session:{hash}              - VSOD → g8eo session auth response
  *
  * Operator channels:
  *   cmd:{operator_id}:{operator_session_id}       - g8ee → Operator command dispatch

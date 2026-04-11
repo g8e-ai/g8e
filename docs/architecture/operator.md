@@ -105,7 +105,7 @@ The primary agent mode. The Operator authenticates with the platform over HTTP, 
 1. Read environment and CLI flags
 2. Resolve the working directory (`--working-dir` or process cwd at launch)
 3. Load the platform CA certificate and install it as the trusted root for all subsequent TLS connections. The binary uses a **local-first** strategy — it checks well-known volume mount paths before attempting any network fetch:
-   1. If `--ca-url` is **not** set, scan these paths in order: `/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`. The first path that exists and contains a valid PEM certificate is used immediately — no network request is made. Inside the Docker network (e.g., the g8e-pod container), the `vsodb-ssl` volume is mounted at `/vsodb`, so the CA is discovered locally at `/vsodb/ca.crt`.
+   1. If `--ca-url` is **not** set, scan these paths in order: `/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`. The first path that exists and contains a valid PEM certificate is used immediately — no network request is made. Inside the Docker network (e.g., the g8ep container), the `vsodb-ssl` volume is mounted at `/vsodb`, so the CA is discovered locally at `/vsodb/ca.crt`.
    2. If no local file is found, fall back to an HTTPS fetch from `https://{endpoint}/ssl/ca.crt`. This uses the OS system trust store (Go's default `http.Client`) with a 15-second timeout. The response body is capped at 64 KB and validated as PEM before being accepted.
    3. If `--ca-url` **is** set, skip local discovery entirely and fetch from the provided URL.
    4. If all paths fail (no local file, network unreachable, invalid PEM, non-200 response), the operator exits immediately with `ExitConfigError`.
@@ -240,7 +240,7 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--key` | | API key for remote operators |
 | `--no-git` | | Disable ledger on remote operators |
 | `--ssh-config` | `~/.ssh/config` | SSH config file path |
-| `--binary-dir` | `/app/components/vsa/build` | Directory containing arch-specific operator builds |
+| `--binary-dir` | `/app/components/g8eo/build` | Directory containing arch-specific operator builds |
 
 ---
 
