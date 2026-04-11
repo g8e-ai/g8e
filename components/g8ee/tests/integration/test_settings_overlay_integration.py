@@ -35,7 +35,12 @@ class TestG8eeSettingsOverlayIntegration:
         return SettingsService(cache_aside_service=cache_service)
 
     async def test_get_platform_settings_loads_from_g8es(self, settings_service, cache_service):
-        """Verify platform settings are loaded from the correct g8es collection/ID."""
+        """Verify platform settings are loaded from the correct g8es collection/ID.
+        
+        G8eePlatformSettings no longer carries LLM config. LLM settings are
+        accessed via get_user_settings() which falls back to platform data
+        when no user document exists.
+        """
         platform_data = {
             "settings": {
                 "llm_provider": "gemini",
@@ -48,11 +53,8 @@ class TestG8eeSettingsOverlayIntegration:
         cache_service.get_document.return_value = platform_data
 
         settings = await settings_service.get_platform_settings()
-        
-        assert settings.llm.provider == "gemini"
-        assert settings.llm.primary_model == GEMINI_3_1_PRO_PREVIEW
-        assert settings.llm.gemini_api_key == "platform-key"
-        
+
+        assert isinstance(settings, G8eePlatformSettings)
         cache_service.get_document.assert_called_once_with(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC
