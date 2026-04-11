@@ -39,7 +39,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 ./g8e platform stop                     # Stop all containers (data preserved)
 ./g8e platform restart                  # Restart all containers (no rebuild)
 ./g8e platform rebuild                  # No-cache rebuild of all services + restart
-./g8e platform rebuild vsod             # Rebuild a single service: vsodb | vse | vsod | g8e-pod
+./g8e platform rebuild vsod             # Rebuild a single service: vsodb | g8ee | vsod | g8e-pod
 ./g8e platform wipe                     # Wipe all data volumes and restart fresh
 ./g8e platform clean                    # Full Docker cleanup: containers, images, volumes, networks (this project only)
 ./g8e platform logs [service]           # Tail service logs
@@ -53,7 +53,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 | `start` | `scripts/core/build.sh up` | |
 | `stop` | `scripts/core/build.sh down` | |
 | `restart` | `scripts/core/build.sh restart` | |
-| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`, `drop`. Accepts optional component names: `vsodb vse vsod g8e-pod` |
+| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`, `drop`. Accepts optional component names: `vsodb g8ee vsod g8e-pod` |
 | `reset` | `scripts/core/build.sh reset` | Wipe ALL data volumes and rebuild from scratch (destructive) |
 | `wipe` | `scripts/core/build.sh wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
 | `clean` | `scripts/core/build.sh clean` | Remove all managed resources scoped to this project |
@@ -85,13 +85,13 @@ Runs tests for platform components. Runs inside g8e-pod.
 
 ```bash
 ./g8e test                          # Run all component test suites
-./g8e test vse                      # AI engine (Python/pytest)
+./g8e test g8ee                      # AI engine (Python/pytest)
 ./g8e test vsod                     # Dashboard (Node/Vitest)
 ./g8e test vsa                      # Operator (Go)
 ./g8e test security                 # Security scanning
-./g8e test vse --coverage           # Generate coverage report
-./g8e test vse --llm openai         # Run with a specific LLM provider
-./g8e test vse --m <model>          # Override the LLM model for the run
+./g8e test g8ee --coverage           # Generate coverage report
+./g8e test g8ee --llm openai         # Run with a specific LLM provider
+./g8e test g8ee --m <model>          # Override the LLM model for the run
 ./g8e test vsa -- TestFoo           # Pass extra args to the underlying test runner
 ```
 
@@ -179,10 +179,10 @@ Builds and runs the local VSO environment. Manages Docker Compose services in de
 | Command | Description |
 |---------|-------------|
 | `status` | Show container status and component versions |
-| `up [component...]` | Start managed services without building. Default: `vsodb vse vsod g8e-pod`. Auto-builds the operator binary inside g8e-pod if absent. |
-| `down` | Stop managed containers (`vsodb`, `vse`, `vsod`, `g8e-pod`) |
-| `rebuild [component...]` | No-cache rebuild + restart. Default: `vsodb vse vsod` |
-| `wipe` | Remove data volumes for `vsodb`, `vse`, `vsod`, `g8e-pod` and restart. Auto-builds operator binary after restart. |
+| `up [component...]` | Start managed services without building. Default: `vsodb g8ee vsod g8e-pod`. Auto-builds the operator binary inside g8e-pod if absent. |
+| `down` | Stop managed containers (`vsodb`, `g8ee`, `vsod`, `g8e-pod`) |
+| `rebuild [component...]` | No-cache rebuild + restart. Default: `vsodb g8ee vsod` |
+| `wipe` | Remove data volumes for `vsodb`, `g8ee`, `vsod`, `g8e-pod` and restart. Auto-builds operator binary after restart. |
 | `clean` | Remove all managed Docker resources (containers, images, volumes) |
 
 ---
@@ -203,7 +203,7 @@ Runs tests for VSO components inside the `g8e-pod` Docker container. Infrastruct
 
 | Component | Test Framework | What It Tests |
 |-----------|---------------|--------------|
-| `vse` | pytest | VSE Python service |
+| `g8ee` | pytest | g8ee Python service |
 | `vsod` | vitest / npm test | VSOD Node.js service |
 | `vsa` | `gotestsum` | VSA Go binary |
 | `security` | `security-validate.sh` | Operator binary security |

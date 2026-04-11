@@ -52,9 +52,9 @@ async function getEnforcedPaths() {
     const { InternalApiPaths } = await import('../../../constants/api_paths.js');
     const enforced = new Map(); // path -> { category, key }
 
-    // Enforce vse paths
-    for (const [key, pathValue] of Object.entries(InternalApiPaths.vse)) {
-        enforced.set(pathValue, { category: 'vse', key });
+    // Enforce g8ee paths
+    for (const [key, pathValue] of Object.entries(InternalApiPaths.g8ee)) {
+        enforced.set(pathValue, { category: 'g8ee', key });
     }
 
     // Enforce vsod internal paths

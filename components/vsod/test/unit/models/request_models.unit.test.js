@@ -80,7 +80,7 @@ describe('VSOHttpContext [UNIT - PURE LOGIC]', () => {
             task_id: 'task-ghi',
             bound_operators: [boundOp],
             execution_id: 'exec-jkl',
-            source_component: 'vse',
+            source_component: 'g8ee',
         });
         expect(ctx.organization_id).toBe('org-789');
         expect(ctx.case_id).toBe('case-abc');
@@ -88,7 +88,7 @@ describe('VSOHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.task_id).toBe('task-ghi');
         expect(ctx.bound_operators).toEqual([boundOp]);
         expect(ctx.execution_id).toBe('exec-jkl');
-        expect(ctx.source_component).toBe('vse');
+        expect(ctx.source_component).toBe('g8ee');
     });
 
     it('converts empty string case_id to null for new case signal', () => {

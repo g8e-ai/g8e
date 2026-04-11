@@ -59,7 +59,7 @@ type CallToolResult struct {
 }
 
 // MCPResultMetadata carries g8e-internal context through the MCP wire envelope.
-// VSE uses these fields in _parse_vsa_payload to reconstruct the original typed payload.
+// g8ee uses these fields in _parse_vsa_payload to reconstruct the original typed payload.
 type MCPResultMetadata struct {
 	OriginalPayload interface{} `json:"original_payload"`
 	EventType       string      `json:"event_type"`

@@ -176,10 +176,10 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
         });
 
-        it('should replace VSE operator payload with full operator list for OPERATOR_PANEL_LIST_UPDATED', async () => {
+        it('should replace g8ee operator payload with full operator list for OPERATOR_PANEL_LIST_UPDATED', async () => {
             const event = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operator_id: 'vse-operator-123'
+                operator_id: 'g8ee-operator-123'
             };
             const mockOperatorList = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
@@ -225,7 +225,7 @@ describe('Internal SSE Routes [UNIT]', () => {
         it('should fallback to original event if operator list fetch fails', async () => {
             const event = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operator_id: 'vse-operator-123'
+                operator_id: 'g8ee-operator-123'
             };
             const req = createMockReq({
                 body: {

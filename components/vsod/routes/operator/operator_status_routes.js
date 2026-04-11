@@ -108,16 +108,16 @@ export function createOperatorStatusRouter({
                 }).forClient());
             }
 
-            logger.info('[OPERATOR-STOP] Relaying stop command to VSE', {
+            logger.info('[OPERATOR-STOP] Relaying stop command to g8ee', {
                 operator_id: operatorId,
                 user_id: userId,
                 operator_session_id: operatorSessionId.substring(0, 12) + '...'
             });
 
             try {
-                await operatorService.relayStopCommandToVse(req.vsoContext);
+                await operatorService.relayStopCommandToG8ee(req.vsoContext);
 
-                logger.info('[OPERATOR-STOP] Stop command relayed successfully to VSE', {
+                logger.info('[OPERATOR-STOP] Stop command relayed successfully to g8ee', {
                     operator_id: operatorId
                 });
 
@@ -126,12 +126,12 @@ export function createOperatorStatusRouter({
                     message: 'Stop command relayed to orchestrator'
                 });
 
-            } catch (vseError) {
-                logger.error('[OPERATOR-STOP] Failed to relay stop command to VSE', {
-                    error: vseError.message,
+            } catch (g8eeError) {
+                logger.error('[OPERATOR-STOP] Failed to relay stop command to g8ee', {
+                    error: g8eeError.message,
                     operator_id: operatorId
                 });
-                throw new Error(`Failed to relay stop command: ${vseError.message}`);
+                throw new Error(`Failed to relay stop command: ${g8eeError.message}`);
             }
 
         } catch (error) {

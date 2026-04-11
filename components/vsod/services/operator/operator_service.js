@@ -34,7 +34,7 @@ import { OperatorDataService } from './operator_data_service.js';
 /**
  * OperatorService (Domain Layer)
  * Orchestrates operator-related operations, delegating CRUD to OperatorDataService.
- * Handles relays to VSE and broadcasts to the UI.
+ * Handles relays to g8ee and broadcasts to the UI.
  */
 class OperatorService {
     /**
@@ -142,26 +142,26 @@ class OperatorService {
         return OperatorWithSessionContext.create(operator, operatorSession, webSession);
     }
 
-    // --- Relays (Authority is VSE) ---
+    // --- Relays (Authority is g8ee) ---
 
-    async relayStopCommandToVse(vsoContext) {
-        return this.relay.relayStopCommandToVse(vsoContext);
+    async relayStopCommandToG8ee(vsoContext) {
+        return this.relay.relayStopCommandToG8ee(vsoContext);
     }
 
-    async deregisterOperatorSessionInVse(vsoContext) {
-        return this.relay.deregisterOperatorSessionInVse(vsoContext);
+    async deregisterOperatorSessionInG8ee(vsoContext) {
+        return this.relay.deregisterOperatorSessionInG8ee(vsoContext);
     }
 
-    async relayDirectCommandToVse(commandData, vsoContext) {
-        return this.relay.relayDirectCommandToVse(commandData, vsoContext);
+    async relayDirectCommandToG8ee(commandData, vsoContext) {
+        return this.relay.relayDirectCommandToG8ee(commandData, vsoContext);
     }
 
-    async relayRegisterOperatorSessionToVse(vsoContext) {
-        return this.relay.relayRegisterOperatorSessionToVse(vsoContext);
+    async relayRegisterOperatorSessionToG8ee(vsoContext) {
+        return this.relay.relayRegisterOperatorSessionToG8ee(vsoContext);
     }
 
-    async relayApprovalResponseToVse(approvalData, vsoContext) {
-        return this.relay.relayApprovalResponseToVse(approvalData, vsoContext);
+    async relayApprovalResponseToG8ee(approvalData, vsoContext) {
+        return this.relay.relayApprovalResponseToG8ee(approvalData, vsoContext);
     }
 
     // --- Notifications ---
@@ -299,10 +299,10 @@ class OperatorService {
         await this.operatorDataService.createOperator(operatorId, freshOperator);
         await this._broadcastOperatorListToUser(existing.user_id);
         
-        // After reset, we should probably inform VSE if it was tracking this operator
+        // After reset, we should probably inform g8ee if it was tracking this operator
         const vsoContext = await this.getOperatorWithSessionContext(operatorId);
         if (vsoContext) {
-            await this.relay.deregisterOperatorSessionInVse(vsoContext).catch(() => {});
+            await this.relay.deregisterOperatorSessionInG8ee(vsoContext).catch(() => {});
         }
 
         return { success: true, operator: freshOperator.forDB(), error: null };

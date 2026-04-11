@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical inbound command payload shapes published by VSE to the cmd:{operator_id}:{operator_session_id} pub/sub channel. VSA deserializes these from the channel. Each payload is the `data` field inside the pub/sub message. Consumers: VSE (Python, publishes), VSA (Go models/commands.go, consumes).",
+  "_comment": "Canonical inbound command payload shapes published by g8ee to the cmd:{operator_id}:{operator_session_id} pub/sub channel. VSA deserializes these from the channel. Each payload is the `data` field inside the pub/sub message. Consumers: g8ee (Python, publishes), VSA (Go models/commands.go, consumes).",
 
-  "_comment.wire_format": "VSE publishes a JSON object with fields: event_type, payload (one of the schemas below), plus routing fields (operator_id, operator_session_id, case_id, investigation_id, web_session_id). VSA reads event_type to select the correct payload deserializer.",
+  "_comment.wire_format": "g8ee publishes a JSON object with fields: event_type, payload (one of the schemas below), plus routing fields (operator_id, operator_session_id, case_id, investigation_id, web_session_id). VSA reads event_type to select the correct payload deserializer.",
 
   "command": {
     "_description": "Payload for event_type: g8e.v1.operator.command.requested. VSA executes a shell command.",
@@ -347,7 +347,7 @@
   },
 
   "audit_direct_cmd": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.recorded. VSE sends this when a user runs a command directly from the anchored terminal.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.recorded. g8ee sends this when a user runs a command directly from the anchored terminal.",
     "_event_types": ["g8e.v1.operator.audit.direct.command.recorded"],
     "fields": {
       "command": {
@@ -369,7 +369,7 @@
   },
 
   "audit_direct_exec_result": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.result.recorded. VSE sends the Sentinel-scrubbed result of a direct terminal command.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.result.recorded. g8ee sends the Sentinel-scrubbed result of a direct terminal command.",
     "_event_types": ["g8e.v1.operator.audit.direct.command.result.recorded"],
     "fields": {
       "command": {

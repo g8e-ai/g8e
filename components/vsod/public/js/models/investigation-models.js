@@ -32,7 +32,7 @@ export const Severity = Object.freeze({
 });
 
 export const ComponentName = Object.freeze({
-    VSE: 'vse',
+    G8EE: 'g8ee',
     VSA: 'vsa',
     VSOD: 'vsod',
 });

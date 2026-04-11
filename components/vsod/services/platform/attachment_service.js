@@ -187,7 +187,7 @@ export class AttachmentService {
 
     /**
      * Retrieve attachment metadata and hydrate base64_data from the blob store.
-     * Used by VSE when it needs the raw binary for LLM processing.
+     * Used by g8ee when it needs the raw binary for LLM processing.
      *
      * @param {string} attachmentKey - VSODB KV key
      * @returns {Promise<{record: AttachmentRecord, base64_data: string}|null>}

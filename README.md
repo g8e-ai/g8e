@@ -43,7 +43,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e && ./g8e platform setup
 g8e is a security-first, self-hosted platform for AI-augmented infrastructure operations.
 
 1.  **The Operator (VSA):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
-2.  **The Engine (VSE):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
+2.  **The Engine (g8ee):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
 3.  **The Dashboard (VSOD):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
 
 See [docs/architecture/about.md](docs/architecture/about.md) for philosophy, governance, and origins.
@@ -132,7 +132,7 @@ flowchart TD
 | Service | Container | Language | Role |
 |---------|-----------|----------|------|
 | **vsodb** | `g8e-data` | Go | Persistence (SQLite), KV store, pub/sub broker |
-| **vse** | `g8e-engine` | Python | AI engine, LLM orchestration, tool calling |
+| **g8ee** | `g8ee` | Python | AI engine, LLM orchestration, tool calling |
 | **vsod** | `g8e-dashboard` | Node.js | Web UI, auth, mTLS gateway, TLS termination |
 | **g8e-pod** | `g8e-pod` | Multi | CLI runner, Operator build, SSL management |
 | **Operator** | *(runs on target)* | Go | Execution agent on managed systems |
@@ -143,7 +143,7 @@ Detailed documentation in [docs/architecture/](docs/architecture/) and [docs/com
 
 ## Data Plane Architecture
 
-The Operator is the central data plane for the entire platform. In `--listen` mode (VSODB), it provides the persistence and messaging backbone for VSE and VSOD. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
+The Operator is the central data plane for the entire platform. In `--listen` mode (VSODB), it provides the persistence and messaging backbone for g8ee and VSOD. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
 
 ```mermaid
 graph TD
@@ -163,10 +163,10 @@ graph TD
         VSODB --- PS
         VSODB --- BS
         
-        VSE["<b>VSE</b><br/>AI Engine"]
+        g8ee["<b>g8ee</b><br/>AI Engine"]
         VSOD["<b>VSOD</b><br/>Dashboard & Gateway"]
         
-        VSE -- "REST / PubSub" --> VSODB
+        g8ee -- "REST / PubSub" --> VSODB
         VSOD -- "REST" --> VSODB
     end
 
@@ -196,7 +196,7 @@ graph TD
     classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
     classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
     
-    class VSODB,VSE,VSOD hub;
+    class VSODB,g8ee,VSOD hub;
     class OPA operator;
     class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
 ```

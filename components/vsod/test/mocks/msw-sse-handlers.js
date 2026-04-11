@@ -201,7 +201,7 @@ export const sseHandlers = [
         }
     },
 
-    // Handle internal SSE push endpoint (VSE → VSOD)
+    // Handle internal SSE push endpoint (g8ee → VSOD)
     {
         method: 'POST',
         path: '/api/internal/sse/push',

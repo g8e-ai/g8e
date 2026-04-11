@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical pub/sub channel prefixes and KV binding key patterns shared across VSE (Python), VSA (Go), and VSOD (JS). Channel format: {prefix}:{operator.id}:{operator.session.id}",
+  "_comment": "Canonical pub/sub channel prefixes and KV binding key patterns shared across g8ee (Python), VSA (Go), and VSOD (JS). Channel format: {prefix}:{operator.id}:{operator.session.id}",
 
   "pubsub": {
     "separator": ":",

@@ -98,7 +98,7 @@ type versionStabilityValues struct {
 
 // componentNameValues mirrors shared/constants/status.json component.name.
 type componentNameValues struct {
-	VSE  string
+	G8EE string
 	VSA  string
 	VSOD string
 }
@@ -194,7 +194,7 @@ var Status = statusValues{
 		Dev:    "dev",
 	},
 	ComponentName: componentNameValues{
-		VSE:  "vse",
+		G8EE: "g8ee",
 		VSA:  "vsa",
 		VSOD: "vsod",
 	},

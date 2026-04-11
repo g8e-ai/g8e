@@ -427,16 +427,16 @@ class ConsoleMetricsService {
         }
 
         try {
-            const vseStart = Date.now();
-            const vseHealth = await this.internalHttpClient.request('vse', '/health', { method: 'GET' });
-            components.vse = {
-                name: 'VSE',
-                status: vseHealth?.status === SystemHealth.HEALTHY ? SystemHealth.HEALTHY : SystemHealth.DEGRADED,
-                latencyMs: Date.now() - vseStart,
-                details: { reported_status: vseHealth?.status }
+            const g8eeStart = Date.now();
+            const g8eeHealth = await this.internalHttpClient.request('g8ee', '/health', { method: 'GET' });
+            components.g8ee = {
+                name: 'g8ee',
+                status: g8eeHealth?.status === SystemHealth.HEALTHY ? SystemHealth.HEALTHY : SystemHealth.DEGRADED,
+                latencyMs: Date.now() - g8eeStart,
+                details: { reported_status: g8eeHealth?.status }
             };
         } catch (error) {
-            components.vse = { name: 'VSE', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
+            components.g8ee = { name: 'g8ee', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
         }
 
         const allHealthy = Object.values(components).every(c => c.status === SystemHealth.HEALTHY);

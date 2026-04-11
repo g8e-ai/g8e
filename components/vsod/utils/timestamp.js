@@ -21,13 +21,13 @@
  * is a valid RFC3339Nano string — all platform consumers accept it.
  *
  * In harmony with:
- *   VSE: components/vse/app/utils/timestamp.py
+ *   G8EE: components/g8ee/app/utils/timestamp.py
  *   VSA: components/vsa/models/timestamp.go
  */
 
 /**
  * Current UTC timestamp as an RFC3339Nano string (millisecond precision).
- * Equivalent to VSE now_iso() and VSA NowTimestamp().
+ * Equivalent to g8ee now_iso() and VSA NowTimestamp().
  * @returns {string} e.g. "2026-03-03T19:05:00.123Z"
  */
 export function nowISOString() {
@@ -36,7 +36,7 @@ export function nowISOString() {
 
 /**
  * Parse an RFC3339 / ISO 8601 string and return a Date object.
- * Equivalent to VSE parse_iso() and VSA ParseTimestamp().
+ * Equivalent to g8ee parse_iso() and VSA ParseTimestamp().
  * @param {string} s
  * @returns {Date}
  */
@@ -46,7 +46,7 @@ export function parseISOString(s) {
 
 /**
  * Check whether a Date (or RFC3339 string) is in the past.
- * Equivalent to VSE is_expired() and VSA (inline comparison).
+ * Equivalent to g8ee is_expired() and VSA (inline comparison).
  * @param {Date|string} dt
  * @returns {boolean}
  */
@@ -57,7 +57,7 @@ export function isExpired(dt) {
 
 /**
  * Add seconds to a Date, returning a new Date. Does not mutate the input.
- * Equivalent to VSE add_seconds() and VSA (time.Add).
+ * Equivalent to g8ee add_seconds() and VSA (time.Add).
  * @param {Date} date
  * @param {number} seconds
  * @returns {Date}
@@ -68,7 +68,7 @@ export function addSeconds(date, seconds) {
 
 /**
  * Add minutes to a Date, returning a new Date. Does not mutate the input.
- * Equivalent to VSE add_minutes().
+ * Equivalent to g8ee add_minutes().
  * @param {Date} date
  * @param {number} minutes
  * @returns {Date}
@@ -79,7 +79,7 @@ export function addMinutes(date, minutes) {
 
 /**
  * Add hours to a Date, returning a new Date. Does not mutate the input.
- * Equivalent to VSE add_hours().
+ * Equivalent to g8ee add_hours().
  * @param {Date} date
  * @param {number} hours
  * @returns {Date}
@@ -90,7 +90,7 @@ export function addHours(date, hours) {
 
 /**
  * Add days to a Date, returning a new Date. Does not mutate the input.
- * Equivalent to VSE add_days().
+ * Equivalent to g8ee add_days().
  * @param {Date} date
  * @param {number} days
  * @returns {Date}
@@ -113,7 +113,7 @@ function _relativeTime(elapsedSeconds) {
 
 /**
  * Human-readable relative time from a past Date or RFC3339 string to now.
- * Equivalent to VSE time_ago().
+ * Equivalent to g8ee time_ago().
  * @param {Date|string} dt
  * @returns {string} e.g. "5 minutes ago"
  */
@@ -126,7 +126,7 @@ export function timeAgo(dt) {
 /**
  * Human-readable relative time from now to a future Date or RFC3339 string.
  * Returns 'in the past' when the date has already passed.
- * Equivalent to VSE time_until().
+ * Equivalent to g8ee time_until().
  * @param {Date|string} dt
  * @returns {string} e.g. "in 5 minutes"
  */
@@ -146,7 +146,7 @@ const _dtf = new Intl.DateTimeFormat('en-CA', {
 
 /**
  * Format a Date or RFC3339 string for display in UTC.
- * Equivalent to VSE format_for_display().
+ * Equivalent to g8ee format_for_display().
  * @param {Date|string} dt
  * @returns {string} e.g. "2026-03-03 19:05:00 UTC"
  */

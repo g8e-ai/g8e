@@ -443,7 +443,7 @@ export const USER_SETTINGS = Object.freeze([
     }),
 
     // -------------------------------------------------------------------------
-    // VSE — Command Validation
+    // g8ee — Command Validation
     // -------------------------------------------------------------------------
     Object.freeze({
         key: 'enable_command_whitelisting',
@@ -477,7 +477,7 @@ export const USER_SETTINGS = Object.freeze([
         key: 'g8e_api_key',
         section: 'validation',
         label: 'g8e API Key',
-        description: 'API key for VSE external API authentication (optional).',
+        description: 'API key for g8ee external API authentication (optional).',
         type: 'password',
         secret: true,
         placeholder: 'your-g8e-api-key-here',
@@ -510,7 +510,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'setup_complete',                  default: false              }),
     Object.freeze({ key: 'g8e_internal_http_url',   default: 'https://vsodb:9000' }),
     Object.freeze({ key: 'g8e_internal_pubsub_url', default: 'wss://vsodb:9001' }),
-    Object.freeze({ key: 'vse_url',                     default: 'https://vse'   }),
+    Object.freeze({ key: 'g8ee_url',                     default: 'https://g8ee'   }),
     Object.freeze({ key: 'docker_gid',                  default: '988'              }),
     Object.freeze({ key: 'https_port',                  default: '443'              }),
     Object.freeze({ key: 'http_port',                   default: '80'               }),

@@ -86,7 +86,7 @@ export class InvestigationListEvent extends VSOBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// HeartbeatSSEEvent  (broadcast to web session when VSE sends heartbeat)
+// HeartbeatSSEEvent  (broadcast to web session when g8ee sends heartbeat)
 // ---------------------------------------------------------------------------
 
 export class HeartbeatSSEEvent extends VSOBaseModel {
@@ -166,7 +166,7 @@ export class OperatorPanelListUpdatedEvent extends VSOBaseModel {
 
 // ---------------------------------------------------------------------------
 // CommandResultSSEEvent  (operator.command.completed / operator.command.failed)
-// Mirrors: components/vse/app/models/operators.py CommandResultBroadcastEvent
+// Mirrors: components/g8ee/app/models/operators.py CommandResultBroadcastEvent
 // Schema:  shared/models/wire/result_payloads.json execution_result
 // ---------------------------------------------------------------------------
 
@@ -251,31 +251,31 @@ export class LogStreamConnectedEvent extends VSOBaseModel {
 
 
 // ---------------------------------------------------------------------------
-// VSEPassthroughEvent  (internal SSE push — raw VSE payloads forwarded as-is)
+// G8eePassthroughEvent  (internal SSE push — raw g8ee payloads forwarded as-is)
 //
-// VSE sends typed events over HTTP to /api/internal/sse/push.
-// The payload is already wire-formatted by VSE.  This model wraps it so the
+// g8ee sends typed events over HTTP to /api/internal/sse/push.
+// The payload is already wire-formatted by G8EE.  This model wraps it so the
 // boundary contract of SSEService.publishEvent (requires VSOBaseModel) is
 // satisfied.  forWire() returns the inner payload directly, preserving the
 // original wire shape.
 //
 // Schema enforcement: the wrapped payload MUST have a non-empty string `type`
-// field.  A missing or non-string `type` means VSE sent a malformed event —
+// field.  A missing or non-string `type` means g8ee sent a malformed event —
 // forwarding it would produce an untyped SSE message the frontend cannot route.
 // ---------------------------------------------------------------------------
 
-export class VSEPassthroughEvent extends VSOBaseModel {
+export class G8eePassthroughEvent extends VSOBaseModel {
     static fields = {
         _payload: { type: F.any, required: true },
     };
 
     _validate() {
         if (!this._payload || typeof this._payload !== 'object') {
-            throw new Error('VSEPassthroughEvent: _payload must be a plain object');
+            throw new Error('G8eePassthroughEvent: _payload must be a plain object');
         }
         if (typeof this._payload.type !== 'string' || this._payload.type.trim() === '') {
             throw new Error(
-                `VSEPassthroughEvent: _payload.type must be a non-empty string, ` +
+                `G8eePassthroughEvent: _payload.type must be a non-empty string, ` +
                 `got ${JSON.stringify(this._payload.type)}`
             );
         }

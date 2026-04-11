@@ -172,7 +172,7 @@ describe('DeviceRegistrationService', () => {
             expect(sessionAuthListener.listen).toHaveBeenCalled();
         });
 
-        it('should relay VSOHttpContext with bound_operators to VSE', async () => {
+        it('should relay VSOHttpContext with bound_operators to g8ee', async () => {
             const operatorId = 'op-relay';
             const operatorSessionId = 'op-sess-relay';
             const mockUser = {
@@ -189,7 +189,7 @@ describe('DeviceRegistrationService', () => {
             userService.getUser.mockResolvedValue(mockUser);
             operatorSessionService.createOperatorSession.mockResolvedValue({ id: operatorSessionId });
             operatorService.claimOperatorSlot.mockResolvedValue(true);
-            vi.spyOn(operatorService, 'relayRegisterOperatorSessionToVse').mockResolvedValue(true);
+            vi.spyOn(operatorService, 'relayRegisterOperatorSessionToG8ee').mockResolvedValue(true);
 
             await service.registerDevice({
                 operator_id: operatorId,
@@ -197,8 +197,8 @@ describe('DeviceRegistrationService', () => {
                 vsoContext: mockVsoContext,
             });
 
-            expect(operatorService.relayRegisterOperatorSessionToVse).toHaveBeenCalledTimes(1);
-            const relayArg = operatorService.relayRegisterOperatorSessionToVse.mock.calls[0][0];
+            expect(operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledTimes(1);
+            const relayArg = operatorService.relayRegisterOperatorSessionToG8ee.mock.calls[0][0];
 
             expect(relayArg.user_id).toBe(mockVsoContext.user_id);
             expect(relayArg.bound_operators).toHaveLength(1);

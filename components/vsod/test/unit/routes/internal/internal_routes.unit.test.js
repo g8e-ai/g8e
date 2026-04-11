@@ -79,7 +79,7 @@ describe('Internal Routes [UNIT]', () => {
                 success: true,
                 message: 'Internal API healthy',
                 vsodb_status: 'healthy',
-                vse_status: 'healthy', 
+                g8ee_status: 'healthy', 
                 vsa_status: 'healthy',
                 uptime_seconds: expect.any(Number),
                 memory_usage: expect.any(Object)

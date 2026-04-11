@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical SystemInfo wire shape sent from VSA during operator authentication and embedded in heartbeats. Consumers: VSE (Python OperatorSystemInfo), VSA (Go SystemInfo / wire.go), VSOD (JS SystemInfo in operator_model.js).",
+  "_comment": "Canonical SystemInfo wire shape sent from VSA during operator authentication and embedded in heartbeats. Consumers: g8ee (Python OperatorSystemInfo), VSA (Go SystemInfo / wire.go), VSOD (JS SystemInfo in operator_model.js).",
 
   "system_info": {
     "_description": "Static host identity information sent by VSA at authentication time and updated on each heartbeat.",

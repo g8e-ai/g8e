@@ -15,7 +15,7 @@
  * SSE Event Testing Helper
  * 
  * Provides utilities for testing SSE event flows in E2E tests
- * Helps simulate VSE events and validate event reception
+ * Helps simulate g8ee events and validate event reception
  */
 
 import { EventType } from '../../constants/events.js';
@@ -26,7 +26,7 @@ import {
     HeartbeatSSEEvent,
     OperatorStatusUpdatedEvent,
     OperatorStatusUpdatedData,
-    VSEPassthroughEvent,
+    G8eePassthroughEvent,
 } from '@vsod/models/sse_models.js';
 
 /**
@@ -51,7 +51,7 @@ export const mockSSEEvents = {
   },
 
   chatThinkingStart(investigationId, webSessionId, thinkingText = 'Analyzing...', metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
         data: {
@@ -67,7 +67,7 @@ export const mockSSEEvents = {
   },
 
   chatThinkingUpdate(investigationId, webSessionId, thinkingText = 'Processing...', metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
         data: {
@@ -83,7 +83,7 @@ export const mockSSEEvents = {
   },
 
   chatThinkingEnd(investigationId, webSessionId, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
         data: {
@@ -99,7 +99,7 @@ export const mockSSEEvents = {
   },
 
   chatResponseChunk(investigationId, content, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
         data: {
@@ -117,7 +117,7 @@ export const mockSSEEvents = {
   },
 
   aiSearchWebRequested(investigationId, webSessionId, info = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
         data: {
@@ -133,7 +133,7 @@ export const mockSSEEvents = {
   },
 
   operatorNetworkPortCheckRequested(investigationId, webSessionId, info = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
         data: {
@@ -149,7 +149,7 @@ export const mockSSEEvents = {
   },
 
   chatResponseComplete(investigationId, messageId, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
         data: {
@@ -166,7 +166,7 @@ export const mockSSEEvents = {
   },
 
   chatCitationsReady(investigationId, webSessionId, groundingMetadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
         data: {
@@ -184,7 +184,7 @@ export const mockSSEEvents = {
   },
 
   chatError(investigationId, error, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.LLM_CHAT_ITERATION_FAILED,
         data: {
@@ -218,7 +218,7 @@ export const mockSSEEvents = {
   },
 
   caseCreated(caseId, title, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.CASE_CREATED,
         data: {
@@ -232,7 +232,7 @@ export const mockSSEEvents = {
   },
 
   investigationCreated(investigationId, caseId, metadata = {}) {
-    return new VSEPassthroughEvent({
+    return new G8eePassthroughEvent({
       _payload: {
         type: EventType.INVESTIGATION_CREATED,
         data: {

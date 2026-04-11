@@ -28,7 +28,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventType } from '@vsod/constants/events.js';
 import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
-import { VSEPassthroughEvent } from '@vsod/models/sse_models.js';
+import { G8eePassthroughEvent } from '@vsod/models/sse_models.js';
 import { SSEService } from '@vsod/services/platform/sse_service.js';
 
 const SESSION_A = 'lifecycle-test-session-a';
@@ -77,8 +77,8 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     });
 
     describe('delivery to registered connection', () => {
-        it('should write a valid SSE frame for a published VSEPassthroughEvent', async () => {
-            await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+        it('should write a valid SSE frame for a published G8eePassthroughEvent', async () => {
+            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {
                     type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     content: 'hello',
@@ -100,7 +100,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should write all frames for a burst of published events', async () => {
             const COUNT = 10;
             for (let i = 0; i < COUNT; i++) {
-                await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                     _payload: {
                         type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                         content: `chunk-${i}`,
@@ -125,7 +125,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
             const regB = await sseService.registerConnection(SESSION_B, responseB);
 
             try {
-                await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                     _payload: {
                         type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                         content: 'for-a-only',
@@ -148,7 +148,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
             const regB = await sseService.registerConnection(SESSION_B, responseB);
 
             try {
-                await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                     _payload: {
                         type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                         content: 'for-a',
@@ -157,7 +157,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
                         web_session_id: SESSION_A,
                     },
                 }));
-                await sseService.publishEvent(SESSION_B, new VSEPassthroughEvent({
+                await sseService.publishEvent(SESSION_B, new G8eePassthroughEvent({
                     _payload: {
                         type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
                         content: 'for-b',
@@ -188,7 +188,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should not write to response after unregisterConnection', async () => {
             sseService.unregisterConnection(SESSION_A, connectionId);
 
-            await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {
                     type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     content: 'should not arrive',
@@ -210,7 +210,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
 
             sseService.unregisterConnection(SESSION_A, connectionId);
 
-            await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {
                     type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     content: 'reaches-new-connection',
@@ -233,7 +233,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should not write to a destroyed response', async () => {
             response.destroy();
 
-            await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {
                     type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     content: 'unreachable',
@@ -254,7 +254,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
             const response2 = makeResponse();
             const reg2 = await sseService.registerConnection(SESSION_A, response2);
 
-            await sseService.publishEvent(SESSION_A, new VSEPassthroughEvent({
+            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {
                     type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     content: 'post-reconnect',

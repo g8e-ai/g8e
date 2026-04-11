@@ -1,8 +1,8 @@
 # g8e node
 
-Drop Pod is the always-on sidecar container that serves as the unified test environment for the g8e platform — a hermetic container for running all component tests (VSE/Python, VSOD/Node.js, VSA/Go) locally and in CI.
+Drop Pod is the always-on sidecar container that serves as the unified test environment for the g8e platform — a hermetic container for running all component tests (g8ee/Python, VSOD/Node.js, VSA/Go) locally and in CI.
 
-It runs as a managed service alongside `vsodb`, `vse`, and `vsod` in `docker-compose.yml`. Tests are never run directly on the host — all test execution goes through the g8e-pod.
+It runs as a managed service alongside `vsodb`, `g8ee`, and `vsod` in `docker-compose.yml`. Tests are never run directly on the host — all test execution goes through the g8e-pod.
 
 **Operator binary:** The `g8e.operator` binary lives at `/home/g8e/g8e.operator`. When the binary is not present, `fetch-key-and-run.sh` automatically downloads the platform-matching binary from the VSODB blob store (`/blob/operator-binary/linux-{arch}`). VSODB bakes and uploads binaries for all architectures on startup, so a fresh `./g8e platform setup` or `./g8e platform up` is sufficient. To compile a fresh binary manually, use `./g8e operator build`.
 
@@ -92,7 +92,7 @@ components/g8e-pod/
 | gotestsum | v1.12.1 | Structured Go test output (pinned) |
 
 **Application dependencies pre-installed at build time** (layer-cached):
-- Python: `components/vse/requirements.txt` → `pip install` into a venv at `/opt/venv` (required by PEP 668 on Ubuntu 24.04 — system-wide pip installs are blocked)
+- Python: `components/g8ee/requirements.txt` → `pip install` into a venv at `/opt/venv` (required by PEP 668 on Ubuntu 24.04 — system-wide pip installs are blocked)
 - Node: `components/vsod/package*.json` → `npm ci`
 - Go: `components/vsa/go.mod` + `go.sum` + `vendor/` → vendored, no network download
 
@@ -112,10 +112,10 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 
 | Host path | Container path | Notes |
 |-----------|---------------|-------|
-| `./components/vse/app` | `/app/components/vse/app` | VSE application source |
-| `./components/vse/config` | `/app/components/vse/config` | VSE configuration |
-| `./components/vse/tests` | `/app/components/vse/tests` | VSE tests |
-| `./components/vse/pyproject.toml` | `/app/components/vse/pyproject.toml` | VSE dependencies |
+| `./components/g8ee/app` | `/app/components/g8ee/app` | g8ee application source |
+| `./components/g8ee/config` | `/app/components/g8ee/config` | g8ee configuration |
+| `./components/g8ee/tests` | `/app/components/g8ee/tests` | g8ee tests |
+| `./components/g8ee/pyproject.toml` | `/app/components/g8ee/pyproject.toml` | g8ee dependencies |
 | `./components/vsod` | `/app/components/vsod` | VSOD source |
 | (named volume) `g8e-dashboard-node-modules` | `/app/components/vsod/node_modules` | Node modules isolated in a named volume |
 | `./components/vsa` | `/app/components/vsa` | VSA source (operator) |
@@ -130,7 +130,7 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `HOME` | `/home/g8e` | User home directory |
-| `G8E_DB_PATH` | `/data/g8e.db` | VSE local SQLite path (for VSE tests) |
+| `G8E_DB_PATH` | `/data/g8e.db` | g8ee local SQLite path (for g8ee tests) |
 | `G8E_SSL_DIR` | `/vsodb` | Path to the SSL directory |
 | `G8E_PUBSUB_CA_CERT` | `/vsodb/ca.crt` | CA cert for pub/sub TLS |
 | `G8E_SSL_CERT_FILE` | `/vsodb/ca.crt` | System trust store injection |
@@ -146,7 +146,7 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 | `ENVIRONMENT` | `test` | Runtime environment flag |
 | `CI` | `false` | CI flag |
 | `G8E_INTERNAL_HTTP_URL` | `https://vsodb` | VSODB HTTP endpoint |
-| `G8E_INTERNAL_PUBSUB_URL` | `wss://vsodb` | VSODB pub/sub endpoint for internal services (VSE) |
+| `G8E_INTERNAL_PUBSUB_URL` | `wss://vsodb` | VSODB pub/sub endpoint for internal services (g8ee) |
 | `G8E_OPERATOR_PUBSUB_URL` | `wss://g8e.local:443` | VSODB pub/sub endpoint for VSA operator tests — uses the external address via `extra_hosts: g8e.local→host-gateway` to simulate a real remote operator |
 | `LLM_ENDPOINT` | — | LLM inference endpoint |
 | `APP_URL` | — | Application URL (required — set in `docker-compose.yml` or shell) |
@@ -245,7 +245,7 @@ Source code changes never require a rebuild. Rebuild only when the image definit
 | Changed file | Action |
 |-------------|--------|
 | `components/g8e-pod/Dockerfile` | `./g8e platform rebuild g8e-pod` |
-| `components/vse/requirements.txt` | `./g8e platform rebuild g8e-pod` |
+| `components/g8ee/requirements.txt` | `./g8e platform rebuild g8e-pod` |
 | `components/vsod/package*.json` | `./g8e platform rebuild g8e-pod` |
 | `components/vsa/go.mod` / `go.sum` | `./g8e platform rebuild g8e-pod` |
 

@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical AI tool result shapes returned by VSE tool executor functions. These are the typed result models that flow through the operator → tool_executor → agent stack. Authority: VSE. Consumers: VSE (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
+  "_comment": "Canonical AI tool result shapes returned by g8ee tool executor functions. These are the typed result models that flow through the operator → tool_executor → agent stack. Authority: G8EE. Consumers: g8ee (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
 
-  "_comment.scope": "These models are VSE-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes VSA publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the agent after translating the wire payload.",
+  "_comment.scope": "These models are g8ee-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes VSA publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the agent after translating the wire payload.",
 
   "operation_error_base": {
     "_description": "Common error fields inherited by all tool result models. Every tool result includes these fields.",
@@ -28,8 +28,8 @@
 
   "file_edit_result": {
     "_description": "Result returned by file_create_on_operator, file_write_on_operator, file_read_on_operator, and file_update_on_operator tool calls. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator"],
     "extends": "operation_error_base",
     "fields": {
@@ -74,8 +74,8 @@
 
   "port_check_tool_result": {
     "_description": "Result returned by the check_port_status tool call. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["check_port_status"],
     "extends": "operation_error_base",
     "fields": {
@@ -94,8 +94,8 @@
 
   "fs_list_tool_result": {
     "_description": "Result returned by the list_files_and_directories_with_detailed_metadata tool call. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["list_files_and_directories_with_detailed_metadata"],
     "extends": "operation_error_base",
     "fields": {
@@ -113,8 +113,8 @@
 
   "fs_read_tool_result": {
     "_description": "Result returned by file_read_on_operator when data is returned directly (not stored locally). Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["file_read_on_operator"],
     "extends": "operation_error_base",
     "fields": {
@@ -127,8 +127,8 @@
 
   "fetch_logs_tool_result": {
     "_description": "Result returned by the fetch_execution_output tool call. Contains stored command output retrieved from the operator local vault. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["fetch_execution_output"],
     "extends": "operation_error_base",
     "fields": {
@@ -145,8 +145,8 @@
 
   "audit_session_metadata": {
     "_description": "WebSession metadata embedded in fetch_history_tool_result. Typed model for the session object returned by fetch_session_history. Canonical wire shape: wire/result_payloads.json fetch_history_result.session.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, pending_command.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, pending_command.py)"],
     "fields": {
       "id": { "type": "string", "required": true, "description": "WebSession identifier" },
       "title": { "type": "string", "required": true, "description": "Human-readable session title" },
@@ -157,8 +157,8 @@
 
   "fs_list_entry": {
     "_description": "A single directory entry returned by an fs_list operation. Items in fs_list_tool_result.entries. Canonical wire shape: wire/result_payloads.json fs_list_result entries items.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, pubsub_messages.py, pending_command.py)"],
     "fields": {
       "name": { "type": "string", "required": true, "description": "File or directory name" },
       "path": { "type": "string", "required": true, "description": "Full absolute path" },
@@ -177,8 +177,8 @@
 
   "audit_file_mutation": {
     "_description": "A single file mutation record embedded in an AuditEvent. Canonical wire shape: wire/result_payloads.json fetch_history_result events file_mutations items.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py)"],
     "fields": {
       "id": { "type": "integer", "required": true },
       "filepath": { "type": "string", "required": true },
@@ -191,8 +191,8 @@
 
   "audit_event": {
     "_description": "A single audit event record returned by fetch_session_history. Items in fetch_history_tool_result.events. Canonical wire shape: wire/result_payloads.json fetch_history_result events items.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, pubsub_messages.py, pending_command.py)"],
     "fields": {
       "id": { "type": "integer", "required": true },
       "web_session_id": { "type": "string", "required": true },
@@ -213,8 +213,8 @@
 
   "file_history_entry": {
     "_description": "A single commit history entry returned by fetch_file_history. Items in fetch_file_history_tool_result.history. Canonical wire shape: wire/result_payloads.json fetch_file_history_result history items.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, pubsub_messages.py, pending_command.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, pubsub_messages.py, pending_command.py)"],
     "fields": {
       "commit_hash": { "type": "string", "required": true, "description": "Git commit hash" },
       "timestamp": { "type": "string", "format": "iso8601", "required": false },
@@ -223,9 +223,9 @@
   },
 
   "file_edit_pending_result": {
-    "_description": "Typed result for file_edit operations. VSE-internal only — never crosses a wire boundary.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (pending_command.py, command_results.py, file_edit_ops.py)"],
+    "_description": "Typed result for file_edit operations. g8ee-internal only — never crosses a wire boundary.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (pending_command.py, command_results.py, file_edit_ops.py)"],
     "fields": {
       "file_path": { "type": "string", "required": true },
       "operation": { "type": "string", "required": true, "description": "File operation performed", "values_ref": "shared/constants/status.json#file.operation" },
@@ -239,8 +239,8 @@
 
   "file_diff_entry": {
     "_description": "Single file diff record from the operator ledger. Used as items in fetch_file_diff_tool_result and as the diff field in fetch_file_diff_tool_result. Canonical wire shape: wire/result_payloads.json file_diff_entry.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, pending_command.py, pubsub_messages.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, pending_command.py, pubsub_messages.py)"],
     "fields": {
       "id": { "type": "string", "required": true, "description": "Unique diff record identifier" },
       "timestamp": { "type": "string", "format": "iso8601", "required": true, "description": "When the file mutation occurred" },
@@ -257,8 +257,8 @@
 
   "token_usage": {
     "_description": "Token usage reported by the LLM for a streaming response. Embedded in StreamChunkData and ConversationMessageMetadata.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, agent.py, investigations.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, agent.py, investigations.py)"],
     "fields": {
       "input_tokens": { "type": "integer", "required": true, "default": 0, "description": "Number of input/prompt tokens" },
       "output_tokens": { "type": "integer", "required": true, "default": 0, "description": "Number of output/completion tokens" },
@@ -270,8 +270,8 @@
 
   "fetch_history_tool_result": {
     "_description": "Result returned by the fetch_session_history tool call. Contains audit session history from the operator local vault. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["fetch_session_history"],
     "extends": "operation_error_base",
     "fields": {
@@ -296,8 +296,8 @@
 
   "fetch_file_history_tool_result": {
     "_description": "Result returned by the fetch_file_history tool call. Contains ledger commit history for a file. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["fetch_file_history"],
     "extends": "operation_error_base",
     "fields": {
@@ -313,8 +313,8 @@
 
   "restore_file_tool_result": {
     "_description": "Result returned by the restore_file tool call. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["restore_file"],
     "extends": "operation_error_base",
     "fields": {
@@ -326,8 +326,8 @@
 
   "fetch_file_diff_tool_result": {
     "_description": "Result returned by the fetch_file_diff tool call. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["fetch_file_diff"],
     "extends": "operation_error_base",
     "fields": {
@@ -351,8 +351,8 @@
 
   "intent_permission_result": {
     "_description": "Result returned by grant_intent_permission and revoke_intent_permission tool calls. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["grant_intent_permission", "revoke_intent_permission"],
     "extends": "operation_error_base",
     "fields": {
@@ -380,8 +380,8 @@
 
   "web_search_result_item": {
     "_description": "A single result item from the Google Custom Search API. Embedded as items in search_web_result.results.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (tool_results.py, tool_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, tool_executor.py)"],
     "fields": {
       "title": { "type": "string", "required": true, "default": "", "description": "Page title returned by the search API" },
       "link": { "type": "string", "required": true, "default": "", "description": "Canonical URL of the search result" },
@@ -390,9 +390,9 @@
   },
 
   "search_web_result": {
-    "_description": "Result returned by the search_web tool call. VSE-only: executed directly against Google Custom Search API, never crosses a VSA wire boundary. Extends operation_error_base.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (agent.py, tool_executor.py)"],
+    "_description": "Result returned by the search_web tool call. g8ee-only: executed directly against Google Custom Search API, never crosses a VSA wire boundary. Extends operation_error_base.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_executor.py)"],
     "_tool_names": ["search_web"],
     "extends": "operation_error_base",
     "fields": {
@@ -409,8 +409,8 @@
 
   "command_risk_analysis": {
     "_description": "Risk analysis result for shell commands. Produced by the AI assistant model before command dispatch.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (command_executor.py, agent.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (command_executor.py, agent.py)"],
     "fields": {
       "risk_level": {
         "type": "string",
@@ -423,8 +423,8 @@
 
   "error_analysis_result": {
     "_description": "Error analysis result produced by the AI assistant model after a command fails. Drives auto-fix vs escalation decision.",
-    "_authority": "VSE",
-    "_consumers": ["VSE (command_executor.py)"],
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (command_executor.py)"],
     "fields": {
       "error_category": {
         "type": "string",

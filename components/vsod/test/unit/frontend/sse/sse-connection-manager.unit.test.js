@@ -25,7 +25,7 @@
  *   - Events with a missing or non-string `type` are dropped with a warning
  *
  * Wire format exercised:
- *   VSE serializes: { type: "...", data: { ... } }
+ *   g8ee serializes: { type: "...", data: { ... } }
  *   SSEService.sendToLocal writes: data: <json>\n\n
  *   SSEConnectionManager.onmessage parses: JSON.parse(event.data) → calls handleSSEEvent(data)
  *   handleSSEEvent destructures: { type: eventType, data: payload } → eventBus.emit(eventType, payload)
@@ -169,7 +169,7 @@ describe('SSEConnectionManager.handleSSEEvent — non-infrastructure without dat
         expect(eventBus.getEmittedEvents()).toHaveLength(0);
     });
 
-    it('drops event when top-level frame has no data field (VSEPassthrough VSE shape)', () => {
+    it('drops event when top-level frame has no data field (G8eePassthrough g8ee shape)', () => {
         const { manager, eventBus } = makeManager();
 
         const result = manager.handleSSEEvent({

@@ -18,7 +18,7 @@
  * NOT exposed via public routes - only accessible from internal services.
  * 
  * This module aggregates all internal route handlers:
- * - SSE routes: Event delivery from VSE
+ * - SSE routes: Event delivery from g8ee
  * - Operator routes: Operator management
  * - User routes: User queries (read-only)
  * - Settings routes: Platform settings (read-only, non-secret)
@@ -64,7 +64,7 @@ export function createInternalRouter({
             success: true,
             message: 'Internal API healthy',
             vsodb_status: SystemHealth.HEALTHY,
-            vse_status: SystemHealth.HEALTHY,
+            g8ee_status: SystemHealth.HEALTHY,
             vsa_status: SystemHealth.HEALTHY,
             uptime_seconds: Math.floor(process.uptime()),
             memory_usage: process.memoryUsage()

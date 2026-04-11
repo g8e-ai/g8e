@@ -57,7 +57,7 @@
     "G8E_SUPERVISOR_PORT": "platform.supervisor_port"
   },
   "service_urls": {
-    "G8E_VSE_URL": "service_urls.vse_url",
+    "G8EE_URL": "service_urls.g8ee_url",
     "G8E_VSOD_URL": "service_urls.vsod_url",
     "G8E_OPERATOR_ENDPOINT": "service_urls.operator_endpoint"
   },

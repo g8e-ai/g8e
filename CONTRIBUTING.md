@@ -46,7 +46,7 @@ Edit source files directly -- changes are reflected without rebuilding. Rebuild 
 
 ```bash
 ./g8e test           # All components
-./g8e test vse       # AI engine (Python/pytest)
+./g8e test g8ee       # AI engine (Python/pytest)
 ./g8e test vsod      # Dashboard (Node/Vitest)
 ./g8e test vsa       # Operator (Go)
 ```
@@ -55,7 +55,7 @@ All tests must pass before submitting a PR.
 
 ## Code Style
 
-- **Python (VSE):** Follow existing patterns. Type hints required. Use Pydantic models for data structures.
+- **Python (g8ee):** Follow existing patterns. Type hints required. Use Pydantic models for data structures.
 - **Node.js (VSOD):** Follow existing Express patterns. Use JSDoc where helpful.
 - **Go (VSA/Operator):** Standard `gofmt`. Follow existing package structure.
 - **Shell scripts:** `set -euo pipefail`. ShellCheck clean.
@@ -78,7 +78,7 @@ component: short description of change
 Longer explanation if needed. Reference issues with #123.
 ```
 
-Prefix with the component name: `vse:`, `vsod:`, `vsa:`, `vsodb:`, `docs:`, `ci:`, `scripts:`.
+Prefix with the component name: `g8ee:`, `vsod:`, `vsa:`, `vsodb:`, `docs:`, `ci:`, `scripts:`.
 
 ### PR Guidelines
 

@@ -44,12 +44,12 @@ VSODB is the Operator binary running in `--listen` mode. It is the platform's **
          │ HTTP+WS      │ HTTP+WS          │ WebSocket
          │              │                  │
     ┌────┴────┐    ┌────┴────┐        ┌────┴────┐
-    │  VSOD   │    │   VSE   │        │ Operator│
+    │  VSOD   │    │   g8ee   │        │ Operator│
     │ (Node)  │    │ (Python)│        │ (Go)    │
     └─────────┘    └─────────┘        └─────────┘
 ```
 
-VSOD and VSE both use HTTP for document store and KV operations, and WebSocket for pub/sub. The Operator (in normal mode) connects via WebSocket only for pub/sub.
+VSOD and g8ee both use HTTP for document store and KV operations, and WebSocket for pub/sub. The Operator (in normal mode) connects via WebSocket only for pub/sub.
 
 ## Transport Summary
 
@@ -97,7 +97,7 @@ On first start, `CertStore.EnsureCerts` generates:
 | **Internal Auth Token** | `internal_auth_token` | 32-byte random hex | — |
 | **Session Encryption Key** | `session_encryption_key` | 32-byte random hex | — |
 
-The `ca.crt` mirror at the ssl root is what VSOD, VSE, and field Operators consume — it is written on every start to ensure it is always present even after volume surgery.
+The `ca.crt` mirror at the ssl root is what VSOD, g8ee, and field Operators consume — it is written on every start to ensure it is always present even after volume surgery.
 
 #### Bootstrap Secrets Handling
 
@@ -107,7 +107,7 @@ The `internal_auth_token` and `session_encryption_key` are the critical bootstra
 - **Generation**: At startup, VSODB ensures these secret files exist on the volume. If a file is missing, VSODB generates a new random 32-byte hex value and writes it to the volume.
 - **DB Backup**: These secrets are also stored in the `components/platform_settings` document in the database. If the SSL volume is wiped but the DB remains, VSODB restores the secret files from the DB. If both are missing, it generates new ones.
 - **Enforcement**: All VSODB HTTP and WebSocket routes strictly require the `internal_auth_token` in the `X-Internal-Auth` header (or `token` query parameter for WebSockets).
-- **Discovery**: VSOD and VSE automatically discover these tokens by reading the files from the shared volume at startup.
+- **Discovery**: VSOD and g8ee automatically discover these tokens by reading the files from the shared volume at startup.
 
 The server certificate includes the following SANs:
 - **DNS:** `g8e.local`, `localhost`, `vsodb`, `vsod`
@@ -133,7 +133,7 @@ GET /ssl/ca.crt   (HTTPS port 443)
 ← 503     {"error": "certificates not initialized"}  (external cert mode)
 ```
 
-VSOD and VSE also access the CA via the `g8e-data-ssl` Docker volume, which is mounted read-only at `/vsodb/ssl` on both services. Field Operators use a local-first strategy — scanning well-known volume mount paths before falling back to `https://<endpoint>/ssl/ca.crt`. Inside the Docker network, the CA is discovered locally at `/vsodb/ca.crt` without any network fetch. See [architecture/security.md — CA Trust Bootstrap](../architecture/security.md#ca-trust-bootstrap-and-the-tls-kill-switch) for the full discovery sequence.
+VSOD and g8ee also access the CA via the `g8e-data-ssl` Docker volume, which is mounted read-only at `/vsodb/ssl` on both services. Field Operators use a local-first strategy — scanning well-known volume mount paths before falling back to `https://<endpoint>/ssl/ca.crt`. Inside the Docker network, the CA is discovered locally at `/vsodb/ca.crt` without any network fetch. See [architecture/security.md — CA Trust Bootstrap](../architecture/security.md#ca-trust-bootstrap-and-the-tls-kill-switch) for the full discovery sequence.
 
 For browser users, VSOD turns that same CA into a workstation trust flow:
 - `GET https://<host>` serves the public CA trust portal
@@ -171,7 +171,7 @@ vsodb:
 - `g8e-data-data` — SQLite DB only, mounted at `/data`. Wiped by `platform reset`.
 - `g8e-data-ssl` — TLS certs only, mounted at `/ssl`. **Never wiped** by `reset` or `wipe` — survives all lifecycle operations except `platform clean`.
 
-**Security:** The container runs as a non-root `g8e` user. VSODB has no external port bindings — it is only reachable within the internal Docker network by VSOD and VSE. The `g8e-data-ssl` volume is mounted read-only at `/vsodb/ssl` on VSOD, VSE, and g8e-pod so they can read the platform CA and server certificates without direct HTTP. VSOD is the only public-facing service: it converts the VSODB-generated certificates into the browser HTTPS endpoint and the HTTP certificate-trust bootstrap flow.
+**Security:** The container runs as a non-root `g8e` user. VSODB has no external port bindings — it is only reachable within the internal Docker network by VSOD and G8EE. The `g8e-data-ssl` volume is mounted read-only at `/vsodb/ssl` on VSOD, g8ee, and g8e-pod so they can read the platform CA and server certificates without direct HTTP. VSOD is the only public-facing service: it converts the VSODB-generated certificates into the browser HTTPS endpoint and the HTTP certificate-trust bootstrap flow.
 
 ## API Reference
 
@@ -327,7 +327,7 @@ The same WebSocket connection supports both publishing and subscribing. Each sub
 
 #### Channel Naming Convention
 
-All channel prefix constants are defined in `components/vsod/constants/channels.js` (`PubSubChannel`) and mirrored in `components/vse/app/constants.py` (`PubSubChannel`). The canonical source is `shared/constants/channels.json`.
+All channel prefix constants are defined in `components/vsod/constants/channels.js` (`PubSubChannel`) and mirrored in `components/g8ee/app/constants.py` (`PubSubChannel`). The canonical source is `shared/constants/channels.json`.
 
 | Channel | Direction | Purpose |
 |---------|-----------|--------|
@@ -335,13 +335,13 @@ All channel prefix constants are defined in `components/vsod/constants/channels.
 | `auth.publish:session:{session_hash}` | VSA → VSOD | WebSession auth request |
 | `auth.response:{api_key_hash}` | VSOD → VSA | API key auth response |
 | `auth.response:session:{hash}` | VSOD → VSA | WebSession auth response |
-| `cmd:{operator_id}:{operator_session_id}` | VSE → Operator | Command dispatch |
-| `results:{operator_id}:{operator_session_id}` | Operator → VSE | Command results |
-| `heartbeat:{operator_id}:{operator_session_id}` | Operator → VSE | Health telemetry |
+| `cmd:{operator_id}:{operator_session_id}` | g8ee → Operator | Command dispatch |
+| `results:{operator_id}:{operator_session_id}` | Operator → g8ee | Command results |
+| `heartbeat:{operator_id}:{operator_session_id}` | Operator → g8ee | Health telemetry |
 
 #### KV Key Format
 
-All KV keys follow the canonical schema `g8e:{domain}:{...segments}`. The `v1` version prefix is `CACHE_PREFIX` — single source of truth in `components/vsod/constants/kv_keys.js`, mirrored in `components/vse/app/constants.py`. All key construction uses `KVKey` builders — never hardcode key strings.
+All KV keys follow the canonical schema `g8e:{domain}:{...segments}`. The `v1` version prefix is `CACHE_PREFIX` — single source of truth in `components/vsod/constants/kv_keys.js`, mirrored in `components/g8ee/app/constants.py`. All key construction uses `KVKey` builders — never hardcode key strings.
 
 For the complete key namespace (all patterns, builders, owners, TTLs, and categories), see [architecture/storage.md — KV Store](../architecture/storage.md#kv-store).
 
@@ -392,9 +392,9 @@ All HTTP clients share `VSODBHttpClient` (`vsodb_http_client.js`) as a base with
 
 **Lifecycle**: `terminate()` / `disconnect()` / `quit()` — closes WebSocket and marks client as terminated.
 
-### VSE (Python)
+### g8ee (Python)
 
-`components/vse/app/clients/db_client.py` — Async client (`KVClient`) for VSODB KV and pub/sub. Uses `aiohttp` for async HTTP and WebSocket. No document store methods, no SSE buffer methods.
+`components/g8ee/app/clients/db_client.py` — Async client (`KVClient`) for VSODB KV and pub/sub. Uses `aiohttp` for async HTTP and WebSocket. No document store methods, no SSE buffer methods.
 
 **Atomicity Warning:** Like the Node.js client, compound operations are not atomic.
 
@@ -500,7 +500,7 @@ In a fully air-gapped environment, the deployment is three processes from a sing
 node components/vsod/server.js
 
 # Terminal 3: AI engine
-python components/vse/app/main.py
+python components/g8ee/app/main.py
 ```
 
 No Docker required. No internet required. No external dependencies. The Operator binary IS the infrastructure.

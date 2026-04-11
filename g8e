@@ -73,7 +73,7 @@ _help() {
     echo "    (run: ./g8e operator --help for full option details)"
     echo ""
     echo "  test [suite] [options]        Run test suites inside g8e-pod"
-    echo "    vse                           Python/pytest tests"
+    echo "    g8ee                           Python/pytest tests"
     echo "    vsod                          TypeScript/vitest tests"
     echo "    vsa                           Go tests"
     echo "    LLM flags (enables ai_integration tests):"
@@ -487,8 +487,8 @@ case "$TOP" in
                     exit 1
                 fi
                 echo "  Token written to VSODB."
-                echo "  Restarting vsod and vse to pick up new token..."
-                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart vsod vse
+                echo "  Restarting vsod and g8ee to pick up new token..."
+                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart vsod g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
             "")

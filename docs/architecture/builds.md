@@ -12,10 +12,10 @@ Every piece of g8e infrastructure ultimately depends on the `g8e.operator` binar
 - A SQLite-backed **document store** (`/db/{collection}/{id}`) — all domain data: users, sessions, operators, cases, investigations, memories. **Authenticated via `X-Internal-Auth`.**
 - A **KV store** (`/kv/{key}`) — platform settings, binary blobs, ephemeral session data, attachments. **Authenticated via `X-Internal-Auth`.**
 - A **blob store** (`/blob/{namespace}/{id}`) — large file storage with TTL support, including operator binaries for remote deployment (namespace `operator-binary`). **Authenticated via `X-Internal-Auth`.**
-- A **pub/sub WebSocket broker** (`/ws/pubsub`) — the real-time message bus connecting operators on remote machines back to VSE and VSOD. **Connection authenticated via `X-Internal-Auth`.**
+- A **pub/sub WebSocket broker** (`/ws/pubsub`) — the real-time message bus connecting operators on remote machines back to g8ee and VSOD. **Connection authenticated via `X-Internal-Auth`.**
 - A **TLS certificate authority** — generates and serves the platform CA cert at `/ssl/ca.crt` at startup; this cert is the root of trust for all mTLS in the stack
 
-VSE and VSOD wait for VSODB to be healthy before starting. g8e-pod starts independently and builds its own operator binary from source. Without VSODB, there is no database, no pub/sub, and no TLS trust anchor.
+g8ee and VSOD wait for VSODB to be healthy before starting. g8e-pod starts independently and builds its own operator binary from source. Without VSODB, there is no database, no pub/sub, and no TLS trust anchor.
 
 **Standard mode (VSA — deployed Operators):** The Operator runs on a remote target system and connects outbound to VSODB. It executes commands, manages files, streams heartbeat telemetry, and maintains the local audit vault and ledger on the target machine.
 
@@ -28,7 +28,7 @@ Operator binaries for remote deployment (linux/amd64, linux/arm64, linux/386) ar
 | Container | Internal name | Image built from | What it is |
 |---|---|---|---|
 | `g8e-data` | VSODB | `components/vsodb/Dockerfile` | Operator binary in `--listen` mode; platform DB + pub/sub + blob store (including operator binaries) |
-| `g8e-engine` | VSE | `components/vse/Dockerfile` | Python/FastAPI AI backend |
+| `g8ee` | g8ee | `components/g8ee/Dockerfile` | Python/FastAPI AI backend |
 | `g8e-dashboard` | VSOD | `components/vsod/Dockerfile` | Node.js web frontend; single external HTTPS entry point |
 | `g8e-pod` | g8e-pod | `components/g8e-pod/Dockerfile` | Ubuntu sidecar; builds operator binary from source, runs tests, streams operators to remote hosts |
 
@@ -41,7 +41,7 @@ All images build in parallel — no component has a build-time dependency on any
 ```
 [1] ALL images build in parallel:
         vsodb      (multi-stage: Go builder cross-compiles amd64/arm64/386 + UPX → alpine runtime)
-        vse        (no build deps)
+        g8ee        (no build deps)
         vsod       (no build deps)
         g8e-pod   (no build deps)
 
@@ -52,8 +52,8 @@ All images build in parallel — no component has a build-time dependency on any
         │    → opens SQLite store, starts HTTPS and WSS servers
         │    → health check passes
         ▼
-[3] vse, vsod start in parallel (depends_on: vsodb healthy):
-        vse       — connects to VSODB pub/sub, reads settings from KV store
+[3] g8ee, vsod start in parallel (depends_on: vsodb healthy):
+        g8ee       — connects to VSODB pub/sub, reads settings from KV store
         vsod      — reads TLS certs from vsodb-data volume
 
 [3] g8e-pod starts independently (no depends_on):
@@ -71,9 +71,9 @@ All component images have no build-time dependencies on each other and build in 
 
 **VSODB image build:** Uses a multi-stage Dockerfile. The builder stage installs Go and UPX, then cross-compiles the `g8e.operator` binary for all 3 target architectures (`linux/amd64`, `linux/arm64`, `linux/386`) with `-trimpath`, `-buildvcs=false`, and UPX `--best --lzma` compression. The platform version is injected via `-ldflags "-X main.version=${VERSION}"` — the `VERSION` build arg is set from the `G8E_VERSION` environment variable (read from the `VERSION` file by `build.sh`). The final stage is a minimal Alpine image that copies the amd64 binary to `/usr/local/bin/` (to run VSODB itself in `--listen` mode) and all 3 compressed binaries to `/opt/operator-binaries/` (for blob store upload at startup). The Go toolchain is not present in the runtime image.
 
-**All other images** (g8e-pod, vse, vsod) build independently with no dependency on vsodb.
+**All other images** (g8e-pod, g8ee, vsod) build independently with no dependency on vsodb.
 
-**VSE image build:** Uses a multi-stage Dockerfile based on Python 3.13-slim. It installs dependencies into a prefix in the builder stage to keep the final runtime image minimal.
+**g8ee image build:** Uses a multi-stage Dockerfile based on Python 3.13-slim. It installs dependencies into a prefix in the builder stage to keep the final runtime image minimal.
 
 **VSOD image build:** Uses a multi-stage Dockerfile based on Node.js 22-alpine. It installs `docker-cli` in the final stage to allow interaction with the host Docker daemon.
 
@@ -92,11 +92,11 @@ All component images have no build-time dependencies on each other and build in 
 
 1. **The TLS CA** — on first start, the Operator binary (in `--listen` mode) generates a self-signed CA and writes it to `/data/ssl/`. All other containers mount `vsodb-data:/vsodb:ro` and read the CA cert from `/vsodb/ssl/ca.crt`. Without this, mTLS cannot be established between any components. See [Security Architecture > Workstation CA Trust](security.md#workstation-ca-trust) for how users trust this CA.
 
-2. **The document store** — VSE and VSOD read and write all domain data (users, sessions, operators, cases, investigations) exclusively through VSODB's HTTP API. All requests are authenticated via the `X-Internal-Auth` header. Neither component holds its own relational database.
+2. **The document store** — g8ee and VSOD read and write all domain data (users, sessions, operators, cases, investigations) exclusively through VSODB's HTTP API. All requests are authenticated via the `X-Internal-Auth` header. Neither component holds its own relational database.
 
 3. **The KV and Blob stores** — platform settings, session data, operator binary blobs, file attachment metadata, and large binary blobs are all stored here. All requests are authenticated via the `X-Internal-Auth` header.
 
-4. **The pub/sub broker** — operators on remote machines maintain a persistent WebSocket connection to VSODB (WSS/TLS). Command dispatch and result delivery for the AI agent flow through this broker. VSE and VSOD also connect to this broker for real-time event distribution.
+4. **The pub/sub broker** — operators on remote machines maintain a persistent WebSocket connection to VSODB (WSS/TLS). Command dispatch and result delivery for the AI agent flow through this broker. g8ee and VSOD also connect to this broker for real-time event distribution.
 
 5. **The operator binaries** — cross-compiled and UPX-compressed at image build time, baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads all 3 binaries (linux-amd64, linux-arm64, linux-386) to the blob store (namespace `operator-binary`). Served on demand via `GET /blob/operator-binary/{os}-{arch}`. The `./g8e operator build` commands in g8e-pod can override these by uploading fresh builds.
 
@@ -107,31 +107,31 @@ All component images have no build-time dependencies on each other and build in 
              --http-listen-port 9000 --wss-listen-port 9001
 ```
 
-Port 9000 (HTTPS) is used by VSE and VSOD for all internal API traffic. Port 9001 (WSS/TLS) is used by remote Operators for the pub/sub connection.
+Port 9000 (HTTPS) is used by g8ee and VSOD for all internal API traffic. Port 9001 (WSS/TLS) is used by remote Operators for the pub/sub connection.
 
 **Health check:** `curl https://localhost/health` — passes when the HTTP server is ready and the SQLite store is open.
 
 ---
 
-### Step 3 — Start VSE, VSOD, and g8e-pod in parallel (`depends_on: vsodb healthy`)
+### Step 3 — Start g8ee, VSOD, and g8e-pod in parallel (`depends_on: vsodb healthy`)
 
 All three services start simultaneously once vsodb is healthy.
 
 ---
 
-### Step 4 — Start VSE (`g8e-engine`)
+### Step 4 — Start g8ee (`g8ee`)
 
 **Why after VSODB:**
 
-- VSE's startup sequence opens a persistent WebSocket connection to VSODB's pub/sub broker to subscribe to heartbeat and command-result channels. If VSODB is not healthy, this connection fails and VSE will not start successfully.
-- VSE reads all platform settings (LLM provider, API keys, feature flags) from VSODB's KV store at startup.
+- g8ee's startup sequence opens a persistent WebSocket connection to VSODB's pub/sub broker to subscribe to heartbeat and command-result channels. If VSODB is not healthy, this connection fails and g8ee will not start successfully.
+- g8ee reads all platform settings (LLM provider, API keys, feature flags) from VSODB's KV store at startup.
 
 **What it runs:**
 ```
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-443}"]
 ```
 
-VSE is an internal-only service. VSOD proxies all traffic to it; VSE is never exposed on a public port. It runs as non-root user `g8e` (UID 1001).
+g8ee is an internal-only service. VSOD proxies all traffic to it; g8ee is never exposed on a public port. It runs as non-root user `g8e` (UID 1001).
 
 **Health check:** `curl https://localhost/health/store` — passes when VSODB document store connectivity is confirmed.
 
@@ -139,10 +139,10 @@ VSE is an internal-only service. VSOD proxies all traffic to it; VSE is never ex
 
 ### Step 5 — Start VSOD (`g8e-dashboard`)
 
-**Why after VSODB (and implicitly after VSE):**
+**Why after VSODB (and implicitly after g8ee):**
 
 - VSOD reads its TLS certificates from the `vsodb-data` volume (`/vsodb/ssl/`) to terminate HTTPS on ports 443/80. Without VSODB having initialized and written those certs, VSOD cannot serve TLS.
-- VSOD proxies all AI requests to VSE's internal HTTP API. While VSOD can start before VSE is fully ready, the setup wizard and dashboard will not function correctly until VSE is healthy.
+- VSOD proxies all AI requests to g8ee's internal HTTP API. While VSOD can start before g8ee is fully ready, the setup wizard and dashboard will not function correctly until g8ee is healthy.
 - VSOD subscribes to VSODB pub/sub to receive operator events (heartbeats, command results, status changes) for SSE fan-out to the browser.
 
 **What it runs:**
@@ -178,7 +178,7 @@ Docker Compose enforces this dependency graph via `condition: service_healthy`:
 
 ```
 vsodb (healthy)
-    ├── vse      (depends_on: vsodb healthy)
+    ├── g8ee      (depends_on: vsodb healthy)
     └── vsod     (depends_on: vsodb healthy)
 
 g8e-pod  — no depends_on; builds its own binary from source at startup
@@ -191,7 +191,7 @@ The `build.sh` script (`scripts/core/build.sh`) manages the full lifecycle. It e
 ### CI Workflow (`ci.yml`)
 Triggered on every push to `main` and pull requests to `main` or `dev`.
 1. **Platform Build:** Executes `./g8e platform build` to verify all components compile and start correctly.
-2. **Component Tests:** Runs `vse`, `vsod`, and `vsa` test suites inside `g8e-pod`.
+2. **Component Tests:** Runs `g8ee`, `vsod`, and `vsa` test suites inside `g8e-pod`.
 3. **Multi-Arch Verification:** Explicitly builds the `g8e.operator` for `amd64`, `arm64`, and `386` architectures.
 
 ---
@@ -224,7 +224,7 @@ On a fresh checkout with no existing images:
           → generates platform CA cert → writes to vsodb-data volume
           → uploads 3 compressed operator binaries to blob store
           → health check passes
-   └─ [3] vse, vsod start in parallel (depends_on: vsodb)
+   └─ [3] g8ee, vsod start in parallel (depends_on: vsodb)
           g8e-pod starts independently: make build → /home/g8e/g8e.operator
    └─ [4] all health checks pass
    └─ https://localhost is live
@@ -257,7 +257,7 @@ All services run on a single internal Docker bridge network: `g8e-network` (`vso
 
 VSOD is given network aliases `localhost` and `g8e.local` so that the Operator binary (running inside g8e-pod) can reach VSOD at `g8e.local:443` — the default platform endpoint used by operators when no `--endpoint` flag is given.
 
-External traffic enters only through VSOD on ports 443 and 80. All other services (VSODB, VSE) are internal-only and not exposed on any host port.
+External traffic enters only through VSOD on ports 443 and 80. All other services (VSODB, g8ee) are internal-only and not exposed on any host port.
 
 ---
 
@@ -269,7 +269,7 @@ External traffic enters only through VSOD on ports 443 and 80. All other service
 
 | Path | Written by | Read by | Why |
 |---|---|---|---|
-| `/data/ssl/ca.crt` | VSODB (on first init) | VSE, VSOD, g8e-pod, Operator binary | Platform TLS CA; root of trust for all mTLS |
+| `/data/ssl/ca.crt` | VSODB (on first init) | g8ee, VSOD, g8e-pod, Operator binary | Platform TLS CA; root of trust for all mTLS |
 | `/data/g8e.db` | VSODB | VSODB only (via HTTP API) | All platform domain data |
 
 Operator binaries are baked into the VSODB image at `/opt/operator-binaries/linux-{amd64,arm64,386}/g8e.operator` (cross-compiled and UPX-compressed at image build time). On container startup, VSODB uploads them to the blob store and serves them via `GET /blob/operator-binary/{os}-{arch}`. g8e-pod builds its own amd64 binary independently from source.

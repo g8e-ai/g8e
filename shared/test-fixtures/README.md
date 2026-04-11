@@ -4,9 +4,9 @@ This directory contains test fixtures shared across all g8e components to ensure
 
 ## SSE Events (`sse-events.json`)
 
-Canonical SSE event structures used by both VSE (Python) and VSOD (Node.js) tests.
+Canonical SSE event structures used by both g8ee (Python) and VSOD (Node.js) tests.
 
-### Usage in VSE (Python)
+### Usage in g8ee (Python)
 
 ```python
 import json
@@ -44,7 +44,7 @@ Each fixture includes:
 
 ## Contract Tests
 
-Both VSE and VSOD should include contract tests that verify:
+Both g8ee and VSOD should include contract tests that verify:
 1. Events emitted match the shared fixture structure
 2. Required routing fields are present
 3. Event types match constants in `shared/constants/events.json`

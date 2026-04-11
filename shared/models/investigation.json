@@ -1,11 +1,11 @@
 {
-  "_comment": "Canonical InvestigationModel document shape. VSE is the authority — it creates and owns this document in its SQLite store. VSOD reads it via VSE HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
+  "_comment": "Canonical InvestigationModel document shape. g8ee is the authority — it creates and owns this document in its SQLite store. VSOD reads it via g8ee HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
 
-  "_authority": "VSE (SQLite)",
-  "_consumers": ["VSOD (JS — renders dashboard, creates investigations via VSE API)", "VSA (receives investigation_id in command envelopes, does not read the document directly)"],
+  "_authority": "g8ee (SQLite)",
+  "_consumers": ["VSOD (JS — renders dashboard, creates investigations via g8ee API)", "VSA (receives investigation_id in command envelopes, does not read the document directly)"],
 
   "investigation": {
-    "_description": "Full investigation document as stored in VSE SQLite and returned by VSE investigation endpoints.",
+    "_description": "Full investigation document as stored in g8ee SQLite and returned by g8ee investigation endpoints.",
 
     "core_identity": {
       "id": {
@@ -149,7 +149,7 @@
       "type": "array",
       "required": true,
       "default": [],
-      "description": "Sequential chat messages. Managed exclusively by VSE. Includes all user messages, AI responses, command requests, approval events, and system notifications.",
+      "description": "Sequential chat messages. Managed exclusively by G8EE. Includes all user messages, AI responses, command requests, approval events, and system notifications.",
       "items": {
         "id": {
           "type": "string",
@@ -211,7 +211,7 @@
       "type": "array",
       "required": true,
       "default": [],
-      "description": "Investigation lifecycle events. Managed by VSE. Does NOT include conversation messages — use conversation_history for that.",
+      "description": "Investigation lifecycle events. Managed by G8EE. Does NOT include conversation messages — use conversation_history for that.",
       "items": {
         "id": { "type": "string", "required": false },
         "attempt_number": { "type": "integer", "required": true },
@@ -240,7 +240,7 @@
         },
         "collaboration_status": {
           "type": "object",
-          "description": "Per-component status map. Keys are component names (vse, vsa, vsod). See status.json component.status."
+          "description": "Per-component status map. Keys are component names (g8ee, vsa, vsod). See status.json component.status."
         }
       }
     }

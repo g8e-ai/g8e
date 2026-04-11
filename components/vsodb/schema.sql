@@ -1,7 +1,7 @@
 -- VSODB SQLite Schema
 -- Canonical schema for the g8e coordination store (g8e.operator --listen mode).
 -- All domain data (users, sessions, operators, cases, etc.) is stored as JSON documents
--- in the documents table. vsod and vse interact with this store exclusively via the
+-- in the documents table. vsod and g8ee interact with this store exclusively via the
 -- VSODB HTTP API — neither component holds a local SQLite database.
 
 -- Document store: unified collection/id based storage

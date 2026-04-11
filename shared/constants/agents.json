@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical agent definitions and metadata shared across VSE (Python) and VSOD (JS).",
+  "_comment": "Canonical agent definitions and metadata shared across g8ee (Python) and VSOD (JS).",
   "triage.complexity": {
     "simple": "simple",
     "complex": "complex"

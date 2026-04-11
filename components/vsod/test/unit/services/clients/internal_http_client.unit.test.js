@@ -18,7 +18,7 @@ import { VSOHeaders, HTTP_INTERNAL_AUTH_HEADER } from '@vsod/constants/headers.j
 import { SourceComponent } from '@vsod/constants/ai.js';
 import {
     INTERNAL_HTTP_TIMEOUT_MS,
-    VSE_INTERNAL_URL,
+    G8EE_INTERNAL_URL,
     NEW_CASE_ID
 } from '@vsod/constants/http_client.js';
 import { apiPaths, InternalApiPaths } from '@vsod/constants/api_paths.js';
@@ -32,7 +32,7 @@ function makeBootstrapService(token = null) {
 }
 
 function makeSettingsService(overrides = {}) {
-    return { vse_url: 'https://vse', ...overrides };
+    return { g8ee_url: 'https://g8ee', ...overrides };
 }
 
 describe('InternalHttpClient', () => {
@@ -67,10 +67,10 @@ describe('InternalHttpClient', () => {
         });
 
         it('should resolve service URL from settingsService or default', () => {
-            expect(client._resolveServiceUrl('vse')).toBe('https://vse');
+            expect(client._resolveServiceUrl('g8ee')).toBe('https://g8ee');
 
             const noSettingsClient = new InternalHttpClient({ bootstrapService });
-            expect(noSettingsClient._resolveServiceUrl('vse')).toBe('https://vse');
+            expect(noSettingsClient._resolveServiceUrl('g8ee')).toBe('https://g8ee');
         });
     });
 
@@ -137,7 +137,7 @@ describe('InternalHttpClient', () => {
             });
 
             const context = new VSOHttpContext({ web_session_id: 'ws-123', user_id: 'u-123' });
-            const result = await client.request('vse', '/test', { vsoContext: context, method: 'POST', body: { foo: 'bar' } });
+            const result = await client.request('g8ee', '/test', { vsoContext: context, method: 'POST', body: { foo: 'bar' } });
 
             expect(result).toEqual(mockData);
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/test'), expect.objectContaining({
@@ -156,7 +156,7 @@ describe('InternalHttpClient', () => {
                 status: 204,
             });
 
-            const result = await client.request('vse', '/test', { method: 'DELETE' });
+            const result = await client.request('g8ee', '/test', { method: 'DELETE' });
             expect(result).toEqual({ success: true });
         });
 
@@ -167,7 +167,7 @@ describe('InternalHttpClient', () => {
                 text: async () => 'Internal Server Error',
             });
 
-            await expect(client.request('vse', '/test')).rejects.toThrow('HTTP 500: Internal Server Error');
+            await expect(client.request('g8ee', '/test')).rejects.toThrow('HTTP 500: Internal Server Error');
         });
 
         it('should timeout if request takes too long', async () => {
@@ -186,14 +186,14 @@ describe('InternalHttpClient', () => {
                 });
             });
 
-            const promise = client.request('vse', '/test');
+            const promise = client.request('g8ee', '/test');
             vi.advanceTimersByTime(INTERNAL_HTTP_TIMEOUT_MS + 100);
 
             await expect(promise).rejects.toThrow(/timeout/);
         });
     });
 
-    describe('VSE endpoint methods', () => {
+    describe('g8ee endpoint methods', () => {
         const context = new VSOHttpContext({ 
             web_session_id: 'ws-123', 
             user_id: 'u-123' 
@@ -207,9 +207,9 @@ describe('InternalHttpClient', () => {
             });
         });
 
-        it('sendChatMessage should call VSE chat endpoint', async () => {
+        it('sendChatMessage should call g8ee chat endpoint', async () => {
             await client.sendChatMessage({ message: 'hi' }, context);
-            const path = apiPaths.vse.chat();
+            const path = apiPaths.g8ee.chat();
             expect(path).toBe('/api/internal/chat');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'POST',
@@ -220,21 +220,21 @@ describe('InternalHttpClient', () => {
         it('queryInvestigations should include query params', async () => {
             const params = new URLSearchParams({ status: 'active' });
             await client.queryInvestigations(params, context);
-            const path = apiPaths.vse.investigations();
+            const path = apiPaths.g8ee.investigations();
             expect(path).toBe('/api/internal/investigations');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path + '?status=active'), expect.any(Object));
         });
 
         it('getInvestigation should call specific investigation endpoint', async () => {
             await client.getInvestigation('inv-123', context);
-            const path = apiPaths.vse.investigation('inv-123');
+            const path = apiPaths.g8ee.investigation('inv-123');
             expect(path).toBe('/api/internal/investigations/inv-123');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.any(Object));
         });
 
         it('deleteCase should call DELETE on case endpoint', async () => {
             await client.deleteCase('case-123', context);
-            const path = apiPaths.vse.case('case-123');
+            const path = apiPaths.g8ee.case('case-123');
             expect(path).toBe('/api/internal/cases/case-123');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'DELETE'
@@ -243,7 +243,7 @@ describe('InternalHttpClient', () => {
 
         it('stopAIProcessing should call stop endpoint', async () => {
             await client.stopAIProcessing({ investigation_id: 'inv-123', reason: 'cancel', web_session_id: 'ws-123' }, context);
-            const path = apiPaths.vse.chatStop();
+            const path = apiPaths.g8ee.chatStop();
             expect(path).toBe('/api/internal/chat/stop');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'POST',
@@ -251,11 +251,11 @@ describe('InternalHttpClient', () => {
             }));
         });
 
-        it('healthCheck should check VSE health', async () => {
+        it('healthCheck should check g8ee health', async () => {
             vi.spyOn(client, 'request').mockResolvedValue({ success: true });
             const results = await client.healthCheck();
-            expect(results.vse.status).toBe('healthy');
-            expect(client.request).toHaveBeenCalledWith('vse', apiPaths.vse.health(), expect.any(Object));
+            expect(results.g8ee.status).toBe('healthy');
+            expect(client.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.health(), expect.any(Object));
         });
         
     });

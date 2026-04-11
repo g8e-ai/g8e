@@ -72,7 +72,7 @@ VSA is the Go-based agent component of the g8e platform. It provides secure, rea
               ┌───────────────┴───────────────┐
               ▼                               ▼
 ┌─────────────────────────┐       ┌─────────────────────────┐
-│       VSE (AI Engine)   │       │   VSOD (Dashboard)      │
+│       g8ee (AI Engine)   │       │   VSOD (Dashboard)      │
 │  - Command dispatch     │       │  - Operator panel UI    │
 │  - Result aggregation   │       │  - SSE broadcast        │
 │  - Session management   │       │  - Status computation   │
@@ -147,7 +147,7 @@ For full details on every VSA security layer — CA trust bootstrap, mTLS, finge
 User approves command
         │
         ▼
-VSE ──publishes──► VSODB pub/sub: cmd:{id}:{session}
+g8ee ──publishes──► VSODB pub/sub: cmd:{id}:{session}
         │
         ▼
 VSOD Gateway ──bridges──► VSA WebSocket
@@ -159,15 +159,15 @@ VSA executes command locally
 VSA ──publishes──► VSODB pub/sub: results:{id}:{session}
         │
         ▼
-VSOD Gateway ──bridges──► VSE
+VSOD Gateway ──bridges──► g8ee
         │
         ▼
-VSE returns result to AI
+g8ee returns result to AI
 ```
 
 ### Heartbeat Flow
 
-VSA calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to VSODB pub/sub. From there, VSE and VSOD handle persistence and SSE fan-out — see [components/vsod.md — Heartbeat Architecture](vsod.md#heartbeat-architecture) for the full end-to-end flow.
+VSA calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to VSODB pub/sub. From there, g8ee and VSOD handle persistence and SSE fan-out — see [components/vsod.md — Heartbeat Architecture](vsod.md#heartbeat-architecture) for the full end-to-end flow.
 
 ---
 
@@ -206,11 +206,11 @@ This is the standard operating mode for remote systems and the `g8e-pod`.
 
 ### Internal Platform Authentication
 
-g8e components (VSOD, VSE, and VSA in `--listen` mode) communicate over an internal network using a shared secret called the `internal_auth_token`.
+g8e components (VSOD, g8ee, and VSA in `--listen` mode) communicate over an internal network using a shared secret called the `internal_auth_token`.
 
 - **Authoritative Source**: The `g8e-data-ssl` volume (mounted at `/vsodb/ssl`) is the sole authoritative source of truth. The token is stored in plain text at `/vsodb/ssl/internal_auth_token`.
 - **Generation**: On the first platform start, VSODB (VSA in `--listen` mode) generates a cryptographically secure 32-byte hex token if one does not exist and writes it to the SSL volume.
-- **Discovery**: VSOD and VSE discover this token by reading the file from the shared volume at startup.
+- **Discovery**: VSOD and g8ee discover this token by reading the file from the shared volume at startup.
 - **Enforcement**: Every internal HTTP request must include the `x-internal-auth` header matching this token.
 - **Diagnostics**: The `./g8e platform settings` command displays a truncated version of the active token (e.g., `f5037487...6c5f`) for verification.
 
@@ -218,7 +218,7 @@ g8e components (VSOD, VSE, and VSA in `--listen` mode) communicate over an inter
 
 In this mode, the Operator acts as **VSODB** (`g8e-data`), the platform's central backend and pub/sub broker.
 
-- **Connectivity**: **Inbound-only**. It listens for connections from other platform components (VSE, VSOD, and Outbound Operators).
+- **Connectivity**: **Inbound-only**. It listens for connections from other platform components (g8ee, VSOD, and Outbound Operators).
 - **Role**: Backend store (SQLite) and Pub/Sub broker. It does **not** execute commands or initiate outbound connections.
 - **Ports**:
   - `443` (WSS/HTTPS): Unified port for all incoming traffic (WebSocket, document store, KV, etc.).

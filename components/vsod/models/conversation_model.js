@@ -15,10 +15,10 @@
  * Conversation Model for VSOD
  *
  * JavaScript equivalent of:
- *   components/vse/app/models/conversation.py  (Python/Pydantic)
+ *   components/g8ee/app/models/conversation.py  (Python/Pydantic)
  *
  * Represents an active AI chat conversation session keyed by web_session_id.
- * VSOD is the transport layer — it builds and forwards conversation context to VSE
+ * VSOD is the transport layer — it builds and forwards conversation context to g8ee
  * and routes streaming responses back to the correct browser tab.
  */
 

@@ -23,8 +23,8 @@
  * 2. Image preview via data: URI from base64 (CSP-compliant, no blob: URLs)
  * 3. Attachment stored in local Map with preview + base64 data
  * 4. On send: getFormattedForBackend() returns base64 payloads with metadata
- * 5. VSOD stores in VSODB KV, forwards metadata to VSE
- * 6. VSE retrieves from VSODB KV for AI processing
+ * 5. VSOD stores in VSODB KV, forwards metadata to g8ee
+ * 6. g8ee retrieves from VSODB KV for AI processing
  */
 
 import { MAX_ATTACHMENT_SIZE, MAX_ATTACHMENT_FILES, ALLOWED_ATTACHMENT_CONTENT_TYPES } from '../constants/service-client-constants.js';

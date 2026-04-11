@@ -57,7 +57,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 ## Code Quality
 
 - Eliminated unnecessary abstractions and dead code across VSOD
-- Removed legacy `message_type` field from VSE conversation models
+- Removed legacy `message_type` field from g8ee conversation models
 - Removed environment-specific test configuration (single environment platform)
 - Cached settings reads in `G8ENodeOperatorService` to eliminate redundant DB reads per launch cycle
 - Implemented proper `HttpService` with protocol-driven design
@@ -67,7 +67,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 ## Testing
 
 - VSOD test suite restructured and expanded
-- VSE integration test suite expanded (SSE error paths, retry loop coverage)
+- g8ee integration test suite expanded (SSE error paths, retry loop coverage)
 - VSA test fixes and listen mode improvements
 - Full documentation audit with corrections across security, architecture, and component docs
 
@@ -75,7 +75,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 
 | Component | Changes |
 |-----------|---------|
-| **VSE** | 304 files, dual model selection, EventType cleanup, integration tests |
+| **g8ee** | 304 files, dual model selection, EventType cleanup, integration tests |
 | **VSOD** | 170 files, EventSource elimination, SSE fixes, test restructuring |
 | **VSA** | 31 files, test fixes, CA cert path discovery |
 | **VSODB** | Multi-arch cross-compile, blob store binary upload on startup |

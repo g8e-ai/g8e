@@ -8,8 +8,8 @@ Documentation for the g8e platform, organized by category.
 
 | Document | Description |
 |----------|-------------|
-| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, code quality rules (VSA/VSE/VSOD), shared constants and models, project structure |
-| [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8e-pod environment, CI workflows, and component-specific guidelines (VSA, VSOD, VSE) |
+| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, code quality rules (VSA/g8ee/VSOD), shared constants and models, project structure |
+| [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8e-pod environment, CI workflows, and component-specific guidelines (VSA, VSOD, g8ee) |
 | [glossary.md](glossary.md) | Essential terminology for understanding the g8e platform, organized alphabetically |
 | [docs-guidelines.md](docs-guidelines.md) | Documentation authoring standards — structure, style, formatting, file locations, ownership rules, and sync rules |
 
@@ -40,10 +40,10 @@ Technical reference for each platform component.
 | Document | Description |
 |----------|-------------|
 | [components/vsa.md](components/vsa.md) | VSA (Virtual Service Agent) — Go-based operator providing secure, real-time command execution and file management for remote system operations |
-| [components/vse.md](components/vse.md) | VSE (Virtual Support Engineer) — AI engine providing agentic, LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
+| [components/g8ee.md](components/g8ee.md) | g8ee (Virtual Support Engineer) — AI engine providing agentic, LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
 | [components/vsod.md](components/vsod.md) | VSOD (VSO Dashboard) — authentication, session management, dashboard backend, operator lifecycle, SSE fan-out, and WebSocket proxy |
 | [components/vsodb.md](components/vsodb.md) | VSODB — operator binary in `--listen` mode; single source of truth for persistence (SQLite document store, KV store, SSE event buffer, and pub/sub broker) |
-| [components/g8e-pod.md](components/g8e-pod.md) | g8e node — always-on sidecar container for running all component tests (VSE/VSOD/VSA), security scans, and ephemeral SSH deployment |
+| [components/g8e-pod.md](components/g8e-pod.md) | g8e node — always-on sidecar container for running all component tests (g8ee/VSOD/VSA), security scans, and ephemeral SSH deployment |
 
 ---
 

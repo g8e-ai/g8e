@@ -172,7 +172,7 @@ export class DeviceRegistrationService {
             await this._sseService.publishEvent(web_session_id, event);
 
             try {
-                await this._operatorService.relayRegisterOperatorSessionToVse(relayContext);
+                await this._operatorService.relayRegisterOperatorSessionToG8ee(relayContext);
             } catch (hbError) {
                 logger.warn('[DEVICE-REGISTRATION] Failed to register operator session heartbeat subscription', {
                     operator_id,

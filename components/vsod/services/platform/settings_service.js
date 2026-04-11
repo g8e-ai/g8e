@@ -217,7 +217,7 @@ class SettingsService {
     }
 
     /**
-     * Update user-specific settings in the DB and sync to VSE.
+     * Update user-specific settings in the DB and sync to G8EE.
      * @param {string} userId
      * @param {Object} updates
      * @returns {Promise<Object>}
@@ -258,16 +258,16 @@ class SettingsService {
             throw new Error(result?.error || 'Failed to update user settings');
         }
 
-        // Sync to VSE if internalHttpClient is available
+        // Sync to g8ee if internalHttpClient is available
         if (this.internalHttpClient) {
             try {
-                await this.internalHttpClient.request('vse', apiPaths.vse.settingsUser(), {
+                await this.internalHttpClient.request('g8ee', apiPaths.g8ee.settingsUser(), {
                     method: 'PATCH',
                     body: validation.valid,
                 });
-                logger.info('[SETTINGS-SERVICE] Synced user settings to VSE', { userId });
+                logger.info('[SETTINGS-SERVICE] Synced user settings to g8ee', { userId });
             } catch (syncError) {
-                logger.warn('[SETTINGS-SERVICE] Failed to sync user settings to VSE (non-critical)', {
+                logger.warn('[SETTINGS-SERVICE] Failed to sync user settings to g8ee (non-critical)', {
                     userId,
                     error: syncError.message
                 });

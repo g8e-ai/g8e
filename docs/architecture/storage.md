@@ -8,13 +8,13 @@ For high-level storage summaries, see the component docs and follow the links ba
 
 ## Platform Storage Overview
 
-The g8e platform uses an **operator-first** storage philosophy. The Operator (VSA) is the authoritative system of record for all operational data — command outputs, file mutations, and session history. Platform components (VSE, VSOD) are **stateless** with respect to persistent data: they hold no databases of their own and rely entirely on VSODB for all platform-side storage.
+The g8e platform uses an **operator-first** storage philosophy. The Operator (VSA) is the authoritative system of record for all operational data — command outputs, file mutations, and session history. Platform components (g8ee, VSOD) are **stateless** with respect to persistent data: they hold no databases of their own and rely entirely on VSODB for all platform-side storage.
 
 ---
 
 ## Data Plane Architecture
 
-The Operator is the central data plane for the entire platform. In `--listen` mode (VSODB), it provides the persistence and messaging backbone for VSE and VSOD. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
+The Operator is the central data plane for the entire platform. In `--listen` mode (VSODB), it provides the persistence and messaging backbone for g8ee and VSOD. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
 
 ```mermaid
 graph TD
@@ -34,10 +34,10 @@ graph TD
         VSODB --- PS
         VSODB --- BS
         
-        VSE["<b>VSE</b><br/>AI Engine"]
+        g8ee["<b>g8ee</b><br/>AI Engine"]
         VSOD["<b>VSOD</b><br/>Dashboard & Gateway"]
         
-        VSE -- "REST / PubSub" --> VSODB
+        g8ee -- "REST / PubSub" --> VSODB
         VSOD -- "REST" --> VSODB
     end
 
@@ -67,7 +67,7 @@ graph TD
     classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
     classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
     
-    class VSODB,VSE,VSOD hub;
+    class VSODB,g8ee,VSOD hub;
     class OPA operator;
     class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
 ```
@@ -81,7 +81,7 @@ graph TD
 │                      g8e platform components                    │
 │                                                                     │
 │  ┌──────────────────────┐      ┌──────────────────────────────────┐ │
-│  │         VSE          │      │              VSOD                │ │
+│  │         g8ee          │      │              VSOD                │ │
 │  │  (stateless)         │      │  (stateless)                     │ │
 │  │                      │      │                                  │ │
 │  │  DBClient         │      │  VSODBDocumentClient             │ │
@@ -149,7 +149,7 @@ graph TD
 |---|---|---|---|
 | **VSODB (DB)** | SQLite (via VSA `--listen`) | `g8e-data-data` → `/data` | Sole platform persistence layer: document store, KV, blob store, SSE buffer, pub/sub broker. Wiped by `platform reset`. |
 | **VSODB (SSL)** | TLS certs (auto-generated) | `g8e-data-ssl` → `/ssl` | Platform CA and server certificates. **Never wiped** — survives `reset`, `wipe`, and `rebuild`. |
-| **VSE** | None (VSODB client) | — | Stateless; reads/writes all data via VSODB HTTP API |
+| **g8ee** | None (VSODB client) | — | Stateless; reads/writes all data via VSODB HTTP API |
 | **VSOD** | None (VSODB client) | — | Stateless; document/KV data via VSODB |
 | **VSA (Scrubbed Vault)** | SQLite | `{workdir}/.g8e/local_state.db` | Sentinel-processed output for AI access |
 | **VSA (Raw Vault)** | SQLite | `{workdir}/.g8e/raw_vault.db` | Unscrubbed output for customer forensics |
@@ -161,7 +161,7 @@ graph TD
 
 ## VSODB — Platform Persistence Layer
 
-VSODB is the **platform-shared** persistence layer for g8e. It is the VSA binary (`g8e.operator`) running in `--listen` mode, backing shared state with a single SQLite database at `/data/g8e.db`. VSE and VSOD are stateless — neither maintains a local SQLite database. All persistent reads and writes go through VSODB.
+VSODB is the **platform-shared** persistence layer for g8e. It is the VSA binary (`g8e.operator`) running in `--listen` mode, backing shared state with a single SQLite database at `/data/g8e.db`. g8ee and VSOD are stateless — neither maintains a local SQLite database. All persistent reads and writes go through VSODB.
 
 VSOD is the sole external entry point — it binds host ports `443` and `80`. VSODB has **no host port bindings**; it is reachable only within the Docker network. Operators dial VSODB through VSOD's TLS termination.
 
@@ -201,7 +201,7 @@ VSODB is the authoritative security generator for the platform. During database 
 The platform treats the shared SSL volume (`g8e-data-ssl`) as the absolute source of truth for these bootstrap secrets.
 - At startup, VSODB ensures these secret files exist on the volume.
 - If a file is missing, VSODB generates a new random 32-byte hex value and writes it to the volume.
-- These secrets are **never stored in the database**. VSOD and VSE read them directly from the volume at startup.
+- These secrets are **never stored in the database**. VSOD and g8ee read them directly from the volume at startup.
 - This ensures that platform identity and session encryption are decoupled from the database lifecycle, surviving full database resets as long as the SSL volume is preserved.
 
 ### SQLite Configuration
@@ -223,7 +223,7 @@ PRAGMA auto_vacuum     = INCREMENTAL;
 PRAGMA temp_store      = MEMORY;
 ```
 
-WAL mode enables concurrent readers with a single writer, which is critical for the mixed read/write workload from VSE and VSOD simultaneously. The connection pool is `MaxOpenConns=1` to match SQLite's single-writer model.
+WAL mode enables concurrent readers with a single writer, which is critical for the mixed read/write workload from g8ee and VSOD simultaneously. The connection pool is `MaxOpenConns=1` to match SQLite's single-writer model.
 
 ### VSODB SQLite Schema
 
@@ -291,7 +291,7 @@ g8e uses a persistent configuration model managed via VSODB. While initial boots
 
 ### Configuration Precedence
 
-All components (VSOD, VSE, VSA) resolve configuration values using a strictly enforced precedence chain (highest priority wins):
+All components (VSOD, g8ee, VSA) resolve configuration values using a strictly enforced precedence chain (highest priority wins):
 
 1.  **User Settings (DB)**: Individual user overrides stored in the `settings` collection. Document ID is `user_settings_{userId}`. CLI tools support this via the `--user-id` flag.
 2.  **Platform Settings (DB)**: Global platform configuration stored in the `settings` collection.
@@ -337,17 +337,17 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `account_locks` | VSOD | Account lockout state — identifier, locked\_until, attempt count |
 | `api_keys` | VSOD | API key registry — key hash, owner, operator\_id, permissions |
 | `organizations` | VSOD | Organization records — owner\_id, name, team\_members, stats |
-| `operators` | VSOD/VSE | Operator registration and runtime state — see [Operator Document](#operator-document) |
+| `operators` | VSOD/g8ee | Operator registration and runtime state — see [Operator Document](#operator-document) |
 | `operator_usage` | VSOD | Operator usage metrics — last\_used, command\_count |
-| `cases` | VSOD/VSE | Support case records — title, status, owner, investigation list |
-| `investigations` | VSE | AI investigation context — managed by `InvestigationDataService` (Data Layer) |
-| `tasks` | VSE | Task records linked to investigations |
-| `memories` | VSE | AI memory entries — managed by `MemoryDataService` (Data Layer) |
-| `settings` | VSOD/VSE | Platform-wide configuration document (`platform_settings` document) and User-specific application preferences (`user_settings_{user_id}` documents) |
+| `cases` | VSOD/g8ee | Support case records — title, status, owner, investigation list |
+| `investigations` | g8ee | AI investigation context — managed by `InvestigationDataService` (Data Layer) |
+| `tasks` | g8ee | Task records linked to investigations |
+| `memories` | g8ee | AI memory entries — managed by `MemoryDataService` (Data Layer) |
+| `settings` | VSOD/g8ee | Platform-wide configuration document (`platform_settings` document) and User-specific application preferences (`user_settings_{user_id}` documents) |
 | `bound_sessions` | VSOD | Operator–web session binding records — one document per web session |
-| `pending_commands` | VSE | Tracked commands awaiting results from operators |
-| `external-services` | VSE | External service integration configs (VSE-internal; not in shared constants) |
-| `orgs` | VSE | Organization alias used internally by VSE (shared constant name is `organizations`) |
+| `pending_commands` | g8ee | Tracked commands awaiting results from operators |
+| `external-services` | g8ee | External service integration configs (g8ee-internal; not in shared constants) |
+| `orgs` | g8ee | Organization alias used internally by g8ee (shared constant name is `organizations`) |
 
 ### Session Documents
 
@@ -385,25 +385,25 @@ Session documents are stored in both the document store (durability) and the KV 
 
 ### Operator Document
 
-Stored in the `operators` collection. VSOD writes lifecycle/auth fields; VSE writes heartbeat data.
+Stored in the `operators` collection. VSOD writes lifecycle/auth fields; g8ee writes heartbeat data.
 
 | Field | Type | Writer | Description |
 |---|---|---|---|
 | `id` | string | VSOD | UUID, primary key |
 | `operator_type` | string | VSOD | `system` or `cloud` |
 | `cloud_subtype` | string | VSOD | `aws`, `gcp`, `azure` (cloud operators only) |
-| `status` | string | VSOD/VSE | `available`, `active`, `bound`, `offline`, `stale`, `stopped`, `unavailable`, `terminated` |
+| `status` | string | VSOD/g8ee | `available`, `active`, `bound`, `offline`, `stale`, `stopped`, `unavailable`, `terminated` |
 | `user_id` | string | VSOD | Owning user ID |
 | `operator_api_key` | string | VSOD | Hashed API key |
 | `hostname` | string | VSA | System hostname from bootstrap |
 | `system_info` | object | VSA | Static system metadata: OS, arch, public/private IP |
-| `last_heartbeat` | string | VSE | Timestamp of most recent heartbeat |
-| `heartbeat_history` | array | VSE | Rolling buffer of last 10 heartbeats |
-| `latest_heartbeat_snapshot` | object | VSE | Most recent metrics: CPU, memory, disk, network |
+| `last_heartbeat` | string | g8ee | Timestamp of most recent heartbeat |
+| `heartbeat_history` | array | g8ee | Rolling buffer of last 10 heartbeats |
+| `latest_heartbeat_snapshot` | object | g8ee | Most recent metrics: CPU, memory, disk, network |
 | `operator_session_id` | string | VSOD | Active session ID |
 | `is_g8e_pod` | boolean | VSOD | Set on g8e-pod sidecar operators |
 | `created_at` | string | VSOD | ISO 8601 creation timestamp |
-| `updated_at` | string | VSOD/VSE | ISO 8601 last-update timestamp |
+| `updated_at` | string | VSOD/g8ee | ISO 8601 last-update timestamp |
 
 ---
 
@@ -413,7 +413,7 @@ The KV store is used for ephemeral, time-bounded state. Every key has an optiona
 
 ### Key Naming
 
-All keys follow the canonical `g8e:{domain}:{...segments}` schema. The `v1` prefix (`CACHE_PREFIX`) allows atomic namespace invalidation by bumping the version. **Never construct key strings manually — always use `KVKey` builders** from `components/vsod/constants/kv_keys.js` (VSOD) or `components/vse/app/constants.py` (VSE).
+All keys follow the canonical `g8e:{domain}:{...segments}` schema. The `v1` prefix (`CACHE_PREFIX`) allows atomic namespace invalidation by bumping the version. **Never construct key strings manually — always use `KVKey` builders** from `components/vsod/constants/kv_keys.js` (VSOD) or `components/g8ee/app/constants.py` (g8ee).
 
 Keys fall into two categories: **ephemeral-only** (KV is the sole store; no document store counterpart) and **cache-aside** (KV is a read cache; document store is authoritative).
 
@@ -424,7 +424,7 @@ Keys fall into two categories: **ephemeral-only** (KV is the sole store; no docu
 | `g8e:investigation:{inv_id}:attachment:{att_id}` | `KVKey.attachment(invId, attId)` | VSOD | Attachment metadata record (`AttachmentRecord`) — `object_key`, `filename`, `content_type`, `file_size`, `user_id`. | 1h |
 | `g8e:investigation:{inv_id}:attachment.index` | `KVKey.attachmentIndex(invId)` | VSOD | Attachment index list for an investigation | 1h |
 | `g8e:user:{id}:web_sessions` | `KVKey.userWebSessions(userId)` | VSOD | Sorted set of active web session IDs | Session TTL (8h) |
-| `g8e:user:{id}:memories` | `KVKey.userMemories(userId)` | VSE | Set of memory IDs for a user | None |
+| `g8e:user:{id}:memories` | `KVKey.userMemories(userId)` | g8ee | Set of memory IDs for a user | None |
 | `g8e:operator:{id}:first.deployed` | `KVKey.operatorFirstDeployed(id)` | VSOD | Persistent first-deployment timestamp | None |
 | `g8e:operator:{id}:tracked.status` | `KVKey.operatorTrackedStatus(id)` | VSOD | Ephemeral operator status for SSE keepalive | 5 min |
 | `g8e:user:{id}:operators` | `KVKey.userOperators(userId)` | VSOD | Set of operator IDs owned by a user | 1h |
@@ -440,7 +440,7 @@ Keys fall into two categories: **ephemeral-only** (KV is the sole store; no docu
 | `g8e:auth:login:ip:{ip}:accounts` | `KVKey.loginIpAccounts(ip)` | VSOD | Account identifiers seen from a source IP | Short-lived |
 | `g8e:auth:passkey:challenge:{user_id}` | `KVKey.passkeyChallenge(userId)` | VSOD | Pending WebAuthn passkey challenge bytes | 5 min |
 | `g8e:auth:passkey:pending:{token}` | `KVKey.passkeyPendingRegistration(token)` | VSOD | Pending passkey registration state | 5 min |
-| `g8e:execution:{execution_id}:pending.cmd` | `KVKey.pendingCmd(executionId)` | VSE | Pending command tracking state | Short-lived |
+| `g8e:execution:{execution_id}:pending.cmd` | `KVKey.pendingCmd(executionId)` | g8ee | Pending command tracking state | Short-lived |
 | `g8e:session:operator:{operator_session_id}:bind` | `KVKey.sessionBindOperators(id)` | VSOD | Operator session → bound web session ID | Session TTL |
 | `g8e:session:web:{web_session_id}:bind` | `KVKey.sessionWebBind(id)` | VSOD | Web session → bound operator session IDs (newline-delimited set) | Session TTL |
 
@@ -650,7 +650,7 @@ CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filep
 
 **Encryption:** when the vault is unlocked, `content_text`, `command_stdout`, and `command_stderr` are encrypted via AES-256-GCM envelope encryption before write and decrypted transparently on read. The `encrypted` column records whether a row was written under encryption. See [Audit Vault Encryption](#audit-vault-encryption).
 
-**Access pattern:** `HistoryHandler.HandleFetchHistory` (`components/vsa/services/storage/history_handler.go`) receives a `FETCH_HISTORY` pub/sub request, calls `AuditVaultService.GetEvents` with pagination (`limit`/`offset`), and for each `FILE_MUTATION` event fetches its `file_mutation_log` rows via `GetFileMutations`. The assembled `FetchHistoryResultPayload` is published back over pub/sub to VSE.
+**Access pattern:** `HistoryHandler.HandleFetchHistory` (`components/vsa/services/storage/history_handler.go`) receives a `FETCH_HISTORY` pub/sub request, calls `AuditVaultService.GetEvents` with pagination (`limit`/`offset`), and for each `FILE_MUTATION` event fetches its `file_mutation_log` rows via `GetFileMutations`. The assembled `FetchHistoryResultPayload` is published back over pub/sub to G8EE.
 
 ---
 
@@ -694,13 +694,13 @@ else:
 | `False` | `"raw"` | Raw Vault (`{workdir}/.g8e/raw_vault.db`) |
 | `None` | omitted | VSA default (`"raw"`) |
 
-The same conversion applies at all wire boundaries in VSE. The raw bool must never be passed directly to a VSA payload — `VaultMode` is the only form accepted on the wire.
+The same conversion applies at all wire boundaries in G8EE. The raw bool must never be passed directly to a VSA payload — `VaultMode` is the only form accepted on the wire.
 
 ---
 
 ## Cache-Aside Pattern
 
-Both VSE and VSOD own a `CacheAsideService` instance that **must be used for all backend document reads and writes**. Direct calls to `DBClient` / `VSODBDocumentClient` that bypass the cache are only acceptable for operations that are explicitly not cacheable (e.g. append-only audit log writes, one-shot bootstrap reads).
+Both g8ee and VSOD own a `CacheAsideService` instance that **must be used for all backend document reads and writes**. Direct calls to `DBClient` / `VSODBDocumentClient` that bypass the cache are only acceptable for operations that are explicitly not cacheable (e.g. append-only audit log writes, one-shot bootstrap reads).
 
 ### How It Works
 
@@ -719,7 +719,7 @@ Invalidate-on-update (not update-in-place) is the correct pattern for this platf
 
 ### Read/Write Operations
 
-| Operation | VSE (`cache_aside.py`) | VSOD (`cache_aside_service.js`) |
+| Operation | g8ee (`cache_aside.py`) | VSOD (`cache_aside_service.js`) |
 |---|---|---|
 | `update_document` | DB write → **invalidate** (del key) | DB write → **invalidate** (del key) |
 | `create_document` | DB write → setex | DB write → setex |
@@ -728,9 +728,9 @@ Invalidate-on-update (not update-in-place) is the correct pattern for this platf
 
 ### Per-Collection TTL Strategies
 
-TTLs are defined in `TTL_STRATEGIES` (VSE) and `CacheTTL` (VSOD). Collections absent from the map use `defaultTTL`.
+TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (VSOD). Collections absent from the map use `defaultTTL`.
 
-| Collection | VSE TTL | VSOD TTL |
+| Collection | g8ee TTL | VSOD TTL |
 |---|---|---|
 | `web_sessions` | `None` (no expiry — session TTL managed separately) | `SESSION_TTL_SECONDS` |
 | `operator_sessions` | `None` (no expiry) | `SESSION_TTL_SECONDS` |
@@ -743,21 +743,21 @@ TTLs are defined in `TTL_STRATEGIES` (VSE) and `CacheTTL` (VSOD). Collections ab
 | `operators` | `CACHE_TTL_MEDIUM` | `CacheTTL.OPERATOR` |
 | `memories` | `CACHE_TTL_MEDIUM` | — |
 | `pending_commands` | `PENDING_CMD_TTL_SECONDS` | — |
-| `orgs` (VSE-internal alias) | `CACHE_TTL_ORGS` | — |
+| `orgs` (g8ee-internal alias) | `CACHE_TTL_ORGS` | — |
 
 ### Implementation Locations
 
 | Component | File |
 |---|---|
-| VSE | `components/vse/app/services/cache/cache_aside.py` |
+| g8ee | `components/g8ee/app/services/cache/cache_aside.py` |
 | VSOD | `components/vsod/services/cache/cache_aside_service.js` |
 
 ### Rules
 
 - All document reads and writes go through `CacheAsideService` — never call `DBClient.get_document` or `VSODBDocumentClient.getDocument` directly from service logic.
 - Never write to the KV store manually for a `g8e:cache:doc:*` key — exclusively managed by `CacheAsideService`.
-- VSE provides `invalidate_document(collection, id)` and `invalidate_collection(collection)` for targeted cache busting when an out-of-band write must occur.
-- `STOPPED` operators are not re-cached on miss — they are historical records. VSE's `get_operator` enforces this explicitly.
+- g8ee provides `invalidate_document(collection, id)` and `invalidate_collection(collection)` for targeted cache busting when an out-of-band write must occur.
+- `STOPPED` operators are not re-cached on miss — they are historical records. g8ee's `get_operator` enforces this explicitly.
 - Query results are short-lived (`CACHE_TTL_SHORT` / `CacheTTL.QUERY`, 5 min). Call `invalidate_query_cache(collection)` / `setQueryResult` after any mutation that would affect a cached query.
 
 ---
@@ -796,17 +796,17 @@ TTLs are defined in `TTL_STRATEGIES` (VSE) and `CacheTTL` (VSOD). Collections ab
 
 1. Browser → VSOD: `POST /api/chat/send`
 2. VSOD → VSODB KV: Resolve bound operators via `sessionWebBind` key
-3. VSOD → VSE: `POST /api/internal/chat` with `VSOHttpContext` headers
+3. VSOD → G8EE: `POST /api/internal/chat` with `VSOHttpContext` headers
 4. VSOD → VSODB KV: Store attachment metadata (`object_key`, filename, type, size) at `g8e:investigation:{id}:attachment:{att_id}`
-5. VSE → VSODB Doc: Read/create `cases` and `investigations` documents
-6. VSE → LLM Provider: Stream request with assembled context
-7. VSE → VSOD SSE: Push each `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event per text chunk
-8. VSE → VSODB Doc: Persist final AI response to `investigations`
-9. VSE → VSODB Doc: Dispatch LFAA events via pub/sub to the bound VSA
+5. g8ee → VSODB Doc: Read/create `cases` and `investigations` documents
+6. g8ee → LLM Provider: Stream request with assembled context
+7. g8ee → VSOD SSE: Push each `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event per text chunk
+8. g8ee → VSODB Doc: Persist final AI response to `investigations`
+9. g8ee → VSODB Doc: Dispatch LFAA events via pub/sub to the bound VSA
 
 ### Command Execution Flow
 
-1. VSE → VSODB Pub/Sub: `publish cmd:{operator_id}:{operator_session_id}` with `CommandPayload` (includes `VaultMode`)
+1. g8ee → VSODB Pub/Sub: `publish cmd:{operator_id}:{operator_session_id}` with `CommandPayload` (includes `VaultMode`)
 2. VSA ← VSODB Pub/Sub: Receive command on subscribed channel
 3. VSA → Sentinel: Pre-execution threat scan (MITRE ATT&CK patterns); block if flagged
 4. VSA: Execute command in subprocess
@@ -816,24 +816,24 @@ TTLs are defined in `TTL_STRATEGIES` (VSE) and `CacheTTL` (VSOD). Collections ab
 8. VSA → Audit Vault: `RecordEvent(CMD_EXEC)` — encrypted fields, truncation applied
 9. VSA → Ledger: `git commit` for any file mutations; hash stored in `file_mutation_log`
 10. VSA → VSODB Pub/Sub: `publish results:{operator_id}:{operator_session_id}` with result payload
-11. VSE ← VSODB Pub/Sub: Receive result; if `stored_locally=true`, instruct AI to call `fetch_execution_output`
-12. VSE → VSODB Doc: Update `investigations` metadata
+11. g8ee ← VSODB Pub/Sub: Receive result; if `stored_locally=true`, instruct AI to call `fetch_execution_output`
+12. g8ee → VSODB Doc: Update `investigations` metadata
 
 ### Fetch Execution Output Flow
 
 1. AI calls `fetch_execution_output(execution_id)` tool
-2. VSE → VSODB Pub/Sub: Publish `FETCH_LOGS` request to `cmd:{operator_id}:{session}` channel
+2. g8ee → VSODB Pub/Sub: Publish `FETCH_LOGS` request to `cmd:{operator_id}:{session}` channel
 3. VSA: Read from Scrubbed Vault (`execution_log WHERE id = ?`); decompress stdout/stderr
 4. VSA → VSODB Pub/Sub: Publish output payload on `results:*` channel
-5. VSE: Receive output ephemerally — content is never persisted on the platform side
+5. G8EE: Receive output ephemerally — content is never persisted on the platform side
 
 ### Fetch Session History Flow
 
 1. AI calls `fetch_session_history(operator_session_id, limit, offset)` tool
-2. VSE → VSODB Pub/Sub: Publish `FETCH_HISTORY` request
+2. g8ee → VSODB Pub/Sub: Publish `FETCH_HISTORY` request
 3. VSA `HistoryHandler`: `GetSession` + `GetEvents` with pagination; `GetFileMutations` for each `FILE_MUTATION` event
 4. VSA → VSODB Pub/Sub: Publish `FetchHistoryResultPayload` with decrypted events
-5. VSE: Receive history; content is never persisted on the platform side
+5. G8EE: Receive history; content is never persisted on the platform side
 
 ---
 
@@ -846,7 +846,7 @@ TTLs are defined in `TTL_STRATEGIES` (VSE) and `CacheTTL` (VSOD). Collections ab
 | Browser → VSOD | TLS 1.2+ (HTTPS) | External listener; cert served from `vsodb-data` volume |
 | VSA → VSOD (auth/bootstrap) | TLS 1.3 + mTLS | After CA bootstrap; VSA rejects if cert not signed by pinned CA |
 | VSA → VSOD (pub/sub) | TLS 1.3 WebSocket (WSS) | VSOD proxies `/ws/pubsub` upgrade to VSODB internally; VSA never dials VSODB directly |
-| VSE, VSOD → VSODB | HTTPS/WSS (TLS) | Internal Docker network only; VSODB has no external port bindings |
+| g8ee, VSOD → VSODB | HTTPS/WSS (TLS) | Internal Docker network only; VSODB has no external port bindings |
 
 ### At Rest — Platform (VSODB)
 
@@ -904,7 +904,7 @@ All VSA-side databases use `sqliteutil.Pruner`, which runs on `PruneIntervalMinu
 ## Related Documentation
 
 - [../components/vsa.md](../components/vsa.md) — VSA component reference
-- [../components/vse.md](../components/vse.md) — VSE component reference
+- [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
 - [../components/vsod.md](../components/vsod.md) — VSOD component reference
 - [../components/vsodb.md](../components/vsodb.md) — VSODB component reference
 - [../architecture/security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection

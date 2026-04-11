@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. VSE reads it via VSOD HTTP API and VSODB KV cache. VSA is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and VSE breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via VSOD HTTP API and VSODB KV cache. VSA is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and g8ee breaks operator binding, context building, and AI execution.",
 
   "_authority": "VSOD (SQLite)",
-  "_consumers": ["VSE (Python OperatorDocument)", "VSA (identity fields at auth time)"],
+  "_consumers": ["g8ee (Python OperatorDocument)", "VSA (identity fields at auth time)"],
   "_cache_aside": "VSODB KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
@@ -309,7 +309,7 @@
   },
 
   "operator_status_info": {
-    "_description": "Lightweight projection of OperatorDocument returned by GET /api/operators/status and GET /api/internal/operators/:id/status. VSE's OperatorDocument model maps to this shape.",
+    "_description": "Lightweight projection of OperatorDocument returned by GET /api/operators/status and GET /api/internal/operators/:id/status. g8ee's OperatorDocument model maps to this shape.",
     "fields": {
       "operator_id": { "type": "string", "required": true },
       "user_id": { "type": "string", "required": false },

@@ -14,13 +14,13 @@
 /**
  * VSOD Internal SSE Routes
  * 
- * Internal HTTP endpoints for SSE event delivery from VSE.
+ * Internal HTTP endpoints for SSE event delivery from G8EE.
  * NOT exposed via public routes - only accessible from internal services.
  */
 
 import express from 'express';
 import { SSEPushRequest } from '../../models/request_models.js';
-import { VSEPassthroughEvent } from '../../models/sse_models.js';
+import { G8eePassthroughEvent } from '../../models/sse_models.js';
 import { OperatorListUpdatedEvent } from '../../models/operator_model.js';
 import { ErrorResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
@@ -39,7 +39,7 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
     /**
      * Normalize citation_num values in a CHAT_CITATIONS_READY event to sequential 1-based integers.
-     * VSE emits non-sequential citation_num values (e.g. 10, 20, 30). The frontend expects
+     * g8ee emits non-sequential citation_num values (e.g. 10, 20, 30). The frontend expects
      * sequential 1-based values. Returns a new event object — does not mutate the input.
      */
     function normalizeCitationNums(event) {
@@ -74,13 +74,13 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
             let finalEvent;
             
-            // Special handling for OPERATOR_PANEL_LIST_UPDATED: replace VSE's single-operator payload
+            // Special handling for OPERATOR_PANEL_LIST_UPDATED: replace g8ee's single-operator payload
             // with VSOD's full operator list for the frontend
             if (pushReq.event.type === EventType.OPERATOR_PANEL_LIST_UPDATED) {
                 try {
                     const operatorList = await operatorService.getUserOperators(pushReq.user_id);
                     finalEvent = new OperatorListUpdatedEvent(operatorList);
-                    logger.info('[INTERNAL-HTTP] Replaced VSE operator payload with full operator list', {
+                    logger.info('[INTERNAL-HTTP] Replaced g8ee operator payload with full operator list', {
                         webSessionId: redactWebSessionId(pushReq.web_session_id),
                         operatorCount: operatorList.operators?.length || 0
                     });
@@ -90,13 +90,13 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
                         error: err.message
                     });
                     // Fallback to original event if we can't get the operator list
-                    finalEvent = new VSEPassthroughEvent({ _payload: pushReq.event });
+                    finalEvent = new G8eePassthroughEvent({ _payload: pushReq.event });
                 }
             } else {
                 const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
                     ? normalizeCitationNums(pushReq.event)
                     : pushReq.event;
-                finalEvent = new VSEPassthroughEvent({ _payload: normalizedEvent });
+                finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
             }
 
             // Forward to SSE service for delivery

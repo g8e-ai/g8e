@@ -179,9 +179,9 @@ export function createMCPRouter({
 
     async function handleToolsList(req, res, { id, internalHttpClient }) {
         try {
-            const vseResponse = await internalHttpClient.mcpToolsList(req.vsoContext);
+            const g8eeResponse = await internalHttpClient.mcpToolsList(req.vsoContext);
 
-            return res.json(jsonrpcResult(id, { tools: vseResponse.tools || [] }));
+            return res.json(jsonrpcResult(id, { tools: g8eeResponse.tools || [] }));
         } catch (error) {
             logger.error('[MCP] tools/list failed', { error: error.message });
             return res.status(500).json(
@@ -198,21 +198,21 @@ export function createMCPRouter({
         }
 
         try {
-            const vseResponse = await internalHttpClient.mcpToolsCall({
+            const g8eeResponse = await internalHttpClient.mcpToolsCall({
                 tool_name: params.name,
                 arguments: params.arguments || {},
                 request_id: id,
             }, req.vsoContext);
 
-            if (vseResponse.error) {
+            if (g8eeResponse.error) {
                 return res.json({
                     jsonrpc: '2.0',
                     id,
-                    error: vseResponse.error,
+                    error: g8eeResponse.error,
                 });
             }
 
-            return res.json(jsonrpcResult(id, vseResponse.result || {}));
+            return res.json(jsonrpcResult(id, g8eeResponse.result || {}));
         } catch (error) {
             logger.error('[MCP] tools/call failed', { error: error.message, tool: params.name });
             return res.status(500).json(

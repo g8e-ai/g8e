@@ -28,7 +28,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
     beforeEach(() => {
         mockOperatorService = {
-            relayStopCommandToVse: vi.fn()
+            relayStopCommandToG8ee: vi.fn()
         };
         mockG8ENodeOperatorService = {
             relaunchG8ENodeOperatorForUser: vi.fn()
@@ -108,13 +108,13 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
     describe(`POST ${OperatorPaths.STOP}`, () => {
         it('successfully relays stop command', async () => {
-            mockOperatorService.relayStopCommandToVse.mockResolvedValue({ success: true });
+            mockOperatorService.relayStopCommandToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app).post('/api/operator/test-op-id/stop');
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(mockOperatorService.relayStopCommandToVse).toHaveBeenCalled();
+            expect(mockOperatorService.relayStopCommandToG8ee).toHaveBeenCalled();
         });
 
         it('returns 400 if operator has no session', async () => {
@@ -129,8 +129,8 @@ describe('OperatorStatusRoutes Unit Tests', () => {
             expect(res.body.error).toBe('Operator has no active session');
         });
 
-        it('returns 500 if relay to VSE fails', async () => {
-            mockOperatorService.relayStopCommandToVse.mockRejectedValue(new Error('VSE Unreachable'));
+        it('returns 500 if relay to g8ee fails', async () => {
+            mockOperatorService.relayStopCommandToG8ee.mockRejectedValue(new Error('g8ee Unreachable'));
 
             const res = await request(app).post('/api/operator/test-op-id/stop');
 

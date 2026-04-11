@@ -15,7 +15,7 @@
  * SSE Service - SSE Event Manager
  * 
  * Architecture:
- * 1. VSE sends events to VSOD via HTTP (NOT pub/sub)
+ * 1. g8ee sends events to VSOD via HTTP (NOT pub/sub)
  * 2. VSOD delivers directly to local SSE connections
  * 3. Fire-and-forget: if client is disconnected, events are missed (client fetches fresh state on reconnect)
  */
@@ -142,7 +142,7 @@ class SSEService {
 
     /**
      * Deliver event to local SSE connection.
-     * Events come from VSE via HTTP, NOT VSODB KV pub/sub.
+     * Events come from g8ee via HTTP, NOT VSODB KV pub/sub.
      * Fire-and-forget: returns true even when no connection is present.
      *
      * @param {string} webSessionId - WebSession ID

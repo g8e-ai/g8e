@@ -29,7 +29,7 @@ External Protocol (e.g., MCP)
            │
            ▼
     Component Execution
-    (VSE, VSA, VSOD)
+    (g8ee, VSA, VSOD)
 ```
 
 **Key Design Principle:** The platform never speaks external protocols directly to its core logic. All external protocols are translated to internal event types at the edge, and core components only understand event types. This enables adding new protocols by implementing a new translator without touching core business logic.
@@ -48,7 +48,7 @@ External Protocol (e.g., MCP)
 g8e implements MCP in three layers:
 
 1. **VSA (Go)** - Protocol translation layer on the operator
-2. **VSE (Python)** - Gateway service for external MCP clients
+2. **g8ee (Python)** - Gateway service for external MCP clients
 3. **Shared** - Canonical wire format models
 
 ### Component Breakdown
@@ -109,11 +109,11 @@ type MCPResultMetadata struct {
 }
 ```
 
-VSE uses this metadata to reconstruct typed payloads from MCP results (see `_parse_vsa_payload` in `pubsub_service.py`).
+g8ee uses this metadata to reconstruct typed payloads from MCP results (see `_parse_vsa_payload` in `pubsub_service.py`).
 
-#### VSE - Gateway Service
+#### g8ee - Gateway Service
 
-**Location:** `components/vse/app/services/mcp/`
+**Location:** `components/g8ee/app/services/mcp/`
 
 | File | Purpose |
 |------|---------|
@@ -152,7 +152,7 @@ async def call_tool(
     tool_name: str,
     arguments: dict[str, Any],
     vso_context: VSOHttpContext,
-    user_settings: VSEUserSettings | None = None,
+    user_settings: G8eeUserSettings | None = None,
     sentinel_mode: bool = True,
 ) -> dict[str, Any]:
     investigation = await self._build_investigation_context(vso_context, sentinel_mode)
@@ -203,8 +203,8 @@ Dispatch table:
 | `initialize` | Returns server info: `{ protocolVersion: "2025-03-26", serverInfo: { name: "g8e", version: "4.3.0" } }` |
 | `notifications/initialized` | Returns 204 (notification, no body) |
 | `ping` | Returns `{}` |
-| `tools/list` | Proxies to VSE `POST /api/internal/mcp/tools/list` |
-| `tools/call` | Proxies to VSE `POST /api/internal/mcp/tools/call` |
+| `tools/list` | Proxies to g8ee `POST /api/internal/mcp/tools/list` |
+| `tools/call` | Proxies to g8ee `POST /api/internal/mcp/tools/call` |
 
 **Authentication:** Supports two methods:
 
@@ -238,7 +238,7 @@ Canonical MCP wire format definitions used by both Python and Go implementations
 
 **Contract Tests:**
 
-- Python: `components/vse/tests/unit/utils/test_shared_mcp_wire.py`
+- Python: `components/g8ee/tests/unit/utils/test_shared_mcp_wire.py`
 - Go: `components/vsa/contracts/shared_wire_models_test.go`
 
 These tests verify that both language implementations match the canonical JSON schema.
@@ -251,7 +251,7 @@ MCP events are integrated into the g8e event system via dedicated event types un
 
 ### MCP Event Types
 
-**Location:** `shared/constants/events.json` and `components/vse/app/constants/events.py`
+**Location:** `shared/constants/events.json` and `components/g8ee/app/constants/events.py`
 
 | Event Type | Purpose |
 |------------|---------|
@@ -272,7 +272,7 @@ Claude Code (MCP client)
 VSOD (mcp_routes.js)
     │ POST /api/internal/mcp/tools/call
     ▼
-VSE (MCPGatewayService.call_tool)
+g8ee (MCPGatewayService.call_tool)
     │ AIToolService.execute_tool
     ▼
 VSODB pub/sub: g8e.v1.operator.mcp.tools.call
@@ -288,10 +288,10 @@ VSA executes command (using translated event type)
 VSODB pub/sub: g8e.v1.operator.mcp.tools.result
     │
     ▼
-VSE (pubsub_service.py)
+g8ee (pubsub_service.py)
     │ _parse_vsa_payload (handles OPERATOR_MCP_TOOLS_RESULT)
     ▼
-VSE returns result to MCP client
+g8ee returns result to MCP client
 ```
 
 ---
@@ -302,7 +302,7 @@ The provider-agnostic design enables adding new protocol translators with minima
 
 ### Step 1: Define Protocol-Specific Event Types
 
-Add event types to `shared/constants/events.json` and `components/vse/app/constants/events.py`:
+Add event types to `shared/constants/events.json` and `components/g8ee/app/constants/events.py`:
 
 ```json
 "new_protocol": {
@@ -365,9 +365,9 @@ if msg.EventType == constants.Event.Operator.NewProtocolToolsCall {
 }
 ```
 
-### Step 4: Add Gateway Service in VSE (Optional)
+### Step 4: Add Gateway Service in g8ee (Optional)
 
-If the protocol needs external client access, create `components/vse/app/services/new_protocol/gateway_service.py` following the MCP pattern.
+If the protocol needs external client access, create `components/g8ee/app/services/new_protocol/gateway_service.py` following the MCP pattern.
 
 ### Step 5: Add VSOD Routes (Optional)
 
@@ -603,10 +603,10 @@ curl -X POST https://your-g8e-instance.com/mcp \
 **VSA (Go):**
 - `components/vsa/services/mcp/translator_test.go` - Translation logic tests
 
-**VSE (Python):**
-- `components/vse/tests/unit/services/mcp/test_gateway_service.py` - Gateway service tests
-- `components/vse/tests/unit/services/mcp/test_adapter.py` - Adapter function tests
-- `components/vse/tests/unit/services/mcp/test_types.py` - Type model tests
+**g8ee (Python):**
+- `components/g8ee/tests/unit/services/mcp/test_gateway_service.py` - Gateway service tests
+- `components/g8ee/tests/unit/services/mcp/test_adapter.py` - Adapter function tests
+- `components/g8ee/tests/unit/services/mcp/test_types.py` - Type model tests
 
 **VSOD (JavaScript):**
 - `components/vsod/test/unit/routes/platform/mcp_routes.unit.test.js` - Route handler tests
@@ -614,7 +614,7 @@ curl -X POST https://your-g8e-instance.com/mcp \
 ### Contract Tests
 
 **Shared Wire Models:**
-- Python: `components/vse/tests/unit/utils/test_shared_mcp_wire.py`
+- Python: `components/g8ee/tests/unit/utils/test_shared_mcp_wire.py`
 - Go: `components/vsa/contracts/shared_wire_models_test.go`
 
 These verify that Python and Go implementations match the canonical `shared/models/wire/mcp.json` schema.
@@ -625,6 +625,6 @@ These verify that Python and Go implementations match the canonical `shared/mode
 
 - [MCP Specification](https://modelcontextprotocol.io)
 - [MCP JSON-RPC Transport](https://modelcontextprotocol.io/docs/concepts/transports#json-rpc-20)
-- [VSE Component Documentation](../components/vse.md)
+- [g8ee Component Documentation](../components/g8ee.md)
 - [VSA Component Documentation](../components/vsa.md)
 - [VSOD Component Documentation](../components/vsod.md)

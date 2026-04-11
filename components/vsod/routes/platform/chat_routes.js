@@ -49,7 +49,7 @@ export function createChatRouter({
                 user_id: req.userId
             });
 
-            logger.info('[HTTP] Sending chat message to VSE', {
+            logger.info('[HTTP] Sending chat message to g8ee', {
                 caseId: req.vsoContext.case_id,
                 investigationId: req.vsoContext.investigation_id,
                 webSessionId: redactWebSessionId(req.vsoContext.web_session_id),
@@ -77,7 +77,7 @@ export function createChatRouter({
         try {
             const queryRequest = InvestigationQueryRequest.parse(req.query);
 
-            logger.info('[HTTP] Querying investigations from VSE', {
+            logger.info('[HTTP] Querying investigations from g8ee', {
                 userId: req.userId,
                 caseId: queryRequest.case_id,
                 webSessionId: redactWebSessionId(req.webSessionId)
@@ -110,7 +110,7 @@ export function createChatRouter({
         try {
             const investigation = await internalHttpClient.getInvestigation(req.params.investigationId, req.vsoContext);
 
-            logger.info('[HTTP] Getting investigation from VSE', {
+            logger.info('[HTTP] Getting investigation from g8ee', {
                 investigationId: req.params.investigationId,
                 webSessionId: redactWebSessionId(req.webSessionId)
             });
@@ -136,7 +136,7 @@ export function createChatRouter({
                 web_session_id: req.webSessionId
             });
 
-            logger.info('[HTTP] Stopping AI processing via VSE', {
+            logger.info('[HTTP] Stopping AI processing via g8ee', {
                 investigationId: stopRequest.investigation_id,
                 reason: stopRequest.reason,
                 webSessionId: redactWebSessionId(req.webSessionId)
@@ -163,7 +163,7 @@ export function createChatRouter({
 
     router.delete(ChatPaths.CASES, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
         try {
-            logger.info('[HTTP] Deleting case via VSE', {
+            logger.info('[HTTP] Deleting case via g8ee', {
                 caseId: req.params.caseId,
                 userId: req.userId,
                 webSessionId: redactWebSessionId(req.webSessionId)

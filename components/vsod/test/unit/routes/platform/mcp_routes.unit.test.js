@@ -175,7 +175,7 @@ describe('MCP Routes [UNIT]', () => {
     });
 
     describe('tools/list', () => {
-        it('should relay to VSE and return tool list', async () => {
+        it('should relay to g8ee and return tool list', async () => {
             const tools = [
                 { name: 'run_commands_with_operator', description: 'Run a command', inputSchema: {} },
             ];
@@ -204,7 +204,7 @@ describe('MCP Routes [UNIT]', () => {
         });
 
         it('should return error on internal failure', async () => {
-            mockInternalHttpClient.mcpToolsList.mockRejectedValue(new Error('VSE unavailable'));
+            mockInternalHttpClient.mcpToolsList.mockRejectedValue(new Error('g8ee unavailable'));
 
             const req = createMockReq({
                 jsonrpc: '2.0',
@@ -218,12 +218,12 @@ describe('MCP Routes [UNIT]', () => {
             expect(res.status).toHaveBeenCalledWith(500);
             const response = res.json.mock.calls[0][0];
             expect(response.error.code).toBe(-32603);
-            expect(response.error.message).toContain('VSE unavailable');
+            expect(response.error.message).toContain('g8ee unavailable');
         });
     });
 
     describe('tools/call', () => {
-        it('should relay tool call to VSE and return result', async () => {
+        it('should relay tool call to g8ee and return result', async () => {
             mockInternalHttpClient.mcpToolsCall.mockResolvedValue({
                 result: {
                     content: [{ type: 'text', text: 'command output' }],
@@ -258,7 +258,7 @@ describe('MCP Routes [UNIT]', () => {
             expect(response.result.content[0].text).toBe('command output');
         });
 
-        it('should return JSON-RPC error when VSE returns error field', async () => {
+        it('should return JSON-RPC error when g8ee returns error field', async () => {
             mockInternalHttpClient.mcpToolsCall.mockResolvedValue({
                 error: { code: -32603, message: 'No operators available' },
             });

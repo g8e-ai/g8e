@@ -15,13 +15,13 @@ package constants
 
 import "fmt"
 
-// Channel naming convention (shared across VSOD, VSE, VSA):
+// Channel naming convention (shared across VSOD, g8ee, VSA):
 // Canonical values defined in shared/constants/channels.json (the source of truth).
-// VSE and VSOD are also consumers of that same JSON file.
+// g8ee and VSOD are also consumers of that same JSON file.
 //
-//	cmd:{operator_id}:{operator_session_id}       VSE -> Operator
-//	results:{operator_id}:{operator_session_id}    Operator -> VSE
-//	heartbeat:{operator_id}:{operator_session_id}  Operator -> VSE
+//	cmd:{operator_id}:{operator_session_id}       g8ee -> Operator
+//	results:{operator_id}:{operator_session_id}    Operator -> g8ee
+//	heartbeat:{operator_id}:{operator_session_id}  Operator -> g8ee
 
 // CmdChannel returns the command channel for an g8e.
 func CmdChannel(operatorID, operatorSessionID string) string {

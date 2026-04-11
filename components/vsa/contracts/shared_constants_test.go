@@ -284,7 +284,7 @@ type sharedVersionStabilityValues struct {
 }
 
 type sharedComponentNameValues struct {
-	VSE  string `json:"vse"`
+	G8EE string `json:"g8ee"`
 	VSA  string `json:"vsa"`
 	VSOD string `json:"vsod"`
 }
@@ -610,7 +610,7 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 	})
 
 	t.Run("component.name", func(t *testing.T) {
-		assert.Equal(t, st.ComponentName.VSE, constants.Status.ComponentName.VSE)
+		assert.Equal(t, st.ComponentName.G8EE, constants.Status.ComponentName.G8EE)
 		assert.Equal(t, st.ComponentName.VSA, constants.Status.ComponentName.VSA)
 		assert.Equal(t, st.ComponentName.VSOD, constants.Status.ComponentName.VSOD)
 	})

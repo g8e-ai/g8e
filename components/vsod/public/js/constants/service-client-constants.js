@@ -21,12 +21,12 @@ export const API_KEY_HEADER          = 'X-API-Key';
 export const RATE_LIMIT_RESET_HEADER = 'RateLimit-Reset';
 
 export const ServiceName = Object.freeze({
-    VSE:  'vse',
+    G8EE:  'g8ee',
     VSOD: 'vsod',
 });
 
 export const ServiceUrl = Object.freeze({
-    VSE: 'https://vse',
+    G8EE: 'https://g8ee',
 });
 
 export const RequestTimeout = Object.freeze({

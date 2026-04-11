@@ -16,9 +16,9 @@ import { _EVENTS } from './shared.js';
 /**
  * Wire Event Type Constants
  * Canonical values loaded from shared/constants/events.json.
- * That file is the single source of truth shared across VSE, VSA, and VSOD.
+ * That file is the single source of truth shared across g8ee, VSA, and VSOD.
  *
- * Mirrors: components/vse/app/constants/events.py EventType (flat naming)
+ * Mirrors: components/g8ee/app/constants/events.py EventType (flat naming)
  */
 
 export const EventType = Object.freeze({

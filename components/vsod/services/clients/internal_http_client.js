@@ -18,7 +18,7 @@
  * Replaces PubSub request-response pattern with direct HTTP calls.
  * 
  * This client communicates with internal HTTP endpoints on:
- * - VSE (chat streaming, case management, investigations)
+ * - g8ee (chat streaming, case management, investigations)
  * 
  * Benefits over PubSub:
  * - 10x faster (5-20ms vs 100-300ms)
@@ -40,7 +40,7 @@ import { SourceComponent } from '../../constants/ai.js';
 import { VSOHeaders, HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 import {
     INTERNAL_HTTP_TIMEOUT_MS,
-    VSE_INTERNAL_URL,
+    G8EE_INTERNAL_URL,
     INTERNAL_HTTP_CLIENT_USER_AGENT,
     NEW_CASE_ID
 } from '../../constants/http_client.js';
@@ -51,7 +51,7 @@ class InternalHttpClient{
     /**
      * @param {Object} options
      * @param {Object} options.bootstrapService - BootstrapService instance (for internal auth token and CA cert)
-     * @param {Object} options.settingsService - SettingsService instance (for vse_url)
+     * @param {Object} options.settingsService - SettingsService instance (for g8ee_url)
      */
     constructor({ bootstrapService, settingsService } = {}) {
         if (!bootstrapService) throw new Error('InternalHttpClient requires bootstrapService');
@@ -72,11 +72,11 @@ class InternalHttpClient{
     }
 
     _resolveServiceUrl(service) {
-        if (service === 'vse') {
-            const url = (this._settingsService && this._settingsService.vse_url) || VSE_INTERNAL_URL;
+        if (service === 'g8ee') {
+            const url = (this._settingsService && this._settingsService.g8ee_url) || G8EE_INTERNAL_URL;
             return url.endsWith('/') ? url.slice(0, -1) : url;
         }
-        return VSE_INTERNAL_URL;
+        return G8EE_INTERNAL_URL;
     }
 
     /**
@@ -103,7 +103,7 @@ class InternalHttpClient{
         if (context.organization_id)  headers[VSOHeaders.ORGANIZATION_ID] = context.organization_id;
 
         // New case signal: VSOD sets the flag and sends NEW_CASE_ID sentinels.
-        // VSE reads X-VSO-New-Case to branch into inline case+investigation creation.
+        // g8ee reads X-VSO-New-Case to branch into inline case+investigation creation.
         if (isNewCase) {
             headers[VSOHeaders.NEW_CASE]         = 'true';
             headers[VSOHeaders.CASE_ID]          = NEW_CASE_ID;
@@ -111,7 +111,7 @@ class InternalHttpClient{
         } else {
             headers[VSOHeaders.CASE_ID]          = context.case_id;
             // ENFORCEMENT: INVESTIGATION_ID is required for all internal requests.
-            // If missing in context, we must fallback to the case_id to satisfy VSE's security requirement
+            // If missing in context, we must fallback to the case_id to satisfy g8ee's security requirement
             // for existing cases.
             headers[VSOHeaders.INVESTIGATION_ID] = context.investigation_id || context.case_id;
         }
@@ -119,7 +119,7 @@ class InternalHttpClient{
         if (context.task_id) headers[VSOHeaders.TASK_ID] = context.task_id;
 
         // Bound operators list (JSON-encoded array)
-        // VSE resolves target operator dynamically per-command from operator_documents
+        // g8ee resolves target operator dynamically per-command from operator_documents
         if (context.bound_operators && context.bound_operators.length > 0) {
             headers[VSOHeaders.BOUND_OPERATORS] = JSON.stringify(context.bound_operators);
         }
@@ -172,7 +172,7 @@ class InternalHttpClient{
         if (options.signal) signals.push(options.signal);
         const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
 
-        // Build headers with VSOHttpContext for VSE calls
+        // Build headers with VSOHttpContext for g8ee calls
         const baseHeaders = {
             'Content-Type': 'application/json',
             'User-Agent': INTERNAL_HTTP_CLIENT_USER_AGENT
@@ -263,13 +263,13 @@ class InternalHttpClient{
     }
 
     // =====================================================
-    // VSE ENDPOINTS
+    // g8ee ENDPOINTS
     // =====================================================
 
     /**
-     * Send chat message to VSE non-streaming endpoint.
+     * Send chat message to g8ee non-streaming endpoint.
      *
-     * Calls VSE's /api/internal/chat which runs the full ReAct loop and delivers
+     * Calls g8ee's /api/internal/chat which runs the full ReAct loop and delivers
      * the AI response + tool events via SSE to the browser's existing SSE connection.
      * Returns a standard JSON response immediately after queueing the background task.
      *
@@ -279,7 +279,7 @@ class InternalHttpClient{
      */
     async sendChatMessage(chatData, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
 
         logger.info('[HTTP-INTERNAL] Sending non-streaming chat message', {
@@ -287,7 +287,7 @@ class InternalHttpClient{
             investigationId: vsoContext.investigation_id,
         });
 
-        return this.request('vse', ApiPaths.vse.chat(), {
+        return this.request('g8ee', ApiPaths.g8ee.chat(), {
             method: 'POST',
             body: chatData,
             vsoContext,
@@ -295,8 +295,8 @@ class InternalHttpClient{
     }
 
     /**
-     * Query investigations via VSE API
-     * Replaces: PubSub publish to vso-vse-investigation-queries-topic
+     * Query investigations via g8ee API
+     * Replaces: PubSub publish to vso-g8ee-investigation-queries-topic
      * 
      * ENFORCEMENT: vsoContext is REQUIRED and must contain web_session_id
      * 
@@ -306,7 +306,7 @@ class InternalHttpClient{
      */
     async queryInvestigations(params, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
 
         logger.info('[HTTP-INTERNAL] Querying investigations', {
@@ -314,7 +314,7 @@ class InternalHttpClient{
             caseId: vsoContext.case_id,
         });
 
-        let path = ApiPaths.vse.investigations();
+        let path = ApiPaths.g8ee.investigations();
         if (params) {
             const queryString = params.toString();
             if (queryString) {
@@ -322,14 +322,14 @@ class InternalHttpClient{
             }
         }
 
-        return this.request('vse', path, {
+        return this.request('g8ee', path, {
             method: 'GET',
             vsoContext
         });
     }
 
     /**
-     * Get single investigation by ID via VSE internal API
+     * Get single investigation by ID via g8ee internal API
      * 
      * ENFORCEMENT: vsoContext is REQUIRED and must contain web_session_id
      * 
@@ -339,21 +339,21 @@ class InternalHttpClient{
      */
     async getInvestigation(investigationId, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
         logger.info('[HTTP-INTERNAL] Getting investigation', {
             investigationId,
             hasContext: !!vsoContext
         });
 
-        return this.request('vse', ApiPaths.vse.investigation(investigationId), {
+        return this.request('g8ee', ApiPaths.g8ee.investigation(investigationId), {
             method: 'GET',
             vsoContext
         });
     }
 
     /**
-     * Delete case and all related data via VSE internal API
+     * Delete case and all related data via g8ee internal API
      * Deletes case, investigations, and memories
      * 
      * ENFORCEMENT: vsoContext is REQUIRED and must contain web_session_id
@@ -364,21 +364,21 @@ class InternalHttpClient{
      */
     async deleteCase(caseId, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
         logger.info('[HTTP-INTERNAL] Deleting case', {
             caseId,
             hasContext: !!vsoContext
         });
 
-        return this.request('vse', ApiPaths.vse.case(caseId), {
+        return this.request('g8ee', ApiPaths.g8ee.case(caseId), {
             method: 'DELETE',
             vsoContext
         });
     }
 
     /**
-     * Stop active AI processing for an investigation via VSE internal API
+     * Stop active AI processing for an investigation via g8ee internal API
      * Cancels the asyncio task processing the AI response
      * 
      * ENFORCEMENT: vsoContext is REQUIRED and must contain web_session_id
@@ -389,7 +389,7 @@ class InternalHttpClient{
      */
     async stopAIProcessing(stopData, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
         logger.info('[HTTP-INTERNAL] Stopping AI processing', {
             investigationId: stopData.investigation_id,
@@ -397,7 +397,7 @@ class InternalHttpClient{
             hasContext: !!vsoContext
         });
 
-        return this.request('vse', ApiPaths.vse.chatStop(), {
+        return this.request('g8ee', ApiPaths.g8ee.chatStop(), {
             method: 'POST',
             body: new StopAIRequest(stopData).forWire(),
             vsoContext
@@ -405,21 +405,21 @@ class InternalHttpClient{
     }
 
     /**
-     * List available MCP tools via VSE.
+     * List available MCP tools via G8EE.
      *
      * @param {Object} vsoContext - REQUIRED VSOHttpContext with session/user info
      * @returns {Object} JSON response { tools: [...] }
      */
     async mcpToolsList(vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
 
         logger.info('[HTTP-INTERNAL] MCP tools/list request', {
             userId: vsoContext.user_id,
         });
 
-        return this.request('vse', ApiPaths.vse.mcpToolsList(), {
+        return this.request('g8ee', ApiPaths.g8ee.mcpToolsList(), {
             method: 'POST',
             body: {},
             vsoContext,
@@ -427,7 +427,7 @@ class InternalHttpClient{
     }
 
     /**
-     * Execute an MCP tool call via VSE.
+     * Execute an MCP tool call via G8EE.
      *
      * @param {Object} toolCallData - { tool_name, arguments, request_id }
      * @param {Object} vsoContext - REQUIRED VSOHttpContext with session/user info
@@ -435,7 +435,7 @@ class InternalHttpClient{
      */
     async mcpToolsCall(toolCallData, vsoContext) {
         if (!vsoContext) {
-            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for VSE calls');
+            throw new Error('ENFORCEMENT VIOLATION: vsoContext is REQUIRED for g8ee calls');
         }
 
         logger.info('[HTTP-INTERNAL] MCP tools/call request', {
@@ -443,7 +443,7 @@ class InternalHttpClient{
             requestId: toolCallData.request_id,
         });
 
-        return this.request('vse', ApiPaths.vse.mcpToolsCall(), {
+        return this.request('g8ee', ApiPaths.g8ee.mcpToolsCall(), {
             method: 'POST',
             body: toolCallData,
             vsoContext,
@@ -454,12 +454,12 @@ class InternalHttpClient{
      * Check health of all internal services
      */
     async healthCheck() {
-        const services = ['vse'];
+        const services = ['g8ee'];
         const results = {};
 
         for (const service of services) {
             try {
-                const response = await this.request(service, ApiPaths.vse.health(), {
+                const response = await this.request(service, ApiPaths.g8ee.health(), {
                     method: 'GET'
                 });
                 results[service] = {

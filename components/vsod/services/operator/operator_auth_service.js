@@ -351,14 +351,14 @@ export class OperatorAuthService {
                 ],
             });
 
-            await this.operatorService.relayRegisterOperatorSessionToVse(vsoContext);
+            await this.operatorService.relayRegisterOperatorSessionToG8ee(vsoContext);
             
-            logger.info('[OPERATOR-AUTH] Operator session registration relayed to VSE', {
+            logger.info('[OPERATOR-AUTH] Operator session registration relayed to g8ee', {
                 operator_id,
                 user_id,
             });
         } catch (err) {
-            logger.error('[OPERATOR-AUTH] Failed to relay Operator session registration to VSE', { 
+            logger.error('[OPERATOR-AUTH] Failed to relay Operator session registration to g8ee', { 
                 operator_id, 
                 error: err.message 
             });

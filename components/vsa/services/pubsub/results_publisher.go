@@ -20,7 +20,7 @@ import (
 )
 
 // ResultsPublisher is the transport-agnostic interface for publishing results
-// from the VSA Operator back to AI Agent Services (VSE).
+// from the VSA Operator back to AI Agent Services (g8ee).
 // Implemented by PubSubResultsService (VSODB pub/sub via VSOD proxy).
 type ResultsPublisher interface {
 	PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error

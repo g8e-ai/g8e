@@ -295,7 +295,7 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${_CONTAINER}$"; then
     _validate_output="$(docker exec -i "$_CONTAINER" \
         /opt/venv/bin/python3 -c "
 import asyncio, sys
-sys.path.insert(0, '/app/components/vse')
+sys.path.insert(0, '/app/components/g8ee')
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 async def run():
     p = WebSearchProvider(

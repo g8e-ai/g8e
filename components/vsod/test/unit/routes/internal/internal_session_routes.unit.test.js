@@ -71,7 +71,7 @@ describe('Internal Session Routes [UNIT]', () => {
         it('should validate a web session and return session data', async () => {
             const req = createMockReq({ 
                 params: { sessionId },
-                headers: { [HTTP_VSO_SERVICE_HEADER.toLowerCase()]: 'vse' }
+                headers: { [HTTP_VSO_SERVICE_HEADER.toLowerCase()]: 'g8ee' }
             });
             const res = createMockRes();
             const mockSession = {

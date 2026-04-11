@@ -41,7 +41,7 @@ describe('OperatorAuthService', () => {
             operatorService: {
                 getOperator: vi.fn(),
                 getOperatorWithSessionContext: vi.fn(),
-                relayRegisterOperatorSessionToVse: vi.fn(),
+                relayRegisterOperatorSessionToG8ee: vi.fn(),
                 claimOperatorSlot: vi.fn().mockResolvedValue(true),
                 emit: vi.fn(),
             },
@@ -198,7 +198,7 @@ describe('OperatorAuthService', () => {
             });
         });
 
-        it('should record usage and relay registration to VSE on success', async () => {
+        it('should record usage and relay registration to g8ee on success', async () => {
             const operatorId = 'op-123';
             const userId = 'u-123';
             const organizationId = 'org-123';
@@ -243,7 +243,7 @@ describe('OperatorAuthService', () => {
                 userId, operatorId, OperatorStatus.ACTIVE
             );
 
-            expect(mocks.operatorService.relayRegisterOperatorSessionToVse).toHaveBeenCalledWith(
+            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
                     user_id: userId,
                     organization_id: organizationId,
@@ -261,7 +261,7 @@ describe('OperatorAuthService', () => {
             expect(result.response.operator_session_id).toBe('os-123');
         });
 
-        it('should pass VSOHttpContext with BoundOperatorContext containing SystemInfo to VSE relay', async () => {
+        it('should pass VSOHttpContext with BoundOperatorContext containing SystemInfo to g8ee relay', async () => {
             const operatorId = 'op-456';
             const userId = 'u-456';
             const rawSystemInfo = { system_fingerprint: 'fp-456', hostname: 'remote-host', os: 'linux' };
@@ -284,7 +284,7 @@ describe('OperatorAuthService', () => {
                 system_info: rawSystemInfo,
             });
 
-            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToVse.mock.calls[0][0];
+            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToG8ee.mock.calls[0][0];
             expect(relayArg.bound_operators).toHaveLength(1);
 
             const boundOp = relayArg.bound_operators[0];
@@ -318,7 +318,7 @@ describe('OperatorAuthService', () => {
                 system_info: { system_fingerprint: 'fp-789' },
             });
 
-            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToVse.mock.calls[0][0];
+            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToG8ee.mock.calls[0][0];
             expect(relayArg.web_session_id).toBe('os-789');
         });
 
@@ -361,7 +361,7 @@ describe('OperatorAuthService', () => {
                 userId, operatorId, OperatorStatus.BOUND
             );
 
-            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToVse.mock.calls[0][0];
+            const relayArg = mocks.operatorService.relayRegisterOperatorSessionToG8ee.mock.calls[0][0];
             expect(relayArg.bound_operators[0].status).toBe(OperatorStatus.BOUND);
         });
 
@@ -397,7 +397,7 @@ describe('OperatorAuthService', () => {
             );
         });
 
-        it('should return success even if VSE relay fails', async () => {
+        it('should return success even if g8ee relay fails', async () => {
             mocks.apiKeyService.validateKey.mockResolvedValue({
                 success: true,
                 data: { user_id: 'u-123', organization_id: 'org-123', operator_id: 'op-123' }
@@ -405,7 +405,7 @@ describe('OperatorAuthService', () => {
             mocks.userService.getUser.mockResolvedValue({ id: 'u-123' });
             mocks.operatorService.getOperator.mockResolvedValue({ operator_id: 'op-123', user_id: 'u-123' });
             mocks.operatorSessionService.createOperatorSession.mockResolvedValue({ id: 'os-123' });
-            mocks.operatorService.relayRegisterOperatorSessionToVse.mockRejectedValue(new Error('VSE Down'));
+            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee Down'));
 
             const result = await service._authenticateViaApiKey({
                 authorizationHeader: 'Bearer key',

@@ -16,7 +16,7 @@ import { _CHANNELS, _PUBSUB } from './shared.js';
 /**
  * Pub/Sub Constants
  * Canonical values loaded from shared/constants/channels.json and shared/constants/pubsub.json.
- * These files are the single source of truth shared across VSE, VSA, and VSOD.
+ * These files are the single source of truth shared across g8ee, VSA, and VSOD.
  *
  * Auth channels:
  *   auth.publish:{api_key_hash}               - VSA → VSOD API key auth request
@@ -25,9 +25,9 @@ import { _CHANNELS, _PUBSUB } from './shared.js';
  *   auth.response:session:{hash}              - VSOD → VSA session auth response
  *
  * Operator channels:
- *   cmd:{operator_id}:{operator_session_id}       - VSE → Operator command dispatch
- *   results:{operator_id}:{operator_session_id}   - Operator → VSE result delivery
- *   heartbeat:{operator_id}:{operator_session_id} - Operator → VSE heartbeat
+ *   cmd:{operator_id}:{operator_session_id}       - g8ee → Operator command dispatch
+ *   results:{operator_id}:{operator_session_id}   - Operator → g8ee result delivery
+ *   heartbeat:{operator_id}:{operator_session_id} - Operator → g8ee heartbeat
  */
 
 const sep = _CHANNELS['pubsub']['separator'];
