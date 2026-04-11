@@ -6,6 +6,8 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow: auto;
+    height: auto;
 }
 
 /* ============================================================================
@@ -14,12 +16,11 @@ body {
 
 .setup-page {
     flex: 1;
-    padding: 2rem 1.5rem 5rem;
 }
 
 .setup-container {
     max-width: 680px;
-    margin: 0 auto;
+    margin: 1rem auto 1rem auto;
 }
 
 /* ============================================================================
