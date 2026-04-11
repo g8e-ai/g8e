@@ -78,15 +78,16 @@ async def test_gemini_accuracy(
     result_data = AccuracyTestResult(scenario_id=scenario["id"])
 
     try:
-        settings = test_settings
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        if settings.llm.provider != LLMProvider.GEMINI:
-            pytest.skip(f"This test only runs with Gemini provider, current provider: {settings.llm.provider}")
+        if llm.provider != LLMProvider.GEMINI:
+            pytest.skip(f"This test only runs with Gemini provider, current provider: {llm.provider}")
 
         # Use the primary model for this test (raw model quality)
-        model_name = settings.llm.primary_model
+        model_name = llm.primary_model
 
         logger.info(f"[GEMINI_EVAL] Running scenario {scenario['id']} with model {model_name}")
 
@@ -103,8 +104,8 @@ async def test_gemini_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=settings.llm.llm_temperature,
-            max_tokens=settings.llm.llm_max_tokens or 4096,
+            temperature=llm.llm_temperature,
+            max_tokens=llm.llm_max_tokens or 4096,
             system_instruction=system_prompt,
             tools=[],
         )
@@ -129,7 +130,7 @@ async def test_gemini_accuracy(
         logger.info(f"[GEMINI_EVAL] Response length: {len(response_text)} chars")
 
         # Step 5: Grade with EvalJudge
-        judge = EvalJudge(provider=llm_provider, model=settings.llm.primary_model)
+        judge = EvalJudge(provider=llm_provider, model=llm.primary_model)
 
         # Build interaction trace for the judge
         trace_lines = [

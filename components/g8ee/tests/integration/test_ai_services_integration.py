@@ -341,7 +341,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_from_description(self, test_settings):
         """generate_case_title creates meaningful titles from descriptions."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
@@ -367,7 +368,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_from_short_description(self, test_settings):
         """generate_case_title handles short descriptions well."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
@@ -406,7 +408,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_empty_description(self, test_settings):
         """generate_case_title handles empty/None descriptions."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
@@ -455,7 +458,8 @@ class TestTriageServiceIntegration:
 
     async def test_triage_complexity_classification(self, test_settings):
         """TriageService correctly classifies case complexity."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -487,7 +491,8 @@ class TestTriageServiceIntegration:
 
     async def test_triage_simple_issue(self, test_settings):
         """TriageService correctly classifies simple issues."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -518,7 +523,8 @@ class TestTriageServiceIntegration:
 
     async def test_triage_password_reset_complexity(self, test_settings):
         """TriageService correctly classifies password reset as complex due to security implications."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -544,7 +550,8 @@ class TestTriageServiceIntegration:
 
     async def test_triage_ambiguous_request(self, test_settings):
         """TriageService handles ambiguous requests appropriately."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -588,7 +595,8 @@ class TestCommandGenerationIntegration:
 
     async def test_command_generation_interface(self, test_settings):
         """Test that command generation interface exists and can be called."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
         assert callable(generate_command)
@@ -612,7 +620,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyze_command_risk(self, test_settings):
         """AIResponseAnalyzer correctly analyzes command risk."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -645,7 +654,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyze_high_risk_command(self, test_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
@@ -677,7 +687,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyzer_interface_exists(self, test_settings):
         """Test that AIResponseAnalyzer interface exists and can be instantiated."""
-        llm = getattr(test_settings, 'llm', None)
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 

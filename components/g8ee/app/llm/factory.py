@@ -30,7 +30,7 @@ All Gemini-specific logic lives in app.llm.providers.gemini.
 
 import logging
 
-from app.models.settings import LLMSettings, G8eePlatformSettings
+from app.models.settings import LLMSettings, G8eePlatformSettings, SearchSettings
 from app.constants import LLMProvider
 
 from .provider import LLMProvider as LLMProviderBase
@@ -41,6 +41,8 @@ from .providers.anthropic import AnthropicProvider
 logger = logging.getLogger(__name__)
 
 _settings: G8eePlatformSettings | None = None
+_llm_settings: LLMSettings | None = None
+_search_settings: SearchSettings | None = None
 
 
 def set_settings(settings: G8eePlatformSettings) -> None:
@@ -54,10 +56,34 @@ def get_settings() -> G8eePlatformSettings | None:
     return _settings
 
 
+def set_llm_settings(settings: LLMSettings) -> None:
+    """Inject LLM settings for testing. Production code uses G8eeUserSettings.llm."""
+    global _llm_settings
+    _llm_settings = settings
+
+
+def get_llm_settings() -> LLMSettings | None:
+    """Return the LLM settings singleton (used in tests)."""
+    return _llm_settings
+
+
+def set_search_settings(settings: SearchSettings) -> None:
+    """Inject search settings for testing. Production code uses G8eeUserSettings.search."""
+    global _search_settings
+    _search_settings = settings
+
+
+def get_search_settings() -> SearchSettings | None:
+    """Return the search settings singleton (used in tests)."""
+    return _search_settings
+
+
 def reset_settings() -> None:
-    """Reset the settings singleton. Intended for use in tests only."""
-    global _settings
+    """Reset all settings singletons. Intended for use in tests only."""
+    global _settings, _llm_settings, _search_settings
     _settings = None
+    _llm_settings = None
+    _search_settings = None
 
 
 def get_llm_provider(settings: LLMSettings) -> LLMProviderBase:

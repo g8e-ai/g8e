@@ -131,7 +131,13 @@ class SettingsService:
         return settings
 
     def _build_llm_settings(self, data: UserSettingsData | PlatformSettingsData) -> LLMSettings:
-        """Build LLMSettings from flat data without fallbacks."""
+        """Build LLMSettings from flat data without fallbacks.
+        
+        Accepts both UserSettingsData and PlatformSettingsData:
+        - UserSettingsData: normal path for per-user settings
+        - PlatformSettingsData: fallback path in get_user_settings() when user doc is missing
+        The PlatformSettingsData branch handles endpoint fields which are platform-level only.
+        """
         kwargs = {}
 
         if data.llm_provider:

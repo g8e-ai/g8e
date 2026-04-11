@@ -55,12 +55,12 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     4. Thinking events properly precede text events in the stream.
     5. The final response contains a reasonable answer to the puzzle.
     """
-    from app.llm.factory import get_settings
-    settings = get_settings()
-    if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+    from app.llm.factory import get_llm_settings
+    llm = get_llm_settings()
+    if not llm or not llm.primary_model:
         pytest.skip("LLM provider is not configured")
 
-    model_name = settings.llm.assistant_model  # Use assistant model like title_generator
+    model_name = llm.assistant_model  # Use assistant model like title_generator
     config = get_model_config(model_name)
     # Note: Let the test fail naturally if model doesn't support thinking chunks
     # This will provide better error information than skipping

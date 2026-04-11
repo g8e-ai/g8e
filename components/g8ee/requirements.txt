@@ -16,7 +16,7 @@ aiohttp>=3.9.0
 openai>=1.82.0
 
 # LLM Provider - Google Gemini
-google-genai>=1.0.0
+google-genai>=1.7.2
 
 # Vertex AI Search (web search grounding via Discovery Engine)
 google-cloud-discoveryengine>=0.13.0
