@@ -100,7 +100,7 @@ import { CORS_INTERNAL_ORIGINS } from './constants/http_client.js';
 import { getVersionInfo } from './utils/version.js';
 import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy } from './utils/cert-installers.js';
 import { BasePaths } from './constants/api_paths.js';
-import { g8es_PUBSUB_PATH } from './constants/http_client.js';
+import { G8ES_PUBSUB_PATH } from './constants/http_client.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -404,7 +404,7 @@ class G8edServer {
         // both HTTP auth and WebSocket pub/sub, and g8ed tunnels the latter to g8es.
         this.server.on('upgrade', (request, socket, head) => {
             const pathname = new URL(request.url, 'https://localhost').pathname;
-            if (pathname === g8es_PUBSUB_PATH) {
+            if (pathname === G8ES_PUBSUB_PATH) {
                 this._proxyWebSocket(request, socket, head);
             } else {
                 logger.warn('[g8ed] WebSocket upgrade rejected — unsupported path', { pathname });

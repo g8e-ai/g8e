@@ -18,7 +18,7 @@ import { AuthManager } from '@g8ed/public/js/components/auth.js';
 import { WebSessionModel } from '@g8ed/public/js/models/session-model.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { UserRole } from '@g8ed/constants/auth.js';
-import { ServiceName } from '@g8ed/public/js/constants/service-client-constants.js';
+import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
 

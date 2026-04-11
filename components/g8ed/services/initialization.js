@@ -26,7 +26,7 @@
  *   6. Configuration       — load global settings from g8es
  */
 
-import { g8esDocumentClient } from './clients/g8es_document_client.js';
+import { G8esDocumentClient } from './clients/g8es_document_client.js';
 import { G8esPubSubClient } from './clients/g8es_pubsub_client.js';
 import { KVCacheClient } from './clients/g8es_kv_cache_client.js';
 import { g8esBlobClient } from './platform/g8es_blob_client.js';
@@ -54,7 +54,7 @@ import { DeviceLinkService } from './auth/device_link_service.js';
 import { OrganizationModel } from '../models/organization_model.js';
 import { BootstrapService } from './platform/bootstrap_service.js';
 import { SettingsService } from './platform/settings_service.js';
-import { G8ENodeOperatorService } from './platform/g8e_pod_operator_service.js';
+import { G8ENodeOperatorService } from './platform/g8ep_operator_service.js';
 import { BindOperatorsService } from './operator/operator_bind_service.js';
 import { OperatorAuthService } from './operator/operator_auth_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
@@ -63,7 +63,7 @@ import { SetupService } from './platform/setup_service.js';
 import { AuditService } from './platform/audit_service.js';
 import { HealthCheckService } from './platform/health_check_service.js';
 import { SourceComponent } from '../constants/ai.js';
-import { g8es_INTERNAL_HTTP_URL, g8es_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
+import { G8ES_INTERNAL_HTTP_URL, G8ES_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
 
 // --- Service instances (locally-owned only) ---
 let organizationModel = null;
@@ -108,7 +108,7 @@ export async function initializeSettingsService() {
     if (settingsService) {
         return settingsService;
     }
-    const listenUrl = g8es_INTERNAL_HTTP_URL;
+    const listenUrl = G8ES_INTERNAL_HTTP_URL;
     const isHttps = listenUrl.startsWith('https://');
     
     // 1. Initialize bootstrap service for g8es volume data
@@ -173,8 +173,8 @@ async function _doInitialize() {
         const internalAuthToken = bootstrapSvc.loadInternalAuthToken();
         const caCertPath = bootstrapSvc.loadCaCertPath();
         
-        const listenUrl = g8es_INTERNAL_HTTP_URL;
-        const pubsubUrl = g8es_INTERNAL_PUBSUB_URL;
+        const listenUrl = G8ES_INTERNAL_HTTP_URL;
+        const pubsubUrl = G8ES_INTERNAL_PUBSUB_URL;
 
         // PubSub ALWAYS uses WSS.
         pubSubClient = new G8esPubSubClient({ 
@@ -380,7 +380,7 @@ async function _doInitialize() {
  * Shared logic for initializing core g8es clients.
  */
 async function _initializeBaseClients(listenUrl, internalAuthToken, caCertPath = null) {
-    const dbClient = new g8esDocumentClient({ listenUrl, internalAuthToken, caCertPath });
+    const dbClient = new G8esDocumentClient({ listenUrl, internalAuthToken, caCertPath });
     logger.info(`[G8ES-CLIENT] Document client initialized for ${listenUrl}`);
 
     const kvClient = new KVCacheClient({ listenUrl, internalAuthToken, caCertPath });

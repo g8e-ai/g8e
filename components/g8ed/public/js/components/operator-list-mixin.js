@@ -51,7 +51,7 @@ export const OperatorListMixin = {
         devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`);
 
         const statusPriority = (op) => {
-            if (op.is_g8e_pod) return 0;
+            if (op.is_g8ep) return 0;
             const isBoundToMe = op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId;
             const isBoundElsewhere = op.status === OperatorStatus.BOUND && !isBoundToMe;
             if (isBoundToMe) return 1;

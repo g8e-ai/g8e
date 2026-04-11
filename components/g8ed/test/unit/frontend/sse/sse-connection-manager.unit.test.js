@@ -37,6 +37,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockEventBus } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { ComponentName } from '@g8ed/public/js/models/investigation-models.js';
 
 class MockEventSource {
     static CONNECTING = 0;

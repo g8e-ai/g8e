@@ -56,10 +56,10 @@
     "G8E_DOCS_DIR": "platform.docs_dir",
     "G8E_SUPERVISOR_PORT": "platform.supervisor_port"
   },
-  "service_urls": {
-    "G8EE_URL": "service_urls.g8ee_url",
-    "G8E_G8ED_URL": "service_urls.g8ed_url",
-    "G8E_OPERATOR_ENDPOINT": "service_urls.operator_endpoint"
+  "component_urls": {
+    "G8EE_URL": "component_urls.g8ee_url",
+    "G8E_G8ED_URL": "component_urls.g8ed_url",
+    "G8E_OPERATOR_ENDPOINT": "component_urls.operator_endpoint"
   },
   "command_validation": {
     "G8E_ENABLE_COMMAND_WHITELISTING": "command_validation.enable_whitelisting",

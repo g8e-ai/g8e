@@ -40,7 +40,7 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	assert.Equal(t, constants.Status.ComponentName.G8EO, cfg.ServiceName)
+	assert.Equal(t, constants.Status.ComponentName.G8EO, cfg.ComponentName)
 	assert.Equal(t, constants.Status.AuthMode.APIKey, cfg.AuthMode)
 	assert.Equal(t, "g8e", cfg.ProjectID)
 	assert.Equal(t, 25, cfg.MaxConcurrentTasks)
@@ -395,7 +395,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 	assert.Equal(t, filepath.Join(cwd, ".g8e", "bin"), cfg.Listen.BinaryDir)
 	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
 	assert.True(t, filepath.IsAbs(cfg.Listen.BinaryDir))
-	assert.Equal(t, "g8eo-listen", cfg.ServiceName)
+	assert.Equal(t, "g8eo-listen", cfg.ComponentName)
 }
 
 func TestLoadListen_ExplicitValues(t *testing.T) {

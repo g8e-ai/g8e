@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export { g8esHttpClient } from './g8es_http_client.js';
-export { g8esDocumentClient, g8esFieldValue } from './g8es_document_client.js';
+export { G8esHttpClient } from './g8es_http_client.js';
+export { G8esDocumentClient, G8esFieldValuE } from './g8es_document_client.js';
 export { KVCacheClient } from './g8es_kv_cache_client.js';
 export { G8esPubSubClient } from './g8es_pubsub_client.js';

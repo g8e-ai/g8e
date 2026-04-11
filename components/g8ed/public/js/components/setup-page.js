@@ -13,7 +13,7 @@
 
 import { LLMProvider } from '../constants/ai-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 
 const LAST_STEP = 4;
 

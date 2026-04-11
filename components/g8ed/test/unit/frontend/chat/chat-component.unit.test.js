@@ -18,6 +18,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { ComponentName } from '@g8ed/public/js/models/investigation-models.js';
 
 vi.mock('@g8ed/public/js/utils/notification-service.js', () => ({
     notificationService: {

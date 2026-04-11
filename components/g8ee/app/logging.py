@@ -110,11 +110,11 @@ except ImportError:
 
 COMPONENT_PATTERN = re.compile(
     r"(?:"
-    r"\/components\/(g8ee|vs[a-z]+)\/"
-    r"|\/app\/components\/(g8ee|vs[a-z]+)\/"
-    r"|^components\.(g8ee|vs[a-z]+)"
-    r"|\/app\/(g8ee|vs[a-z]+)\/"
-    r"|^(g8ee|vs[a-z]+)\."
+    r"\/components\/(g8ee|g8e[a-z]+)\/"
+    r"|\/app\/components\/(g8ee|g8e[a-z]+)\/"
+    r"|^components\.(g8ee|g8e[a-z]+)"
+    r"|\/app\/(g8ee|g8e[a-z]+)\/"
+    r"|^(g8ee|g8e[a-z]+)\."
     r")"
 )
 

@@ -15,6 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
+import { ComponentName } from '@g8ed/public/js/models/investigation-models.js';
 
 let operatorPanelService;
 

@@ -38,7 +38,7 @@ export class OperatorSlotService {
         const createdSlotIds = [];
 
         if (existingCount < DEFAULT_OPERATOR_SLOTS) {
-            const hasG8eNode = liveOperators.some(op => op.is_g8e_pod === true);
+            const hasG8eNode = liveOperators.some(op => op.is_g8ep === true);
             const slotsToCreate = DEFAULT_OPERATOR_SLOTS - existingCount;
             let g8eNodeAssigned = hasG8eNode;
             for (let i = 0; i < slotsToCreate; i++) {
@@ -114,7 +114,7 @@ export class OperatorSlotService {
             slotNumber,
             operatorType: oldOperator.operator_type || OperatorType.SYSTEM,
             cloudSubtype: oldOperator.cloud_subtype || null,
-            isG8eNode: oldOperator.is_g8e_pod ?? false,
+            isG8eNode: oldOperator.is_g8ep ?? false,
             slotCost: oldOperator.slot_cost ?? 1,
             newApiKey,
             certInfo: newCertInfo,

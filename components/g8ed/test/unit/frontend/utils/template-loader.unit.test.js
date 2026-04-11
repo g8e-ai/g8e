@@ -14,6 +14,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { ComponentName } from '@g8ed/public/js/models/investigation-models.js';
 
 let TemplateLoader;
 
@@ -83,8 +84,8 @@ describe('TemplateLoader [UNIT - jsdom]', () => {
 
             await loader.load('approval-status');
 
-            const [serviceName, path] = transportGet.mock.calls[0];
-            expect(serviceName).toBe('g8ed');
+            const [componentName, path] = transportGet.mock.calls[0];
+            expect(componentName).toBe('g8ed');
             expect(path).toBe('/js/components/templates/approval-status.html');
         });
 

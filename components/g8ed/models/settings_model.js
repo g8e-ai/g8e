@@ -522,7 +522,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'upload_path',                 default: ''                 }),
     Object.freeze({ key: 'session_ttl',                 default: '28800'            }),
     Object.freeze({ key: 'absolute_session_timeout',    default: '86400'            }),
-    Object.freeze({ key: 'g8e_pod_operator_endpoint',  default: 'g8e.local'    }),
+    Object.freeze({ key: 'g8ep_operator_endpoint',  default: 'g8e.local'    }),
     Object.freeze({ key: 'host_ips',                     default: ''                 }),
     Object.freeze({ key: 'docs_dir',                     default: '/docs'            }),
     Object.freeze({ key: 'readme_path',                  default: '/readme/README.md' }),
@@ -530,7 +530,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'g8es_http_port',              default: '9000'            }),
     Object.freeze({ key: 'g8es_wss_port',               default: '9001'            }),
     Object.freeze({ key: 'supervisor_port',              default: '443'             }),
-    Object.freeze({ key: 'g8e_pod_operator_api_key',   default: '', secret: true  }),
+    Object.freeze({ key: 'g8ep_operator_api_key',   default: '', secret: true  }),
 ]);
 
 // ---------------------------------------------------------------------------

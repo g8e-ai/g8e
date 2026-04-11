@@ -174,11 +174,11 @@ describe('OperatorSlotService', () => {
             expect(calls[1].isG8eNode).toBe(false);
         });
 
-        it('should not assign G8E_POD if an existing live operator already has is_g8e_pod', async () => {
+        it('should not assign G8E_POD if an existing live operator already has is_g8ep', async () => {
             const existingG8eNode = {
                 operator_id: 'op-drop',
                 status: OperatorStatus.AVAILABLE,
-                is_g8e_pod: true,
+                is_g8ep: true,
             };
             mocks.operatorDataService.queryOperators.mockResolvedValueOnce([existingG8eNode]);
 

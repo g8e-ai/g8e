@@ -25,7 +25,7 @@
 import { readFileSync, existsSync } from 'fs';
 import WebSocket from 'ws';
 import { logger } from '../../utils/logger.js';
-import { PUBSUB_RECONNECT_DELAY_MS, g8es_PUBSUB_PATH } from '../../constants/http_client.js';
+import { PUBSUB_RECONNECT_DELAY_MS, G8ES_PUBSUB_PATH } from '../../constants/http_client.js';
 import { PubSubAction, PubSubMessageType } from '../../constants/channels.js';
 import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 import { PubSubSubscribeMessage, PubSubPublishMessage, PubSubInboundMessage, PubSubInboundPMessage } from '../../models/pubsub_models.js';
@@ -63,7 +63,7 @@ class G8esPubSubClient {
     // =========================================================================
 
     _connectWS() {
-        const wsUrl = new URL(this.pubsubUrl + g8es_PUBSUB_PATH);
+        const wsUrl = new URL(this.pubsubUrl + G8ES_PUBSUB_PATH);
         if (!wsUrl.protocol.startsWith('wss')) {
             logger.warn(`[G8ES-CLIENT] Protocol override: forcing WSS for ${this.pubsubUrl}`);
             wsUrl.protocol = 'wss:';

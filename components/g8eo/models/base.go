@@ -49,7 +49,7 @@ type MemoryInfo struct {
 }
 
 type ExecutionEnvironmentInfo struct {
-	ServiceName string `json:"service_name"`
-	ProjectID   string `json:"project_id"`
-	MaxMemoryMB int    `json:"max_memory_mb"`
+	ComponentName string `json:"component_name"`
+	ProjectID     string `json:"project_id"`
+	MaxMemoryMB   int    `json:"max_memory_mb"`
 }

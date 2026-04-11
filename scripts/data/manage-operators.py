@@ -56,7 +56,7 @@ class OperatorManager:
         op_type = (op.get('operator_type') or 'N/A')[:10]
         has_key = 'yes' if op.get('has_api_key') or op.get('operator_api_key') else 'no'
         claimed = 'yes' if op.get('claimed') else 'no'
-        is_g8e_pod = 'yes' if op.get('is_g8e_pod') else 'no'
+        is_g8ep = 'yes' if op.get('is_g8ep') else 'no'
         heartbeat = (op.get('last_heartbeat') or 'never')[:19]
         return (
             f"  {op_id}  "
@@ -66,7 +66,7 @@ class OperatorManager:
             f"type={op_type:<10} "
             f"key={has_key:<3} "
             f"claimed={claimed:<3} "
-            f"g8e_pod={is_g8e_pod:<3} "
+            f"g8ep={is_g8ep:<3} "
             f"heartbeat={heartbeat}"
         )
 
@@ -84,7 +84,7 @@ class OperatorManager:
             f"  Slot Number:       {op.get('slot_number', 'N/A')}",
             f"  Operator Type:     {op.get('operator_type', 'N/A')}",
             f"  Cloud Subtype:     {op.get('cloud_subtype', 'N/A')}",
-            f"  Is g8e node:       {op.get('is_g8e_pod', False)}",
+            f"  Is g8e node:       {op.get('is_g8ep', False)}",
             f"  Slot Cost:         {op.get('slot_cost', 'N/A')}",
             "",
             "  Status:",

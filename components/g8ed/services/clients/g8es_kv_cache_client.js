@@ -40,9 +40,9 @@
  * compensating logic on failure paths rather than relying on exact counts.
  */
 
-import { g8esHttpClient } from './g8es_http_client.js';
+import { G8esHttpClient } from './g8es_http_client.js';
 import { logger } from '../../utils/logger.js';
-import { g8es_KV_CLIENT_STATUS_READY, KV_SCAN_DEFAULT_COUNT } from '../../constants/http_client.js';
+import { G8ES_KV_CLIENT_STATUS_READY, KV_SCAN_DEFAULT_COUNT } from '../../constants/http_client.js';
 import { KVHash, KVList, KVSet, KVSortedSet, KVStream } from '../../models/kv_models.js';
 
 class KVOperationError extends Error {
@@ -63,7 +63,7 @@ class KVCacheClient {
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
     constructor({ listenUrl, internalAuthToken = null, caCertPath = null } = {}) {
-        this._http = new g8esHttpClient({ listenUrl, component: 'G8E-KV', internalAuthToken, caCertPath });
+        this._http = new G8esHttpClient({ listenUrl, component: 'G8E-KV', internalAuthToken, caCertPath });
     }
 
     // =========================================================================
@@ -160,7 +160,7 @@ class KVCacheClient {
     }
 
     get status() {
-        return g8es_KV_CLIENT_STATUS_READY;
+        return G8ES_KV_CLIENT_STATUS_READY;
     }
 
     async exists(key) {

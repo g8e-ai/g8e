@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { LLMProvider } from '@g8ed/public/js/constants/ai-constants.js';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
-import { ServiceName } from '@g8ed/public/js/constants/service-client-constants.js';
+import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 
 // Import SetupPage class dynamically to prevent auto-execution
 let SetupPage;

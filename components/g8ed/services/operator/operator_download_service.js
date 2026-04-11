@@ -13,7 +13,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { PLATFORMS, OPERATOR_BINARY_BLOB_NAMESPACE } from '../../constants/service_config.js';
-import { g8es_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
+import { G8ES_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 
 /**
@@ -61,7 +61,7 @@ class OperatorDownloadService {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), g8es_HTTP_TIMEOUT_MS);
+            const timeoutId = setTimeout(() => controller.abort(), G8ES_HTTP_TIMEOUT_MS);
             let res;
             try {
                 res = await fetch(url, { signal: controller.signal, headers: this._headers() });
@@ -100,7 +100,7 @@ class OperatorDownloadService {
         const url = `${this._blobUrl(os, arch)}/meta`;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), g8es_HTTP_TIMEOUT_MS);
+            const timeoutId = setTimeout(() => controller.abort(), G8ES_HTTP_TIMEOUT_MS);
             let res;
             try {
                 res = await fetch(url, { signal: controller.signal, headers: this._headers() });

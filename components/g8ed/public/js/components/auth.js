@@ -18,7 +18,7 @@ import { webSessionService } from '../utils/web-session-service.js';
 import { UserRole, OperatorSessionRole } from '../constants/auth-constants.js';
 import { AppPaths } from '../constants/app-constants.js';
 import { notificationService } from '../utils/notification-service.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 
 function _base64urlToBuffer(base64url) {

@@ -269,7 +269,7 @@ type sharedCloudSubtypeValues struct {
 	AWS     string `json:"aws"`
 	GCP     string `json:"gcp"`
 	Azure   string `json:"azure"`
-	G8eNode string `json:"g8e_pod"`
+	G8eNode string `json:"g8ep"`
 }
 
 type sharedVaultModeValues struct {

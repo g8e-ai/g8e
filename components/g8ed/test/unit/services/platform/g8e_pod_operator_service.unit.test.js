@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { G8ENodeOperatorService } from '@g8ed/services/platform/g8e_pod_operator_service.js';
+import { G8ENodeOperatorService } from '@g8ed/services/platform/g8ep_operator_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
 
 global.fetch = vi.fn();
@@ -26,7 +26,7 @@ function makeSettingsService(overrides = {}) {
             internal_auth_token: 'test-token',
             ...overrides,
         }),
-        savePlatformSettings: vi.fn().mockResolvedValue({ success: true, saved: ['g8e_pod_operator_api_key'] }),
+        savePlatformSettings: vi.fn().mockResolvedValue({ success: true, saved: ['g8ep_operator_api_key'] }),
     };
 }
 
@@ -73,7 +73,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             expect(operatorService.queryOperators).toHaveBeenCalledWith(
                 expect.arrayContaining([
                     { field: 'user_id', operator: '==', value: 'user_123' },
-                    { field: 'is_g8e_pod', operator: '==', value: true },
+                    { field: 'is_g8ep', operator: '==', value: true },
                 ])
             );
         });
@@ -92,7 +92,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             await service.launchG8ENodeOperator('sk-test-key');
 
             expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8e_pod_operator_api_key: 'sk-test-key',
+                g8ep_operator_api_key: 'sk-test-key',
             });
             expect(fetch).toHaveBeenCalledWith(
                 expect.stringContaining(':443/RPC2'),
@@ -174,7 +174,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             );
             expect(operatorService.resetOperator).toHaveBeenCalledWith('op_123');
             expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8e_pod_operator_api_key: 'new-key',
+                g8ep_operator_api_key: 'new-key',
             });
             expect(fetch).toHaveBeenCalledWith(
                 expect.any(String),
@@ -223,7 +223,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1');
 
             expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8e_pod_operator_api_key: 'sk-key',
+                g8ep_operator_api_key: 'sk-key',
             });
             expect(fetch).toHaveBeenCalled();
         });

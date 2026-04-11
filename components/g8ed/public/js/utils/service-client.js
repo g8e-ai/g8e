@@ -13,8 +13,8 @@
 
 import { devLogger } from './dev-logger.js';
 import {
-    ServiceName,
-    ServiceUrl,
+    ComponentName,
+    ComponentUrl,
     RequestTimeout,
     RetryConfig,
     RequestPath,
@@ -40,8 +40,10 @@ class RateLimitError extends Error {
     }
 }
 
-const SERVICE_URLS = {
-    [ServiceName.G8EE]: ServiceUrl.G8EE,
+const COMPONENT_URLS = {
+    [ComponentName.G8EE]: ComponentUrl.G8EE,
+    [ComponentName.G8ED]: ComponentUrl.G8ED,
+    [ComponentName.G8ES]: ComponentUrl.G8ES,
 };
 
 class ServiceClient {
@@ -54,7 +56,7 @@ class ServiceClient {
         };
 
         this.currentEndpointIndex = {
-            [ServiceName.G8EE]: 0,
+            [ComponentName.G8EE]: 0,
             [ComponentName.G8ED]: 0,
         };
 
@@ -70,19 +72,19 @@ class ServiceClient {
 
 
 
-    getServiceEndpoints(serviceName) {
-        if (serviceName === ComponentName.G8ED) {
+    getServiceEndpoints(componentName) {
+        if (componentName === ComponentName.G8ED) {
             return [window.location.origin];
         }
         
-        if (SERVICE_URLS[serviceName]) {
-            return [SERVICE_URLS[serviceName]];
+        if (COMPONENT_URLS[componentName]) {
+            return [COMPONENT_URLS[componentName]];
         }
         
-        throw new Error(`Unknown service: ${serviceName}`);
+        throw new Error(`Unknown component: ${componentName}`);
     }
 
-    getAuthHeaders(serviceName = null) {
+    getAuthHeaders(componentName = null) {
         const headers = {};
 
         const auth = this._authAccessor ? this._authAccessor() : null;
@@ -99,7 +101,7 @@ class ServiceClient {
                 headers[API_KEY_HEADER] = apiKey;
             }
         } else if (auth) {
-            devLogger.warn(`[ ServiceClient ] No session ID found for ${serviceName || ComponentName.G8ED}`);
+            devLogger.warn(`[ ServiceClient ] No session ID found for ${componentName || ComponentName.G8ED}`);
         }
 
         return headers;
@@ -113,26 +115,26 @@ class ServiceClient {
     }
 
     async initializeConfiguration() {
-        devLogger.log('[ServiceClient] Service URLs:', {
-            [ServiceName.G8EE]: SERVICE_URLS[ServiceName.G8EE],
+        devLogger.log('[ServiceClient] Component URLs:', {
+            [ComponentName.G8EE]: COMPONENT_URLS[ComponentName.G8EE],
             [ComponentName.G8ED]: window.location.origin,
         });
         this.configLoaded = true;
     }
 
 
-    async sendRequest(serviceName, path, options = {}) {
+    async sendRequest(componentName, path, options = {}) {
         const startTime = performance.now();
         const requestId = Math.random().toString(36).substring(2, 9);
 
         const mappedPath = path;
 
-        const endpoints = this.getServiceEndpoints(serviceName);
+        const endpoints = this.getServiceEndpoints(componentName);
         const baseUrl = endpoints[0]; // Use primary endpoint only
 
         const url = `${baseUrl}${mappedPath}`;
 
-        const authHeaders = this.getAuthHeaders(serviceName);
+        const authHeaders = this.getAuthHeaders(componentName);
 
         const mergedHeaders = {
             ...(typeof options.body === 'string' ? { 'Content-Type': CONTENT_TYPE_JSON } : {}),
@@ -199,41 +201,41 @@ class ServiceClient {
         }
     }
 
-    async get(serviceName, path, options = {}) {
-        return this.sendRequest(serviceName, path, { method: HttpMethod.GET, ...options });
+    async get(componentName, path, options = {}) {
+        return this.sendRequest(componentName, path, { method: HttpMethod.GET, ...options });
     }
 
-    async post(serviceName, path, data = null, options = {}) {
+    async post(componentName, path, data = null, options = {}) {
         const requestOptions = {
             method: HttpMethod.POST,
             headers: { 'Content-Type': CONTENT_TYPE_JSON, ...options.headers },
             ...options
         };
         if (data) requestOptions.body = JSON.stringify(data);
-        return this.sendRequest(serviceName, path, requestOptions);
+        return this.sendRequest(componentName, path, requestOptions);
     }
 
-    async put(serviceName, path, data = null, options = {}) {
+    async put(componentName, path, data = null, options = {}) {
         const requestOptions = {
             method: HttpMethod.PUT,
             headers: { 'Content-Type': CONTENT_TYPE_JSON, ...options.headers },
             ...options
         };
         if (data) requestOptions.body = JSON.stringify(data);
-        return this.sendRequest(serviceName, path, requestOptions);
+        return this.sendRequest(componentName, path, requestOptions);
     }
 
-    async delete(serviceName, path, options = {}) {
-        return this.sendRequest(serviceName, path, { method: HttpMethod.DELETE, ...options });
+    async delete(componentName, path, options = {}) {
+        return this.sendRequest(componentName, path, { method: HttpMethod.DELETE, ...options });
     }
 
-    async upload(serviceName, path, formData, options = {}) {
+    async upload(componentName, path, formData, options = {}) {
         const requestOptions = {
             method: HttpMethod.POST,
             body: formData,
             ...options
         };
-        return this.sendRequest(serviceName, path, requestOptions);
+        return this.sendRequest(componentName, path, requestOptions);
     }
 }
 

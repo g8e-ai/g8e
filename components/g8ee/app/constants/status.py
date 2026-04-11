@@ -53,7 +53,7 @@ class ExecutionStatus(str, Enum):
 class ComponentName(str, Enum):
     G8EE = "g8ee"
     G8EO = "g8eo"
-    g8ed = "g8ed"
+    G8ED = "g8ed"
 
 class ComponentStatus(str, Enum):
     ACTIVE = "active"
@@ -101,7 +101,7 @@ class CloudSubtype(str, Enum):
     AWS = _STATUS["cloud.subtype"]["aws"]
     AZURE = _STATUS["cloud.subtype"]["azure"]
     GCP = _STATUS["cloud.subtype"]["gcp"]
-    G8E_POD = _STATUS["cloud.subtype"]["g8e_pod"]
+    G8E_POD = _STATUS["cloud.subtype"]["g8ep"]
 
 class CommandErrorType(str, Enum):
     VALIDATION_ERROR = "validation.error"

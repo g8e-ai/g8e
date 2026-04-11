@@ -12,7 +12,7 @@
 // limitations under the License.
 
 /**
- * g8esDocumentClient — g8es Document Store HTTP client.
+ * G8esDocumentClient — g8es Document Store HTTP client.
  * 
  * Purpose-built client for g8es document store operations (/db/...).
  * Mirrors g8ee's DBClient (components/g8ee/app/db/client.py) in scope
@@ -27,7 +27,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { g8esHttpClient, g8esHttpError } from './g8es_http_client.js';
+import { G8esHttpClient, G8esHttpError } from './g8es_http_client.js';
 import { G8eBaseModel } from '../../models/base.js';
 import { logger } from '../../utils/logger.js';
 import { nowISOString } from '../../utils/timestamp.js';
@@ -43,7 +43,7 @@ const FieldOp = {
     SERVER_TIMESTAMP: '__SERVER_TIMESTAMP__',
 };
 
-class g8esFieldValue {
+class G8esFieldValuE {
     static serverTimestamp() {
         return nowISOString();
     }
@@ -71,8 +71,8 @@ function isFieldValueOp(val) {
     return val && typeof val === 'object' && '__op' in val;
 }
 
-class g8esDocumentClient {
-    static FieldValue = g8esFieldValue;
+class G8esDocumentClient {
+    static FieldValue = G8esFieldValuE;
 
     /**
      * @param {object} config
@@ -81,11 +81,11 @@ class g8esDocumentClient {
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
     constructor({ listenUrl, internalAuthToken = null, caCertPath = null } = {}) {
-        this._http = new g8esHttpClient({ listenUrl, component: 'G8E-DOC', internalAuthToken, caCertPath });
+        this._http = new G8esHttpClient({ listenUrl, component: 'G8E-DOC', internalAuthToken, caCertPath });
     }
 
     get FieldValue() {
-        return g8esDocumentClient.FieldValue;
+        return G8esDocumentClient.FieldValue;
     }
 
     // =========================================================================
@@ -99,7 +99,7 @@ class g8esDocumentClient {
             const data = await this._http.get(`/db/${collection}/${documentId}`);
             return { success: true, data, error: null };
         } catch (error) {
-            if (error instanceof g8esHttpError && error.status === 404) {
+            if (error instanceof G8esHttpError && error.status === 404) {
                 return { success: true, data: null, error: 'Document not found' };
             }
             logger.error(`${LOG_PREFIX} getDocument failed: ${error.message}`);
@@ -190,7 +190,7 @@ class g8esDocumentClient {
             await this._http.delete(`/db/${collection}/${documentId}`);
             return { success: true, notFound: false, error: null };
         } catch (error) {
-            const notFound = error instanceof g8esHttpError && error.status === 404;
+            const notFound = error instanceof G8esHttpError && error.status === 404;
             if (!notFound) {
                 logger.error(`${LOG_PREFIX} deleteDocument failed: ${error.message}`);
             }
@@ -271,4 +271,4 @@ class g8esDocumentClient {
     }
 }
 
-export { g8esDocumentClient, g8esFieldValue };
+export { G8esDocumentClient, G8esFieldValuE };

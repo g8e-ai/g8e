@@ -540,7 +540,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 | Subservice | Responsibility |
 |------------|----------------|
 | `lifecycle` | CRUD operations, activation, stopping, and history trail management. |
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8e_pod` subtype if no existing live operator already has it, ensuring exactly one g8ep operator per user regardless of slot ordering. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8ep` subtype if no existing live operator already has it, ensuring exactly one g8ep operator per user regardless of slot ordering. |
 | `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration). |
 | `notifications` | SSE event broadcasting and user-level operator list updates. |
 

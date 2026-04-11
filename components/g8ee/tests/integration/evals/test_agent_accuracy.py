@@ -18,7 +18,7 @@ Tests the real ChatPipelineService.run_chat end-to-end. This is the full agent p
 user message in, investigation context assembly, triage, system prompt, LLM call,
 response persistence.
 
-The test creates a real investigation in g8es, builds G8EHttpContext, calls
+The test creates a real investigation in g8es, builds G8eHttpContext, calls
 chat_pipeline.run_chat() with real services, reads the persisted AI response from
 g8es, and grades it with EvalJudge (Primary Model grades Assistant Model).
 """
@@ -34,7 +34,7 @@ from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from app.llm.factory import get_llm_provider
 from app.models.settings import G8eeUserSettings
-from app.models.http_context import G8EHttpContext, BoundOperator
+from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import (
@@ -76,7 +76,7 @@ async def test_agent_accuracy(
 
     This test uses the real ChatPipelineService.run_chat end-to-end:
     1. Creates a real investigation in g8es
-    2. Builds G8EHttpContext with the investigation
+    2. Builds G8eHttpContext with the investigation
     3. Calls chat_pipeline.run_chat() with real services
     4. Reads conversation history from g8es to extract AI response
     5. Grades with EvalJudge (Primary Model grades Assistant Model)
