@@ -123,19 +123,20 @@ class MemoryGenerationService:
 
         system_instruction = build_memory_analysis_system_instruction(memory.case_title)
 
-        provider = get_llm_provider(settings.llm)
-        assistant_model = settings.llm.assistant_model
-        response = await provider.generate_content(
-            model=assistant_model,
-            contents=contents,
-            config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
+        async with get_llm_provider(settings.llm) as provider:
+            assistant_model = settings.llm.assistant_model
+            config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
-                json_schema=MemoryAnalysis.model_json_schema(),
                 temperature=None,
                 max_tokens=None,
                 system_instruction=system_instruction,
-            ),
-        )
+                response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
+            )
+            response = await provider.generate_content_assistant(
+                model=assistant_model,
+                contents=contents,
+                assistant_llm_settings=config,
+            )
 
         if not response or not response.text:
             logger.warning(

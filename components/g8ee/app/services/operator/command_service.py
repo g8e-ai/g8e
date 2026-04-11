@@ -234,23 +234,13 @@ class OperatorCommandService:
         args: OperatorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        request_settings: G8eeUserSettings | None = None,
+        request_settings: G8eeUserSettings,
     ) -> CommandExecutionResult:
         """Orchestrate command execution: risk analysis -> approval -> dispatch."""
         command = args.command.strip()
         justification = args.justification.strip()
         
         logger.info("[COMMAND] Starting execution: %s", command)
-
-        # Use provided request_settings or fallback to a default if absolutely necessary
-        # In practice, this should be passed from the router/pipeline
-        if request_settings is None:
-            from app.models.settings import LLMSettings
-            from app.constants import LLMProvider
-            request_settings = G8eeUserSettings(
-                llm=self._settings.llm,
-                search=self._settings.search
-            )
 
         # 1. Resolve operator
         try:

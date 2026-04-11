@@ -58,126 +58,131 @@ _PROBED_CAPABILITIES = {
 }
 
 
-async def _probe_llm_capabilities(settings: G8eePlatformSettings):
+async def _probe_llm_capabilities(settings):
     """Probe the LLM for thinking and tool support."""
     from app.llm import get_llm_provider
     from app.llm import llm_types as types
     from app.constants import ThinkingLevel
 
-    if not _has_llm_credentials(settings):
+    llm = getattr(settings, 'llm', None)
+    if not _has_llm_credentials(llm):
         return
 
-    provider = get_llm_provider(settings.llm)
-    primary_model = settings.llm.primary_model
-    
-    # 1. Probe Thinking
-    try:
-        logger.info(f"[PROBE] Testing thinking support for {primary_model}...")
-        thinking_config = types.ThinkingConfig(
-            thinking_level=ThinkingLevel.MINIMAL,
-            include_thoughts=True
-        )
-        config = types.GenerateContentConfig(
-            max_output_tokens=1024,
-            thinking_config=thinking_config,
-        )
-        await provider.generate_content(
-            model=primary_model,
-            contents=[types.Content(role="user", parts=[types.Part.from_text("Say 'ok'")])],
-            config=config,
-        )
-        logger.info(f"[PROBE] Thinking support confirmed for {primary_model}")
-    except Exception as e:
-        error_msg = str(e).lower()
-        # Common error patterns for lack of thinking support
-        if any(p in error_msg for p in ["thinking_config", "thinking is not supported", "invalid thinking_level", "400"]):
-            _PROBED_CAPABILITIES["supports_thinking"] = False
-            _PROBED_CAPABILITIES["thinking_error"] = str(e)
-            logger.warning(f"[PROBE] Thinking support failed for {primary_model}: {e}")
-        else:
-            logger.info(f"[PROBE] Thinking probe returned non-capability error (ignoring): {e}")
+    provider = get_llm_provider(llm)
+    primary_model = llm.primary_model
 
-    # 2. Probe Tools
-    try:
-        logger.info(f"[PROBE] Testing tool support for {primary_model}...")
-        dummy_tool = types.ToolDeclaration(
-            name="get_current_weather",
-            description="Get the current weather in a given location",
-            parameters={
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
-                },
-                "required": ["location"],
-            },
-        )
-        tool_group = types.ToolGroup(tools=[dummy_tool])
-        config = types.GenerateContentConfig(
-            max_output_tokens=1024,
-            tools=[tool_group],
-        )
-        await provider.generate_content(
-            model=primary_model,
-            contents=[types.Content(role="user", parts=[types.Part.from_text("What is the weather in London?")])],
-            config=config,
-        )
-        logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
-    except Exception as e:
-        error_msg = str(e).lower()
-        # Common error patterns for lack of tool support
-        if any(p in error_msg for p in ["tool", "function call", "not supported", "400"]):
-            _PROBED_CAPABILITIES["supports_tools"] = False
-            _PROBED_CAPABILITIES["tools_error"] = str(e)
-            logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
-        else:
-            logger.info(f"[PROBE] Tool probe returned non-capability error (ignoring): {e}")
-
-    # Update the registry for the duration of the session
-    config = get_model_config(primary_model)
-    config.supports_thinking = _PROBED_CAPABILITIES["supports_thinking"]
-    config.supports_tools = _PROBED_CAPABILITIES["supports_tools"]
-    
-    # 3. Probe Web Search
-    if settings.search and settings.search.enabled:
-        from app.services.ai.grounding.web_search_provider import WebSearchProvider
+    async with provider:
+        # 1. Probe Thinking
         try:
-            logger.info("[PROBE] Testing web search connectivity...")
-            search_provider = WebSearchProvider(
-                project_id=settings.search.project_id,
-                engine_id=settings.search.engine_id,
-                api_key=settings.search.api_key,
-                location=settings.search.location or "global"
+            logger.info(f"[PROBE] Testing thinking support for {primary_model}...")
+            thinking_config = types.ThinkingConfig(
+                thinking_level=ThinkingLevel.MINIMAL,
+                include_thoughts=True
             )
-            # Perform a minimal search for connectivity check
-            result = await search_provider.search(query="connectivity-check", num=1)
-            if result.success:
-                logger.info("[PROBE] Web search connectivity confirmed")
-            else:
-                _PROBED_CAPABILITIES["supports_web_search"] = False
-                _PROBED_CAPABILITIES["web_search_error"] = result.error
-                logger.warning(f"[PROBE] Web search connectivity failed: {result.error}")
+            settings = types.PrimaryLLMSettings(
+                max_output_tokens=1024,
+                thinking_config=thinking_config,
+                system_instruction="",
+            )
+            await provider.generate_content_primary(
+                model=primary_model,
+                contents=[types.Content(role="user", parts=[types.Part.from_text("Say 'ok'")])],
+                primary_llm_settings=settings,
+            )
+            logger.info(f"[PROBE] Thinking support confirmed for {primary_model}")
         except Exception as e:
-            _PROBED_CAPABILITIES["supports_web_search"] = False
-            _PROBED_CAPABILITIES["web_search_error"] = str(e)
-            logger.warning(f"[PROBE] Web search probe failed with exception: {e}")
-    
-    # If the model is not in the registry yet, add it
-    found = False
-    for cfg in MODEL_REGISTRY.configs:
-        if cfg.name == primary_model:
-            cfg.supports_thinking = config.supports_thinking
-            cfg.supports_tools = config.supports_tools
-            found = True
-            break
-    if not found:
-        MODEL_REGISTRY.configs.append(config)
+            error_msg = str(e).lower()
+            # Common error patterns for lack of thinking support
+            if any(p in error_msg for p in ["thinking_config", "thinking is not supported", "invalid thinking_level", "400"]):
+                _PROBED_CAPABILITIES["supports_thinking"] = False
+                _PROBED_CAPABILITIES["thinking_error"] = str(e)
+                logger.warning(f"[PROBE] Thinking support failed for {primary_model}: {e}")
+            else:
+                logger.info(f"[PROBE] Thinking probe returned non-capability error (ignoring): {e}")
+
+        # 2. Probe Tools
+        try:
+            logger.info(f"[PROBE] Testing tool support for {primary_model}...")
+            dummy_tool = types.ToolDeclaration(
+                name="get_current_weather",
+                description="Get the current weather in a given location",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
+                    },
+                    "required": ["location"],
+                },
+            )
+            tool_group = types.ToolGroup(tools=[dummy_tool])
+            settings = types.PrimaryLLMSettings(
+                max_output_tokens=1024,
+                tools=[tool_group],
+                system_instruction="",
+            )
+            await provider.generate_content_primary(
+                model=primary_model,
+                contents=[types.Content(role="user", parts=[types.Part.from_text("What is the weather in London?")])],
+                primary_llm_settings=settings,
+            )
+            logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Common error patterns for lack of tool support
+            if any(p in error_msg for p in ["tool", "function call", "not supported", "400"]):
+                _PROBED_CAPABILITIES["supports_tools"] = False
+                _PROBED_CAPABILITIES["tools_error"] = str(e)
+                logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
+            else:
+                logger.info(f"[PROBE] Tool probe returned non-capability error (ignoring): {e}")
+
+        # Update the registry for the duration of the session
+        config = get_model_config(primary_model)
+        config.supports_thinking = _PROBED_CAPABILITIES["supports_thinking"]
+        config.supports_tools = _PROBED_CAPABILITIES["supports_tools"]
+
+        # 3. Probe Web Search
+        if settings.search and settings.search.enabled:
+            from app.services.ai.grounding.web_search_provider import WebSearchProvider
+            try:
+                logger.info("[PROBE] Testing web search connectivity...")
+                search_provider = WebSearchProvider(
+                    project_id=settings.search.project_id,
+                    engine_id=settings.search.engine_id,
+                    api_key=settings.search.api_key,
+                    location=settings.search.location or "global"
+                )
+                # Perform a minimal search for connectivity check
+                result = await search_provider.search(query="connectivity-check", num=1)
+                if result.success:
+                    logger.info("[PROBE] Web search connectivity confirmed")
+                else:
+                    _PROBED_CAPABILITIES["supports_web_search"] = False
+                    _PROBED_CAPABILITIES["web_search_error"] = result.error
+                    logger.warning(f"[PROBE] Web search connectivity failed: {result.error}")
+            except Exception as e:
+                _PROBED_CAPABILITIES["supports_web_search"] = False
+                _PROBED_CAPABILITIES["web_search_error"] = str(e)
+                logger.warning(f"[PROBE] Web search probe failed with exception: {e}")
+
+        # If the model is not in the registry yet, add it
+        found = False
+        for cfg in MODEL_REGISTRY.configs:
+            if cfg.name == primary_model:
+                cfg.supports_thinking = config.supports_thinking
+                cfg.supports_tools = config.supports_tools
+                found = True
+                break
+        if not found:
+            MODEL_REGISTRY.configs.append(config)
 
 logger = logging.getLogger(__name__)
 
 
-def _has_llm_credentials(settings: G8eePlatformSettings) -> bool:
-    """Return True if the active LLM provider has the credentials it needs."""
-    llm = settings.llm
+def _has_llm_credentials(llm: LLMSettings | None) -> bool:
+    """Return True if the given LLMSettings has the credentials it needs."""
+    if llm is None:
+        return False
     provider = llm.provider
     if provider == LLMProvider.GEMINI:
         return bool(llm.gemini_api_key)
@@ -323,12 +328,12 @@ def pytest_configure(config):
     env_llm = _llm_settings_from_env()
     if env_llm is not None:
         logger.info(f"Overriding settings from env: provider={env_llm.provider}")
-        settings.llm = env_llm
+        object.__setattr__(settings, 'llm', env_llm)
 
     env_search = _web_search_settings_from_env()
     if env_search is not None:
         logger.info("Overriding web search settings from env")
-        settings.search = env_search
+        object.__setattr__(settings, 'search', env_search)
 
     set_settings(settings)
     # Probing is now deferred to the 'probed_capabilities' fixture to avoid startup latency.
@@ -346,7 +351,8 @@ def pytest_collection_modifyitems(config, items):
     # will now fail later during execution rather than being skipped here,
     # unless they are explicitly marked with capabilities.
 
-    has_llm_credentials = _has_llm_credentials(settings) if settings else False
+    llm = getattr(settings, 'llm', None) if settings else None
+    has_llm_credentials = _has_llm_credentials(llm)
     has_vertex_search = settings.search.enabled if settings else False
     has_web_search = (
         settings.search.enabled
@@ -356,16 +362,16 @@ def pytest_collection_modifyitems(config, items):
     ) if settings else False
 
     logger.info(f"Collection: settings={settings is not None}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
-    if settings and settings.llm:
-        logger.info(f"LLM Config: provider={settings.llm.provider}, key_set={bool(settings.llm.gemini_api_key)}")
+    if llm:
+        logger.info(f"LLM Config: provider={llm.provider}, key_set={bool(llm.gemini_api_key)}")
 
     skip_no_llm = pytest.mark.skip(reason=f"ai_integration tests require LLM flags. has_creds={has_llm_credentials}")
     skip_no_vertex = pytest.mark.skip(reason="requires_api tests require Vertex AI Search credentials (VERTEX_SEARCH_ENABLED, VERTEX_SEARCH_PROJECT_ID, VERTEX_SEARCH_ENGINE_ID, VERTEX_SEARCH_API_KEY)")
     skip_no_web_search = pytest.mark.skip(reason=f"requires_web_search tests require web search configuration (search.enabled, project_id, engine_id, api_key). has_web_search={has_web_search}")
     
     # Capability-based skips
-    skip_no_thinking = pytest.mark.skip(reason=f"Model {settings.llm.primary_model if settings and settings.llm else 'None'} proven not to support thinking: {_PROBED_CAPABILITIES['thinking_error']}")
-    skip_no_tools = pytest.mark.skip(reason=f"Model {settings.llm.primary_model if settings and settings.llm else 'None'} proven not to support tools: {_PROBED_CAPABILITIES['tools_error']}")
+    skip_no_thinking = pytest.mark.skip(reason=f"Model {llm.primary_model if llm else 'None'} proven not to support thinking: {_PROBED_CAPABILITIES['thinking_error']}")
+    skip_no_tools = pytest.mark.skip(reason=f"Model {llm.primary_model if llm else 'None'} proven not to support tools: {_PROBED_CAPABILITIES['tools_error']}")
     skip_web_search_unreachable = pytest.mark.skip(reason=f"Web search service unreachable: {_PROBED_CAPABILITIES['web_search_error']}")
 
     for item in items:
@@ -563,7 +569,7 @@ async def probed_capabilities(test_settings):
     better visibility.
     """
     import asyncio
-    if _has_llm_credentials(test_settings):
+    if _has_llm_credentials(getattr(test_settings, 'llm', None)):
         try:
             # Apply a 30s timeout to the entire probing session
             async with asyncio.timeout(30.0):
@@ -752,9 +758,10 @@ def real_provider_config(test_settings):
     """
     from app.llm.llm_types import GenerateContentConfig
     
-    llm_settings = test_settings.llm
+    llm_settings = getattr(test_settings, 'llm', None)
+    if llm_settings is None:
+        pytest.skip("No LLM settings configured")
     
-    # Create config that exactly matches platform settings
     config = GenerateContentConfig(
         temperature=llm_settings.llm_temperature,
         max_output_tokens=llm_settings.llm_max_tokens,
@@ -866,12 +873,17 @@ async def db_service(test_settings, cache_aside_service):
     yield InvestigationDataService(cache=cache_aside_service)
 
 
-@pytest.fixture(scope="session")
-def llm_provider():
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def llm_provider():
     """Returns a configured LLMProvider instance for the session."""
     from app.llm.factory import get_llm_provider, get_settings
     settings = get_settings()
-    return get_llm_provider(settings.llm)
+    llm = getattr(settings, 'llm', None)
+    if llm is None:
+        pytest.skip("No LLM settings configured")
+    provider = get_llm_provider(llm)
+    yield provider
+    await provider.close()
 
 
 @pytest.fixture(scope="session")

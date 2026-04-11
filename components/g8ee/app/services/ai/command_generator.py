@@ -72,7 +72,6 @@ from app.constants import (
     LLMProvider as LLMProviderEnum,
     TribunalFallbackReason,
     TribunalMember,
-    LLMProvider,
     ThinkingLevel,
     TRIBUNAL_MEMBER_TEMPERATURES,
     EventType,
@@ -82,9 +81,9 @@ from app.constants import (
     ANTHROPIC_DEFAULT_MODEL,
     GEMINI_DEFAULT_MODEL,
 )
-from app.llm import LLMProvider
-from app.llm.factory import get_llm_provider_for_provider
-from app.llm.llm_types import Content, GenerateContentConfig, Part, Role, ThinkingConfig
+from app.llm.factory import get_llm_provider
+from app.llm.llm_types import Content, GenerateContentConfig, Part, Role, ThinkingConfig, LiteLLMSettings
+from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -211,26 +210,6 @@ def _is_system_error(error_message: str) -> bool:
     return any(pattern in lower for pattern in _SYSTEM_ERROR_PATTERNS)
 
 
-def _infer_provider_for_model(model: str) -> LLMProviderEnum | None:
-    """Infer which LLM provider owns a model based on naming conventions.
-
-    Only cloud providers (Gemini, OpenAI, Anthropic) are inferred from model
-    naming patterns. Ollama is a first-class provider with many models and
-    must be configured explicitly via provider=ollama in settings.
-
-    Returns None when the model name is ambiguous (caller should fall back
-    to settings.provider).
-    """
-    lower = model.lower()
-    if lower.startswith("gemini-"):
-        return LLMProviderEnum.GEMINI
-    if lower.startswith("gpt-"):
-        return LLMProviderEnum.OPENAI
-    if lower.startswith("claude-"):
-        return LLMProviderEnum.ANTHROPIC
-    return None
-
-
 def _resolve_model(llm: LLMSettings) -> str:
     """Resolve a concrete model string for the Tribunal pipeline.
 
@@ -241,23 +220,6 @@ def _resolve_model(llm: LLMSettings) -> str:
     if llm.primary_model:
         return llm.primary_model
     return _PROVIDER_DEFAULT_MODELS.get(llm.provider, OLLAMA_DEFAULT_MODEL)
-
-
-def _resolve_provider_and_model(
-    llm: LLMSettings,
-) -> tuple[LLMProviderEnum, str]:
-    """Resolve a coupled (provider, model) pair for the Tribunal pipeline.
-
-    The model is chosen via the existing fallback chain (assistant_model ->
-    primary_model -> provider default). The provider is then inferred from
-    the model name so that the correct API endpoint and credentials are used.
-    If the model name is ambiguous, the primary provider from settings is
-    used.
-    """
-    model = _resolve_model(llm)
-    inferred = _infer_provider_for_model(model)
-    provider = inferred if inferred is not None else llm.provider
-    return provider, model
 
 
 _TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
@@ -382,16 +344,16 @@ async def _run_generation_pass(
         working_directory=working_directory,
         original_command=original_command,
     )
-    config = GenerateContentConfig(
+    settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=None,
-        thinking_config=_build_thinking_config(model),
+        system_instruction="",
     )
     try:
-        response = await provider.generate_content(
+        response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-            config=config,
+            lite_llm_settings=settings,
         )
         if not response or not response.text:
             error_msg = f"Pass {pass_index} ({member.value}) returned empty response"
@@ -441,16 +403,16 @@ async def _run_verifier(
         os=os_name,
         candidate_command=candidate_command,
     )
-    config = GenerateContentConfig(
+    settings = LiteLLMSettings(
         temperature=None,
         max_output_tokens=None,
-        thinking_config=_build_thinking_config(model),
+        system_instruction="",
     )
     try:
-        response = await provider.generate_content(
+        response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-            config=config,
+            lite_llm_settings=settings,
         )
         if not response or not response.text:
             logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate")
@@ -543,13 +505,13 @@ async def generate_command(
             outcome=CommandGenerationOutcome.DISABLED,
         )
 
-    resolved_provider, model = _resolve_provider_and_model(resolved_settings.llm)
+    model = _resolve_model(resolved_settings.llm)
     num_passes = max(1, resolved_settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
 
     logger.info(
         "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d",
-        resolved_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
+        resolved_settings.llm.provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
     )
 
     await emitter.emit(
@@ -565,125 +527,123 @@ async def generate_command(
     )
 
     try:
-        provider = get_llm_provider_for_provider(resolved_provider, resolved_settings.llm)
+        provider = get_llm_provider(resolved_settings.llm)
     except Exception as exc:
-        logger.error("[TRIBUNAL] Provider unavailable (%s): %s", resolved_provider, exc)
+        logger.error("[TRIBUNAL] Provider unavailable (%s): %s", resolved_settings.llm.provider, exc)
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(reason=TribunalFallbackReason.PROVIDER_UNAVAILABLE, original_command=original_command, final_command=original_command, error=str(exc)),
         )
         raise TribunalProviderUnavailableError(
-            provider=str(resolved_provider),
+            provider=str(resolved_settings.llm.provider),
             error=str(exc),
             original_command=original_command,
         )
 
-    # Stage 1: Generation
-    pass_errors: list[str] = []
-    pass_tasks = [
-        _run_generation_pass(
-            provider=provider, model=model, intent=intent, original_command=original_command,
-            os_name=os_name, shell=shell, working_directory=working_directory,
-            pass_index=i, emitter=emitter, pass_errors=pass_errors,
-        )
-        for i in range(num_passes)
-    ]
-    raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
-    candidates = [
-        CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
-        for i, res in enumerate(raw_results) if res
-    ]
-
-    if not candidates:
-        all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
-        if all_system:
-            logger.error(
-                "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
-                num_passes, pass_errors,
+    async with provider:
+        # Stage 1: Generation
+        pass_errors: list[str] = []
+        pass_tasks = [
+            _run_generation_pass(
+                provider=provider, model=model, intent=intent, original_command=original_command,
+                os_name=os_name, shell=shell, working_directory=working_directory,
+                pass_index=i, emitter=emitter, pass_errors=pass_errors,
             )
+            for i in range(num_passes)
+        ]
+        raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
+        candidates = [
+            CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
+            for i, res in enumerate(raw_results) if res
+        ]
+
+        if not candidates:
+            all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
+            if all_system:
+                logger.error(
+                    "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
+                    num_passes, pass_errors,
+                )
+                await emitter.emit(
+                    EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
+                    TribunalFallbackPayload(
+                        reason=TribunalFallbackReason.SYSTEM_ERROR,
+                        original_command=original_command,
+                        final_command=original_command,
+                        pass_errors=pass_errors,
+                    ),
+                )
+                raise TribunalSystemError(
+                    pass_errors=pass_errors,
+                    original_command=original_command,
+                )
+
+            logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
             await emitter.emit(
                 EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
                 TribunalFallbackPayload(
-                    reason=TribunalFallbackReason.SYSTEM_ERROR,
+                    reason=TribunalFallbackReason.ALL_PASSES_FAILED,
                     original_command=original_command,
                     final_command=original_command,
-                    pass_errors=pass_errors,
+                    pass_errors=pass_errors if pass_errors else None,
                 ),
             )
-            raise TribunalSystemError(
-                pass_errors=pass_errors,
+            raise TribunalGenerationFailedError(
+                pass_errors=pass_errors if pass_errors else ["No candidates produced"],
                 original_command=original_command,
             )
 
-        logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
+        # Stage 2: Voting
+        vote_winner, vote_score = _weighted_vote(candidates)
+        assert vote_winner is not None, "vote_winner should not be None after empty candidates check"
+
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(
-                reason=TribunalFallbackReason.ALL_PASSES_FAILED,
-                original_command=original_command,
-                final_command=original_command,
-                pass_errors=pass_errors if pass_errors else None,
-            ),
-        )
-        raise TribunalGenerationFailedError(
-            pass_errors=pass_errors if pass_errors else ["No candidates produced"],
-            original_command=original_command,
+            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
+            TribunalVotingCompletedPayload(vote_winner=vote_winner, vote_score=vote_score, num_candidates=len(candidates), original_command=original_command),
         )
 
-    # Stage 2: Voting
-    vote_winner, vote_score = _weighted_vote(candidates)
-    # Note: vote_winner can only be None if candidates is empty, which is already
-    # handled by the empty candidates check above (raises TribunalGenerationFailedError)
-    assert vote_winner is not None, "vote_winner should not be None after empty candidates check"
+        # Stage 3: Verification
+        final_command = vote_winner
+        outcome = CommandGenerationOutcome.CONSENSUS
+        verifier_passed = True
+        verifier_revision = None
 
-    await emitter.emit(
-        EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
-        TribunalVotingCompletedPayload(vote_winner=vote_winner, vote_score=vote_score, num_candidates=len(candidates), original_command=original_command),
-    )
+        if resolved_settings.llm.llm_command_gen_verifier:
+            verifier_passed, verifier_revision = await _run_verifier(
+                provider=provider, model=model, intent=intent,
+                candidate_command=vote_winner, os_name=os_name, emitter=emitter,
+            )
+            if verifier_passed:
+                logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
+                outcome = CommandGenerationOutcome.VERIFIED
+            elif verifier_revision:
+                logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
+                final_command = verifier_revision
+                outcome = CommandGenerationOutcome.VERIFICATION_FAILED
+            else:
+                outcome = CommandGenerationOutcome.VERIFIED
+                verifier_passed = True
 
-    # Stage 3: Verification
-    final_command = vote_winner
-    outcome = CommandGenerationOutcome.CONSENSUS
-    verifier_passed = True
-    verifier_revision = None
-
-    if resolved_settings.llm.llm_command_gen_verifier:
-        verifier_passed, verifier_revision = await _run_verifier(
-            provider=provider, model=model, intent=intent,
-            candidate_command=vote_winner, os_name=os_name, emitter=emitter,
-        )
-        if verifier_passed:
-            logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
-            outcome = CommandGenerationOutcome.VERIFIED
-        elif verifier_revision:
-            logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
-            final_command = verifier_revision
-            outcome = CommandGenerationOutcome.VERIFICATION_FAILED
-        else:
-            # Non-ok but no revision (treated as passed)
-            outcome = CommandGenerationOutcome.VERIFIED
-            verifier_passed = True
-
-    # Stage 4: Result & Final Event
-    result = CommandGenerationResult(
-        original_command=original_command,
-        final_command=final_command,
-        outcome=outcome,
-        candidates=candidates,
-        vote_winner=vote_winner,
-        vote_score=vote_score,
-        verifier_passed=verifier_passed,
-        verifier_revision=verifier_revision,
-    )
-
-    await emitter.emit(
-        EventType.TRIBUNAL_SESSION_COMPLETED,
-        TribunalSessionCompletedPayload(
+        # Stage 4: Result & Final Event
+        result = CommandGenerationResult(
             original_command=original_command,
             final_command=final_command,
             outcome=outcome,
+            candidates=candidates,
+            vote_winner=vote_winner,
             vote_score=vote_score,
-            refined=final_command != original_command,
-        ),
-    )
-    return result
+            verifier_passed=verifier_passed,
+            verifier_revision=verifier_revision,
+        )
+
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_COMPLETED,
+            TribunalSessionCompletedPayload(
+                original_command=original_command,
+                final_command=final_command,
+                outcome=outcome,
+                vote_score=vote_score,
+                refined=final_command != original_command,
+            ),
+        )
+        return result

@@ -64,6 +64,7 @@ from app.services.ai.command_generator import generate_command
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
+from app.models.agents.title_generator import CaseTitleResult
 from app.services.ai.triage import TriageAgent
 from app.services.service_factory import ServiceFactory
 from tests.fakes.factories import (
@@ -355,13 +356,13 @@ class TestTitleGenerationIntegration:
         )
 
         # Verify title quality
-        assert isinstance(title, str)
-        assert len(title) > 0
-        assert len(title) <= 80
-        assert title != "New Technical Support Case"  # Should not be fallback
+        assert isinstance(title, CaseTitleResult)
+        assert len(title.generated_title) > 0
+        assert len(title.generated_title) <= 80
+        assert title.fallback is False  # Should not be fallback
         
         # Verify title captures specific key concepts - check for any of the key terms
-        title_lower = title.lower()
+        title_lower = title.generated_title.lower()
         # Look for router, network, or connectivity concepts
         assert any(keyword in title_lower for keyword in ["router", "crimson", "edge", "purple", "pulse", "sync", "singapore", "fiber", "optic", "signal", "port", "network", "connection"])
 
@@ -381,10 +382,10 @@ class TestTitleGenerationIntegration:
         )
 
         # Verify title is meaningful despite short input
-        assert isinstance(title, str)
-        assert len(title) > 0
-        assert len(title) <= 80
-        assert "kubernetes" in title.lower()
+        assert isinstance(title, CaseTitleResult)
+        assert len(title.generated_title) > 0
+        assert len(title.generated_title) <= 80
+        assert "kubernetes" in title.generated_title.lower()
 
     async def test_generate_case_title_fallback_handling(self):
         """generate_case_title returns fallback when no settings provided."""
@@ -397,11 +398,12 @@ class TestTitleGenerationIntegration:
         )
 
         # Verify fallback behavior
-        assert isinstance(title, str)
-        assert len(title) > 0
-        assert len(title) <= 80
+        assert isinstance(title, CaseTitleResult)
+        assert len(title.generated_title) > 0
+        assert len(title.generated_title) <= 80
+        assert title.fallback is True
         # Should be truncated version of description
-        assert title.lower().startswith("complex technical")
+        assert title.generated_title.lower().startswith("complex technical")
 
     async def test_generate_case_title_empty_description(self, test_settings):
         """generate_case_title handles empty/None descriptions."""
@@ -416,7 +418,9 @@ class TestTitleGenerationIntegration:
             settings=test_settings,
         )
 
-        assert title == "New Technical Support Case"
+        assert isinstance(title, CaseTitleResult)
+        assert title.generated_title == "New Technical Support Case"
+        assert title.fallback is True
 
         # Test with empty string
         title = await generate_case_title(
@@ -425,7 +429,9 @@ class TestTitleGenerationIntegration:
             settings=test_settings,
         )
 
-        assert title == "New Technical Support Case"
+        assert isinstance(title, CaseTitleResult)
+        assert title.generated_title == "New Technical Support Case"
+        assert title.fallback is True
 
         # Test with whitespace-only
         title = await generate_case_title(
@@ -434,7 +440,9 @@ class TestTitleGenerationIntegration:
             settings=test_settings,
         )
 
-        assert title == "New Technical Support Case"
+        assert isinstance(title, CaseTitleResult)
+        assert title.generated_title == "New Technical Support Case"
+        assert title.fallback is True
 
 
 # ---------------------------------------------------------------------------
@@ -613,7 +621,7 @@ class TestResponseAnalysisIntegration:
         if not hasattr(settings, 'llm') or not settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        analyzer = AIResponseAnalyzer(test_settings)
+        analyzer = AIResponseAnalyzer()
 
         # Test low-risk command: specifically checking it's NOT high
         low_risk_command = "ls -la /home/user/Alpine-Delta/logs"
@@ -646,7 +654,7 @@ class TestResponseAnalysisIntegration:
         if not hasattr(settings, 'llm') or not settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        analyzer = AIResponseAnalyzer(test_settings)
+        analyzer = AIResponseAnalyzer()
 
         # Test high-risk command: wiping a specific important directory
         high_risk_command = "rm -rf /data/Zurich/Alpine-Alpha/backups"
@@ -679,7 +687,7 @@ class TestResponseAnalysisIntegration:
             pytest.skip("LLM provider is not configured")
 
         # Test that the class can be instantiated
-        analyzer = AIResponseAnalyzer(test_settings)
+        analyzer = AIResponseAnalyzer()
         assert analyzer is not None
         assert hasattr(analyzer, 'analyze_command_risk')
         assert callable(getattr(analyzer, 'analyze_command_risk'))

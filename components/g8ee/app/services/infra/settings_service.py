@@ -116,9 +116,6 @@ class SettingsService:
         # Search (Merged Vertex/Google)
         settings.search = self._build_search_settings(data)
 
-        # LLM
-        settings.llm = self._build_llm_settings(data)
-
         # Auth
         if data.internal_auth_token and not settings.auth.internal_auth_token:
             settings.auth.internal_auth_token = data.internal_auth_token

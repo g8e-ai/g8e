@@ -32,7 +32,7 @@ from app.constants import (
     LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
 )
-from app.llm.llm_types import GenerateContentConfig
+from app.llm.llm_types import PrimaryLLMSettings
 from app.models.agent import AgentStreamContext
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
@@ -113,7 +113,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         conversation_history=[],
         system_instructions="",
         contents=[],
-        generation_config=GenerateContentConfig(
+        generation_config=PrimaryLLMSettings(
             temperature=LLM_DEFAULT_TEMPERATURE,
             max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
         ),

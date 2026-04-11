@@ -21,10 +21,12 @@ import anthropic
 import httpx
 
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Candidate,
     Content,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
     ToolCall,
-    GenerateContentConfig,
     GenerateContentResponse,
     Part,
     StreamChunkFromModel,
@@ -151,46 +153,48 @@ class AnthropicProvider(LLMProvider):
         if endpoint:
             kwargs["base_url"] = endpoint
         self._client = anthropic.AsyncAnthropic(**kwargs)
+        self._http_client = http_client
         logger.info("Anthropic provider initialized")
 
-    async def generate_content_stream(
+    async def close(self):
+        """Clean up the httpx client to prevent resource leaks."""
+        if self._http_client:
+            await self._http_client.aclose()
+            logger.info("Anthropic provider closed")
+
+    async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        sys_instr = system_instruction or (config.system_instruction if config else None)
-        effective_tools = tools or (config.tools if config else None)
         messages = _contents_to_anthropic(contents)
-        anthropic_tools = _tools_to_anthropic(effective_tools)
+        anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
 
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": config.max_output_tokens if config else None,
+            "max_tokens": primary_llm_settings.max_output_tokens,
         }
-        if config and config.temperature is not None:
-            kwargs["temperature"] = config.temperature
-        if config and config.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = config.top_p_nucleus_sampling
-        if config and config.top_k_filtering is not None:
-            kwargs["top_k"] = config.top_k_filtering
-        if sys_instr:
-            kwargs["system"] = sys_instr
+        if primary_llm_settings.temperature is not None:
+            kwargs["temperature"] = primary_llm_settings.temperature
+        if primary_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
+        if primary_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = primary_llm_settings.top_k_filtering
+        if primary_llm_settings.system_instruction:
+            kwargs["system"] = primary_llm_settings.system_instruction
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
 
         thinking_enabled = (
-            config is not None
-            and config.thinking_config is not None
-            and config.thinking_config.thinking_level is not None
+            primary_llm_settings.thinking_config is not None
+            and primary_llm_settings.thinking_config.thinking_level is not None
         )
         if thinking_enabled:
             kwargs["thinking"] = {
                 "type": "enabled",
-                "budget_tokens": max_tokens // 2,
+                "budget_tokens": primary_llm_settings.max_output_tokens // 2,
             }
             kwargs["temperature"] = 1.0
         accumulated_tool_name: dict[int, str] = {}
@@ -272,46 +276,235 @@ class AnthropicProvider(LLMProvider):
                                 prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
                             ))
 
-    async def generate_content(
+    async def generate_content_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        sys_instr = system_instruction or (config.system_instruction if config else None)
-        effective_tools = tools or (config.tools if config else None)
         messages = _contents_to_anthropic(contents)
-        anthropic_tools = _tools_to_anthropic(effective_tools)
+        anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
 
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": config.max_output_tokens if config else None,
+            "max_tokens": primary_llm_settings.max_output_tokens,
         }
-        if config and config.temperature is not None:
-            kwargs["temperature"] = config.temperature
-        if config and config.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = config.top_p_nucleus_sampling
-        if config and config.top_k_filtering is not None:
-            kwargs["top_k"] = config.top_k_filtering
-        if sys_instr:
-            kwargs["system"] = sys_instr
+        if primary_llm_settings.temperature is not None:
+            kwargs["temperature"] = primary_llm_settings.temperature
+        if primary_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
+        if primary_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = primary_llm_settings.top_k_filtering
+        if primary_llm_settings.system_instruction:
+            kwargs["system"] = primary_llm_settings.system_instruction
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
 
         thinking_enabled = (
-            config is not None
-            and config.thinking_config is not None
-            and config.thinking_config.thinking_level is not None
+            primary_llm_settings.thinking_config is not None
+            and primary_llm_settings.thinking_config.thinking_level is not None
         )
         if thinking_enabled:
             kwargs["thinking"] = {
                 "type": "enabled",
-                "budget_tokens": max_tokens // 2,
+                "budget_tokens": primary_llm_settings.max_output_tokens // 2,
             }
             kwargs["temperature"] = 1.0
+
+        response = await self._client.messages.create(**kwargs)
+
+        parts = _parse_response_blocks(response.content)
+
+        usage = UsageMetadata()
+        if response.usage:
+            usage = UsageMetadata(
+                prompt_token_count=getattr(response.usage, "input_tokens", 0) or 0,
+                candidates_token_count=getattr(response.usage, "output_tokens", 0) or 0,
+                total_token_count=(
+                    (getattr(response.usage, "input_tokens", 0) or 0)
+                    + (getattr(response.usage, "output_tokens", 0) or 0)
+                ),
+            )
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=response.stop_reason,
+            )],
+            usage_metadata=usage,
+        )
+
+    async def generate_content_stream_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        messages = _contents_to_anthropic(contents)
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": assistant_llm_settings.max_output_tokens,
+        }
+        if assistant_llm_settings.temperature is not None:
+            kwargs["temperature"] = assistant_llm_settings.temperature
+        if assistant_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
+        if assistant_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = assistant_llm_settings.top_k_filtering
+        if assistant_llm_settings.system_instruction:
+            kwargs["system"] = assistant_llm_settings.system_instruction
+
+        accumulated_text: list[str] = []
+
+        async with self._client.messages.stream(**kwargs) as stream:
+            async for event in stream:
+                event_type = event.type
+
+                if event_type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta":
+                        yield StreamChunkFromModel(text=delta.text or "")
+
+                elif event_type == "message_delta":
+                    stop_reason = getattr(event.delta, "stop_reason", None)
+                    usage = getattr(event, "usage", None)
+                    um = None
+                    if usage:
+                        um = UsageMetadata(
+                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                        )
+                    if stop_reason:
+                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+
+                elif event_type == "message_start":
+                    msg = getattr(event, "message", None)
+                    if msg:
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
+                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                            ))
+
+    async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        messages = _contents_to_anthropic(contents)
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": assistant_llm_settings.max_output_tokens,
+        }
+        if assistant_llm_settings.temperature is not None:
+            kwargs["temperature"] = assistant_llm_settings.temperature
+        if assistant_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
+        if assistant_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = assistant_llm_settings.top_k_filtering
+        if assistant_llm_settings.system_instruction:
+            kwargs["system"] = assistant_llm_settings.system_instruction
+
+        response = await self._client.messages.create(**kwargs)
+
+        parts = _parse_response_blocks(response.content)
+
+        usage = UsageMetadata()
+        if response.usage:
+            usage = UsageMetadata(
+                prompt_token_count=getattr(response.usage, "input_tokens", 0) or 0,
+                candidates_token_count=getattr(response.usage, "output_tokens", 0) or 0,
+                total_token_count=(
+                    (getattr(response.usage, "input_tokens", 0) or 0)
+                    + (getattr(response.usage, "output_tokens", 0) or 0)
+                ),
+            )
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=response.stop_reason,
+            )],
+            usage_metadata=usage,
+        )
+
+    async def generate_content_stream_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        messages = _contents_to_anthropic(contents)
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": lite_llm_settings.max_output_tokens,
+        }
+        if lite_llm_settings.temperature is not None:
+            kwargs["temperature"] = lite_llm_settings.temperature
+        if lite_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
+        if lite_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = lite_llm_settings.top_k_filtering
+        if lite_llm_settings.system_instruction:
+            kwargs["system"] = lite_llm_settings.system_instruction
+
+        async with self._client.messages.stream(**kwargs) as stream:
+            async for event in stream:
+                event_type = event.type
+
+                if event_type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta":
+                        yield StreamChunkFromModel(text=delta.text or "")
+
+                elif event_type == "message_delta":
+                    stop_reason = getattr(event.delta, "stop_reason", None)
+                    usage = getattr(event, "usage", None)
+                    um = None
+                    if usage:
+                        um = UsageMetadata(
+                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                        )
+                    if stop_reason:
+                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+
+                elif event_type == "message_start":
+                    msg = getattr(event, "message", None)
+                    if msg:
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
+                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                            ))
+
+    async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        messages = _contents_to_anthropic(contents)
+
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": lite_llm_settings.max_output_tokens,
+        }
+        if lite_llm_settings.temperature is not None:
+            kwargs["temperature"] = lite_llm_settings.temperature
+        if lite_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
+        if lite_llm_settings.top_k_filtering is not None:
+            kwargs["top_k"] = lite_llm_settings.top_k_filtering
+        if lite_llm_settings.system_instruction:
+            kwargs["system"] = lite_llm_settings.system_instruction
 
         response = await self._client.messages.create(**kwargs)
 

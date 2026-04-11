@@ -38,18 +38,27 @@ from app.models.agents.tribunal import (
     TribunalVerifierFailedError,
 )
 from app.services.ai.command_generator import (
-    _infer_provider_for_model,
     _is_system_error,
     _member_for_pass,
     _resolve_model,
-    _resolve_provider_and_model,
     _run_generation_pass,
     _run_verifier,
     _temperature_for_pass,
     generate_command,
     TribunalEmitter,
 )
-from app.models.http_context import G8eHttpContext
+
+
+def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
+    """Create a mock LLM provider that supports async context manager protocol."""
+    mock_provider = MagicMock()
+    if generate_content_lite_side_effect is not None:
+        mock_provider.generate_content_lite = AsyncMock(side_effect=generate_content_lite_side_effect)
+    elif generate_content_lite_return is not None:
+        mock_provider.generate_content_lite = AsyncMock(return_value=generate_content_lite_return)
+    mock_provider.__aenter__ = AsyncMock(return_value=mock_provider)
+    mock_provider.__aexit__ = AsyncMock(return_value=False)
+    return mock_provider
 
 
 class TestResolveModel:
@@ -139,7 +148,7 @@ class TestRoleImportRegression:
         mock_response.text = "ls -la"
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
         pass_errors: list[str] = []
 
@@ -158,7 +167,7 @@ class TestRoleImportRegression:
 
         assert result == "ls -la"
         assert pass_errors == []
-        call_kwargs = mock_provider.generate_content.call_args
+        call_kwargs = mock_provider.generate_content_lite.call_args
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
         assert contents[0].role == Role.USER
@@ -169,7 +178,7 @@ class TestRoleImportRegression:
         mock_response.text = "ok"
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
         passed, revision = await _run_verifier(
@@ -183,104 +192,10 @@ class TestRoleImportRegression:
 
         assert passed is True
         assert revision is None
-        call_kwargs = mock_provider.generate_content.call_args
+        call_kwargs = mock_provider.generate_content_lite.call_args
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
         assert contents[0].role == Role.USER
-
-
-class TestInferProviderForModel:
-    """_infer_provider_for_model maps model name prefixes to LLM providers."""
-
-    def test_gemini_models(self):
-        assert _infer_provider_for_model("gemini-3.1-pro-preview") == LLMProvider.GEMINI
-        assert _infer_provider_for_model("gemini-3-flash-preview") == LLMProvider.GEMINI
-
-    def test_openai_models(self):
-        assert _infer_provider_for_model("gpt-4o") == LLMProvider.OPENAI
-        assert _infer_provider_for_model("gpt-4o-mini") == LLMProvider.OPENAI
-        assert _infer_provider_for_model("gpt-3.5-turbo") == LLMProvider.OPENAI
-
-    def test_anthropic_models(self):
-        assert _infer_provider_for_model("claude-3-5-sonnet-20241022") == LLMProvider.ANTHROPIC
-
-    def test_ollama_models_not_inferred(self):
-        """Ollama models are not inferred - provider must be set explicitly."""
-        assert _infer_provider_for_model("gemma3:1b") is None
-        assert _infer_provider_for_model("llama3:8b") is None
-        assert _infer_provider_for_model("qwen3:1.7b") is None
-        assert _infer_provider_for_model("mistral:7b") is None
-
-    def test_ambiguous_returns_none(self):
-        assert _infer_provider_for_model("some-custom-model") is None
-        assert _infer_provider_for_model("my-model") is None
-
-    def test_case_insensitive(self):
-        assert _infer_provider_for_model("GEMINI-3.1-pro") == LLMProvider.GEMINI
-        assert _infer_provider_for_model("GPT-4o") == LLMProvider.OPENAI
-        assert _infer_provider_for_model("Claude-3-5-sonnet") == LLMProvider.ANTHROPIC
-
-
-class TestResolveProviderAndModel:
-    """_resolve_provider_and_model returns coupled (provider, model) pairs."""
-
-    def test_ollama_assistant_model_with_gemini_primary_provider(self):
-        """Ollama model with Gemini primary provider falls back to GEMINI.
-        
-        Ollama models are not inferred from naming patterns. To use Ollama,
-        provider must be explicitly set to ollama in settings.
-        """
-        llm = LLMSettings(
-            provider=LLMProvider.GEMINI,
-            assistant_model="gemma3:1b",
-        )
-        provider, model = _resolve_provider_and_model(llm)
-        assert provider == LLMProvider.GEMINI
-        assert model == "gemma3:1b"
-
-    def test_explicit_ollama_provider_with_any_model(self):
-        """When provider=ollama is set explicitly, it uses OLLAMA regardless of model name."""
-        llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
-            assistant_model="any-model-name",
-        )
-        provider, model = _resolve_provider_and_model(llm)
-        assert provider == LLMProvider.OLLAMA
-        assert model == "any-model-name"
-
-    def test_gemini_assistant_with_ollama_primary(self):
-        llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
-            assistant_model="gemini-3.1-pro-preview",
-        )
-        provider, model = _resolve_provider_and_model(llm)
-        assert provider == LLMProvider.GEMINI
-        assert model == "gemini-3.1-pro-preview"
-
-    def test_falls_back_to_settings_provider_for_ambiguous_model(self):
-        llm = LLMSettings(
-            provider=LLMProvider.OPENAI,
-            assistant_model="my-custom-model",
-        )
-        provider, model = _resolve_provider_and_model(llm)
-        assert provider == LLMProvider.OPENAI
-        assert model == "my-custom-model"
-
-    def test_provider_default_model_matches_provider(self):
-        for p in LLMProvider:
-            llm = LLMSettings(provider=p)
-            provider, model = _resolve_provider_and_model(llm)
-            assert isinstance(model, str) and len(model) > 0
-            assert provider == p
-
-    def test_openai_model_overrides_ollama_provider(self):
-        llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
-            assistant_model="gpt-4o-mini",
-        )
-        provider, model = _resolve_provider_and_model(llm)
-        assert provider == LLMProvider.OPENAI
-        assert model == "gpt-4o-mini"
 
 
 class TestIsSystemError:
@@ -334,7 +249,7 @@ class TestPassErrorsCollection:
     @pytest.mark.asyncio
     async def test_exception_appends_to_pass_errors(self):
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(
+        mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Connection refused")
         )
         emitter = TribunalEmitter(None, None)
@@ -363,7 +278,7 @@ class TestPassErrorsCollection:
         mock_response.text = ""
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
         pass_errors: list[str] = []
 
@@ -390,7 +305,7 @@ class TestPassErrorsCollection:
         mock_response.text = "ls -la"
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
         pass_errors: list[str] = []
 
@@ -469,13 +384,12 @@ class TestGenerateCommandSystemError:
         )
         settings = G8eeUserSettings(llm=llm)
 
-        mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(
-            side_effect=RuntimeError("401 Unauthorized")
+        mock_provider = _make_mock_provider(
+            generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
         )
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider_for_provider",
+            "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalSystemError) as exc_info:
@@ -505,13 +419,12 @@ class TestGenerateCommandSystemError:
         )
         settings = G8eeUserSettings(llm=llm)
 
-        mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(
-            side_effect=RuntimeError("Model returned gibberish")
+        mock_provider = _make_mock_provider(
+            generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
         )
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider_for_provider",
+            "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
@@ -533,7 +446,7 @@ class TestGenerateCommandSystemError:
             assert len(exc_info.value.pass_errors) > 0
 
     @pytest.mark.asyncio
-    async def test_provider_routing_uses_resolved_provider(self):
+    async def test_provider_routing_uses_settings_provider(self):
         llm = LLMSettings(
             provider=LLMProvider.GEMINI,
             assistant_model="gemma3:1b",
@@ -542,22 +455,20 @@ class TestGenerateCommandSystemError:
 
         call_count = 0
 
-        async def mock_generate_content(**kwargs):
+        async def mock_generate_content_lite(**kwargs):
             nonlocal call_count
             call_count += 1
             mock_response = MagicMock()
-            # First call is generation, second call is verifier
             if call_count == 1:
                 mock_response.text = "ls -la"
             else:
                 mock_response.text = "ok"
             return mock_response
 
-        mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(side_effect=mock_generate_content)
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=mock_generate_content_lite)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider_for_provider",
+            "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ) as mock_factory:
             result = await generate_command(
@@ -574,7 +485,7 @@ class TestGenerateCommandSystemError:
                 settings=settings,
             )
 
-            mock_factory.assert_called_once_with(LLMProvider.GEMINI, llm)
+            mock_factory.assert_called_once_with(llm)
             assert result.final_command == "ls -la"
 
 
@@ -600,11 +511,10 @@ class TestMixedErrorFallback:
                 raise RuntimeError("401 Unauthorized")
             raise RuntimeError("Model returned gibberish")
 
-        mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(side_effect=mixed_side_effect)
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=mixed_side_effect)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider_for_provider",
+            "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
@@ -658,7 +568,7 @@ class TestTribunalProviderUnavailableError:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider_for_provider",
+            "app.services.ai.command_generator.get_llm_provider",
             side_effect=RuntimeError("Unsupported LLM provider: foo"),
         ):
             with pytest.raises(TribunalProviderUnavailableError) as exc_info:
@@ -691,7 +601,7 @@ class TestTribunalVerifierFailedError:
         mock_response.text = None
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
@@ -715,7 +625,7 @@ class TestTribunalVerifierFailedError:
         mock_response.text = "ls -la"
 
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(return_value=mock_response)
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
@@ -735,7 +645,7 @@ class TestTribunalVerifierFailedError:
     async def test_raises_on_verifier_exception(self):
         """Verifier exception raises TribunalVerifierFailedError instead of treating as passed."""
         mock_provider = MagicMock()
-        mock_provider.generate_content = AsyncMock(
+        mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Verifier API timeout")
         )
         emitter = TribunalEmitter(None, None)

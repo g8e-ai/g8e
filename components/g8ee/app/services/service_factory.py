@@ -15,7 +15,7 @@
 
 from typing import TYPE_CHECKING, cast, Any
 
-from app.services.ai.agent import g8eAgent
+from app.services.ai.agent import g8eEngine
 from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.grounding import GroundingService, WebSearchProvider
@@ -174,7 +174,7 @@ class ServiceFactory:
             blob_service=blob_service,
             settings=settings,
         )
-        response_analyzer = AIResponseAnalyzer(settings=settings)
+        response_analyzer = AIResponseAnalyzer()
         grounding_service = GroundingService()
 
         web_search_provider = None
@@ -226,10 +226,7 @@ class ServiceFactory:
             tool_executor=tool_executor,
         )
 
-        from app.llm.factory import get_llm_provider
-        default_provider = get_llm_provider(settings.llm)
-        g8e_agent = g8eAgent(
-            llm_provider=default_provider,
+        g8e_agent = g8eEngine(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
         )

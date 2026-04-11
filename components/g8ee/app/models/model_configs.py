@@ -25,6 +25,7 @@ from pydantic import Field
 
 from app.constants import (
     GEMINI_3_1_PRO_PREVIEW,
+    GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
     GEMINI_3_1_FLASH_LITE_PREVIEW,
     GEMINI_3_FLASH_PREVIEW,
     GEMMA3_1B,
@@ -69,6 +70,14 @@ class LLMModelConfig(G8eBaseModel):
 # Google Gemma 3 models (Ollama)
 GEMINI_3_PRO_PREVIEW = LLMModelConfig(
     name=GEMINI_3_1_PRO_PREVIEW,
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
+    supports_thinking=True,
+    context_window_input=1_000_000,
+    context_window_output=64_000,
+)
+
+GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
+    name=GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
     context_window_input=1_000_000,
@@ -278,6 +287,7 @@ MODEL_REGISTRY = LLMModelRegistry(configs=[
     OPENAI_DEFAULT_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
     GEMINI_3_PRO_PREVIEW,
+    GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG,
     GEMINI_3_FLASH_PREVIEW,
     GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG,
     GEMMA3_27B,

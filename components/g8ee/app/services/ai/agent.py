@@ -74,7 +74,7 @@ from app.services.infra.g8ed_event_service import EventService
 logger = logging.getLogger(__name__)
 
 
-class g8eAgent:
+class g8eEngine:
     """
     Unified g8e AI Agent — orchestrates the ReAct streaming loop.
 
@@ -87,14 +87,12 @@ class g8eAgent:
 
     def __init__(
         self,
-        llm_provider: LLMProvider,
         tool_executor: AIToolService,
         grounding_service: GroundingService | None = None,
     ):
-        self._llm_provider = llm_provider
         self._tool_executor = tool_executor
         self._grounding_service = grounding_service or GroundingService()
-        logger.info("g8eAgent initialized")
+        logger.info("g8eEngine initialized")
 
     @property
     def tool_executor(self) -> AIToolService:
@@ -108,11 +106,11 @@ class g8eAgent:
         self,
         message: str,
         contents: list[types.Content],
-        generation_config: types.GenerateContentConfig,
+        generation_config: types.PrimaryLLMSettings,
         model_name: str,
         context: AgentStreamContext,
         g8ed_event_service: EventService,
-        llm_provider: LLMProvider | None = None,
+        llm_provider: LLMProvider,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         """
         Stream AI response with full tool support.
@@ -197,7 +195,7 @@ class g8eAgent:
     async def run_with_sse(
         self,
         contents: list[types.Content],
-        generation_config: types.GenerateContentConfig,
+        generation_config: types.PrimaryLLMSettings,
         model_name: str,
         agent_streaming_context: AgentStreamContext,
         context: AgentStreamContext,
@@ -248,10 +246,10 @@ class g8eAgent:
     async def _stream_with_tool_loop(
         self,
         contents: list[types.Content],
-        generation_config: types.GenerateContentConfig,
+        generation_config: types.PrimaryLLMSettings,
         model_name: str,
         context: AgentStreamContext,
-        llm_provider: LLMProvider | None,
+        llm_provider: LLMProvider,
         g8ed_event_service: EventService,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         """
@@ -284,12 +282,10 @@ class g8eAgent:
                 loop_turn, len(contents), case_id, investigation_id,
             )
 
-            provider = llm_provider or self._llm_provider
-
-            stream_response = provider.generate_content_stream(
+            stream_response = llm_provider.generate_content_stream_primary(
                 model=model_name,
                 contents=contents,
-                config=generation_config,
+                primary_llm_settings=generation_config,
             )
 
             if not stream_response:

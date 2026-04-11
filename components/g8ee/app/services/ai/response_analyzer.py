@@ -14,7 +14,7 @@
 import logging
 
 import app.llm.llm_types as types
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings
 from app.constants import ErrorAnalysisCategory, RiskLevel
 from app.llm import get_llm_provider, Role
 from app.models.tool_results import (
@@ -37,8 +37,7 @@ class AIResponseAnalyzer:
     - Defensive operations analysis (command risk, error analysis, file operations)
     """
 
-    def __init__(self, settings: G8eePlatformSettings):
-        self._settings = settings
+    def __init__(self):
         logger.info("AIResponseAnalyzer initialized")
 
     async def analyze_command_risk(
@@ -79,31 +78,30 @@ HIGH: Destructive or irreversible operations.
 Classify the command risk level."""
 
         try:
-            client = get_llm_provider(resolved_settings.llm)
-            assistant_model = resolved_settings.llm.assistant_model
-            response = await client.generate_content(
-                model=assistant_model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
-                    json_schema=CommandRiskAnalysis.model_json_schema(),
+            async with get_llm_provider(resolved_settings.llm) as client:
+                assistant_model = resolved_settings.llm.assistant_model
+                config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
                     max_tokens=None,
                     system_instruction="",
-                ),
-                tools=[],
-                system_instruction="",
-            )
+                    response_format=types.ResponseFormat.from_pydantic_schema(CommandRiskAnalysis.model_json_schema()),
+                )
+                response = await client.generate_content_assistant(
+                    model=assistant_model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    assistant_llm_settings=config,
+                )
 
-            response_text = response.text
-            if response_text is None:
-                logger.error("Command risk analysis: LLM returned no text content")
-                return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
-            analysis = CommandRiskAnalysis.model_validate_json(response_text)
+                response_text = response.text
+                if response_text is None:
+                    logger.error("Command risk analysis: LLM returned no text content")
+                    return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
+                analysis = CommandRiskAnalysis.model_validate_json(response_text)
 
-            logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
+                logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
 
-            return analysis
+                return analysis
 
         except Exception as e:
             logger.error("Command risk analysis failed: %s", e, exc_info=True)
@@ -182,43 +180,42 @@ Working Directory: {working_dir}
 Based on the information above, analyze the failure and fill in ALL response fields."""
 
         try:
-            client = get_llm_provider(resolved_settings.llm)
-            assistant_model = resolved_settings.llm.assistant_model
-            response = await client.generate_content(
-                model=assistant_model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
-                    json_schema=ErrorAnalysisResult.model_json_schema(),
+            async with get_llm_provider(resolved_settings.llm) as client:
+                assistant_model = resolved_settings.llm.assistant_model
+                config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
                     max_tokens=None,
                     system_instruction="",
-                ),
-                tools=[],
-                system_instruction="",
-            )
-
-            response_text = response.text
-            if response_text is None:
-                logger.error("Error analysis: LLM returned no text content")
-                return ErrorAnalysisResult(
-                    error_category=ErrorAnalysisCategory.UNKNOWN,
-                    root_cause="LLM returned no text content",
-                    can_auto_fix=False,
-                    should_escalate=True,
-                    reasoning="LLM response contained no text parts",
-                    user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+                    response_format=types.ResponseFormat.from_pydantic_schema(ErrorAnalysisResult.model_json_schema()),
                 )
-            analysis = ErrorAnalysisResult.model_validate_json(response_text)
-            if retry_count >= 2:
-                analysis.can_auto_fix = False
-                analysis.should_escalate = True
-                analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
-            logger.info(
-                "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
-                command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
-            )
-            return analysis
+                response = await client.generate_content_assistant(
+                    model=assistant_model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    assistant_llm_settings=config,
+                )
+
+                response_text = response.text
+                if response_text is None:
+                    logger.error("Error analysis: LLM returned no text content")
+                    return ErrorAnalysisResult(
+                        error_category=ErrorAnalysisCategory.UNKNOWN,
+                        root_cause="LLM returned no text content",
+                        can_auto_fix=False,
+                        should_escalate=True,
+                        reasoning="LLM response contained no text parts",
+                        user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+                    )
+                analysis = ErrorAnalysisResult.model_validate_json(response_text)
+                if retry_count >= 2:
+                    analysis.can_auto_fix = False
+                    analysis.should_escalate = True
+                    analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
+                logger.info(
+                    "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
+                    command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
+                )
+                return analysis
 
         except Exception as e:
             logger.error("Error analysis failed: %s", e, exc_info=True)
@@ -286,46 +283,45 @@ HIGH: System files, irreversible deletes, dirty git + destructive operation
 Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
 
         try:
-            client = get_llm_provider(resolved_settings.llm)
-            assistant_model = resolved_settings.llm.assistant_model
-            response = await client.generate_content(
-                model=assistant_model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
-                    json_schema=FileOperationRiskAnalysis.model_json_schema(),
+            async with get_llm_provider(resolved_settings.llm) as client:
+                assistant_model = resolved_settings.llm.assistant_model
+                config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
                     max_tokens=None,
                     system_instruction="",
-                ),
-                tools=[],
-                system_instruction="",
-            )
-
-            response_text = response.text
-            if response_text is None:
-                logger.error("File operation risk analysis: LLM returned no text content")
-                return FileOperationRiskAnalysis(
-                    risk_level=RiskLevel.HIGH,
-                    is_system_file=False,
-                    safe_to_proceed=False,
-                    blocking_issues=["Risk analysis failed - LLM returned no content"],
-                    approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+                    response_format=types.ResponseFormat.from_pydantic_schema(FileOperationRiskAnalysis.model_json_schema()),
                 )
-            analysis = FileOperationRiskAnalysis.model_validate_json(response_text)
+                response = await client.generate_content_assistant(
+                    model=assistant_model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    assistant_llm_settings=config,
+                )
 
-            system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
-            analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
+                response_text = response.text
+                if response_text is None:
+                    logger.error("File operation risk analysis: LLM returned no text content")
+                    return FileOperationRiskAnalysis(
+                        risk_level=RiskLevel.HIGH,
+                        is_system_file=False,
+                        safe_to_proceed=False,
+                        blocking_issues=["Risk analysis failed - LLM returned no content"],
+                        approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+                    )
+                analysis = FileOperationRiskAnalysis.model_validate_json(response_text)
 
-            if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
-                analysis.safe_to_proceed = False
+                system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
+                analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
 
-            logger.info(
-                "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
-                operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
-            )
+                if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
+                    analysis.safe_to_proceed = False
 
-            return analysis
+                logger.info(
+                    "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
+                    operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
+                )
+
+                return analysis
 
         except Exception as e:
             logger.error("File operation risk analysis failed: %s", e, exc_info=True)

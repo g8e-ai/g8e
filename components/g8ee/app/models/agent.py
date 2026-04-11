@@ -101,7 +101,7 @@ class OperatorContext(G8eBaseModel):
 
 
 class AgentStreamContext(G8eBaseModel):
-    """Typed context passed through g8eAgent stream methods. """
+    """Typed context passed through g8eEngine stream methods. """
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # Core context fields
@@ -121,7 +121,7 @@ class AgentStreamContext(G8eBaseModel):
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list)
     system_instructions: str = ""
     contents: list[types.Content] = Field(default_factory=list)
-    generation_config: types.GenerateContentConfig | None = None
+    generation_config: types.PrimaryLLMSettings | None = None
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None

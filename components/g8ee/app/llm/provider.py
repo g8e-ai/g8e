@@ -21,9 +21,11 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Content,
-    GenerateContentConfig,
     GenerateContentResponse,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
     StreamChunkFromModel,
     ToolGroup,
 )
@@ -33,25 +35,74 @@ class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     @abstractmethod
-    async def generate_content_stream(
+    async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        """Stream a response from the LLM."""
+        """Stream a response from the primary LLM (agent main loop)."""
         yield
 
     @abstractmethod
-    async def generate_content(
+    async def generate_content_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        """Generate a complete (non-streaming) response from the LLM."""
+        """Generate a complete response from the primary LLM."""
         ...
+
+    @abstractmethod
+    async def generate_content_stream_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        """Stream a response from the assistant LLM (analysis, memory, title)."""
+        yield
+
+    @abstractmethod
+    async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        """Generate a complete response from the assistant LLM."""
+        ...
+
+    @abstractmethod
+    async def generate_content_stream_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        """Stream a response from the lite LLM (triage, eval)."""
+        yield
+
+    @abstractmethod
+    async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        """Generate a complete response from the lite LLM."""
+        ...
+
+    async def close(self):
+        """Clean up provider resources (e.g., close HTTP clients)."""
+        pass
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - ensures cleanup."""
+        await self.close()
+        return False

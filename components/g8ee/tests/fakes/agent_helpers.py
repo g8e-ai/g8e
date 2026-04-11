@@ -16,35 +16,28 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.constants import AgentMode
 from app.llm.llm_types import ThoughtSignature
 from app.models.agent import AgentStreamContext, StreamChunkFromModel, TurnResult
-from app.services.ai.agent import g8eAgent
+from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
 from tests.fakes.factories import build_g8e_http_context
 
 
 def make_gen_config(
-    settings: G8eePlatformSettings = None,
+    settings: G8eeUserSettings = None,
     agent_mode: AgentMode = AgentMode.OPERATOR_NOT_BOUND,
     system_instructions: str = "You are a helpful assistant.",
 ):
-    """Build an AIRequestBuilder GenerateContentConfig for tests."""
+    """Build an AIRequestBuilder PrimaryLLMSettings for tests."""
     fn_handler = MagicMock()
     fn_handler._tool_declarations = {}
     builder = AIRequestBuilder(tool_executor=fn_handler)
     return builder.get_generation_config(
         system_instructions=system_instructions,
-        settings=settings or G8eePlatformSettings(
-            port=443,
-            llm={
-                "provider": "ollama",
-                "ollama_primary_model": "llama3",
-                "ollama_assistant_model": "llama3",
-            }
-        ),
+        settings=settings or G8eeUserSettings(llm=LLMSettings()),
         agent_mode=agent_mode,
     )
 
@@ -126,18 +119,16 @@ make_streaming_context = make_agent_streaming_context
 
 
 def make_g8e_agent(
-    provider=None,
     fn_handler=None,
-) -> g8eAgent:
-    """Build a g8eAgent suitable for unit tests."""
+) -> g8eEngine:
+    """Build a g8eEngine suitable for unit tests."""
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
         fn_handler.start_invocation_context = MagicMock(return_value=None)
         fn_handler.reset_invocation_context = MagicMock()
 
-    return g8eAgent(
-        llm_provider=provider or MagicMock(),
+    return g8eEngine(
         tool_executor=fn_handler,
     )
 
@@ -167,7 +158,7 @@ class FakeStreamProvider:
     def __init__(self, chunks: list):
         self._chunks = chunks
 
-    def generate_content_stream(self, **kwargs):
+    def generate_content_stream_primary(self, **kwargs):
         async def _gen():
             for c in self._chunks:
                 yield c
@@ -181,7 +172,7 @@ class FakeMultiTurnStreamProvider:
         self._chunks_per_call = chunks_per_call
         self._call_idx = 0
 
-    def generate_content_stream(self, **kwargs):
+    def generate_content_stream_primary(self, **kwargs):
         idx = self._call_idx
         self._call_idx += 1
         chunks = self._chunks_per_call[idx] if idx < len(self._chunks_per_call) else []
@@ -193,7 +184,7 @@ class FakeMultiTurnStreamProvider:
         return _gen()
 
 
-def patch_stream_response(agent: g8eAgent, chunks: list[StreamChunkFromModel]) -> None:
+def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) -> None:
     """Replace agent.stream_response with an async generator that yields chunks."""
     async def _fake_stream(*args, **kwargs):
         for chunk in chunks:
@@ -202,7 +193,7 @@ def patch_stream_response(agent: g8eAgent, chunks: list[StreamChunkFromModel]) -
 
 
 async def collect_stream_from_model_chunks(
-    agent: g8eAgent,
+    agent: g8eEngine,
     context: AgentStreamContext,
     gen_config=None,
     model_name: str = "test-model",

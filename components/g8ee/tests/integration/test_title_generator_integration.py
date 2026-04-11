@@ -29,6 +29,7 @@ What is verified:
 import pytest
 
 from app.services.ai.title_generator import generate_case_title
+from app.models.agents.title_generator import CaseTitleResult
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration]
 
@@ -43,10 +44,10 @@ class TestTitleGeneratorIntegration:
             settings=test_settings
         )
 
-        assert isinstance(result, str)
-        assert 5 <= len(result) <= 80
-        assert "\n" not in result
-        lower = result.lower()
+        assert isinstance(result, CaseTitleResult)
+        assert 5 <= len(result.generated_title) <= 80
+        assert "\n" not in result.generated_title
+        lower = result.generated_title.lower()
         # Check for web server, deployment, or error concepts
         assert any(kw in lower for kw in ("nginx", "502", "gateway", "deployment", "error", "server", "web", "http", "bad gateway"))
 
@@ -54,10 +55,10 @@ class TestTitleGeneratorIntegration:
         """A greeting must not produce a title about a completely unrelated topic."""
         result = await generate_case_title("hey man, what's going on", settings=test_settings)
 
-        assert isinstance(result, str)
-        assert 5 <= len(result) <= 80
-        assert "\n" not in result
-        lower = result.lower()
+        assert isinstance(result, CaseTitleResult)
+        assert 5 <= len(result.generated_title) <= 80
+        assert "\n" not in result.generated_title
+        lower = result.generated_title.lower()
         assert not any(kw in lower for kw in ("coffee", "bean", "linux", "system", "kernel", "ubuntu"))
 
     async def test_specific_issue_title_reflects_content(self, test_settings):
@@ -67,10 +68,10 @@ class TestTitleGeneratorIntegration:
             settings=test_settings
         )
 
-        assert isinstance(result, str)
-        assert 5 <= len(result) <= 80
-        assert "\n" not in result
-        lower = result.lower()
+        assert isinstance(result, CaseTitleResult)
+        assert 5 <= len(result.generated_title) <= 80
+        assert "\n" not in result.generated_title
+        lower = result.generated_title.lower()
         assert any(kw in lower for kw in ("ssh", "key", "auth", "server", "remote"))
 
     async def test_title_fits_within_max_length(self, test_settings):
@@ -81,8 +82,8 @@ class TestTitleGeneratorIntegration:
             settings=test_settings
         )
 
-        assert isinstance(result, str)
-        assert len(result) <= 40
+        assert isinstance(result, CaseTitleResult)
+        assert len(result.generated_title) <= 40
 
     async def test_title_is_single_line(self, test_settings):
         """Title must always be a single line — no newlines."""
@@ -91,5 +92,5 @@ class TestTitleGeneratorIntegration:
             settings=test_settings
         )
 
-        assert "\n" not in result
-        assert "\r" not in result
+        assert "\n" not in result.generated_title
+        assert "\r" not in result.generated_title

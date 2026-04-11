@@ -19,7 +19,7 @@ response analysis, tool execution, streaming agent, memory,
 and investigation context.
 """
 
-from .agent import g8eAgent
+from .agent import g8eEngine
 from .chat_pipeline import ChatPipelineService
 from .chat_task_manager import ChatTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
@@ -34,7 +34,7 @@ __all__ = [
     "AttachmentGroundingProvider",
     "ChatPipelineService",
     "ChatTaskManager",
-    "g8eAgent",
+    "g8eEngine",
     "extract_all_operators_context",
     "extract_system_context",
     "generate_case_title",

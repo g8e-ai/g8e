@@ -33,7 +33,7 @@ markers = [
     "ai: Tests involving AI/LLM functionality",
     "ai_integration: AI integration tests requiring real LLM API calls",
     "aws: Tests requiring LocalStack AWS emulation",
-    "intent_workflow: Tests for intent-based permission workflow with g8eAgent",
+    "intent_workflow: Tests for intent-based permission workflow with g8eEngine",
     "requires_api: Tests requiring a live external API (e.g. Google Search API)",
     "requires_web_search: Tests requiring web search configuration (search.enabled, project_id, engine_id, api_key)",
     "agent_eval: AI agent accuracy evaluation tests using a Judge LLM",

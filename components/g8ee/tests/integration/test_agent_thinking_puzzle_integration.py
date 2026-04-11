@@ -26,7 +26,7 @@ from app.constants import (
     InvestigationStatus,
 )
 import app.llm.llm_types as types
-from app.services.ai.agent import g8eAgent
+from app.services.ai.agent import g8eEngine
 from app.services.ai.tool_service import AIToolService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.service_factory import ServiceFactory
@@ -118,7 +118,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     
     # Create generation config
     from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-    gen_config = AIGenerationConfigBuilder.build_config(
+    gen_config = AIGenerationConfigBuilder.build_primary_settings(
         model=model_name,
         temperature=None,
         max_tokens=None,

@@ -15,11 +15,14 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Candidate,
     Content,
     GenerateContentConfig,
     GenerateContentResponse,
+    LiteLLMSettings,
     Part,
+    PrimaryLLMSettings,
     StreamChunkFromModel,
     ToolCall,
     ToolGroup,
@@ -49,6 +52,108 @@ class FakeLLMProvider(LLMProvider):
             ]
         )
         self.responses.append(response)
+
+    async def generate_content_stream_primary(
+        self,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        self.call_log.append({
+            "method": "generate_content_stream_primary",
+            "model": model,
+            "contents": contents,
+            "primary_llm_settings": primary_llm_settings,
+        })
+        if not self.stream_chunks:
+            return
+        chunks = self.stream_chunks.pop(0)
+        for chunk in chunks:
+            yield chunk
+
+    async def generate_content_primary(
+        self,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> GenerateContentResponse:
+        self.call_log.append({
+            "method": "generate_content_primary",
+            "model": model,
+            "contents": contents,
+            "primary_llm_settings": primary_llm_settings,
+        })
+        if not self.responses:
+            return GenerateContentResponse(candidates=[])
+        return self.responses.pop(0)
+
+    async def generate_content_stream_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        self.call_log.append({
+            "method": "generate_content_stream_assistant",
+            "model": model,
+            "contents": contents,
+            "assistant_llm_settings": assistant_llm_settings,
+        })
+        if not self.stream_chunks:
+            return
+        chunks = self.stream_chunks.pop(0)
+        for chunk in chunks:
+            yield chunk
+
+    async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        self.call_log.append({
+            "method": "generate_content_assistant",
+            "model": model,
+            "contents": contents,
+            "assistant_llm_settings": assistant_llm_settings,
+        })
+        if not self.responses:
+            return GenerateContentResponse(candidates=[])
+        return self.responses.pop(0)
+
+    async def generate_content_stream_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        self.call_log.append({
+            "method": "generate_content_stream_lite",
+            "model": model,
+            "contents": contents,
+            "lite_llm_settings": lite_llm_settings,
+        })
+        if not self.stream_chunks:
+            return
+        chunks = self.stream_chunks.pop(0)
+        for chunk in chunks:
+            yield chunk
+
+    async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        self.call_log.append({
+            "method": "generate_content_lite",
+            "model": model,
+            "contents": contents,
+            "lite_llm_settings": lite_llm_settings,
+        })
+        if not self.responses:
+            return GenerateContentResponse(candidates=[])
+        return self.responses.pop(0)
 
     async def generate_content(
         self,
