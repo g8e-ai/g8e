@@ -121,7 +121,7 @@ const Operator = {
     REFRESH_API_KEY:   'refresh-api-key',
     DOWNLOAD:          'download',
     HEALTH:            'health',
-    G8E_POD:          'g8e-pod',
+    G8E_POD:          'g8ep',
     REAUTH:            'reauth',
     PARAM:             ':operatorId',
 };

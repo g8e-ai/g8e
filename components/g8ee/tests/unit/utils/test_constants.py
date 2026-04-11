@@ -259,8 +259,8 @@ class TestComponentNameMatchesSharedJSON:
     def test_g8ee(self, status):
         assert status["component.name"]["g8ee"] == ComponentName.G8EE
 
-    def test_vsa(self, status):
-        assert status["component.name"]["vsa"] == ComponentName.VSA
+    def test_g8eo(self, status):
+        assert status["component.name"]["g8eo"] == ComponentName.G8EO
 
     def test_vsod(self, status):
         assert status["component.name"]["vsod"] == ComponentName.VSOD

@@ -128,7 +128,7 @@ export const ApiKeyStatus = Object.freeze({
 
 /**
  * Authentication Mode identifiers
- * Sent by VSA in the auth_mode field of POST /api/auth/g8e.
+ * Sent by g8eo in the auth_mode field of POST /api/auth/g8e.
  * Canonical values from shared/constants/status.json auth.mode.
  */
 export const AuthMode = Object.freeze({

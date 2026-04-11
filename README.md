@@ -42,7 +42,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e && ./g8e platform setup
 
 g8e is a security-first, self-hosted platform for AI-augmented infrastructure operations.
 
-1.  **The Operator (VSA):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
+1.  **The Operator (g8eo):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
 2.  **The Engine (g8ee):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
 3.  **The Dashboard (VSOD):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
 
@@ -131,10 +131,10 @@ flowchart TD
 
 | Service | Container | Language | Role |
 |---------|-----------|----------|------|
-| **vsodb** | `g8e-data` | Go | Persistence (SQLite), KV store, pub/sub broker |
+| **vsodb** | `g8es` | Go | Persistence (SQLite), KV store, pub/sub broker |
 | **g8ee** | `g8ee` | Python | AI engine, LLM orchestration, tool calling |
 | **vsod** | `g8e-dashboard` | Node.js | Web UI, auth, mTLS gateway, TLS termination |
-| **g8e-pod** | `g8e-pod` | Multi | CLI runner, Operator build, SSL management |
+| **g8ep** | `g8ep` | Multi | CLI runner, Operator build, SSL management |
 | **Operator** | *(runs on target)* | Go | Execution agent on managed systems |
 
 Detailed documentation in [docs/architecture/](docs/architecture/) and [docs/components/](docs/components/).

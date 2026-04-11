@@ -143,7 +143,7 @@ class OperatorIntentService:
         if op_doc.cloud_subtype == CloudSubtype.G8E_POD:
             return IntentPermissionResult(
                 success=False, 
-                error="g8e-pod operators have direct system access and do not support IAM intent grants. Use run_commands_with_operator directly.", 
+                error="g8ep operators have direct system access and do not support IAM intent grants. Use run_commands_with_operator directly.", 
                 error_type=CommandErrorType.BUSINESS_LOGIC_ERROR
             )
 

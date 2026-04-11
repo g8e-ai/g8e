@@ -49,7 +49,7 @@ export class OperatorMetrics {
         this.uptime = snapshot.uptime ?? uptime.uptime ?? uptime.uptime_string ?? null;
         this.uptimeSeconds = snapshot.uptime_seconds ?? uptime.uptime_seconds ?? null;
 
-        this.version = version.vsa_version || actualData.vsa_version || null;
+        this.version = version.g8eo_version || actualData.g8eo_version || null;
         this.status = version.status || actualData.status || null;
 
         this.publicIp = systemInfo.public_ip || network.public_ip || null;

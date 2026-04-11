@@ -8,7 +8,7 @@ For high-level storage summaries, see the component docs and follow the links ba
 
 ## Platform Storage Overview
 
-The g8e platform uses an **operator-first** storage philosophy. The Operator (VSA) is the authoritative system of record for all operational data — command outputs, file mutations, and session history. Platform components (g8ee, VSOD) are **stateless** with respect to persistent data: they hold no databases of their own and rely entirely on VSODB for all platform-side storage.
+The g8e platform uses an **operator-first** storage philosophy. The Operator (g8eo) is the authoritative system of record for all operational data — command outputs, file mutations, and session history. Platform components (g8ee, VSOD) are **stateless** with respect to persistent data: they hold no databases of their own and rely entirely on VSODB for all platform-side storage.
 
 ---
 
@@ -102,7 +102,7 @@ graph TD
 │                                ▼                                     │
 │  ┌─────────────────────────────────────────┐                         │
 │  │                 VSODB                   │                         │
-│  │    VSA binary in --listen mode          │                         │
+│  │    g8eo binary in --listen mode          │                         │
 │  │    SQLite (g8e.db) at               │                         │
 │  │    /data/g8e.db                     │                         │
 │  │                                         │                         │
@@ -121,7 +121,7 @@ graph TD
                     Gateway Protocol (WebSocket + mTLS)
                               │
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    OPERATOR (VSA binary)                             │
+│                    OPERATOR (g8eo binary)                             │
 │                                                                     │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
 │  │   Scrubbed Vault │  │    Raw Vault     │  │   Audit Vault    │  │
@@ -147,21 +147,21 @@ graph TD
 
 | Component | Storage Technology | Volume / Path | Role |
 |---|---|---|---|
-| **VSODB (DB)** | SQLite (via VSA `--listen`) | `g8e-data-data` → `/data` | Sole platform persistence layer: document store, KV, blob store, SSE buffer, pub/sub broker. Wiped by `platform reset`. |
-| **VSODB (SSL)** | TLS certs (auto-generated) | `g8e-data-ssl` → `/ssl` | Platform CA and server certificates. **Never wiped** — survives `reset`, `wipe`, and `rebuild`. |
+| **VSODB (DB)** | SQLite (via g8eo `--listen`) | `g8es-data` → `/data` | Sole platform persistence layer: document store, KV, blob store, SSE buffer, pub/sub broker. Wiped by `platform reset`. |
+| **VSODB (SSL)** | TLS certs (auto-generated) | `g8es-ssl` → `/ssl` | Platform CA and server certificates. **Never wiped** — survives `reset`, `wipe`, and `rebuild`. |
 | **g8ee** | None (VSODB client) | — | Stateless; reads/writes all data via VSODB HTTP API |
 | **VSOD** | None (VSODB client) | — | Stateless; document/KV data via VSODB |
-| **VSA (Scrubbed Vault)** | SQLite | `{workdir}/.g8e/local_state.db` | Sentinel-processed output for AI access |
-| **VSA (Raw Vault)** | SQLite | `{workdir}/.g8e/raw_vault.db` | Unscrubbed output for customer forensics |
-| **VSA (Audit Vault)** | SQLite (encrypted) | `{workdir}/.g8e/data/g8e.db` | LFAA: session history, command logs, file mutations |
-| **VSA (Ledger)** | Git | `{workdir}/.g8e/data/ledger` | LFAA: cryptographic file version history |
+| **g8eo (Scrubbed Vault)** | SQLite | `{workdir}/.g8e/local_state.db` | Sentinel-processed output for AI access |
+| **g8eo (Raw Vault)** | SQLite | `{workdir}/.g8e/raw_vault.db` | Unscrubbed output for customer forensics |
+| **g8eo (Audit Vault)** | SQLite (encrypted) | `{workdir}/.g8e/data/g8e.db` | LFAA: session history, command logs, file mutations |
+| **g8eo (Ledger)** | Git | `{workdir}/.g8e/data/ledger` | LFAA: cryptographic file version history |
 | *(none)* | — | — | — |
 
 ---
 
 ## VSODB — Platform Persistence Layer
 
-VSODB is the **platform-shared** persistence layer for g8e. It is the VSA binary (`g8e.operator`) running in `--listen` mode, backing shared state with a single SQLite database at `/data/g8e.db`. g8ee and VSOD are stateless — neither maintains a local SQLite database. All persistent reads and writes go through VSODB.
+VSODB is the **platform-shared** persistence layer for g8e. It is the g8eo binary (`g8e.operator`) running in `--listen` mode, backing shared state with a single SQLite database at `/data/g8e.db`. g8ee and VSOD are stateless — neither maintains a local SQLite database. All persistent reads and writes go through VSODB.
 
 VSOD is the sole external entry point — it binds host ports `443` and `80`. VSODB has **no host port bindings**; it is reachable only within the Docker network. Operators dial VSODB through VSOD's TLS termination.
 
@@ -172,7 +172,7 @@ ENTRYPOINT: g8e.operator --listen --data-dir /data --ssl-dir /ssl
             --http-listen-port 9000 --wss-listen-port 9001
 ```
 
-`--ssl-dir` is a dedicated mount point (`g8e-data-ssl` volume) separate from `--data-dir` (`g8e-data-data` volume). This separation means the platform CA and server certificates are never destroyed by a DB volume wipe.
+`--ssl-dir` is a dedicated mount point (`g8es-ssl` volume) separate from `--data-dir` (`g8es-data` volume). This separation means the platform CA and server certificates are never destroyed by a DB volume wipe.
 
 **Authentication:** All HTTP and WebSocket routes provided by `ListenService` (VSODB) are strictly authenticated via the `X-Internal-Auth` header (or `token` query parameter for WebSocket upgrades). This shared secret is generated by VSODB on first boot and persisted in the SSL volume.
 
@@ -198,7 +198,7 @@ VSODB is the authoritative security generator for the platform. During database 
 - `session_encryption_key` — 32-byte hex key for session field encryption
 
 **Authoritative Source (The Volume):**
-The platform treats the shared SSL volume (`g8e-data-ssl`) as the absolute source of truth for these bootstrap secrets.
+The platform treats the shared SSL volume (`g8es-ssl`) as the absolute source of truth for these bootstrap secrets.
 - At startup, VSODB ensures these secret files exist on the volume.
 - If a file is missing, VSODB generates a new random 32-byte hex value and writes it to the volume.
 - These secrets are **never stored in the database**. VSOD and g8ee read them directly from the volume at startup.
@@ -206,7 +206,7 @@ The platform treats the shared SSL volume (`g8e-data-ssl`) as the absolute sourc
 
 ### SQLite Configuration
 
-Applied via DSN and explicit `PRAGMA` calls in `components/vsa/services/sqliteutil/db.go`:
+Applied via DSN and explicit `PRAGMA` calls in `components/g8eo/services/sqliteutil/db.go`:
 
 ```sql
 -- DSN parameters
@@ -227,7 +227,7 @@ WAL mode enables concurrent readers with a single writer, which is critical for 
 
 ### VSODB SQLite Schema
 
-Single database at `/data/g8e.db`. Canonical schema in `components/vsodb/schema.sql`. The inline `listenSchema` in `components/vsa/services/listen/listen_db.go` contains `documents`, `kv_store`, `sse_events`, and `blobs`.
+Single database at `/data/g8e.db`. Canonical schema in `components/vsodb/schema.sql`. The inline `listenSchema` in `components/g8eo/services/listen/listen_db.go` contains `documents`, `kv_store`, `sse_events`, and `blobs`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS documents (
@@ -281,7 +281,7 @@ CREATE INDEX IF NOT EXISTS idx_blobs_expires   ON blobs(expires_at);
 
 **Blob Store limits:** binary blobs have a hard limit of 15 MB at the transport layer. Optional TTL can be set via `X-Blob-TTL` header.
 
-**Schema migrations:** each VSA-side SQLite database (VSODB, Scrubbed Vault, Raw Vault, Audit Vault) uses `sqliteutil.RunMigrations`, which tracks applied versions in a `schema_version` table (`version`, `description`, `applied_at`). Migrations are monotonically versioned and applied in order; already-applied versions are skipped.
+**Schema migrations:** each g8eo-side SQLite database (VSODB, Scrubbed Vault, Raw Vault, Audit Vault) uses `sqliteutil.RunMigrations`, which tracks applied versions in a `schema_version` table (`version`, `description`, `applied_at`). Migrations are monotonically versioned and applied in order; already-applied versions are skipped.
 
 ---
 
@@ -291,7 +291,7 @@ g8e uses a persistent configuration model managed via VSODB. While initial boots
 
 ### Configuration Precedence
 
-All components (VSOD, g8ee, VSA) resolve configuration values using a strictly enforced precedence chain (highest priority wins):
+All components (VSOD, g8ee, g8eo) resolve configuration values using a strictly enforced precedence chain (highest priority wins):
 
 1.  **User Settings (DB)**: Individual user overrides stored in the `settings` collection. Document ID is `user_settings_{userId}`. CLI tools support this via the `--user-id` flag.
 2.  **Platform Settings (DB)**: Global platform configuration stored in the `settings` collection.
@@ -395,13 +395,13 @@ Stored in the `operators` collection. VSOD writes lifecycle/auth fields; g8ee wr
 | `status` | string | VSOD/g8ee | `available`, `active`, `bound`, `offline`, `stale`, `stopped`, `unavailable`, `terminated` |
 | `user_id` | string | VSOD | Owning user ID |
 | `operator_api_key` | string | VSOD | Hashed API key |
-| `hostname` | string | VSA | System hostname from bootstrap |
-| `system_info` | object | VSA | Static system metadata: OS, arch, public/private IP |
+| `hostname` | string | g8eo | System hostname from bootstrap |
+| `system_info` | object | g8eo | Static system metadata: OS, arch, public/private IP |
 | `last_heartbeat` | string | g8ee | Timestamp of most recent heartbeat |
 | `heartbeat_history` | array | g8ee | Rolling buffer of last 10 heartbeats |
 | `latest_heartbeat_snapshot` | object | g8ee | Most recent metrics: CPU, memory, disk, network |
 | `operator_session_id` | string | VSOD | Active session ID |
-| `is_g8e_pod` | boolean | VSOD | Set on g8e-pod sidecar operators |
+| `is_g8e_pod` | boolean | VSOD | Set on g8ep sidecar operators |
 | `created_at` | string | VSOD | ISO 8601 creation timestamp |
 | `updated_at` | string | VSOD/g8ee | ISO 8601 last-update timestamp |
 
@@ -461,11 +461,11 @@ The `CacheAsideService` (Hierarchy Level 2) coordinates between the authoritativ
 
 ---
 
-## VSA — Operator Storage
+## g8eo — Operator Storage
 
-The VSA (Virtual Service Agent) is the Operator binary that runs on the target system. It is the **system of record** for all operational data under the LFAA. Raw command output, file contents, and unfiltered telemetry live exclusively on the Operator — the g8e platform only receives Sentinel-scrubbed metadata.
+The g8eo (Virtual Service Agent) is the Operator binary that runs on the target system. It is the **system of record** for all operational data under the LFAA. Raw command output, file contents, and unfiltered telemetry live exclusively on the Operator — the g8e platform only receives Sentinel-scrubbed metadata.
 
-All VSA SQLite databases use the same WAL-mode pragma configuration as VSODB (see [SQLite Configuration](#sqlite-configuration)) and the same `sqliteutil.RunMigrations` framework for schema evolution.
+All g8eo SQLite databases use the same WAL-mode pragma configuration as VSODB (see [SQLite Configuration](#sqlite-configuration)) and the same `sqliteutil.RunMigrations` framework for schema evolution.
 
 ### Storage Summary
 
@@ -481,7 +481,7 @@ All VSA SQLite databases use the same WAL-mode pragma configuration as VSODB (se
 ### Scrubbed Vault
 
 **Path:** `{workdir}/.g8e/local_state.db`
-**Service:** `LocalStoreService` (`components/vsa/services/storage/local_store.go`)
+**Service:** `LocalStoreService` (`components/g8eo/services/storage/local_store.go`)
 **Default config:** `MaxDBSizeMB=1024`, `RetentionDays=30`, `PruneIntervalMinutes=60`
 
 Stores command output blobs (stdout/stderr, gzip-compressed) and file diffs **after** Sentinel scrubbing. Sentinel applies 27+ redaction patterns to remove PII, secrets, and credentials before any data is written here. This is the vault the AI reads from when `VaultMode=scrubbed`.
@@ -539,7 +539,7 @@ CREATE INDEX IF NOT EXISTS idx_file_diff_session   ON file_diff_log(operator_ses
 ### Raw Vault
 
 **Path:** `{workdir}/.g8e/raw_vault.db`
-**Service:** `RawVaultService` (`components/vsa/services/storage/raw_vault.go`)
+**Service:** `RawVaultService` (`components/g8eo/services/storage/raw_vault.go`)
 **Default config:** `MaxDBSizeMB=2048`, `RetentionDays=30`, `PruneIntervalMinutes=60`
 
 Stores the same command output blobs and file diffs as the Scrubbed Vault, but completely **unmodified** — no Sentinel processing applied. This data never leaves the Operator; it is never transmitted to the platform. Raw vault writes are skipped when `VaultMode=scrubbed`. Intended for customer forensics where full fidelity is required.
@@ -595,7 +595,7 @@ CREATE INDEX IF NOT EXISTS idx_raw_diff_session   ON raw_file_diff_log(operator_
 ### Audit Vault
 
 **Path:** `{workdir}/.g8e/data/g8e.db`
-**Service:** `AuditVaultService` (`components/vsa/services/storage/audit_vault.go`)
+**Service:** `AuditVaultService` (`components/g8eo/services/storage/audit_vault.go`)
 **Default config:** `MaxDBSizeMB=2048`, `RetentionDays=90`, `PruneIntervalMinutes=60`
 **Output truncation:** outputs exceeding `OutputTruncationThreshold` (default 100 KB) are truncated to head 50 KB + tail 50 KB with a byte-count marker in between.
 
@@ -650,14 +650,14 @@ CREATE INDEX IF NOT EXISTS idx_file_mutation_filepath ON file_mutation_log(filep
 
 **Encryption:** when the vault is unlocked, `content_text`, `command_stdout`, and `command_stderr` are encrypted via AES-256-GCM envelope encryption before write and decrypted transparently on read. The `encrypted` column records whether a row was written under encryption. See [Audit Vault Encryption](#audit-vault-encryption).
 
-**Access pattern:** `HistoryHandler.HandleFetchHistory` (`components/vsa/services/storage/history_handler.go`) receives a `FETCH_HISTORY` pub/sub request, calls `AuditVaultService.GetEvents` with pagination (`limit`/`offset`), and for each `FILE_MUTATION` event fetches its `file_mutation_log` rows via `GetFileMutations`. The assembled `FetchHistoryResultPayload` is published back over pub/sub to G8EE.
+**Access pattern:** `HistoryHandler.HandleFetchHistory` (`components/g8eo/services/storage/history_handler.go`) receives a `FETCH_HISTORY` pub/sub request, calls `AuditVaultService.GetEvents` with pagination (`limit`/`offset`), and for each `FILE_MUTATION` event fetches its `file_mutation_log` rows via `GetFileMutations`. The assembled `FetchHistoryResultPayload` is published back over pub/sub to G8EE.
 
 ---
 
 ### Ledger
 
 **Path:** `{workdir}/.g8e/data/ledger`
-**Service:** `LedgerService` (`components/vsa/services/storage/ledger.go`)
+**Service:** `LedgerService` (`components/g8eo/services/storage/ledger.go`)
 
 A git repository providing cryptographic integrity and full version history for every file modified by the Operator. Requires a functional `git` binary; disabled via `--no-git` or when git is unavailable at startup.
 
@@ -671,11 +671,11 @@ These are the same concept at two different abstraction layers.
 
 **`sentinel_mode`** is the investigation-level domain setting — a Python `bool | None` on the `InvestigationModel` that records whether data scrubbing is enabled for a given investigation. It travels through the Python application layer as a plain boolean.
 
-**`VaultMode`** is the wire-protocol string sent in `CommandPayload` to VSA via pub/sub. It tells VSA whether the raw vault should be written and, when `fetch_execution_output` is called, which vault the AI reads from.
+**`VaultMode`** is the wire-protocol string sent in `CommandPayload` to g8eo via pub/sub. It tells g8eo whether the raw vault should be written and, when `fetch_execution_output` is called, which vault the AI reads from.
 
-VSA **always writes to the scrubbed vault**. The raw vault write is conditional: it is skipped when `VaultMode == "scrubbed"`. `VaultMode` therefore controls both whether the raw vault is written and which vault the AI reads from.
+g8eo **always writes to the scrubbed vault**. The raw vault write is conditional: it is skipped when `VaultMode == "scrubbed"`. `VaultMode` therefore controls both whether the raw vault is written and which vault the AI reads from.
 
-When `VaultMode` is absent from the payload, VSA defaults to `"raw"`.
+When `VaultMode` is absent from the payload, g8eo defaults to `"raw"`.
 
 The conversion happens at the pub/sub boundary in `_execute_command_internal`:
 
@@ -692,9 +692,9 @@ else:
 |---|---|---|
 | `True` | `"scrubbed"` | Scrubbed Vault (`{workdir}/.g8e/local_state.db`) |
 | `False` | `"raw"` | Raw Vault (`{workdir}/.g8e/raw_vault.db`) |
-| `None` | omitted | VSA default (`"raw"`) |
+| `None` | omitted | g8eo default (`"raw"`) |
 
-The same conversion applies at all wire boundaries in G8EE. The raw bool must never be passed directly to a VSA payload — `VaultMode` is the only form accepted on the wire.
+The same conversion applies at all wire boundaries in G8EE. The raw bool must never be passed directly to a g8eo payload — `VaultMode` is the only form accepted on the wire.
 
 ---
 
@@ -775,13 +775,13 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (VSOD). Collections a
 
 ### Operator Bootstrap / Auth Flow
 
-1. VSA → VSOD (HTTPS): `POST /api/auth/operator` with API key or device token
+1. g8eo → VSOD (HTTPS): `POST /api/auth/operator` with API key or device token
 2. VSOD → VSODB KV: Validate device link token (`g8e:auth:token:device:{token}`)
 3. VSOD → VSODB Doc: Fetch/create `operators` document
 4. VSOD → VSODB Doc: Create `operator_sessions` document
 5. VSOD → VSODB KV: `setex(g8e:session:operator:{id}, session, 8h)`
 6. VSOD → VSODB KV: Lock fingerprint to slot (`g8e:auth:token:device:{token}:fingerprints`)
-7. VSOD → VSA: Bootstrap config response (operator ID, session ID, mTLS cert, heartbeat interval)
+7. VSOD → g8eo: Bootstrap config response (operator ID, session ID, mTLS cert, heartbeat interval)
 
 ### Session Binding Flow
 
@@ -802,20 +802,20 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (VSOD). Collections a
 6. g8ee → LLM Provider: Stream request with assembled context
 7. g8ee → VSOD SSE: Push each `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event per text chunk
 8. g8ee → VSODB Doc: Persist final AI response to `investigations`
-9. g8ee → VSODB Doc: Dispatch LFAA events via pub/sub to the bound VSA
+9. g8ee → VSODB Doc: Dispatch LFAA events via pub/sub to the bound g8eo
 
 ### Command Execution Flow
 
 1. g8ee → VSODB Pub/Sub: `publish cmd:{operator_id}:{operator_session_id}` with `CommandPayload` (includes `VaultMode`)
-2. VSA ← VSODB Pub/Sub: Receive command on subscribed channel
-3. VSA → Sentinel: Pre-execution threat scan (MITRE ATT&CK patterns); block if flagged
-4. VSA: Execute command in subprocess
-5. VSA → Sentinel: Post-execution output scrub (27+ redaction patterns)
-6. VSA → Scrubbed Vault: `StoreExecution(ExecutionRecord)` — `execution_log` row, gzip-compressed
-7. VSA → Raw Vault: `StoreRawExecution(RawExecutionRecord)` — skipped when `VaultMode=scrubbed`
-8. VSA → Audit Vault: `RecordEvent(CMD_EXEC)` — encrypted fields, truncation applied
-9. VSA → Ledger: `git commit` for any file mutations; hash stored in `file_mutation_log`
-10. VSA → VSODB Pub/Sub: `publish results:{operator_id}:{operator_session_id}` with result payload
+2. g8eo ← VSODB Pub/Sub: Receive command on subscribed channel
+3. g8eo → Sentinel: Pre-execution threat scan (MITRE ATT&CK patterns); block if flagged
+4. g8eo: Execute command in subprocess
+5. g8eo → Sentinel: Post-execution output scrub (27+ redaction patterns)
+6. g8eo → Scrubbed Vault: `StoreExecution(ExecutionRecord)` — `execution_log` row, gzip-compressed
+7. g8eo → Raw Vault: `StoreRawExecution(RawExecutionRecord)` — skipped when `VaultMode=scrubbed`
+8. g8eo → Audit Vault: `RecordEvent(CMD_EXEC)` — encrypted fields, truncation applied
+9. g8eo → Ledger: `git commit` for any file mutations; hash stored in `file_mutation_log`
+10. g8eo → VSODB Pub/Sub: `publish results:{operator_id}:{operator_session_id}` with result payload
 11. g8ee ← VSODB Pub/Sub: Receive result; if `stored_locally=true`, instruct AI to call `fetch_execution_output`
 12. g8ee → VSODB Doc: Update `investigations` metadata
 
@@ -823,17 +823,17 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (VSOD). Collections a
 
 1. AI calls `fetch_execution_output(execution_id)` tool
 2. g8ee → VSODB Pub/Sub: Publish `FETCH_LOGS` request to `cmd:{operator_id}:{session}` channel
-3. VSA: Read from Scrubbed Vault (`execution_log WHERE id = ?`); decompress stdout/stderr
-4. VSA → VSODB Pub/Sub: Publish output payload on `results:*` channel
-5. G8EE: Receive output ephemerally — content is never persisted on the platform side
+3. g8eo: Read from Scrubbed Vault (`execution_log WHERE id = ?`); decompress stdout/stderr
+4. g8eo → VSODB Pub/Sub: Publish output payload on `results:*` channel
+5. g8ee: Receive output ephemerally — content is never persisted on the platform side
 
 ### Fetch Session History Flow
 
 1. AI calls `fetch_session_history(operator_session_id, limit, offset)` tool
 2. g8ee → VSODB Pub/Sub: Publish `FETCH_HISTORY` request
-3. VSA `HistoryHandler`: `GetSession` + `GetEvents` with pagination; `GetFileMutations` for each `FILE_MUTATION` event
-4. VSA → VSODB Pub/Sub: Publish `FetchHistoryResultPayload` with decrypted events
-5. G8EE: Receive history; content is never persisted on the platform side
+3. g8eo `HistoryHandler`: `GetSession` + `GetEvents` with pagination; `GetFileMutations` for each `FILE_MUTATION` event
+4. g8eo → VSODB Pub/Sub: Publish `FetchHistoryResultPayload` with decrypted events
+5. g8ee: Receive history; content is never persisted on the platform side
 
 ---
 
@@ -844,8 +844,8 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (VSOD). Collections a
 | Path | Protocol | Notes |
 |---|---|---|
 | Browser → VSOD | TLS 1.2+ (HTTPS) | External listener; cert served from `vsodb-data` volume |
-| VSA → VSOD (auth/bootstrap) | TLS 1.3 + mTLS | After CA bootstrap; VSA rejects if cert not signed by pinned CA |
-| VSA → VSOD (pub/sub) | TLS 1.3 WebSocket (WSS) | VSOD proxies `/ws/pubsub` upgrade to VSODB internally; VSA never dials VSODB directly |
+| g8eo → VSOD (auth/bootstrap) | TLS 1.3 + mTLS | After CA bootstrap; g8eo rejects if cert not signed by pinned CA |
+| g8eo → VSOD (pub/sub) | TLS 1.3 WebSocket (WSS) | VSOD proxies `/ws/pubsub` upgrade to VSODB internally; g8eo never dials VSODB directly |
 | g8ee, VSOD → VSODB | HTTPS/WSS (TLS) | Internal Docker network only; VSODB has no external port bindings |
 
 ### At Rest — Platform (VSODB)
@@ -884,7 +884,7 @@ The `encrypted` column (integer `0`/`1`) records whether a row was written under
 
 ## Storage Retention Policies
 
-All VSA-side databases use `sqliteutil.Pruner`, which runs on `PruneIntervalMinutes` (default 60 min) and enforces both time-based and size-based pruning. Records are pruned when either threshold is exceeded — oldest records first.
+All g8eo-side databases use `sqliteutil.Pruner`, which runs on `PruneIntervalMinutes` (default 60 min) and enforces both time-based and size-based pruning. Records are pruned when either threshold is exceeded — oldest records first.
 
 | Data Layer | Data Type | Default Retention | Size Limit | Pruner Interval |
 |---|---|---|---|---|
@@ -894,16 +894,16 @@ All VSA-side databases use `sqliteutil.Pruner`, which runs on `PruneIntervalMinu
 | | Device link tokens | 1h default (configurable 1min–7days) | — | On read |
 | | Auth nonces | `NONCE_TTL_SECONDS` | — | On read |
 | **VSODB Doc** | All collections | Until explicit deletion | — | None |
-| **VSA Scrubbed Vault** | `execution_log`, `file_diff_log` | 30 days (`RetentionDays=30`) | 1 GB (`MaxDBSizeMB=1024`) | 60 min |
-| **VSA Raw Vault** | `raw_execution_log`, `raw_file_diff_log` | 30 days (`RetentionDays=30`) | 2 GB (`MaxDBSizeMB=2048`) | 60 min |
-| **VSA Audit Vault** | `events`, `file_mutation_log` | 90 days (`RetentionDays=90`) | 2 GB (`MaxDBSizeMB=2048`) | 60 min |
-| **VSA Ledger** | Git commits | Permanent | None | — |
+| **g8eo Scrubbed Vault** | `execution_log`, `file_diff_log` | 30 days (`RetentionDays=30`) | 1 GB (`MaxDBSizeMB=1024`) | 60 min |
+| **g8eo Raw Vault** | `raw_execution_log`, `raw_file_diff_log` | 30 days (`RetentionDays=30`) | 2 GB (`MaxDBSizeMB=2048`) | 60 min |
+| **g8eo Audit Vault** | `events`, `file_mutation_log` | 90 days (`RetentionDays=90`) | 2 GB (`MaxDBSizeMB=2048`) | 60 min |
+| **g8eo Ledger** | Git commits | Permanent | None | — |
 
 ---
 
 ## Related Documentation
 
-- [../components/vsa.md](../components/vsa.md) — VSA component reference
+- [../components/g8eo.md](../components/g8eo.md) — g8eo component reference
 - [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
 - [../components/vsod.md](../components/vsod.md) — VSOD component reference
 - [../components/vsodb.md](../components/vsodb.md) — VSODB component reference

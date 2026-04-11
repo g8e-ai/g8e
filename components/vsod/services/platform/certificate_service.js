@@ -21,7 +21,7 @@
  * Certificate Trust Model:
  *   g8e Operator CA (ECDSA P-384, 10-year validity)
  *   +-- Client Certificate (ECDSA P-384, per-operator, 365-day validity)
- *       +-- Used by: Individual VSA Operator instances
+ *       +-- Used by: Individual g8eo Operator instances
  *       +-- CN contains operator_id for identification
  */
 

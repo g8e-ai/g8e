@@ -1,8 +1,8 @@
 # g8e node
 
-Drop Pod is the always-on sidecar container that serves as the unified test environment for the g8e platform — a hermetic container for running all component tests (g8ee/Python, VSOD/Node.js, VSA/Go) locally and in CI.
+g8ep is the always-on sidecar container that serves as the unified test environment for the g8e platform — a hermetic container for running all component tests (g8ee/Python, VSOD/Node.js, g8eo/Go) locally and in CI.
 
-It runs as a managed service alongside `vsodb`, `g8ee`, and `vsod` in `docker-compose.yml`. Tests are never run directly on the host — all test execution goes through the g8e-pod.
+It runs as a managed service alongside `vsodb`, `g8ee`, and `vsod` in `docker-compose.yml`. Tests are never run directly on the host — all test execution goes through the g8ep.
 
 **Operator binary:** The `g8e.operator` binary lives at `/home/g8e/g8e.operator`. When the binary is not present, `fetch-key-and-run.sh` automatically downloads the platform-matching binary from the VSODB blob store (`/blob/operator-binary/linux-{arch}`). VSODB bakes and uploads binaries for all architectures on startup, so a fresh `./g8e platform setup` or `./g8e platform up` is sufficient. To compile a fresh binary manually, use `./g8e operator build`.
 
@@ -11,7 +11,7 @@ It runs as a managed service alongside `vsodb`, `g8ee`, and `vsod` in `docker-co
 ## Location
 
 ```
-components/g8e-pod/
+components/g8ep/
 ├── Dockerfile                    # Container definition (ubuntu:24.04 base, Python 3.12, Node 22, Go 1.24.1)
 ├── reports/                      # Scan output (gitignored, .gitkeep preserves dir)
 └── scripts/
@@ -94,7 +94,7 @@ components/g8e-pod/
 **Application dependencies pre-installed at build time** (layer-cached):
 - Python: `components/g8ee/requirements.txt` → `pip install` into a venv at `/opt/venv` (required by PEP 668 on Ubuntu 24.04 — system-wide pip installs are blocked)
 - Node: `components/vsod/package*.json` → `npm ci`
-- Go: `components/vsa/go.mod` + `go.sum` + `vendor/` → vendored, no network download
+- Go: `components/g8eo/go.mod` + `go.sum` + `vendor/` → vendored, no network download
 
 Component source directories are **volume-mounted** at runtime — code changes never require a rebuild.
 
@@ -102,11 +102,11 @@ Component source directories are **volume-mounted** at runtime — code changes 
 
 ## Docker Compose Integration
 
-Drop Pod is a managed service in `docker-compose.yml`, started alongside the core platform. It has no `depends_on` constraints and no `restart` policy — it stays running as a sidecar.
+g8ep is a managed service in `docker-compose.yml`, started alongside the core platform. It has no `depends_on` constraints and no `restart` policy — it stays running as a sidecar.
 
 **Healthcheck:** `pgrep -x supervisord` — passes once supervisord is running.
 
-**Process model:** `supervisord` runs as PID 1 and manages the `operator` program. The operator service is configured with `autostart=false` — it starts only when VSOD persists the operator API key to the `platform_settings` document in VSODB and then signals supervisor via XML-RPC. The supervisor `command=` delegates to `fetch-key-and-run.sh`, which fetches the API key from VSODB (with retry and exponential backoff for transient unavailability), validates it, and execs the operator binary. Operator stdout/stderr routes to Docker log output (visible via `./g8e platform logs g8e-pod` or `docker logs g8e-pod`).
+**Process model:** `supervisord` runs as PID 1 and manages the `operator` program. The operator service is configured with `autostart=false` — it starts only when VSOD persists the operator API key to the `platform_settings` document in VSODB and then signals supervisor via XML-RPC. The supervisor `command=` delegates to `fetch-key-and-run.sh`, which fetches the API key from VSODB (with retry and exponential backoff for transient unavailability), validates it, and execs the operator binary. Operator stdout/stderr routes to Docker log output (visible via `./g8e platform logs g8ep` or `docker logs g8ep`).
 
 **Volume mounts (runtime):**
 
@@ -118,12 +118,12 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 | `./components/g8ee/pyproject.toml` | `/app/components/g8ee/pyproject.toml` | g8ee dependencies |
 | `./components/vsod` | `/app/components/vsod` | VSOD source |
 | (named volume) `g8e-dashboard-node-modules` | `/app/components/vsod/node_modules` | Node modules isolated in a named volume |
-| `./components/vsa` | `/app/components/vsa` | VSA source (operator) |
-| `./components/g8e-pod/scripts` | `/app/components/g8e-pod/scripts` | g8e node scripts |
+| `./components/g8eo` | `/app/components/g8eo` | g8eo source (operator) |
+| `./components/g8ep/scripts` | `/app/components/g8ep/scripts` | g8e node scripts |
 | `./shared` | `/app/shared` | Shared models and constants |
 | `./scripts` | `/app/scripts` | Platform scripts |
 | `/var/run/docker.sock` | `/var/run/docker.sock` | Docker socket |
-| (named volume) `g8e-data-ssl` | `/vsodb` | VSODB SSL volume — read-only |
+| (named volume) `g8es-ssl` | `/vsodb` | VSODB SSL volume — read-only |
 
 **Environment variables (set in the service block — always present):**
 
@@ -147,7 +147,7 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 | `CI` | `false` | CI flag |
 | `G8E_INTERNAL_HTTP_URL` | `https://vsodb` | VSODB HTTP endpoint |
 | `G8E_INTERNAL_PUBSUB_URL` | `wss://vsodb` | VSODB pub/sub endpoint for internal services (g8ee) |
-| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8e.local:443` | VSODB pub/sub endpoint for VSA operator tests — uses the external address via `extra_hosts: g8e.local→host-gateway` to simulate a real remote operator |
+| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8e.local:443` | VSODB pub/sub endpoint for g8eo operator tests — uses the external address via `extra_hosts: g8e.local→host-gateway` to simulate a real remote operator |
 | `LLM_ENDPOINT` | — | LLM inference endpoint |
 | `APP_URL` | — | Application URL (required — set in `docker-compose.yml` or shell) |
 
@@ -155,7 +155,7 @@ Drop Pod is a managed service in `docker-compose.yml`, started alongside the cor
 
 ## Operator in g8e node
 
-The g8e-pod container hosts the `g8e.operator` binary at `/home/g8e/g8e.operator`. The binary must be built explicitly via `./g8e operator build` before use — it is never built automatically. VSOD runs the binary inside the container via `docker exec` in two scenarios:
+The g8ep container hosts the `g8e.operator` binary at `/home/g8e/g8e.operator`. The binary must be built explicitly via `./g8e operator build` before use — it is never built automatically. VSOD runs the binary inside the container via `docker exec` in two scenarios:
 
 1. **Login-triggered activation** — automatically on every user login or registration (see below).
 2. **Fleet streaming** — on-demand via the `operator stream` command.
@@ -166,11 +166,11 @@ The g8e-pod container hosts the `g8e.operator` binary at `/home/g8e/g8e.operator
 |----------|---------|-------|
 | `G8E_GATEWAY_OPERATOR_ENDPOINT` | `g8e.local` | `--endpoint` passed to the operator binary when launched by VSOD |
 
-The VSOD service exposes `g8e.local` as a network alias on `vso-network`. The g8e-pod container shares that network, so an operator running inside it resolves `g8e.local` to the VSOD container and reaches VSODB on port 443 exactly as a real remote operator would.
+The VSOD service exposes `g8e.local` as a network alias on `vso-network`. The g8ep container shares that network, so an operator running inside it resolves `g8e.local` to the VSOD container and reaches VSODB on port 443 exactly as a real remote operator would.
 
 ### Login-Triggered Activation (`G8ENodeOperatorService`)
 
-On every successful login or registration, VSOD's `G8ENodeOperatorService` fires a non-blocking activation flow so that the user's g8e-pod operator is `ACTIVE` and ready to be bound by the time their browser finishes loading.
+On every successful login or registration, VSOD's `G8ENodeOperatorService` fires a non-blocking activation flow so that the user's g8ep operator is `ACTIVE` and ready to be bound by the time their browser finishes loading.
 
 **Flow:**
 
@@ -180,7 +180,7 @@ POST /api/auth/login (or /register)
        └─ fire-and-forget: activateG8ENodeOperatorForUser(user_id, org_id, web_session_id)
             │
             ├─ 1. getG8ENodeOperatorForUser(user_id)
-            │       → queryOperators: returns the g8e-pod slot for this user
+            │       → queryOperators: returns the g8ep slot for this user
             │       → if already ACTIVE/BOUND: done (idempotent)
             │       → if no slot: done (graceful no-op)
             │
@@ -202,7 +202,7 @@ Failures at any step are caught and logged as warnings — they never propagate 
 
 ### Standalone Reauth (`operator reauth`)
 
-To force a reauth outside of the login flow — for example when the g8e-pod operator is stuck or unresponsive — use:
+To force a reauth outside of the login flow — for example when the g8ep operator is stuck or unresponsive — use:
 
 ```bash
 ./g8e operator reauth --email user@example.com
@@ -218,21 +218,21 @@ This calls `POST /api/internal/operators/user/:userId/reauth` on VSOD, which:
 
 The operator re-authenticates and goes `ACTIVE` within seconds. The operation is idempotent — safe to call whether or not the operator is currently running.
 
-> The g8e-pod operator is a **system operator** (`operator_type: system`). It authenticates using its `operator_api_key` from the operator document — no device link, no `--cloud` flag. AWS CLI is **not installed** in the container; however, if it were, the host `~/.aws` directory would typically be mounted for credentials.
+> The g8ep operator is a **system operator** (`operator_type: system`). It authenticates using its `operator_api_key` from the operator document — no device link, no `--cloud` flag. AWS CLI is **not installed** in the container; however, if it were, the host `~/.aws` directory would typically be mounted for credentials.
 
 ---
 
 ## Running Tests
 
-The g8e-pod container runs `entrypoint.sh` on startup, writes the supervisor config, and execs `supervisord` as PID 1. Tests are executed via `docker exec` — the `g8e` bash script routes `test` commands into the g8e-pod and invokes `run_tests.sh` directly inside it.
+The g8ep container runs `entrypoint.sh` on startup, writes the supervisor config, and execs `supervisord` as PID 1. Tests are executed via `docker exec` — the `g8e` bash script routes `test` commands into the g8ep and invokes `run_tests.sh` directly inside it.
 
-See [testing.md](../testing.md) for complete test execution documentation — g8e-pod environment details, all `./g8e test` commands, component-specific guides, and CI workflows.
+See [testing.md](../testing.md) for complete test execution documentation — g8ep environment details, all `./g8e test` commands, component-specific guides, and CI workflows.
 
 ---
 
 ## Security Scans
 
-Security scan scripts live in `components/g8e-pod/scripts/security/` and are volume-mounted into the container at runtime. The scanning tools (Nuclei, testssl.sh, Trivy, Grype) are **not** pre-installed in the image — they are lazy-installed on first use by `install-scan-tools.sh`. All network utilities required by the scan scripts (`wget`, `unzip`, `nmap`, etc.) are pre-installed in the base image.
+Security scan scripts live in `components/g8ep/scripts/security/` and are volume-mounted into the container at runtime. The scanning tools (Nuclei, testssl.sh, Trivy, Grype) are **not** pre-installed in the image — they are lazy-installed on first use by `install-scan-tools.sh`. All network utilities required by the scan scripts (`wget`, `unzip`, `nmap`, etc.) are pre-installed in the base image.
 
 See [testing.md](../testing.md) for security scan commands and script documentation.
 
@@ -244,17 +244,17 @@ Source code changes never require a rebuild. Rebuild only when the image definit
 
 | Changed file | Action |
 |-------------|--------|
-| `components/g8e-pod/Dockerfile` | `./g8e platform rebuild g8e-pod` |
-| `components/g8ee/requirements.txt` | `./g8e platform rebuild g8e-pod` |
-| `components/vsod/package*.json` | `./g8e platform rebuild g8e-pod` |
-| `components/vsa/go.mod` / `go.sum` | `./g8e platform rebuild g8e-pod` |
+| `components/g8ep/Dockerfile` | `./g8e platform rebuild g8ep` |
+| `components/g8ee/requirements.txt` | `./g8e platform rebuild g8ep` |
+| `components/vsod/package*.json` | `./g8e platform rebuild g8ep` |
+| `components/g8eo/go.mod` / `go.sum` | `./g8e platform rebuild g8ep` |
 
 ```bash
-# Rebuild g8e-pod image only
-./g8e platform rebuild g8e-pod
+# Rebuild g8ep image only
+./g8e platform rebuild g8ep
 
-# Clean g8e-pod image (full removal)
-./g8e platform clean --clean-g8e-pod
+# Clean g8ep image (full removal)
+./g8e platform clean --clean-g8ep
 ```
 
 ---
@@ -266,7 +266,7 @@ The `stream` subcommand is a Go-native concurrent SSH engine built directly into
 **Architecture:**
 
 ```
-g8e-pod container
+g8ep container
   │
   ├─ Load linux/<arch>/g8e.operator into RAM (once)
   │
@@ -336,7 +336,7 @@ Each host emits a status line as it completes; a summary line is written last. S
 | Network g8e | SSHD kills the remote shell, `EXIT` trap fires, binary deleted |
 | Ctrl+C on host | Go context cancels, all SSH sessions close, remote `EXIT` traps fire |
 
-**SSH config resolution:** The inline parser reads `~/.ssh/config` (volume-mounted from the host into g8e-pod at `/root/.ssh`) and resolves `HostName`, `User`, `Port`, and `IdentityFile` per host. Wildcard patterns (`prod-*`, `?`) are supported. SSH agent (`SSH_AUTH_SOCK`) is used when available; identity files fall back to standard paths (`id_ed25519`, `id_ecdsa`, `id_rsa`).
+**SSH config resolution:** The inline parser reads `~/.ssh/config` (volume-mounted from the host into g8ep at `/root/.ssh`) and resolves `HostName`, `User`, `Port`, and `IdentityFile` per host. Wildcard patterns (`prod-*`, `?`) are supported. SSH agent (`SSH_AUTH_SOCK`) is used when available; identity files fall back to standard paths (`id_ed25519`, `id_ecdsa`, `id_rsa`).
 
 **vs. `operator deploy`:** `deploy` copies the binary to a persistent path on disk via `scp` and optionally starts it with `nohup`. `stream` is zero-footprint — the binary is always volatile and the session is live for its lifetime.
 
@@ -392,24 +392,24 @@ Host jump.example.com
 
 ## VSOD Operator Panel UI
 
-VSOD manages the g8e-pod operator through the Operator Panel in the browser UI. The panel is implemented in `components/vsod/public/js/components/operator-panel.js` and its mixin modules.
+VSOD manages the g8ep operator through the Operator Panel in the browser UI. The panel is implemented in `components/vsod/public/js/components/operator-panel.js` and its mixin modules.
 
-The g8e-pod operator is sorted to the top of the operator list — it is identified by the `is_g8e_pod` flag on the operator document and always renders first, above all remote operators.
+The g8ep operator is sorted to the top of the operator list — it is identified by the `is_g8e_pod` flag on the operator document and always renders first, above all remote operators.
 
 **Actions available per operator card in the UI:**
 
 | Button | Action | API call |
 |--------|--------|----------|
 | Device Link | Generate a `dlk_` token and copy to clipboard | `POST /api/auth/link/generate` (body: `{ operator_id }`) |
-| Restart g8e-pod | Stop the supervised process, reset slot, relaunch with fresh token | `POST /api/operators/g8e-pod/reauth` |
+| Restart g8ep | Stop the supervised process, reset slot, relaunch with fresh token | `POST /api/operators/g8ep/reauth` |
 | Copy API Key | Copy `operator_api_key` to clipboard | `GET /api/operators/:operatorId/api-key` |
 | Refresh API Key | Terminate operator, create new slot with new API key | `POST /api/operators/:operatorId/refresh-key` |
 | Bind / Unbind | Bind operator to the current web session (or unbind/clear stale) | `POST /api/operators/:operatorId/bind` / `/unbind` |
 | Stop | Send shutdown command to a running operator | `POST /api/operators/:operatorId/stop` |
 
-**Restart g8e-pod flow (UI-triggered):**
+**Restart g8ep flow (UI-triggered):**
 
-`POST /api/operators/g8e-pod/reauth` is an authenticated user-facing route on VSOD — the caller's identity comes from the session (`req.userId`). It calls `relaunchG8ENodeOperatorForUser` in `G8ENodeOperatorService`, which is the same function used by the internal CLI route. No `operator_id` parameter is required because each user has exactly one g8e-pod operator slot.
+`POST /api/operators/g8ep/reauth` is an authenticated user-facing route on VSOD — the caller's identity comes from the session (`req.userId`). It calls `relaunchG8ENodeOperatorForUser` in `G8ENodeOperatorService`, which is the same function used by the internal CLI route. No `operator_id` parameter is required because each user has exactly one g8ep operator slot.
 
 **SSE updates:** The panel subscribes to `EVENTS.OPERATOR.DATA_UPDATED` events emitted by `OperatorSSEHandler`. Heartbeat events update the metrics display in place; state-change and stale events trigger a full operator list re-render.
 
@@ -425,5 +425,5 @@ Operator test VMs are not defined in `docker-compose.yml`. Multi-operator integr
 
 | Document | Description |
 |----------|-------------|
-| [testing.md](../testing.md) | Complete testing guide — g8e-pod environment, all test commands, component-specific guides, CI workflows |
+| [testing.md](../testing.md) | Complete testing guide — g8ep environment, all test commands, component-specific guides, CI workflows |
 | [developer.md](../developer.md) | Platform setup, infrastructure, code quality rules |

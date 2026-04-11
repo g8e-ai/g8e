@@ -402,7 +402,7 @@ class AIToolService:
                         f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
                         f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
                         f"If root privileges are required, ask the user to restart the Operator with sudo "
-                        f"(e.g., 'sudo ./vsa' or 'sudo vsa'). Do NOT attempt to use sudo in commands."
+                        f"(e.g., 'sudo ./g8eo' or 'sudo g8eo'). Do NOT attempt to use sudo in commands."
                     )
                     logger.error("[SECURITY] Blocked forbidden command pattern '%s' in: %s", pattern, raw_command)
                     return CommandExecutionResult(
@@ -615,7 +615,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> PortCheckToolResult:
-        """Delegate port check operation to the VSAOperatorService."""
+        """Delegate port check operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_port_check(
             args=args,
             investigation=investigation,
@@ -628,7 +628,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> FsListToolResult:
-        """Delegate file system list operation to the VSAOperatorService."""
+        """Delegate file system list operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_list(
             args=args,
             investigation=investigation,
@@ -641,7 +641,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> FsReadToolResult:
-        """Delegate file system read operation to the VSAOperatorService."""
+        """Delegate file system read operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_read(
             args=args,
             investigation=investigation,
@@ -655,7 +655,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> IntentPermissionResult:
-        """Delegate intent permission request to the VSAOperatorService."""
+        """Delegate intent permission request to the G8eoOperatorService."""
         if vso_context is None:
             raise ValidationError("vso_context is required for execute_intent_permission_request", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_permission_request(
@@ -671,7 +671,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> IntentPermissionResult:
-        """Delegate intent permission revocation to the VSAOperatorService."""
+        """Delegate intent permission revocation to the G8eoOperatorService."""
         if vso_context is None:
             raise ValidationError("vso_context is required for execute_intent_revocation", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_revocation(
@@ -686,7 +686,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> FetchFileHistoryToolResult:
-        """Delegate file history fetch operation to the VSAOperatorService."""
+        """Delegate file history fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_history(
             args=args,
             investigation=investigation,
@@ -699,7 +699,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         vso_context: VSOHttpContext,
     ) -> FetchFileDiffToolResult:
-        """Delegate file diff fetch operation to the VSAOperatorService."""
+        """Delegate file diff fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_diff(
             args=args,
             investigation=investigation,

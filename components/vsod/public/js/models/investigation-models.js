@@ -33,7 +33,7 @@ export const Severity = Object.freeze({
 
 export const ComponentName = Object.freeze({
     G8EE: 'g8ee',
-    VSA: 'vsa',
+    G8EO: 'g8eo',
     VSOD: 'vsod',
 });
 
@@ -173,7 +173,7 @@ export class InvestigationCurrentState extends FrontendIdentifiableModel {
         escalation_risk:          { type: F.string,  default: 'low' },
         collaboration_status:     { type: F.any,     default: () => ({}) },
         troubleshooting_context:  { type: F.any,     default: null },
-        vsa_engagement_criteria:  { type: F.any,     default: null },
+        g8eo_engagement_criteria:  { type: F.any,     default: null },
     };
 }
 

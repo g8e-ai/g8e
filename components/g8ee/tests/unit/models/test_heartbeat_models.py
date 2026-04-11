@@ -20,8 +20,8 @@ Coverage:
 - HeartbeatSystemIdentity: all fields from wire schema
 - HeartbeatNetworkInfo / HeartbeatNetworkInterface: connectivity_status shape
 - HeartbeatVersionInfo: operator_version, status
-- VSAHeartbeatCapabilityFlags: nested shape, defaults
-- OperatorHeartbeat.from_wire: full round-trip from a complete VSAHeartbeatPayload
+- G8eoHeartbeatCapabilityFlags: nested shape, defaults
+- OperatorHeartbeat.from_wire: full round-trip from a complete G8eoHeartbeatPayload
 - OperatorHeartbeat.to_sse_payload: all fields emitted correctly
 - _coerce_heartbeat_type: valid values pass through, unknown falls back to AUTOMATIC
 """
@@ -39,8 +39,8 @@ from app.models.operators import (
     _coerce_heartbeat_type,
 )
 from app.models.pubsub_messages import (
-    VSAHeartbeatCapabilityFlags,
-    VSAHeartbeatPayload,
+    G8eoHeartbeatCapabilityFlags,
+    G8eoHeartbeatPayload,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -50,21 +50,21 @@ pytestmark = [pytest.mark.unit]
 # Helpers
 # =============================================================================
 
-def _full_payload(**overrides) -> VSAHeartbeatPayload:
-    """Return a VSAHeartbeatPayload with all sections populated."""
+def _full_payload(**overrides) -> G8eoHeartbeatPayload:
+    """Return a G8eoHeartbeatPayload with all sections populated."""
     from app.constants import EventType
     from app.models.pubsub_messages import (
         NetworkConnectivityStatus,
-        VSAHeartbeatDiskDetails,
-        VSAHeartbeatEnvironment,
-        VSAHeartbeatMemoryDetails,
-        VSAHeartbeatNetworkInfo,
-        VSAHeartbeatOSDetails,
-        VSAHeartbeatPerformanceMetrics,
-        VSAHeartbeatSystemIdentity,
-        VSAHeartbeatUptimeInfo,
-        VSAHeartbeatUserDetails,
-        VSAHeartbeatVersionInfo,
+        G8eoHeartbeatDiskDetails,
+        G8eoHeartbeatEnvironment,
+        G8eoHeartbeatMemoryDetails,
+        G8eoHeartbeatNetworkInfo,
+        G8eoHeartbeatOSDetails,
+        G8eoHeartbeatPerformanceMetrics,
+        G8eoHeartbeatSystemIdentity,
+        G8eoHeartbeatUptimeInfo,
+        G8eoHeartbeatUserDetails,
+        G8eoHeartbeatVersionInfo,
     )
 
     defaults = dict(
@@ -72,7 +72,7 @@ def _full_payload(**overrides) -> VSAHeartbeatPayload:
         operator_id="op-full-001",
         operator_session_id="sess-full-001",
         heartbeat_type=HeartbeatType.AUTOMATIC,
-        system_identity=VSAHeartbeatSystemIdentity(
+        system_identity=G8eoHeartbeatSystemIdentity(
             hostname="testhost",
             os="linux",
             architecture="amd64",
@@ -81,7 +81,7 @@ def _full_payload(**overrides) -> VSAHeartbeatPayload:
             cpu_count=8,
             memory_mb=16384,
         ),
-        network_info=VSAHeartbeatNetworkInfo(
+        network_info=G8eoHeartbeatNetworkInfo(
             public_ip="1.2.3.4",
             interfaces=["eth0", "lo"],
             connectivity_status=[
@@ -89,15 +89,15 @@ def _full_payload(**overrides) -> VSAHeartbeatPayload:
                 NetworkConnectivityStatus(name="lo", ip="127.0.0.1", mtu=65536),
             ],
         ),
-        version_info=VSAHeartbeatVersionInfo(
+        version_info=G8eoHeartbeatVersionInfo(
             operator_version="1.2.3",
             status="stable",
         ),
-        uptime_info=VSAHeartbeatUptimeInfo(
+        uptime_info=G8eoHeartbeatUptimeInfo(
             uptime="2 days, 4:30:00",
             uptime_seconds=191400,
         ),
-        performance_metrics=VSAHeartbeatPerformanceMetrics(
+        performance_metrics=G8eoHeartbeatPerformanceMetrics(
             cpu_percent=42.5,
             memory_percent=61.0,
             disk_percent=35.0,
@@ -107,27 +107,27 @@ def _full_payload(**overrides) -> VSAHeartbeatPayload:
             disk_used_gb=120.0,
             disk_total_gb=500.0,
         ),
-        os_details=VSAHeartbeatOSDetails(kernel="5.15.0", distro="Ubuntu", version="22.04"),
-        user_details=VSAHeartbeatUserDetails(
+        os_details=G8eoHeartbeatOSDetails(kernel="5.15.0", distro="Ubuntu", version="22.04"),
+        user_details=G8eoHeartbeatUserDetails(
             username="admin", uid="1000", gid="1000",
             home="/home/admin", name="Admin User", shell="/bin/bash",
         ),
-        disk_details=VSAHeartbeatDiskDetails(total_gb=500.0, used_gb=120.0, free_gb=380.0, percent=24.0),
-        memory_details=VSAHeartbeatMemoryDetails(
+        disk_details=G8eoHeartbeatDiskDetails(total_gb=500.0, used_gb=120.0, free_gb=380.0, percent=24.0),
+        memory_details=G8eoHeartbeatMemoryDetails(
             total_mb=16384, available_mb=6554, used_mb=9830, percent=60.0,
         ),
-        environment=VSAHeartbeatEnvironment(
+        environment=G8eoHeartbeatEnvironment(
             pwd="/home/admin", lang="en_US.UTF-8", timezone="UTC",
             term="xterm-256color", is_container=False,
         ),
-        capability_flags=VSAHeartbeatCapabilityFlags(
+        capability_flags=G8eoHeartbeatCapabilityFlags(
             local_storage_enabled=True,
             git_available=True,
             ledger_enabled=False,
         ),
     )
     defaults.update(overrides)
-    return VSAHeartbeatPayload(**defaults)
+    return G8eoHeartbeatPayload(**defaults)
 
 
 # =============================================================================
@@ -307,19 +307,19 @@ class TestHeartbeatVersionInfo:
 
 
 # =============================================================================
-# VSAHeartbeatCapabilityFlags
+# G8eoHeartbeatCapabilityFlags
 # =============================================================================
 
-class TestVSAHeartbeatCapabilityFlags:
+class TestG8eoHeartbeatCapabilityFlags:
 
     def test_defaults_all_false(self):
-        flags = VSAHeartbeatCapabilityFlags()
+        flags = G8eoHeartbeatCapabilityFlags()
         assert flags.local_storage_enabled is False
         assert flags.git_available is False
         assert flags.ledger_enabled is False
 
     def test_accepts_all_true(self):
-        flags = VSAHeartbeatCapabilityFlags(
+        flags = G8eoHeartbeatCapabilityFlags(
             local_storage_enabled=True,
             git_available=True,
             ledger_enabled=True,
@@ -329,7 +329,7 @@ class TestVSAHeartbeatCapabilityFlags:
         assert flags.ledger_enabled is True
 
     def test_mixed_values(self):
-        flags = VSAHeartbeatCapabilityFlags(
+        flags = G8eoHeartbeatCapabilityFlags(
             local_storage_enabled=True,
             git_available=False,
             ledger_enabled=True,
@@ -339,12 +339,12 @@ class TestVSAHeartbeatCapabilityFlags:
         assert flags.ledger_enabled is True
 
     def test_field_name_is_local_storage_enabled_not_local_storage(self):
-        flags = VSAHeartbeatCapabilityFlags()
+        flags = G8eoHeartbeatCapabilityFlags()
         assert hasattr(flags, "local_storage_enabled")
         assert not hasattr(flags, "local_storage")
 
     def test_field_name_is_ledger_enabled_not_ledger_mirror_enabled(self):
-        flags = VSAHeartbeatCapabilityFlags()
+        flags = G8eoHeartbeatCapabilityFlags()
         assert hasattr(flags, "ledger_enabled")
         assert not hasattr(flags, "ledger_mirror_enabled")
 
@@ -444,9 +444,9 @@ class TestOperatorHeartbeatFromWireFull:
         assert hb.ledger_enabled is False
 
     def test_capability_flags_all_false_when_default(self):
-        from app.models.pubsub_messages import VSAHeartbeatCapabilityFlags
+        from app.models.pubsub_messages import G8eoHeartbeatCapabilityFlags
         payload = _full_payload(
-            capability_flags=VSAHeartbeatCapabilityFlags(
+            capability_flags=G8eoHeartbeatCapabilityFlags(
                 local_storage_enabled=False,
                 git_available=False,
                 ledger_enabled=False,
@@ -503,7 +503,7 @@ class TestOperatorHeartbeatFromWireFull:
 
     def test_minimal_payload_does_not_raise(self):
         from app.constants import EventType
-        payload = VSAHeartbeatPayload(
+        payload = G8eoHeartbeatPayload(
             event_type=EventType.OPERATOR_HEARTBEAT_SENT,
             operator_id="op-min",
             operator_session_id="sess-min",

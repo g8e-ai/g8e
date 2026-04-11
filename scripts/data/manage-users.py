@@ -15,7 +15,7 @@
 User Management Script for VSO Platform
 
 Manage platform users via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Runs inside g8ep and communicates with g8e-dashboard over the internal network.
 
 Usage:
     python manage-vsodb.py users list

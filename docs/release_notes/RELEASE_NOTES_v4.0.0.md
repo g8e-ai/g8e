@@ -7,7 +7,7 @@ The most significant release since launch. g8e is now 100% self-hosted with no e
 ### Platform & Infrastructure
 - **4MB Operator as Backend** - The Operator now serves as the backend data plane for the entire platform, handling SQLite persistence, KV caching, and WebSocket pub/sub.
 - **Unified CLI (`./g8e`)** - Single entry point for all platform operations. Only Docker is required on the host.
-- **g8e-pod Execution Sandbox** - Isolated container for all toolchain operations (builds, tests, security scans).
+- **g8ep Execution Sandbox** - Isolated container for all toolchain operations (builds, tests, security scans).
 - **Admin Console** - Complete administrative interface (`/console`) with real-time platform metrics and component health monitoring.
 - **Full Documentation in Repo** - All platform documentation now ships inside the repository under `docs/`.
 

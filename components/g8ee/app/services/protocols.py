@@ -55,7 +55,7 @@ from app.models.operators import (
     PendingApproval,
     TargetSystem,
 )
-from app.models.pubsub_messages import VSOMessage, VSAResultEnvelope
+from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
@@ -465,7 +465,7 @@ class InvestigationServiceProtocol(Protocol):
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
-        actor: ComponentName = ComponentName.VSA,
+        actor: ComponentName = ComponentName.G8EO,
     ) -> InvestigationModel: ...
     async def add_file_operation_result(
         self,
@@ -524,7 +524,7 @@ class PubSubServiceProtocol(Protocol):
     @property
     def is_ready(self) -> bool: ...
     def set_pubsub_client(self, client: "PubSubClient") -> None: ...
-    def subscribe_results(self, handler: Callable[[VSAResultEnvelope], Coroutine[object, object, None]]) -> None: ...
+    def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None: ...
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
@@ -603,7 +603,7 @@ class PortServiceProtocol(Protocol):
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):
-    async def handle(self, envelope: VSAResultEnvelope) -> None: ...
+    async def handle(self, envelope: G8eoResultEnvelope) -> None: ...
 
 @runtime_checkable
 class ToolExecutorProtocol(Protocol):

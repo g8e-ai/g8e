@@ -55,14 +55,14 @@ The operator is launched with the device link token (`-D`) and an explicit endpo
 
 ### Method 2: SSH Streaming
 
-The operator binary is streamed over SSH to all nodes concurrently from g8e-pod. No binary needs to exist on the target machines beforehand. This demonstrates the ephemeral agent deployment capability.
+The operator binary is streamed over SSH to all nodes concurrently from g8ep. No binary needs to exist on the target machines beforehand. This demonstrates the ephemeral agent deployment capability.
 
 ```bash
 ./g8e operator stream --hosts /home/g8e/demo-hosts \
   --endpoint g8e.local --device-token dlk_your_token
 ```
 
-The SSH key and hosts file are automatically configured in g8e-pod when you run `./g8e demo up`. The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed).
+The SSH key and hosts file are automatically configured in g8ep when you run `./g8e demo up`. The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed).
 
 The SSH key is baked into the fleet demo image at build time. All 10 nodes accept the same key for the `appuser` account.
 

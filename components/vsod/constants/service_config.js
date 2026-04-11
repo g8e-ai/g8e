@@ -113,7 +113,7 @@ export const DEFAULT_DOCS_DIR = '/docs';
 // ---------------------------------------------------------------------------
 // g8e node Operator
 // ---------------------------------------------------------------------------
-export const G8E_GATEWAY_CONTAINER_NAME = 'g8e-pod';
+export const G8E_GATEWAY_CONTAINER_NAME = 'g8ep';
 export const G8E_GATEWAY_OPERATOR_BINARY_PATH = '/home/g8e/g8e.operator';
 export const G8E_GATEWAY_OPERATOR_LAUNCH_TIMEOUT_MS = 10000;
 

@@ -15,7 +15,7 @@
 VSODB Document Store & KV Management
 
 Queries and manages the VSODB document store and KV store via the HTTP API.
-Runs inside g8e-pod and communicates with vsodb directly.
+Runs inside g8ep and communicates with vsodb directly.
 
 Usage:
     python manage-vsodb.py store stats

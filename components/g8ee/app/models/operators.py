@@ -16,7 +16,7 @@ from __future__ import annotations
 """
 Operator models for VSO system.
 
-Defines data structures for tracking VSA operators and their runtime configurations.
+Defines data structures for tracking g8eo operators and their runtime configurations.
 """
 
 import asyncio
@@ -41,7 +41,7 @@ from app.constants import (
     OperatorType,
     VersionStability,
 )
-from app.models.pubsub_messages import VSAHeartbeatPayload
+from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
@@ -109,10 +109,10 @@ class SystemInfoEnvironment(VSOBaseModel):
 
 
 class OperatorSystemInfo(VSOBaseModel):
-    """System information sent by VSA.
+    """System information sent by g8eo.
 
     Canonical shape defined in shared/models/wire/system_info.json.
-    Populated from VSA auth payload and updated on each heartbeat.
+    Populated from g8eo auth payload and updated on each heartbeat.
     """
 
     hostname: str | None = Field(default=None, description="System hostname")
@@ -295,7 +295,7 @@ def _coerce_heartbeat_type(value: object) -> HeartbeatType:
 
 class HeartbeatVersionInfo(VSOBaseModel):
     """Operator version metadata from heartbeat."""
-    operator_version: str | None = Field(default=None, description="Operator (VSA) binary version")
+    operator_version: str | None = Field(default=None, description="Operator (g8eo) binary version")
     status: VersionStability | None = Field(default=None, description="Version stability status")
 
 
@@ -305,7 +305,7 @@ class OperatorHeartbeat(VSOBaseModel):
     Clean, normalized heartbeat data structure.
     
     This is the canonical representation of Operator heartbeat data.
-    VSA sends heartbeats every 30 seconds with system telemetry.
+    g8eo sends heartbeats every 30 seconds with system telemetry.
     
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
@@ -381,7 +381,7 @@ class OperatorHeartbeat(VSOBaseModel):
         description="Detailed memory usage"
     )
 
-    # Network identity fields (top-level in VSA payload, not nested under network_info)
+    # Network identity fields (top-level in g8eo payload, not nested under network_info)
     internal_ip: str | None = Field(default=None, description="Primary internal/private IP address")
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
     fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
@@ -396,8 +396,8 @@ class OperatorHeartbeat(VSOBaseModel):
     ledger_enabled: bool = Field(default=False, description="True when LFAA ledger mirroring is active")
 
     @classmethod
-    def from_wire(cls, payload: VSAHeartbeatPayload) -> "OperatorHeartbeat":
-        """Create OperatorHeartbeat from the typed VSA wire payload.
+    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "OperatorHeartbeat":
+        """Create OperatorHeartbeat from the typed g8eo wire payload.
 
         Canonical wire shape: shared/models/wire/heartbeat.json.
         Validation happens once at the pub/sub boundary in heartbeat_service.py

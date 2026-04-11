@@ -69,30 +69,30 @@ describe('OperatorStatusRoutes Unit Tests', () => {
     });
 
     describe(`POST ${OperatorPaths.G8E_GATEWAY_REAUTH}`, () => {
-        it('successfully initiates g8e-pod reauth', async () => {
+        it('successfully initiates g8ep reauth', async () => {
             mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
                 success: true,
-                operator_id: 'new-g8e-pod-op-id'
+                operator_id: 'new-g8ep-op-id'
             });
 
-            const res = await request(app).post('/api/operator/g8e-pod/reauth');
+            const res = await request(app).post('/api/operator/g8ep/reauth');
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(res.body.operator_id).toBe('new-g8e-pod-op-id');
+            expect(res.body.operator_id).toBe('new-g8ep-op-id');
             expect(mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser).toHaveBeenCalledWith('test-user-id');
         });
 
-        it('returns 404 if g8e-pod reauth fails', async () => {
+        it('returns 404 if g8ep reauth fails', async () => {
             mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
                 success: false,
-                error: 'g8e-pod not found'
+                error: 'g8ep not found'
             });
 
-            const res = await request(app).post('/api/operator/g8e-pod/reauth');
+            const res = await request(app).post('/api/operator/g8ep/reauth');
 
             expect(res.status).toBe(404);
-            expect(res.body.error).toBe('g8e-pod not found');
+            expect(res.body.error).toBe('g8ep not found');
         });
     });
 

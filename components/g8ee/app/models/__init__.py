@@ -196,9 +196,9 @@ from .pubsub_messages import (
     PortCheckResultPayload,
     RestoreFileResultPayload,
     ShutdownAckPayload,
-    VSAResultEnvelope,
-    VSAResultPayload,
-    VSAHeartbeatPayload,
+    G8eoResultEnvelope,
+    G8eoResultPayload,
+    G8eoHeartbeatPayload,
     VSOMessage,
 )
 from .tool_results import (

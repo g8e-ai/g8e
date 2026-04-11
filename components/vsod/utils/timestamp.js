@@ -21,13 +21,13 @@
  * is a valid RFC3339Nano string — all platform consumers accept it.
  *
  * In harmony with:
- *   G8EE: components/g8ee/app/utils/timestamp.py
- *   VSA: components/vsa/models/timestamp.go
+ *   g8ee: components/g8ee/app/utils/timestamp.py
+ *   g8eo: components/g8eo/models/timestamp.go
  */
 
 /**
  * Current UTC timestamp as an RFC3339Nano string (millisecond precision).
- * Equivalent to g8ee now_iso() and VSA NowTimestamp().
+ * Equivalent to g8ee now_iso() and g8eo NowTimestamp().
  * @returns {string} e.g. "2026-03-03T19:05:00.123Z"
  */
 export function nowISOString() {
@@ -36,7 +36,7 @@ export function nowISOString() {
 
 /**
  * Parse an RFC3339 / ISO 8601 string and return a Date object.
- * Equivalent to g8ee parse_iso() and VSA ParseTimestamp().
+ * Equivalent to g8ee parse_iso() and g8eo ParseTimestamp().
  * @param {string} s
  * @returns {Date}
  */
@@ -46,7 +46,7 @@ export function parseISOString(s) {
 
 /**
  * Check whether a Date (or RFC3339 string) is in the past.
- * Equivalent to g8ee is_expired() and VSA (inline comparison).
+ * Equivalent to g8ee is_expired() and g8eo (inline comparison).
  * @param {Date|string} dt
  * @returns {boolean}
  */
@@ -57,7 +57,7 @@ export function isExpired(dt) {
 
 /**
  * Add seconds to a Date, returning a new Date. Does not mutate the input.
- * Equivalent to g8ee add_seconds() and VSA (time.Add).
+ * Equivalent to g8ee add_seconds() and g8eo (time.Add).
  * @param {Date} date
  * @param {number} seconds
  * @returns {Date}

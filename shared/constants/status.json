@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical status values shared across g8ee (Python), VSA (Go), and VSOD (JS).",
+  "_comment": "Canonical status values shared across g8ee (Python), g8eo (Go), and VSOD (JS).",
 
   "user.role": {
     "user": "user",
@@ -91,7 +91,7 @@
 
   "component.name": {
     "g8ee": "g8ee",
-    "vsa": "vsa",
+    "g8eo": "g8eo",
     "vsod": "vsod"
   },
 
@@ -409,7 +409,7 @@
   "history.actor": {
     "vsod": "vsod",
     "user": "user",
-    "vsa": "vsa",
+    "g8eo": "g8eo",
     "system": "system"
   },
 

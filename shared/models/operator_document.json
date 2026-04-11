@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via VSOD HTTP API and VSODB KV cache. VSA is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via VSOD HTTP API and VSODB KV cache. g8eo is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and g8ee breaks operator binding, context building, and AI execution.",
 
   "_authority": "VSOD (SQLite)",
-  "_consumers": ["g8ee (Python OperatorDocument)", "VSA (identity fields at auth time)"],
+  "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
   "_cache_aside": "VSODB KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
@@ -27,7 +27,7 @@
       "component": {
         "type": "string",
         "required": true,
-        "default": "vsa",
+        "default": "g8eo",
         "description": "Component type. See status.json component.name."
       },
       "name": {
@@ -41,7 +41,7 @@
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Current active session identifier. Set when VSA authenticates. Cleared on termination."
+        "description": "Current active session identifier. Set when g8eo authenticates. Cleared on termination."
       },
       "web_session_id": {
         "type": "string",
@@ -56,7 +56,7 @@
       "operator_api_key": {
         "type": "string",
         "required": false,
-        "description": "Per-operator API key provisioned in the slot. Used by VSA to authenticate to VSOD."
+        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to VSOD."
       },
       "operator_api_key_created_at": {
         "type": "string",
@@ -159,7 +159,7 @@
         "type": "boolean",
         "required": true,
         "default": false,
-        "description": "True when the slot has been claimed by a running VSA process"
+        "description": "True when the slot has been claimed by a running g8eo process"
       },
       "operator_type": {
         "type": "string",
@@ -178,7 +178,7 @@
         "type": "boolean",
         "required": true,
         "default": false,
-        "description": "True when this slot is the platform-managed g8e-pod operator (slot 1). Always pinned at the top of the operator list. Restart via POST /api/operators/g8e-pod/reauth."
+        "description": "True when this slot is the platform-managed g8ep operator (slot 1). Always pinned at the top of the operator list. Restart via POST /api/operators/g8ep/reauth."
       },
       "slot_cost": {
         "type": "integer",
@@ -189,7 +189,7 @@
       "consumed_by_operator_id": {
         "type": "string",
         "required": false,
-        "description": "For slot documents: the operator_id of the VSA process that claimed this slot"
+        "description": "For slot documents: the operator_id of the g8eo process that claimed this slot"
       }
     },
 
@@ -210,7 +210,7 @@
     },
 
     "system_info": {
-      "_description": "Operator host system information. Shape defined in wire/system_info.json. Populated from VSA auth payload and updated on each heartbeat.",
+      "_description": "Operator host system information. Shape defined in wire/system_info.json. Populated from g8eo auth payload and updated on each heartbeat.",
       "$ref": "wire/system_info.json#system_info"
     },
 
@@ -232,7 +232,7 @@
       "type": "object",
       "required": true,
       "default": {},
-      "description": "CLI flags and env var overrides active when the operator binary was started. Sent by VSA at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in VSA wire.go.",
+      "description": "CLI flags and env var overrides active when the operator binary was started. Sent by g8eo at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in g8eo wire.go.",
       "fields": {
         "cloud_mode":           { "type": "boolean", "description": "True when operator started with --cloud flag" },
         "cloud_provider":       { "type": "string",  "description": "Cloud provider (aws, gcp, azure). Empty unless cloud_mode is true." },
@@ -301,7 +301,7 @@
         "actor": {
           "type": "string",
           "required": true,
-          "description": "Component or entity that caused this event. Values: vsod, user, vsa, system"
+          "description": "Component or entity that caused this event. Values: vsod, user, g8eo, system"
         },
         "details": { "type": "object", "required": false, "default": {} }
       }

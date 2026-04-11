@@ -19,7 +19,7 @@
 import { _INTENTS } from './shared.js';
 
 /**
- * Default runtime configuration returned to the VSA operator on successful authentication.
+ * Default runtime configuration returned to the g8eo operator on successful authentication.
  * Returned by the pub/sub auth flow (AuthService).
  */
 export const DEFAULT_OPERATOR_CONFIG = {

@@ -2,7 +2,7 @@
 # =============================================================================
 # Comprehensive mTLS Test for VSODB Proxy Certificates
 # =============================================================================
-# Tests that VSA operators can connect to VSODB proxy via mTLS and that
+# Tests that g8eo operators can connect to VSODB proxy via mTLS and that
 # connections without valid client certs are properly rejected.
 # =============================================================================
 set +e  # Don't exit on errors - we handle them ourselves
@@ -29,7 +29,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 PROD_CERT_DIR="$PROJECT_ROOT/terraform/prod/certs"
 DEV_CERT_DIR="$PROJECT_ROOT/terraform/dev/certs"
-VSA_CERT_DIR="$PROJECT_ROOT/components/vsa/certs"
+G8EO_CERT_DIR="$PROJECT_ROOT/components/g8eo/certs"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -106,29 +106,29 @@ echo "           mTLS Certificate Verification Tests"
 echo "============================================================"
 echo ""
 
-# Test 1: Prod server + VSA client (should succeed)
+# Test 1: Prod server + g8eo client (should succeed)
 echo "--- Test 1: Production mTLS ---"
-test_mtls "Prod server with VSA client cert" \
+test_mtls "Prod server with g8eo client cert" \
     "$PROD_CERT_DIR/operator.g8e.ai.crt" \
     "$PROD_CERT_DIR/operator.g8e.ai.key" \
     "$PROD_CERT_DIR/ca/ca.crt" \
-    "$VSA_CERT_DIR/client.crt" \
-    "$VSA_CERT_DIR/client.key" \
-    "$VSA_CERT_DIR/ca.crt" \
+    "$G8EO_CERT_DIR/client.crt" \
+    "$G8EO_CERT_DIR/client.key" \
+    "$G8EO_CERT_DIR/ca.crt" \
     19443 \
     true
 echo ""
 
-# Test 2: Dev server + VSA client (should succeed)
+# Test 2: Dev server + g8eo client (should succeed)
 echo "--- Test 2: Dev Environment mTLS ---"
 if [ -f "$DEV_CERT_DIR/operator.dev.g8e.ai.crt" ]; then
-    test_mtls "Dev server with VSA client cert" \
+    test_mtls "Dev server with g8eo client cert" \
         "$DEV_CERT_DIR/operator.dev.g8e.ai.crt" \
         "$DEV_CERT_DIR/operator.dev.g8e.ai.key" \
         "$DEV_CERT_DIR/ca/ca.crt" \
-        "$VSA_CERT_DIR/client.crt" \
-        "$VSA_CERT_DIR/client.key" \
-        "$VSA_CERT_DIR/ca.crt" \
+        "$G8EO_CERT_DIR/client.crt" \
+        "$G8EO_CERT_DIR/client.key" \
+        "$G8EO_CERT_DIR/ca.crt" \
         19444 \
         true
 else
@@ -146,29 +146,29 @@ else
     ((FAIL_COUNT++))
 fi
 
-if openssl verify -CAfile "$VSA_CERT_DIR/ca.crt" "$VSA_CERT_DIR/client.crt" >/dev/null 2>&1; then
-    echo "✅ PASS: VSA client cert chain valid"
+if openssl verify -CAfile "$G8EO_CERT_DIR/ca.crt" "$G8EO_CERT_DIR/client.crt" >/dev/null 2>&1; then
+    echo "✅ PASS: g8eo client cert chain valid"
     ((PASS_COUNT++))
 else
-    echo "❌ FAIL: VSA client cert chain invalid"
+    echo "❌ FAIL: g8eo client cert chain invalid"
     ((FAIL_COUNT++))
 fi
 
 # Test 4: CA consistency
 echo ""
 echo "--- Test 4: CA Consistency Check ---"
-if diff -q "$PROD_CERT_DIR/ca/ca.crt" "$VSA_CERT_DIR/ca.crt" >/dev/null 2>&1; then
-    echo "✅ PASS: Prod CA matches VSA embedded CA"
+if diff -q "$PROD_CERT_DIR/ca/ca.crt" "$G8EO_CERT_DIR/ca.crt" >/dev/null 2>&1; then
+    echo "✅ PASS: Prod CA matches g8eo embedded CA"
     ((PASS_COUNT++))
 else
-    echo "❌ FAIL: CA mismatch between prod and VSA"
+    echo "❌ FAIL: CA mismatch between prod and g8eo"
     ((FAIL_COUNT++))
 fi
 
 # Test 5: Certificate expiry check
 echo ""
 echo "--- Test 5: Certificate Expiry Check ---"
-for CERT_FILE in "$PROD_CERT_DIR/operator.g8e.ai.crt" "$VSA_CERT_DIR/client.crt"; do
+for CERT_FILE in "$PROD_CERT_DIR/operator.g8e.ai.crt" "$G8EO_CERT_DIR/client.crt"; do
     EXPIRY=$(openssl x509 -in "$CERT_FILE" -noout -enddate 2>/dev/null | cut -d= -f2)
     CERT_NAME=$(basename "$CERT_FILE")
     if openssl x509 -in "$CERT_FILE" -noout -checkend 0 >/dev/null 2>&1; then
@@ -192,7 +192,7 @@ echo ""
 if [ $FAIL_COUNT -eq 0 ]; then
     echo "🎉 ALL TESTS PASSED - mTLS is properly configured"
     echo ""
-    echo "The VSA Operator can connect to VSODB proxy via SSL with 100% certainty."
+    echo "The g8eo Operator can connect to VSODB proxy via SSL with 100% certainty."
     exit 0
 else
     echo "⚠️  SOME TESTS FAILED - Review the failures above"

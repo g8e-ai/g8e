@@ -144,7 +144,7 @@ export const OperatorListMixin = {
                     <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
-                    <button class="operator-action-btn g8e-pod-reauth-btn" title="Restart g8e-pod Operator" data-operator-id="${operator.operator_id}">
+                    <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">restart_alt</span>
                     </button>
                     <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
@@ -234,7 +234,7 @@ export const OperatorListMixin = {
                 });
             }
 
-            const g8eNodeReauthBtn = item.querySelector('.g8e-pod-reauth-btn');
+            const g8eNodeReauthBtn = item.querySelector('.g8ep-reauth-btn');
             if (g8eNodeReauthBtn) {
                 g8eNodeReauthBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
@@ -556,17 +556,17 @@ export const OperatorListMixin = {
                 buttonElement.disabled = true;
             }
 
-            devLogger.log('[OPERATOR] Restarting g8e-pod operator');
+            devLogger.log('[OPERATOR] Restarting g8ep operator');
 
             const response = await operatorPanelService.g8eNodeReauth();
 
             if (!response.ok) {
                 const error = await response.json();
-                throw new Error(error.error || 'Failed to restart g8e-pod operator');
+                throw new Error(error.error || 'Failed to restart g8ep operator');
             }
 
             const result = await response.json();
-            devLogger.log('[OPERATOR] g8e-pod operator restarted:', result);
+            devLogger.log('[OPERATOR] g8ep operator restarted:', result);
 
             if (icon) {
                 icon.textContent = 'check';
@@ -578,13 +578,13 @@ export const OperatorListMixin = {
             }
 
         } catch (error) {
-            devLogger.error('[OPERATOR] Failed to restart g8e-pod operator:', error);
+            devLogger.error('[OPERATOR] Failed to restart g8ep operator:', error);
             if (icon) {
                 icon.textContent = originalIcon;
                 icon.classList.remove('rotating');
             }
             if (buttonElement) buttonElement.disabled = false;
-            notificationService.error(`Failed to restart g8e-pod operator: ${error.message}`);
+            notificationService.error(`Failed to restart g8ep operator: ${error.message}`);
         }
     },
 

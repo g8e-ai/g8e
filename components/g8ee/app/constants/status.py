@@ -52,7 +52,7 @@ class ExecutionStatus(str, Enum):
 
 class ComponentName(str, Enum):
     G8EE = "g8ee"
-    VSA = "vsa"
+    G8EO = "g8eo"
     VSOD = "vsod"
 
 class ComponentStatus(str, Enum):

@@ -359,7 +359,7 @@ async function _doInitialize() {
             bindingService: getBindingService(),
             webSessionService: getWebSessionService(),
         });
-        logger.info('[VSOD-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8e-pod operator, console metrics, post-login, setup, audit, operator-bind)');
+        logger.info('[VSOD-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
 
         // --- Phase 6: Configuration ---
         // All configuration is now available via settingsService

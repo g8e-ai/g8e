@@ -72,7 +72,7 @@ flowchart TD
 5. **SSE delivery** — Chunks are translated and forwarded to the browser via VSOD in real time.
 6. **Persistence** — Results are saved to VSODB via authenticated HTTP calls (`X-Internal-Auth`); background memory update tasks are fired.
 
-All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in VSODB (KV) or on the Operator (VSA via LFAA). All platform-side interactions with VSODB are strictly authenticated via the `X-Internal-Auth` shared secret.
+All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in VSODB (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with VSODB are strictly authenticated via the `X-Internal-Auth` shared secret.
 
 ---
 
@@ -121,7 +121,7 @@ Mode is determined by two flags: `operator_bound` (bool) and `is_cloud_operator`
 | Mode | Directory | Loaded When |
 |---|---|---|
 | Operator bound (standard) | `prompts_data/modes/operator_bound/` | Operator connected, not cloud type |
-| Cloud operator bound | `prompts_data/modes/cloud_operator_bound/` | Operator connected, cloud type. g8e-pod subtypes receive a specialized prompt for direct system access. |
+| Cloud operator bound | `prompts_data/modes/cloud_operator_bound/` | Operator connected, cloud type. g8ep subtypes receive a specialized prompt for direct system access. |
 | Not bound | `prompts_data/modes/operator_not_bound/` | No operator connected |
 
 Each mode directory provides up to three sections: `capabilities`, `execution`, and `tools`. The `tools` section is only included when `operator_bound` is true or `search_web` is available.
@@ -190,7 +190,7 @@ Every operator-bound action produces an audit trail via LFAA (Local-First Audit 
 
 ### User Message Audit
 
-Before the LLM call, for every bound operator, an `OPERATOR_AUDIT_USER_RECORDED` event is sent carrying the raw user message, `operator_id`, `operator_session_id`, `web_session_id`, `case_id`, and `investigation_id`. This event travels to VSA via pub/sub and is written to the local audit log on the operator machine.
+Before the LLM call, for every bound operator, an `OPERATOR_AUDIT_USER_RECORDED` event is sent carrying the raw user message, `operator_id`, `operator_session_id`, `web_session_id`, `case_id`, and `investigation_id`. This event travels to g8eo via pub/sub and is written to the local audit log on the operator machine.
 
 ### AI Response Audit
 
@@ -198,7 +198,7 @@ After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sen
 
 ### Command Execution Audit
 
-When the agent proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via VSOD SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, VSA executes the command locally, audits the result, and returns it through VSOD back to G8EE. The result is then fed back into the agent's ReAct loop as a function response.
+When the agent proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via VSOD SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through VSOD back to G8EE. The result is then fed back into the agent's ReAct loop as a function response.
 
 ---
 
@@ -216,7 +216,7 @@ sequenceDiagram
     participant Provider as LLMProvider
     participant Tools as AIToolService
     participant Tribunal as Tribunal
-    participant VSA
+    participant g8eo
 
     Browser->>VSOD: POST /api/chat {message}
     VSOD->>G8ee_Pipeline: run_chat(message, vso_context)
@@ -251,8 +251,8 @@ sequenceDiagram
                 Tools->>VSOD: approval request SSE event
                 VSOD->>Browser: g8e.v1.operator.command.approval.requested
                 Browser->>VSOD: approve
-                VSOD->>VSA: pub/sub command dispatch
-                VSA-->>G8ee_Pipeline: command result
+                VSOD->>G8eo: pub/sub command dispatch
+                G8eo-->>G8ee_Pipeline: command result
             end
             Tools-->>Agent: ToolCallResponse list
             Agent->>Agent: append model + tool responses to contents
@@ -264,7 +264,7 @@ sequenceDiagram
 
     G8ee_Pipeline->>G8ee_Pipeline: persist AI response to DB
     G8ee_Pipeline->>G8ee_Pipeline: asyncio.create_task(_background_memory_update)
-    G8ee_Pipeline->>VSA: LFAA audit (user + AI messages)
+    G8ee_Pipeline->>G8eo: LFAA audit (user + AI messages)
 ```
 
 ---
@@ -765,7 +765,7 @@ The provider abstraction lives in `components/g8ee/app/llm/provider.py` (`LLMPro
 
 ## Using `scripts/tools/setup-llm.sh`
 
-`setup-llm.sh` configures the LLM provider for G8EE. It writes settings directly to the platform DB via `manage-vsodb.py settings` running inside the `g8e-pod` container. Settings take effect on the next platform restart — no rebuild required.
+`setup-llm.sh` configures the LLM provider for G8EE. It writes settings directly to the platform DB via `manage-vsodb.py settings` running inside the `g8ep` container. Settings take effect on the next platform restart — no rebuild required.
 
 Run via the `g8e` CLI:
 
@@ -822,7 +822,7 @@ Examples:
 
 ### What Gets Written to DB
 
-The script calls `manage-vsodb.py settings set` inside the running `g8e-pod` container with these keys:
+The script calls `manage-vsodb.py settings set` inside the running `g8ep` container with these keys:
 
 | DB Key | Maps To |
 |---|---|

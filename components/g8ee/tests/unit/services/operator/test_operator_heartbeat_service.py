@@ -20,7 +20,7 @@ from app.constants import EventType, HeartbeatType, OperatorStatus, PubSubChanne
 from app.errors import ConfigurationError
 from app.models.events import SessionEvent
 from app.models.operators import HeartbeatSSEPayload, OperatorDocument, OperatorHeartbeat
-from app.models.pubsub_messages import VSAHeartbeatPayload
+from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.services.operator.heartbeat_service import (
     VALID_HEARTBEAT_STATUSES,
     OperatorHeartbeatService,
@@ -30,7 +30,7 @@ from app.utils.timestamp import now
 pytestmark = [pytest.mark.unit]
 
 
-def _make_payload(**kwargs) -> VSAHeartbeatPayload:
+def _make_payload(**kwargs) -> G8eoHeartbeatPayload:
     defaults = dict(
         event_type=EventType.OPERATOR_HEARTBEAT_SENT,
         operator_id="op-222",
@@ -38,7 +38,7 @@ def _make_payload(**kwargs) -> VSAHeartbeatPayload:
         timestamp=now().isoformat(),
     )
     defaults.update(kwargs)
-    return VSAHeartbeatPayload(**defaults)
+    return G8eoHeartbeatPayload(**defaults)
 
 
 def _make_mock_pubsub_client() -> MagicMock:
@@ -239,15 +239,15 @@ class TestOperatorHeartbeatServiceIdentity:
         return _make_service()
 
     async def test_validate_matching_operator_id(self, service):
-        payload = VSAHeartbeatPayload(operator_id="op-222")
+        payload = G8eoHeartbeatPayload(operator_id="op-222")
         assert service._validate_operator_identity("op-222", payload, "sess-111") is True
 
     async def test_validate_mismatched_operator_id_rejected(self, service):
-        payload = VSAHeartbeatPayload(operator_id="op-EVIL")
+        payload = G8eoHeartbeatPayload(operator_id="op-EVIL")
         assert service._validate_operator_identity("op-222", payload, "sess-111") is False
 
     async def test_validate_no_payload_id_passes(self, service):
-        payload = VSAHeartbeatPayload(operator_id=None)
+        payload = G8eoHeartbeatPayload(operator_id=None)
         assert service._validate_operator_identity("op-222", payload, "sess-111") is True
 
 
@@ -300,7 +300,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
 
 
 class TestOperatorHeartbeatServiceProcessMessage:
-    """process_heartbeat_message — full pipeline using VSAHeartbeatPayload directly."""
+    """process_heartbeat_message — full pipeline using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
     def mock_operator_data_service(self):
@@ -536,7 +536,7 @@ class TestPushHeartbeatSSE:
 
 
 class TestValidateHeartbeatTimestamp:
-    """_validate_heartbeat_timestamp — reads timestamp directly from VSAHeartbeatPayload."""
+    """_validate_heartbeat_timestamp — reads timestamp directly from G8eoHeartbeatPayload."""
 
     @pytest.fixture
     def service(self):
@@ -602,8 +602,8 @@ class TestWsDisconnectHandler:
         assert service._ready is True
 
 
-class TestVSAHeartbeatPayloadApiKey:
-    """VSAHeartbeatPayload — api_key field acceptance and default."""
+class TestG8eoHeartbeatPayloadApiKey:
+    """G8eoHeartbeatPayload — api_key field acceptance and default."""
 
     def test_api_key_field_accepted(self):
         payload = _make_payload(api_key="g8e_abc123")

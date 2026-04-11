@@ -15,15 +15,15 @@
  * g8e node Operator Service
  *
  * Manages the lifecycle of the g8e.operator process running inside the
- * g8e-pod container on behalf of a user. Called fire-and-forget after login
- * so that an operator on the g8e-pod is active and ready to be bound by the
+ * g8ep container on behalf of a user. Called fire-and-forget after login
+ * so that an operator on the g8ep is active and ready to be bound by the
  * time the user's browser finishes loading.
  *
  * Explicit flow (three separate responsibilities):
  *
  *   1. getG8ENodeOperatorForUser(user_id)
  *      → Queries operator slots. Returns the first operator that is already
- *        ACTIVE on the g8e-pod, or the first AVAILABLE slot to use. Returns
+ *        ACTIVE on the g8ep, or the first AVAILABLE slot to use. Returns
  *        null when no usable slot exists.
  *
  *   2. launchG8ENodeOperator(apiKey)
@@ -65,13 +65,13 @@ class G8ENodeOperatorService {
         const port = settings.supervisor_port || '443';
         const token = settings.internal_auth_token || '';
         return {
-            supervisorUrl: `http://g8e-pod:${port}/RPC2`,
+            supervisorUrl: `http://g8ep:${port}/RPC2`,
             authHeader: `Basic ${Buffer.from(`vso-internal:${token}`).toString('base64')}`,
         };
     }
 
     /**
-     * Returns the specific g8e-pod operator slot for this user.
+     * Returns the specific g8ep operator slot for this user.
      *
      * Queries for the operator with is_g8e_pod=true for the given user.
      *
@@ -81,7 +81,7 @@ class G8ENodeOperatorService {
     async getG8ENodeOperatorForUser(user_id) {
         if (!this._operatorService) throw new Error('operatorService is required for getG8ENodeOperatorForUser');
         
-        // Find the specific slot designated as the g8e-pod for this user
+        // Find the specific slot designated as the g8ep for this user
         const operators = await this._operatorService.queryOperators([
             { field: 'user_id', operator: '==', value: user_id },
             { field: 'is_g8e_pod', operator: '==', value: true }
@@ -90,7 +90,7 @@ class G8ENodeOperatorService {
         const operatorData = operators && operators.length > 0 ? operators[0] : null;
 
         if (!operatorData) {
-            logger.info('[DROP-POD-OPERATOR] No g8e-pod operator slot found for user', { user_id });
+            logger.info('[DROP-POD-OPERATOR] No g8ep operator slot found for user', { user_id });
             return null;
         }
 
@@ -100,7 +100,7 @@ class G8ENodeOperatorService {
         const alreadyActive = operator.status === OperatorStatus.ACTIVE ||
                               operator.status === OperatorStatus.BOUND;
 
-        logger.info('[DROP-POD-OPERATOR] g8e-pod operator slot resolved', {
+        logger.info('[DROP-POD-OPERATOR] g8ep operator slot resolved', {
             user_id,
             operator_id: operator.operator_id,
             status: operator.status,
@@ -111,17 +111,17 @@ class G8ENodeOperatorService {
     }
 
     /**
-     * Launches the operator inside the g8e-pod container.
+     * Launches the operator inside the g8ep container.
      *
      * Persists the operator API key to the platform_settings document in VSODB,
      * then starts the supervised operator process via XML-RPC. The operator
-     * command in g8e-pod fetches the key from VSODB at startup.
+     * command in g8ep fetches the key from VSODB at startup.
      *
      * @param {string} apiKey  - operator API key from the operator document
      * @returns {Promise<void>}
      */
     async launchG8ENodeOperator(apiKey) {
-        logger.info('[DROP-POD-OPERATOR] Starting operator in g8e-pod via XML-RPC', {
+        logger.info('[DROP-POD-OPERATOR] Starting operator in g8ep via XML-RPC', {
             container: G8E_GATEWAY_CONTAINER_NAME,
         });
 
@@ -148,7 +148,7 @@ class G8ENodeOperatorService {
             }
         }
 
-        logger.info('[DROP-POD-OPERATOR] Operator service signaled in g8e-pod', {
+        logger.info('[DROP-POD-OPERATOR] Operator service signaled in g8ep', {
             container: G8E_GATEWAY_CONTAINER_NAME,
         });
     }
@@ -197,13 +197,13 @@ class G8ENodeOperatorService {
             // https://github.com/Supervisor/supervisor/blob/master/supervisor/xmlrpc.py
             switch (faultCode) {
                 case 10: // BAD_NAME
-                    throw new Error('Operator process not found in g8e-pod configuration.');
+                    throw new Error('Operator process not found in g8ep configuration.');
                 case 60: // ALREADY_STARTED
                     throw new Error('ALREADY_STARTED');
                 case 70: // NOT_RUNNING
                     return xml; // Ignore if trying to stop
                 case 90: // SPAWN_ERROR
-                    throw new Error('Failed to spawn operator process. Check g8e-pod logs.');
+                    throw new Error('Failed to spawn operator process. Check g8ep logs.');
                 default:
                     throw new Error(`Supervisor error (${faultCode}): ${faultString}`);
             }
@@ -214,7 +214,7 @@ class G8ENodeOperatorService {
 
     /**
      * Maps operator exit codes to human-readable error messages.
-     * Exit codes are defined in components/vsa/constants/exit_codes.go
+     * Exit codes are defined in components/g8eo/constants/exit_codes.go
      * 
      * @param {number} exitCode 
      * @returns {string}
@@ -232,7 +232,7 @@ class G8ENodeOperatorService {
     }
 
     /**
-     * Kills any running operator process in the g8e-pod container for this
+     * Kills any running operator process in the g8ep container for this
      * user, resets their operator slot to AVAILABLE, then relaunches using the
      * fresh API key produced by the reset.
      *
@@ -246,14 +246,14 @@ class G8ENodeOperatorService {
 
         const slotResult = await this.getG8ENodeOperatorForUser(user_id);
         if (!slotResult) {
-            logger.warn('[DROP-POD-OPERATOR] Relaunch requested but no g8e-pod operator slot found for user', { user_id });
-            return { success: false, error: 'No g8e-pod operator slot found for user' };
+            logger.warn('[DROP-POD-OPERATOR] Relaunch requested but no g8ep operator slot found for user', { user_id });
+            return { success: false, error: 'No g8ep operator slot found for user' };
         }
 
         const { operator } = slotResult;
         const operator_id = operator.operator_id;
 
-        logger.info('[DROP-POD-OPERATOR] Stopping supervised operator service in g8e-pod', {
+        logger.info('[DROP-POD-OPERATOR] Stopping supervised operator service in g8ep', {
             user_id,
             operator_id,
         });
@@ -283,7 +283,7 @@ class G8ENodeOperatorService {
 
         await this.launchG8ENodeOperator(apiKey);
 
-        logger.info('[DROP-POD-OPERATOR] g8e-pod operator relaunched successfully', {
+        logger.info('[DROP-POD-OPERATOR] g8ep operator relaunched successfully', {
             user_id,
             operator_id,
         });
@@ -292,7 +292,7 @@ class G8ENodeOperatorService {
     }
 
     /**
-     * Orchestrates the full g8e-pod operator activation for a user who has
+     * Orchestrates the full g8ep operator activation for a user who has
      * just logged in.
      *
      * Steps:
@@ -312,12 +312,12 @@ class G8ENodeOperatorService {
             const slotResult = await this.getG8ENodeOperatorForUser(user_id);
 
             if (!slotResult) {
-                logger.info('[DROP-POD-OPERATOR] No operator slot available for user — skipping g8e-pod launch', { user_id });
+                logger.info('[DROP-POD-OPERATOR] No operator slot available for user — skipping g8ep launch', { user_id });
                 return;
             }
 
             if (slotResult.alreadyActive) {
-                logger.info('[DROP-POD-OPERATOR] g8e-pod operator already active for user — skipping launch', {
+                logger.info('[DROP-POD-OPERATOR] g8ep operator already active for user — skipping launch', {
                     user_id,
                     operator_id: slotResult.operator.operator_id
                 });
@@ -328,7 +328,7 @@ class G8ENodeOperatorService {
             const apiKey = operator.api_key;
 
             if (!apiKey) {
-                logger.warn('[DROP-POD-OPERATOR] Operator slot has no API key — g8e-pod operator will not be launched', {
+                logger.warn('[DROP-POD-OPERATOR] Operator slot has no API key — g8ep operator will not be launched', {
                     user_id,
                     operator_id: operator.operator_id,
                 });
@@ -338,7 +338,7 @@ class G8ENodeOperatorService {
             await this.launchG8ENodeOperator(apiKey);
 
         } catch (err) {
-            logger.warn('[DROP-POD-OPERATOR] g8e-pod operator activation failed (non-fatal)', {
+            logger.warn('[DROP-POD-OPERATOR] g8ep operator activation failed (non-fatal)', {
                 user_id,
                 error: err.message
             });

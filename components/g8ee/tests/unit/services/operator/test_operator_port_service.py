@@ -21,7 +21,7 @@ Covers:
 - Operator session missing
 - Pubsub not ready
 - Timeout handling
-- Failed result from VSA
+- Failed result from g8eo
 - Unexpected result payload
 - Generic exception handling
 """
@@ -34,7 +34,7 @@ from app.constants import CommandErrorType, EventType, NetworkProtocol, Operator
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_payloads import CheckPortArgs
 from app.models.operators import OperatorDocument, OperatorSystemInfo
-from app.models.pubsub_messages import PortCheckResultPayload, VSAResultEnvelope
+from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
 from app.models.tool_results import PortCheckToolResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
@@ -119,8 +119,8 @@ def _make_success_envelope(
     port: int = 443,
     is_open: bool = True,
     latency_ms: float = 12.5,
-) -> VSAResultEnvelope:
-    return VSAResultEnvelope(
+) -> G8eoResultEnvelope:
+    return G8eoResultEnvelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         operator_id="op-1",
         operator_session_id="session-1",
@@ -135,8 +135,8 @@ def _make_success_envelope(
     )
 
 
-def _make_failed_envelope(error: str = "Connection refused") -> VSAResultEnvelope:
-    return VSAResultEnvelope(
+def _make_failed_envelope(error: str = "Connection refused") -> G8eoResultEnvelope:
+    return G8eoResultEnvelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         operator_id="op-1",
         operator_session_id="session-1",
@@ -447,10 +447,10 @@ class TestTimeout:
 
 
 # ---------------------------------------------------------------------------
-# VSA result handling
+# g8eo result handling
 # ---------------------------------------------------------------------------
 
-class TestVSAResultHandling:
+class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_failed_event_type_returns_port_check_failed(self, task_tracker):
@@ -475,7 +475,7 @@ class TestVSAResultHandling:
         service, pubsub, registry, _ = _make_service()
         investigation = _make_investigation()
 
-        envelope = VSAResultEnvelope(
+        envelope = G8eoResultEnvelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
             operator_id="op-1",
             operator_session_id="session-1",
@@ -517,7 +517,7 @@ class TestVSAResultHandling:
         service, pubsub, registry, _ = _make_service()
         investigation = _make_investigation()
 
-        envelope = VSAResultEnvelope(
+        envelope = G8eoResultEnvelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
             operator_id="op-1",
             operator_session_id="session-1",

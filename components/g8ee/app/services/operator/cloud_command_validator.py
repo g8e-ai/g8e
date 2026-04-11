@@ -63,7 +63,7 @@ def is_cloud_only_command(command: str) -> bool:
 def is_cloud_operator_self_discovery_command(command: str, cloud_subtype: CloudSubtype | None = None) -> bool:
     """Return True if the command is a read-only Cloud Operator self-discovery command.
     
-    g8e-pod operators are explicitly excluded from auto-approval patterns to avoid
+    g8ep operators are explicitly excluded from auto-approval patterns to avoid
     accidental privilege escalation on the host system.
     """
     if cloud_subtype == CloudSubtype.G8E_POD:

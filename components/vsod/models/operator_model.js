@@ -15,7 +15,7 @@
  * Operator Domain Models for VSOD
  *
  * Aligned with:
- * - components/vsa/models/ (Go structs)
+ * - components/g8eo/models/ (Go structs)
  * - components/g8ee/app/models/ (Python/Pydantic)
  *
  * Construction from untrusted data (DB read, wire payload):
@@ -314,7 +314,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
         operator_id:                  { type: F.string,  required: true },
         user_id:                      { type: F.string,  required: true },
         organization_id:              { type: F.string,  default: null },
-        component:                    { type: F.string,  default: SourceComponent.VSA },
+        component:                    { type: F.string,  default: SourceComponent.G8EO },
         name:                         { type: F.string,  default: null },
         operator_session_id:          { type: F.string,  default: null },
         web_session_id:               { type: F.string,  default: null },
@@ -397,7 +397,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             operator_id:               data.operator_id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
-            component:                 SourceComponent.VSA,
+            component:                 SourceComponent.G8EO,
             name:                      data.name ?? null,
             operator_session_id:       data.operator_session_id ?? null,
             web_session_id:            data.web_session_id ?? null,
@@ -440,7 +440,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             operator_id:               data.operator_id,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
-            component:                 SourceComponent.VSA,
+            component:                 SourceComponent.G8EO,
             name:                      `${data.namePrefix}-${data.slotNumber}`,
             api_key:                   data.operatorApiKey ?? null,
             status:                    OperatorStatus.AVAILABLE,
@@ -475,7 +475,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             operator_id:               data.newOperatorId,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
-            component:                 SourceComponent.VSA,
+            component:                 SourceComponent.G8EO,
             name:                      data.name,
             slot_number:               data.slotNumber,
             operator_type:             data.operatorType || OperatorType.SYSTEM,
@@ -517,7 +517,7 @@ export class OperatorDocument extends VSOIdentifiableModel {
             operator_id:               data.operator_id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
-            component:                 SourceComponent.VSA,
+            component:                 SourceComponent.G8EO,
             name:                      data.name,
             slot_number:               data.slot_number ?? null,
             api_key:                   data.api_key ?? null,

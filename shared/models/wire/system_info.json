@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical SystemInfo wire shape sent from VSA during operator authentication and embedded in heartbeats. Consumers: g8ee (Python OperatorSystemInfo), VSA (Go SystemInfo / wire.go), VSOD (JS SystemInfo in operator_model.js).",
+  "_comment": "Canonical SystemInfo wire shape sent from g8eo during operator authentication and embedded in heartbeats. Consumers: g8ee (Python OperatorSystemInfo), g8eo (Go SystemInfo / wire.go), VSOD (JS SystemInfo in operator_model.js).",
 
   "system_info": {
-    "_description": "Static host identity information sent by VSA at authentication time and updated on each heartbeat.",
+    "_description": "Static host identity information sent by g8eo at authentication time and updated on each heartbeat.",
     "fields": {
       "hostname": {
         "type": "string",

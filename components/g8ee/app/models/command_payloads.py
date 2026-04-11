@@ -12,12 +12,12 @@
 # limitations under the License.
 
 """
-Command payload models for VSA pub/sub wire protocol.
+Command payload models for g8eo pub/sub wire protocol.
 
 These are the inbound payload shapes published by g8ee to the
-cmd:{operator_id}:{operator_session_id} pub/sub channel. VSA deserializes
+cmd:{operator_id}:{operator_session_id} pub/sub channel. g8eo deserializes
 them. Field names and types mirror the canonical Go structs in
-components/vsa/models/commands.go and the JSON schema in
+components/g8eo/models/commands.go and the JSON schema in
 shared/models/wire/command_payloads.json.
 """
 

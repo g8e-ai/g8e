@@ -301,11 +301,11 @@ class TestComponentFormatter:
     def test_component_resolved_from_pathname(self, formatter_no_name):
         record = _make_record(
             name="unregistered.logger",
-            pathname="/app/components/vsa/something.py",
+            pathname="/app/components/g8eo/something.py",
             module="something",
         )
         formatter_no_name.format(record)
-        assert record.component == "vsa"
+        assert record.component == "g8eo"
 
     def test_component_resolved_from_module(self, formatter_no_name):
         record = _make_record(

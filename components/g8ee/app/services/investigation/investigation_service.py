@@ -401,7 +401,7 @@ class InvestigationService:
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
-        actor: ComponentName = ComponentName.VSA,
+        actor: ComponentName = ComponentName.G8EO,
     ) -> InvestigationModel:
         """Domain orchestration for recording a command execution result."""
         return await self.investigation_data_service.add_command_execution_result(

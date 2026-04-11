@@ -13,7 +13,7 @@
 
 """Operator Execution Service
 
-Handles VSA execution dispatch, validation, security checks, operator resolution,
+Handles g8eo execution dispatch, validation, security checks, operator resolution,
 and result assembly.
 """
 
@@ -307,10 +307,10 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 error_type=CommandErrorType.COMMAND_TIMEOUT,
             )
 
-        from app.models.pubsub_messages import VSAResultEnvelope, ExecutionResultsPayload
+        from app.models.pubsub_messages import G8eoResultEnvelope, ExecutionResultsPayload
         envelope = self.execution_registry.get_result(execution_id)
 
-        if not isinstance(envelope, VSAResultEnvelope) or not isinstance(envelope.payload, ExecutionResultsPayload):
+        if not isinstance(envelope, G8eoResultEnvelope) or not isinstance(envelope.payload, ExecutionResultsPayload):
             self.execution_registry.release(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,

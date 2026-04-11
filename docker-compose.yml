@@ -12,14 +12,14 @@
 #   ./g8e test g8ee                         # Run tests (never rebuilds)
 #
 # Volume layout:
-#   g8e-data-data  — SQLite DB only (/data inside vsodb, wiped by reset)
-#   g8e-data-ssl   — TLS certs only (/ssl inside vsodb, NEVER wiped by reset or wipe)
+#   g8es-data  — SQLite DB only (/data inside vsodb, wiped by reset)
+#   g8es-ssl   — TLS certs only (/ssl inside vsodb, NEVER wiped by reset or wipe)
 #   g8ee-data — g8ee app data
 #   g8e-dashboard-data — VSOD app data
 #
 # Profiles:
-#   (default)      - vsodb, g8ee, vsod, g8e-pod
-#   g8e-pod       - g8e-pod (never touched unless explicitly rebuilt or cleaned)
+#   (default)      - vsodb, g8ee, vsod, g8ep
+#   g8ep       - g8ep (never touched unless explicitly rebuilt or cleaned)
 #   development    - includes source bind mounts for hot reload
 #
 # Development:
@@ -82,12 +82,12 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      g8e-data:
+      g8es:
         condition: service_healthy
 
   # g8e-dashboard (VSOD) - Web frontend + single external entry point
   #
-  # VSOD's G8ENodeOperatorService manages operator sessions inside the g8e-pod
+  # VSOD's G8ENodeOperatorService manages operator sessions inside the g8ep
   # container via Supervisor XML-RPC over the network (port 443).
   g8e-dashboard:
     build:
@@ -141,15 +141,15 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      g8e-data:
+      g8es:
         condition: service_healthy
 
   # =============================================================================
   # Data Services
   # =============================================================================
 
-  # g8e-data (VSODB) - Operator in --listen mode: platform persistence + pub/sub broker
-  g8e-data:
+  # g8es (VSODB) - Operator in --listen mode: platform persistence + pub/sub broker
+  g8es:
     build:
       context: .
       dockerfile: ./components/vsodb/Dockerfile
@@ -157,7 +157,7 @@ services:
         VERSION: ${G8E_VERSION:-dev}
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-data
+    container_name: g8es
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
@@ -203,15 +203,15 @@ services:
   # Always running alongside core services. Run tests with: ./scripts/testing/run_tests.sh
   #
   # Docker socket: required for docker exec into service containers during tests and
-  # for operator build/stream/deploy workflows. g8e-pod is internal-only (never
+  # for operator build/stream/deploy workflows. g8ep is internal-only (never
   # public-facing). Runs as g8e (uid 1001).
-  g8e-pod:
+  g8ep:
     build:
       context: .
-      dockerfile: components/g8e-pod/Dockerfile
+      dockerfile: components/g8ep/Dockerfile
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-pod
+    container_name: g8ep
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
@@ -232,8 +232,8 @@ services:
       - ./components/g8ee:/app/components/g8ee
       - ./components/vsod:/app/components/vsod
       - vsod-node-modules:/app/components/vsod/node_modules
-      - ./components/vsa:/app/components/vsa
-      - ./components/g8e-pod/scripts:/app/components/g8e-pod/scripts
+      - ./components/g8eo:/app/components/g8eo
+      - ./components/g8ep/scripts:/app/components/g8ep/scripts
       - ./shared:/app/shared
       - ./scripts:/app/scripts
       - vsodb-ssl:/vsodb:ro
@@ -289,10 +289,10 @@ volumes:
     labels:
       - "io.g8e.managed=true"
   vsodb-data:
-    name: g8e-data-data
+    name: g8es-data
     labels:
       - "io.g8e.managed=true"
   vsodb-ssl:
-    name: g8e-data-ssl
+    name: g8es-ssl
     labels:
       - "io.g8e.managed=true"

@@ -16,7 +16,7 @@
  *
  * Verifies that constants/shared.js resolves all shared JSON files correctly.
  *
- * In the g8e-pod container the repo root is mounted at /app (.:/app), so:
+ * In the g8ep container the repo root is mounted at /app (.:/app), so:
  *   constants/shared.js lives at /app/components/vsod/constants/shared.js
  *   shared constants live at /app/shared/constants/
  *

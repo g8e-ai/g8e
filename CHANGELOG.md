@@ -13,7 +13,7 @@ Initial public release of g8e on GitHub. This release marks the platform's debut
 - **Fixed** — Broken Markdown link in README.md corrected
 - **Improved** — `.gitignore` now covers secret file patterns (.key, .pem, .crt, .secret)
 - **Verified** — Security audit complete: no hardcoded secrets or leaked credentials in codebase or git history
-- **Verified** — Full test suite green: 4360 tests passing across VSA, VSOD, and g8ee components
+- **Verified** — Full test suite green: 4360 tests passing across g8eo, VSOD, and g8ee components
 
 ### Documentation
 - **Verified** — All documentation links resolve correctly
@@ -28,7 +28,7 @@ Resolves critical production bugs across the operator activation path, the Tribu
 ### Operator & Execution
 - **Fixed** — **Operator Activation** — `_completeAuthentication` now completes the full activation lifecycle: claims slot, updates user record, and relays to g8ee with a proper `VSOHttpContext`. Operators no longer get stuck in a permanently inactive state after authentication.
 - **Fixed** — **Operator Status on Re-auth** — BOUND operators that re-authenticate now preserve BOUND status instead of being downgraded to ACTIVE.
-- **Fixed** — **Post-Login Race Condition** — `initializeOperatorSlots` and `activateG8ENodeOperatorForUser` now run sequentially, preventing the g8e-pod operator from silently skipping activation.
+- **Fixed** — **Post-Login Race Condition** — `initializeOperatorSlots` and `activateG8ENodeOperatorForUser` now run sequentially, preventing the g8ep operator from silently skipping activation.
 - **Improved** — **Execution Registry** — Replaced `PendingCommand` DB-polling loop with a fully event-driven in-memory result stash. `execution_service.py` waits once via `asyncio.Event` and reads the result directly — no polling, no DB round-trips.
 - **Improved** — **`resolveBoundOperators`** — Rewrote to a single cache-aside read + parallel `Promise.all` fetch, eliminating N+1 queries and the `operatorSessionService` dependency.
 - **New** — **Real-Time Command Lifecycle Events** — All operator services (command, file, filesystem, intent, port) now broadcast `STARTED`, `COMPLETED`, and `FAILED` events via `EventService.publish_command_event()`, enabling real-time dashboard progress updates for every operation.
@@ -48,7 +48,7 @@ Resolves critical production bugs across the operator activation path, the Tribu
 - **Fixed** — **Approval route 500** — Route was accessing `req.services.operatorService` which was never attached; fixed by constructing `OperatorRelayService` directly in the route constructor.
 
 ### Pub/Sub
-- **New** — **`shared/constants/pubsub.json`** — Canonical wire-protocol constants shared across g8ee, VSA, and VSOD with contract tests in all three languages.
+- **New** — **`shared/constants/pubsub.json`** — Canonical wire-protocol constants shared across g8ee, g8eo, and VSOD with contract tests in all three languages.
 - **New** — **`EventService`** — Extracted `vsod_event_service.py` with typed `publish_command_event()` and `publish_investigation_event()` methods for all operator service SSE broadcasting.
 - **Fixed** — **PubSub Subscribe Timeout** — `PubSubMessageType` enum was missing `MESSAGE`, `PMESSAGE`, `SUBSCRIBED` wire members, causing `AttributeError` in `_ws_reader` which silently killed the task. All `subscribe()` calls timed out after 5 seconds.
 - **Fixed** — **`psubscribe()` Race Condition** — Channel tracking now occurs after `_ensure_ws()` and ACK handler setup, preventing double-subscription on reconnect.
@@ -97,7 +97,7 @@ Major stabilization release following the v4.0 platform rebuild. Sweeping intern
 
 ### Architecture & Refactoring
 - **Removed** — **EventSource Abstraction** — Eliminated the `EventSource` constants layer entirely. All event routing now uses `EventType` directly, fixing an entire class of bugs where the browser-native `EventSource` API was confused with the internal constants object.
-- **Redesigned** — **Operator Binary Distribution** — Binaries are now cross-compiled for all architectures with UPX compression at VSODB build time and distributed via the blob store. g8e-pod fetches on startup with retry logic.
+- **Redesigned** — **Operator Binary Distribution** — Binaries are now cross-compiled for all architectures with UPX compression at VSODB build time and distributed via the blob store. g8ep fetches on startup with retry logic.
 - **New** — **`./g8e platform setup`** — First-time setup command that orchestrates a full build with correct startup ordering.
 - **Fixed** — **Operator Version Injection** — Operator binary now reports the correct platform version instead of `dev`. Version injected via Go ldflags across all build paths (VSODB Dockerfile, Makefile container and local targets).
 - **Improved** — **Code Quality** — Removed unnecessary abstractions, dead code, legacy fields, and environment-specific test config. Implemented `HttpService` protocol and `CacheAsideProtocol`.
@@ -121,7 +121,7 @@ Major stabilization release following the v4.0 platform rebuild. Sweeping intern
 
 ## v4.1.0 — Execution & Intelligence Refinement — 2026-04-03
 
-Focused on improving AI interaction reliability, execution tracing, and VSA listen mode testability.
+Focused on improving AI interaction reliability, execution tracing, and g8eo listen mode testability.
 
 ### AI & Execution
 - **Improved** — **Gemini Streaming & Multi-turn** — Fixed function call streaming and state management for multi-turn conversations.
@@ -130,7 +130,7 @@ Focused on improving AI interaction reliability, execution tracing, and VSA list
 - **Refined** — **Payload Typing** — Strict model definitions for execution results and command payloads.
 
 ### Component Improvements
-- **VSA** — Enhanced listen mode testability and internal auth token handling.
+- **g8eo** — Enhanced listen mode testability and internal auth token handling.
 - **g8ee** — Fixed DB client token loading and settings definition synchronization.
 - **VSOD** — Improved diagram generation and API endpoint alignment.
 
@@ -148,7 +148,7 @@ The most significant release since launch. g8e is now 100% self-hosted with no e
 ### Platform & Infrastructure
 - **New** — **4MB Operator as Backend** — The Operator now serves as the backend data plane for the entire platform, handling SQLite persistence, KV caching, and WebSocket pub/sub.
 - **New** — **`./g8e` Unified CLI** — Single entry point for all platform operations. Only Docker is required on the host.
-- **New** — **g8e-pod Execution Sandbox** — Isolated container for all toolchain operations (builds, tests, security scans).
+- **New** — **g8ep Execution Sandbox** — Isolated container for all toolchain operations (builds, tests, security scans).
 - **New** — **Admin Console** — Complete administrative interface (`/console`) with real-time platform metrics and component health monitoring.
 - **New** — **Full Documentation in Repo** — All platform documentation now ships inside the repository under `docs/`.
 

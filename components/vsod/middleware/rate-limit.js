@@ -218,7 +218,7 @@ export function createRateLimiters({ config = {} } = {}) {
 
     /**
      * Rate limiter for Operator session refresh
-     * Moderate limit - VSA refreshes periodically but shouldn't be too frequent
+     * Moderate limit - g8eo refreshes periodically but shouldn't be too frequent
      * 10 refreshes per minute per IP (allows for multiple operators)
      */
     const operatorRefreshRateLimiter = rateLimit({

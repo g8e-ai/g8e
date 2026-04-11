@@ -113,8 +113,8 @@ _read_env() {
 
 _write_to_db() {
     local db_args=("$@")
-    if docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
-        if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set "${db_args[@]}" 2>/dev/null; then
+    if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
+        if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set "${db_args[@]}" 2>/dev/null; then
             _ok "Settings written to DB"
         else
             _warn "Could not write to DB — settings will apply after next platform restart"
@@ -284,10 +284,10 @@ fi
 
 _header "Validating API key"
 echo
-_info "Testing connectivity to Vertex AI Search via g8e-pod..."
+_info "Testing connectivity to Vertex AI Search via g8ep..."
 echo
 
-_CONTAINER="g8e-pod"
+_CONTAINER="g8ep"
 _validate_output=""
 _validate_exit=0
 
@@ -323,7 +323,7 @@ asyncio.run(run())
         _info "$_validate_output"
     fi
 else
-    _warn "g8e-pod container is not running — skipping live validation."
+    _warn "g8ep container is not running — skipping live validation."
     _info "Run './g8e platform start' then './g8e search setup' to validate."
 fi
 

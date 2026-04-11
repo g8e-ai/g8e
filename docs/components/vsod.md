@@ -165,7 +165,7 @@ All services follow the same contract: document store written first, KV invalida
 
 All channel prefix constants are defined in `constants/channels.js` (`PubSubChannel`). The canonical channel listing is in [components/vsodb.md — Channel Naming Convention](vsodb.md#channel-naming-convention).
 
-VSOD subscribes to the `auth.publish:*` channels to handle VSA API key and WebSession authentication requests, and publishes responses on the corresponding `auth.response:*` channels. Command, results, and heartbeat channels are brokered transparently by VSODB between g8ee and VSA.
+VSOD subscribes to the `auth.publish:*` channels to handle g8eo API key and WebSession authentication requests, and publishes responses on the corresponding `auth.response:*` channels. Command, results, and heartbeat channels are brokered transparently by VSODB between g8ee and g8eo.
 
 ### Internal HTTP Communication (VSOD → g8ee)
 
@@ -540,7 +540,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 | Subservice | Responsibility |
 |------------|----------------|
 | `lifecycle` | CRUD operations, activation, stopping, and history trail management. |
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8e_pod` subtype if no existing live operator already has it, ensuring exactly one g8e-pod operator per user regardless of slot ordering. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8e_pod` subtype if no existing live operator already has it, ensuring exactly one g8ep operator per user regardless of slot ordering. |
 | `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration). |
 | `notifications` | SSE event broadcasting and user-level operator list updates. |
 
@@ -562,10 +562,10 @@ Each branch is independently error-isolated — a failure in one does not affect
 
 ### Heartbeat Architecture
 
-VSA sends heartbeats every 30 seconds directly to VSODB pub/sub. g8ee subscribes, validates, persists to VSODB document store, detects staleness, and manages all operator status transitions. g8ee then notifies VSOD via HTTP POST. VSOD's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to VSODB and does **not** run its own stale detection.
+g8eo sends heartbeats every 30 seconds directly to VSODB pub/sub. g8ee subscribes, validates, persists to VSODB document store, detects staleness, and manages all operator status transitions. g8ee then notifies VSOD via HTTP POST. VSOD's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to VSODB and does **not** run its own stale detection.
 
 ```
-VSA (every 30s)
+g8eo (every 30s)
     │ WebSocket
     ▼
 VSODB pub/sub  →  g8ee (OperatorHeartbeatService)
@@ -612,7 +612,7 @@ User types command
     → **`OperatorService.relay.relayDirectCommandToG8ee()`**
     → POST to g8ee `/api/internal/operator/direct-command`
     → g8ee publishes to VSODB pub/sub cmd:{operator_id}:{session_id}
-    → VSA executes command
+    → g8eo executes command
     → result → g8ee → HTTP POST to VSOD → SSE → terminal
 ```
 
@@ -834,7 +834,7 @@ For the full deep-reference security documentation covering internal auth token,
 | `/api/auth/link/generate` | POST | Generate device link token |
 | `/api/auth/link/:token/authorize` | POST | Approve a pending device link (DLT owner required) |
 | `/api/auth/link/:token/reject` | POST | Reject a pending device link (DLT owner required) |
-| `/api/auth/operator` | POST | VSA Operator authentication (API key) |
+| `/api/auth/operator` | POST | g8eo Operator authentication (API key) |
 | `/api/auth/operator/refresh` | POST | Refresh Operator session |
 | `/api/auth/admin/locked-accounts` | GET | List locked accounts (admin) |
 | `/api/auth/admin/unlock-account` | POST | Unlock account (admin) |
@@ -852,7 +852,7 @@ For the full deep-reference security documentation covering internal auth token,
 | `/api/operators/:id/api-key` | GET | Fetch operator API key (ownership required) |
 | `/api/operators/:id/refresh-api-key` | POST | Refresh operator API key |
 | `/api/operators/:id/stop` | POST | Stop operator (ownership required) |
-| `/api/operators/g8e-pod/reauth` | POST | Relaunch user's g8e-pod operator |
+| `/api/operators/g8ep/reauth` | POST | Relaunch user's g8ep operator |
 | `/api/operators/health` | GET | Operator binary availability health check |
 | `/api/operator/approval/respond` | POST | Approve or deny command request |
 | `/api/operator/approval/direct-command` | POST | Execute direct command on bound operator |
@@ -946,7 +946,7 @@ All guarded by `requireInternalOrigin` which validates `X-Internal-Auth` using `
 | `/api/internal/health` | GET | Internal API health |
 | `/api/internal/operators/user/:userId` | GET | List user operators |
 | `/api/internal/operators/user/:userId/initialize-slots` | POST | Initialize operator slots |
-| `/api/internal/operators/user/:userId/reauth` | POST | Relaunch g8e-pod operator |
+| `/api/internal/operators/user/:userId/reauth` | POST | Relaunch g8ep operator |
 | `/api/internal/operators/:id/status` | GET | Get operator status |
 | `/api/internal/operators/:id` | GET | Get operator details |
 | `/api/internal/operators/:id/with-session-context` | GET | Get operator with session context |

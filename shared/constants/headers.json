@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical HTTP header names shared across g8ee (Python), VSA (Go), and VSOD (JavaScript). HTTP headers are case-insensitive; these use canonical Title-Case form as the authoritative values.",
+  "_comment": "Canonical HTTP header names shared across g8ee (Python), g8eo (Go), and VSOD (JavaScript). HTTP headers are case-insensitive; these use canonical Title-Case form as the authoritative values.",
 
   "x-vso.session-id":       "X-VSO-WebSession-ID",
   "x-vso.user-id":          "X-VSO-User-ID",

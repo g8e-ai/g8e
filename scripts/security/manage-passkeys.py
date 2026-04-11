@@ -15,7 +15,7 @@
 Passkey Management Script for VSO Platform
 
 Manage FIDO2/WebAuthn passkey credentials via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Runs inside g8ep and communicates with g8e-dashboard over the internal network.
 
 Usage:
     ./g8e security passkeys list --id USER_ID

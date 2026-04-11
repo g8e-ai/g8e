@@ -1,7 +1,7 @@
 #!/bin/bash
 # g8e node g8e node
 #
-# Runs tests in the g8e-pod container. Infrastructure must already be running (use build.sh).
+# Runs tests in the g8ep container. Infrastructure must already be running (use build.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -20,7 +20,7 @@ NC=$'\033[0m'
 
 log_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  [g8e-pod] $1${NC}"
+    echo -e "${BLUE}  [g8ep] $1${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 log_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -35,7 +35,7 @@ _footer() {
     local rc=$?
     [[ $rc -eq 0 ]] || return
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  [g8e-pod] run_tests.sh complete${NC}"
+    echo -e "${GREEN}  [g8ep] run_tests.sh complete${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 trap _footer EXIT
@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: ./run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: all, g8ee, vsod, vsa, security"
+            echo "Components: all, g8ee, vsod, g8eo, security"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -134,7 +134,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(all|g8ee|vsod|vsa|security)$ ]]; then
+            if [[ "$1" =~ ^(all|g8ee|vsod|g8eo|security)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -205,7 +205,7 @@ verify_container_infrastructure() {
 # =============================================================================
 
 run_g8ee() {
-    log_header "Running g8ee tests on g8e-pod"
+    log_header "Running g8ee tests on g8ep"
     cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
@@ -216,16 +216,16 @@ run_g8ee() {
 }
 
 run_vsod() {
-    log_header "Running VSOD tests on g8e-pod"
+    log_header "Running VSOD tests on g8ep"
     cd "$PROJECT_ROOT/components/vsod"
     local cov_flag=""
     [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
     NODE_PATH="./node_modules" npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
 }
 
-run_vsa() {
-    log_header "Running VSA tests on g8e-pod"
-    cd "$PROJECT_ROOT/components/vsa"
+run_g8eo() {
+    log_header "Running g8eo tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8eo"
     local test_target="./..."
     local pass_through_args=()
     
@@ -247,7 +247,7 @@ run_vsa() {
         local rc=$?
         if [[ -f coverage.out ]]; then
             echo ""
-            log_header "VSA Coverage Report"
+            log_header "g8eo Coverage Report"
             go tool cover -func=coverage.out
         fi
         return $rc
@@ -260,8 +260,8 @@ run_component() {
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
         vsod) run_vsod ;;
-        vsa) run_vsa ;;
-        all) run_g8ee; run_vsod; run_vsa ;;
+        g8eo) run_g8eo ;;
+        all) run_g8ee; run_vsod; run_g8eo ;;
     esac
 }
 
@@ -305,9 +305,9 @@ _show_web_search_config() {
 # =============================================================================
 
 run_in_container() {
-    if ! docker ps --filter "name=^g8e-pod$" --filter "status=running" -q | grep -q .; then
-        log_warn "g8e-pod not running — starting it..."
-        docker compose up -d g8e-pod
+    if ! docker ps --filter "name=^g8ep$" --filter "status=running" -q | grep -q .; then
+        log_warn "g8ep not running — starting it..."
+        docker compose up -d g8ep
     fi
     local exec_args=("$COMPONENT")
     [[ "$COVERAGE" == "true" ]] && exec_args+=("--coverage")
@@ -326,7 +326,7 @@ run_in_container() {
     [[ -n "$TEST_WEB_SEARCH_API_KEY" ]]     && env_args+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
     [[ -n "$TEST_WEB_SEARCH_LOCATION" ]]    && env_args+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
 
-    docker exec "${env_args[@]}" g8e-pod /app/scripts/testing/run_tests.sh "${exec_args[@]}"
+    docker exec "${env_args[@]}" g8ep /app/scripts/testing/run_tests.sh "${exec_args[@]}"
 }
 
 # =============================================================================
@@ -354,7 +354,7 @@ if in_container; then
     _show_web_search_config
     run_component
 else
-    # Host-side: ALWAYS launch in g8e-pod. 
+    # Host-side: ALWAYS launch in g8ep. 
     # Direct execution on host is strictly forbidden for tests.
     run_in_container
 fi

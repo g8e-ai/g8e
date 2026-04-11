@@ -182,7 +182,7 @@ Pagination: 10 operators per page. Each operator card (`operator-list-item`) sho
 
 Action buttons:
 - **Get Device Link Token** (`dns`)
-- **Restart g8e-pod Operator** (`restart_alt`)
+- **Restart g8ep Operator** (`restart_alt`)
 - **Copy API Key** (`vpn_key`)
 - **Refresh API Key** (`key_off`)
 - **Bind/Unbind** (`link` / `link_off`)

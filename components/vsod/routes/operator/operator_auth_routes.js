@@ -32,7 +32,7 @@ export function createOperatorAuthRouter({ services, rateLimiters, requestTimest
     const router = express.Router();
 
     router.post(AuthPaths.OPERATOR_AUTH, operatorAuthIpBackstopLimiter, operatorAuthRateLimiter, requireRequestTimestamp(), async (req, res) => {
-        logger.info('[OPERATOR-AUTH] VSA Operator authentication request received', {
+        logger.info('[OPERATOR-AUTH] g8eo Operator authentication request received', {
             hasBody: !!req.body,
             hasBearerToken: !!(req.headers.authorization && req.headers.authorization.startsWith(BEARER_PREFIX)),
             hasSystemInfo: !!(req.body && req.body.system_info),

@@ -1,6 +1,6 @@
 # g8e v4.1.0 — Execution & Intelligence Refinement
 
-Focused on improving AI interaction reliability, execution tracing, and VSA listen mode testability. This release standardizes how tool calls and execution IDs are handled across the platform to ensure a consistent audit trail and more reliable model interactions.
+Focused on improving AI interaction reliability, execution tracing, and g8eo listen mode testability. This release standardizes how tool calls and execution IDs are handled across the platform to ensure a consistent audit trail and more reliable model interactions.
 
 ## 🚀 Major Features
 
@@ -11,14 +11,14 @@ Focused on improving AI interaction reliability, execution tracing, and VSA list
 - **Strict Payload Typing** - New model definitions for execution results and command payloads to prevent runtime type mismatches.
 
 ### Component Improvements
-- **VSA (Virtual Security Agent)** - Enhanced listen mode testability and hardened internal auth token handling.
+- **g8eo (Virtual Security Agent)** - Enhanced listen mode testability and hardened internal auth token handling.
 - **g8ee (Virtual Execution Engine)** - Optimized DB client token loading and synchronized settings definitions.
 - **VSOD (Virtual Security Operations Dashboard)** - Improved diagram generation for infrastructure visualization and aligned internal API endpoints.
 
 ### CI/CD & DX
 - **GitHub Actions Integration** - New automated workflow for pull requests to ensure code quality and test coverage.
 - **Local-CI Parity** - Simplified CI environment to match local developer testing workflows exactly.
-- **Testing Toolchain** - Standardized `setup-llm.sh` and improved coverage reporting for VSA.
+- **Testing Toolchain** - Standardized `setup-llm.sh` and improved coverage reporting for g8eo.
 
 ## 🚀 Quick Start
 
@@ -35,7 +35,7 @@ g8e v4.1.0 continues our commitment to local-first, human-in-the-loop operations
 
 - **Execution Tracing**: Every command now carries a unique `execution_id` from inception to completion.
 - **Type Safety**: Model-driven boundaries prevent injection or malformed data from reaching the execution plane.
-- **Testable Security**: VSA listen mode improvements allow for more rigorous automated security regression testing.
+- **Testable Security**: g8eo listen mode improvements allow for more rigorous automated security regression testing.
 
 ---
 
