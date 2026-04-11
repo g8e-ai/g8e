@@ -1,0 +1,16 @@
+Retrieve git version history for a file from the Operator's Ledger. Only files modified by the Operator have history. Use commit hashes with restore_file to revert.
+
+<parameters>
+- file_path: REQUIRED — absolute path
+- limit: default 50 | target_operator: REQUIRED when multiple operators bound
+</parameters>
+
+<returns>
+- file_path, history[]: commit_hash, timestamp, message
+</returns>
+
+<when_to_use>
+- User asks "what changes were made to this file?"
+- Need restore points before calling restore_file
+- Debugging when/how a config was changed
+</when_to_use>

@@ -1,0 +1,55 @@
+{
+  "_comment": "Canonical Conversation document shape. VSOD is the authority — it creates and stores this document in SQLite keyed by web_session_id. VSE reads it via VSOD context headers (X-VSO-*) to build AI stream context. A field mismatch breaks session routing, investigation linkage, and sentinel mode propagation.",
+
+  "_authority": "VSOD (SQLite)",
+  "_consumers": ["VSE (Python — reads context from X-VSO-* headers that VSOD builds from this document)"],
+  "_key": "Stored in VSOD SQLite conversations collection, keyed by web_session_id",
+
+  "conversation": {
+    "_description": "Active AI chat conversation session. One conversation per browser tab (web_session_id). VSOD creates this when a chat message arrives for an unknown session.",
+
+    "web_session_id": {
+      "type": "string",
+      "required": true,
+      "description": "Browser session identifier. Primary key. One conversation per web session."
+    },
+    "case_id": {
+      "type": "string",
+      "required": false,
+      "description": "Associated case ID. Set once a case is created for this conversation. Null for pre-case chat."
+    },
+    "investigation_id": {
+      "type": "string",
+      "required": false,
+      "description": "Associated investigation ID. Set once an investigation is opened."
+    },
+    "user_id": {
+      "type": "string",
+      "required": false,
+      "description": "User who owns this conversation. Populated from authenticated session."
+    },
+    "status": {
+      "type": "string",
+      "required": true,
+      "default": "active",
+      "values": ["active", "inactive", "completed"],
+      "description": "Conversation lifecycle status. See status.json conversation.status."
+    },
+    "sentinel_mode": {
+      "type": "boolean",
+      "required": true,
+      "default": true,
+      "description": "Propagated to all operator commands issued during this conversation. When true, output is Sentinel-scrubbed before storage."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "iso8601",
+      "required": false
+    }
+  }
+}

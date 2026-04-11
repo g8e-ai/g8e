@@ -1,0 +1,1179 @@
+{
+    "enabled": false,
+    "version": "1.0.0",
+    "description": "Command whitelist for Operator execution - DISABLED BY DEFAULT. Enable via config when ready for per-operator assignment.",
+    "enforcement_policy": {
+        "description": "When enabled, this whitelist defines commands and options permitted for Operator command execution. Currently disabled to allow full flexibility during development.",
+        "restrictions": [
+            "VertexAI must only use commands listed in the 'commands' section",
+            "VertexAI must only use options listed in 'safe_options' for each command",
+            "VertexAI must validate all parameters against the 'validation' rules",
+            "VertexAI must respect all 'global_restrictions' and 'forbidden_patterns'",
+            "No command execution is permitted outside of this whitelist"
+        ]
+    },
+    "commands": {
+        "network_diagnostics": {
+            "ping": {
+                "description": "Test network connectivity to a host",
+                "command": "ping",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-c <count>",
+                        "-W <timeout>",
+                        "-s <size>",
+                        "-i <interval>",
+                        "-4",
+                        "-6"
+                    ]
+                },
+                "validation": {
+                    "target": "^[a-zA-Z0-9.-]+$",
+                    "count": "^[1-9][0-9]?$|^100$",
+                    "timeout": "^[1-9]$|^[1-2][0-9]$|^30$",
+                    "size": "^[1-9][0-9]{0,3}$|^1[0-3][0-9]{2}$|^1400$"
+                },
+                "examples": [
+                    "ping -c 4 google.com",
+                    "ping -c 10 -W 5 192.168.1.1"
+                ],
+                "max_execution_time": 60
+            },
+            "traceroute": {
+                "description": "Trace the route packets take to reach a host",
+                "command": "traceroute",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-m <max_hops>",
+                        "-w <timeout>",
+                        "-q <nqueries>",
+                        "-n",
+                        "-4",
+                        "-6"
+                    ]
+                },
+                "validation": {
+                    "target": "^[a-zA-Z0-9.-]+$",
+                    "max_hops": "^[1-9]$|^[1-2][0-9]$|^30$",
+                    "timeout": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "traceroute google.com",
+                    "traceroute -n -m 15 8.8.8.8"
+                ],
+                "max_execution_time": 180
+            },
+            "nslookup": {
+                "description": "Query DNS servers for domain information",
+                "command": "nslookup",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-type=A",
+                    "-type=AAAA",
+                    "-type=MX",
+                    "-type=TXT",
+                    "-type=NS",
+                    "-type=SOA",
+                    "-type=PTR",
+                    "-type=CNAME"
+                ],
+                "validation": {
+                    "domain": "^[a-zA-Z0-9.-]+$",
+                    "server": "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
+                },
+                "examples": [
+                    "nslookup google.com",
+                    "nslookup -type=MX example.com",
+                    "nslookup example.com 8.8.8.8"
+                ],
+                "max_execution_time": 30
+            },
+            "dig": {
+                "description": "DNS lookup utility (Linux/macOS)",
+                "command": "dig",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "+short",
+                    "+trace",
+                    "@<server>",
+                    "-t <type>",
+                    "-x <ip>",
+                    "+tcp"
+                ],
+                "validation": {
+                    "domain": "^[a-zA-Z0-9.-]+$",
+                    "type": "^(A|AAAA|MX|TXT|NS|SOA|PTR|CNAME|ANY)$",
+                    "server": "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$"
+                },
+                "examples": [
+                    "dig google.com",
+                    "dig +short MX example.com",
+                    "dig @8.8.8.8 example.com"
+                ],
+                "max_execution_time": 30
+            },
+            "netstat": {
+                "description": "Display network connections and statistics",
+                "command": "netstat",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-tuln",
+                        "-an",
+                        "-rn",
+                        "-i",
+                        "-s"
+                    ]
+                },
+                "examples": [
+                    "netstat -tuln",
+                    "netstat -an | grep LISTEN",
+                    "netstat -rn"
+                ],
+                "max_execution_time": 10
+            },
+            "ss": {
+                "description": "Modern socket statistics (Linux)",
+                "command": "ss",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-tuln",
+                    "-a",
+                    "-n",
+                    "-p",
+                    "-s",
+                    "-o"
+                ],
+                "examples": [
+                    "ss -tuln",
+                    "ss -an state established",
+                    "ss -s"
+                ],
+                "max_execution_time": 10
+            },
+            "curl": {
+                "description": "Test HTTP/HTTPS connectivity",
+                "command": "curl",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-I",
+                    "-v",
+                    "-o /dev/null",
+                    "--connect-timeout <sec>",
+                    "--max-time <sec>",
+                    "-k",
+                    "-4",
+                    "-6",
+                    "-w <format>"
+                ],
+                "validation": {
+                    "url": "^https?://[a-zA-Z0-9.-]+(:[0-9]+)?(/.*)?$",
+                    "timeout": "^[1-9]$|^[1-5][0-9]$|^60$"
+                },
+                "examples": [
+                    "curl -I https://www.google.com",
+                    "curl -v --connect-timeout 5 https://api.example.com/health",
+                    "curl -w '\\n%{http_code}\\n' -o /dev/null -s https://example.com"
+                ],
+                "max_execution_time": 60
+            },
+            "wget": {
+                "description": "Network downloader (test connectivity)",
+                "command": "wget",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "--spider",
+                    "-t <tries>",
+                    "-T <timeout>",
+                    "-O /dev/null",
+                    "--no-check-certificate"
+                ],
+                "validation": {
+                    "url": "^https?://[a-zA-Z0-9.-]+(:[0-9]+)?(/.*)?$",
+                    "tries": "^[1-3]$",
+                    "timeout": "^[1-9]$|^[1-2][0-9]$|^30$"
+                },
+                "examples": [
+                    "wget --spider https://www.google.com",
+                    "wget -t 2 -T 10 --spider https://example.com"
+                ],
+                "max_execution_time": 60
+            },
+            "nc": {
+                "description": "Netcat - test port connectivity",
+                "command": "nc",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-v",
+                    "-z",
+                    "-w <timeout>",
+                    "-n",
+                    "-u"
+                ],
+                "validation": {
+                    "host": "^[a-zA-Z0-9.-]+$",
+                    "port": "^[1-9][0-9]{0,4}$",
+                    "timeout": "^[1-9]$|^[1-2][0-9]$|^30$"
+                },
+                "examples": [
+                    "nc -vz google.com 443",
+                    "nc -vz -w 5 192.168.1.1 22",
+                    "nc -vzu 192.168.1.1 53"
+                ],
+                "max_execution_time": 30
+            },
+            "telnet": {
+                "description": "Test TCP port connectivity",
+                "command": "telnet",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_usage": "timeout 10 telnet <host> <port>",
+                "validation": {
+                    "host": "^[a-zA-Z0-9.-]+$",
+                    "port": "^[1-9][0-9]{0,4}$"
+                },
+                "examples": [
+                    "timeout 10 telnet google.com 443",
+                    "timeout 10 telnet 192.168.1.1 22"
+                ],
+                "max_execution_time": 10
+            },
+            "host": {
+                "description": "DNS lookup utility",
+                "command": "host",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-t <type>",
+                    "-a",
+                    "-4",
+                    "-6"
+                ],
+                "validation": {
+                    "domain": "^[a-zA-Z0-9.-]+$",
+                    "type": "^(A|AAAA|MX|TXT|NS|SOA|PTR|CNAME)$"
+                },
+                "examples": [
+                    "host google.com",
+                    "host -t MX example.com"
+                ],
+                "max_execution_time": 30
+            },
+            "arp": {
+                "description": "Display ARP table",
+                "command": "arp",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-a",
+                        "-n"
+                    ]
+                },
+                "examples": [
+                    "arp -a",
+                    "arp -an"
+                ],
+                "max_execution_time": 5
+            },
+            "route": {
+                "description": "Display routing table",
+                "command": "route",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-n"
+                    ]
+                },
+                "examples": [
+                    "route -n",
+                    "route print"
+                ],
+                "max_execution_time": 5
+            },
+            "ip": {
+                "description": "Show/manipulate routing and network devices (Linux)",
+                "command": "ip",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_subcommands": [
+                    "addr show",
+                    "route show",
+                    "link show",
+                    "neigh show",
+                    "-s link",
+                    "-4 addr",
+                    "-6 addr"
+                ],
+                "examples": [
+                    "ip addr show",
+                    "ip route show",
+                    "ip -s link"
+                ],
+                "max_execution_time": 5
+            },
+            "ifconfig": {
+                "description": "Configure network interface",
+                "command": "ifconfig",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-a"
+                ],
+                "examples": [
+                    "ifconfig -a",
+                    "ifconfig eth0"
+                ],
+                "max_execution_time": 5
+            },
+            "mtr": {
+                "description": "Combined ping/traceroute tool",
+                "command": "mtr",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-r",
+                    "-n",
+                    "-c <count>",
+                    "-4",
+                    "-6"
+                ],
+                "validation": {
+                    "host": "^[a-zA-Z0-9.-]+$",
+                    "count": "^[1-9][0-9]?$|^100$"
+                },
+                "examples": [
+                    "mtr -r -c 10 google.com",
+                    "mtr -rn -c 20 8.8.8.8"
+                ],
+                "max_execution_time": 120
+            }
+        },
+        "system_diagnostics": {
+            "df": {
+                "description": "Display disk space usage",
+                "command": "df",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-h",
+                    "-H",
+                    "-T",
+                    "-i",
+                    "-a"
+                ],
+                "examples": [
+                    "df -h",
+                    "df -hT",
+                    "df -hi"
+                ],
+                "max_execution_time": 5
+            },
+            "du": {
+                "description": "Display directory space usage",
+                "command": "du",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-h",
+                    "-s",
+                    "--max-depth=1",
+                    "-c"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "examples": [
+                    "du -sh /var/log",
+                    "du -h --max-depth=1 /home",
+                    "du -sch /tmp/*"
+                ],
+                "max_execution_time": 30
+            },
+            "free": {
+                "description": "Display memory usage",
+                "command": "free",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-h",
+                    "-m",
+                    "-g",
+                    "-t",
+                    "-s <n>"
+                ],
+                "validation": {
+                    "seconds": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "free -h",
+                    "free -m",
+                    "free -ht"
+                ],
+                "max_execution_time": 10
+            },
+            "uptime": {
+                "description": "Show system uptime and load average",
+                "command": "uptime",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [],
+                "examples": [
+                    "uptime"
+                ],
+                "max_execution_time": 2
+            },
+            "w": {
+                "description": "Show who is logged on and what they are doing",
+                "command": "w",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-h"
+                ],
+                "examples": [
+                    "w",
+                    "w -h"
+                ],
+                "max_execution_time": 2
+            },
+            "who": {
+                "description": "Show who is logged on",
+                "command": "who",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-a",
+                    "-b",
+                    "-r"
+                ],
+                "examples": [
+                    "who",
+                    "who -a",
+                    "who -b"
+                ],
+                "max_execution_time": 2
+            },
+            "top": {
+                "description": "Display running processes",
+                "command": "top",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": {
+                    "linux": [
+                        "-b",
+                        "-n <num>",
+                        "-d <sec>"
+                    ],
+                    "macos": [
+                        "-l <num>",
+                        "-n <num>"
+                    ]
+                },
+                "validation": {
+                    "iterations": "^[1-5]$",
+                    "delay": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "top -b -n 1",
+                    "top -b -n 3 -d 2"
+                ],
+                "max_execution_time": 30
+            },
+            "ps": {
+                "description": "Display process status",
+                "command": "ps",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "aux",
+                    "-ef",
+                    "-eo <format>",
+                    "axu"
+                ],
+                "validation": {
+                    "format": "^[a-z,%]+$"
+                },
+                "examples": [
+                    "ps aux",
+                    "ps -ef",
+                    "ps -eo pid,ppid,cmd,%mem,%cpu"
+                ],
+                "max_execution_time": 5
+            },
+            "vmstat": {
+                "description": "Report virtual memory statistics",
+                "command": "vmstat",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-a",
+                    "-s",
+                    "-d",
+                    "<interval>"
+                ],
+                "validation": {
+                    "interval": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "vmstat",
+                    "vmstat 2 5",
+                    "vmstat -s"
+                ],
+                "max_execution_time": 60
+            },
+            "iostat": {
+                "description": "Report I/O statistics",
+                "command": "iostat",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-x",
+                    "-m",
+                    "-d",
+                    "-c",
+                    "<interval>"
+                ],
+                "validation": {
+                    "interval": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "iostat",
+                    "iostat -x 2 5",
+                    "iostat -mx"
+                ],
+                "max_execution_time": 60
+            },
+            "mpstat": {
+                "description": "Report processor statistics",
+                "command": "mpstat",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-P ALL",
+                    "<interval>"
+                ],
+                "validation": {
+                    "interval": "^[1-9]$|^10$"
+                },
+                "examples": [
+                    "mpstat",
+                    "mpstat -P ALL",
+                    "mpstat 2 5"
+                ],
+                "max_execution_time": 60
+            },
+            "sar": {
+                "description": "System activity reporter",
+                "command": "sar",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-u",
+                    "-r",
+                    "-d",
+                    "-n DEV",
+                    "-q"
+                ],
+                "examples": [
+                    "sar -u 2 5",
+                    "sar -r",
+                    "sar -d"
+                ],
+                "max_execution_time": 60
+            },
+            "lscpu": {
+                "description": "Display CPU architecture information",
+                "command": "lscpu",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [],
+                "examples": [
+                    "lscpu"
+                ],
+                "max_execution_time": 2
+            },
+            "lsblk": {
+                "description": "List block devices",
+                "command": "lsblk",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-f",
+                    "-o <cols>",
+                    "-J"
+                ],
+                "validation": {
+                    "columns": "^[A-Z,]+$"
+                },
+                "examples": [
+                    "lsblk",
+                    "lsblk -f",
+                    "lsblk -o NAME,SIZE,TYPE,MOUNTPOINT"
+                ],
+                "max_execution_time": 5
+            },
+            "lspci": {
+                "description": "List PCI devices",
+                "command": "lspci",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-v",
+                    "-vv",
+                    "-k",
+                    "-nn"
+                ],
+                "examples": [
+                    "lspci",
+                    "lspci -v",
+                    "lspci -k"
+                ],
+                "max_execution_time": 5
+            },
+            "lsusb": {
+                "description": "List USB devices",
+                "command": "lsusb",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-v",
+                    "-t"
+                ],
+                "examples": [
+                    "lsusb",
+                    "lsusb -t"
+                ],
+                "max_execution_time": 5
+            },
+            "dmesg": {
+                "description": "Display kernel ring buffer messages",
+                "command": "dmesg",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-T",
+                    "-l <level>",
+                    "--level=<level>",
+                    "-c"
+                ],
+                "validation": {
+                    "level": "^(emerg|alert|crit|err|warn|notice|info|debug)$"
+                },
+                "examples": [
+                    "dmesg | tail -50",
+                    "dmesg -T | tail -50",
+                    "dmesg --level=err,warn"
+                ],
+                "max_execution_time": 5
+            },
+            "uname": {
+                "description": "Display system information",
+                "command": "uname",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-a",
+                    "-r",
+                    "-v",
+                    "-m",
+                    "-n",
+                    "-s"
+                ],
+                "examples": [
+                    "uname -a",
+                    "uname -r"
+                ],
+                "max_execution_time": 2
+            },
+            "hostname": {
+                "description": "Display system hostname",
+                "command": "hostname",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-f",
+                    "-i",
+                    "-I",
+                    "-s"
+                ],
+                "examples": [
+                    "hostname",
+                    "hostname -f",
+                    "hostname -I"
+                ],
+                "max_execution_time": 2
+            },
+            "date": {
+                "description": "Display system date and time",
+                "command": "date",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-u",
+                    "+<format>"
+                ],
+                "validation": {
+                    "format": "^[+%a-zA-Z0-9 :/-]+$"
+                },
+                "examples": [
+                    "date",
+                    "date -u",
+                    "date '+%Y-%m-%d %H:%M:%S'"
+                ],
+                "max_execution_time": 2
+            },
+            "timedatectl": {
+                "description": "Control system time and date",
+                "command": "timedatectl",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "status",
+                    "list-timezones"
+                ],
+                "examples": [
+                    "timedatectl status",
+                    "timedatectl list-timezones | grep America"
+                ],
+                "max_execution_time": 5
+            }
+        },
+        "service_diagnostics": {
+            "systemctl": {
+                "description": "Control systemd services",
+                "command": "systemctl",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_subcommands": [
+                    "status <service>",
+                    "is-active <service>",
+                    "is-enabled <service>",
+                    "list-units",
+                    "list-unit-files",
+                    "--failed",
+                    "show <service>"
+                ],
+                "validation": {
+                    "service": "^[a-zA-Z0-9@._-]+$"
+                },
+                "examples": [
+                    "systemctl status nginx",
+                    "systemctl list-units --failed",
+                    "systemctl is-active sshd"
+                ],
+                "max_execution_time": 5
+            },
+            "service": {
+                "description": "Control system services (SysV)",
+                "command": "service",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_subcommands": [
+                    "<service> status",
+                    "--status-all"
+                ],
+                "validation": {
+                    "service": "^[a-zA-Z0-9_-]+$"
+                },
+                "examples": [
+                    "service nginx status",
+                    "service --status-all"
+                ],
+                "max_execution_time": 5
+            },
+            "journalctl": {
+                "description": "Query systemd journal",
+                "command": "journalctl",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-n <lines>",
+                    "-u <unit>",
+                    "--since <time>",
+                    "--until <time>",
+                    "-p <priority>",
+                    "-x",
+                    "--no-pager",
+                    "-f"
+                ],
+                "validation": {
+                    "lines": "^[1-9][0-9]{0,2}$|^1000$",
+                    "unit": "^[a-zA-Z0-9@._-]+$",
+                    "priority": "^[0-7]$|^(emerg|alert|crit|err|warning|notice|info|debug)$",
+                    "time": "^[0-9-: ]+$"
+                },
+                "examples": [
+                    "journalctl -n 100",
+                    "journalctl -u nginx -n 50",
+                    "journalctl --since '1 hour ago'",
+                    "timeout 10 journalctl -f"
+                ],
+                "max_execution_time": 30
+            }
+        },
+        "file_operations": {
+            "ls": {
+                "description": "List directory contents",
+                "command": "ls",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-la",
+                    "-lh",
+                    "-lt",
+                    "-lS",
+                    "-R",
+                    "-1"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "allowed_paths": [
+                    "/var/log",
+                    "/etc",
+                    "/tmp",
+                    "/opt",
+                    "/home",
+                    "/usr/local"
+                ],
+                "examples": [
+                    "ls -la /var/log",
+                    "ls -lh /tmp",
+                    "ls -lt /etc | head -20"
+                ],
+                "max_execution_time": 5
+            },
+            "cat": {
+                "description": "Display file contents",
+                "command": "cat",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-n",
+                    "-b",
+                    "-s"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "allowed_paths": [
+                    "/var/log",
+                    "/etc",
+                    "/proc",
+                    "/sys"
+                ],
+                "max_file_size_kb": 1024,
+                "examples": [
+                    "cat /etc/hosts",
+                    "cat /var/log/syslog | tail -100"
+                ],
+                "max_execution_time": 10
+            },
+            "tail": {
+                "description": "Display last lines of file",
+                "command": "tail",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-n <lines>",
+                    "-f",
+                    "-F"
+                ],
+                "validation": {
+                    "lines": "^[1-9][0-9]{0,2}$|^1000$",
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "allowed_paths": [
+                    "/var/log"
+                ],
+                "examples": [
+                    "tail -n 50 /var/log/syslog",
+                    "timeout 30 tail -f /var/log/messages"
+                ],
+                "max_execution_time": 30
+            },
+            "head": {
+                "description": "Display first lines of file",
+                "command": "head",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-n <lines>",
+                    "-c <bytes>"
+                ],
+                "validation": {
+                    "lines": "^[1-9][0-9]{0,2}$|^1000$",
+                    "bytes": "^[1-9][0-9]{0,6}$",
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "allowed_paths": [
+                    "/var/log",
+                    "/etc",
+                    "/proc"
+                ],
+                "examples": [
+                    "head -n 20 /var/log/syslog",
+                    "head -c 1000 /etc/passwd"
+                ],
+                "max_execution_time": 10
+            },
+            "grep": {
+                "description": "Search text patterns in files",
+                "command": "grep",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-i",
+                    "-n",
+                    "-c",
+                    "-v",
+                    "-E",
+                    "-F",
+                    "-r",
+                    "-l",
+                    "-L"
+                ],
+                "validation": {
+                    "pattern": "^[a-zA-Z0-9 ._-]+$",
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "allowed_paths": [
+                    "/var/log",
+                    "/etc"
+                ],
+                "examples": [
+                    "grep -i error /var/log/syslog",
+                    "grep -n 'connection refused' /var/log/messages",
+                    "grep -c ERROR /var/log/*.log"
+                ],
+                "max_execution_time": 30
+            },
+            "find": {
+                "description": "Search for files and directories",
+                "command": "find",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-name <pattern>",
+                    "-type <type>",
+                    "-size <size>",
+                    "-mtime <days>",
+                    "-maxdepth <depth>",
+                    "-ls"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$",
+                    "pattern": "^[\"'a-zA-Z0-9.*_-]+[\"']?$",
+                    "type": "^[fdl]$",
+                    "depth": "^[1-5]$"
+                },
+                "allowed_paths": [
+                    "/var/log",
+                    "/tmp",
+                    "/etc"
+                ],
+                "examples": [
+                    "find /var/log -name '*.log' -type f",
+                    "find /tmp -type f -mtime +7",
+                    "find /etc -maxdepth 2 -name '*.conf'"
+                ],
+                "max_execution_time": 30
+            },
+            "wc": {
+                "description": "Word, line, character, and byte count",
+                "command": "wc",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-l",
+                    "-w",
+                    "-c",
+                    "-m"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "examples": [
+                    "wc -l /var/log/syslog",
+                    "cat /etc/passwd | wc -l"
+                ],
+                "max_execution_time": 10
+            },
+            "stat": {
+                "description": "Display file or filesystem status",
+                "command": "stat",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-c <format>",
+                    "-f <format>"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$",
+                    "format": "^[%a-zA-Z]+$"
+                },
+                "examples": [
+                    "stat /var/log/syslog",
+                    "stat -c '%s %n' /etc/passwd"
+                ],
+                "max_execution_time": 5
+            },
+            "file": {
+                "description": "Determine file type",
+                "command": "file",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-b",
+                    "-i",
+                    "-z"
+                ],
+                "validation": {
+                    "path": "^[/a-zA-Z0-9._-]+$"
+                },
+                "examples": [
+                    "file /var/log/syslog",
+                    "file -i /etc/passwd"
+                ],
+                "max_execution_time": 5
+            }
+        }
+    },
+    "global_restrictions": {
+        "forbidden_patterns": [
+            "rm -rf",
+            "rm -fr",
+            "> /dev/null 2>&1",
+            ":(){ :|:& };:",
+            "mkfs",
+            "dd if=",
+            "format",
+            "fdisk",
+            "shutdown",
+            "reboot",
+            "init 0",
+            "halt",
+            "poweroff",
+            "systemctl stop",
+            "service .* stop",
+            "kill -9",
+            "pkill",
+            "passwd",
+            "useradd",
+            "userdel",
+            "usermod",
+            "groupadd",
+            "chmod 777",
+            "chmod +s",
+            "chown",
+            "iptables -F",
+            "iptables -X",
+            "ufw disable"
+        ],
+        "forbidden_directories": [
+            "/boot",
+            "/root",
+            "/sys/firmware",
+            "/proc/sys",
+            "/dev"
+        ],
+        "max_output_lines": 10000,
+        "max_output_bytes": 5242880,
+        "default_timeout_seconds": 30,
+        "max_concurrent_commands": 5
+    }
+}

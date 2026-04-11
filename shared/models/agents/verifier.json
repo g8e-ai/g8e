@@ -1,0 +1,16 @@
+{
+  "_comment": "Canonical Verifier agent model. A separate, fast Tribunal call that provides final syntactic validation of the voting winner.",
+  "name": "VerifierAgent",
+  "description": "Syntactic validation and final review of command candidates.",
+  "request": {
+    "intent": { "type": "string", "description": "The original user intent." },
+    "os": { "type": "string", "description": "The operating system of the target." },
+    "candidate_command": { "type": "string", "description": "The command string to be verified." }
+  },
+  "result": {
+    "passed": { "type": "boolean", "description": "True if the verifier approves the candidate." },
+    "revision": { "type": "string", "nullable": true, "description": "The revised command string if the verifier rejects the candidate." },
+    "reason": { "type": "string", "description": "Reasoning for the approval or rejection." },
+    "reason_enum": { "type": "string", "enum": ["ok", "revised", "empty_response", "no_valid_revision", "verifier_error"] }
+  }
+}

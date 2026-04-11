@@ -1,0 +1,204 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0d1117; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+* { scrollbar-width: thin; scrollbar-color: #30363d #0d1117; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  min-height: 100vh;
+  padding: 32px 24px;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+#summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.summary-table {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.summary-table th {
+  color: #8b949e;
+  font-weight: 500;
+  font-size: 0.75rem;
+  padding: 0 24px 4px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.summary-table td {
+  font-weight: 700;
+  font-size: 1.4rem;
+  padding: 0 24px 0 0;
+  text-align: left;
+  line-height: 1;
+}
+
+.val-healthy  { color: #3fb950; }
+.val-warning  { color: #e3b341; }
+.val-degraded { color: #f78166; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 5px;
+}
+
+.card {
+  border-radius: 8px;
+  border: 1px solid #30363d;
+  padding: 10px 12px;
+  background: #161b22;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+
+.card.healthy::before   { background: #238636; }
+.card.degraded::before  { background: #da3633; }
+.card.warning::before   { background: #9e6a03; }
+.card.loading::before   { background: #484f58; }
+
+.card.healthy  { border-color: #238636; }
+.card.degraded { border-color: #da3633; }
+.card.warning  { border-color: #9e6a03; }
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.node-id {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-green  { background: #3fb950; box-shadow: 0 0 6px #3fb950aa; }
+.dot-red    { background: #f85149; box-shadow: 0 0 6px #f85149aa; }
+.dot-yellow { background: #e3b341; box-shadow: 0 0 6px #e3b341aa; }
+.dot-grey   { background: #484f58; }
+
+.profile-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-healthy  { background: #0d3a1f; color: #3fb950; }
+.badge-warning  { background: #2d2200; color: #e3b341; border: 1px solid #9e6a03; }
+.badge-degraded { background: #3a0d0d; color: #f85149; }
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.metrics span { display: flex; justify-content: space-between; }
+.metrics .val { color: #e6edf3; }
+
+.error-msg {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #f85149;
+  background: #2a0d0d;
+  border: 1px solid #3a1010;
+  border-radius: 5px;
+  padding: 5px 8px;
+  word-break: break-all;
+}
+
+#refresh-btn {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: 16px;
+}
+#refresh-btn:hover { background: #30363d; }
+#refresh-btn:disabled { opacity: 0.5; cursor: default; }
+
+.spinner {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 2px solid #484f58;
+  border-top-color: #8b949e;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.updated-section {
+  margin-left: auto;
+  text-align: right;
+}
+
+.updated-label {
+  font-size: 0.7rem;
+  color: #8b949e;
+  margin-bottom: 2px;
+}
+
+.updated-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.updated-value {
+  font-size: 0.8rem;
+  color: #e6edf3;
+  font-weight: 500;
+}

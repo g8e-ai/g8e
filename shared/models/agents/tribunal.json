@@ -1,0 +1,42 @@
+{
+  "_comment": "Canonical Tribunal agent model. Refines command syntax through multi-perspective voting and verification.",
+  "name": "TribunalAgent",
+  "description": "Syntactic refinement and validation for shell commands.",
+  "member_result": {
+    "reasoning": { "type": "string", "description": "The logic behind the member's verdict or revision." },
+    "command": { "type": "string", "description": "The refined command string." },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Confidence in the revision." }
+  },
+  "request": {
+    "original_command": { "type": "string", "description": "The command string proposed by the Primary agent." },
+    "intent": { "type": "string", "description": "The user's original intent." },
+    "system_context": {
+      "type": "object",
+      "properties": {
+        "os": { "type": "string" },
+        "shell": { "type": "string" },
+        "working_directory": { "type": "string" }
+      }
+    }
+  },
+  "voting_result": {
+    "vote_winner": { "type": "string", "description": "The command that won the weighted majority vote." },
+    "vote_score": { "type": "number", "description": "Normalised weight of the winner (0.0-1.0)." },
+    "outcome": {
+      "type": "string",
+      "enum": ["consensus", "verified", "verification_failed", "fallback", "disabled", "system_error"]
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "member": { "type": "string", "enum": ["axiom", "concord", "variance"] },
+          "pass_index": { "type": "number" },
+          "reasoning": { "type": "string" }
+        }
+      }
+    }
+  }
+}

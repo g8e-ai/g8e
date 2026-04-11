@@ -1,0 +1,37 @@
+<%# 
+  Standardized public navigation partial - consistent header styling across public pages
+
+  Expects the following locals:
+    - currentPage: string (e.g., 'home', 'operator', 'docs', etc.)
+
+  Usage: include('partials/nav-public', { currentPage: 'docs' })
+%>
+<%
+  const page = typeof currentPage !== 'undefined' ? currentPage : '';
+%>
+<!-- Header (consistent styling across public pages) -->
+<header class="landing-header">
+    <div class="header-left">
+        <%- include('hamburger-menu', { currentPage: page }) %>
+        <a href="/" class="nav-logo-link">
+            <span class="logo-icon"><span class="logo-accent">g</span>8<span class="logo-accent">e</span></span>
+        </a>
+    </div>
+    <!-- Navigation Menu -->
+    <div class="nav-categories-menu" id="nav-categories-menu">
+        <a href="/" class="nav-category-link">Home</a>
+        <a href="/docs" class="nav-category-link">Docs</a>
+        <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="nav-category-link">GitHub</a>
+    </div>
+    <nav class="header-nav">
+        <div id="auth-button-container" class="nav-auth-container">
+        </div>
+    </nav>
+</header>
+<% if (page !== 'setup') { %>
+<script type="module" nonce="<%= locals.cspNonce %>">
+    import { AuthManager } from '/js/components/auth.js';
+    window.navAuthManager = new AuthManager();
+    window.navAuthManager.init();
+</script>
+<% } %>

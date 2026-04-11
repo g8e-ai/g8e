@@ -1,0 +1,16 @@
+Enable an AWS capability AND execute a command in ONE user approval (Zero Standing Privileges).
+
+<parameters>
+- intent_name: ec2_discovery | ec2_management | s3_read | s3_write | terraform_state | cloudwatch_logs | secrets_read
+- justification: REQUIRED
+- pending_command: AWS CLI command to auto-execute after approval (include whenever you know what to run)
+- pending_command_justification: brief explanation
+
+Flow: you call → user sees ONE approval card → user approves → IAM policy attaches + command executes → you receive output.
+Always inform the user: "I need [intent] permission to [action]."
+</parameters>
+
+<examples>
+<example>User: "Show my EC2 instances" → grant_intent_permission(intent_name="ec2_discovery", justification="List EC2 instances", pending_command="aws ec2 describe-instances --output table", pending_command_justification="List EC2 instances")</example>
+<example>User: "Check S3 buckets" → grant_intent_permission(intent_name="s3_read", justification="List S3 buckets", pending_command="aws s3 ls", pending_command_justification="List S3 buckets")</example>
+</examples>

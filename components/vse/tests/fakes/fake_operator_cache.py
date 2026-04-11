@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Typed fake for OperatorCacheProtocol."""
+
+from app.constants import OperatorStatus
+from app.services.protocols import OperatorCacheProtocol
+
+
+class FakeOperatorCache:
+    """Typed fake implementing OperatorCacheProtocol.
+
+    Records all calls for assertion in tests. Does not perform any real I/O.
+    """
+
+    def __init__(self) -> None:
+        self.status_updates: list[dict] = []
+
+    async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
+        self.status_updates.append({"operator_id": operator_id, "status": status})
+        return True
+
+
+_: OperatorCacheProtocol = FakeOperatorCache()

@@ -1,0 +1,17 @@
+List files and directories with comprehensive metadata. Preferred over `ls` commands.
+
+<parameters>
+<required>
+- path: Absolute path to the directory to list
+- justification: Explanation for why this listing is needed
+</required>
+<optional>
+- max_depth: Recursion depth (default: 1, current directory only)
+- include_hidden: Include files starting with `.` (default: false)
+</optional>
+</parameters>
+
+<returns>
+Per entry: name, type, size, permissions, modified timestamp, owner.
+Returns error if path missing (use for existence checks).
+</returns>

@@ -1,0 +1,36 @@
+{
+  "_comment": "Canonical KV key schema shared across VSE (Python) and VSOD (JS). All keys follow: g8e:{domain}:{...segments}",
+
+  "cache.prefix": "g8e",
+
+  "key.schema": {
+    "cache.doc":                        "g8e:cache:doc:{collection}:{id}",
+    "cache.query":                      "g8e:cache:query:{collection}:{hash}",
+    "session.web":                          "g8e:session:{session.type}:{session.id}",
+    "session.operator.bind":            "g8e:session:operator:{operator.session.id}:bind",
+    "session.web.bind":                 "g8e:session:web:{web.session.id}:bind",
+    "g8e.first.deployed":          "g8e:operator:{operator.id}:first.deployed",
+    "g8e.tracked.status":          "g8e:operator:{operator.id}:tracked.status",
+    "user.operators":                   "g8e:user:{user.id}:operators",
+    "user.web_sessions":                "g8e:user:{user.id}:web_sessions",
+    "user.memories":                    "g8e:user:{user.id}:memories",
+    "investigation.attachment":         "g8e:investigation:{investigation.id}:attachment:{attachment.id}",
+    "investigation.attachment.index":   "g8e:investigation:{investigation.id}:attachment.index",
+    "auth.nonce":                       "g8e:auth:nonce:{nonce}",
+    "auth.token.download":              "g8e:auth:token:download:{token}",
+    "auth.token.device":                "g8e:auth:token:device:{token}",
+    "auth.token.device.uses":           "g8e:auth:token:device:{token}:uses",
+    "auth.token.device.fingerprints":   "g8e:auth:token:device:{token}:fingerprints",
+    "auth.token.device.reg.lock":       "g8e:auth:token:device:{token}:reg.lock",
+    "auth.device.list":                 "g8e:auth:device.list:{user.id}",
+    "auth.login.failed":                "g8e:auth:login:{identifier}:failed",
+    "auth.login.lock":                  "g8e:auth:login:{identifier}:lock",
+    "auth.login.ip.accounts":           "g8e:auth:login:ip:{ip}:accounts",
+    "execution.pending.cmd":            "g8e:execution:{execution.id}:pending.cmd"
+  },
+
+  "session.type": {
+    "web": "web",
+    "operator": "operator"
+  }
+}

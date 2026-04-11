@@ -1,0 +1,25 @@
+{
+  "_comment": "Canonical message types and senders. Every value must be composed exclusively from segments in segments.json.",
+
+  "message": {
+    "sender": {
+      "user": {
+        "chat": "g8e.v1.source.user.chat",
+        "terminal": "g8e.v1.source.user.terminal"
+      },
+      "ai": {
+        "primary": "g8e.v1.source.ai.primary",
+        "assistant": "g8e.v1.source.ai.assistant"
+      },
+      "system": "g8e.v1.source.system"
+    },
+    "type": {
+      "text": "text",
+      "code": "code",
+      "call": "call",
+      "result": "result",
+      "error": "error",
+      "thinking": "thinking"
+    }
+  }
+}

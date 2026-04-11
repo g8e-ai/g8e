@@ -1,0 +1,8 @@
+{
+  "_comment": "Canonical document IDs for database collections shared across VSE (Python) and VSOD (JS).",
+  
+  "document_ids": {
+    "platform_settings": "platform_settings",
+    "user_settings_prefix": "user_settings_"
+  }
+}

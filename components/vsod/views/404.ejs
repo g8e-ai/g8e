@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Page Not Found - g8e</title>
+
+    <link rel="stylesheet" href="/css/fonts.css">
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/navigation.css">
+    <link rel="stylesheet" href="/css/components.css">
+    <link rel="stylesheet" href="/css/error-pages.css">
+
+
+</head>
+
+<body>
+    <div class="error-container">
+        <div class="error-code">404</div>
+        <h1 class="error-title">Page Not Found</h1>
+        <p class="error-message">
+            <%= typeof message !== 'undefined' && message ? message : "The page you're looking for doesn't exist or has been moved." %>
+        </p>
+        <div class="error-actions">
+            <a href="/" class="error-btn error-btn-primary">
+                <span class="material-symbols-outlined">home</span>
+                Go Home
+            </a>
+            <a href="#" id="go-back-btn" class="error-btn error-btn-secondary">
+                <span class="material-symbols-outlined">arrow_back</span>
+                Go Back
+            </a>
+        </div>
+    </div>
+    <script nonce="<%= cspNonce %>">
+        document.getElementById('go-back-btn').addEventListener('click', function(e) {
+            e.preventDefault();
+            history.back();
+        });
+    </script>
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+</body>
+
+</html>

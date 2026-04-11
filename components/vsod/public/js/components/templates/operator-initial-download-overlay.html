@@ -1,0 +1,67 @@
+<!-- Operator Binary Downloads -->
+<div class="operator-binary-downloads" id="operator-binary-downloads">
+    <div class="operator-download-links-row">
+        <a class="operator-download-link" data-os="linux" data-arch="amd64" href="#">Linux x64</a>
+        <a class="operator-download-link" data-os="linux" data-arch="arm64" href="#">Linux ARM64</a>
+        <a class="operator-download-link" data-os="linux" data-arch="386" href="#">Linux x86</a>
+    </div>
+    <div class="operator-deploy-section">
+        <div class="operator-deploy-row">
+            <span class="operator-deploy-label">API Key</span>
+            <div class="operator-deploy-api-key-row">
+                <div class="operator-deploy-api-key-value obfuscated" id="deploy-api-key-value"></div>
+                <button class="operator-deploy-icon-btn" id="deploy-api-key-toggle" type="button" title="Show/Hide">
+                    <span class="material-symbols-outlined">visibility</span>
+                </button>
+                <button class="operator-deploy-icon-btn" id="deploy-api-key-copy" type="button" title="Copy">
+                    <span class="material-symbols-outlined">content_copy</span>
+                </button>
+                <button class="operator-deploy-icon-btn" id="deploy-api-key-refresh" type="button" title="Refresh API Key">
+                    <span class="material-symbols-outlined">refresh</span>
+                </button>
+            </div>
+        </div>
+        <div class="operator-deploy-row">
+            <span class="operator-deploy-label">Device Link</span>
+            <div class="operator-device-link-generate-row">
+                <div class="operator-device-link-param">
+                    <label class="operator-device-link-param-label" for="device-link-cmd-count">Count</label>
+                    <div class="operator-counter">
+                        <button class="operator-counter-btn" id="device-link-cmd-count-dec" type="button">-</button>
+                        <input class="operator-counter-input" id="device-link-cmd-count" type="number" min="1" max="10000" value="1">
+                        <button class="operator-counter-btn" id="device-link-cmd-count-inc" type="button">+</button>
+                    </div>
+                </div>
+                <div class="operator-device-link-param">
+                    <label class="operator-device-link-param-label" for="device-link-cmd-ttl">TTL (hours)</label>
+                    <div class="operator-counter">
+                        <button class="operator-counter-btn" id="device-link-cmd-ttl-dec" type="button">-</button>
+                        <input class="operator-counter-input" id="device-link-cmd-ttl" type="number" min="1" max="8760" value="24">
+                        <button class="operator-counter-btn" id="device-link-cmd-ttl-inc" type="button">+</button>
+                    </div>
+                </div>
+                <button class="operator-device-link-generate-btn" id="device-link-generate-btn" type="button">
+                    <span class="material-symbols-outlined">add_link</span>
+                    Generate
+                </button>
+            </div>
+            <div class="operator-device-link-result initially-hidden" id="device-link-result">
+                <span class="operator-deploy-sublabel">Curl Command</span>
+                <div class="operator-deploy-cmd-row">
+                    <div class="operator-deploy-cmd" id="device-link-curl-cmd"></div>
+                    <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
+                        <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                </div>
+                <span class="operator-deploy-sublabel">Device Link Token</span>
+                <div class="operator-deploy-cmd-row">
+                    <div class="operator-deploy-cmd" id="device-link-token"></div>
+                    <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy">
+                        <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                </div>
+            </div>
+            <div class="operator-device-link-error initially-hidden" id="device-link-generate-error"></div>
+        </div>
+    </div>
+</div>

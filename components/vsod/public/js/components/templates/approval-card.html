@@ -1,0 +1,18 @@
+<div class="approval-compact {{!cardModifier}}">
+    <div class="approval-compact__header">
+        <span class="material-symbols-outlined approval-compact__icon {{!iconModifier}}">{{{icon}}}</span>
+        <span class="approval-compact__title">{{headerText}}</span>
+        {{{riskBadgeHtml}}}
+    </div>
+    <div class="approval-compact__command">{{{promptHtml}}}{{commandDisplay}}</div>
+    {{{systemsHtml}}}
+    <div class="approval-compact__reason">{{justification}}</div>
+    <div class="approval-compact__actions">
+        <button class="approval-compact__btn approval-compact__btn--approve" data-approval-id="{{!approvalId}}">
+            <span class="material-symbols-outlined">check</span>{{approveButtonText}}
+        </button>
+        <button class="approval-compact__btn approval-compact__btn--deny" data-approval-id="{{!approvalId}}">
+            <span class="material-symbols-outlined">close</span>Deny
+        </button>
+    </div>
+</div>

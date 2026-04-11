@@ -1,0 +1,136 @@
+{
+  "_comment": "Canonical User document shape. VSOD is the authority — it creates and owns this document in SQLite. VSE reads it via VSODB KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
+
+  "_authority": "VSOD (SQLite)",
+  "_consumers": ["VSE (Python — reads user context from X-VSO-* headers that VSOD populates from this document)", "VSOD internal services (auth, session, API key validation)"],
+  "_cache_aside": "VSODB KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
+
+  "user": {
+    "_description": "Full user document as stored in VSOD SQLite.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique user identifier (UUID v4). Used as organization_id in single-user orgs."
+      },
+      "email": {
+        "type": "string",
+        "required": true,
+        "description": "User email address. Stored lowercase. Unique."
+      },
+      "name": {
+        "type": "string",
+        "required": true,
+        "description": "Display name. Defaults to email prefix if not provided."
+      },
+      "password_hash": {
+        "type": "string",
+        "required": false,
+        "description": "Hashed password. Null for SSO users."
+      }
+    },
+
+    "organization": {
+      "organization_id": {
+        "type": "string",
+        "required": true,
+        "description": "Organization this user belongs to. Equals user.id for single-user orgs."
+      },
+      "roles": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "default": ["user"],
+        "description": "RBAC roles assigned to this user. See status.js UserRole. Values: user, admin, superadmin, operator."
+      }
+    },
+
+    "api_keys": {
+      "g8e_key": {
+        "type": "string",
+        "required": false,
+        "description": "User's download/frontend API key. One per user. Used for operator download and frontend API calls. Prefixed with platform API key prefix."
+      },
+      "g8e_key_created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "Timestamp when the g8e_key was first created."
+      },
+      "g8e_key_updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "Timestamp when the g8e_key was last refreshed/rotated. Null if never refreshed."
+      }
+    },
+
+    "operator_linkage": {
+      "operator_id": {
+        "type": "string",
+        "required": false,
+        "description": "Primary operator ID currently associated with this user. Updated by VSOD on operator activation."
+      },
+      "operator_status": {
+        "type": "string",
+        "required": false,
+        "description": "Status of the linked operator. See status.json operator.status."
+      }
+    },
+
+    "auth": {
+      "provider": {
+        "type": "string",
+        "required": true,
+        "default": "passkey",
+        "values": ["passkey"],
+        "description": "Authentication provider. passkey = FIDO2/WebAuthn passwordless."
+      },
+      "passkey_credentials": {
+        "type": "array",
+        "required": false,
+        "default": [],
+        "description": "Registered FIDO2/WebAuthn passkey credentials. Each entry: { id, public_key, counter, transports, created_at, last_used_at }. Stored as encrypted JSON array. Never exposed to clients."
+      },
+      "passkey_challenge": {
+        "type": "string",
+        "required": false,
+        "default": null,
+        "description": "Ephemeral base64url challenge for in-progress WebAuthn ceremony. Cleared on completion or expiry."
+      },
+      "passkey_challenge_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "default": null,
+        "description": "Expiry timestamp for the current passkey challenge."
+      },
+      "sessions": {
+        "type": "array",
+        "required": false,
+        "default": [],
+        "description": "Active session tokens. Managed by VSOD session service."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "last_login": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "_description": "Canonical timestamp format for all VSO platform components (VSE, VSA, VSOD).",
+
+  "format": "RFC3339Nano",
+  "precision": "nanoseconds",
+  "timezone": "UTC",
+  "suffix": "Z",
+  "example": "2026-03-03T19:05:00.123456789Z",
+  "pattern": "YYYY-MM-DDTHH:MM:SS[.nnnnnnnnn]Z",
+
+  "_notes": [
+    "Always UTC — no offset notation (+00:00 or -07:00), always the literal Z suffix.",
+    "Fractional seconds are always included when non-zero; the sub-second part is omitted only when the value is exactly on a whole second.",
+    "Consumers MUST accept any valid RFC3339Nano string regardless of sub-second precision (nanoseconds, microseconds, milliseconds, or none).",
+    "Producers MUST emit the highest precision available natively (nanoseconds in Go, microseconds in Python, milliseconds in JavaScript).",
+    "Sorting lexicographically on this format yields correct chronological order."
+  ],
+
+  "consumers": {
+    "VSE": "app/utils/timestamp.py — now_iso() emits RFC3339Nano (microsecond precision, always present when non-zero)",
+    "VSA": "services/sqliteutil/timestamp.go — TimestampFormat = time.RFC3339Nano, NowTimestamp() / FormatTimestamp()",
+    "VSOD": "utils/timestamp.js — nowISOString() emits RFC3339Nano (millisecond precision via Date)"
+  }
+}

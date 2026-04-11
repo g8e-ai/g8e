@@ -1,0 +1,22 @@
+<div class="pagination-info">
+    Slots {{startSlot}}-{{endSlot}} of {{maxSlots}}
+</div>
+<button class="bind-all-btn initially-hidden" id="bind-all-btn" title="Bind All Active Operators">
+    <span>Bind All Active</span>
+</button>
+<button class="unbind-all-btn initially-hidden" id="unbind-all-btn" title="Unbind All Bound Operators">
+    <span>Unbind All</span>
+</button>
+<div class="pagination-controls">
+    <button class="pagination-btn prev-btn" {{!prevDisabled}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+    </button>
+    <span class="pagination-text">Page {{currentPage}} of {{totalPages}}</span>
+    <button class="pagination-btn next-btn" {{!nextDisabled}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+    </button>
+</div>

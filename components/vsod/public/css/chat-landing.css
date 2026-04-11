@@ -1,0 +1,128 @@
+/**
+ * Copyright (c) 2026 Lateralus Labs, LLC. All Rights Reserved.
+ * Chat Landing State Styles - Unauthenticated user view within chat interface
+ */
+
+/* Unauthenticated Empty State - Content wrapper */
+.chat-empty-unauthenticated {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    flex: 1;
+}
+
+/* When unauthenticated, messages panel should fill available space */
+.chat-messages-panel:has(.chat-empty-unauthenticated) {
+    flex: 1 1 auto;
+    min-height: 200px;
+    max-height: none;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Messages container should fill available space for iframe */
+.chat-messages-panel:has(.chat-empty-unauthenticated) .messages-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Landing Hero Content within Chat */
+.landing-hero-content {
+    width: 100%;
+}
+
+
+@keyframes bounce-arrow {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(4px);
+    }
+}
+
+
+.landing-hero-content .hero-single-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Hero Intro Section */
+.landing-hero-content .hero-intro {
+    text-align: left;
+}
+
+.landing-hero-content .how-it-works-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin: 0 0 1rem 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.landing-hero-content .title-blue {
+    color: var(--accent-primary, #3b82f6);
+}
+
+.landing-hero-content .title-primary {
+    color: var(--text-secondary, #7d8590);
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.landing-hero-content .title-accent {
+    color: var(--accent-green, #10b981);
+}
+
+.landing-hero-content .how-it-works-section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary, #c9d1d9);
+    margin: 0 0 1rem 0;
+}
+
+.landing-hero-content .how-it-works-subtitle {
+    font-size: 0.95rem;
+    color: var(--text-secondary, #7d8590);
+    margin: 0 0 0.5rem 0;
+    line-height: 1.5;
+}
+
+/* Light Theme Overrides */
+[data-theme="light"] .landing-hero-content .how-it-works-section-title {
+    color: #1f2937;
+}
+
+[data-theme="light"] .landing-hero-content .how-it-works-subtitle {
+    color: #6b7280;
+}
+
+/* Disabled Chat Input Panel - Visible but non-interactive for unauthenticated users */
+.chat-input-panel--disabled {
+    border: none;
+    pointer-events: none;
+}
+
+.chat-input-panel--disabled .case-selector-container,
+.chat-input-panel--disabled .enhanced-input-container,
+.chat-input-panel--disabled #enhanced-input-container {
+    cursor: not-allowed;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .landing-hero-content .how-it-works-title {
+        font-size: 1.5rem;
+    }
+
+    .landing-hero-content .title-primary {
+        font-size: 1rem;
+    }
+}

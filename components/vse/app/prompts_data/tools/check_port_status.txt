@@ -1,0 +1,37 @@
+Check if a network port is open and reachable on a host.
+
+<purpose>
+Use this for network diagnostics like verifying service availability, checking if a database port
+is listening, or testing connectivity to remote services. This is a lightweight, non-invasive
+operation that simply tests TCP/UDP connectivity.
+</purpose>
+
+<parameters>
+- host: Host to check (IP address or hostname). Defaults to 'localhost' if not specified.
+- port: Port number to check (1-65535). Required.
+- protocol: Protocol to use: 'tcp' or 'udp'. Defaults to 'tcp'.
+</parameters>
+
+<returns>
+- is_open: Whether the port is accepting connections
+- latency_ms: Connection latency in milliseconds (if successful)
+- error: Error message if connection failed
+- host: The host that was checked
+- port: The port that was checked
+- protocol: The protocol used
+</returns>
+
+<behavior>
+- This is a read-only diagnostic operation
+- Does not require user approval
+- Times out after a few seconds if no response
+- TCP checks attempt a full connection handshake
+- UDP checks are less reliable due to protocol nature
+</behavior>
+
+<examples>
+- Check if MySQL is running: port=3306, host='localhost'
+- Verify Redis connectivity: port=6379, host='redis-server'
+- Test web server: port=80 or port=443, host='example.com'
+- Check SSH access: port=22, host='remote-server'
+</examples>

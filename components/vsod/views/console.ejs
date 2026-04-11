@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console - g8e</title>
+    <meta name="robots" content="noindex, nofollow">
+
+    <%- include('partials/head-public') %>
+
+    <link rel="stylesheet" href="/css/console.css?v=<%= assetVersion %>">
+</head>
+<body class="console-body" data-theme="<%= theme %>">
+    <%- include('partials/nav-public', { currentPage: 'console' }) %>
+
+    <main class="console-page">
+
+        <a href="/chat" class="console-back-link">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Back to Chat
+        </a>
+
+        <header class="console-header">
+            <div class="console-header-left">
+                <span class="material-symbols-outlined console-header-icon">admin_panel_settings</span>
+                <div>
+                    <h1 class="console-title">Console</h1>
+                    <p class="console-subtitle">Platform visibility — health, data, and live logs</p>
+                </div>
+            </div>
+            <div class="console-header-actions">
+                <span class="console-last-updated" id="last-updated">--</span>
+                <button class="console-btn" id="refresh-btn">
+                    <span class="material-symbols-outlined">refresh</span>
+                    Refresh
+                </button>
+                <button class="console-btn console-btn-danger" id="clear-cache-btn">
+                    <span class="material-symbols-outlined">delete_sweep</span>
+                    Clear Cache
+                </button>
+            </div>
+        </header>
+
+        <!-- Tab Bar -->
+        <nav class="console-tabs" role="tablist">
+            <button class="console-tab active" data-tab="overview" role="tab" aria-selected="true">
+                <span class="material-symbols-outlined">dashboard</span>
+                Overview
+            </button>
+            <button class="console-tab" data-tab="components" role="tab" aria-selected="false">
+                <span class="material-symbols-outlined">device_hub</span>
+                Components
+            </button>
+            <button class="console-tab" data-tab="kv" role="tab" aria-selected="false">
+                <span class="material-symbols-outlined">storage</span>
+                KV Store
+            </button>
+            <button class="console-tab" data-tab="db" role="tab" aria-selected="false">
+                <span class="material-symbols-outlined">table_view</span>
+                Database
+            </button>
+            <button class="console-tab" data-tab="logs" role="tab" aria-selected="false">
+                <span class="material-symbols-outlined">terminal</span>
+                Logs
+            </button>
+        </nav>
+
+        <!-- ================================================================
+             TAB: OVERVIEW
+        ================================================================ -->
+        <div class="console-tab-panel active" id="tab-overview">
+
+            <!-- System Health Banner -->
+            <div class="console-health-banner" id="health-banner">
+                <span class="material-symbols-outlined console-health-icon" id="health-icon">sync</span>
+                <span id="health-text">Loading system health...</span>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="console-stats-grid">
+                <div class="console-stat-card">
+                    <div class="console-stat-header">
+                        <span class="material-symbols-outlined console-stat-icon blue">group</span>
+                        <span class="console-stat-label">Total Users</span>
+                    </div>
+                    <div class="console-stat-value" id="stat-users-total">--</div>
+                    <div class="console-stat-sub" id="stat-users-active">-- active (7d)</div>
+                </div>
+                <div class="console-stat-card">
+                    <div class="console-stat-header">
+                        <span class="material-symbols-outlined console-stat-icon green">computer</span>
+                        <span class="console-stat-label">Operators</span>
+                    </div>
+                    <div class="console-stat-value" id="stat-operators-total">--</div>
+                    <div class="console-stat-sub" id="stat-operators-healthy">-- healthy</div>
+                </div>
+                <div class="console-stat-card">
+                    <div class="console-stat-header">
+                        <span class="material-symbols-outlined console-stat-icon purple">hub</span>
+                        <span class="console-stat-label">Active Sessions</span>
+                    </div>
+                    <div class="console-stat-value" id="stat-sessions-total">--</div>
+                    <div class="console-stat-sub" id="stat-sessions-bound">-- bound operators</div>
+                </div>
+                <div class="console-stat-card">
+                    <div class="console-stat-header">
+                        <span class="material-symbols-outlined console-stat-icon orange">psychology</span>
+                        <span class="console-stat-label">Investigations (7d)</span>
+                    </div>
+                    <div class="console-stat-value" id="stat-investigations-total">--</div>
+                    <div class="console-stat-sub" id="stat-investigations-active">-- active</div>
+                </div>
+            </div>
+
+            <!-- Two-column layout -->
+            <div class="console-grid-2col">
+
+                <div class="console-panel">
+                    <div class="console-panel-header">
+                        <span class="material-symbols-outlined console-panel-icon">computer</span>
+                        <h2 class="console-panel-title">Operator Status</h2>
+                    </div>
+                    <div class="console-panel-body" id="operator-status-panel">
+                        <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                    </div>
+                </div>
+
+                <div class="console-panel">
+                    <div class="console-panel-header">
+                        <span class="material-symbols-outlined console-panel-icon">hub</span>
+                        <h2 class="console-panel-title">WebSession Overview</h2>
+                    </div>
+                    <div class="console-panel-body" id="session-stats-panel">
+                        <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                    </div>
+                </div>
+
+                <div class="console-panel">
+                    <div class="console-panel-header">
+                        <span class="material-symbols-outlined console-panel-icon">group</span>
+                        <h2 class="console-panel-title">User Activity</h2>
+                    </div>
+                    <div class="console-panel-body" id="user-activity-panel">
+                        <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                    </div>
+                </div>
+
+                <div class="console-panel">
+                    <div class="console-panel-header">
+                        <span class="material-symbols-outlined console-panel-icon">lock</span>
+                        <h2 class="console-panel-title">Login Activity (24h)</h2>
+                    </div>
+                    <div class="console-panel-body" id="login-audit-panel">
+                        <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Cache & Runtime -->
+            <div class="console-panel console-panel-wide">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">memory</span>
+                    <h2 class="console-panel-title">Cache Performance</h2>
+                    <span class="console-realtime-badge">Live</span>
+                </div>
+                <div class="console-panel-body" id="cache-panel">
+                    <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================================================================
+             TAB: COMPONENTS
+        ================================================================ -->
+        <div class="console-tab-panel" id="tab-components">
+
+            <div class="console-panel console-panel-wide">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">device_hub</span>
+                    <h2 class="console-panel-title">Component Health</h2>
+                    <span class="console-realtime-badge" id="comp-overall-badge">Checking...</span>
+                    <button class="console-btn console-btn-sm console-btn-header-right" id="comp-refresh-btn">
+                        <span class="material-symbols-outlined">refresh</span>
+                        Check Now
+                    </button>
+                </div>
+                <div class="console-panel-body" id="components-panel">
+                    <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================================================================
+             TAB: KV STORE
+        ================================================================ -->
+        <div class="console-tab-panel" id="tab-kv">
+
+            <div class="console-panel console-panel-wide">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">storage</span>
+                    <h2 class="console-panel-title">KV Store Browser</h2>
+                </div>
+                <div class="console-panel-body">
+                    <div class="console-browser-toolbar">
+                        <input type="text" class="console-input" id="kv-pattern" placeholder="Pattern (e.g. g8e:session:* or *)" value="*">
+                        <button class="console-btn" id="kv-scan-btn">
+                            <span class="material-symbols-outlined">search</span>
+                            Scan
+                        </button>
+                        <span class="console-browser-info" id="kv-scan-info"></span>
+                    </div>
+                    <div id="kv-keys-list" class="console-kv-keys-list"></div>
+                    <div class="console-browser-pagination" id="kv-pagination"></div>
+                </div>
+            </div>
+
+            <!-- KV Key detail -->
+            <div class="console-panel console-panel-wide console-detail-panel" id="kv-detail-panel">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">key</span>
+                    <h2 class="console-panel-title" id="kv-detail-key-title">Key Detail</h2>
+                    <button class="console-btn-icon" id="kv-detail-close" title="Close">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="console-panel-body" id="kv-detail-body">
+                    <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================================================================
+             TAB: DATABASE
+        ================================================================ -->
+        <div class="console-tab-panel" id="tab-db">
+
+            <div class="console-panel console-panel-wide">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">table_view</span>
+                    <h2 class="console-panel-title">Document Store Browser</h2>
+                </div>
+                <div class="console-panel-body">
+                    <div class="console-browser-toolbar">
+                        <select class="console-select" id="db-collection">
+                            <option value="">Select collection...</option>
+                        </select>
+                        <input type="number" class="console-input console-input-sm" id="db-limit" placeholder="Limit" value="50" min="1" max="200">
+                        <button class="console-btn" id="db-query-btn">
+                            <span class="material-symbols-outlined">search</span>
+                            Query
+                        </button>
+                        <span class="console-browser-info" id="db-query-info"></span>
+                    </div>
+                    <div id="db-results" class="console-db-results"></div>
+                </div>
+            </div>
+
+            <!-- Document detail -->
+            <div class="console-panel console-panel-wide console-detail-panel" id="db-detail-panel">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">description</span>
+                    <h2 class="console-panel-title" id="db-detail-title">Document</h2>
+                    <button class="console-btn-icon" id="db-detail-close" title="Close">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="console-panel-body" id="db-detail-body"></div>
+            </div>
+
+        </div>
+
+        <!-- ================================================================
+             TAB: LOGS
+        ================================================================ -->
+        <div class="console-tab-panel" id="tab-logs">
+
+            <div class="console-panel console-panel-wide console-logs-panel">
+                <div class="console-panel-header">
+                    <span class="material-symbols-outlined console-panel-icon">terminal</span>
+                    <h2 class="console-panel-title">Platform Logs</h2>
+                    <span class="console-realtime-badge" id="logs-status-badge">Connecting...</span>
+                    <div class="console-logs-controls">
+                        <select class="console-select console-select-sm" id="logs-level">
+                            <option value="error">error</option>
+                            <option value="warn">warn</option>
+                            <option value="info" selected>info</option>
+                            <option value="debug">debug</option>
+                        </select>
+                        <button class="console-btn console-btn-sm" id="logs-pause-btn">
+                            <span class="material-symbols-outlined">pause</span>
+                            Pause
+                        </button>
+                        <button class="console-btn console-btn-sm" id="logs-clear-btn">
+                            <span class="material-symbols-outlined">delete_sweep</span>
+                            Clear
+                        </button>
+                        <button class="console-btn console-btn-sm" id="logs-scroll-btn" title="Toggle auto-scroll">
+                            <span class="material-symbols-outlined">arrow_downward</span>
+                            Auto-scroll
+                        </button>
+                    </div>
+                </div>
+                <div class="console-panel-body console-logs-body" id="logs-container">
+                    <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Connecting to log stream...</div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <%- include('partials/footer-public') %>
+
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+    <script type="module" nonce="<%= locals.cspNonce %>">
+    (function() {
+
+        function fmt(n) {
+            if (n === null || n === undefined) return '--';
+            return Number(n).toLocaleString();
+        }
+
+        function setEl(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function esc(s) {
+            if (s === null || s === undefined) return '';
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function setLastUpdated() {
+            setEl('last-updated', 'Updated ' + new Date().toLocaleTimeString());
+        }
+
+        async function apiFetch(path, options = {}) {
+            const sc = window.serviceClient;
+            const method = (options.method || 'GET').toUpperCase();
+            let res;
+            if (method === 'POST') {
+                res = await sc.post('vsod', path, options.body ? JSON.parse(options.body) : null);
+            } else {
+                res = await sc.get('vsod', path);
+            }
+            return res.json();
+        }
+
+        const tabInited = {};
+
+        function activateTab(name) {
+            document.querySelectorAll('.console-tab').forEach(b => {
+                const active = b.dataset.tab === name;
+                b.classList.toggle('active', active);
+                b.setAttribute('aria-selected', String(active));
+            });
+            document.querySelectorAll('.console-tab-panel').forEach(p => {
+                p.classList.toggle('active', p.id === 'tab-' + name);
+            });
+            if (!tabInited[name]) {
+                tabInited[name] = true;
+                initTab(name);
+            }
+        }
+
+        document.querySelectorAll('.console-tab').forEach(btn => {
+            btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+        });
+
+        function renderHealth(system) {
+            const banner = document.getElementById('health-banner');
+            const icon   = document.getElementById('health-icon');
+            const text   = document.getElementById('health-text');
+            if (!system) return;
+
+            const healthy = system.overall === 'healthy';
+            banner.className = 'console-health-banner ' + (healthy ? 'healthy' : 'degraded');
+            icon.textContent = healthy ? 'check_circle' : 'warning';
+
+            const vsodb = system.vsodb?.status === 'healthy'
+                ? `VSODB ${system.vsodb.latencyMs}ms`
+                : `VSODB ${system.vsodb?.status || 'unknown'}`;
+            const db = system.db?.status === 'healthy'
+                ? `DB ${system.db.latencyMs}ms`
+                : `DB ${system.db?.status || 'unknown'}`;
+
+            text.textContent = healthy
+                ? `All systems healthy — ${vsodb} | ${db}`
+                : `System degraded — ${vsodb} | ${db}`;
+        }
+
+        function renderStats(data) {
+            const { users, operators, sessions, system } = data;
+            setEl('stat-users-total',         fmt(users?.total));
+            setEl('stat-users-active',        `${fmt(users?.activity?.lastWeek)} active (7d)`);
+            setEl('stat-operators-total',     fmt(operators?.total));
+            setEl('stat-operators-healthy',   `${fmt(operators?.health?.healthy)} healthy`);
+            setEl('stat-sessions-total',      fmt(sessions?.total));
+            setEl('stat-sessions-bound',      `${fmt(sessions?.boundOperators)} bound operators`);
+            renderHealth(system);
+        }
+
+        function renderOperatorStatus(operators) {
+            const panel = document.getElementById('operator-status-panel');
+            if (!operators || operators.error) {
+                panel.innerHTML = '<p class="console-error">Failed to load operator data</p>';
+                return;
+            }
+            const dist = operators.statusDistribution || {};
+            const typeDist = operators.typeDistribution || {};
+            const health = operators.health || {};
+            const statusRows = Object.entries(dist)
+                .filter(([, v]) => v > 0)
+                .map(([k, v]) => `
+                    <div class="console-kv-row">
+                        <span class="console-status-dot status-${esc(k.toLowerCase())}"></span>
+                        <span class="console-kv-key">${esc(k)}</span>
+                        <span class="console-kv-val">${fmt(v)}</span>
+                    </div>`).join('');
+            panel.innerHTML = `
+                <div class="console-kv-group">
+                    ${statusRows || '<p class="console-empty">No operators</p>'}
+                </div>
+                <div class="console-divider"></div>
+                <div class="console-kv-group">
+                    <div class="console-kv-row"><span class="console-kv-key">Avg CPU</span><span class="console-kv-val">${health.avgCpuPercent ?? '--'}%</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Avg Memory</span><span class="console-kv-val">${health.avgMemoryPercent ?? '--'}%</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Avg Latency</span><span class="console-kv-val">${health.avgLatencyMs ?? '--'}ms</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Standard</span><span class="console-kv-val">${fmt(typeDist.operator)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Cloud</span><span class="console-kv-val">${fmt(typeDist.cloud)}</span></div>
+                </div>`;
+        }
+
+        function renderSessionStats(sessions) {
+            const panel = document.getElementById('session-stats-panel');
+            if (!sessions || sessions.error) { panel.innerHTML = '<p class="console-error">Failed to load session data</p>'; return; }
+            panel.innerHTML = `
+                <div class="console-kv-group">
+                    <div class="console-kv-row"><span class="console-kv-key">Web Sessions</span><span class="console-kv-val">${fmt(sessions.web)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Operator Sessions</span><span class="console-kv-val">${fmt(sessions.operator)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Total</span><span class="console-kv-val">${fmt(sessions.total)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Bound Operators</span><span class="console-kv-val">${fmt(sessions.boundOperators)}</span></div>
+                </div>`;
+        }
+
+        function renderUserActivity(users) {
+            const panel = document.getElementById('user-activity-panel');
+            if (!users || users.error) { panel.innerHTML = '<p class="console-error">Failed to load user data</p>'; return; }
+            panel.innerHTML = `
+                <div class="console-kv-group">
+                    <div class="console-kv-row"><span class="console-kv-key">Total Users</span><span class="console-kv-val">${fmt(users.total)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Active (24h)</span><span class="console-kv-val">${fmt(users.activity?.lastDay)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Active (7d)</span><span class="console-kv-val">${fmt(users.activity?.lastWeek)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Active (30d)</span><span class="console-kv-val">${fmt(users.activity?.lastMonth)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">New (7d)</span><span class="console-kv-val">${fmt(users.newUsersLastWeek)}</span></div>
+                </div>`;
+        }
+
+        function renderLoginAudit(audit) {
+            const panel = document.getElementById('login-audit-panel');
+            if (!audit || audit.error) { panel.innerHTML = '<p class="console-error">Failed to load login audit data</p>'; return; }
+            panel.innerHTML = `
+                <div class="console-kv-group">
+                    <div class="console-kv-row"><span class="console-kv-key">Total Events</span><span class="console-kv-val">${fmt(audit.total)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Successful</span><span class="console-kv-val success">${fmt(audit.successful)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Failed</span><span class="console-kv-val ${audit.failed > 0 ? 'warn' : ''}">${fmt(audit.failed)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Locked</span><span class="console-kv-val ${audit.locked > 0 ? 'danger' : ''}">${fmt(audit.locked)}</span></div>
+                    <div class="console-kv-row"><span class="console-kv-key">Anomalies</span><span class="console-kv-val ${audit.anomalies > 0 ? 'danger' : ''}">${fmt(audit.anomalies)}</span></div>
+                </div>`;
+        }
+
+        function renderCache(cache) {
+            const panel = document.getElementById('cache-panel');
+            if (!cache) { panel.innerHTML = '<p class="console-error">Failed to load cache data</p>'; return; }
+            const overall = cache.overall || {};
+            const byType  = cache.byType  || {};
+            const typeRows = Object.entries(byType).map(([k, v]) => `
+                <div class="console-kv-row">
+                    <span class="console-kv-key">${esc(k)}</span>
+                    <span class="console-kv-val">${fmt(v.hits)} hits / ${fmt(v.misses)} misses</span>
+                </div>`).join('');
+            panel.innerHTML = `
+                <div class="console-cache-grid">
+                    <div class="console-kv-group">
+                        <div class="console-kv-row"><span class="console-kv-key">Hit Rate</span><span class="console-kv-val">${overall.hitRate ?? '--'}%</span></div>
+                        <div class="console-kv-row"><span class="console-kv-key">Total Hits</span><span class="console-kv-val">${fmt(overall.hits)}</span></div>
+                        <div class="console-kv-row"><span class="console-kv-key">Total Misses</span><span class="console-kv-val">${fmt(overall.misses)}</span></div>
+                        <div class="console-kv-row"><span class="console-kv-key">Cost Savings</span><span class="console-kv-val">${esc(cache.costSavings ?? '--')}</span></div>
+                    </div>
+                    <div class="console-kv-group">
+                        ${typeRows || '<p class="console-empty">No per-type data</p>'}
+                    </div>
+                </div>`;
+        }
+
+        function renderAIStats(ai) {
+            setEl('stat-investigations-total', fmt(ai?.totalInvestigations));
+            setEl('stat-investigations-active', `${fmt(ai?.activeInvestigations)} active`);
+        }
+
+        function showBannerError(msg) {
+            const banner = document.getElementById('health-banner');
+            banner.className = 'console-health-banner degraded';
+            setEl('health-icon', 'error');
+            setEl('health-text', msg);
+        }
+
+        async function loadOverview() {
+            try {
+                const json = await apiFetch('/api/console/overview');
+                if (!json.success) throw new Error(json.error || 'Request failed');
+                renderStats(json.data);
+                renderOperatorStatus(json.data.operators);
+                renderSessionStats(json.data.sessions);
+                renderUserActivity(json.data.users);
+                renderCache(json.data.cache);
+                setLastUpdated();
+            } catch (err) {
+                showBannerError('Failed to load overview: ' + err.message);
+            }
+        }
+
+        async function loadLoginAudit() {
+            try {
+                const json = await apiFetch('/api/console/metrics/login-audit');
+                renderLoginAudit(json.success ? json.data : null);
+            } catch (err) {
+                document.getElementById('login-audit-panel').innerHTML = '<p class="console-error">Failed to load login audit</p>';
+            }
+        }
+
+        async function loadAIStats() {
+            try {
+                const json = await apiFetch('/api/console/metrics/ai');
+                if (json.success) renderAIStats(json.data);
+            } catch (_) {}
+        }
+
+        async function loadAll() {
+            await Promise.all([loadOverview(), loadLoginAudit(), loadAIStats()]);
+        }
+
+        async function clearCache() {
+            const btn = document.getElementById('clear-cache-btn');
+            btn.disabled = true;
+            try {
+                const json = await apiFetch('/api/console/cache/clear', { method: 'POST' });
+                if (json.success) await loadAll();
+            } catch (err) {
+                showBannerError('Failed to clear cache: ' + err.message);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function statusClass(s) {
+            if (s === 'healthy') return 'success';
+            if (s === 'degraded') return 'warn';
+            return 'danger';
+        }
+
+        function statusIcon(s) {
+            if (s === 'healthy') return 'check_circle';
+            if (s === 'degraded') return 'warning';
+            return 'error';
+        }
+
+        async function loadComponentHealth() {
+            const panel = document.getElementById('components-panel');
+            const badge = document.getElementById('comp-overall-badge');
+            try {
+                const json = await apiFetch('/api/console/components/health');
+                if (!json.success) throw new Error(json.error);
+                const { overall, components, timestamp } = json.data;
+
+                badge.textContent = overall.charAt(0).toUpperCase() + overall.slice(1);
+                badge.className = 'console-realtime-badge badge-' + overall;
+
+                const rows = Object.entries(components).map(([key, c]) => {
+                    const latency = c.latencyMs !== null ? `${c.latencyMs}ms` : 'n/a';
+                    const detailItems = c.details
+                        ? Object.entries(c.details).map(([k, v]) => `<span class="console-comp-detail-item"><span class="console-kv-key">${esc(k)}</span><span class="console-kv-val">${esc(String(v))}</span></span>`).join('')
+                        : '';
+                    const errorHtml = c.error ? `<div class="console-comp-error">${esc(c.error)}</div>` : '';
+                    return `
+                        <div class="console-comp-row">
+                            <span class="material-symbols-outlined console-comp-icon ${statusClass(c.status)}">${statusIcon(c.status)}</span>
+                            <div class="console-comp-info">
+                                <span class="console-comp-name">${esc(c.name)}</span>
+                                ${detailItems ? `<div class="console-comp-details">${detailItems}</div>` : ''}
+                                ${errorHtml}
+                            </div>
+                            <span class="console-comp-latency">${latency}</span>
+                            <span class="console-kv-val ${statusClass(c.status)}">${esc(c.status)}</span>
+                        </div>`;
+                }).join('');
+
+                panel.innerHTML = `
+                    <div class="console-comp-list">${rows}</div>
+                    <div class="console-comp-footer">Checked at ${new Date(timestamp).toLocaleTimeString()}</div>`;
+            } catch (err) {
+                badge.textContent = 'Error';
+                badge.className = 'console-realtime-badge badge-unhealthy';
+                panel.innerHTML = `<p class="console-error">Failed to check component health: ${esc(err.message)}</p>`;
+            }
+        }
+
+        let kvCursor = '0';
+        let kvPattern = '*';
+
+        async function kvScan(cursor) {
+            const pattern = document.getElementById('kv-pattern').value.trim() || '*';
+            kvPattern = pattern;
+            const list = document.getElementById('kv-keys-list');
+            const info = document.getElementById('kv-scan-info');
+            list.innerHTML = '<div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Scanning...</div>';
+            try {
+                const json = await apiFetch(`/api/console/kv/scan?pattern=${encodeURIComponent(pattern)}&cursor=${encodeURIComponent(cursor || '0')}&count=50`);
+                if (!json.success) throw new Error(json.error);
+                const { keys, cursor: next, count } = json.data;
+                kvCursor = next;
+                info.textContent = `${count} key${count === 1 ? '' : 's'} returned`;
+
+                if (keys.length === 0) {
+                    list.innerHTML = '<p class="console-empty">No keys matched.</p>';
+                } else {
+                    list.innerHTML = keys.map(k => `
+                        <div class="console-kv-key-row" data-key="${esc(k)}">
+                            <span class="material-symbols-outlined console-kv-key-icon">key</span>
+                            <span class="console-kv-key-name">${esc(k)}</span>
+                            <button class="console-btn-link" data-kv-view="${esc(k)}">View</button>
+                        </div>`).join('');
+
+                    list.querySelectorAll('[data-kv-view]').forEach(btn => {
+                        btn.addEventListener('click', () => kvViewKey(btn.dataset.kvView));
+                    });
+                }
+
+                const pag = document.getElementById('kv-pagination');
+                if (next !== '0') {
+                    pag.innerHTML = `<button class="console-btn" id="kv-next-btn">Load more</button>`;
+                    document.getElementById('kv-next-btn').addEventListener('click', () => kvScan(kvCursor));
+                } else {
+                    pag.innerHTML = '';
+                }
+            } catch (err) {
+                list.innerHTML = `<p class="console-error">Scan failed: ${esc(err.message)}</p>`;
+                info.textContent = '';
+            }
+        }
+
+        async function kvViewKey(key) {
+            const panel = document.getElementById('kv-detail-panel');
+            const body  = document.getElementById('kv-detail-body');
+            const title = document.getElementById('kv-detail-key-title');
+            panel.classList.add('visible');
+            title.textContent = key;
+            body.innerHTML = '<div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            try {
+                const json = await apiFetch(`/api/console/kv/key?key=${encodeURIComponent(key)}`);
+                if (!json.success) throw new Error(json.error);
+                const { value, ttl, exists } = json.data;
+
+                let prettyValue = esc(value ?? '(null)');
+                if (value) {
+                    try {
+                        prettyValue = `<pre class="console-json-pre">${esc(JSON.stringify(JSON.parse(value), null, 2))}</pre>`;
+                    } catch (_) {
+                        prettyValue = `<pre class="console-json-pre">${esc(value)}</pre>`;
+                    }
+                }
+
+                body.innerHTML = `
+                    <div class="console-kv-group console-kv-meta-group">
+                        <div class="console-kv-row"><span class="console-kv-key">Exists</span><span class="console-kv-val ${exists ? 'success' : 'danger'}">${exists ? 'yes' : 'no'}</span></div>
+                        <div class="console-kv-row"><span class="console-kv-key">TTL</span><span class="console-kv-val">${ttl === -1 ? 'no expiry' : ttl === -2 ? 'key not found' : ttl + 's'}</span></div>
+                    </div>
+                    <div class="console-kv-value-label">Value</div>
+                    ${prettyValue}`;
+            } catch (err) {
+                body.innerHTML = `<p class="console-error">Failed to load key: ${esc(err.message)}</p>`;
+            }
+        }
+
+        async function populateCollections() {
+            const sel = document.getElementById('db-collection');
+            try {
+                const json = await apiFetch('/api/console/db/collections');
+                if (!json.success) throw new Error(json.error);
+                json.data.collections.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    sel.appendChild(opt);
+                });
+            } catch (_) {}
+        }
+
+        async function dbQuery() {
+            const collection = document.getElementById('db-collection').value;
+            const limit = parseInt(document.getElementById('db-limit').value, 10) || 50;
+            const results = document.getElementById('db-results');
+            const info = document.getElementById('db-query-info');
+
+            if (!collection) {
+                info.textContent = 'Select a collection first.';
+                return;
+            }
+
+            results.innerHTML = '<div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Querying...</div>';
+            info.textContent = '';
+
+            try {
+                const json = await apiFetch(`/api/console/db/query?collection=${encodeURIComponent(collection)}&limit=${limit}`);
+                if (!json.success) throw new Error(json.error);
+                const { documents, count } = json.data;
+                info.textContent = `${count} document${count === 1 ? '' : 's'}`;
+
+                if (documents.length === 0) {
+                    results.innerHTML = '<p class="console-empty">No documents found.</p>';
+                    return;
+                }
+
+                const cols = [...new Set(documents.flatMap(d => Object.keys(d)))].slice(0, 12);
+
+                const headerCells = cols.map(c => `<th class="console-db-th">${esc(c)}</th>`).join('');
+                const rows = documents.map((doc, i) => {
+                    const cells = cols.map(c => {
+                        const v = doc[c];
+                        const display = v === null || v === undefined ? '' : typeof v === 'object' ? '{...}' : String(v);
+                        return `<td class="console-db-td" title="${esc(JSON.stringify(v))}">${esc(display.substring(0, 60))}${display.length > 60 ? '…' : ''}</td>`;
+                    }).join('');
+                    return `<tr class="console-db-tr" data-doc-idx="${i}">${cells}<td class="console-db-td"><button class="console-btn-link" data-db-view="${i}">View</button></td></tr>`;
+                }).join('');
+
+                results.innerHTML = `
+                    <div class="console-db-table-wrap">
+                        <table class="console-db-table">
+                            <thead><tr>${headerCells}<th class="console-db-th"></th></tr></thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+
+                results.querySelectorAll('[data-db-view]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const doc = documents[parseInt(btn.dataset.dbView, 10)];
+                        dbViewDocument(doc);
+                    });
+                });
+            } catch (err) {
+                results.innerHTML = `<p class="console-error">Query failed: ${esc(err.message)}</p>`;
+                info.textContent = '';
+            }
+        }
+
+        function dbViewDocument(doc) {
+            const panel = document.getElementById('db-detail-panel');
+            const body  = document.getElementById('db-detail-body');
+            const title = document.getElementById('db-detail-title');
+            panel.classList.add('visible');
+            title.textContent = doc.id || doc._id || 'Document';
+            body.innerHTML = `<pre class="console-json-pre">${esc(JSON.stringify(doc, null, 2))}</pre>`;
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        let logsPaused = false;
+        let logsAutoScroll = true;
+        let logsEventSource = null;
+        let logsCount = 0;
+
+        const LOG_LEVEL_CLASS = {
+            error: 'log-error',
+            warn:  'log-warn',
+            info:  'log-info',
+            debug: 'log-debug'
+        };
+
+        function appendLogEntry(entry) {
+            if (logsPaused) return;
+            const container = document.getElementById('logs-container');
+            const row = document.createElement('div');
+            row.className = `console-log-row ${LOG_LEVEL_CLASS[entry.level] || ''}`;
+
+            const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '';
+            const level = (entry.level || 'info').toUpperCase().padEnd(5);
+            const msg = entry.message || '';
+            const meta = Object.entries(entry)
+                .filter(([k]) => !['level', 'message', 'timestamp', 'service'].includes(k))
+                .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                .join(' ');
+
+            row.innerHTML = `<span class="log-ts">${esc(ts)}</span><span class="log-level log-level-${entry.level || 'info'}">${esc(level)}</span><span class="log-msg">${esc(msg)}</span>${meta ? `<span class="log-meta">${esc(meta)}</span>` : ''}`;
+            container.appendChild(row);
+            logsCount++;
+
+            if (container.children.length > 1500) {
+                container.removeChild(container.firstChild);
+            }
+
+            if (logsAutoScroll) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function connectLogs() {
+            const level = document.getElementById('logs-level').value;
+            const badge = document.getElementById('logs-status-badge');
+
+            if (logsEventSource) {
+                logsEventSource.close();
+                logsEventSource = null;
+            }
+
+            badge.textContent = 'Connecting...';
+            badge.className = 'console-realtime-badge';
+
+            const container = document.getElementById('logs-container');
+            container.innerHTML = '';
+            logsCount = 0;
+
+            const es = new EventType(`/api/console/logs/stream?level=${encodeURIComponent(level)}&limit=200`, { withCredentials: true });
+            logsEventSource = es;
+
+            es.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'connected') {
+                        badge.textContent = 'Live';
+                        badge.className = 'console-realtime-badge';
+                    } else if (data.type === 'log') {
+                        appendLogEntry(data.entry);
+                    }
+                } catch (_) {}
+            };
+
+            es.onerror = () => {
+                badge.textContent = 'Disconnected';
+                badge.className = 'console-realtime-badge badge-unhealthy';
+                es.close();
+                logsEventSource = null;
+            };
+        }
+
+        function initTab(name) {
+            if (name === 'overview') {
+                loadAll();
+            } else if (name === 'components') {
+                loadComponentHealth();
+                document.getElementById('comp-refresh-btn').addEventListener('click', loadComponentHealth);
+            } else if (name === 'kv') {
+                document.getElementById('kv-scan-btn').addEventListener('click', () => kvScan('0'));
+                document.getElementById('kv-detail-close').addEventListener('click', () => {
+                    document.getElementById('kv-detail-panel').classList.remove('visible');
+                });
+                document.getElementById('kv-pattern').addEventListener('keydown', e => {
+                    if (e.key === 'Enter') kvScan('0');
+                });
+                kvScan('0');
+            } else if (name === 'db') {
+                populateCollections();
+                document.getElementById('db-query-btn').addEventListener('click', dbQuery);
+                document.getElementById('db-detail-close').addEventListener('click', () => {
+                    document.getElementById('db-detail-panel').classList.remove('visible');
+                });
+                document.getElementById('db-collection').addEventListener('keydown', e => {
+                    if (e.key === 'Enter') dbQuery();
+                });
+            } else if (name === 'logs') {
+                document.getElementById('logs-pause-btn').addEventListener('click', () => {
+                    logsPaused = !logsPaused;
+                    const btn = document.getElementById('logs-pause-btn');
+                    btn.querySelector('.material-symbols-outlined').textContent = logsPaused ? 'play_arrow' : 'pause';
+                    btn.querySelector('.material-symbols-outlined').nextSibling.textContent = logsPaused ? ' Resume' : ' Pause';
+                });
+                document.getElementById('logs-clear-btn').addEventListener('click', () => {
+                    document.getElementById('logs-container').innerHTML = '';
+                    logsCount = 0;
+                });
+                document.getElementById('logs-scroll-btn').addEventListener('click', () => {
+                    logsAutoScroll = !logsAutoScroll;
+                    document.getElementById('logs-scroll-btn').classList.toggle('active', logsAutoScroll);
+                });
+                document.getElementById('logs-level').addEventListener('change', connectLogs);
+                connectLogs();
+            }
+        }
+
+        document.getElementById('refresh-btn').addEventListener('click', () => {
+            const active = document.querySelector('.console-tab.active')?.dataset.tab || 'overview';
+            if (active === 'overview') loadAll();
+            else if (active === 'components') loadComponentHealth();
+            else if (active === 'kv') kvScan('0');
+            else if (active === 'db') dbQuery();
+            else if (active === 'logs') connectLogs();
+        });
+
+        document.getElementById('clear-cache-btn').addEventListener('click', clearCache);
+
+        initTab('overview');
+        tabInited['overview'] = true;
+
+    })();
+    </script>
+</body>
+</html>

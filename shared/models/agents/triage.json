@@ -1,0 +1,36 @@
+{
+  "_comment": "Canonical Triage agent model. Classifies incoming user messages into complexity and intent buckets to route to the appropriate model (Assistant vs Primary).",
+  "name": "TriageAgent",
+  "description": "Routes user messages based on complexity and intent.",
+  "request": {
+    "message": { "type": "string", "description": "The user message to triage." },
+    "agent_mode": { "type": "string", "description": "The current agent mode (operator_bound, operator_not_bound, etc.)" },
+    "conversation_history": { "type": "array", "items": { "$ref": "../conversation_message.json" }, "description": "Recent conversation turns." },
+    "attachments": { "type": "array", "items": { "type": "object" }, "description": "Metadata for any attached files." },
+    "model_override": { "type": "string", "nullable": true, "description": "Optional model override." }
+  },
+  "result": {
+    "complexity": {
+      "type": "string",
+      "enum": ["simple", "complex"],
+      "description": "The determined complexity level."
+    },
+    "complexity_confidence": {
+      "type": "string",
+      "enum": ["high", "low"],
+      "description": "Confidence in complexity classification."
+    },
+    "intent": {
+      "type": "string",
+      "enum": ["information", "action", "unknown"],
+      "description": "The determined intent category."
+    },
+    "intent_confidence": {
+      "type": "string",
+      "enum": ["high", "low"],
+      "description": "Confidence in intent classification."
+    },
+    "intent_summary": { "type": "string", "description": "A concise summary of the user's goal." },
+    "follow_up_question": { "type": "string", "nullable": true, "description": "Clarifying question if intent is ambiguous." }
+  }
+}

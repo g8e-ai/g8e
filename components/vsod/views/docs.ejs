@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docs - g8e</title>
+    <meta name="robots" content="noindex, nofollow">
+
+    <%- include('partials/head-public') %>
+
+    <link rel="stylesheet" href="/css/vendor/github-dark.min.css">
+    <link rel="stylesheet" href="/css/code-blocks.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/docs.css?v=<%= assetVersion %>">
+</head>
+<body data-theme="<%= theme %>" class="docs-page">
+
+    <%- include('partials/nav-public', { currentPage: 'docs' }) %>
+
+    <div class="docs-explorer">
+        <aside class="docs-sidebar">
+            <div class="docs-sidebar-header">
+                <span class="docs-sidebar-title">Documentation</span>
+            </div>
+            <div class="docs-tree" id="docs-tree">
+                <p class="docs-loading docs-loading-tree">Loading...</p>
+            </div>
+        </aside>
+
+        <main class="docs-content" id="docs-content">
+            <div class="docs-content-empty" id="docs-empty">
+                <span class="material-symbols-outlined">menu_book</span>
+                <p>Select a document from the sidebar</p>
+            </div>
+            <div id="docs-article" class="docs-article-hidden">
+                <div class="docs-breadcrumb" id="docs-breadcrumb"></div>
+                <div class="docs-md" id="docs-md"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/vendor/markdown-it.min.js"></script>
+    <script src="/js/vendor/purify.min.js"></script>
+    <script src="/js/vendor/highlight.min.js"></script>
+    <script src="/js/vendor/mermaid.min.js"></script>
+    <script type="module" nonce="<%= locals.cspNonce %>">
+        import { MarkdownRenderer } from '/js/utils/markdown.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+            mermaid.initialize({ startOnLoad: false, theme: currentTheme === 'light' ? 'base' : 'dark' });
+        });
+
+        const mdRenderer = new MarkdownRenderer();
+
+        const treeEl = document.getElementById('docs-tree');
+        const emptyEl = document.getElementById('docs-empty');
+        const articleEl = document.getElementById('docs-article');
+        const breadcrumbEl = document.getElementById('docs-breadcrumb');
+        const mdEl = document.getElementById('docs-md');
+
+        let activeLink = null;
+
+        async function loadTree() {
+            try {
+                const res = await fetch('/api/docs/tree');
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+                treeEl.innerHTML = '';
+                treeEl.appendChild(renderTree(data.tree));
+
+                const hash = decodeURIComponent(window.location.hash.slice(1));
+                if (hash) {
+                    loadFile(hash);
+                } else {
+                    const firstFile = treeEl.querySelector('[data-path]');
+                    if (firstFile) loadFile(firstFile.dataset.path);
+                }
+            } catch (err) {
+                treeEl.innerHTML = `<p class="docs-error docs-error-tree">${err.message}</p>`;
+            }
+        }
+
+        function renderTree(nodes, depth = 0) {
+            const ul = document.createElement('ul');
+            for (const node of nodes) {
+                const li = document.createElement('li');
+                if (node.type === 'dir') {
+                    li.className = 'docs-tree-dir collapsed';
+                    const label = document.createElement('div');
+                    label.className = 'docs-tree-dir-label';
+                    label.innerHTML = `<span class="material-symbols-outlined dir-arrow">expand_more</span>${node.name}`;
+                    label.addEventListener('click', () => li.classList.toggle('collapsed'));
+                    const children = renderTree(node.children, depth + 1);
+                    li.appendChild(label);
+                    li.appendChild(children);
+                } else {
+                    const label = node.name.replace(/\.md$/, '').replace(/-/g, ' ');
+                    const a = document.createElement('a');
+                    a.className = 'docs-tree-file';
+                    a.textContent = label;
+                    a.href = '#' + encodeURIComponent(node.path);
+                    a.dataset.path = node.path;
+                    a.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        loadFile(node.path);
+                        history.replaceState(null, '', '#' + encodeURIComponent(node.path));
+                    });
+                    li.appendChild(a);
+                }
+                ul.appendChild(li);
+            }
+            return ul;
+        }
+
+        async function loadFile(filePath) {
+            emptyEl.classList.add('initially-hidden');
+            articleEl.classList.remove('docs-article-hidden');
+            mdEl.innerHTML = '<p class="docs-loading">Loading...</p>';
+            breadcrumbEl.textContent = filePath === '__root__/README.md' ? 'README.md' : filePath;
+
+            if (activeLink) activeLink.classList.remove('active');
+            const link = treeEl.querySelector(`[data-path="${CSS.escape(filePath)}"]`);
+            if (link) {
+                link.classList.add('active');
+                activeLink = link;
+                let parent = link.closest('.docs-tree-dir');
+                while (parent) {
+                    parent.classList.remove('collapsed');
+                    parent = parent.parentElement?.closest('.docs-tree-dir');
+                }
+            }
+
+            try {
+                const res = await fetch('/api/docs/file?path=' + encodeURIComponent(filePath));
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error);
+                mdEl.innerHTML = mdRenderer.parseMarkdown(data.content);
+                await mdRenderer.renderMermaidDiagrams(mdEl);
+            } catch (err) {
+                mdEl.innerHTML = `<div class="docs-error">${err.message}</div>`;
+            }
+        }
+
+        loadTree();
+    </script>
+
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+
+</body>
+</html>

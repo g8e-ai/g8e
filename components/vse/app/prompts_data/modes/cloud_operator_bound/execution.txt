@@ -1,0 +1,37 @@
+<execution mode="cloud_operator_bound">
+
+<aws_examples>
+aws sts get-caller-identity
+aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,State.Name,InstanceType,PrivateIpAddress,SubnetId]' --output table
+aws ec2 describe-vpcs --query 'Vpcs[*].[VpcId,CidrBlock,Tags[?Key==`Name`].Value|[0]]' --output table
+aws rds describe-db-instances --query 'DBInstances[*].[DBInstanceIdentifier,DBInstanceStatus,Engine,Endpoint.Address]' --output table
+aws logs filter-log-events --log-group-name /aws/lambda/my-function --start-time $(date -d '1 hour ago' +%s000) --limit 50
+curl -s -o /dev/null -w '%{http_code}' https://internal-service.local:8080/health
+terraform plan -out=tfplan
+kubectl get pods -n kube-system
+</aws_examples>
+
+<command_guidelines>
+- Start with `aws` CLI for any AWS question. Use `--query` and `--output table` for focused output. Use `--region` for cross-region resources.
+- Chain read-only `aws` CLI commands with `&&`. Single destructive command per call.
+- Credential safety: never print credentials, tokens, or private keys. Use `--query` to extract only non-sensitive fields from secretsmanager. For Terraform state with secrets: `terraform state show` on specific resources only.
+- Safe operations: `--dry-run` for mutating AWS calls | `terraform plan` before `apply` | `kubectl diff` before `apply` | `aws describe-*` before modifications
+</command_guidelines>
+
+<execution_workflow>
+1. Plan: decide how you will confirm success before executing
+2. Execute: run the command
+3. Verify: confirm it worked
+4. Present: report results to user
+5. Adapt: try alternatives on failure. Human engagement: LAST RESORT only.
+</execution_workflow>
+
+<verification>
+- Terraform: `terraform plan` after changes
+- Kubernetes: `kubectl get` after apply
+- AWS resources: `aws describe-*` after modifications
+- File edits: file_read_on_operator to confirm
+- Credentials: `aws sts get-caller-identity` before cloud operations
+</verification>
+
+</execution>

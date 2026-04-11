@@ -1,0 +1,128 @@
+<!-- Mobile drawer backdrop -->
+<div class="operator-mobile-backdrop" id="operator-mobile-backdrop"></div>
+
+<!-- Mobile pull-out tab (shown only in drawer mode when panel is closed) -->
+<button class="operator-panel-pull-tab" id="operator-panel-pull-tab" title="Open Operator panel" aria-label="Open Operator panel">
+    <span class="pull-tab-icon material-symbols-outlined">chevron_right</span>
+</button>
+
+<!-- Operator Sidebar -->
+<div id="operator-panel-container"></div>
+
+<!-- Horizontal Resize Divider -->
+<div class="panel-divider" id="panel-divider" title="Drag to resize panels">
+    <div class="panel-divider__handle"></div>
+</div>
+
+<div class="chat-panel">
+    <!-- Chat messages panel hidden when authenticated - all content goes to terminal -->
+    <div class="chat-messages-panel initially-hidden" id="chat-messages">
+        <div class="messages-container" id="messages-container">
+            <!-- AI chat messages appear here, Operator execution events route to anchored terminal -->
+        </div>
+    </div>
+
+    <!-- Resize Handle - Hidden when terminal is in unified mode -->
+    <div class="panel-resize-handle initially-hidden" id="panel-resize-handle" title="Drag to resize">
+        <span class="panel-resize-handle__icon material-symbols-outlined">drag_handle</span>
+    </div>
+
+    <!-- Unified Input Terminal - Chat + CLI commands (takes full height when authenticated) -->
+    <div class="anchored-terminal-container unified-mode" id="anchored-terminal-container">
+        <div class="anchored-terminal" id="anchored-terminal">
+            <!-- Terminal output body -->
+            <div class="anchored-terminal__body" id="anchored-terminal-body">
+                <div class="anchored-terminal__output" id="anchored-terminal-output">
+                    <!-- Command output history will appear here -->
+                </div>
+                
+            </div>
+            
+            <!-- Terminal Header with controls -->
+            <div class="anchored-terminal__header">
+                <div class="anchored-terminal__header-left">
+                    <span class="anchored-terminal__hostname" id="anchored-terminal-hostname"></span>
+                    <button class="new-case-btn" id="new-case-btn" title="Start New Chat">+</button>
+                </div>
+                <div class="anchored-terminal__header-center">
+                    <!-- Case selector and controls moved here -->
+                    <div class="case-selector-container">
+                        <div class="case-dropdown" id="case-dropdown" tabindex="0">
+                            <div class="case-dropdown__selected" id="case-dropdown-selected">
+                                <span class="case-dropdown__text placeholder">Select a past conversation here, or start a new one below</span>
+                                <span class="case-dropdown__arrow material-symbols-outlined">expand_more</span>
+                            </div>
+                            <div class="case-dropdown__menu" id="case-dropdown-menu">
+                                <div class="case-dropdown__option placeholder" data-value="">Select a past conversation here, or start a new one below</div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="case-dropdown-value" value="">
+                        <div class="header-actions" id="sentinel-mode-container">
+                            <div class="llm-model-dropdown initially-hidden" id="llm-primary-model-container">
+                                <span class="llm-model-label">Primary</span>
+                                <select class="llm-model-select" id="llm-primary-model-select" title="Primary LLM model for complex tasks"></select>
+                            </div>
+                            <div class="llm-model-dropdown initially-hidden" id="llm-assistant-model-container">
+                                <span class="llm-model-label">Assistant</span>
+                                <select class="llm-model-select" id="llm-assistant-model-select" title="Assistant LLM model for simple tasks"></select>
+                            </div>
+                            <label class="sentinel-mode-toggle" id="sentinel-mode-toggle" title="Sentinel Mode: AI receives only scrubbed/redacted data. Works with or without a bound operator. Toggle anytime during your conversation.">
+                                <input type="checkbox" id="sentinel-mode-checkbox">
+                                <span class="sentinel-mode-slider"></span>
+                                <span class="sentinel-mode-label">
+                                    <span class="material-symbols-outlined sentinel-mode-icon">shield_lock</span>
+                                </span>
+                            </label>
+                            <button class="ai-stop-btn" id="ai-stop-btn" title="Stop AI Response" disabled>
+                                <span class="material-symbols-outlined">stop_circle</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="anchored-terminal__header-right">
+                </div>
+            </div>
+            
+            <!-- Unified input area -->
+            <div class="anchored-terminal__input-area">
+                <!-- Attachments display -->
+                <div class="anchored-terminal__attachments initially-hidden" id="anchored-terminal-attachments">
+                    <!-- Attached files will appear here -->
+                </div>
+                
+                <div class="anchored-terminal__input-wrapper">
+                    <!-- Maximize button - top left corner -->
+                    <button class="anchored-terminal__maximize-btn" id="anchored-terminal-maximize" title="Expand input area">
+                        <span class="material-symbols-outlined">expand_less</span>
+                    </button>
+                    
+                    <!-- Textarea for multi-line input -->
+                    <textarea 
+                        class="anchored-terminal__input" 
+                        id="anchored-terminal-input" 
+                        placeholder="Sign in to start chatting..."
+                        autocomplete="off"
+                        spellcheck="false"
+                        rows="2"
+                        disabled></textarea>
+                </div>
+                
+                <!-- Hint row -->
+                <div class="anchored-terminal__hint">
+                    <div class="anchored-terminal__hint-left">
+                        <span class="anchored-terminal__mode-indicator chat-mode" id="anchored-terminal-mode">CHAT</span>
+                        <span class="anchored-terminal__hint-text">Press Enter to send</span>
+                        <span class="anchored-terminal__hint-separator">|</span>
+                        <span class="anchored-terminal__hint-text">Use <code>/run &lt;cmd&gt;</code> for direct execution</span>
+                    </div>
+                    <div class="anchored-terminal__hint-right">
+                        <button class="anchored-terminal__attach-btn" id="anchored-terminal-attach" title="Attach files" disabled><span class="material-symbols-outlined">attach_file</span></button>
+                        <button class="anchored-terminal__send-btn" id="anchored-terminal-send" title="Send message" disabled>
+                            <span class="material-symbols-outlined">send</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,19 @@
+Surgical find-and-replace on a file.
+
+<parameters>
+<required>
+- file_path: Absolute path to the file
+- old_content: Exact text to find (must match perfectly including whitespace)
+- new_content: Replacement text
+- justification: Explanation for why this update is needed
+</required>
+<optional>
+- create_backup: Backup before modifying (default: true)
+</optional>
+</parameters>
+
+<critical>
+old_content MUST match file content exactly, including whitespace.
+Always READ the file first and copy the exact text to replace.
+Fails safely if old_content is not found.
+</critical>

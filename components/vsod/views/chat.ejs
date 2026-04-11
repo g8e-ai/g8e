@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="g8e - Zero-Trust AI for Real Production">
+    <meta name="robots" content="noindex, nofollow">
+    <title>g8e - Zero-Trust AI for Real Production</title>
+
+    <link rel="stylesheet" href="/css/fonts.css?v=<%= assetVersion %>">
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="/css/main.css?v=<%= assetVersion %>">
+
+    <!-- Component CSS -->
+    <link rel="stylesheet" href="/css/components.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/navigation.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/operator-terminal.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/code-blocks.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/modals.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/system-notifications.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/feedback.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/auth.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/chat.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/chat-input.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/markdown-tables.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/operator-panel.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/operator-metrics.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/bind-all-overlay.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/attachments.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/anchored-terminal.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/chat-landing.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/landing.css?v=<%= assetVersion %>">
+    <link rel="stylesheet" href="/css/operator-deployment.css?v=<%= assetVersion %>">
+
+
+
+    <!-- Markdown / Syntax / Diagram Libraries -->
+    <script src="/js/vendor/markdown-it.min.js"></script>
+    <script src="/js/vendor/purify.min.js"></script>
+    <link rel="stylesheet" href="/css/vendor/github-dark.min.css">
+    <script src="/js/vendor/highlight.min.js"></script>
+    <script src="/js/vendor/mermaid.min.js"></script>
+            <script nonce="<%= cspNonce %>">
+                // Initialize mermaid with dynamic theme support after DOM loads
+                document.addEventListener('DOMContentLoaded', () => {
+                    const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+                    
+                    // Comprehensive theme configuration for readable diagrams
+                    const themeConfig = currentTheme === 'light' ? {
+                        theme: 'base',
+                        themeVariables: {
+                            primaryTextColor: '#1f2937',
+                            textColor: '#374151',
+                            primaryColor: '#3b82f6',
+                            primaryBorderColor: '#2563eb',
+                            lineColor: '#6b7280',
+                            background: '#ffffff',
+                            mainBkg: '#f3f4f6',
+                            secondBkg: '#e5e7eb',
+                            tertiaryColor: '#f9fafb',
+                            nodeBorder: '#9ca3af',
+                            nodeTextColor: '#1f2937',
+                            clusterBkg: '#f3f4f6',
+                            clusterBorder: '#d1d5db',
+                            actorTextColor: '#1f2937',
+                            actorBkg: '#f3f4f6',
+                            actorBorder: '#9ca3af',
+                            signalColor: '#374151',
+                            signalTextColor: '#1f2937',
+                            labelBoxBkgColor: '#f9fafb',
+                            labelBoxBorderColor: '#d1d5db',
+                            labelTextColor: '#1f2937',
+                            loopTextColor: '#374151',
+                            noteBkgColor: '#fef3c7',
+                            noteBorderColor: '#f59e0b',
+                            noteTextColor: '#92400e',
+                            edgeLabelBackground: '#ffffff',
+                            classText: '#1f2937'
+                        }
+                    } : {
+                        theme: 'dark',
+                        themeVariables: {
+                            primaryTextColor: '#f0f6fc',
+                            textColor: '#e5e7eb',
+                            primaryColor: '#3b82f6',
+                            primaryBorderColor: '#60a5fa',
+                            lineColor: '#9ca3af',
+                            background: '#0d1117',
+                            mainBkg: '#1f2937',
+                            secondBkg: '#374151',
+                            tertiaryColor: '#161b22',
+                            nodeBorder: '#6b7280',
+                            nodeTextColor: '#f0f6fc',
+                            clusterBkg: '#1f2937',
+                            clusterBorder: '#4b5563',
+                            actorTextColor: '#f0f6fc',
+                            actorBkg: '#1f2937',
+                            actorBorder: '#6b7280',
+                            signalColor: '#e5e7eb',
+                            signalTextColor: '#f0f6fc',
+                            labelBoxBkgColor: '#161b22',
+                            labelBoxBorderColor: '#4b5563',
+                            labelTextColor: '#f0f6fc',
+                            loopTextColor: '#e5e7eb',
+                            noteBkgColor: '#422006',
+                            noteBorderColor: '#f59e0b',
+                            noteTextColor: '#fef3c7',
+                            edgeLabelBackground: '#1f2937',
+                            classText: '#f0f6fc'
+                        }
+                    };
+                    
+                    mermaid.initialize({ startOnLoad: false, ...themeConfig });
+                });
+            </script>
+
+            <!-- App Configuration -->
+            <script nonce="<%= cspNonce %>">
+                window.APP_CONFIG = {};
+                // Service URLs now defined in /js/utils/service-client.js
+            </script>
+
+            <!-- Dev logs bootstrap — server-side user preference injected before module scripts -->
+            <%- include('partials/dev-logs-bootstrap') %>
+
+            <!-- Theme Manager - must load before all other scripts -->
+            <script src="/js/utils/theme-manager.js"></script>
+            <!-- ServiceClient - must load before any module that calls window.serviceClient -->
+            <script type="module" src="/js/utils/service-client.js"></script>
+
+</head>
+
+<body class="chat-page" data-theme="<%= theme %>">
+        <!-- Header -->
+        <header class="landing-header">
+            <div class="header-left">
+                <%- include('partials/hamburger-menu', { currentPage: 'chat' }) %>
+                <a href="/" class="nav-logo-link">
+                    <span class="logo-icon"><span class="logo-accent">g</span>8<span class="logo-accent">e</span></span>
+                </a>
+            </div>
+            <div class="nav-categories-menu" id="nav-categories-menu" style="display: none;">
+                <a href="/" class="nav-category-link">Home</a>
+                <a href="/docs" class="nav-category-link">Docs</a>
+                <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="nav-category-link">GitHub</a>
+            </div>
+            <nav class="header-nav">
+                <div id="auth-button-container" class="nav-auth-container">
+                </div>
+            </nav>
+        </header>
+
+        <!-- Chat Container -->
+        <div class="chat-container" data-component="chat">
+            <!-- Chat content will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <div class="footer-links">
+                    <a href="/docs" class="footer-link">Docs</a>
+                </div>
+                <div class="footer-copyright">
+                    <a href="https://g8e.local" class="footer-link">g8e © 2026 Lateralus Labs, LLC</a>
+                </div>
+                <div class="footer-links">
+                    <a href="https://g8e.local" class="footer-link">g8e.local</a>
+                </div>
+            </div>
+        </footer>
+
+    <!-- JavaScript -->
+    <script type="module" src="/js/utils/error-handler.js"></script>
+    <!-- Then load main app -->
+    <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+
+    <!-- Progressive Enhancement: Works without JS -->
+    <!-- Note: .auth-prompt elements should also have .noscript-hide class for JS-disabled fallback -->
+    <!-- The .noscript-hide class is defined in main.css and applied via <noscript> link below -->
+    <noscript>
+        <link rel="stylesheet" href="/css/noscript.css?v=<%= assetVersion %>">
+    </noscript>
+</body>
+
+</html>

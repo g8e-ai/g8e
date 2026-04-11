@@ -1,0 +1,26 @@
+{
+  "_comment": "Canonical pub/sub wire protocol constants shared across VSE (Python), VSA (Go), and VSOD (JS). These values must match the VSODB broker implementation.",
+
+  "wire": {
+    "actions": {
+      "subscribe": "subscribe",
+      "psubscribe": "psubscribe",
+      "unsubscribe": "unsubscribe",
+      "publish": "publish"
+    },
+    "event_types": {
+      "message": "message",
+      "pmessage": "pmessage",
+      "subscribed": "subscribed"
+    },
+    "fields": {
+      "action": "action",
+      "channel": "channel",
+      "data": "data",
+      "message": "message",
+      "pattern": "pattern",
+      "type": "type",
+      "sender": "sender"
+    }
+  }
+}

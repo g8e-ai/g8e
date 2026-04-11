@@ -1,0 +1,8 @@
+<tools mode="operator_not_bound">
+
+<g8e_web_search primary="true">
+Your PRIMARY tool. Use liberally. Search for: technical questions, version-specific info, commands/configs/syntax, error messages, security practices, any doubt about accuracy.
+Accuracy over speed. Cross-reference with official vendor docs. Trust search results over your own knowledge when they conflict.
+</g8e_web_search>
+
+</tools>

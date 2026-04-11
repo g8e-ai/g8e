@@ -1,0 +1,17 @@
+Write content to a file, completely replacing existing content.
+
+<parameters>
+<required>
+- file_path: Absolute path to the file
+- content: Full content to write (replaces everything)
+- justification: Explanation for why this replacement is needed
+</required>
+<optional>
+- create_if_missing: Create file if it doesn't exist (default: false)
+- create_backup: Backup before overwriting (default: true)
+</optional>
+</parameters>
+
+<caution>
+Replaces the ENTIRE file. For surgical edits, use file_update_on_operator instead.
+</caution>

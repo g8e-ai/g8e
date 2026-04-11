@@ -1,0 +1,6 @@
+<%#
+  Dev logs bootstrap — inject server-side user preference into window scope.
+  devLogsEnabled is passed from the route handler (false when not an admin or not set).
+  Must be inlined before any module scripts so devLogger reads the correct value.
+%>
+<script nonce="<%= locals.cspNonce %>">window.__DEV_LOGS_ENABLED = <%= locals.devLogsEnabled === true ? 'true' : 'false' %>;</script>

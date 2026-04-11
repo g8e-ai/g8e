@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="g8e - Zero-Trust AI for Real Production">
+    <meta name="robots" content="noindex, nofollow">
+    <title>g8e - Sign In</title>
+
+    <%- include('partials/head-public') %>
+</head>
+
+<body data-theme="<%= theme %>">
+        <%- include('partials/nav-public', { currentPage: 'login' }) %>
+
+        <main class="login-section">
+            <div class="login-body-content">
+                <div class="login-flow">
+                    <div class="login-logo-img"><span class="logo-accent">g</span>8<span class="logo-accent">e</span></div>
+                    <div class="login-flow-node login-flow-browser login-flow-row2">
+                        <span class="material-symbols-outlined">terminal</span>
+                        <span>Your Browser</span>
+                    </div>
+                    <div class="login-flow-arrow login-flow-row2">
+                        <span class="material-symbols-outlined">arrow_forward</span>
+                    </div>
+                    <div class="login-flow-node login-flow-platform login-flow-row2">
+                        <span class="material-symbols-outlined">hub</span>
+                        <span>g8e Platform</span>
+                    </div>
+                    <div class="login-flow-arrow login-flow-row2">
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </div>
+                    <div class="login-flow-node login-flow-operator login-flow-row2">
+                        <span class="material-symbols-outlined">dns</span>
+                        <span>Bound Operator</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <%- include('partials/footer-public') %>
+
+    <script type="module" src="/js/utils/error-handler.js"></script>
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+</body>
+
+</html>

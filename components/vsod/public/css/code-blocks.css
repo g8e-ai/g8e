@@ -1,0 +1,202 @@
+/* Modern Code Blocks with highlight.js */
+
+.code-block-wrapper {
+    margin: 1rem 0;
+    border-radius: 0.25rem;
+    background: #0d1117;
+    border: 1px solid rgba(240, 246, 252, 0.1);
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    background: #161b22 !important;
+    border-bottom: 1px solid rgba(240, 246, 252, 0.1);
+    color: #7d8590 !important;
+}
+
+.code-lang-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #8b949e !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono);
+    background: transparent !important;
+}
+
+.code-copy-btn {
+    background: transparent;
+    border: 1px solid rgba(240, 246, 252, 0.12);
+    border-radius: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    color: #7d8590;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.code-copy-btn:hover {
+    background: rgba(240, 246, 252, 0.08);
+    border-color: rgba(240, 246, 252, 0.2);
+    color: #c9d1d9;
+}
+
+.code-copy-btn .material-symbols-outlined {
+    font-size: 1rem;
+}
+
+/* CSP-compliant copy button states (replaces inline styles) */
+.code-copy-btn.copy-success {
+    color: #4ade80;
+}
+
+.code-copy-btn.copy-error {
+    color: #ef4444;
+}
+
+.code-block-wrapper pre {
+    margin: 0;
+    padding: 1rem;
+    background: #0d1117;
+    overflow-x: auto;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.code-block-wrapper code {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: pre !important;
+    display: block;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    max-width: none;
+    width: max-content;
+    min-width: 100%;
+    background: #0d1117 !important;
+    color: #e6edf3;
+}
+
+.code-block-wrapper code.hljs {
+    background: #0d1117 !important;
+    padding: 1rem;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .code-block-wrapper {
+    background: #ffffff;
+    border-color: rgba(27, 31, 36, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .code-block-header {
+    background: #f6f8fa !important;
+    border-bottom-color: rgba(27, 31, 36, 0.15);
+    color: #57606a !important;
+}
+
+[data-theme="light"] .code-lang-label {
+    color: #57606a !important;
+    background: transparent !important;
+}
+
+[data-theme="light"] .code-copy-btn {
+    border-color: rgba(27, 31, 36, 0.15);
+    color: #57606a;
+}
+
+[data-theme="light"] .code-copy-btn:hover {
+    background: rgba(175, 184, 193, 0.2);
+    border-color: rgba(27, 31, 36, 0.25);
+    color: #24292f;
+}
+
+[data-theme="light"] .code-block-wrapper pre {
+    background: #ffffff;
+}
+
+[data-theme="light"] .code-block-wrapper code,
+[data-theme="light"] .code-block-wrapper code.hljs {
+    background: #ffffff !important;
+    color: #24292f;
+}
+
+/* Inline code styling */
+.inline-code {
+    background: rgba(110, 118, 129, 0.15);
+    color: #f0f6fc;
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    border: 1px solid rgba(110, 118, 129, 0.2);
+}
+
+[data-theme="light"] .inline-code {
+    background: rgba(175, 184, 193, 0.2);
+    color: #24292f;
+    border-color: rgba(27, 31, 36, 0.15);
+}
+
+/* Mermaid diagram styling */
+.mermaid-wrapper {
+    margin: 1rem 0;
+    border-radius: 0.25rem;
+    background: #0d1117;
+    border: 1px solid rgba(240, 246, 252, 0.1);
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.mermaid-diagram {
+    padding: 2rem;
+    background: #0d1117;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    overflow-x: auto;
+}
+
+.mermaid-diagram.mermaid-rendered {
+    background: #0d1117;
+}
+
+.mermaid-diagram svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.mermaid-error {
+    color: #f85149;
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+[data-theme="light"] .mermaid-wrapper {
+    background: #ffffff;
+    border-color: rgba(27, 31, 36, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .mermaid-diagram {
+    background: #ffffff;
+}
+
+[data-theme="light"] .mermaid-diagram.mermaid-rendered {
+    background: #ffffff;
+}
+
+[data-theme="light"] .mermaid-error {
+    color: #cf222e;
+}

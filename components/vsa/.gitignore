@@ -1,0 +1,4 @@
+# vendor/ is intentionally committed — all deps are vendored for auditable, air-gapped builds
+
+# Go tilde backup files
+*~

@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Shared utilities for g8e data management scripts.
+
+Provides authentication, HTTP clients (VSODB direct + VSOD internal API),
+and terminal display helpers used across all resource scripts.
+"""
+
+import json
+import os
+import shutil
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
+_SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
+
+with open(_SHARED_CONSTANTS / 'collections.json') as _f:
+    _COLLECTIONS_DATA = json.load(_f)
+
+VSODB_BASE_URL = 'https://vsodb'
+VSOD_BASE_URL = 'https://vsod'
+COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
+PRESERVE_COLLECTIONS = {'settings'}
+
+
+# =============================================================================
+# Authentication
+# =============================================================================
+
+def get_internal_auth_token() -> str:
+    """Load internal auth token from env or shared SSL volume."""
+    token = os.environ.get('G8E_INTERNAL_AUTH_TOKEN')
+    if token:
+        return token
+
+    token_path = Path('/vsodb/internal_auth_token')
+    if token_path.exists():
+        try:
+            return token_path.read_text().strip()
+        except Exception:
+            pass
+
+    token_path_ssl = Path('/vsodb/ssl/internal_auth_token')
+    if token_path_ssl.exists():
+        try:
+            return token_path_ssl.read_text().strip()
+        except Exception:
+            pass
+    return ''
+
+
+# =============================================================================
+# VSODB HTTP client — direct DB/KV access (same as VSE's DBClient)
+# =============================================================================
+
+def vsodb_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
+    url = f'{VSODB_BASE_URL}{path}'
+    data = json.dumps(body).encode() if body is not None else None
+    headers = {'Content-Type': 'application/json'} if data is not None else {}
+
+    token = get_internal_auth_token()
+    if token:
+        headers['X-Internal-Auth'] = token
+
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            text = resp.read().decode()
+            return json.loads(text) if text else None
+    except urllib.error.HTTPError as e:
+        body_text = e.read().decode()
+        if e.code == 404:
+            return None
+        try:
+            err = json.loads(body_text).get('error', body_text)
+        except Exception:
+            err = body_text
+        raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
+    except urllib.error.URLError as e:
+        raise RuntimeError(
+            f'Cannot reach VSODB at {VSODB_BASE_URL}. Is the platform running?\n  {e.reason}'
+        )
+
+
+def query_collection(collection: str, limit: int = 0) -> List[Dict]:
+    body: Dict = {}
+    if limit > 0:
+        body['limit'] = limit
+    result = vsodb_request('POST', f'/db/{urllib.parse.quote(collection, safe="")}/_query', body)
+    return result if isinstance(result, list) else []
+
+
+def get_document(collection: str, doc_id: str) -> Optional[Dict]:
+    return vsodb_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+
+
+def delete_document(collection: str, doc_id: str) -> None:
+    vsodb_request('DELETE', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+
+
+def kv_keys(pattern: str = '*') -> List[str]:
+    result = vsodb_request('POST', '/kv/_keys', {'pattern': pattern})
+    return result.get('keys', []) if isinstance(result, dict) else []
+
+
+def kv_get(key: str) -> Optional[str]:
+    result = vsodb_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
+    return result.get('value') if isinstance(result, dict) else None
+
+
+def kv_delete_pattern(pattern: str) -> int:
+    result = vsodb_request('POST', '/kv/_delete_pattern', {'pattern': pattern})
+    return result.get('deleted', 0) if isinstance(result, dict) else 0
+
+
+# =============================================================================
+# VSOD internal API client — for resource management (users, operators, etc.)
+# =============================================================================
+
+INTERNAL_AUTH_HEADER = 'x-internal-auth'
+
+
+def vsod_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
+    data = json.dumps(body).encode() if body is not None else None
+    headers = {
+        INTERNAL_AUTH_HEADER: get_internal_auth_token() or '',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+    }
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body_bytes = e.read()
+        try:
+            err = json.loads(body_bytes.decode())
+        except Exception:
+            err = {'error': body_bytes.decode()}
+        err['_status_code'] = e.code
+        return err
+    except urllib.error.URLError as e:
+        raise RuntimeError(
+            f"Could not reach VSOD at {VSOD_BASE_URL}. Is the platform running? "
+            f"(./g8e platform start)\n  {e.reason}"
+        )
+
+
+def resolve_user_id(user_id: Optional[str], email: Optional[str]) -> Optional[str]:
+    if user_id:
+        return user_id
+    if not email:
+        return None
+    result = vsod_request('GET', f'{VSOD_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
+    if not result.get('success'):
+        if result.get('_status_code') == 404:
+            print(f"\nUser not found with email: {email}")
+        else:
+            raise RuntimeError(result.get('error', 'Failed to resolve user by email'))
+        return None
+    return result['data']['id']
+
+
+# =============================================================================
+# Display helpers
+# =============================================================================
+
+def print_table(rows: List[Dict]) -> None:
+    if not rows:
+        return
+    keys = list(rows[0].keys())
+    term_width = shutil.get_terminal_size((200, 40)).columns
+
+    widths: Dict[str, int] = {k: len(k) for k in keys}
+    for row in rows:
+        for k in keys:
+            val = row.get(k)
+            widths[k] = max(widths[k], len(str(val) if val is not None else ''))
+
+    total = sum(widths.values()) + 3 * (len(keys) - 1) + 2
+    if total > term_width:
+        overflow = total - term_width
+        shrinkable = sorted(keys, key=lambda k: -widths[k])
+        for k in shrinkable:
+            trim = min(overflow, widths[k] - max(len(k), 8))
+            if trim > 0:
+                widths[k] -= trim
+                overflow -= trim
+            if overflow <= 0:
+                break
+
+    sep = '  '
+    header = sep.join(f'{k.upper()[:widths[k]]:<{widths[k]}}' for k in keys)
+    divider = sep.join('-' * widths[k] for k in keys)
+    print(f'  {header}')
+    print(f'  {divider}')
+    for row in rows:
+        parts = []
+        for k in keys:
+            val = row.get(k)
+            s = str(val) if val is not None else ''
+            if len(s) > widths[k]:
+                s = s[:widths[k] - 1] + '+'
+            parts.append(f'{s:<{widths[k]}}')
+        print(f'  {sep.join(parts)}')
+
+
+def print_banner(script_name: str, args_str: str) -> None:
+    print('')
+    print('\u2501' * 52)
+    print(f'  {script_name} {args_str}')
+    print('\u2501' * 52)
+    print('')

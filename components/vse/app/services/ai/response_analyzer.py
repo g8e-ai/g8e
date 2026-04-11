@@ -1,0 +1,338 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import logging
+
+import app.llm.llm_types as types
+from app.models.settings import VSEPlatformSettings, VSEUserSettings
+from app.constants import ErrorAnalysisCategory, RiskLevel
+from app.llm import get_llm_provider, Role
+from app.models.tool_results import (
+    CommandRiskAnalysis,
+    CommandRiskContext,
+    ErrorAnalysisContext,
+    ErrorAnalysisResult,
+    FileOperationRiskAnalysis,
+    FileOperationRiskContext,
+)
+from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+
+logger = logging.getLogger(__name__)
+
+
+class AIResponseAnalyzer:
+    """Analyzes AI responses and performs defensive operations.
+
+    Responsibilities:
+    - Defensive operations analysis (command risk, error analysis, file operations)
+    """
+
+    def __init__(self, settings: VSEPlatformSettings):
+        self._settings = settings
+        logger.info("AIResponseAnalyzer initialized")
+
+    async def analyze_command_risk(
+        self,
+        command: str,
+        justification: str,
+        context: CommandRiskContext,
+        settings: VSEUserSettings,
+    ) -> CommandRiskAnalysis:
+        context = context or CommandRiskContext()
+        working_dir = context.working_directory
+        resolved_settings = settings
+
+        prompt = f"""\
+Classify the risk level of a shell command.
+
+<risk_levels>
+LOW: Read-only operations that cannot modify state.
+  Examples: cat, ls, grep, ps, df, top, echo, which, find (read-only), uptime, whoami, hostname, uname, free, vmstat, iostat, netstat, ss, ip, dig, nslookup, ping, traceroute, curl (GET), wget (GET)
+MEDIUM: State-changing operations that are reversible or scoped.
+  Examples: file writes, service restarts, package installs, chmod, mkdir
+HIGH: Destructive or irreversible operations.
+  Examples: rm -rf, mkfs, dd, truncate, kill -9, iptables -F, shutdown
+</risk_levels>
+
+<command>
+{command}
+</command>
+
+<justification>
+{justification}
+</justification>
+
+<working_directory>
+{working_dir}
+</working_directory>
+
+Classify the command risk level."""
+
+        try:
+            client = get_llm_provider(resolved_settings.llm)
+            assistant_model = resolved_settings.llm.assistant_model
+            response = await client.generate_content(
+                model=assistant_model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
+                    json_schema=CommandRiskAnalysis.model_json_schema(),
+                    model=assistant_model,
+                    temperature=None,
+                    max_tokens=None,
+                    system_instruction="",
+                ),
+                tools=[],
+                system_instruction="",
+            )
+
+            response_text = response.text
+            if response_text is None:
+                logger.error("Command risk analysis: LLM returned no text content")
+                return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
+            analysis = CommandRiskAnalysis.model_validate_json(response_text)
+
+            logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
+
+            return analysis
+
+        except Exception as e:
+            logger.error("Command risk analysis failed: %s", e, exc_info=True)
+            return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
+
+    async def analyze_error_and_suggest_fix(
+        self,
+        command: str,
+        exit_code: int,
+        stdout: str,
+        stderr: str,
+        context: ErrorAnalysisContext,
+        settings: VSEUserSettings,
+    ) -> ErrorAnalysisResult:
+        context = context or ErrorAnalysisContext()
+        retry_count = context.retry_count
+        working_dir = context.working_directory
+        resolved_settings = settings
+
+        if retry_count >= 2:
+            logger.info(
+                "Error analysis short-circuited at retry limit: command=%s retry_count=%s",
+                command[:60], retry_count,
+            )
+            return ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause=f"Command failed after {retry_count} retries",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="Retry limit reached - escalating to prevent infinite loop",
+                user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
+            )
+
+        prompt = f"""\
+Analyze this command failure and determine if it can be auto-fixed or requires human intervention.
+
+<failed_command>
+{command}
+</failed_command>
+
+<exit_code>
+{exit_code}
+</exit_code>
+
+<stdout>
+{stdout[:1000]}
+</stdout>
+
+<stderr>
+{stderr[:1000]}
+</stderr>
+
+<context>
+Retry Count: {retry_count}
+Working Directory: {working_dir}
+</context>
+
+<auto_fixable_errors>
+- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
+- Permission denied on a LOCAL project file (chmod, chown — NOT SSH auth): chmod / chown scoped to project directory
+- Syntax errors in commands (wrong flags, typos): corrected command
+- Missing directories (No such file or directory for expected paths): mkdir -p
+- Port conflicts (Address already in use): kill process on port or use different port
+</auto_fixable_errors>
+
+<escalate_to_human>
+- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
+- Invalid API keys or credentials: MUST escalate
+- System-level failures: kernel errors, hardware issues
+- Data corruption: file system errors, database corruption
+- Ambiguous errors: multiple possible root causes
+- Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
+- Configuration issues requiring human access: environment setup, server-side config
+</escalate_to_human>
+
+Based on the information above, analyze the failure and fill in ALL response fields."""
+
+        try:
+            client = get_llm_provider(resolved_settings.llm)
+            assistant_model = resolved_settings.llm.assistant_model
+            response = await client.generate_content(
+                model=assistant_model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
+                    json_schema=ErrorAnalysisResult.model_json_schema(),
+                    model=assistant_model,
+                    temperature=None,
+                    max_tokens=None,
+                    system_instruction="",
+                ),
+                tools=[],
+                system_instruction="",
+            )
+
+            response_text = response.text
+            if response_text is None:
+                logger.error("Error analysis: LLM returned no text content")
+                return ErrorAnalysisResult(
+                    error_category=ErrorAnalysisCategory.UNKNOWN,
+                    root_cause="LLM returned no text content",
+                    can_auto_fix=False,
+                    should_escalate=True,
+                    reasoning="LLM response contained no text parts",
+                    user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+                )
+            analysis = ErrorAnalysisResult.model_validate_json(response_text)
+            if retry_count >= 2:
+                analysis.can_auto_fix = False
+                analysis.should_escalate = True
+                analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
+            logger.info(
+                "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
+                command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
+            )
+            return analysis
+
+        except Exception as e:
+            logger.error("Error analysis failed: %s", e, exc_info=True)
+            return ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="Error analysis failed",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning=f"Analysis error: {e!s}",
+                user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+            )
+
+    async def analyze_file_operation_risk(
+        self,
+        operation: str,
+        file_path: str,
+        content: str,
+        context: FileOperationRiskContext,
+        settings: VSEUserSettings,
+    ) -> FileOperationRiskAnalysis:
+        context = context or FileOperationRiskContext()
+        git_status = context.git_status
+        backup_available = context.backup_available
+        resolved_settings = settings
+
+        content_preview = content[:500] if content else "N/A"
+
+        prompt = f"""\
+Analyze this file operation for safety and risk level.
+
+<operation>
+{operation}
+</operation>
+
+<file_path>
+{file_path}
+</file_path>
+
+<content_preview>
+{content_preview}
+</content_preview>
+
+<context>
+Git Status: {git_status}
+Backup Available: {backup_available}
+</context>
+
+<system_file_patterns>
+HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
+HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries
+</system_file_patterns>
+
+<risk_levels>
+LOW: Build artifacts, temp files (/tmp), generated output
+MEDIUM: Project source files, config files (package.json, requirements.txt)
+HIGH: System files, irreversible deletes, dirty git + destructive operation
+</risk_levels>
+
+<blocking_conditions>
+- System file path without explicit override
+- Delete operation with no backup available
+- Dirty git state combined with a destructive operation
+</blocking_conditions>
+
+Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
+
+        try:
+            client = get_llm_provider(resolved_settings.llm)
+            assistant_model = resolved_settings.llm.assistant_model
+            response = await client.generate_content(
+                model=assistant_model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                config=AIGenerationConfigBuilder.get_lite_generation_config_with_schema(
+                    json_schema=FileOperationRiskAnalysis.model_json_schema(),
+                    model=assistant_model,
+                    temperature=None,
+                    max_tokens=None,
+                    system_instruction="",
+                ),
+                tools=[],
+                system_instruction="",
+            )
+
+            response_text = response.text
+            if response_text is None:
+                logger.error("File operation risk analysis: LLM returned no text content")
+                return FileOperationRiskAnalysis(
+                    risk_level=RiskLevel.HIGH,
+                    is_system_file=False,
+                    safe_to_proceed=False,
+                    blocking_issues=["Risk analysis failed - LLM returned no content"],
+                    approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+                )
+            analysis = FileOperationRiskAnalysis.model_validate_json(response_text)
+
+            system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
+            analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
+
+            if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
+                analysis.safe_to_proceed = False
+
+            logger.info(
+                "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
+                operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
+            )
+
+            return analysis
+
+        except Exception as e:
+            logger.error("File operation risk analysis failed: %s", e, exc_info=True)
+            return FileOperationRiskAnalysis(
+                risk_level=RiskLevel.HIGH,
+                is_system_file=False,
+                safe_to_proceed=False,
+                blocking_issues=["Risk analysis failed - manual review required"],
+                approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+            )

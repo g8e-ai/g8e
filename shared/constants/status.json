@@ -1,0 +1,513 @@
+{
+  "_comment": "Canonical status values shared across VSE (Python), VSA (Go), and VSOD (JS).",
+
+  "user.role": {
+    "user": "user",
+    "admin": "admin",
+    "superadmin": "superadmin",
+    "operator": "operator"
+  },
+
+  "g8e.status": {
+    "available": "available",
+    "unavailable": "unavailable",
+    "offline": "offline",
+    "bound": "bound",
+    "stale": "stale",
+    "active": "active",
+    "stopped": "stopped",
+    "terminated": "terminated"
+  },
+
+  "g8e.type": {
+    "system": "system",
+    "cloud": "cloud"
+  },
+
+  "cloud.subtype": {
+    "aws": "aws",
+    "gcp": "gcp",
+    "azure": "azure",
+    "g8e_pod": "g8e_pod"
+  },
+
+  "execution.status": {
+    "pending": "pending",
+    "executing": "executing",
+    "completed": "completed",
+    "failed": "failed",
+    "timeout": "timeout",
+    "cancelled": "cancelled",
+    "cancel.requested": "cancel_requested",
+    "denied": "denied",
+    "feedback": "feedback"
+  },
+
+  "action.status": {
+    "completed": "completed",
+    "failed": "failed",
+    "timeout": "timeout",
+    "cancelled": "cancelled",
+    "user.cancelled": "user.cancelled"
+  },
+
+  "vault.mode": {
+    "raw": "raw",
+    "scrubbed": "scrubbed"
+  },
+
+  "api.key.status": {
+    "active": "active",
+    "revoked": "revoked",
+    "expired": "expired",
+    "suspended": "suspended"
+  },
+
+  "investigation.status": {
+    "open":      "Open",
+    "closed":    "Closed",
+    "escalated": "Escalated",
+    "resolved":  "Resolved"
+  },
+
+  "case.status": {
+    "new": "New",
+    "triage": "Triage",
+    "escalated": "Escalated",
+    "waiting.for.customer": "WaitingForCustomer",
+    "investigate": "Investigate",
+    "human.review": "HumanReview",
+    "resolved": "Resolved",
+    "closed": "Closed"
+  },
+
+  "task.status": {
+    "pending": "pending",
+    "in.progress": "executing",
+    "completed": "completed",
+    "failed": "failed",
+    "cancelled": "cancelled"
+  },
+
+  "component.name": {
+    "vse": "vse",
+    "vsa": "vsa",
+    "vsod": "vsod"
+  },
+
+  "component.status": {
+    "active": "active",
+    "inactive": "inactive",
+    "maintenance": "maintenance",
+    "error": "error"
+  },
+
+  "health.status": {
+    "healthy": "healthy",
+    "unhealthy": "unhealthy"
+  },
+
+  "approval.type": {
+    "command": "command",
+    "file.edit": "file.edit",
+    "intent": "intent"
+  },
+
+  "workflow.type": {
+    "g8e.bound": "g8e.bound",
+    "g8e.not.bound": "g8e.not.bound"
+  },
+
+  "risk.level": {
+    "low": "LOW",
+    "medium": "MEDIUM",
+    "high": "HIGH"
+  },
+
+  "risk.threshold": {
+    "low": "low",
+    "medium": "medium",
+    "high": "high"
+  },
+
+  "escalation.risk": {
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "critical": "critical"
+  },
+
+  "platform": {
+    "linux": "linux",
+    "windows": "windows",
+    "darwin": "darwin"
+  },
+
+  "heartbeat.type": {
+    "automatic": "automatic",
+    "bootstrap": "bootstrap",
+    "requested": "requested"
+  },
+
+  "g8e.availability": {
+    "online": "ONLINE",
+    "offline": "OFFLINE"
+  },
+
+  "version.stability": {
+    "stable": "stable",
+    "beta": "beta",
+    "dev": "dev"
+  },
+
+  "session.type": {
+    "web": "web",
+    "operator": "operator"
+  },
+
+  "conversation.status": {
+    "active": "active",
+    "inactive": "inactive",
+    "completed": "completed"
+  },
+
+  "infrastructure.status": {
+    "unknown": "unknown",
+    "healthy": "healthy",
+    "stable": "stable",
+    "degraded": "degraded",
+    "critical": "critical"
+  },
+
+  "ai.source": {
+    "tool.call": "ai.tool.call",
+    "terminal.anchored": "ai.terminal.anchored",
+    "terminal.direct": "ai.terminal.direct"
+  },
+
+  "ai.task.id": {
+    "command": "ai.command",
+    "direct.command": "ai.direct.command",
+    "file.edit": "ai.file.edit",
+    "fs.list": "ai.fs.list",
+    "fs.read": "ai.fs.read",
+    "port.check": "ai.port.check",
+    "fetch.logs": "ai.fetch.logs",
+    "fetch.history": "ai.fetch.history",
+    "fetch.file.history": "ai.fetch.file.history",
+    "restore.file": "ai.restore.file",
+    "fetch.file.diff": "ai.fetch.file.diff",
+    "intent.grant": "ai.intent.grant",
+    "intent.revoke": "ai.intent.revoke"
+  },
+
+  "thinking.action.type": {
+    "start":  "start",
+    "update": "update",
+    "end":    "end"
+  },
+
+  "tool.call.status": {
+    "started":   "started",
+    "completed": "completed"
+  },
+
+  "command.status": {
+    "pending":   "pending",
+    "executing": "executing",
+    "output":    "output",
+    "completed": "completed",
+    "failed":    "failed",
+    "timeout":   "timeout",
+    "cancelled": "cancelled"
+  },
+
+  "tool.display.category": {
+    "execution": "execution",
+    "file":      "file",
+    "network":   "network",
+    "search":    "search",
+    "general":   "general"
+  },
+
+  "tool.call.defaults": {
+    "label":    "Processing",
+    "icon":     "sync",
+    "category": "general"
+  },
+
+  "tribunal.verifier.reason": {
+    "revised": "revised"
+  },
+
+  "tribunal.outcome": {
+    "verification.failed": "verification_failed",
+    "consensus":           "consensus",
+    "verified":            "verified"
+  },
+
+  "tribunal.fallback.reason": {
+    "disabled":             "disabled",
+    "provider.unavailable": "provider_unavailable",
+    "all.passes.failed":    "all_passes_failed",
+    "no.vote.winner":       "no_vote_winner"
+  },
+
+  "citation.layout": {
+    "hover.card.width.px":            360,
+    "favicon.size.px":                16,
+    "hover.card.viewport.margin.px":  8,
+    "heading.segment.max.length":     60,
+    "sentence.lookahead.chars":       120,
+    "paragraph.lookahead.chars":      200
+  },
+
+  "g8e.action.type": {
+    "command.execution": "operator.command.execution",
+    "command.executed": "operator.command.executed",
+    "file.read": "operator.file.read",
+    "file.edit": "operator.file.edit",
+    "file.list": "operator.file.list",
+    "port.check": "g8e.port.check"
+  },
+
+  "command.error.type": {
+    "validation.error": "validation.error",
+    "security.error": "security.error",
+    "security.violation": "security.violation",
+    "binding.violation": "binding.violation",
+    "no.operators.available": "no.operators.available",
+    "g8e.resolution.error": "g8e.resolution.error",
+    "cloud.operator.required": "cloud.operator.required",
+    "blacklist.violation": "blacklist.violation",
+    "whitelist.violation": "whitelist.violation",
+    "execution.failed": "execution.failed",
+    "execution.error": "execution.error",
+    "user.denied": "user.denied",
+    "user.feedback": "user.feedback",
+    "permission.denied": "permission.denied",
+    "command.timeout": "command.timeout",
+    "command.execution.failed": "command.execution.failed",
+    "pubsub.subscription.not.ready": "pubsub.subscription.not.ready",
+    "unknown.tool": "unknown.tool",
+    "fs.list.failed": "fs.list.failed",
+    "fs.read.failed": "fs.read.failed",
+    "user.cancelled": "user.cancelled",
+    "risk.analysis.blocked": "risk.analysis.blocked",
+    "approval.denied": "approval.denied",
+    "operation.timeout": "operation.timeout",
+    "invalid.intent": "invalid.intent",
+    "missing.operator.id": "missing.operator.id",
+    "partial.iam.update.failed": "partial.iam.update.failed",
+    "partial.iam.detach.failed": "partial.iam.detach.failed",
+    "restore.file.failed": "restore.file.failed",
+    "fetch.file.diff.failed": "fetch.file.diff.failed",
+    "fetch.logs.failed": "fetch.logs.failed",
+    "fetch.history.failed": "fetch.history.failed",
+    "fetch.file.history.failed": "fetch.file.history.failed",
+    "port.check.failed": "port.check.failed",
+    "approval.timeout": "approval.timeout",
+    "permission.error": "permission.error"
+  },
+
+  "file.operation": {
+    "read": "read",
+    "create": "create",
+    "write": "write",
+    "update": "update",
+    "replace": "replace",
+    "insert": "insert",
+    "delete": "delete",
+    "patch": "patch"
+  },
+
+  "network.protocol": {
+    "tcp": "tcp",
+    "udp": "udp"
+  },
+
+  "auth.provider": {
+    "local": "local",
+    "passkey": "passkey"
+  },
+
+  "auth.mode": {
+    "api_key": "api_key",
+    "operator_session": "operator_session"
+  },
+
+  "auth.method": {
+    "kv.pubsub": "kv_pubsub",
+    "session": "session"
+  },
+
+  "connection.state": {
+    "disconnected": "disconnected",
+    "connecting": "connecting",
+    "connected": "connected",
+    "reconnecting": "reconnecting",
+    "closed": "closed",
+    "error": "error"
+  },
+
+  "environment": {
+    "production": "production",
+    "dev": "dev",
+    "test": "test"
+  },
+
+  "device.link.status": {
+    "active": "active",
+    "pending": "pending",
+    "used": "used",
+    "exhausted": "exhausted",
+    "expired": "expired",
+    "revoked": "revoked"
+  },
+
+  "device.link.success": {
+    "listed":  "Device links listed successfully",
+    "created": "Device link created successfully",
+    "revoked": "Device link revoked successfully",
+    "deleted": "Device link deleted successfully"
+  },
+
+  "system.health": {
+    "healthy": "healthy",
+    "degraded": "degraded",
+    "unhealthy": "unhealthy",
+    "unknown": "unknown"
+  },
+
+  "session.key.prefix": {
+    "web": "web_session",
+    "operator": "operator_session"
+  },
+
+  "history.event.type": {
+    "created": "created",
+    "slot.created": "slot.created",
+    "slot.consumed": "slot.consumed",
+    "slot.released": "slot.released",
+    "bound": "bound",
+    "unbound": "unbound",
+    "heartbeat.received": "heartbeat.received",
+    "status.changed": "status.changed",
+    "api.key.refreshed": "api.key.refreshed",
+    "created.from.refresh": "created.from.refresh",
+    "terminated.for.refresh": "terminated.for.refresh",
+    "reset": "reset",
+    "terminated": "terminated",
+    "authenticated": "authenticated",
+    "deactivated": "deactivated",
+    "stopped": "stopped",
+    "shutdown.requested": "shutdown.requested",
+    "claimed": "claimed",
+    "reconnected": "reconnected"
+  },
+
+  "history.actor": {
+    "vsod": "vsod",
+    "user": "user",
+    "vsa": "vsa",
+    "system": "system"
+  },
+
+  "audit.sse.event.type": {
+    "connected": "audit.connected",
+    "metadata": "audit.metadata",
+    "event": "audit.event",
+    "complete": "audit.complete",
+    "error": "audit.error"
+  },
+
+  "audit.event.source": {
+    "history.trail": "history_trail",
+    "conversation": "conversation"
+  },
+
+  "audit.event.type": {
+    "message": "message",
+    "command.executed": "command.executed",
+    "command.approved": "command.approved",
+    "command.denied": "command.denied",
+    "command.started": "command.started",
+    "escalation.requested": "escalation.requested",
+    "escalation.approved": "escalation.approved",
+    "file.modified": "file.modified",
+    "file.created": "file.created",
+    "file.deleted": "file.deleted",
+    "permission.granted": "permission.granted",
+    "permission.revoked": "permission.revoked",
+    "config.changed": "config.changed",
+    "g8e.bound": "g8e.bound",
+    "session.started": "session.started"
+  },
+
+  "login.audit.event.type": {
+    "login.success": "login_success",
+    "login.failed": "login_failed",
+    "login.anomaly": "login_anomaly",
+    "account.locked": "account_locked",
+    "account.unlocked": "account_unlocked"
+  },
+
+  "auth.audit.event.type": {
+    "auth.success": "auth_success",
+    "auth.failed": "auth_failed"
+  },
+
+  "download.audit.event.type": {
+    "download.token.failed": "download_token_failed",
+    "download.token.success": "download_token_success"
+  },
+
+  "auth.audit.result": {
+    "success": "success",
+    "failure": "failure",
+    "invalid.api.key": "invalid_api_key"
+  },
+
+  "session.end.reason": {
+    "user.logout": "user_logout",
+    "integrity.failure": "integrity_failure",
+    "session.regeneration": "session_regeneration",
+    "invalidate.all": "invalidate_all",
+    "user.deleted": "user_deleted"
+  },
+
+  "session.suspicious.reason": {
+    "excessive.ip.changes": "excessive_ip_changes"
+  },
+
+  "session.event.type": {
+    "session.created": "session.created",
+    "session.ended": "session.ended",
+    "session.regenerated": "session.regenerated",
+    "session.timeout.absolute": "session.timeout.absolute",
+    "session.timeout.idle": "session.timeout.idle",
+    "session.suspicious.activity": "session.suspicious_activity",
+    "g8e.bound": "g8e.bound",
+    "g8e.unbound": "g8e.unbound"
+  },
+
+  "_comment.tool.names": "g8e.tool.name values are LLM-registered tool names. These are NOT wire event types and intentionally use underscore per LLM tool naming conventions.",
+  "g8e.tool.name": {
+    "run.commands": "run_commands_with_operator",
+    "file.create": "file_create_on_operator",
+    "file.write": "file_write_on_operator",
+    "file.read": "file_read_on_operator",
+    "file.update": "file_update_on_operator",
+    "check.port": "check_port_status",
+    "list.files": "list_files_and_directories_with_detailed_metadata",
+    "read.file.content": "read_file_content",
+    "grant.intent": "grant_intent_permission",
+    "revoke.intent": "revoke_intent_permission",
+    "fetch.execution.output": "fetch_execution_output",
+    "fetch.session.history": "fetch_session_history",
+    "fetch.file.history": "fetch_file_history",
+    "restore.file": "restore_file",
+    "fetch.file.diff": "fetch_file_diff",
+    "g8e.web.search": "g8e_web_search"
+  }
+}

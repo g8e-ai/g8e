@@ -1,0 +1,93 @@
+{
+  "_comment": "Canonical ConversationHistoryMessage wire shape. VSE is the authority — it creates these messages and persists them in investigation conversation_history arrays. VSOD consumes them via VSE HTTP API to render chat history and flatten audit events. A field mismatch breaks conversation history loading and operator command restoration.",
+
+  "_authority": "VSE (Python — ConversationHistoryMessage in app/models/investigations.py)",
+  "_consumers": ["VSOD (JS — InvestigationHistoryEntry.parse() in public/js/models/investigation-models.js, AuditService.flattenInvestigationEvents in services/platform/audit_service.js)"],
+
+  "conversation_history_message": {
+    "_description": "Single message in an investigation's conversation_history array. Messages are appended by VSE during chat turns, operator command executions, approval flows, and system notifications. VSOD parses these into InvestigationHistoryEntry instances for UI rendering.",
+
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "required": true,
+      "description": "Unique message identifier (UUID v4). Generated server-side by VSE."
+    },
+    "sender": {
+      "type": "string",
+      "required": true,
+      "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system"],
+      "description": "Message sender path. See senders.json message.sender. VSOD derives event_type from this field via _senderToEventType mapping."
+    },
+    "content": {
+      "type": "string",
+      "required": false,
+      "default": "",
+      "description": "Message content. For user messages: the user's text. For AI responses: the generated response. For operator commands: command output or approval text."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "iso8601",
+      "required": true,
+      "description": "When the message was created. ISO 8601 string on the wire."
+    },
+    "metadata": {
+      "type": "object",
+      "required": false,
+      "default": {},
+      "description": "Typed metadata object. Shape varies by sender — see metadata_by_sender below. All fields are optional; VSOD reads specific fields based on metadata.sender and metadata.event_type.",
+
+      "_note": "The base ConversationMessageMetadata in VSE carries all possible fields with extra='ignore' on deserialization. On the wire, only fields relevant to the message category are populated. VSOD should not assume any metadata field is present beyond sender.",
+
+      "common_fields": {
+        "sender": {
+          "type": "string",
+          "description": "Echoes the top-level sender field. Always present after VSE persistence."
+        },
+        "event_type": {
+          "type": "string",
+          "description": "Specific event type within the sender category. E.g. g8e.v1.operator.command.approval.requested, g8e.v1.operator.command.execution, g8e.v1.operator.command.result."
+        }
+      },
+
+      "metadata_by_sender": {
+        "user.chat": {
+          "attachment_filenames": { "type": "array", "items": "string", "description": "Filenames of attachments sent with this message" },
+          "sentinel_mode": { "type": "boolean", "description": "Sentinel mode active when message was created" }
+        },
+        "ai.primary": {
+          "model": { "type": "string", "description": "AI model used" },
+          "tokens": { "type": "integer", "description": "Token count" },
+          "has_thinking": { "type": "boolean", "description": "Whether this message has embedded thinking content" },
+          "thinking_content": { "type": "string", "description": "Embedded AI thinking content" },
+          "is_thinking": { "type": "boolean", "description": "Whether this is a thinking-only message (filtered from UI)" },
+          "source": { "type": "string", "description": "AI response source EventType" },
+          "response_source": { "type": "string", "description": "Source of the AI response" },
+          "grounding_metadata": { "type": "object", "description": "Grounding/citation metadata from AI response" },
+          "token_usage": { "type": "object", "description": "Token usage stats from AI response" }
+        },
+        "user.terminal": {
+          "execution_id": { "type": "string", "description": "Operator execution ID. Groups related messages (approval + result) for the same command." },
+          "command": { "type": "string", "description": "Operator command string" },
+          "status": { "type": "string", "values": ["pending", "running", "completed", "failed", "cancelled", "timeout"], "description": "Execution status" },
+          "exit_code": { "type": "integer", "description": "Command exit code" },
+          "output": { "type": "string", "description": "Command output" },
+          "hostname": { "type": "string", "description": "Operator hostname" },
+          "direct_execution": { "type": "boolean", "description": "Whether this was a direct terminal execution (no approval flow)" },
+          "justification": { "type": "string", "description": "Justification for the command" },
+          "approval_id": { "type": "string", "description": "Approval request ID" },
+          "approved": { "type": "boolean", "description": "Whether the approval was granted" },
+          "reason": { "type": "string", "description": "Approval decision reason or feedback" },
+          "execution_time_seconds": { "type": "number", "description": "Command execution duration in seconds" },
+          "timeout_seconds": { "type": "integer", "description": "Timeout value for the operation" },
+          "error": { "type": "string", "description": "Error message if operation failed" }
+        },
+        "system": {
+          "approval_id": { "type": "string", "description": "Approval request ID for system notifications about approvals" },
+          "intent_name": { "type": "string", "description": "Intent name for intent approval notifications" },
+          "intent_question": { "type": "string", "description": "User-facing question for intent approval" }
+        }
+      }
+    }
+  }
+}

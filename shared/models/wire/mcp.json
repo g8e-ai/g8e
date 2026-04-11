@@ -1,0 +1,99 @@
+{
+  "_comment": "Canonical Model Context Protocol (MCP) models for g8e. Mirrors JSON-RPC 2.0 structures and MCP concepts.",
+  "jsonrpc": {
+    "error": {
+      "fields": {
+        "code": { "type": "integer", "required": true },
+        "message": { "type": "string", "required": true },
+        "data": { "type": "any", "required": false }
+      }
+    },
+    "request": {
+      "fields": {
+        "jsonrpc": { "type": "string", "const": "2.0", "required": true },
+        "id": { "type": "string", "required": true },
+        "method": { "type": "string", "required": true },
+        "params": { "type": "object", "required": false }
+      }
+    },
+    "response": {
+      "fields": {
+        "jsonrpc": { "type": "string", "const": "2.0", "required": true },
+        "id": { "type": "string", "required": true },
+        "result": { "type": "any", "required": false },
+        "error": { "type": "JSONRPCError", "required": false }
+      }
+    }
+  },
+  "tools": {
+    "call": {
+      "params": {
+        "fields": {
+          "name": { "type": "string", "required": true },
+          "arguments": { "type": "object", "required": false }
+        }
+      },
+      "result": {
+        "fields": {
+          "content": { "type": "array", "items": "Content", "required": true },
+          "isError": { "type": "boolean", "default": false },
+          "_metadata": { "type": "object", "required": false, "comment": "g8e extension: carries original_payload and event_type" }
+        }
+      }
+    }
+  },
+  "resources": {
+    "list": {
+      "params": {
+        "fields": {
+          "cursor": { "type": "string", "required": false }
+        }
+      },
+      "result": {
+        "fields": {
+          "resources": { "type": "array", "items": "Resource", "required": true },
+          "nextCursor": { "type": "string", "required": false }
+        }
+      }
+    },
+    "read": {
+      "params": {
+        "fields": {
+          "uri": { "type": "string", "required": true }
+        }
+      },
+      "result": {
+        "fields": {
+          "contents": { "type": "array", "items": "ResourceContent", "required": true }
+        }
+      }
+    }
+  },
+  "types": {
+    "Content": {
+      "fields": {
+        "type": { "type": "string", "required": true, "enum": ["text", "image", "resource"] },
+        "text": { "type": "string", "required": false },
+        "data": { "type": "string", "required": false, "comment": "Base64 for images" },
+        "mimeType": { "type": "string", "required": false },
+        "resource": { "type": "ResourceContent", "required": false }
+      }
+    },
+    "Resource": {
+      "fields": {
+        "uri": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "description": { "type": "string", "required": false },
+        "mimeType": { "type": "string", "required": false }
+      }
+    },
+    "ResourceContent": {
+      "fields": {
+        "uri": { "type": "string", "required": true },
+        "mimeType": { "type": "string", "required": false },
+        "text": { "type": "string", "required": false },
+        "blob": { "type": "string", "required": false, "comment": "Base64 encoded" }
+      }
+    }
+  }
+}

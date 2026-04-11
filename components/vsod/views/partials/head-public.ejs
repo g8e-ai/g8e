@@ -1,0 +1,26 @@
+<%#
+  Common head elements for public pages
+  Includes all CSS files needed for consistent styling across the application
+
+  Usage: include('partials/head-public')
+%>
+<link rel="stylesheet" href="/css/fonts.css?v=<%= assetVersion %>">
+
+<!-- Main CSS (consistent styling across public pages) -->
+<link rel="stylesheet" href="/css/main.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/navigation.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/components.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/modals.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/system-notifications.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/landing.css?v=<%= assetVersion %>">
+<link rel="stylesheet" href="/css/auth.css?v=<%= assetVersion %>">
+
+
+<!-- Dev logs bootstrap — server-side user preference injected before module scripts -->
+<%- include('dev-logs-bootstrap') %>
+
+<!-- Theme Manager - must load before all other scripts -->
+<script src="/js/utils/theme-manager.js"></script>
+<!-- ServiceClient - must load before nav-public inline module (auth.js init) -->
+<script type="module" src="/js/utils/service-client.js"></script>
+

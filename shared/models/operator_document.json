@@ -1,0 +1,351 @@
+{
+  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. VSE reads it via VSOD HTTP API and VSODB KV cache. VSA is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and VSE breaks operator binding, context building, and AI execution.",
+
+  "_authority": "VSOD (SQLite)",
+  "_consumers": ["VSE (Python OperatorDocument)", "VSA (identity fields at auth time)"],
+  "_cache_aside": "VSODB KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
+
+  "operator_document": {
+    "_description": "Full operator record as stored in VSOD SQLite and returned by GET /api/internal/operators/:operatorId/status and GET /api/operators/status.",
+
+    "core_identity": {
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique operator identifier (UUID v4)"
+      },
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user who owns this operator"
+      },
+      "organization_id": {
+        "type": "string",
+        "required": false,
+        "description": "Organization ID (equals user_id in single-user orgs)"
+      },
+      "component": {
+        "type": "string",
+        "required": true,
+        "default": "vsa",
+        "description": "Component type. See status.json component.name."
+      },
+      "name": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable operator name (e.g. operator-1)"
+      }
+    },
+
+    "web_session": {
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Current active session identifier. Set when VSA authenticates. Cleared on termination."
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Browser session the operator is currently bound to. Set during bind. Cleared on unbind."
+      },
+      "api_key": {
+        "type": "string",
+        "required": false,
+        "description": "Platform API key used by this operator for VSOD authentication (hashed form for validation)"
+      },
+      "operator_api_key": {
+        "type": "string",
+        "required": false,
+        "description": "Per-operator API key provisioned in the slot. Used by VSA to authenticate to VSOD."
+      },
+      "operator_api_key_created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_api_key_updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "certificate": {
+      "_description": "Per-operator mTLS certificate provisioned by VSOD.",
+      "operator_cert": {
+        "type": "string",
+        "required": false,
+        "description": "PEM-encoded operator TLS certificate"
+      },
+      "operator_cert_serial": {
+        "type": "string",
+        "required": false,
+        "description": "Certificate serial number"
+      },
+      "operator_cert_not_before": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_cert_not_after": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "operator_cert_created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    },
+
+    "status_lifecycle": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "available",
+        "values": ["available", "unavailable", "offline", "bound", "stale", "active", "stopped", "terminated"],
+        "description": "Current operator lifecycle status. See status.json operator.status."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "started_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the operator process first authenticated with VSOD"
+      },
+      "terminated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "first_deployed": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When this operator slot was first ever activated (persisted across resets)"
+      },
+      "last_heartbeat": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "Timestamp of the most recently received heartbeat"
+      }
+    },
+
+    "slot_metadata": {
+      "_description": "Operator slot provisioning fields. Slots are pre-created by VSOD for each user.",
+      "slot_number": {
+        "type": "integer",
+        "required": false,
+        "description": "Slot index (1-based). Null for dynamically created operators."
+      },
+      "is_slot": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "True when this document represents a pre-provisioned slot"
+      },
+      "claimed": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "True when the slot has been claimed by a running VSA process"
+      },
+      "operator_type": {
+        "type": "string",
+        "required": true,
+        "default": "system",
+        "values": ["system", "cloud"],
+        "description": "Operator deployment type. See status.json operator.type."
+      },
+      "cloud_subtype": {
+        "type": "string",
+        "required": false,
+        "values": ["aws", "gcp", "azure"],
+        "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
+      },
+      "is_g8e_pod": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "True when this slot is the platform-managed g8e-pod operator (slot 1). Always pinned at the top of the operator list. Restart via POST /api/operators/g8e-pod/reauth."
+      },
+      "slot_cost": {
+        "type": "integer",
+        "required": true,
+        "default": 1,
+        "description": "Number of operator slots this instance consumes"
+      },
+      "consumed_by_operator_id": {
+        "type": "string",
+        "required": false,
+        "description": "For slot documents: the operator_id of the VSA process that claimed this slot"
+      }
+    },
+
+    "investigation_context": {
+      "_description": "Active investigation/case context. Set when the operator is bound to an investigation session.",
+      "case_id": {
+        "type": "string",
+        "required": false
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false
+      },
+      "task_id": {
+        "type": "string",
+        "required": false
+      }
+    },
+
+    "system_info": {
+      "_description": "Operator host system information. Shape defined in wire/system_info.json. Populated from VSA auth payload and updated on each heartbeat.",
+      "$ref": "wire/system_info.json#system_info"
+    },
+
+    "fingerprint": {
+      "_description": "Top-level fingerprint columns denormalized from system_info for efficient SQLite queries.",
+      "system_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA256 fingerprint of the operator host. Copied from system_info.system_fingerprint."
+      },
+      "fingerprint_details": {
+        "type": "object",
+        "required": false,
+        "description": "Structured fingerprint sub-fields. Copied from system_info.fingerprint_details."
+      }
+    },
+
+    "runtime_config": {
+      "type": "object",
+      "required": true,
+      "default": {},
+      "description": "CLI flags and env var overrides active when the operator binary was started. Sent by VSA at bootstrap and updated on reconnect. Shape mirrors models.RuntimeConfig in VSA wire.go.",
+      "fields": {
+        "cloud_mode":           { "type": "boolean", "description": "True when operator started with --cloud flag" },
+        "cloud_provider":       { "type": "string",  "description": "Cloud provider (aws, gcp, azure). Empty unless cloud_mode is true." },
+        "local_storage_enabled":{ "type": "boolean", "description": "True when local SQLite storage is enabled (--local-storage flag)" },
+        "no_git":               { "type": "boolean", "description": "True when ledger is disabled (--no-git flag)" },
+        "log_level":            { "type": "string",  "description": "Active log level (info, debug, error)" },
+        "wss_port":             { "type": "integer", "description": "WSS port dialled on VSODB for pub/sub" },
+        "http_port":            { "type": "integer", "description": "HTTPS port dialled on VSODB for auth/bootstrap" }
+      }
+    },
+
+    "telemetry": {
+      "latest_heartbeat_snapshot": {
+        "type": "object",
+        "required": false,
+        "description": "Most recent heartbeat performance snapshot for quick UI reads. Shape: { timestamp, cpu_percent, memory_percent, disk_percent, network_latency, uptime, uptime_seconds }. Full heartbeat data is in wire/heartbeat.json."
+      }
+    },
+
+    "error_termination": {
+      "error_message": {
+        "type": "string",
+        "required": false
+      },
+      "termination_reason": {
+        "type": "string",
+        "required": false
+      },
+      "stop_reason": {
+        "type": "string",
+        "required": false
+      },
+      "shutdown_reason": {
+        "type": "string",
+        "required": false
+      }
+    },
+
+    "cloud_intents": {
+      "granted_intents": {
+        "type": "array",
+        "required": true,
+        "default": [],
+        "description": "Granted AWS/cloud intent permissions. Always an array, empty when no intents are granted. Items are GrantedIntent objects with TTL.",
+        "items": {
+          "name":       { "type": "string", "required": true, "description": "Intent name from shared/constants/intents.json" },
+          "granted_at": { "type": "string", "format": "iso8601", "required": true },
+          "expires_at": { "type": "string", "format": "iso8601", "required": true }
+        }
+      }
+    },
+
+    "history_trail": {
+      "type": "array",
+      "required": true,
+      "default": [],
+      "description": "Chronological log of operator lifecycle events managed by VSOD.",
+      "items": {
+        "timestamp": { "type": "string", "format": "iso8601", "required": true },
+        "event_type": {
+          "type": "string",
+          "required": true,
+          "description": "Event type. Values: created, slot.created, bound, unbound, heartbeat.received, status.changed, api.key.refreshed, created.from.refresh, reset, terminated"
+        },
+        "summary": { "type": "string", "required": true },
+        "actor": {
+          "type": "string",
+          "required": true,
+          "description": "Component or entity that caused this event. Values: vsod, user, vsa, system"
+        },
+        "details": { "type": "object", "required": false, "default": {} }
+      }
+    }
+  },
+
+  "operator_status_info": {
+    "_description": "Lightweight projection of OperatorDocument returned by GET /api/operators/status and GET /api/internal/operators/:id/status. VSE's OperatorDocument model maps to this shape.",
+    "fields": {
+      "operator_id": { "type": "string", "required": true },
+      "user_id": { "type": "string", "required": false },
+      "status": { "type": "string", "required": true },
+      "web_session_id": { "type": "string", "required": false },
+      "operator_session_id": { "type": "string", "required": false },
+      "last_heartbeat": { "type": "string", "format": "iso8601", "required": false },
+      "system_info": { "type": "object", "required": false, "ref": "wire/system_info.json#system_info" },
+      "latest_heartbeat_snapshot": { "type": "object", "required": false },
+      "investigation_id": { "type": "string", "required": false },
+      "case_id": { "type": "string", "required": false },
+      "is_active": {
+        "type": "boolean",
+        "required": true,
+        "description": "True when status == active. Computed field, never stored.",
+        "computation": "status === 'active'"
+      },
+      "operator_type": { "type": "string", "required": false },
+      "granted_intents": { "type": "array", "items": "string", "required": true, "default": [], "description": "Active intent names (string projection of GrantedIntent objects). Always an array, empty when no intents are granted." },
+      "cloud_subtype": { "type": "string", "required": false },
+      "current_hostname": {
+        "type": "string",
+        "required": false,
+        "description": "Denormalized hostname from system_info for quick access without traversing nested objects"
+      },
+      "session_token": {
+        "type": "string",
+        "required": false,
+        "description": "Active session token for session-based auth validation. Set by VSOD at bootstrap time."
+      },
+      "session_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "WebSession expiration timestamp. Null means no session expiry is enforced."
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "include": ["app/services"],
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": "none",
+  "venvPath": "/opt",
+  "venv": "venv",
+  "extraPaths": [
+    "/app/components/vse",
+    "/app/shared",
+    "/app"
+  ]
+}

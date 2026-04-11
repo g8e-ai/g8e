@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="g8e - Platform Setup">
+    <meta name="robots" content="noindex, nofollow">
+    <title>g8e - Platform Setup</title>
+
+    <%- include('partials/head-public') %>
+
+    <link rel="stylesheet" href="/css/setup.css?v=<%= assetVersion %>">
+</head>
+
+<body data-theme="<%= theme %>">
+    <%- include('partials/nav-public', { currentPage: 'setup' }) %>
+
+    <main class="setup-page">
+        <div class="setup-container">
+
+            <!-- ================================================================
+                 Step indicator
+                 ================================================================ -->
+            <div class="wizard-steps-wrap">
+            <nav class="wizard-steps" aria-label="Setup progress">
+                <div class="wizard-step active" data-step="1">
+                    <div class="wizard-step-circle">
+                        <span class="wizard-step-num">1</span>
+                        <span class="wizard-step-check material-symbols-outlined">check</span>
+                    </div>
+                    <span class="wizard-step-label">Account</span>
+                </div>
+                <div class="wizard-step-connector"></div>
+                <div class="wizard-step" data-step="2">
+                    <div class="wizard-step-circle">
+                        <span class="wizard-step-num">2</span>
+                        <span class="wizard-step-check material-symbols-outlined">check</span>
+                    </div>
+                    <span class="wizard-step-label">AI Provider</span>
+                </div>
+                <div class="wizard-step-connector"></div>
+                <div class="wizard-step" data-step="3">
+                    <div class="wizard-step-circle">
+                        <span class="wizard-step-num">3</span>
+                        <span class="wizard-step-check material-symbols-outlined">check</span>
+                    </div>
+                    <span class="wizard-step-label">Web Search</span>
+                </div>
+                <div class="wizard-step-connector"></div>
+                <div class="wizard-step" data-step="4">
+                    <div class="wizard-step-circle">
+                        <span class="wizard-step-num">4</span>
+                        <span class="wizard-step-check material-symbols-outlined">check</span>
+                    </div>
+                    <span class="wizard-step-label">Finish</span>
+                </div>
+            </nav>
+            </div>
+
+            <!-- Status bar -->
+            <div class="setup-status" id="setup-status">
+                <span class="material-symbols-outlined" id="setup-status-icon"></span>
+                <span id="setup-status-msg"></span>
+            </div>
+
+            <!-- ================================================================
+                 Step 1: Account
+                 ================================================================ -->
+            <div class="wizard-panel active" data-panel="1">
+                <div class="wizard-panel-header">
+                    <span class="material-symbols-outlined wizard-panel-icon">person_add</span>
+                    <div>
+                        <h2 class="wizard-panel-title">Create Your Account</h2>
+                        <p class="wizard-panel-desc">Your admin account — no password required.</p>
+                    </div>
+                </div>
+                <div class="setup-fields">
+                    <div class="setup-fields-row">
+                        <div class="setup-field">
+                            <label class="setup-label" for="account_name">Full Name <span class="setup-label-optional">optional</span></label>
+                            <input type="text" id="account_name" name="account_name" class="setup-input" placeholder="Your name" autocomplete="name" spellcheck="false">
+                        </div>
+                        <div class="setup-field">
+                            <label class="setup-label" for="account_email">Email Address</label>
+                            <input type="email" id="account_email" name="account_email" class="setup-input" placeholder="admin@yourcompany.com" autocomplete="email" spellcheck="false">
+                        </div>
+                    </div>
+                    <div class="setup-passkey-note">
+                        <span class="material-symbols-outlined">fingerprint</span>
+                        <span>On the last step you'll register a passkey — Touch ID, Windows Hello, or a hardware security key. This is your only login method.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================================================================
+                 Step 2: AI Provider
+                 ================================================================ -->
+            <div class="wizard-panel" data-panel="2">
+                <div class="wizard-panel-header">
+                    <span class="material-symbols-outlined wizard-panel-icon">psychology</span>
+                    <div>
+                        <h2 class="wizard-panel-title">Connect Your AI</h2>
+                        <p class="wizard-panel-desc">Choose how the platform generates commands and answers questions.</p>
+                    </div>
+                </div>
+                <div class="setup-fields">
+
+                    <!-- Provider cards -->
+                    <div class="wizard-provider-cards" role="radiogroup" aria-label="AI provider">
+                        <label class="wizard-provider-card active" data-provider="gemini">
+                            <input type="radio" name="ai_provider" value="gemini" checked>
+                            <div class="wizard-provider-card-inner">
+                                <span class="material-symbols-outlined wizard-provider-icon">auto_awesome</span>
+                                <strong>Gemini</strong>
+                                <span class="wizard-provider-sub">Google</span>
+                                <span class="wizard-provider-rec-badge">Recommended</span>
+                            </div>
+                        </label>
+                        <label class="wizard-provider-card" data-provider="anthropic">
+                            <input type="radio" name="ai_provider" value="anthropic">
+                            <div class="wizard-provider-card-inner">
+                                <span class="material-symbols-outlined wizard-provider-icon">smart_toy</span>
+                                <strong>Claude</strong>
+                                <span class="wizard-provider-sub">Anthropic</span>
+                            </div>
+                        </label>
+                        <label class="wizard-provider-card" data-provider="openai">
+                            <input type="radio" name="ai_provider" value="openai">
+                            <div class="wizard-provider-card-inner">
+                                <span class="material-symbols-outlined wizard-provider-icon">hub</span>
+                                <strong>GPT</strong>
+                                <span class="wizard-provider-sub">OpenAI</span>
+                            </div>
+                        </label>
+                        <label class="wizard-provider-card" data-provider="ollama">
+                            <input type="radio" name="ai_provider" value="ollama">
+                            <div class="wizard-provider-card-inner">
+                                <span class="material-symbols-outlined wizard-provider-icon">lan</span>
+                                <strong>Ollama</strong>
+                                <span class="wizard-provider-sub">Remote</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Gemini config -->
+                    <div class="wizard-provider-config" id="config-gemini">
+                        <div class="setup-passkey-note" style="margin-bottom: 24px;">
+                            <span class="material-symbols-outlined">info</span>
+                            <span><strong>Recommended: Gemini 3.1 Pro.</strong> g8e was originally built entirely around Gemini 3.1 — meaning the agent architecture and prompting are tuned specifically for its behaviors, and it will give you the most reliable execution here. Plus, one single API key covers both the LLM and Vertex AI web search — which is the ideal stack for this platform.</span>
+                        </div>
+                        <div class="setup-field">
+                            <label class="setup-label" for="gemini_api_key">
+                                Gemini API Key
+                                <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
+                                    <span class="material-symbols-outlined">open_in_new</span>Get key
+                                </a>
+                            </label>
+                            <div class="setup-input-wrap">
+                                <input type="password" id="gemini_api_key" name="gemini_api_key" class="setup-input has-toggle" placeholder="AIza..." autocomplete="new-password" spellcheck="false">
+                                <button type="button" class="setup-reveal-btn" aria-label="Toggle visibility" data-for="gemini_api_key">
+                                    <span class="material-symbols-outlined">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="wizard-model-fields">
+                            <div class="setup-field">
+                                <label class="setup-label" for="gemini_primary_model">Primary Model</label>
+                                <select id="gemini_primary_model" class="setup-select">
+                                    <option value="gemini-3.1-pro-preview" selected>Gemini 3.1 Pro (Flagship)</option>
+                                    <option value="gemini-3.1-flash-lite-preview">Gemini 3.1 Flash Lite</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+                                </select>
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="gemini_assistant_model">Assistant Model</label>
+                                <select id="gemini_assistant_model" class="setup-select">
+                                    <option value="gemini-3.1-flash-lite-preview" selected>Gemini 3.1 Flash Lite</option>
+                                    <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Anthropic config -->
+                    <div class="wizard-provider-config" id="config-anthropic">
+                        <div class="setup-field">
+                            <label class="setup-label" for="anthropic_api_key">
+                                Anthropic API Key
+                                <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
+                                    <span class="material-symbols-outlined">open_in_new</span>Get key
+                                </a>
+                            </label>
+                            <div class="setup-input-wrap">
+                                <input type="password" id="anthropic_api_key" name="anthropic_api_key" class="setup-input has-toggle" placeholder="sk-ant-..." autocomplete="new-password" spellcheck="false">
+                                <button type="button" class="setup-reveal-btn" aria-label="Toggle visibility" data-for="anthropic_api_key">
+                                    <span class="material-symbols-outlined">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="wizard-model-fields">
+                            <div class="setup-field">
+                                <label class="setup-label" for="anthropic_primary_model">Primary Model</label>
+                                <select id="anthropic_primary_model" class="setup-select">
+                                    <option value="claude-4-6-opus" selected>Claude Opus 4.6</option>
+                                    <option value="claude-4-6-sonnet">Claude Sonnet 4.6</option>
+                                </select>
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="anthropic_assistant_model">Assistant Model</label>
+                                <select id="anthropic_assistant_model" class="setup-select">
+                                    <option value="claude-4-6-sonnet" selected>Claude Sonnet 4.6</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OpenAI config -->
+                    <div class="wizard-provider-config" id="config-openai">
+                        <div class="setup-field">
+                            <label class="setup-label" for="openai_api_key">
+                                OpenAI API Key
+                                <a href="https://platform.openai.com/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
+                                    <span class="material-symbols-outlined">open_in_new</span>Get key
+                                </a>
+                            </label>
+                            <div class="setup-input-wrap">
+                                <input type="password" id="openai_api_key" name="openai_api_key" class="setup-input has-toggle" placeholder="sk-..." autocomplete="new-password" spellcheck="false">
+                                <button type="button" class="setup-reveal-btn" aria-label="Toggle visibility" data-for="openai_api_key">
+                                    <span class="material-symbols-outlined">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="wizard-model-fields">
+                            <div class="setup-field">
+                                <label class="setup-label" for="openai_primary_model">Primary Model</label>
+                                <select id="openai_primary_model" class="setup-select">
+                                    <option value="gpt-5.4" selected>GPT-5.4 (Flagship)</option>
+                                    <option value="gpt-5.3-instant">GPT-5.3 Instant</option>
+                                    <option value="gpt-4o">GPT-4o</option>
+                                </select>
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="openai_assistant_model">Assistant Model</label>
+                                <select id="openai_assistant_model" class="setup-select">
+                                    <option value="gpt-5.4-mini" selected>GPT-5.4 mini</option>
+                                    <option value="gpt-5.4-nano">GPT-5.4 nano</option>
+                                    <option value="gpt-4o-mini">GPT-4o mini</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ollama config -->
+                    <div class="wizard-provider-config" id="config-ollama">
+                        <div class="setup-field">
+                            <label class="setup-label" for="ollama_url">Ollama URL</label>
+                            <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="http://192.168.1.100:11434" spellcheck="false" autocomplete="off">
+                            <div class="setup-field-desc">
+                                <span class="material-symbols-outlined setup-field-desc-icon">warning</span>
+                                Ollama only supports HTTP. Use https:// only if you have set up a custom reverse proxy with TLS. HTTP is unencrypted and may expose prompts and responses on your network.
+                            </div>
+                        </div>
+                        <div class="wizard-model-fields">
+                            <div class="setup-field">
+                                <label class="setup-label" for="ollama_primary_model">Primary Model</label>
+                                <input type="text" id="ollama_primary_model" name="ollama_primary_model" class="setup-input" placeholder="gemma3:1b" spellcheck="false" autocomplete="off" value="gemma3:1b">
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="ollama_assistant_model">Assistant Model</label>
+                                <input type="text" id="ollama_assistant_model" name="ollama_assistant_model" class="setup-input" placeholder="gemma3:1b" spellcheck="false" autocomplete="off" value="gemma3:1b">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ================================================================
+                 Step 3: Web Search
+                 ================================================================ -->
+            <div class="wizard-panel" data-panel="3">
+                <div class="wizard-panel-header">
+                    <span class="material-symbols-outlined wizard-panel-icon">travel_explore</span>
+                    <div>
+                        <h2 class="wizard-panel-title">Web Search</h2>
+                        <p class="wizard-panel-desc">Let the AI search the web when answering questions. Optional — can be configured later.</p>
+                    </div>
+                </div>
+                <div class="setup-fields">
+                    <div class="setup-field">
+                        <label class="setup-label" for="search_provider">Search Provider</label>
+                        <select id="search_provider" class="setup-select">
+                            <option value="">None (disable web search)</option>
+                            <option value="google">Google</option>
+                        </select>
+                    </div>
+                    <div class="setup-field setup-field-hidden" id="search-config-google">
+                        <div class="setup-field">
+                            <label class="setup-label" for="google_project_id">Google Project ID</label>
+                            <input type="text" id="google_project_id" name="google_project_id" class="setup-input" placeholder="your-project-id" spellcheck="false" autocomplete="off">
+                        </div>
+                        <div class="setup-field">
+                            <label class="setup-label" for="vertex_ai_search_app_id">Vertex AI Search App ID</label>
+                            <input type="text" id="vertex_ai_search_app_id" name="vertex_ai_search_app_id" class="setup-input" placeholder="your-app-id" spellcheck="false" autocomplete="off">
+                        </div>
+                        <div class="setup-field">
+                            <label class="setup-label" for="search_api_key">
+                                API Key
+                                <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link" id="search-api-key-link">
+                                    <span class="material-symbols-outlined">open_in_new</span>Get key
+                                </a>
+                            </label>
+                            <div class="setup-input-wrap">
+                                <input type="password" id="search_api_key" name="search_api_key" class="setup-input has-toggle" placeholder="AIza..." autocomplete="new-password" spellcheck="false">
+                                <button type="button" class="setup-reveal-btn" aria-label="Toggle visibility" data-for="search_api_key">
+                                    <span class="material-symbols-outlined">visibility</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================================================================
+                 Step 4: Finish
+                 ================================================================ -->
+            <div class="wizard-panel" data-panel="4">
+                <div class="wizard-panel-header">
+                    <span class="material-symbols-outlined wizard-panel-icon">check_circle</span>
+                    <div>
+                        <h2 class="wizard-panel-title">Almost Done</h2>
+                        <p class="wizard-panel-desc">Review your settings and register your passkey.</p>
+                    </div>
+                </div>
+
+                <!-- Summary card -->
+                <div class="wizard-summary" id="wizard-summary"></div>
+
+                <!-- Finish button -->
+                <div class="wizard-finish-actions">
+                    <button type="button" id="finish-btn" class="setup-btn-primary setup-btn-lg">
+                        <span class="material-symbols-outlined">fingerprint</span>
+                        Create Account &amp; Register Passkey
+                    </button>
+                    <p class="wizard-finish-note">Your browser will prompt you to register a passkey.</p>
+                </div>
+            </div>
+
+            <!-- ================================================================
+                 Wizard navigation
+                 ================================================================ -->
+            <div class="wizard-nav" id="wizard-nav">
+                <button type="button" id="wizard-back-btn" class="setup-btn-secondary">
+                    <span class="material-symbols-outlined">arrow_back</span>
+                    Back
+                </button>
+                <button type="button" id="wizard-next-btn" class="setup-btn-primary">
+                    Next
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </div>
+
+            </div>
+        </main>
+
+    <%- include('partials/footer-public') %>
+
+    <script type="module" src="/js/components/hamburger-menu.js"></script>
+    <script type="module" src="/js/components/setup-page.js"></script>
+</body>
+</html>

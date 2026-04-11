@@ -1,0 +1,193 @@
+{
+  "text_chunk_received": {
+    "type": "g8e.v1.ai.llm.chat.iteration.text.chunk.received",
+    "data": {
+      "content": "Partial AI response text",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "text_completed": {
+    "type": "g8e.v1.ai.llm.chat.iteration.text.completed",
+    "data": {
+      "content": "Complete AI response text",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "chat_iteration_failed": {
+    "type": "g8e.v1.ai.llm.chat.iteration.failed",
+    "data": {
+      "error": "AI processing stopped",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_web_search_requested": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.requested",
+    "data": {
+      "query": "test search query",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_web_search_completed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.completed",
+    "data": {
+      "query": "test search query",
+      "results": [
+        {
+          "title": "Test Result",
+          "url": "https://example.com",
+          "snippet": "Test snippet"
+        }
+      ],
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_web_search_failed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.web.search.failed",
+    "data": {
+      "query": "test search query",
+      "error": "Search service unavailable",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "port_check_requested": {
+    "type": "g8e.v1.operator.network.port.check.requested",
+    "data": {
+      "port": "443",
+      "host": "example.com",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "port_check_completed": {
+    "type": "g8e.v1.operator.network.port.check.completed",
+    "data": {
+      "port": "443",
+      "host": "example.com",
+      "is_open": true,
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "port_check_failed": {
+    "type": "g8e.v1.operator.network.port.check.failed",
+    "data": {
+      "port": "443",
+      "host": "example.com",
+      "error": "Connection timeout",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "citations_received": {
+    "type": "g8e.v1.ai.llm.chat.iteration.citations.received",
+    "data": {
+      "grounding_used": true,
+      "chunks": [
+        {
+          "text": "Source text chunk",
+          "source": {
+            "uri": "https://example.com",
+            "title": "Source Title"
+          }
+        }
+      ],
+      "sources_count": 1,
+      "query_list": ["test query"],
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "operator_command_requested": {
+    "type": "g8e.v1.operator.command.requested",
+    "data": {
+      "command": "ls",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "operator_command_started": {
+    "type": "g8e.v1.operator.command.started",
+    "data": {
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "operator_command_completed": {
+    "type": "g8e.v1.operator.command.completed",
+    "data": {
+      "execution_id": "test-execution-id",
+      "output": "command output",
+      "exit_code": 0,
+      "success": true,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "operator_command_failed": {
+    "type": "g8e.v1.operator.command.failed",
+    "data": {
+      "execution_id": "test-execution-id",
+      "error": "Command failed",
+      "exit_code": 1,
+      "success": false,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "llm_lifecycle_started": {
+    "type": "g8e.v1.ai.llm.lifecycle.started",
+    "data": {
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "llm_lifecycle_completed": {
+    "type": "g8e.v1.ai.llm.lifecycle.completed",
+    "data": {
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "platform_sse_connection_established": {
+    "type": "g8e.v1.platform.sse.connection.established",
+    "data": {
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "platform_sse_keepalive_sent": {
+    "type": "g8e.v1.platform.sse.keepalive.sent",
+    "data": {
+      "web_session_id": "test-web-session-id"
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "llm": {
+    "G8E_LLM_PROVIDER": "llm.provider",
+    "G8E_LLM_PRIMARY_MODEL": "llm.primary_model",
+    "G8E_LLM_ASSISTANT_MODEL": "llm.assistant_model",
+    "G8E_LLM_OPENAI_ENDPOINT": "llm.openai_endpoint",
+    "G8E_LLM_OLLAMA_ENDPOINT": "llm.ollama_endpoint",
+    "G8E_LLM_ANTHROPIC_ENDPOINT": "llm.anthropic_endpoint",
+    "G8E_LLM_OPENAI_API_KEY": "llm.openai_api_key",
+    "G8E_LLM_OLLAMA_API_KEY": "llm.ollama_api_key",
+    "G8E_LLM_GEMINI_API_KEY": "llm.gemini_api_key",
+    "G8E_LLM_ANTHROPIC_API_KEY": "llm.anthropic_api_key",
+    "G8E_LLM_TEMPERATURE": "llm.temperature",
+    "G8E_LLM_MAX_TOKENS": "llm.max_tokens",
+    "G8E_LLM_COMMAND_GEN_ENABLED": "llm.command_gen_enabled",
+    "G8E_LLM_COMMAND_GEN_VERIFIER": "llm.command_gen_verifier",
+    "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes",
+    "G8E_LLM_COMMAND_GEN_TEMP": "llm.command_gen_temp"
+  },
+  "auth": {
+    "G8E_INTERNAL_AUTH_TOKEN": "auth.internal_auth_token",
+    "G8E_SESSION_ENCRYPTION_KEY": "auth.session_encryption_key",
+    "G8E_API_KEY": "auth.g8e_api_key"
+  },
+  "general": {
+    "G8E_APP_URL": "general.app_url",
+    "G8E_ALLOWED_ORIGINS": "general.allowed_origins",
+    "G8E_PASSKEY_RP_NAME": "general.passkey_rp_name",
+    "G8E_PASSKEY_RP_ID": "general.passkey_rp_id",
+    "G8E_PASSKEY_ORIGIN": "general.passkey_origin"
+  },
+  "search": {
+    "G8E_VERTEX_SEARCH_ENABLED": "vertex_search.enabled",
+    "G8E_VERTEX_SEARCH_PROJECT_ID": "vertex_search.project_id",
+    "G8E_VERTEX_SEARCH_ENGINE_ID": "vertex_search.engine_id",
+    "G8E_VERTEX_SEARCH_LOCATION": "vertex_search.location",
+    "G8E_VERTEX_SEARCH_API_KEY": "vertex_search.api_key",
+    "G8E_GOOGLE_SEARCH_ENABLED": "google_search.enabled",
+    "G8E_GOOGLE_SEARCH_API_KEY": "google_search.api_key",
+    "G8E_GOOGLE_SEARCH_ENGINE_ID": "google_search.engine_id"
+  },
+  "vsodb": {
+    "G8E_INTERNAL_HTTP_URL": "listen.http_url",
+    "G8E_INTERNAL_PUBSUB_URL": "listen.pubsub_url",
+    "G8E_VSODB_BLOB_URL": "listen.blob_url"
+  },
+  "platform": {
+    "G8E_DOCKER_GID": "platform.docker_gid",
+    "G8E_HTTPS_PORT": "platform.https_port",
+    "G8E_HTTP_PORT": "platform.http_port",
+    "G8E_PORT": "platform.port",
+    "G8E_SESSION_TTL": "platform.session_ttl",
+    "G8E_ABSOLUTE_SESSION_TIMEOUT": "platform.absolute_session_timeout",
+    "G8E_ENVIRONMENT": "platform.environment",
+    "G8E_UPLOAD_PATH": "platform.upload_path",
+    "G8E_DOCS_DIR": "platform.docs_dir",
+    "G8E_SUPERVISOR_PORT": "platform.supervisor_port"
+  },
+  "service_urls": {
+    "G8E_VSE_URL": "service_urls.vse_url",
+    "G8E_VSOD_URL": "service_urls.vsod_url",
+    "G8E_OPERATOR_ENDPOINT": "service_urls.operator_endpoint"
+  },
+  "command_validation": {
+    "G8E_ENABLE_COMMAND_WHITELISTING": "command_validation.enable_whitelisting",
+    "G8E_ENABLE_COMMAND_BLACKLISTING": "command_validation.enable_blacklisting"
+  },
+  "ssl": {
+    "G8E_SSL_DIR": "ssl.ssl_dir",
+    "G8E_PUBSUB_CA_CERT": "ssl.pubsub_ca_cert",
+    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file",
+    "REQUESTS_CA_BUNDLE": "ssl.requests_ca_bundle"
+  }
+}

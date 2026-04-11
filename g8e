@@ -1,0 +1,626 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
+CONTAINER="g8e-pod"
+
+_banner() {
+    echo -e "\033[1;34m[g8e]\033[0m $*"
+}
+
+_g8e_pod_running() {
+    docker ps --filter "name=^${CONTAINER}$" --filter "status=running" -q 2>/dev/null | grep -q .
+}
+
+_g8e_pod_exists() {
+    docker ps -a --filter "name=^${CONTAINER}$" -q 2>/dev/null | grep -q .
+}
+
+_ensure_g8e_pod() {
+    local _cmd="${1:-}"
+    if ! _g8e_pod_running; then
+        if ! _g8e_pod_exists; then
+            [[ -n "$_cmd" ]] && echo "[g8e] Running: ./g8e $_cmd"
+            echo "[g8e] g8e-pod is the sandboxed environment used to run this command."
+            echo "[g8e] First run — building g8e-pod image (requires Docker)..."
+            echo ""
+            $COMPOSE build g8e-pod
+            echo ""
+        fi
+        $COMPOSE up -d --wait g8e-pod
+    fi
+}
+
+_exec_in_pod() {
+    _ensure_g8e_pod "$TOP${SUB:+ $SUB}"
+    if [ -t 0 ] && [ -t 1 ]; then
+        exec docker exec -it "$CONTAINER" "$@"
+    else
+        exec docker exec -i "$CONTAINER" "$@"
+    fi
+}
+
+
+_help() {
+    echo ""
+    echo "Usage: ./g8e <command> <subcommand> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  g8e                          Rebuild images and restart services (alias: 'platform build')"
+    echo "  platform                      Manage Docker platform services (runs on host)"
+    echo "    setup                         Full first-time setup: no-cache build of all images, start platform (recommended)"
+    echo "    settings                      Show effective platform settings (requires platform running)"
+    echo "    update                        Pull latest changes (with confirmation) and rebuild"
+    echo "    start                         Start all platform services"
+    echo "    stop                          Stop all platform services"
+    echo "    restart                       Restart all platform services (no rebuild)"
+    echo "    status                        Show service status"
+    echo "    rebuild|build                 Rebuild images and restart services (data volumes preserved)"
+    echo "    reset                         Wipe ALL data volumes and rebuild from scratch (destructive)"
+    echo "    wipe                          Clear app data from the database (preserves platform settings, SSL, LLM)"
+    echo "    clean                         Remove all managed Docker resources (containers, images, volumes, cache)"
+    echo "    logs [service]                Tail service logs"
+    echo ""
+    echo "  operator                      Build and deploy the operator binary"
+    echo "    init                          Build the operator binary inside g8e-pod (first time)"
+    echo "    build                         Rebuild the operator binary inside g8e-pod"
+    echo "    build-all                     Build all operator architectures with compression (for distribution)"
+    echo "    deploy <user@host>       Copy the operator binary to a remote host via scp"
+    echo "    stream <host...>              Stream-inject operator to one or more remote hosts"
+    echo "    ssh-config                    Configure ~/.ssh/config for high-concurrency streaming"
+    echo "    reauth                        Kill and relaunch the g8e-pod operator for a user"
+    echo "    (run: ./g8e operator --help for full option details)"
+    echo ""
+    echo "  test [suite] [options]        Run test suites inside g8e-pod"
+    echo "    vse                           Python/pytest tests"
+    echo "    vsod                          TypeScript/vitest tests"
+    echo "    vsa                           Go tests"
+    echo "    LLM flags (enables ai_integration tests):"
+    echo "      -p, --llm-provider          gemini | openai | anthropic | ollama"
+    echo "      -m, --primary-model         Primary model name"
+    echo "      -a, --assistant-model        Assistant model name"
+    echo "      -e, --llm-endpoint-url      API endpoint URL"
+    echo "      -k, --llm-api-key           API key"
+    echo ""
+    echo "  security                      Security tools (runs inside g8e-pod)"
+    echo "    validate                      Validate platform security (volumes, env vars, tokens)"
+    echo "    certs [generate|rotate|status|trust]"
+    echo "    mtls-test                     Test mTLS connectivity"
+    echo "    scan-licenses                 Scan dependency licences"
+    echo "    passkeys                      Manage user passkey credentials"
+    echo "    rotate-internal-token         Rotate the internal auth token across all components"
+    echo ""
+    echo "  data                          Data management tools (runs inside g8e-pod)"
+    echo "    users                         Manage platform users"
+    echo "    operators                     Manage operator documents"
+    echo "    store                         Manage VSODB data store"
+    echo "    settings                      Read/write platform settings"
+    echo "    audit                         Manage audit log (LFAA)"
+    echo "    device-links                  Manage device link tokens (generate, list, revoke, delete)"
+    echo ""
+    echo "  search                        Manage web search (runs on host)"
+    echo "    setup                         Configure Vertex AI Search for the search_web tool"
+    echo "    disable                       Remove web search configuration"
+    echo ""
+    echo "  llm                           Manage LLM tooling"
+    echo "    setup                         Install and configure LLM provider (interactive or --flags)"
+    echo "    restart                       Restart the LLM container"
+    echo "    show                          Show current LLM settings"
+    echo "    get <key>                     Read a single LLM setting (e.g. llm_model)"
+    echo "    set <key=value> [...]         Write one or more LLM settings (e.g. llm_model=gpt-4o)"
+    echo ""
+    echo "  ssh                           Configure SSH credentials for operator streaming (runs on host)"
+    echo "    setup                         Mount an SSH directory into g8e-pod"
+    echo ""
+    echo "  aws                           Configure AWS credentials for AI tools (runs on host)"
+    echo "    setup                         Mount an AWS credentials directory into g8e-pod"
+    echo ""
+    echo "  demo                          Manage the broken-fleet demo (runs on host)"
+    echo "    up                            Build and start all 10 web nodes"
+    echo "    down                          Stop all nodes"
+    echo "    status                        Show container status"
+    echo "    clean                         Remove everything (containers, images, volumes)"
+    echo "    health                        Check Flask backend health on all nodes"
+    echo "    nginx-check                   Check nginx status on all nodes"
+    echo "    operators                     Show operator status on all nodes"
+    echo "    logs                          Follow all container logs"
+    echo "    shell N=<nn>                  Shell into a specific node (e.g. N=01)"
+    echo "    deploy DEVICE_TOKEN=<tok>     Deploy operators via API download"
+    echo "    ssh-key                       Extract SSH private key for streaming"
+    echo "    stream DEVICE_TOKEN=<tok>     Deploy operators via SSH streaming"
+    echo "    vanish                        Remove all operators (zero trace)"
+    echo "    dashboard                     Print dashboard URL"
+    echo ""
+}
+
+if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
+    _help
+    exit 0
+fi
+
+TOP="$1"
+SUB="${2:-}"
+
+# --- Authentication ---
+# Pull the internal auth token into memory as a constant for the duration of the run.
+# This ensures that all subcommands have access to the token for internal API calls.
+INTERNAL_AUTH_TOKEN=""
+if [[ "$TOP" != "platform" || ("$SUB" != "start" && "$SUB" != "status" && "$SUB" != "stop" && "$SUB" != "restart" && "$SUB" != "rebuild" && "$SUB" != "reset" && "$SUB" != "wipe" && "$SUB" != "clean") ]]; then
+    if _g8e_pod_running; then
+        # Use docker exec to read the token directly from the SSL volume mount in g8e-pod
+        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /vsodb/internal_auth_token 2>/dev/null || true)
+    fi
+fi
+readonly INTERNAL_AUTH_TOKEN
+
+case "$TOP" in
+
+    # ------------------------------------------------------------------
+    # platform — manages Docker services; must run on host
+    # ------------------------------------------------------------------
+    platform)
+        case "$SUB" in
+            setup)
+                _banner "platform setup"
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" setup ;;
+            build)
+                _banner "platform build"
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
+            settings)
+                _banner "platform settings"
+                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show "${@:3}" ;;
+            update)
+                _banner "platform update"
+                git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
+                _local=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
+                _remote=$(git -C "$SCRIPT_DIR" rev-parse origin/main 2>/dev/null || echo "unknown")
+                if [[ "$_local" == "$_remote" ]]; then
+                    echo "  Already up to date ($(git -C "$SCRIPT_DIR" rev-parse --short HEAD))."
+                    echo ""
+                    echo "  Nothing to pull — run './g8e platform rebuild' to force a rebuild."
+                    exit 0
+                fi
+                echo ""
+                echo "  Local:  $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)  ($(git -C "$SCRIPT_DIR" log -1 --format='%s' HEAD))"
+                echo "  Remote: $(git -C "$SCRIPT_DIR" rev-parse --short origin/main)  ($(git -C "$SCRIPT_DIR" log -1 --format='%s' origin/main))"
+                echo ""
+                git -C "$SCRIPT_DIR" log --oneline HEAD..origin/main | sed 's/^/  + /'
+                echo ""
+                printf "  Pull and rebuild? [y/N] "
+                read -r _confirm
+                if [[ "$_confirm" != "y" && "$_confirm" != "Y" ]]; then
+                    echo "  Aborted."
+                    exit 0
+                fi
+                git -C "$SCRIPT_DIR" pull origin main
+                echo ""
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
+            logs)
+                _banner "platform logs"
+                exec bash "$SCRIPT_DIR/scripts/core/logs.sh" "${@:3}" ;;
+            status|start|stop|restart|rebuild|reset|wipe|clean)
+                case "$SUB" in
+                    start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" up      "${@:3}" ;;
+                    stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
+                    restart) _banner "platform restart"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" restart "${@:3}" ;;
+                    status)  _banner "platform status";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:3}" ;;
+                    rebuild) _banner "platform rebuild"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
+                    reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
+                    wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
+                    clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
+                esac ;;
+            "")
+                echo "[g8e] missing subcommand for 'platform'" >&2
+                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown platform subcommand: '$SUB'" >&2
+                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # operator — build/deploy must run on host; test runs in g8e-pod
+    # ------------------------------------------------------------------
+    operator)
+        case "$SUB" in
+            -h|--help|"")
+                echo "Usage: ./g8e operator <subcommand> [options]"
+                echo ""
+                echo "Subcommands:"
+                echo "  deploy <user@host>       Copy the operator binary to a remote host via scp"
+                echo "    --arch amd64|arm64|386        Architecture (default: amd64)"
+                echo "    --dest /path                  Remote destination path (default: ./g8e.operator)"
+                echo "    --endpoint <host>             Platform endpoint — if set, starts operator on remote host"
+                echo "    --device-token <tok>          Device link token"
+                echo "    --key <apikey>                API key auth (fallback)"
+                echo "    --wss-port <port>             WSS port for pub/sub (default: 443)"
+                echo "    --http-port <port>            HTTPS port for auth (default: 443)"
+                echo "    --no-git                      Disable ledger"
+                echo "  stream <host...>              Stream-inject operator to one or more remote hosts concurrently"
+                echo "                                Uses Go crypto/ssh — no system ssh binary, 1,000+ node capable"
+                echo "                                Binary piped directly from g8e-pod — never written to local disk"
+                echo "                                Remote binary is volatile: deleted automatically on session close"
+                echo "    --arch amd64|arm64|386        Architecture (default: amd64)"
+                echo "    --hosts <file|->              File of hosts (one per line), or - for stdin"
+                echo "    --concurrency <N>             Max parallel SSH sessions (default: 50)"
+                echo "    --timeout <secs>              Per-host dial+inject timeout in seconds (default: 60)"
+                echo "    --endpoint <host>             Platform endpoint — if set, starts operator on each remote host"
+                echo "    --device-token <tok>          Device link token"
+                echo "    --key <apikey>                API key auth (fallback)"
+                echo "    --no-git                      Disable ledger"
+                echo "    --ssh-config <path>           Custom SSH config path (default: ~/.ssh/config)"
+                echo "  ssh-config                    Configure ~/.ssh/config for high-concurrency operator streaming"
+                echo "                                Creates ~/.ssh/sockets/ and appends g8e multiplexing stanza"
+                echo "    --print                       Print the stanza without writing anything"
+                echo "    --force                       Replace stanza even if g8e block already present"
+                echo "  reauth --user-id <id>         Kill and relaunch the g8e-pod operator for a user"
+                echo "         --email <email>          Resolve user by email instead of ID"
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
+            reauth)
+                _banner "operator reauth"
+                _ensure_g8e_pod "operator reauth"
+
+                USER_ID=""
+                EMAIL=""
+                while [[ $# -gt 2 ]]; do
+                    case "${3:-}" in
+                        --user-id) USER_ID="${4:-}"; shift 2 ;;
+                        --email)   EMAIL="${4:-}"; shift 2 ;;
+                        *) echo "[g8e] unknown option: '${3}'"; echo "  Usage: ./g8e operator reauth --user-id <id>"; echo "         ./g8e operator reauth --email <email>"; exit 1 ;;
+                    esac
+                done
+
+                if [[ -z "$USER_ID" && -z "$EMAIL" ]]; then
+                    echo "[g8e] operator reauth requires --user-id <id> or --email <email>" >&2
+                    echo "  Usage: ./g8e operator reauth --user-id <id>" >&2
+                    echo "         ./g8e operator reauth --email <email>" >&2
+                    exit 1
+                fi
+
+                if [[ -z "$INTERNAL_AUTH_TOKEN" ]]; then
+                    echo "[g8e] Authentication failed: Internal auth token not found." >&2
+                    echo "          Ensure the platform is running: ./g8e platform start" >&2
+                    exit 1
+                fi
+
+                if [[ -n "$EMAIL" && -z "$USER_ID" ]]; then
+                    USER_ID="$(docker exec -i "$CONTAINER" \
+                        python3 /app/scripts/data/manage-vsodb.py users get --email "$EMAIL" 2>/dev/null \
+                        | grep -E '^  ID:' | awk '{print $2}')"
+                    if [[ -z "$USER_ID" ]]; then
+                        echo "[g8e] No user found with email: $EMAIL" >&2
+                        exit 1
+                    fi
+                fi
+
+                RESPONSE="$(docker exec -i g8e-dashboard \
+                    curl -sf -X POST \
+                    -H 'Content-Type: application/json' \
+                    -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
+                    "https://localhost/api/internal/operators/user/$USER_ID/reauth")"
+                EXIT_CODE=$?
+
+                if [[ $EXIT_CODE -ne 0 ]]; then
+                    echo "[g8e] Reauth request failed" >&2
+                    exit 1
+                fi
+
+                echo "$RESPONSE" | grep -q '"success":true' \
+                    && echo "[g8e] g8e-pod operator relaunched for user $USER_ID" \
+                    || { echo "[g8e] Reauth failed: $RESPONSE" >&2; exit 1; }
+                exit 0 ;;
+
+            init)
+                _banner "operator init"
+                _ensure_g8e_pod "operator init"
+                _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
+                docker exec g8e-pod bash -c "
+                    set -e
+                    cd /app/components/vsa
+                    mkdir -p certs
+                    [ -f /vsodb/ssl/ca.crt ] && cp /vsodb/ssl/ca.crt certs/server_ca.crt
+                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \\
+                        -trimpath -buildvcs=false \\
+                        -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
+                        -o /home/g8e/g8e.operator .
+                    echo '[g8e-pod] Built: /home/g8e/g8e.operator'
+                "
+                echo ""
+                echo "Operator binary built."
+                exit 0 ;;
+            build)
+                _banner "operator build"
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build ;;
+            build-all)
+                _banner "operator build-all"
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build-all ;;
+            deploy)
+                _banner "operator deploy ${@:3}"
+                _DEPLOY_TARGET=""
+                _DEPLOY_ARCH="amd64"
+                _DEPLOY_DEST="./g8e.operator"
+                _DEPLOY_ENDPOINT=""
+                _DEPLOY_DEVICE_TOKEN=""
+                _DEPLOY_API_KEY=""
+                _DEPLOY_NO_GIT=false
+                _DEPLOY_WSS_PORT=""
+                _DEPLOY_HTTP_PORT=""
+                _args=("${@:3}")
+                set -- "${_args[@]}"
+                while [[ $# -gt 0 ]]; do
+                    case "$1" in
+                        --arch)         _DEPLOY_ARCH="$2";         shift 2 ;;
+                        --dest)         _DEPLOY_DEST="$2";         shift 2 ;;
+                        --endpoint)     _DEPLOY_ENDPOINT="$2";     shift 2 ;;
+                        --device-token) _DEPLOY_DEVICE_TOKEN="$2"; shift 2 ;;
+                        --key)          _DEPLOY_API_KEY="$2";      shift 2 ;;
+                        --wss-port)     _DEPLOY_WSS_PORT="$2";     shift 2 ;;
+                        --http-port)    _DEPLOY_HTTP_PORT="$2";    shift 2 ;;
+                        --no-git)       _DEPLOY_NO_GIT=true;        shift ;;
+                        -h|--help)
+                            echo "Usage: ./g8e operator deploy <user@host> [options]"
+                            echo "  --arch amd64|arm64|386       (default: amd64)"
+                            echo "  --dest /path                 (default: ./g8e.operator)"
+                            echo "  --endpoint <host>            Platform endpoint"
+                            echo "  --device-token <tok>         Device link token"
+                            echo "  --key <apikey>               API key auth (fallback)"
+                            echo "  --wss-port <port>            WSS port for pub/sub (default: 443)"
+                            echo "  --http-port <port>           HTTPS port for auth (default: 443)"
+                            echo "  --no-git                     Disable ledger"
+                            exit 0 ;;
+                        *) _DEPLOY_TARGET="$1"; shift ;;
+                    esac
+                done
+                if [[ -z "$_DEPLOY_TARGET" ]]; then
+                    echo "[g8e] operator deploy requires a target host" >&2
+                    echo "  Usage: ./g8e operator deploy <user@host> [options]" >&2
+                    exit 1
+                fi
+                _ensure_g8e_pod "operator deploy"
+                _REMOTE_EXEC="${_DEPLOY_DEST}"
+                [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
+                echo "Fetching linux/${_DEPLOY_ARCH} operator from VSODB blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
+                docker exec -i g8e-pod curl -sf \
+                    -H "X-Internal-Auth: ${INTERNAL_AUTH_TOKEN}" \
+                    --cacert /vsodb/ca.crt \
+                    "https://vsodb:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+                    | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
+                echo "  Done."
+                if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
+                    _REMOTE_CMD="nohup ${_REMOTE_EXEC} -e ${_DEPLOY_ENDPOINT}"
+                    [[ -n "$_DEPLOY_DEVICE_TOKEN" ]] && _REMOTE_CMD+=" -D ${_DEPLOY_DEVICE_TOKEN}"
+                    [[ -n "$_DEPLOY_API_KEY" ]]      && _REMOTE_CMD+=" -k ${_DEPLOY_API_KEY}"
+                    [[ -n "$_DEPLOY_WSS_PORT" ]]     && _REMOTE_CMD+=" --wss-port ${_DEPLOY_WSS_PORT}"
+                    [[ -n "$_DEPLOY_HTTP_PORT" ]]    && _REMOTE_CMD+=" --http-port ${_DEPLOY_HTTP_PORT}"
+                    [[ "$_DEPLOY_NO_GIT" == "true" ]] && _REMOTE_CMD+=" --no-git"
+                    _REMOTE_CMD+=" > ./g8e.operator.log 2>&1 &"
+                    echo "Starting operator on ${_DEPLOY_TARGET}..."
+                    ssh "${_DEPLOY_TARGET}" "${_REMOTE_CMD}"
+                    echo "  Operator started. Logs: ./g8e.operator.log"
+                fi
+                exit 0 ;;
+            stream)
+                if [[ "${3:-}" == "-h" || "${3:-}" == "--help" || "${3:-}" == "" ]]; then
+                    _ensure_g8e_pod "operator stream"
+                    if [ -t 0 ] && [ -t 1 ]; then
+                        exec docker exec -it "$CONTAINER" /home/g8e/g8e.operator stream --help
+                    else
+                        exec docker exec -i "$CONTAINER" /home/g8e/g8e.operator stream --help
+                    fi
+                fi
+                _banner "operator stream ${@:3}"
+                _ensure_g8e_pod "operator stream"
+                if ! docker exec "$CONTAINER" test -f /home/g8e/g8e.operator 2>/dev/null; then
+                    echo "[g8e] Operator binary not found in g8e-pod at /home/g8e/g8e.operator" >&2
+                    echo "  Run: ./g8e operator build" >&2
+                    exit 1
+                fi
+                _stream_args=(/home/g8e/g8e.operator stream)
+                _args=("${@:3}")
+                set -- "${_args[@]}"
+                while [[ $# -gt 0 ]]; do
+                    case "$1" in
+                        --arch|--hosts|--concurrency|--timeout|--endpoint|--device-token|--key|--ssh-config)
+                            _stream_args+=("$1" "$2"); shift 2 ;;
+                        --no-git) _stream_args+=("--no-git"); shift ;;
+                        *) _stream_args+=("$1"); shift ;;
+                    esac
+                done
+                if [ -t 0 ] && [ -t 1 ]; then
+                    exec docker exec -it "$CONTAINER" "${_stream_args[@]}"
+                else
+                    exec docker exec -i "$CONTAINER" "${_stream_args[@]}"
+                fi ;;
+            ssh-config)
+                _banner "operator ssh-config"
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" ssh-config "${@:3}" ;;
+            *)
+                echo "[g8e] unknown operator subcommand: '$SUB'" >&2
+                echo "  Valid: deploy, stream, ssh-config, reauth, build-all" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # test — runs inside g8e-pod
+    # ------------------------------------------------------------------
+    test)
+        _exec_in_pod /app/scripts/testing/run_tests.sh "${@:2}" ;;
+
+    # ------------------------------------------------------------------
+    # security — runs inside g8e-pod
+    # ------------------------------------------------------------------
+    security)
+        case "$SUB" in
+            validate)
+                _banner "security validate"
+                _exec_in_pod /app/scripts/security/validate-platform-security.sh "${@:3}" ;;
+            certs)
+                CERT_SUB="${3:-status}"
+                case "$CERT_SUB" in
+                    generate|rotate|status|trust)
+                        _banner "security certs $CERT_SUB"
+                        exec bash "$SCRIPT_DIR/scripts/security/manage-ssl.sh" "$CERT_SUB" "${@:4}" ;;
+                    *)
+                        echo "[g8e] unknown certs subcommand: '$CERT_SUB'" >&2
+                        echo "  Valid: generate, rotate, status, trust" >&2
+                        exit 1 ;;
+                esac ;;
+            mtls-test)
+                _banner "security mtls-test"
+                _exec_in_pod /app/scripts/security/mtls-test.sh "${@:3}" ;;
+            scan-licenses)
+                _banner "security scan-licenses"
+                _exec_in_pod /app/scripts/security/scan-licenses.sh "${@:3}" ;;
+            passkeys)
+                _banner "security passkeys ${@:3}"
+                _exec_in_pod /app/scripts/security/manage-passkeys.py "${@:3}" ;;
+            rotate-internal-token)
+                _banner "security rotate-internal-token"
+                _ensure_g8e_pod "security rotate-internal-token"
+                echo "  Rotating internal auth token..."
+                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-vsodb.py settings rotate-token 2>&1)"
+                if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then
+                    echo "[g8e] Failed to rotate token: $_new_token" >&2
+                    exit 1
+                fi
+                echo "  Token written to VSODB."
+                echo "  Restarting vsod and vse to pick up new token..."
+                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart vsod vse
+                echo ""
+                echo "  Done. All components now use the new internal auth token." ;;
+            "")
+                echo "[g8e] missing subcommand for 'security'" >&2
+                echo "  Valid: validate, certs, mtls-test, scan-licenses, passkeys, rotate-internal-token" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown security subcommand: '$SUB'" >&2
+                echo "  Valid: validate, certs, mtls-test, scan-licenses, passkeys, rotate-internal-token" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # data — runs inside g8e-pod
+    # ------------------------------------------------------------------
+    data)
+        case "$SUB" in
+            users|operators|store|settings|audit|device-links)
+                _banner "data $SUB ${@:3}"
+                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py "$SUB" "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'data'" >&2
+                echo "  Valid: users, operators, store, settings, audit, device-links" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown data subcommand: '$SUB'" >&2
+                echo "  Valid: users, operators, store, settings, audit, device-links" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # demo — manages the broken-fleet demo; must run on host
+    # ------------------------------------------------------------------
+    demo)
+        DEMO_DIR="$SCRIPT_DIR/demo"
+        if [[ ! -d "$DEMO_DIR" ]]; then
+            echo "[g8e] demo directory not found: $DEMO_DIR" >&2
+            exit 1
+        fi
+        case "$SUB" in
+            up|down|status|clean|health|nginx-check|operators|logs|deploy|ssh-key|stream|vanish|dashboard)
+                _banner "demo $SUB"
+                exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
+            shell)
+                _banner "demo shell"
+                exec make -C "$DEMO_DIR" shell "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'demo'" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown demo subcommand: '$SUB'" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # ssh — manages SSH credential mount; must run on host
+    # ------------------------------------------------------------------
+    ssh)
+        case "$SUB" in
+            setup)
+                _banner "ssh setup"
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'ssh'" >&2
+                echo "  Valid: setup" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown ssh subcommand: '$SUB'" >&2
+                echo "  Valid: setup" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # aws — manages AWS credential mount; must run on host
+    # ------------------------------------------------------------------
+    aws)
+        case "$SUB" in
+            setup)
+                _banner "aws setup"
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-aws.sh" "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'aws'" >&2
+                echo "  Valid: setup" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown aws subcommand: '$SUB'" >&2
+                echo "  Valid: setup" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # search — manages web search config; must run on host
+    # ------------------------------------------------------------------
+    search)
+        case "$SUB" in
+            setup)
+                _banner "search setup"
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" "${@:3}" ;;
+            disable)
+                _banner "search disable"
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" --disable "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'search'" >&2
+                echo "  Valid: setup, disable" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown search subcommand: '$SUB'" >&2
+                echo "  Valid: setup, disable" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # llm — manages Docker container; must run on host
+    # ------------------------------------------------------------------
+    llm)
+        case "$SUB" in
+            setup|show|get|set|restart)
+                # Forward to setup-llm.sh
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-llm.sh" "$SUB" "${@:3}" ;;
+            "")
+                exec bash "$SCRIPT_DIR/scripts/tools/setup-llm.sh" --help ;;
+            *)
+                echo "[g8e] unknown llm subcommand: '$SUB'" >&2
+                echo "  Valid: setup, show, get, set, restart" >&2
+                exit 1 ;;
+        esac ;;
+
+    *)
+        echo "[g8e] unknown command: '$TOP'" >&2
+        echo "  Run: ./g8e --help" >&2
+        exit 1 ;;
+
+esac

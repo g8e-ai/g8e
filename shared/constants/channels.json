@@ -1,0 +1,24 @@
+{
+  "_comment": "Canonical pub/sub channel prefixes and KV binding key patterns shared across VSE (Python), VSA (Go), and VSOD (JS). Channel format: {prefix}:{operator.id}:{operator.session.id}",
+
+  "pubsub": {
+    "separator": ":",
+    "segment_count": 3,
+    "prefixes": {
+      "cmd": "cmd",
+      "results": "results",
+      "heartbeat": "heartbeat",
+      "vsa_results": "vsa_results",
+      "operator_heartbeats": "operator_heartbeats",
+      "sse_events": "sse_events",
+      "system_events": "system_events"
+    },
+    "auth": {
+      "publish.prefix": "auth.publish:",
+      "publish.session.prefix": "auth.publish:session:",
+      "response.prefix": "auth.response:",
+      "response.session.prefix": "auth.response:session:",
+      "session.prefix": "auth.session:"
+    }
+  }
+}

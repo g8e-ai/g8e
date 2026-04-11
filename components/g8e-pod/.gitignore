@@ -1,0 +1,9 @@
+# Ignore scan reports (may contain sensitive findings)
+reports/*.json
+reports/*.html
+reports/*.txt
+reports/*.md
+reports/*/
+
+# Keep the reports directory
+!reports/.gitkeep
