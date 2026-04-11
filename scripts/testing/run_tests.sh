@@ -63,7 +63,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: ./run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: all, g8ee, vsod, g8eo, security"
+            echo "Components: all, g8ee, g8ed, g8eo, security"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -134,7 +134,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(all|g8ee|vsod|g8eo|security)$ ]]; then
+            if [[ "$1" =~ ^(all|g8ee|g8ed|g8eo|security)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -148,11 +148,11 @@ done
 # Container Environment Setup
 # =============================================================================
 
-_settings_script=(/app/scripts/data/manage-vsodb.py settings)
+_settings_script=(/app/scripts/data/manage-g8es.py settings)
 
 _install_ca_cert() {
-    local ca_cert="/vsodb/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/vsodb/ca/ca.crt"
+    local ca_cert="/g8es/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
     if [[ ! -f "$ca_cert" ]]; then
         log_warn "Platform CA cert not found"
         return
@@ -164,15 +164,15 @@ _install_ca_cert() {
 }
 
 _load_platform_secrets() {
-    local auth_token_file="/vsodb/internal_auth_token"
-    local session_key_file="/vsodb/session_encryption_key"
+    local auth_token_file="/g8es/internal_auth_token"
+    local session_key_file="/g8es/session_encryption_key"
     if [[ -f "$auth_token_file" ]]; then
         export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file")
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from /vsodb"
+        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from /g8es"
     fi
     if [[ -f "$session_key_file" ]]; then
         export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file")
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from /vsodb"
+        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from /g8es"
     fi
 }
 
@@ -183,8 +183,8 @@ setup_container_environment() {
 }
 
 verify_container_infrastructure() {
-    local ca_cert="/vsodb/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/vsodb/ca/ca.crt"
+    local ca_cert="/g8es/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
     local curl_args=()
     if [[ -f "$ca_cert" ]]; then
         curl_args=("--cacert" "$ca_cert")
@@ -193,11 +193,11 @@ verify_container_infrastructure() {
         log_warn "CA cert not found, using insecure connection"
     fi
     
-    if ! curl -sf "${curl_args[@]}" https://vsodb:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "VSODB not accessible at https://vsodb:9000/health"
+    if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
+        log_err "g8es not accessible at https://g8es:9000/health"
         exit 1
     fi
-    log_ok "VSODB connected"
+    log_ok "g8es connected"
 }
 
 # =============================================================================
@@ -215,9 +215,9 @@ run_g8ee() {
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
-run_vsod() {
-    log_header "Running VSOD tests on g8ep"
-    cd "$PROJECT_ROOT/components/vsod"
+run_g8ed() {
+    log_header "Running g8ed tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8ed"
     local cov_flag=""
     [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
     NODE_PATH="./node_modules" npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
@@ -259,9 +259,9 @@ run_g8eo() {
 run_component() {
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
-        vsod) run_vsod ;;
+        g8ed) run_g8ed ;;
         g8eo) run_g8eo ;;
-        all) run_g8ee; run_vsod; run_g8eo ;;
+        all) run_g8ee; run_g8ed; run_g8eo ;;
     esac
 }
 

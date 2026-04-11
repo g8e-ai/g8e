@@ -3,7 +3,7 @@
 # Scans Docker images and filesystems for CVEs
 #
 # Usage: ./scan-containers.sh [image_name]
-# If no image specified, scans all vso-* images
+# If no image specified, scans all g8e-* images
 
 set -e
 
@@ -15,8 +15,8 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 if [ -n "$1" ]; then
     IMAGES=("$1")
 else
-    echo "Discovering VSO images..."
-    IMAGES=(vsod g8ee vso-nginx)
+    echo "Discovering g8e images..."
+    IMAGES=(g8ed g8ee g8e-nginx)
 fi
 
 echo "Container Vulnerability Scan"

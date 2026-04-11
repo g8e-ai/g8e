@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-VSO HTTP Client
+g8ee HTTP Client
 
 A robust HTTP client for inter-component communication with built-in retry,
 circuit breaking, and error handling capabilities.
@@ -42,14 +42,14 @@ from app.constants import (
     CircuitBreakerState,
     ErrorCode,
     ErrorSeverity,
-    VSOHeaders,
+    G8eHeaders,
 )
 from app.errors import (
     NetworkError,
     ValidationError,
 )
-from app.models.base import VSOBaseModel
-from app.models.http_context import VSOHttpContext
+from app.models.base import G8eBaseModel
+from app.models.http_context import G8eHttpContext
 from app.utils.aiohttp_session import new_component_http_session
 from app.utils.timestamp import now
 
@@ -58,9 +58,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_RETRY_METHODS: set[str] = {"GET", "PUT", "DELETE", "HEAD", "OPTIONS"}
 DEFAULT_RETRY_STATUS_CODES: set[int] = {408, 429, 500, 502, 503, 504}
 
-EXECUTION_ID_HEADER = VSOHeaders.EXECUTION_ID
+EXECUTION_ID_HEADER = G8eHeaders.EXECUTION_ID
 
-class RequestTrace(VSOBaseModel):
+class RequestTrace(G8eBaseModel):
     """
     Tracking information for a request to provide context in logs
     and enable distributed tracing.
@@ -82,11 +82,11 @@ class RequestTrace(VSOBaseModel):
             EXECUTION_ID_HEADER: self.execution_id,
         }
         if self.case_id:
-            headers[VSOHeaders.CASE_ID] = self.case_id
+            headers[G8eHeaders.CASE_ID] = self.case_id
         if self.task_id:
-            headers[VSOHeaders.TASK_ID] = self.task_id
+            headers[G8eHeaders.TASK_ID] = self.task_id
         if self.investigation_id:
-            headers[VSOHeaders.INVESTIGATION_ID] = self.investigation_id
+            headers[G8eHeaders.INVESTIGATION_ID] = self.investigation_id
         return headers
 
     @classmethod
@@ -96,9 +96,9 @@ class RequestTrace(VSOBaseModel):
         return cls(
             execution_id=execution_id,
             component_id=component_id,
-            case_id=headers.get(VSOHeaders.CASE_ID),
-            task_id=headers.get(VSOHeaders.TASK_ID),
-            investigation_id=headers.get(VSOHeaders.INVESTIGATION_ID),
+            case_id=headers.get(G8eHeaders.CASE_ID),
+            task_id=headers.get(G8eHeaders.TASK_ID),
+            investigation_id=headers.get(G8eHeaders.INVESTIGATION_ID),
             start_time=now(),
         )
 
@@ -109,7 +109,7 @@ class RequestTrace(VSOBaseModel):
             self.duration_ms = (self.end_time - self.start_time).total_seconds() * 1000
 
 
-class RetryConfig(VSOBaseModel):
+class RetryConfig(G8eBaseModel):
     """Configuration for HTTP client retry behavior"""
     max_retries: int = DEFAULT_MAX_RETRIES
     retry_backoff_factor: float = DEFAULT_RETRY_BACKOFF_FACTOR
@@ -118,7 +118,7 @@ class RetryConfig(VSOBaseModel):
     retry_status_codes: set[int] = DEFAULT_RETRY_STATUS_CODES
 
 
-class CircuitBreakerConfig(VSOBaseModel):
+class CircuitBreakerConfig(G8eBaseModel):
     """Configuration for circuit breaker behavior"""
     failure_threshold: int = 5
     recovery_time: float = 30.0
@@ -208,13 +208,13 @@ class AiohttpResponse:
 
 class HTTPClient:
     """
-    A robust HTTP client for inter-component communication within the VSO ecosystem.
+    A robust HTTP client for inter-component communication within the g8e ecosystem.
     
     Features:
     - Automatic retry for transient failures with exponential backoff
     - Circuit breaker pattern to fail fast when services are unavailable
     - Distributed tracing via request ID and correlation ID
-    - Structured error handling that integrates with the VSO error system
+    - Structured error handling that integrates with the g8e error system
     - Authentication between components
     """
 
@@ -271,22 +271,22 @@ class HTTPClient:
         return self.circuit_breakers[endpoint]
 
     @staticmethod
-    def _context_to_headers(context: "VSOHttpContext") -> dict[str, str]:
-        """Convert a VSOHttpContext into the standard X-VSO-* outbound headers."""
+    def _context_to_headers(context: "G8eHttpContext") -> dict[str, str]:
+        """Convert a G8eHttpContext into the standard X-G8E-* outbound headers."""
         headers: dict[str, str] = {
-            VSOHeaders.WEB_SESSION_ID: context.web_session_id,
-            VSOHeaders.USER_ID: context.user_id,
-            VSOHeaders.SOURCE_COMPONENT: context.source_component,
-            VSOHeaders.EXECUTION_ID: context.execution_id,
+            G8eHeaders.WEB_SESSION_ID: context.web_session_id,
+            G8eHeaders.USER_ID: context.user_id,
+            G8eHeaders.SOURCE_COMPONENT: context.source_component,
+            G8eHeaders.EXECUTION_ID: context.execution_id,
         }
         if context.organization_id:
-            headers[VSOHeaders.ORGANIZATION_ID] = context.organization_id
+            headers[G8eHeaders.ORGANIZATION_ID] = context.organization_id
         if context.case_id:
-            headers[VSOHeaders.CASE_ID] = context.case_id
+            headers[G8eHeaders.CASE_ID] = context.case_id
         if context.investigation_id:
-            headers[VSOHeaders.INVESTIGATION_ID] = context.investigation_id
+            headers[G8eHeaders.INVESTIGATION_ID] = context.investigation_id
         if context.task_id:
-            headers[VSOHeaders.TASK_ID] = context.task_id
+            headers[G8eHeaders.TASK_ID] = context.task_id
         return headers
 
     async def _prepare_request(
@@ -294,7 +294,7 @@ class HTTPClient:
         method: str,
         url: str,
         headers: dict[str, str],
-        context: Optional["VSOHttpContext"],
+        context: Optional["G8eHttpContext"],
         **kwargs
     ) -> tuple[str, dict[str, str], dict[str, object], RequestTrace]:
         """
@@ -304,7 +304,7 @@ class HTTPClient:
             method: HTTP method
             url: Request URL or path (will be joined with base_url if provided)
             headers: Optional headers to add to the request
-            context: Optional VSOHttpContext to propagate as X-VSO-* headers
+            context: Optional G8eHttpContext to propagate as X-G8E-* headers
             **kwargs: Additional request parameters
 
         Returns:
@@ -366,7 +366,7 @@ class HTTPClient:
         url: str,
         headers: dict[str, str],
         json_data: Any,
-        context: Optional["VSOHttpContext"],
+        context: Optional["G8eHttpContext"],
         **kwargs
     ) -> "AiohttpResponse":
         """
@@ -377,7 +377,7 @@ class HTTPClient:
             url: URL or path to request
             headers: Optional headers to include
             json_data: Optional JSON data to send
-            context: Optional VSOHttpContext to propagate as X-VSO-* headers
+            context: Optional G8eHttpContext to propagate as X-G8E-* headers
             **kwargs: Additional parameters to pass to aiohttp
             
         Returns:
@@ -632,23 +632,23 @@ class HTTPClient:
 
                 raise error
 
-    async def get(self, url: str, params, context: VSOHttpContext, **kwargs) -> AiohttpResponse:
+    async def get(self, url: str, params, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
         return await self.request("GET", url, params=params, context=context, **kwargs)
 
-    async def post(self, url: str, json_data=None, data=None, context: Optional[VSOHttpContext] = None, **kwargs) -> AiohttpResponse:
+    async def post(self, url: str, json_data=None, data=None, context: Optional[G8eHttpContext] = None, **kwargs) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("POST", url, json_data=json_data, context=context, **kwargs)
         return await self.request("POST", url, json_data=None, context=context, **kwargs) if data is None else await self.request("POST", url, data=data, context=context, **kwargs)
 
-    async def put(self, url: str, json_data, data, context: VSOHttpContext, **kwargs) -> AiohttpResponse:
+    async def put(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("PUT", url, json_data=json_data, context=context, **kwargs)
         return await self.request("PUT", url, data=data, context=context, **kwargs)
 
-    async def delete(self, url: str, context: VSOHttpContext, **kwargs) -> AiohttpResponse:
+    async def delete(self, url: str, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
         return await self.request("DELETE", url, context=context, **kwargs)
 
-    async def patch(self, url: str, json_data, data, context: VSOHttpContext, **kwargs) -> AiohttpResponse:
+    async def patch(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("PATCH", url, json_data=json_data, context=context, **kwargs)
         return await self.request("PATCH", url, data=data, context=context, **kwargs)
@@ -659,7 +659,7 @@ class HTTPClient:
         url: str,
         headers: dict[str, str],
         json_data: Any,
-        context: Optional["VSOHttpContext"],
+        context: Optional["G8eHttpContext"],
         chunk_size: int = 8192,
         **kwargs
     ) -> AsyncIterator[bytes]:
@@ -753,7 +753,7 @@ def get_service_client(
     """Get an HTTP client configured for inter-service communication.
 
     Args:
-        target_service: The service being called (e.g., ComponentName.VSOD)
+        target_service: The service being called (e.g., ComponentName.G8ED)
         source_service: The component making the request (e.g., ComponentName.G8EE)
         base_url: Optional explicit service URL
         timeout: Request timeout in seconds

@@ -30,7 +30,7 @@ from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
 from .operator_data_service import OperatorDataService
-from ..infra.vsod_event_service import EventService
+from ..infra.g8ed_event_service import EventService
 
 logger = logging.getLogger(__name__)
 

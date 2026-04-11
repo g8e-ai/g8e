@@ -38,7 +38,7 @@ from app.models.command_payloads import GrantIntentArgs
 from app.models.tool_results import IntentPermissionResult
 from app.services.operator.command_service import OperatorCommandService
 from tests.fakes.builder import build_command_service
-from tests.fakes.factories import build_vso_http_context
+from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = [pytest.mark.unit]
 
@@ -57,8 +57,8 @@ def _make_service() -> OperatorCommandService:
     return build_command_service()
 
 
-def _make_vso_context():
-    return build_vso_http_context(
+def _make_g8e_context():
+    return build_g8e_http_context(
         web_session_id="web-test-123",
         case_id="case-456",
         investigation_id="inv-123",
@@ -325,7 +325,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="totally_fake_service_intent", justification="Test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert isinstance(result, IntentPermissionResult)
@@ -337,7 +337,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="bad_intent_name", justification="Test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.error is not None
@@ -348,7 +348,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="fake_intent", justification="Test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.error is not None
@@ -373,7 +373,7 @@ class TestExecuteIntentPermissionRequestValidation:
 
             result = await service._intent_service.execute_intent_permission_request(
                 args=GrantIntentArgs(intent_name=value, justification="Automated validation test"),
-                vso_context=_make_vso_context(),
+                g8e_context=_make_g8e_context(),
                 investigation=self._make_cloud_investigation(),
             )
             assert result.error_type != CommandErrorType.INVALID_INTENT, (
@@ -387,7 +387,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="", justification="Test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.success is False
@@ -396,7 +396,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="ec2_discovery", justification=""),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.success is False
@@ -408,7 +408,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="ec2_discovery,completely_fake_intent", justification="Multi-intent test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.success is False
@@ -426,7 +426,7 @@ class TestExecuteIntentPermissionRequestValidation:
             CLOUD_INTENT_DEPENDENCIES["ec2_management"] = ["ec2_discovery", "fake_dep_intent"]
             result = await service._intent_service.execute_intent_permission_request(
                 args=GrantIntentArgs(intent_name="ec2_management", justification="Test with injected bad dep"),
-                vso_context=_make_vso_context(),
+                g8e_context=_make_g8e_context(),
                 investigation=self._make_cloud_investigation(),
             )
             assert result.success is False
@@ -452,7 +452,7 @@ class TestExecuteIntentPermissionRequestValidation:
         service = _make_service()
         result = await service._intent_service.execute_intent_permission_request(
             args=GrantIntentArgs(intent_name="ec2_discovery", justification="Test"),
-            vso_context=_make_vso_context(),
+            g8e_context=_make_g8e_context(),
             investigation=investigation,
         )
         assert result.success is False

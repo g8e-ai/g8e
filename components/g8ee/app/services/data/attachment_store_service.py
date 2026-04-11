@@ -14,14 +14,14 @@
 """
 Attachment Service for g8ee
 
-Retrieves file attachment data from VSODB Blob Store that was stored by VSOD,
+Retrieves file attachment data from g8es Blob Store that was stored by g8ed,
 and processes the retrieved base64 data for LLM provider consumption.
 
 Attachments are stored per-investigation in Blob Store namespaces.
 Namespace format: att:{investigation_id}
 Blob ID format: att:{investigation_id}/{attachment_id}
 
-This service is read-only from g8ee's perspective - VSOD handles writes.
+This service is read-only from g8ee's perspective - g8ed handles writes.
 """
 
 import base64
@@ -43,9 +43,9 @@ logger = logging.getLogger(__name__)
 
 class AttachmentService:
     """
-    Retrieves attachment data from VSODB Blob Store and processes it for AI consumption.
+    Retrieves attachment data from g8es Blob Store and processes it for AI consumption.
 
-    VSOD stores full AttachmentData JSON (including base64 data) in Blob Store.
+    g8ed stores full AttachmentData JSON (including base64 data) in Blob Store.
     g8ee retrieves and classifies it here for LLM provider consumption.
     """
 
@@ -126,10 +126,10 @@ class AttachmentService:
         attachment_metadata: list[AttachmentMetadata]
     ) -> list[AttachmentData]:
         """
-        Retrieve full attachment data for a list of attachment metadata from VSOD.
+        Retrieve full attachment data for a list of attachment metadata from g8ed.
 
         Args:
-            attachment_metadata: List of AttachmentMetadata from VSOD
+            attachment_metadata: List of AttachmentMetadata from g8ed
 
         Returns:
             List of AttachmentData with base64_data included
@@ -160,7 +160,7 @@ class AttachmentService:
                 )
 
         logger.info(
-            "[ATTACHMENTS] Retrieved attachments from VSODB",
+            "[ATTACHMENTS] Retrieved attachments from g8es",
             extra={"retrieved": len(attachments), "total": len(attachment_metadata)}
         )
         return attachments

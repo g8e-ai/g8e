@@ -39,15 +39,15 @@ from app.constants import (
 )
 from app.constants.paths import PATHS
 from pydantic import model_validator, field_validator
-from app.models.base import ConfigDict, Field, VSOBaseModel
+from app.models.base import ConfigDict, Field, G8eBaseModel
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
 
-class PlatformSettingsData(VSOBaseModel):
-    """Internal flat map of platform settings as stored in VSODB.
+class PlatformSettingsData(G8eBaseModel):
+    """Internal flat map of platform settings as stored in g8es.
     
     Keys must match shared/models/platform_settings.json.
     """
@@ -102,8 +102,8 @@ class PlatformSettingsData(VSOBaseModel):
     # Cluster Port Configuration
     https_port: int = 443
     http_port: int = 80
-    vsodb_http_port: int = 9000
-    vsodb_wss_port: int = 9001
+    g8es_http_port: int = 9000
+    g8es_wss_port: int = 9001
     supervisor_port: int = 443
 
     @model_validator(mode="before")
@@ -129,8 +129,8 @@ class PlatformSettingsData(VSOBaseModel):
         return data
 
 
-class UserSettingsData(VSOBaseModel):
-    """Internal flat map of user settings as stored in VSODB.
+class UserSettingsData(G8eBaseModel):
+    """Internal flat map of user settings as stored in g8es.
     
     Keys must match shared/models/user_settings.json.
     """
@@ -190,36 +190,36 @@ class UserSettingsData(VSOBaseModel):
         return data
 
 
-class PlatformSettingsDocument(VSOBaseModel):
-    """Platform-wide configuration document from VSODB 'platform_settings' collection."""
+class PlatformSettingsDocument(G8eBaseModel):
+    """Platform-wide configuration document from g8es 'platform_settings' collection."""
     settings: PlatformSettingsData
     created_at: str
     updated_at: str
 
 
-class UserSettingsDocument(VSOBaseModel):
-    """Per-user settings document from VSODB 'user_settings' collection."""
+class UserSettingsDocument(G8eBaseModel):
+    """Per-user settings document from g8es 'user_settings' collection."""
     settings: UserSettingsData
     created_at: str
     updated_at: str
 
-class AuthSettings(VSOBaseModel):
+class AuthSettings(G8eBaseModel):
     """Authentication and security token configuration."""
     internal_auth_token: str | None = Field(None)
     session_encryption_key: str | None = Field(None)
     g8e_api_key: str | None = Field(None)
 
-class ServiceURLsSettings(VSOBaseModel):
+class ServiceURLsSettings(G8eBaseModel):
     """Internal and external service URL configuration."""
     g8ee_url: str = Field("https://g8ee")
-    vsod_url: str = Field("https://vsod")
+    g8ed_url: str = Field("https://g8ed")
 
-class CommandValidationSettings(VSOBaseModel):
+class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration."""
     enable_whitelisting: bool = Field(False)
     enable_blacklisting: bool = Field(False)
 
-class SearchSettings(VSOBaseModel):
+class SearchSettings(G8eBaseModel):
     """Unified search configuration (Vertex AI and Google Search)."""
     enabled: bool = Field(False)
     project_id: str | None = Field(None)
@@ -227,7 +227,7 @@ class SearchSettings(VSOBaseModel):
     location: str = Field("global")
     api_key: str | None = Field(None)
 
-class DatabaseSettings(VSOBaseModel):
+class DatabaseSettings(G8eBaseModel):
     """SQLite coordination store configuration."""
     db_path: str = Field(PATHS["infra"]["db_path"])
     poll_interval_active_seconds: float = Field(0.5)
@@ -246,11 +246,11 @@ class DatabaseSettings(VSOBaseModel):
     orgs_collection: str = Field(DB_COLLECTION_ORGANIZATIONS)
     operators_collection: str = Field(DB_COLLECTION_OPERATORS)
 
-class ListenSettings(VSOBaseModel):
-    """VSODB (Operator --listen mode) configuration."""
-    http_url: str = Field("https://vsodb:9000")
-    pubsub_url: str = Field("wss://vsodb:9001")
-    blob_url: str = Field("https://vsodb:9000")
+class ListenSettings(G8eBaseModel):
+    """g8es (Operator --listen mode) configuration."""
+    http_url: str = Field("https://g8es:9000")
+    pubsub_url: str = Field("wss://g8es:9001")
+    blob_url: str = Field("https://g8es:9000")
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
 
     @field_validator("http_url", "pubsub_url", "blob_url", mode="after")
@@ -264,7 +264,7 @@ class ListenSettings(VSOBaseModel):
         settings = settings_service.get_local_settings()
         return settings.listen
 
-class LLMSettings(VSOBaseModel):
+class LLMSettings(G8eBaseModel):
     """LLM provider configuration."""
     model_config = ConfigDict(
         populate_by_name=True,
@@ -308,7 +308,7 @@ class LLMSettings(VSOBaseModel):
         }
         return endpoints.get(self.provider)
 
-class G8eePlatformSettings(VSOBaseModel):
+class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
     port: int
     host: str = Field("0.0.0.0")
@@ -352,7 +352,7 @@ class G8eePlatformSettings(VSOBaseModel):
         return await settings_service.get_platform_settings()
 
 
-class G8eeUserSettings(VSOBaseModel):
+class G8eeUserSettings(G8eBaseModel):
     """Per-user settings, overlaid on platform settings."""
     llm: LLMSettings
     search: SearchSettings = Field(default_factory=SearchSettings)

@@ -19,10 +19,10 @@ from pydantic import Field
 from app.constants import CaseStatus, ComponentName, EventType, Priority, Severity
 
 from .attachments import AttachmentMetadata
-from .base import VSOBaseModel, VSOIdentifiableModel
+from .base import G8eBaseModel, G8eIdentifiableModel
 
 
-class HistoryEntry(VSOBaseModel):
+class HistoryEntry(G8eBaseModel):
     """Entry in the case history trail"""
     timestamp: datetime = Field(..., description="When the event occurred")
     event_type: EventType = Field(..., description="Type of event")
@@ -32,7 +32,7 @@ class HistoryEntry(VSOBaseModel):
     related_ids: dict[str, str] | None = Field(default=None, description="Related entity IDs")
     details: dict[str, Any] | None = Field(default=None, description="Full event details")
 
-class CaseModel(VSOIdentifiableModel):
+class CaseModel(G8eIdentifiableModel):
     """Canonical case model used by ALL components"""
     title: str = Field(..., min_length=1, max_length=500)
     description: str = Field(..., min_length=1)
@@ -52,14 +52,14 @@ class CaseModel(VSOIdentifiableModel):
     history_trail: list[HistoryEntry] = Field(default_factory=list, description="Chronological list of key events")
     attachments: list[str] = Field(default_factory=list, description="List of Google Cloud Storage URLs for attached files")
 
-class CaseCreateRequest(VSOBaseModel):
+class CaseCreateRequest(G8eBaseModel):
     """
     Request model for creating a case.
     
     SECURITY MODEL (Adversarial Client Design):
     - Client input is treated as potentially adversarial
     - Only essential user-controlled fields are accepted from client
-    - All identity/security fields are injected server-side by VSOD from authenticated session
+    - All identity/security fields are injected server-side by g8ed from authenticated session
     - All generated fields (id, title) are created server-side by g8e
     
     CLIENT-PROVIDED (user input):
@@ -67,7 +67,7 @@ class CaseCreateRequest(VSOBaseModel):
     - attachments: Optional - user-uploaded files  
     - sentinel_mode: Optional - user preference for data scrubbing
     
-    SERVER-INJECTED BY VSOD (from authenticated session - never trust client):
+    SERVER-INJECTED BY g8ed (from authenticated session - never trust client):
     - user_id: From session.user_id
     - user_email: From session.user_data.email
     - web_session_id: From validated session cookie
@@ -89,16 +89,16 @@ class CaseCreateRequest(VSOBaseModel):
         default=True,
         description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data."
     )
-    user_id: str = Field(..., min_length=1, description="User ID - MUST be injected by VSOD from authenticated session")
-    user_email: str | None = Field(default=None, description="User email - injected by VSOD from session")
-    web_session_id: str = Field(..., min_length=1, description="Session ID - MUST be injected by VSOD from validated session cookie")
-    organization_id: str | None = Field(default=None, description="Organization ID - injected by VSOD from session")
+    user_id: str = Field(..., min_length=1, description="User ID - MUST be injected by g8ed from authenticated session")
+    user_email: str | None = Field(default=None, description="User email - injected by g8ed from session")
+    web_session_id: str = Field(..., min_length=1, description="Session ID - MUST be injected by g8ed from validated session cookie")
+    organization_id: str | None = Field(default=None, description="Organization ID - injected by g8ed from session")
     priority: Priority = Field(default=Priority.MEDIUM, description="Server default - not client controllable")
     severity: Severity = Field(default=Severity.MEDIUM, description="Server default - not client controllable")
     source: str = Field(default="g8e.ai", description="Server default - not client controllable")
 
 
-class CaseUpdateRequest(VSOBaseModel):
+class CaseUpdateRequest(G8eBaseModel):
     """Request model for updating a case"""
     title: str | None = Field(default=None, min_length=1, max_length=500)
     description: str | None = Field(default=None, min_length=1)
@@ -110,13 +110,13 @@ class CaseUpdateRequest(VSOBaseModel):
     metadata: dict[str, Any] | None = None
 
 
-class CaseCreatedPayload(VSOBaseModel):
+class CaseCreatedPayload(G8eBaseModel):
     """Typed payload for the CASE_CREATED SSE event."""
     title: str | None = Field(default=None, description="Case title")
 
 
-class CaseEventPayload(VSOBaseModel):
-    """Typed payload for case SSE events pushed to VSOD."""
+class CaseEventPayload(G8eBaseModel):
+    """Typed payload for case SSE events pushed to g8ed."""
     updated_at: datetime = Field(..., description="When the case was last updated")
     title: str | None = Field(default=None, description="Updated title")
     description: str | None = Field(default=None, description="Updated description")

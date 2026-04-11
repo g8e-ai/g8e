@@ -26,9 +26,9 @@ from app.constants import (
     AuthMethod,
     ComponentName,
     HealthStatus,
-    VSOHeaders,
+    G8eHeaders,
 )
-from tests.fakes.headers import TEST_VSO_HEADERS
+from tests.fakes.headers import TEST_G8E_HEADERS
 from app.models.settings import G8eePlatformSettings
 from app.dependencies import (
     get_g8ee_platform_settings,
@@ -43,7 +43,7 @@ from app.dependencies import (
     get_g8ee_investigation_service,
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
-    get_vso_http_context,
+    get_g8e_http_context,
     health_check_dependencies,
     require_internal_origin,
     require_proxy_auth,
@@ -272,19 +272,19 @@ class TestGetG8eeCurrentActiveUser:
         assert exc_info.value.get_http_status() == 401
 
 
-class TestGetVsoHttpContext:
+class TestGetG8eHttpContext:
     async def test_extracts_full_context_from_headers(self, mock_request):
         mock_request.headers = {
-            **TEST_VSO_HEADERS,
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-123",
-            VSOHeaders.USER_ID.lower(): "user-456",
-            VSOHeaders.ORGANIZATION_ID.lower(): "org-789",
-            VSOHeaders.CASE_ID.lower(): "case-111",
-            VSOHeaders.INVESTIGATION_ID.lower(): "inv-222",
-            VSOHeaders.BOUND_OPERATORS.lower(): '[{"operator_id": "op-333", "operator_session_id": "sess-333", "status": "bound"}]',
-            VSOHeaders.SOURCE_COMPONENT.lower(): "vsod",
+            **TEST_G8E_HEADERS,
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
+            G8eHeaders.USER_ID.lower(): "user-456",
+            G8eHeaders.ORGANIZATION_ID.lower(): "org-789",
+            G8eHeaders.CASE_ID.lower(): "case-111",
+            G8eHeaders.INVESTIGATION_ID.lower(): "inv-222",
+            G8eHeaders.BOUND_OPERATORS.lower(): '[{"operator_id": "op-333", "operator_session_id": "sess-333", "status": "bound"}]',
+            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
         }
-        context = await get_vso_http_context(mock_request)
+        context = await get_g8e_http_context(mock_request)
         assert context.web_session_id == "session-123"
         assert context.user_id == "user-456"
         assert context.organization_id == "org-789"
@@ -292,48 +292,48 @@ class TestGetVsoHttpContext:
         assert context.investigation_id == "inv-222"
         assert len(context.bound_operators) == 1
         assert context.bound_operators[0].operator_id == "op-333"
-        assert context.source_component == ComponentName.VSOD
+        assert context.source_component == ComponentName.G8ED
 
     async def test_missing_session_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {VSOHeaders.USER_ID.lower(): "user-456", VSOHeaders.SOURCE_COMPONENT.lower(): "vsod"}
+        mock_request.headers = {G8eHeaders.USER_ID.lower(): "user-456", G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed"}
         with pytest.raises(AuthenticationError) as exc_info:
-            await get_vso_http_context(mock_request)
+            await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
 
     async def test_missing_user_id_raises_authentication_error(self, mock_request):
-        mock_request.headers = {VSOHeaders.WEB_SESSION_ID.lower(): "session-123", VSOHeaders.SOURCE_COMPONENT.lower(): "vsod"}
+        mock_request.headers = {G8eHeaders.WEB_SESSION_ID.lower(): "session-123", G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed"}
         with pytest.raises(AuthenticationError) as exc_info:
-            await get_vso_http_context(mock_request)
+            await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
 
     async def test_missing_source_component_raises_authentication_error(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-123",
-            VSOHeaders.USER_ID.lower(): "user-456",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
+            G8eHeaders.USER_ID.lower(): "user-456",
         }
         with pytest.raises(AuthenticationError) as exc_info:
-            await get_vso_http_context(mock_request)
+            await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
 
     async def test_invalid_source_component_raises_authentication_error(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-123",
-            VSOHeaders.USER_ID.lower(): "user-456",
-            VSOHeaders.SOURCE_COMPONENT.lower(): "unknown",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-123",
+            G8eHeaders.USER_ID.lower(): "user-456",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "unknown",
         }
         with pytest.raises(AuthenticationError) as exc_info:
-            await get_vso_http_context(mock_request)
+            await get_g8e_http_context(mock_request)
         assert exc_info.value.get_http_status() == 401
 
     async def test_minimal_required_headers_succeeds(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            VSOHeaders.USER_ID.lower(): "user-xyz",
-            VSOHeaders.SOURCE_COMPONENT.lower(): "vsod",
-            VSOHeaders.CASE_ID.lower(): "case-min-001",
-            VSOHeaders.INVESTIGATION_ID.lower(): "inv-min-001",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
+            G8eHeaders.USER_ID.lower(): "user-xyz",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.CASE_ID.lower(): "case-min-001",
+            G8eHeaders.INVESTIGATION_ID.lower(): "inv-min-001",
         }
-        context = await get_vso_http_context(mock_request)
+        context = await get_g8e_http_context(mock_request)
         assert context.web_session_id == "session-abc"
         assert context.user_id == "user-xyz"
         assert context.organization_id is None
@@ -342,37 +342,37 @@ class TestGetVsoHttpContext:
 
     async def test_source_component_is_enum(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            VSOHeaders.USER_ID.lower(): "user-xyz",
-            VSOHeaders.SOURCE_COMPONENT.lower(): "g8ee",
-            VSOHeaders.CASE_ID.lower(): "case-src-001",
-            VSOHeaders.INVESTIGATION_ID.lower(): "inv-src-001",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
+            G8eHeaders.USER_ID.lower(): "user-xyz",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ee",
+            G8eHeaders.CASE_ID.lower(): "case-src-001",
+            G8eHeaders.INVESTIGATION_ID.lower(): "inv-src-001",
         }
-        context = await get_vso_http_context(mock_request)
+        context = await get_g8e_http_context(mock_request)
         assert context.source_component == ComponentName.G8EE
 
     async def test_request_id_defaults_when_header_absent(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            VSOHeaders.USER_ID.lower(): "user-xyz",
-            VSOHeaders.SOURCE_COMPONENT.lower(): "vsod",
-            VSOHeaders.CASE_ID.lower(): "case-req-001",
-            VSOHeaders.INVESTIGATION_ID.lower(): "inv-req-001",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
+            G8eHeaders.USER_ID.lower(): "user-xyz",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.CASE_ID.lower(): "case-req-001",
+            G8eHeaders.INVESTIGATION_ID.lower(): "inv-req-001",
         }
-        context = await get_vso_http_context(mock_request)
+        context = await get_g8e_http_context(mock_request)
         assert context.execution_id is not None
         assert context.execution_id.startswith("exec")
 
     async def test_request_id_uses_header_when_present(self, mock_request):
         mock_request.headers = {
-            VSOHeaders.WEB_SESSION_ID.lower(): "session-abc",
-            VSOHeaders.USER_ID.lower(): "user-xyz",
-            VSOHeaders.SOURCE_COMPONENT.lower(): "vsod",
-            VSOHeaders.CASE_ID.lower(): "case-rid-001",
-            VSOHeaders.INVESTIGATION_ID.lower(): "inv-rid-001",
-            VSOHeaders.EXECUTION_ID.lower(): "exec_explicit_id",
+            G8eHeaders.WEB_SESSION_ID.lower(): "session-abc",
+            G8eHeaders.USER_ID.lower(): "user-xyz",
+            G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+            G8eHeaders.CASE_ID.lower(): "case-rid-001",
+            G8eHeaders.INVESTIGATION_ID.lower(): "inv-rid-001",
+            G8eHeaders.EXECUTION_ID.lower(): "exec_explicit_id",
         }
-        context = await get_vso_http_context(mock_request)
+        context = await get_g8e_http_context(mock_request)
         assert context.execution_id == "exec_explicit_id"
 
 
@@ -478,16 +478,16 @@ class TestRequireProxyAuth:
         assert result.organization_id == "org-xyz"
         assert result.auth_method == AuthMethod.PROXY
 
-    async def test_internal_token_with_vso_headers_return_authenticated_user(self, mock_request):
+    async def test_internal_token_with_g8e_headers_return_authenticated_user(self, mock_request):
         token = "internal-secret"
         settings = MagicMock()
         settings.auth.internal_auth_token = token
         mock_request.headers = {
-            **TEST_VSO_HEADERS,
+            **TEST_G8E_HEADERS,
             INTERNAL_AUTH_HEADER: token,
-            VSOHeaders.USER_ID.lower(): "internal-user",
-            VSOHeaders.WEB_SESSION_ID.lower(): "sess-abc",
-            VSOHeaders.ORGANIZATION_ID.lower(): "org-internal",
+            G8eHeaders.USER_ID.lower(): "internal-user",
+            G8eHeaders.WEB_SESSION_ID.lower(): "sess-abc",
+            G8eHeaders.ORGANIZATION_ID.lower(): "org-internal",
         }
         result = await require_proxy_auth(mock_request, settings)
         assert result.uid == "internal-user"

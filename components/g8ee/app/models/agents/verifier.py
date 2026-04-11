@@ -12,18 +12,18 @@
 # limitations under the License.
 
 from pydantic import Field
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.constants import VerifierReason
 
 
-class VerifierRequest(VSOBaseModel):
+class VerifierRequest(G8eBaseModel):
     """Request model for the Verifier agent."""
     intent: str = Field(description="The original user intent.")
     os: str = Field(description="The operating system of the target.")
     candidate_command: str = Field(description="The command string to be verified.")
 
 
-class VerifierResult(VSOBaseModel):
+class VerifierResult(G8eBaseModel):
     """The result of a Verifier agent operation."""
     passed: bool = Field(description="True if the verifier approves the candidate.")
     revision: str | None = Field(default=None, description="The revised command string if the verifier rejects the candidate.")

@@ -1,5 +1,5 @@
 {
-  "_comment": "Primitive segment vocabulary. These are the only valid dot-path segments used to compose event types, channel names, sender paths, and status values across g8ee, g8eo, and VSOD. Every value in events.json, senders.json, status.json, channels.json must be composed exclusively from these segments joined by '.'.",
+  "_comment": "Primitive segment vocabulary. These are the only valid dot-path segments used to compose event types, channel names, sender paths, and status values across g8ee, g8eo, and g8ed. Every value in events.json, senders.json, status.json, channels.json must be composed exclusively from these segments joined by '.'.",
 
   "segments": [
     "acknowledged",

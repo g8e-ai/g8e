@@ -43,11 +43,11 @@ from app.constants.settings import (
     ApprovalErrorType,
 )
 from app.models.command_payloads import FileEditPayload, FetchFileHistoryArgs, FetchFileDiffArgs
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
 from app.models.operators import FileEditApprovalRequest, OperatorDocument, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 from app.utils.ids import generate_command_execution_id
 from app.utils.timestamp import now
 
@@ -62,7 +62,7 @@ class OperatorFileService:
         pubsub_service: PubSubServiceProtocol,
         execution_registry: ExecutionRegistryProtocol,
         approval_service: ApprovalServiceProtocol,
-        vsod_event_service: EventServiceProtocol,
+        g8ed_event_service: EventServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
@@ -70,7 +70,7 @@ class OperatorFileService:
         self.pubsub_service = pubsub_service
         self.execution_registry = execution_registry
         self.approval_service = approval_service
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self.execution_service = execution_service
         self.ai_response_analyzer = ai_response_analyzer
         self.investigation_service = investigation_service
@@ -78,7 +78,7 @@ class OperatorFileService:
     async def execute_file_edit(
         self,
         args: FileEditPayload,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         execution_id: str,
     ) -> FileEditResult:
@@ -159,7 +159,7 @@ class OperatorFileService:
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 approval_result = await self.approval_service.request_file_edit_approval(
                     FileEditApprovalRequest(
-                        vso_context=vso_context,
+                        g8e_context=g8e_context,
                         timeout_seconds=600,
                         justification=justification or f"Requested {op_name} on {file_path}",
                         execution_id=exec_id,
@@ -173,7 +173,7 @@ class OperatorFileService:
 
                 if not approval_result.approved:
                     # Broadcast failure
-                    await self.vsod_event_service.publish_command_event(
+                    await self.g8ed_event_service.publish_command_event(
                         EventType.OPERATOR_FILE_EDIT_FAILED,
                         CommandFailedBroadcastEvent(
                             command=f"file_edit {op_name} {file_path}",
@@ -184,7 +184,7 @@ class OperatorFileService:
                             error_type=CommandErrorType.APPROVAL_DENIED,
                             approval_id=approval_result.approval_id,
                         ),
-                        vso_context,
+                        g8e_context,
                     )
                     return FileEditResult(
                         success=False, 
@@ -206,21 +206,21 @@ class OperatorFileService:
                 request_id=exec_id,
             )
 
-            vso_message = VSOMessage(
+            g8e_message = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.FILE_EDIT,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 operator_session_id=operator_session_id,
                 operator_id=operator_id,
                 payload=mcp_payload,
             )
 
             # Notify start
-            await self.vsod_event_service.publish_command_event(
+            await self.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_FILE_EDIT_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"file_edit {op_name} {file_path}",
@@ -228,13 +228,13 @@ class OperatorFileService:
                     operator_session_id=operator_session_id,
                     approval_id=getattr(approval_result, "approval_id", None) if "approval_result" in locals() else None,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FILE_EDIT,
             )
 
             internal_result = await self.execution_service.execute(
-                vso_message=vso_message,
-                vso_context=vso_context,
+                g8e_message=g8e_message,
+                g8e_context=g8e_context,
                 timeout_seconds=60,
             )
 
@@ -245,7 +245,7 @@ class OperatorFileService:
                 else EventType.OPERATOR_FILE_EDIT_FAILED
             )
 
-            await self.vsod_event_service.publish_command_event(
+            await self.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 FileEditBroadcastEvent(
                     file_path=file_path,
@@ -258,7 +258,7 @@ class OperatorFileService:
                     content=getattr(args, "content", None) or getattr(args, "new_content", None),
                     approval_id=getattr(approval_result, "approval_id", None) if "approval_result" in locals() else None,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FILE_EDIT,
             )
 
@@ -275,7 +275,7 @@ class OperatorFileService:
     async def execute_fetch_file_history(
         self,
         args: FetchFileHistoryArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> FetchFileHistoryToolResult:
         """Fetch file history from operator ledger."""
@@ -315,34 +315,34 @@ class OperatorFileService:
                     request_id=exec_id,
                 )
 
-                vso_message = VSOMessage(
+                g8e_message = G8eMessage(
                     id=exec_id,
                     source_component=ComponentName.G8EE,
                     event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                    case_id=vso_context.case_id,
+                    case_id=g8e_context.case_id,
                     task_id=AITaskId.FETCH_FILE_HISTORY,
-                    investigation_id=vso_context.investigation_id,
-                    web_session_id=vso_context.web_session_id,
+                    investigation_id=g8e_context.investigation_id,
+                    web_session_id=g8e_context.web_session_id,
                     operator_session_id=operator_session_id,
                     operator_id=operator_id,
                     payload=mcp_payload,
                 )
 
                 # Notify start
-                await self.vsod_event_service.publish_command_event(
+                await self.g8ed_event_service.publish_command_event(
                     EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED,
                     CommandExecutingBroadcastEvent(
                         command=f"file_history {file_path}",
                         execution_id=exec_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.FETCH_FILE_HISTORY,
                 )
 
                 internal_result = await self.execution_service.execute(
-                    vso_message=vso_message,
-                    vso_context=vso_context,
+                    g8e_message=g8e_message,
+                    g8e_context=g8e_context,
                     timeout_seconds=60,
                 )
 
@@ -353,7 +353,7 @@ class OperatorFileService:
                     else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
                 )
 
-                await self.vsod_event_service.publish_command_event(
+                await self.g8ed_event_service.publish_command_event(
                     completion_event_type,
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
@@ -364,7 +364,7 @@ class OperatorFileService:
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.FETCH_FILE_HISTORY,
                 )
 
@@ -393,7 +393,7 @@ class OperatorFileService:
     async def execute_fetch_file_diff(
         self,
         args: FetchFileDiffArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> FetchFileDiffToolResult:
         """Fetch file diff from operator ledger."""
@@ -433,34 +433,34 @@ class OperatorFileService:
                     request_id=exec_id,
                 )
 
-                vso_message = VSOMessage(
+                g8e_message = G8eMessage(
                     id=exec_id,
                     source_component=ComponentName.G8EE,
                     event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                    case_id=vso_context.case_id,
+                    case_id=g8e_context.case_id,
                     task_id=AITaskId.FETCH_FILE_DIFF,
-                    investigation_id=vso_context.investigation_id,
-                    web_session_id=vso_context.web_session_id,
+                    investigation_id=g8e_context.investigation_id,
+                    web_session_id=g8e_context.web_session_id,
                     operator_session_id=operator_session_id,
                     operator_id=operator_id,
                     payload=mcp_payload,
                 )
 
                 # Notify start
-                await self.vsod_event_service.publish_command_event(
+                await self.g8ed_event_service.publish_command_event(
                     EventType.OPERATOR_FILE_DIFF_FETCH_STARTED,
                     CommandExecutingBroadcastEvent(
                         command=f"file_diff {file_path}",
                         execution_id=exec_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.FETCH_FILE_DIFF,
                 )
 
                 internal_result = await self.execution_service.execute(
-                    vso_message=vso_message,
-                    vso_context=vso_context,
+                    g8e_message=g8e_message,
+                    g8e_context=g8e_context,
                     timeout_seconds=60,
                 )
 
@@ -471,7 +471,7 @@ class OperatorFileService:
                     else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
                 )
 
-                await self.vsod_event_service.publish_command_event(
+                await self.g8ed_event_service.publish_command_event(
                     completion_event_type,
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
@@ -482,7 +482,7 @@ class OperatorFileService:
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.FETCH_FILE_DIFF,
                 )
 

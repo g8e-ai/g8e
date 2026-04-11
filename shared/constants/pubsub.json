@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical pub/sub wire protocol constants shared across g8ee (Python), g8eo (Go), and VSOD (JS). These values must match the VSODB broker implementation.",
+  "_comment": "Canonical pub/sub wire protocol constants shared across g8ee (Python), g8eo (Go), and g8ed (JS). These values must match the g8es broker implementation.",
 
   "wire": {
     "actions": {

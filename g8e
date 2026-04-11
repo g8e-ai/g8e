@@ -74,7 +74,7 @@ _help() {
     echo ""
     echo "  test [suite] [options]        Run test suites inside g8ep"
     echo "    g8ee                           Python/pytest tests"
-    echo "    vsod                          TypeScript/vitest tests"
+    echo "    g8ed                          TypeScript/vitest tests"
     echo "    g8eo                           Go tests"
     echo "    LLM flags (enables ai_integration tests):"
     echo "      -p, --llm-provider          gemini | openai | anthropic | ollama"
@@ -94,7 +94,7 @@ _help() {
     echo "  data                          Data management tools (runs inside g8ep)"
     echo "    users                         Manage platform users"
     echo "    operators                     Manage operator documents"
-    echo "    store                         Manage VSODB data store"
+    echo "    store                         Manage g8es data store"
     echo "    settings                      Read/write platform settings"
     echo "    audit                         Manage audit log (LFAA)"
     echo "    device-links                  Manage device link tokens (generate, list, revoke, delete)"
@@ -149,7 +149,7 @@ INTERNAL_AUTH_TOKEN=""
 if [[ "$TOP" != "platform" || ("$SUB" != "start" && "$SUB" != "status" && "$SUB" != "stop" && "$SUB" != "restart" && "$SUB" != "rebuild" && "$SUB" != "reset" && "$SUB" != "wipe" && "$SUB" != "clean") ]]; then
     if _g8e_pod_running; then
         # Use docker exec to read the token directly from the SSL volume mount in g8ep
-        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /vsodb/internal_auth_token 2>/dev/null || true)
+        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /g8es/internal_auth_token 2>/dev/null || true)
     fi
 fi
 readonly INTERNAL_AUTH_TOKEN
@@ -169,7 +169,7 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
             settings)
                 _banner "platform settings"
-                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show "${@:3}" ;;
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;
             update)
                 _banner "platform update"
                 git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
@@ -288,7 +288,7 @@ case "$TOP" in
 
                 if [[ -n "$EMAIL" && -z "$USER_ID" ]]; then
                     USER_ID="$(docker exec -i "$CONTAINER" \
-                        python3 /app/scripts/data/manage-vsodb.py users get --email "$EMAIL" 2>/dev/null \
+                        python3 /app/scripts/data/manage-g8es.py users get --email "$EMAIL" 2>/dev/null \
                         | grep -E '^  ID:' | awk '{print $2}')"
                     if [[ -z "$USER_ID" ]]; then
                         echo "[g8e] No user found with email: $EMAIL" >&2
@@ -296,7 +296,7 @@ case "$TOP" in
                     fi
                 fi
 
-                RESPONSE="$(docker exec -i g8e-dashboard \
+                RESPONSE="$(docker exec -i g8ed \
                     curl -sf -X POST \
                     -H 'Content-Type: application/json' \
                     -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
@@ -321,7 +321,7 @@ case "$TOP" in
                     set -e
                     cd /app/components/g8eo
                     mkdir -p certs
-                    [ -f /vsodb/ssl/ca.crt ] && cp /vsodb/ssl/ca.crt certs/server_ca.crt
+                    [ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt
                     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \\
                         -trimpath -buildvcs=false \\
                         -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
@@ -382,11 +382,11 @@ case "$TOP" in
                 _ensure_g8e_pod "operator deploy"
                 _REMOTE_EXEC="${_DEPLOY_DEST}"
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
-                echo "Fetching linux/${_DEPLOY_ARCH} operator from VSODB blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
+                echo "Fetching linux/${_DEPLOY_ARCH} operator from g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
                 docker exec -i g8ep curl -sf \
                     -H "X-Internal-Auth: ${INTERNAL_AUTH_TOKEN}" \
-                    --cacert /vsodb/ca.crt \
-                    "https://vsodb:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+                    --cacert /g8es/ca.crt \
+                    "https://g8es:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
                     | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
                 echo "  Done."
                 if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
@@ -481,14 +481,14 @@ case "$TOP" in
                 _banner "security rotate-internal-token"
                 _ensure_g8e_pod "security rotate-internal-token"
                 echo "  Rotating internal auth token..."
-                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-vsodb.py settings rotate-token 2>&1)"
+                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-g8es.py settings rotate-token 2>&1)"
                 if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then
                     echo "[g8e] Failed to rotate token: $_new_token" >&2
                     exit 1
                 fi
-                echo "  Token written to VSODB."
-                echo "  Restarting vsod and g8ee to pick up new token..."
-                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart vsod g8ee
+                echo "  Token written to g8es."
+                echo "  Restarting g8ed and g8ee to pick up new token..."
+                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart g8ed g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
             "")
@@ -508,7 +508,7 @@ case "$TOP" in
         case "$SUB" in
             users|operators|store|settings|audit|device-links)
                 _banner "data $SUB ${@:3}"
-                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py "$SUB" "${@:3}" ;;
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py "$SUB" "${@:3}" ;;
             "")
                 echo "[g8e] missing subcommand for 'data'" >&2
                 echo "  Valid: users, operators, store, settings, audit, device-links" >&2

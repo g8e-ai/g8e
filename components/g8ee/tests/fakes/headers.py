@@ -12,23 +12,23 @@
 # limitations under the License.
 
 """
-Shared VSO header fixtures for g8ee unit tests.
+Shared g8e header fixtures for g8ee unit tests.
 
-TEST_VSO_HEADERS provides a complete, stable set of lowercase X-VSO-* headers
+TEST_G8E_HEADERS provides a complete, stable set of lowercase X-G8E-* headers
 with predictable test values.  Use it wherever tests need to simulate an
-inbound request that carries VSO context headers.
+inbound request that carries g8e context headers.
 """
 
-from app.constants import INTERNAL_AUTH_HEADER, VSOHeaders
+from app.constants import INTERNAL_AUTH_HEADER, G8eHeaders
 
-TEST_VSO_HEADERS: dict[str, str] = {
-    VSOHeaders.WEB_SESSION_ID.lower():       "session-test-abc123",
-    VSOHeaders.USER_ID.lower():          "user-test-001",
-    VSOHeaders.ORGANIZATION_ID.lower():  "org-test-001",
-    VSOHeaders.CASE_ID.lower():          "case-test-001",
-    VSOHeaders.INVESTIGATION_ID.lower(): "inv-test-001",
-    VSOHeaders.SOURCE_COMPONENT.lower(): "vsod",
-    VSOHeaders.EXECUTION_ID.lower():     "exec-test-001",
-    VSOHeaders.BOUND_OPERATORS.lower():  "[]",
+TEST_G8E_HEADERS: dict[str, str] = {
+    G8eHeaders.WEB_SESSION_ID.lower():       "session-test-abc123",
+    G8eHeaders.USER_ID.lower():          "user-test-001",
+    G8eHeaders.ORGANIZATION_ID.lower():  "org-test-001",
+    G8eHeaders.CASE_ID.lower():          "case-test-001",
+    G8eHeaders.INVESTIGATION_ID.lower(): "inv-test-001",
+    G8eHeaders.SOURCE_COMPONENT.lower(): "g8ed",
+    G8eHeaders.EXECUTION_ID.lower():     "exec-test-001",
+    G8eHeaders.BOUND_OPERATORS.lower():  "[]",
     INTERNAL_AUTH_HEADER:                "test-internal-token",
 }

@@ -7,7 +7,7 @@
 # Usage:
 #   docker compose run g8ep              # Run all tests
 #   docker compose run g8ep g8ee          # Run g8ee tests only
-#   docker compose run g8ep vsod -v      # Run VSOD tests with verbose
+#   docker compose run g8ep g8ed -v      # Run g8ed tests with verbose
 
 FROM ubuntu:24.04
 
@@ -127,8 +127,8 @@ RUN mkdir -p /var/log/supervisor \
 
 # Copy dependency files first for layer caching
 COPY components/g8ee/requirements.txt /app/components/g8ee/
-COPY components/vsod/package.json components/vsod/package-lock.json /app/components/vsod/
-COPY components/vsod/vitest.config.js /app/vsod-vitest.config.js
+COPY components/g8ed/package.json components/g8ed/package-lock.json /app/components/g8ed/
+COPY components/g8ed/vitest.config.js /app/g8ed-vitest.config.js
 COPY components/g8eo/go.mod components/g8eo/go.sum /app/components/g8eo/
 COPY components/g8eo/vendor/ /app/components/g8eo/vendor/
 
@@ -138,10 +138,10 @@ ENV PATH="${VENV_PATH}/bin:${PATH}"
 RUN python3 -m venv ${VENV_PATH} \
     && pip install --no-cache-dir -r /app/components/g8ee/requirements.txt
 
-# Install VSOD Node.js dependencies
+# Install g8ed Node.js dependencies
 RUN npm config set update-notifier false \
-    && cd /app/components/vsod && npm ci \
-    && chown -R g8e:g8e /app/components/vsod
+    && cd /app/components/g8ed && npm ci \
+    && chown -R g8e:g8e /app/components/g8ed
 
 # Copy entrypoint to root — outside /app so not overridden by the .:/app bind mount
 COPY components/g8ep/scripts/entrypoint.sh /entrypoint.sh

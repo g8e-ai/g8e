@@ -31,7 +31,7 @@ func (rr *PubSubResultsService) resultsChannel() string {
 	return constants.ResultsChannel(rr.config.OperatorID, rr.config.OperatorSessionId)
 }
 
-// PubSubResultsService handles publishing results back to AI Agent Services via VSODB pub/sub
+// PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
 type PubSubResultsService struct {
 	client     PubSubClient
 	config     *config.Config
@@ -39,7 +39,7 @@ type PubSubResultsService struct {
 	localStore *storage.LocalStoreService
 }
 
-// NewPubSubResultsService creates a new VSODB pub/sub results service
+// NewPubSubResultsService creates a new g8es pub/sub results service
 func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client PubSubClient, localStore *storage.LocalStoreService) (*PubSubResultsService, error) {
 	return &PubSubResultsService{
 		client:     client,
@@ -49,7 +49,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.VSOMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
+func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
 	isMCP := originalMsg.EventType == constants.Event.Operator.MCP.ToolsCall ||
 		originalMsg.EventType == constants.Event.Operator.MCP.ResourcesRead ||
 		originalMsg.EventType == constants.Event.Operator.MCP.ResourcesList
@@ -75,7 +75,7 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.VSOMessage, origi
 	return nil
 }
 
-// PublishExecutionResult publishes command execution result via VSODB pub/sub
+// PublishExecutionResult publishes command execution result via g8es pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Completed
@@ -108,7 +108,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 			"stderr_size", len(result.Stderr))
 	}
 
-	msg, err := models.NewVSOMessage(
+	msg, err := models.NewG8eMessage(
 		result.ExecutionID, eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
@@ -141,7 +141,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	return nil
 }
 
-// PublishCancellationResult publishes command cancellation result via VSODB pub/sub
+// PublishCancellationResult publishes command cancellation result via g8es pub/sub
 func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 	payload := models.CancellationResultPayload{
@@ -153,7 +153,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 		ErrorType:         result.ErrorType,
 	}
 
-	msg, err := models.NewVSOMessage(
+	msg, err := models.NewG8eMessage(
 		result.ExecutionID, eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
@@ -182,7 +182,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	return nil
 }
 
-// PublishFileEditResult publishes file edit result via VSODB pub/sub.
+// PublishFileEditResult publishes file edit result via g8es pub/sub.
 // Content has already been sentinel.Sentinel-scrubbed before this is called.
 func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result *models.FileEditResult, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FileEdit.Completed
@@ -225,7 +225,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 			"content_size", len(contentStr))
 	}
 
-	msg, err := models.NewVSOMessage(
+	msg, err := models.NewG8eMessage(
 		result.ExecutionID, eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
@@ -251,7 +251,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	return nil
 }
 
-// PublishFsListResult publishes file system list result via VSODB pub/sub.
+// PublishFsListResult publishes file system list result via g8es pub/sub.
 // Entries have already been sentinel.Sentinel-scrubbed before this is called.
 func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsList.Completed
@@ -294,7 +294,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 			"entries_count", result.TotalCount)
 	}
 
-	msg, err := models.NewVSOMessage(
+	msg, err := models.NewG8eMessage(
 		result.ExecutionID, eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
@@ -368,7 +368,7 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	}
 
 	msgID := fmt.Sprintf("%s_status_%d", status.ExecutionID, timeNowNano())
-	msg, err := models.NewVSOMessage(
+	msg, err := models.NewG8eMessage(
 		msgID, eventType, status.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
@@ -392,8 +392,8 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	return nil
 }
 
-// PublishResult publishes a pre-built ResultMessage to the VSODB pub/sub results channel.
-func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *models.VSOMessage) error {
+// PublishResult publishes a pre-built ResultMessage to the g8es pub/sub results channel.
+func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *models.G8eMessage) error {
 	if result.OperatorSessionID == "" {
 		result.OperatorSessionID = rr.config.OperatorSessionId
 	}
@@ -406,7 +406,7 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *model
 	return rr.publish(ctx, result)
 }
 
-// PublishHeartbeat publishes heartbeat to dedicated VSODB pub/sub heartbeat channel
+// PublishHeartbeat publishes heartbeat to dedicated g8es pub/sub heartbeat channel
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error {
 	data, err := json.Marshal(heartbeat)
 	if err != nil {
@@ -421,7 +421,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 }
 
 // publish marshals a ResultMessage and publishes it to the results channel.
-func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.VSOMessage) error {
+func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMessage) error {
 	data, err := msg.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal result message: %w", err)

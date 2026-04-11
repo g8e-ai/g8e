@@ -13,7 +13,7 @@ Initial public release of g8e on GitHub. This release marks the platform's debut
 - **Fixed** — Broken Markdown link in README.md corrected
 - **Improved** — `.gitignore` now covers secret file patterns (.key, .pem, .crt, .secret)
 - **Verified** — Security audit complete: no hardcoded secrets or leaked credentials in codebase or git history
-- **Verified** — Full test suite green: 4360 tests passing across g8eo, VSOD, and g8ee components
+- **Verified** — Full test suite green: 4360 tests passing across g8eo, g8ed, and g8ee components
 
 ### Documentation
 - **Verified** — All documentation links resolve correctly
@@ -26,7 +26,7 @@ Initial public release of g8e on GitHub. This release marks the platform's debut
 Resolves critical production bugs across the operator activation path, the Tribunal command-safety pipeline, and the pub/sub subsystem. Introduces real-time command lifecycle events, a one-command operator g8e script, a redesigned Getting Started onboarding flow, and LLM CLI flags for AI integration testing. Includes a sweeping code quality pass removing the `PendingCommand` DB-polling model in favour of a fully event-driven execution registry.
 
 ### Operator & Execution
-- **Fixed** — **Operator Activation** — `_completeAuthentication` now completes the full activation lifecycle: claims slot, updates user record, and relays to g8ee with a proper `VSOHttpContext`. Operators no longer get stuck in a permanently inactive state after authentication.
+- **Fixed** — **Operator Activation** — `_completeAuthentication` now completes the full activation lifecycle: claims slot, updates user record, and relays to g8ee with a proper `G8eHttpContext`. Operators no longer get stuck in a permanently inactive state after authentication.
 - **Fixed** — **Operator Status on Re-auth** — BOUND operators that re-authenticate now preserve BOUND status instead of being downgraded to ACTIVE.
 - **Fixed** — **Post-Login Race Condition** — `initializeOperatorSlots` and `activateG8ENodeOperatorForUser` now run sequentially, preventing the g8ep operator from silently skipping activation.
 - **Improved** — **Execution Registry** — Replaced `PendingCommand` DB-polling loop with a fully event-driven in-memory result stash. `execution_service.py` waits once via `asyncio.Event` and reads the result directly — no polling, no DB round-trips.
@@ -48,8 +48,8 @@ Resolves critical production bugs across the operator activation path, the Tribu
 - **Fixed** — **Approval route 500** — Route was accessing `req.services.operatorService` which was never attached; fixed by constructing `OperatorRelayService` directly in the route constructor.
 
 ### Pub/Sub
-- **New** — **`shared/constants/pubsub.json`** — Canonical wire-protocol constants shared across g8ee, g8eo, and VSOD with contract tests in all three languages.
-- **New** — **`EventService`** — Extracted `vsod_event_service.py` with typed `publish_command_event()` and `publish_investigation_event()` methods for all operator service SSE broadcasting.
+- **New** — **`shared/constants/pubsub.json`** — Canonical wire-protocol constants shared across g8ee, g8eo, and g8ed with contract tests in all three languages.
+- **New** — **`EventService`** — Extracted `g8ed_event_service.py` with typed `publish_command_event()` and `publish_investigation_event()` methods for all operator service SSE broadcasting.
 - **Fixed** — **PubSub Subscribe Timeout** — `PubSubMessageType` enum was missing `MESSAGE`, `PMESSAGE`, `SUBSCRIBED` wire members, causing `AttributeError` in `_ws_reader` which silently killed the task. All `subscribe()` calls timed out after 5 seconds.
 - **Fixed** — **`psubscribe()` Race Condition** — Channel tracking now occurs after `_ensure_ws()` and ACK handler setup, preventing double-subscription on reconnect.
 - **Improved** — **PubSub Reconnect** — `_ws_reader` now schedules exponential-backoff reconnect on disconnect when active subscriptions exist.
@@ -61,10 +61,10 @@ Resolves critical production bugs across the operator activation path, the Tribu
 
 ### Data Integrity
 - **New** — **`KVOperationError`** — `keys()` and `scan()` on the KV cache client now throw `KVOperationError` on failure instead of silently returning empty results. Prevents stale query cache entries from serving empty operator lists.
-- **New** — **`shared/constants/document_ids.json`** — Canonical document ID constants (`platform_settings`, `user_settings_` prefix) shared across g8ee and VSOD.
+- **New** — **`shared/constants/document_ids.json`** — Canonical document ID constants (`platform_settings`, `user_settings_` prefix) shared across g8ee and g8ed.
 
 ### Testing & DX
-- **New** — **LLM CLI Flags** — `./g8e test` now accepts `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, `--llm-api-key` for running AI integration tests without VSODB.
+- **New** — **LLM CLI Flags** — `./g8e test` now accepts `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, `--llm-api-key` for running AI integration tests without g8es.
 - **Improved** — Test coverage expanded across Tribunal, pub/sub, provider SSL, operator activation, approval routing, port service, terminal output rendering, and KV cache error handling.
 
 ---
@@ -78,12 +78,12 @@ Hotfix release resolving two critical bugs affecting user authentication and ope
 - **Fixed** — **Passkey Route Response** — Passkey routes now properly return the complete response shape including the `success` field.
 
 ### Operator Panel & SSE
-- **Fixed** — **SSE Push Missing user_id** — `SSEPushRequest` now requires `user_id` as a mandatory field. Previously, SSE event pushes from g8ee to VSOD were missing the `user_id`, causing operator panel updates to fail silently.
+- **Fixed** — **SSE Push Missing user_id** — `SSEPushRequest` now requires `user_id` as a mandatory field. Previously, SSE event pushes from g8ee to g8ed were missing the `user_id`, causing operator panel updates to fail silently.
 - **Fixed** — **Heartbeat Service Validation** — `HeartbeatService` now validates both `web_session_id` and `user_id` before pushing SSE events. Missing `user_id` now logs a warning and skips the push instead of failing.
 - **Fixed** — **Operator Panel List Updated Event** — Internal SSE route now properly constructs `OperatorListUpdatedEvent` from the operator list payload instead of passing the raw result object.
 
 ### g8ee Event Publishing
-- **Fixed** — All g8ee services now include `user_id` when publishing events via `vsod_event_service`: `AgentSSEService`, `AgentToolLoop`, `ChatPipeline`, `ChatTaskManager`, `CommandGenerator`, `ApprovalService`, and `HeartbeatService`.
+- **Fixed** — All g8ee services now include `user_id` when publishing events via `g8ed_event_service`: `AgentSSEService`, `AgentToolLoop`, `ChatPipeline`, `ChatTaskManager`, `CommandGenerator`, `ApprovalService`, and `HeartbeatService`.
 
 ### Demo & Documentation
 - **Improved** — Demo fleet SSH streaming configuration automated in `make up` with proper SSH key and hosts file setup.
@@ -97,9 +97,9 @@ Major stabilization release following the v4.0 platform rebuild. Sweeping intern
 
 ### Architecture & Refactoring
 - **Removed** — **EventSource Abstraction** — Eliminated the `EventSource` constants layer entirely. All event routing now uses `EventType` directly, fixing an entire class of bugs where the browser-native `EventSource` API was confused with the internal constants object.
-- **Redesigned** — **Operator Binary Distribution** — Binaries are now cross-compiled for all architectures with UPX compression at VSODB build time and distributed via the blob store. g8ep fetches on startup with retry logic.
+- **Redesigned** — **Operator Binary Distribution** — Binaries are now cross-compiled for all architectures with UPX compression at g8es build time and distributed via the blob store. g8ep fetches on startup with retry logic.
 - **New** — **`./g8e platform setup`** — First-time setup command that orchestrates a full build with correct startup ordering.
-- **Fixed** — **Operator Version Injection** — Operator binary now reports the correct platform version instead of `dev`. Version injected via Go ldflags across all build paths (VSODB Dockerfile, Makefile container and local targets).
+- **Fixed** — **Operator Version Injection** — Operator binary now reports the correct platform version instead of `dev`. Version injected via Go ldflags across all build paths (g8es Dockerfile, Makefile container and local targets).
 - **Improved** — **Code Quality** — Removed unnecessary abstractions, dead code, legacy fields, and environment-specific test config. Implemented `HttpService` protocol and `CacheAsideProtocol`.
 
 ### AI & Dashboard
@@ -109,12 +109,12 @@ Major stabilization release following the v4.0 platform rebuild. Sweeping intern
 
 ### Bug Fixes
 - **Fixed** — **Operator Execution** — Execution path failures, duplicate API key issuance, CA certificate bootstrap (chicken-and-egg TLS problem).
-- **Fixed** — **VSOD** — Setup page 500 error, settings loading, investigation query construction, text completion handling, VSODB client alignment.
+- **Fixed** — **g8ed** — Setup page 500 error, settings loading, investigation query construction, text completion handling, g8es client alignment.
 - **Fixed** — **Internal Auth** — KV endpoint authentication, redundant per-event operator resolution removed from SSE route.
 - **Fixed** — **Logger** — Date objects rendering as `{}` in logs; `redactPii` now skips non-plain objects.
 
 ### Testing & Documentation
-- **Improved** — VSOD test suite restructured and expanded. g8ee integration tests expanded with SSE error paths and retry loop coverage.
+- **Improved** — g8ed test suite restructured and expanded. g8ee integration tests expanded with SSE error paths and retry loop coverage.
 - **Improved** — Full documentation audit with corrections across security, architecture, and component docs.
 
 ---
@@ -132,7 +132,7 @@ Focused on improving AI interaction reliability, execution tracing, and g8eo lis
 ### Component Improvements
 - **g8eo** — Enhanced listen mode testability and internal auth token handling.
 - **g8ee** — Fixed DB client token loading and settings definition synchronization.
-- **VSOD** — Improved diagram generation and API endpoint alignment.
+- **g8ed** — Improved diagram generation and API endpoint alignment.
 
 ### CI/CD & DX
 - **New** — GitHub Actions workflow for PRs.

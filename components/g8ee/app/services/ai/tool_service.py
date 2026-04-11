@@ -27,7 +27,7 @@ from app.constants.status import (
 )
 from app.constants.prompts import AgentMode, PromptFile
 from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
 from app.llm.prompts import load_prompt
@@ -82,7 +82,7 @@ class AIToolService:
         self._web_search_provider: WebSearchProvider | None = web_search_provider
         logger.info("AIToolService initialized")
 
-        self._tool_context: ContextVar[VSOHttpContext | None] = ContextVar(
+        self._tool_context: ContextVar[G8eHttpContext | None] = ContextVar(
             "g8ee_tool_context",
             default=None
         )
@@ -132,20 +132,20 @@ class AIToolService:
 
     def start_invocation_context(
         self,
-        vso_context: VSOHttpContext,
-    ) -> ContextVarToken[VSOHttpContext | None]:
-        """Set the vso_context used by tool calls for the active request."""
-        token = self._tool_context.set(vso_context)
-        bound_count = len(vso_context.bound_operators) if vso_context else 0
-        case_id = vso_context.case_id if vso_context else None
-        user_id = vso_context.user_id if vso_context else None
+        g8e_context: G8eHttpContext,
+    ) -> ContextVarToken[G8eHttpContext | None]:
+        """Set the g8e_context used by tool calls for the active request."""
+        token = self._tool_context.set(g8e_context)
+        bound_count = len(g8e_context.bound_operators) if g8e_context else 0
+        case_id = g8e_context.case_id if g8e_context else None
+        user_id = g8e_context.user_id if g8e_context else None
         logger.info(
             "[TOOL_CONTEXT] Context initialized: case_id=%s user_id=%s bound_operators=%d",
             case_id, user_id, bound_count
         )
         return token
 
-    def reset_invocation_context(self, token: ContextVarToken[VSOHttpContext | None]) -> None:
+    def reset_invocation_context(self, token: ContextVarToken[G8eHttpContext | None]) -> None:
         """Reset invocation context after request completion."""
         self._tool_context.reset(token)
         logger.info("[TOOL_CONTEXT] Context reset")
@@ -389,7 +389,7 @@ class AIToolService:
         tool_name: str,
         tool_args: dict[str, object],
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
     ) -> ToolResult:
         """Validate, dispatch, and execute a single AI tool call by name."""
@@ -412,7 +412,7 @@ class AIToolService:
                         blocked_pattern=pattern
                     )
 
-        # CRITICAL: Validate operator binding from VSOHttpContext before any operator-bound tool execution.
+        # CRITICAL: Validate operator binding from G8eHttpContext before any operator-bound tool execution.
         operator_tools = {
             OperatorToolName.RUN_COMMANDS,
             OperatorToolName.FILE_CREATE,
@@ -428,12 +428,12 @@ class AIToolService:
         }
 
         if tool_name in operator_tools:
-            if not vso_context or not vso_context.has_bound_operator():
+            if not g8e_context or not g8e_context.has_bound_operator():
                 error_msg = (
                     "No operators are currently BOUND to this session. "
                     "Operator commands can only be executed when an operator is explicitly bound in the g8e UI."
                 )
-                logger.error("[TOOL_CALL] Execution blocked: No bound operators in VSOHttpContext")
+                logger.error("[TOOL_CALL] Execution blocked: No bound operators in G8eHttpContext")
                 return CommandExecutionResult(
                     success=False,
                     error=error_msg,
@@ -443,8 +443,8 @@ class AIToolService:
         logger.info("[TOOL_CALL] Starting execution: %s", tool_name)
         logger.info("[TOOL_CALL] Args: %s", tool_args)
         logger.info("[TOOL_CALL] Context - case_id: %s, user_id: %s",
-            vso_context.case_id if vso_context else None,
-            vso_context.user_id if vso_context else None,
+            g8e_context.case_id if g8e_context else None,
+            g8e_context.user_id if g8e_context else None,
         )
         logger.info("[TOOL_CALL] Investigation ID: %s", investigation.id if investigation else "None")
 
@@ -453,7 +453,7 @@ class AIToolService:
                 args = OperatorCommandArgs.model_validate(tool_args)
                 logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
                 result = await self.execute_command(
-                    args, vso_context, investigation, request_settings=request_settings
+                    args, g8e_context, investigation, request_settings=request_settings
                 )
                 logger.info("[RUN_OPERATOR_COMMANDS] Result: %s", result)
                 return result
@@ -462,7 +462,7 @@ class AIToolService:
                 args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE, "create_if_missing": True})
                 logger.info("[FILE_CREATE] File path: %s", args.file_path)
                 result = await self._execute_file_edit(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FILE_CREATE] Result: %s", result)
                 return result
@@ -471,7 +471,7 @@ class AIToolService:
                 args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE})
                 logger.info("[FILE_WRITE] File path: %s", args.file_path)
                 result = await self._execute_file_edit(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FILE_WRITE] Result: %s", result)
                 return result
@@ -480,7 +480,7 @@ class AIToolService:
                 args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.READ})
                 logger.info("[FILE_READ] File path: %s", args.file_path)
                 result = await self._execute_file_edit(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FILE_READ] Result: %s", result)
                 return result
@@ -489,7 +489,7 @@ class AIToolService:
                 args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.REPLACE})
                 logger.info("[FILE_UPDATE] File path: %s", args.file_path)
                 result = await self._execute_file_edit(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FILE_UPDATE] Result: %s", result)
                 return result
@@ -498,7 +498,7 @@ class AIToolService:
                 args = FetchFileHistoryArgs.model_validate(tool_args)
                 logger.info("[FETCH_FILE_HISTORY] File path: %s", args.file_path)
                 result = await self._execute_fetch_file_history(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FETCH_FILE_HISTORY] Result: %s", result)
                 return result
@@ -507,7 +507,7 @@ class AIToolService:
                 args = FetchFileDiffArgs.model_validate(tool_args)
                 logger.info("[FETCH_FILE_DIFF] File path: %s", args.file_path)
                 result = await self._execute_fetch_file_diff(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[FETCH_FILE_DIFF] Result: %s", result)
                 return result
@@ -522,13 +522,13 @@ class AIToolService:
                 return result
 
             if tool_name == OperatorToolName.CHECK_PORT:
-                if vso_context is None:
-                    raise ValidationError("vso_context is required for CHECK_PORT", field="vso_context", constraint="required")
+                if g8e_context is None:
+                    raise ValidationError("g8e_context is required for CHECK_PORT", field="g8e_context", constraint="required")
                 args = CheckPortArgs.model_validate(tool_args)
                 logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
                     args.host, args.port, args.protocol)
                 result = await self._execute_port_check(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[CHECK_PORT_STATUS] Result: %s", result)
                 return result
@@ -538,7 +538,7 @@ class AIToolService:
                 logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
                     args.path, args.max_depth, args.max_entries)
                 result = await self._execute_fs_list(
-                    args, investigation, vso_context
+                    args, investigation, g8e_context
                 )
                 logger.info("[LIST_DIRECTORY] entries=%d truncated=%s",
                     result.total_count, result.truncated)
@@ -548,7 +548,7 @@ class AIToolService:
                 args = GrantIntentArgs.model_validate(tool_args)
                 logger.info("[REQUEST_INTENT] Intent: %s", args.intent_name)
                 result = await self._execute_intent_permission_request(
-                    args=args, investigation=investigation, vso_context=vso_context
+                    args=args, investigation=investigation, g8e_context=g8e_context
                 )
                 logger.info("[REQUEST_INTENT] approved=%s", result.approved)
                 return result
@@ -557,7 +557,7 @@ class AIToolService:
                 args = RevokeIntentArgs.model_validate(tool_args)
                 logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
                 result = await self._execute_intent_revocation(
-                    args=args, investigation=investigation, vso_context=vso_context
+                    args=args, investigation=investigation, g8e_context=g8e_context
                 )
                 logger.info("[REVOKE_INTENT] success=%s", result.success)
                 return result
@@ -583,14 +583,14 @@ class AIToolService:
     async def execute_command(
         self,
         args: OperatorCommandArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings | None = None,
     ) -> CommandExecutionResult:
         """Delegate command execution to the OperatorCommandService."""
         return await self.operator_command_service.execute_command(
             args=args,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             investigation=investigation,
             request_settings=request_settings,
         )
@@ -599,53 +599,53 @@ class AIToolService:
         self,
         args: FileEditPayload,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FileEditResult:
         """Delegate file edit operation to the OperatorCommandService."""
         return await self.operator_command_service.execute_file_edit(
             args=args,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             investigation=investigation,
-            execution_id=args.execution_id if hasattr(args, "execution_id") and args.execution_id else (vso_context.execution_id if vso_context else "unknown"),
+            execution_id=args.execution_id if hasattr(args, "execution_id") and args.execution_id else (g8e_context.execution_id if g8e_context else "unknown"),
         )
 
     async def _execute_port_check(
         self,
         args: CheckPortArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> PortCheckToolResult:
         """Delegate port check operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_port_check(
             args=args,
             investigation=investigation,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )
 
     async def _execute_fs_list(
         self,
         args: FsListArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FsListToolResult:
         """Delegate file system list operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_list(
             args=args,
             investigation=investigation,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )
 
     async def _execute_fs_read(
         self,
         args: FsReadArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
         """Delegate file system read operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_read(
             args=args,
             investigation=investigation,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )
 
     async def _execute_intent_permission_request(
@@ -653,14 +653,14 @@ class AIToolService:
         *,
         args: GrantIntentArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> IntentPermissionResult:
         """Delegate intent permission request to the G8eoOperatorService."""
-        if vso_context is None:
-            raise ValidationError("vso_context is required for execute_intent_permission_request", component=ComponentName.G8EE)
+        if g8e_context is None:
+            raise ValidationError("g8e_context is required for execute_intent_permission_request", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_permission_request(
             args=args,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             investigation=investigation,
         )
 
@@ -669,14 +669,14 @@ class AIToolService:
         *,
         args: RevokeIntentArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> IntentPermissionResult:
         """Delegate intent permission revocation to the G8eoOperatorService."""
-        if vso_context is None:
-            raise ValidationError("vso_context is required for execute_intent_revocation", component=ComponentName.G8EE)
+        if g8e_context is None:
+            raise ValidationError("g8e_context is required for execute_intent_revocation", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_revocation(
             args=args,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             investigation=investigation,
         )
 
@@ -684,24 +684,24 @@ class AIToolService:
         self,
         args: FetchFileHistoryArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FetchFileHistoryToolResult:
         """Delegate file history fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_history(
             args=args,
             investigation=investigation,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )
 
     async def _execute_fetch_file_diff(
         self,
         args: FetchFileDiffArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FetchFileDiffToolResult:
         """Delegate file diff fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_diff(
             args=args,
             investigation=investigation,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )

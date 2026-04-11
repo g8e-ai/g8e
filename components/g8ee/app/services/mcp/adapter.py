@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import Field
 
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from .types import CallToolResult, Content
 
 

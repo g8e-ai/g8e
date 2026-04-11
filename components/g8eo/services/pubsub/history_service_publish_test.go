@@ -35,7 +35,7 @@ import (
 func TestHistoryService_PublishFetchLogsResultFromRaw_PublishesOnResultsChannel(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	hs := NewHistoryService(cfg, logger, db)
@@ -84,7 +84,7 @@ func TestHistoryService_PublishFetchLogsResultFromRaw_PublishesOnResultsChannel(
 func TestHistoryService_PublishFetchLogsResult_PublishesOnResultsChannel(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	hs := NewHistoryService(cfg, logger, db)
@@ -133,7 +133,7 @@ func TestHistoryService_PublishFetchLogsResult_PublishesOnResultsChannel(t *test
 func TestHistoryService_PublishFetchLogsPayload_ThreadsMessageIDs(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	hs := NewHistoryService(cfg, logger, db)
@@ -190,7 +190,7 @@ func TestHistoryService_PublishFetchLogsPayload_ThreadsMessageIDs(t *testing.T) 
 func TestHistoryService_PublishFetchLogsPayload_PublishesToResultsChannel(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	hs := NewHistoryService(cfg, logger, db)
@@ -236,7 +236,7 @@ func TestHistoryService_PublishFetchLogsPayload_PublishesToResultsChannel(t *tes
 func TestHistoryService_PublishFetchLogsResultFromRaw_FallsBackToScrubbedWhenNotFound(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	hs := NewHistoryService(cfg, logger, db)

@@ -8,19 +8,19 @@ A major stabilization release following the v4.0 platform rebuild. v4.2.0 delive
 
 Removed the `EventSource` abstraction entirely from the platform. All event routing now uses the `EventType` constants directly, which encode their source in the naming schema (e.g., `EventType.SOURCE_AI`, `EventType.SOURCE_USER`). This eliminated an entire class of bugs where the browser-native `EventSource` API was being confused with the internal `EventSource` constants object.
 
-- Unified event handling across VSOD frontend and backend
+- Unified event handling across g8ed frontend and backend
 - Replaced sender-path aliases with proper shared event type constants
 - Renamed `message_types.json` to `senders.json` for clarity
 - Fixed broken operator command history restoration in the dashboard
 
 ### Operator Binary Distribution via Blob Store
 
-Redesigned how operator binaries are distributed across the platform. Binaries are now cross-compiled for all three architectures (amd64, arm64, 386) with UPX compression at VSODB image build time and stored in the VSODB blob store.
+Redesigned how operator binaries are distributed across the platform. Binaries are now cross-compiled for all three architectures (amd64, arm64, 386) with UPX compression at g8es image build time and stored in the g8es blob store.
 
 - g8ep fetches the operator binary from the blob store on startup via `fetch-key-and-run.sh`
-- Retry logic with exponential backoff for transient VSODB unavailability
+- Retry logic with exponential backoff for transient g8es unavailability
 - Architecture auto-detection for correct binary selection
-- Idempotent blob store upload on every VSODB container start
+- Idempotent blob store upload on every g8es container start
 
 ### Dual LLM Model Selection
 
@@ -28,13 +28,13 @@ Split the single "Balanced" LLM model dropdown into two distinct dropdowns in th
 
 ### Platform Setup Command
 
-New `./g8e platform setup` command for first-time setup. Performs a full no-cache build, starts VSODB first (waits for health), then starts all other components in the correct order.
+New `./g8e platform setup` command for first-time setup. Performs a full no-cache build, starts g8es first (waits for health), then starts all other components in the correct order.
 
 ### Operator Version Injection
 
 The operator binary now reports the correct platform version instead of `dev`. Version is injected via Go ldflags (`-X main.version`) at build time across all build paths:
 
-- **VSODB Dockerfile** -- receives `VERSION` build arg from `docker-compose.yml` (set via `G8E_VERSION` env var, read from `VERSION` file by `build.sh`)
+- **g8es Dockerfile** -- receives `VERSION` build arg from `docker-compose.yml` (set via `G8E_VERSION` env var, read from `VERSION` file by `build.sh`)
 - **Makefile `build` / `build-all`** -- reads `VERSION` file directly (already worked)
 - **Makefile `build-local` / `build-local-all`** -- now includes version in ldflags (previously missing)
 
@@ -47,7 +47,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 - **Settings page** -- Fixed 500 error on setup page (missing views path) and settings loading failures
 - **Investigation queries** -- Fixed `select_fields` query construction for investigation lookups
 - **Text completion** -- Fixed frontend handling of completed text events
-- **VSOD/VSODB client** -- Fixed client communication and alignment issues
+- **g8ed/g8es client** -- Fixed client communication and alignment issues
 - **Initialization handlers** -- Fixed service initialization ordering bugs
 - **g8ep CA certificate** -- Fixed chicken-and-egg TLS problem; operator now discovers CA cert from local mount instead of network fetch
 - **Logger** -- Fixed Date objects rendering as `{}` in log output; `redactPii` now skips non-plain objects
@@ -56,7 +56,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 
 ## Code Quality
 
-- Eliminated unnecessary abstractions and dead code across VSOD
+- Eliminated unnecessary abstractions and dead code across g8ed
 - Removed legacy `message_type` field from g8ee conversation models
 - Removed environment-specific test configuration (single environment platform)
 - Cached settings reads in `G8ENodeOperatorService` to eliminate redundant DB reads per launch cycle
@@ -66,7 +66,7 @@ The operator binary now reports the correct platform version instead of `dev`. V
 
 ## Testing
 
-- VSOD test suite restructured and expanded
+- g8ed test suite restructured and expanded
 - g8ee integration test suite expanded (SSE error paths, retry loop coverage)
 - g8eo test fixes and listen mode improvements
 - Full documentation audit with corrections across security, architecture, and component docs
@@ -76,9 +76,9 @@ The operator binary now reports the correct platform version instead of `dev`. V
 | Component | Changes |
 |-----------|---------|
 | **g8ee** | 304 files, dual model selection, EventType cleanup, integration tests |
-| **VSOD** | 170 files, EventSource elimination, SSE fixes, test restructuring |
+| **g8ed** | 170 files, EventSource elimination, SSE fixes, test restructuring |
 | **g8eo** | 31 files, test fixes, CA cert path discovery |
-| **VSODB** | Multi-arch cross-compile, blob store binary upload on startup |
+| **g8es** | Multi-arch cross-compile, blob store binary upload on startup |
 | **g8ep** | Binary fetch from blob store, retry logic, CA cert fix |
 
 ## Quick Start

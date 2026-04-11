@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-VSODB Document Store & KV Management
+g8es Document Store & KV Management
 
-Queries and manages the VSODB document store and KV store via the HTTP API.
-Runs inside g8ep and communicates with vsodb directly.
+Queries and manages the g8es document store and KV store via the HTTP API.
+Runs inside g8ep and communicates with g8es directly.
 
 Usage:
-    python manage-vsodb.py store stats
-    python manage-vsodb.py store operators
-    python manage-vsodb.py store web_sessions
-    python manage-vsodb.py store doc --collection operators --id <id>
-    python manage-vsodb.py store kv
-    python manage-vsodb.py store kv --pattern "g8e:session:*"
-    python manage-vsodb.py store kv-get --key "g8e:session:web:session_123"
-    python manage-vsodb.py store network
-    python manage-vsodb.py store find --collection operators --field status --value active
-    python manage-vsodb.py store wipe [--dry-run]
-    python manage-vsodb.py store get-setting <key>
+    python manage-g8es.py store stats
+    python manage-g8es.py store operators
+    python manage-g8es.py store web_sessions
+    python manage-g8es.py store doc --collection operators --id <id>
+    python manage-g8es.py store kv
+    python manage-g8es.py store kv --pattern "g8e:session:*"
+    python manage-g8es.py store kv-get --key "g8e:session:web:session_123"
+    python manage-g8es.py store network
+    python manage-g8es.py store find --collection operators --field status --value active
+    python manage-g8es.py store wipe [--dry-run]
+    python manage-g8es.py store get-setting <key>
 """
 
 import argparse
@@ -47,7 +47,7 @@ from _lib import (
     print_banner,
     print_table,
     query_collection,
-    vsodb_request,
+    g8es_request,
 )
 
 
@@ -156,7 +156,7 @@ def exec_stats() -> None:
     keys = kv_keys('*')
 
     print(f'\n{"=" * 60}')
-    print('VSODB Statistics')
+    print('g8es Statistics')
     print(f'{"=" * 60}')
     print(f'\n  Records:')
     print(f'    Documents:  {total_docs}')
@@ -287,12 +287,12 @@ def exec_kv_get(key: str) -> None:
 
 
 def _sse_events_count() -> int:
-    result = vsodb_request('GET', '/db/_sse_events/count')
+    result = g8es_request('GET', '/db/_sse_events/count')
     return int(result.get('count', 0)) if isinstance(result, dict) else 0
 
 
 def _sse_events_wipe() -> int:
-    result = vsodb_request('DELETE', '/db/_sse_events')
+    result = g8es_request('DELETE', '/db/_sse_events')
     return int(result.get('deleted', 0)) if isinstance(result, dict) else 0
 
 
@@ -358,18 +358,18 @@ def exec_get_setting(key: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='VSODB Document Store & KV Management',
+        description='g8es Document Store & KV Management',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-vsodb.py store stats
-  python manage-vsodb.py store operators
-  python manage-vsodb.py store doc --collection operators --id <id>
-  python manage-vsodb.py store kv --pattern "g8e:session:*"
-  python manage-vsodb.py store kv-get --key "g8e:session:web:session_123"
-  python manage-vsodb.py store network
-  python manage-vsodb.py store find --collection operators --field status --value active
-  python manage-vsodb.py store wipe --dry-run
+  python manage-g8es.py store stats
+  python manage-g8es.py store operators
+  python manage-g8es.py store doc --collection operators --id <id>
+  python manage-g8es.py store kv --pattern "g8e:session:*"
+  python manage-g8es.py store kv-get --key "g8e:session:web:session_123"
+  python manage-g8es.py store network
+  python manage-g8es.py store find --collection operators --field status --value active
+  python manage-g8es.py store wipe --dry-run
         """
     )
 
@@ -425,7 +425,7 @@ def run(argv: List[str]) -> int:
 
     _machine_readable = args.command == 'get-setting'
     if not _machine_readable:
-        print_banner('manage-vsodb.py store', ' '.join(argv))
+        print_banner('manage-g8es.py store', ' '.join(argv))
 
     try:
         if args.command == 'stats':
@@ -451,7 +451,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'get-setting':
             exec_get_setting(args.key)
     except RuntimeError as e:
-        print(f'[manage-vsodb store] {e}', file=sys.stderr)
+        print(f'[manage-g8es store] {e}', file=sys.stderr)
         return 1
 
     return 0

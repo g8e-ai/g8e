@@ -26,7 +26,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def disconnected_client():
     client = PubSubClient(
-        pubsub_url="wss://vsodb:9001",
+        pubsub_url="wss://g8es:9001",
         component_name=ComponentName.G8EE,
     )
     return client
@@ -40,7 +40,7 @@ class TestPubSubClientInit:
 
     def test_trailing_slash_stripped_from_urls(self):
         client = PubSubClient(
-            pubsub_url="wss://vsodb:9001/",
+            pubsub_url="wss://g8es:9001/",
         )
         assert not client.pubsub_url.endswith("/")
 
@@ -68,7 +68,7 @@ class TestPubSubWireProtocolConstants:
     def test_pubsub_field_has_pattern(self):
         assert PubSubField.PATTERN == "pattern"
 
-    def test_wire_protocol_values_match_vsodb_go_constants(self):
+    def test_wire_protocol_values_match_g8es_go_constants(self):
         assert PubSubWireEventType.MESSAGE.value == "message"
         assert PubSubWireEventType.PMESSAGE.value == "pmessage"
         assert PubSubWireEventType.SUBSCRIBED.value == "subscribed"
@@ -278,7 +278,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             if attempts < 3:
-                raise ConnectionError("VSODB down")
+                raise ConnectionError("g8es down")
 
         delays = []
         original_sleep = asyncio.sleep
@@ -302,7 +302,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             connected_client._subscribed_channels.clear()
-            raise ConnectionError("VSODB down")
+            raise ConnectionError("g8es down")
 
         connected_client._subscribed_channels.add("test-channel")
         connected_client._ensure_ws = mock_ensure_ws

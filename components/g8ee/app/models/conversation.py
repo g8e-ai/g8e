@@ -17,10 +17,10 @@ from pydantic import ConfigDict, Field
 
 from app.constants import ConversationStatus
 
-from .base import VSOTimestampedModel
+from .base import G8eTimestampedModel
 
 
-class Conversation(VSOTimestampedModel):
+class Conversation(G8eTimestampedModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     web_session_id: str = Field(..., description="Browser session identifier — primary key for this conversation")

@@ -21,7 +21,7 @@ Tests:
 - stream_response error handling (retryable vs non-retryable)
 - stream_response streaming_started guard
 - run_with_sse ContextVar lifecycle ownership
-- run_with_sse VSOHttpContext validation
+- run_with_sse G8eHttpContext validation
 - _stream_with_tool_loop ReAct loop termination
 - _stream_with_tool_loop token accumulation
 - _stream_with_tool_loop grounding metadata merge
@@ -63,9 +63,9 @@ from tests.fakes.agent_helpers import (
     make_g8e_agent,
     make_gen_config,
     make_provider_chunk,
-    make_vsod_event_service,
+    make_g8ed_event_service,
 )
-from tests.fakes.factories import build_vso_http_context
+from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = pytest.mark.unit
 
@@ -167,7 +167,7 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent.stream_response(
@@ -176,7 +176,7 @@ class TestStreamResponseRetryLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
         ):
             chunks.append(chunk)
 
@@ -206,7 +206,7 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent.stream_response(
@@ -215,7 +215,7 @@ class TestStreamResponseRetryLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
         ):
             chunks.append(chunk)
 
@@ -248,7 +248,7 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         with patch("asyncio.sleep") as mock_sleep:
             async def capture_sleep(duration):
@@ -263,7 +263,7 @@ class TestStreamResponseRetryLoop:
                 generation_config=gen_config,
                 model_name="test-model",
                 context=context,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
             ):
                 chunks.append(chunk)
 
@@ -289,7 +289,7 @@ class TestStreamResponseRetryLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent.stream_response(
@@ -298,7 +298,7 @@ class TestStreamResponseRetryLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
         ):
             chunks.append(chunk)
 
@@ -332,7 +332,7 @@ class TestStreamResponseErrorHandling:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent.stream_response(
@@ -341,7 +341,7 @@ class TestStreamResponseErrorHandling:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
         ):
             chunks.append(chunk)
 
@@ -367,7 +367,7 @@ class TestStreamResponseErrorHandling:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent.stream_response(
@@ -376,7 +376,7 @@ class TestStreamResponseErrorHandling:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
         ):
             chunks.append(chunk)
 
@@ -407,7 +407,7 @@ class TestRunWithSSEContextVarLifecycle:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         await agent.run_with_sse(
             contents=[],
@@ -415,13 +415,13 @@ class TestRunWithSSEContextVarLifecycle:
             model_name="test-model",
             agent_streaming_context=context,
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         )
 
         tool_executor.start_invocation_context.assert_called_once()
         call_kwargs = tool_executor.start_invocation_context.call_args.kwargs
-        assert "vso_context" in call_kwargs
+        assert "g8e_context" in call_kwargs
 
     async def test_resets_invocation_context_in_finally(self):
         tool_executor = MagicMock()
@@ -441,7 +441,7 @@ class TestRunWithSSEContextVarLifecycle:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         try:
             await agent.run_with_sse(
@@ -450,7 +450,7 @@ class TestRunWithSSEContextVarLifecycle:
                 model_name="test-model",
                 agent_streaming_context=context,
                 context=context,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
             )
         except RuntimeError:
@@ -478,7 +478,7 @@ class TestRunWithSSEContextVarLifecycle:
         )
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         await agent.run_with_sse(
             contents=[],
@@ -486,7 +486,7 @@ class TestRunWithSSEContextVarLifecycle:
             model_name="test-model",
             agent_streaming_context=context,
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         )
 
@@ -494,22 +494,22 @@ class TestRunWithSSEContextVarLifecycle:
 
 
 # =============================================================================
-# TEST: run_with_sse - VSOHttpContext Validation
+# TEST: run_with_sse - G8eHttpContext Validation
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 class TestRunWithSSEValidation:
 
-    async def test_raises_validation_error_when_vso_context_missing(self):
+    async def test_raises_validation_error_when_g8e_context_missing(self):
         tool_executor = MagicMock()
         provider = MagicMock()
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
 
         context = make_agent_streaming_context()
-        context.vso_context = None
+        context.g8e_context = None
 
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         with pytest.raises(ValidationError) as exc_info:
             await agent.run_with_sse(
@@ -518,11 +518,11 @@ class TestRunWithSSEValidation:
                 model_name="test-model",
                 agent_streaming_context=context,
                 context=context,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
             )
 
-        assert "VSOHttpContext is required" in str(exc_info.value)
+        assert "G8eHttpContext is required" in str(exc_info.value)
 
 
 # =============================================================================
@@ -547,7 +547,7 @@ class TestStreamWithToolLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -555,7 +555,7 @@ class TestStreamWithToolLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -592,7 +592,7 @@ class TestStreamWithToolLoop:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -600,7 +600,7 @@ class TestStreamWithToolLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -626,7 +626,7 @@ class TestStreamWithToolLoop:
         agent = make_g8e_agent(provider=default_provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -634,7 +634,7 @@ class TestStreamWithToolLoop:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=override_provider,
         ):
             chunks.append(chunk)
@@ -672,7 +672,7 @@ class TestTokenAccumulation:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -680,7 +680,7 @@ class TestTokenAccumulation:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -707,7 +707,7 @@ class TestTokenAccumulation:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -715,7 +715,7 @@ class TestTokenAccumulation:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -760,7 +760,7 @@ class TestGroundingMetadata:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         async def mock_execute(**kwargs):
             grounding = GroundingMetadata(grounding_used=True, sources=[])
@@ -788,7 +788,7 @@ class TestGroundingMetadata:
                 generation_config=gen_config,
                 model_name="test-model",
                 context=context,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
             ):
                 chunks.append(chunk)
@@ -810,7 +810,7 @@ class TestGroundingMetadata:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -818,7 +818,7 @@ class TestGroundingMetadata:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -848,7 +848,7 @@ class TestCompleteEmission:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -856,7 +856,7 @@ class TestCompleteEmission:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)
@@ -880,7 +880,7 @@ class TestCompleteEmission:
         agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
-        vsod_event_service = make_vsod_event_service()
+        g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
@@ -888,7 +888,7 @@ class TestCompleteEmission:
             generation_config=gen_config,
             model_name="test-model",
             context=context,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
         ):
             chunks.append(chunk)

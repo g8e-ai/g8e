@@ -14,5 +14,5 @@
 """
 Infrastructure Services
 
-VSOD HTTP client, VSOD event service, and health check manager.
+g8ed HTTP client, g8ed event service, and health check manager.
 """

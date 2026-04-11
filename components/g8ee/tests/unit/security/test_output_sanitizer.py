@@ -13,7 +13,7 @@
 
 import pytest
 from app.constants import SuspiciousPatternType
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 from app.security.output_sanitizer import (
     MAX_OUTPUT_LENGTH,
@@ -27,7 +27,7 @@ pytestmark = [pytest.mark.unit]
 
 class TestSanitizationResultModel:
     def test_is_pydantic_model(self):
-        assert issubclass(SanitizationResult, VSOBaseModel)
+        assert issubclass(SanitizationResult, G8eBaseModel)
 
     def test_instantiation(self):
         result = SanitizationResult(

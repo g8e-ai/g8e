@@ -34,8 +34,8 @@ class TestG8eeSettingsOverlayIntegration:
     def settings_service(self, cache_service):
         return SettingsService(cache_aside_service=cache_service)
 
-    async def test_get_platform_settings_loads_from_vsodb(self, settings_service, cache_service):
-        """Verify platform settings are loaded from the correct VSODB collection/ID."""
+    async def test_get_platform_settings_loads_from_g8es(self, settings_service, cache_service):
+        """Verify platform settings are loaded from the correct g8es collection/ID."""
         platform_data = {
             "settings": {
                 "llm_provider": "gemini",

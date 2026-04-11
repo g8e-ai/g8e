@@ -15,11 +15,11 @@
 Tests for app.main.lifespan — the FastAPI startup/shutdown orchestrator.
 
 main.py responsibilities:
-    Phase 0: Bootstrap settings (SettingsService, initialize_vso_service, setup_logging)
-    Phase 1: Core VSODB clients (DB, KV, PubSub, Blob) via _connect_clients
+    Phase 0: Bootstrap settings (SettingsService, initialize_g8e_service, setup_logging)
+    Phase 1: Core g8es clients (DB, KV, PubSub, Blob) via _connect_clients
     Phase 2: Handler services (DBService, KVService, BlobService)
     Phase 3: CacheAsideService
-    Phase 4: Platform settings from VSODB
+    Phase 4: Platform settings from g8es
     Phase 5: ServiceFactory.create_all_services -> bind_to_app_state
     Phase 6: ServiceFactory.start_services
     Shutdown: ServiceFactory.stop_services -> close clients
@@ -36,7 +36,7 @@ pytestmark = [pytest.mark.unit]
 
 _PATCHES = [
     "app.main.SettingsService",
-    "app.main.initialize_vso_service",
+    "app.main.initialize_g8e_service",
     "app.main.setup_logging",
     "app.main.set_settings",
     "app.main.DBClient",
@@ -66,14 +66,14 @@ def _build_mocks():
 
 
 def _configure_settings(mocks):
-    """Wire up SettingsService + initialize_vso_service to return a usable mock settings."""
+    """Wire up SettingsService + initialize_g8e_service to return a usable mock settings."""
     settings = MagicMock()
     settings.ca_cert_path = "/tmp/ca.crt"
     settings.auth.internal_auth_token = "tok"
     settings.listen.default_ttl = 3600
     settings.port = 443
 
-    mocks["initialize_vso_service"].side_effect = AsyncMock(return_value=settings)
+    mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 
     settings_svc = mocks["SettingsService"].return_value
     settings_svc.get_local_settings.return_value = settings
@@ -175,7 +175,7 @@ class TestLifespanStartup:
             async with lifespan(mock_app):
                 pass
 
-            mocks["initialize_vso_service"].assert_called_once()
+            mocks["initialize_g8e_service"].assert_called_once()
             mocks["setup_logging"].assert_called_once()
         finally:
             for p in patches:

@@ -14,16 +14,16 @@
 """Models for HTTP client and service state."""
 
 from typing import Optional
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
-class HTTPClientStatus(VSOBaseModel):
+class HTTPClientStatus(G8eBaseModel):
     """Status information for an individual HTTP client."""
     service_name: str
     base_url: str
     is_session_closed: bool
     circuit_breaker_count: int
 
-class HTTPServiceStatus(VSOBaseModel):
+class HTTPServiceStatus(G8eBaseModel):
     """Complete status information for the HTTP service."""
     is_ready: bool
     active_clients: dict[str, HTTPClientStatus]

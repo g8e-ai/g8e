@@ -3,15 +3,15 @@
 #
 # supervisord is exec'd as PID 1. It manages the operator process as a
 # supervised service so its output appears in Docker logs and it restarts
-# automatically on failure. VSOD persists the operator API key to the
-# platform_settings document in VSODB, then signals supervisor to start the
-# operator. The operator command fetches its API key from VSODB at startup.
+# automatically on failure. g8ed persists the operator API key to the
+# platform_settings document in g8es, then signals supervisor to start the
+# operator. The operator command fetches its API key from g8es at startup.
 #
 # The operator binary must be built explicitly via: ./g8e operator build
 
 set -euo pipefail
 
-SSL_DIR="${G8E_SSL_DIR:-/vsodb}"
+SSL_DIR="${G8E_SSL_DIR:-/g8es}"
 
 # Load Internal Auth Token
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
@@ -52,7 +52,7 @@ file=/tmp/supervisor.sock
 
 [inet_http_server]
 port = *:${supervisor_port}
-username = vso-internal
+username = g8e-internal
 password = ${auth_token}
 
 [supervisorctl]

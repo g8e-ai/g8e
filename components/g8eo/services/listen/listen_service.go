@@ -26,7 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 )
 
-// ListenService is the top-level orchestrator for --listen mode (VSODB).
+// ListenService is the top-level orchestrator for --listen mode (g8es).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
@@ -185,7 +185,7 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	// Start KV TTL cleanup goroutine
 	go ls.db.RunTTLCleanup(ctx)
 
-	ls.logger.Info("VSODB Listen Mode ready",
+	ls.logger.Info("g8es Listen Mode ready",
 		"http_port", ls.cfg.Listen.HTTPPort,
 		"wss_port", ls.cfg.Listen.WSSPort,
 		"data_dir", ls.cfg.Listen.DataDir)
@@ -230,7 +230,7 @@ func (ls *ListenService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
-		ls.logger.Info("VSODB Listen Mode fully operational")
+		ls.logger.Info("g8es Listen Mode fully operational")
 	}()
 
 	return <-errChan

@@ -62,7 +62,7 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.events import SessionEvent
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.utils.ids import generate_approval_id, generate_intent_approval_id
 from app.utils.timestamp import now
 
@@ -74,12 +74,12 @@ class OperatorApprovalService:
 
     def __init__(
         self,
-        vsod_event_service: EventServiceProtocol,
+        g8ed_event_service: EventServiceProtocol,
         operator_data_service: OperatorDataServiceProtocol,
         investigation_data_service: InvestigationDataServiceProtocol,
         on_approval_requested: Callable[[str, PendingApproval], None] | None = None,
     ) -> None:
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self.operator_data_service = operator_data_service
         self.investigation_data_service = investigation_data_service
         self._on_approval_requested = on_approval_requested
@@ -205,7 +205,7 @@ class OperatorApprovalService:
         operator_id: str | None,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         log_tag: str,
     ) -> None:
         """Record an approval lifecycle event to both operator activity_log and conversation_history."""
@@ -222,7 +222,7 @@ class OperatorApprovalService:
 
         try:
             await self.investigation_data_service.add_approval_record(
-                investigation_id=vso_context.investigation_id,
+                investigation_id=g8e_context.investigation_id,
                 event_type=event_type,
                 metadata=metadata,
             )
@@ -235,9 +235,9 @@ class OperatorApprovalService:
         return await self._request_command_approval(
             command=request.command,
             justification=request.justification,
-            vso_context=request.vso_context,
+            g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.vso_context.user_id,
+            user_id=request.g8e_context.user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -252,9 +252,9 @@ class OperatorApprovalService:
             file_path=request.file_path,
             operation=request.operation,
             justification=request.justification,
-            vso_context=request.vso_context,
+            g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.vso_context.user_id,
+            user_id=request.g8e_context.user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -266,9 +266,9 @@ class OperatorApprovalService:
         return await self._grant_intent_permission(
             intent_name=request.intent_name,
             justification=request.justification,
-            vso_context=request.vso_context,
+            g8e_context=request.g8e_context,
             timeout_seconds=request.timeout_seconds,
-            user_id=request.vso_context.user_id,
+            user_id=request.g8e_context.user_id,
             execution_id=request.execution_id,
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
@@ -280,7 +280,7 @@ class OperatorApprovalService:
         self,
         command: str,
         justification: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int,
         user_id: str,
         execution_id: str,
@@ -298,8 +298,8 @@ class OperatorApprovalService:
             logger.info("[APPROVAL] approval_id=%s execution_id=%s", approval_id, execution_id)
             logger.info(
                 "[APPROVAL] case_id=%s investigation_id=%s user_id=%s web_session_id=%s operator_id=%s",
-                vso_context.case_id, vso_context.investigation_id, user_id,
-                vso_context.web_session_id, operator_id,
+                g8e_context.case_id, g8e_context.investigation_id, user_id,
+                g8e_context.web_session_id, operator_id,
             )
             if risk_analysis:
                 logger.info("[APPROVAL] risk_level=%s", risk_analysis.risk_level)
@@ -322,20 +322,20 @@ class OperatorApprovalService:
                     logger.info("[APPROVAL]   - %s (%s)", ts.hostname, ts.operator_type)
 
             try:
-                await self.vsod_event_service.publish(
+                await self.g8ed_event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=vso_context.web_session_id,
-                        user_id=vso_context.user_id,
-                        case_id=vso_context.case_id,
-                        investigation_id=vso_context.investigation_id,
+                        web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        case_id=g8e_context.case_id,
+                        investigation_id=g8e_context.investigation_id,
                         task_id=task_id,
                     )
                 )
-                logger.info("[APPROVAL] Published to VSOD")
+                logger.info("[APPROVAL] Published to g8ed")
             except Exception as publish_error:
-                error_msg = f"Failed to publish approval request to VSOD: {publish_error}"
+                error_msg = f"Failed to publish approval request to g8ed: {publish_error}"
                 logger.error("[APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -356,7 +356,7 @@ class OperatorApprovalService:
                     requested_at=approval_event.requested_at,
                     is_batch_execution=approval_event.is_batch_execution,
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="APPROVAL",
             )
 
@@ -365,8 +365,8 @@ class OperatorApprovalService:
                 approval_type=ApprovalType.COMMAND,
                 command=command,
                 requested_at=now(),
-                case_id=vso_context.case_id,
-                investigation_id=vso_context.investigation_id,
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
                 user_id=user_id,
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
@@ -403,7 +403,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    vso_context=vso_context,
+                    g8e_context=g8e_context,
                     log_tag="APPROVAL",
                 )
                 return ApprovalResult(
@@ -426,7 +426,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="APPROVAL",
             )
 
@@ -446,10 +446,10 @@ class OperatorApprovalService:
                 "[APPROVAL-EXCEPTION] command=%s approval_id=%s case_id=%s investigation_id=%s user_id=%s web_session_id=%s operator_id=%s",
                 command,
                 approval_id,
-                vso_context.case_id,
-                vso_context.investigation_id,
+                g8e_context.case_id,
+                g8e_context.investigation_id,
                 user_id,
-                vso_context.web_session_id,
+                g8e_context.web_session_id,
                 operator_id,
             )
             return ApprovalResult(
@@ -465,7 +465,7 @@ class OperatorApprovalService:
         file_path: str,
         operation: FileOperation,
         justification: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int,
         user_id: str,
         execution_id: str,
@@ -494,19 +494,19 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.vsod_event_service.publish(
+                await self.g8ed_event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=vso_context.web_session_id,
-                        user_id=vso_context.user_id,
-                        case_id=vso_context.case_id,
-                        investigation_id=vso_context.investigation_id,
+                        web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        case_id=g8e_context.case_id,
+                        investigation_id=g8e_context.investigation_id,
                     )
                 )
-                logger.info("[FILE_EDIT_APPROVAL] Published to VSOD")
+                logger.info("[FILE_EDIT_APPROVAL] Published to g8ed")
             except Exception as publish_error:
-                error_msg = f"Failed to publish file edit approval request to VSOD: {publish_error}"
+                error_msg = f"Failed to publish file edit approval request to g8ed: {publish_error}"
                 logger.error("[FILE_EDIT_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -526,7 +526,7 @@ class OperatorApprovalService:
                     operation=operation,
                     requested_at=approval_event.requested_at,
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="FILE_EDIT_APPROVAL",
             )
 
@@ -536,8 +536,8 @@ class OperatorApprovalService:
                 file_path=file_path,
                 operation=operation,
                 requested_at=now(),
-                case_id=vso_context.case_id,
-                investigation_id=vso_context.investigation_id,
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
                 user_id=user_id,
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
@@ -559,7 +559,7 @@ class OperatorApprovalService:
                         file_path=file_path,
                         responded_at=pending.responded_at or now(),
                     ),
-                    vso_context=vso_context,
+                    g8e_context=g8e_context,
                     log_tag="FILE_EDIT_APPROVAL",
                 )
                 return ApprovalResult(
@@ -581,7 +581,7 @@ class OperatorApprovalService:
                     operation=operation,
                     responded_at=now(),
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="FILE_EDIT_APPROVAL",
             )
 
@@ -601,8 +601,8 @@ class OperatorApprovalService:
                 "[FILE_EDIT_APPROVAL-EXCEPTION] file_path=%s approval_id=%s case_id=%s investigation_id=%s operator_id=%s",
                 file_path,
                 approval_id,
-                vso_context.case_id,
-                vso_context.investigation_id,
+                g8e_context.case_id,
+                g8e_context.investigation_id,
                 operator_id,
             )
             return ApprovalResult(
@@ -617,7 +617,7 @@ class OperatorApprovalService:
         self,
         intent_name: str | CloudIntent,
         justification: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int,
         user_id: str,
         execution_id: str,
@@ -674,19 +674,19 @@ class OperatorApprovalService:
             )
 
             try:
-                await self.vsod_event_service.publish(
+                await self.g8ed_event_service.publish(
                     SessionEvent(
                         event_type=EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
                         payload=approval_event,
-                        web_session_id=vso_context.web_session_id,
-                        user_id=vso_context.user_id,
-                        case_id=vso_context.case_id,
-                        investigation_id=vso_context.investigation_id,
+                        web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        case_id=g8e_context.case_id,
+                        investigation_id=g8e_context.investigation_id,
                     )
                 )
-                logger.info("[INTENT_APPROVAL] Published to VSOD")
+                logger.info("[INTENT_APPROVAL] Published to g8ed")
             except Exception as publish_error:
-                error_msg = f"Failed to publish intent approval request to VSOD: {publish_error}"
+                error_msg = f"Failed to publish intent approval request to g8ed: {publish_error}"
                 logger.error("[INTENT_APPROVAL] %s", error_msg, exc_info=True)
                 return ApprovalResult(
                     approved=False,
@@ -707,7 +707,7 @@ class OperatorApprovalService:
                     justification=justification,
                     requested_at=approval_event.requested_at,
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="INTENT_APPROVAL",
             )
 
@@ -716,8 +716,8 @@ class OperatorApprovalService:
                 approval_type=ApprovalType.INTENT,
                 intent_name=intent,
                 requested_at=now(),
-                case_id=vso_context.case_id,
-                investigation_id=vso_context.investigation_id,
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
                 user_id=user_id,
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
@@ -742,7 +742,7 @@ class OperatorApprovalService:
                         feedback_reason=pending.reason,
                         responded_at=pending.responded_at or now(),
                     ),
-                    vso_context=vso_context,
+                    g8e_context=g8e_context,
                     log_tag="INTENT_APPROVAL",
                 )
                 return ApprovalResult(
@@ -765,7 +765,7 @@ class OperatorApprovalService:
                     reason=pending.reason,
                     responded_at=now(),
                 ),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 log_tag="INTENT_APPROVAL",
             )
 

@@ -45,7 +45,7 @@ from app.models.agent import (
 
 from app.services.ai.command_generator import generate_command
 from app.models.grounding import GroundingMetadata
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWebResult
 from app.models.settings import G8eeUserSettings
@@ -58,7 +58,7 @@ from app.models.agents.tribunal import (
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target
 from app.services.ai.tool_service import AIToolService
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 from app.utils.timestamp import now, to_timestamp
 
 
@@ -140,8 +140,8 @@ async def orchestrate_tool_execution(
     tool_call: ToolCall,
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
-    vso_context: VSOHttpContext,
-    vsod_event_service: EventService,
+    g8e_context: G8eHttpContext,
+    g8ed_event_service: EventService,
     request_settings: G8eeUserSettings,
 ) -> ToolCallResult:
     """
@@ -186,10 +186,10 @@ async def orchestrate_tool_execution(
                     os_name=os_name,
                     shell=shell,
                     working_directory=working_directory,
-                    vsod_event_service=vsod_event_service,
-                    web_session_id=vso_context.web_session_id,
-                    user_id=vso_context.user_id,
-                    case_id=vso_context.case_id,
+                    g8ed_event_service=g8ed_event_service,
+                    web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    case_id=g8e_context.case_id,
                     investigation_id=investigation.id,
                     settings=request_settings,
                 )
@@ -330,13 +330,13 @@ async def orchestrate_tool_execution(
     tool_args_with_id = {**raw_args}
     if is_operator_tool and execution_id:
         tool_args_with_id["execution_id"] = execution_id
-        tool_args_with_id["_web_session_id"] = vso_context.web_session_id
+        tool_args_with_id["_web_session_id"] = g8e_context.web_session_id
 
     result = await tool_executor.execute_tool_call(
         tool_name,
         tool_args_with_id,
         investigation,
-        vso_context,
+        g8e_context,
         request_settings=request_settings,
     )
 
@@ -377,10 +377,10 @@ async def execute_turn_tool_calls(
     pending_tool_calls: list[ToolCall],
     tool_executor: AIToolService,
     investigation: EnrichedInvestigationContext,
-    vso_context: VSOHttpContext,
+    g8e_context: G8eHttpContext,
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
-    vsod_event_service: EventService,
+    g8ed_event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel, None]:
     """
     Execute all tool calls from one turn sequentially.
@@ -399,8 +399,8 @@ async def execute_turn_tool_calls(
                 tool_call=fc,
                 tool_executor=tool_executor,
                 investigation=investigation,
-                vso_context=vso_context,
-                vsod_event_service=vsod_event_service,
+                g8e_context=g8e_context,
+                g8ed_event_service=g8ed_event_service,
                 request_settings=request_settings,
             )
         except Exception as exc:

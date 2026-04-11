@@ -1,6 +1,6 @@
 # Dashboard
 
-The dashboard is the primary UI surface in VSOD. It is served at `/chat` and consists of four main areas: the Header (with profile dropdown), the Operator Panel, the chat/message area, and the Terminal. All components communicate exclusively through `EventBus` — no component holds a direct reference to another.
+The dashboard is the primary UI surface in g8ed. It is served at `/chat` and consists of four main areas: the Header (with profile dropdown), the Operator Panel, the chat/message area, and the Terminal. All components communicate exclusively through `EventBus` — no component holds a direct reference to another.
 
 ---
 
@@ -61,7 +61,7 @@ On `init()`, `_loadPreflight()` calls `GET /api/setup/config` to pre-fill existi
 ### Finish
 
 The Finish button (`#finish-btn`) on step 4:
-1. `POST /api/setup/config` — saves the collected settings to VSODB.
+1. `POST /api/setup/config` — saves the collected settings to g8es.
 2. `POST /api/auth/register` — creates the admin account (email + optional name)
 3. Calls `navigator.credentials.create` for passkey registration (WebAuthn challenge/verify round-trip)
 4. On success, redirects to `/chat`
@@ -565,7 +565,7 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 | Active Sessions | `sessions.web` | `sessions.operator` operator sessions |
 | Investigations (7d) | `ai.totalInvestigations` | `ai.activeInvestigations` active |
 
-**System health banner** (`#health-banner`) shows overall health derived from VSODB KV and DB connectivity — `healthy` (green) or `degraded` (yellow). The banner includes latency readings for each subsystem.
+**System health banner** (`#health-banner`) shows overall health derived from g8es KV and DB connectivity — `healthy` (green) or `degraded` (yellow). The banner includes latency readings for each subsystem.
 
 **Panels** (two-column grid):
 
@@ -576,7 +576,7 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 
 **Cache Performance** (full-width panel): hit rate, total hits/misses, cost savings, per-type breakdown (hits/misses per cache category). Data comes from `getCacheStats()` which reads `cacheMetrics.getStats()` directly — this panel is not cached through `_getCachedMetric`.
 
-`GET /api/console/metrics/realtime` → `getRealTimeMetrics()` — returns VSOD process heap used/peak and current cache stats. This endpoint is not cached.
+`GET /api/console/metrics/realtime` → `getRealTimeMetrics()` — returns g8ed process heap used/peak and current cache stats. This endpoint is not cached.
 
 #### Components
 
@@ -584,9 +584,9 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 
 | Component | Probe | Details |
 |---|---|---|
-| VSOD | Always healthy (self-check) | uptime (seconds), heap used (MB), PID |
-| VSODB KV | `GET __console_health_check__` via Redis client | round-trip latency ms |
-| VSODB DB | `getDocument(COMPONENTS, 'platform_settings')` | round-trip latency ms |
+| g8ed | Always healthy (self-check) | uptime (seconds), heap used (MB), PID |
+| g8es KV | `GET __console_health_check__` via Redis client | round-trip latency ms |
+| g8es DB | `getDocument(COMPONENTS, 'platform_settings')` | round-trip latency ms |
 | g8ee | `GET /health` via internal HTTP client | reported status from g8ee response |
 
 Overall status: `healthy` if all components healthy; `unhealthy` if any is unhealthy; `degraded` otherwise.
@@ -595,7 +595,7 @@ Each component row renders: status icon (`check_circle` / `warning` / `error`), 
 
 #### KV Store
 
-`GET /api/console/kv/scan?pattern=<glob>&cursor=<cursor>&count=<n>` — paginated VSODB KV key scan using `SCAN` with `MATCH`. Maximum `count` per request is 200. Returns `{ cursor, keys, count }`. The UI starts with `cursor='0'` and advances using the returned cursor until `cursor === '0'` again (SCAN cursor wrap).
+`GET /api/console/kv/scan?pattern=<glob>&cursor=<cursor>&count=<n>` — paginated g8es KV key scan using `SCAN` with `MATCH`. Maximum `count` per request is 200. Returns `{ cursor, keys, count }`. The UI starts with `cursor='0'` and advances using the returned cursor until `cursor === '0'` again (SCAN cursor wrap).
 
 Clicking a key: `GET /api/console/kv/key?key=<key>` → `getKVKey(key)` — fetches value and TTL via `GET` + `TTL` in parallel. The detail panel (`#kv-detail-panel`) renders the key name, value, TTL, and existence flag.
 

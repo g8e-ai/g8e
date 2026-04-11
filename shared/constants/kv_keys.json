@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical KV key schema shared across g8ee (Python) and VSOD (JS). All keys follow: g8e:{domain}:{...segments}",
+  "_comment": "Canonical KV key schema shared across g8ee (Python) and g8ed (JS). All keys follow: g8e:{domain}:{...segments}",
 
   "cache.prefix": "g8e",
 

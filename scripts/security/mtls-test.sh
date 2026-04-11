@@ -1,8 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# Comprehensive mTLS Test for VSODB Proxy Certificates
+# Comprehensive mTLS Test for g8es Proxy Certificates
 # =============================================================================
-# Tests that g8eo operators can connect to VSODB proxy via mTLS and that
+# Tests that g8eo operators can connect to g8es proxy via mTLS and that
 # connections without valid client certs are properly rejected.
 # =============================================================================
 set +e  # Don't exit on errors - we handle them ourselves
@@ -192,7 +192,7 @@ echo ""
 if [ $FAIL_COUNT -eq 0 ]; then
     echo "🎉 ALL TESTS PASSED - mTLS is properly configured"
     echo ""
-    echo "The g8eo Operator can connect to VSODB proxy via SSL with 100% certainty."
+    echo "The g8eo Operator can connect to g8es proxy via SSL with 100% certainty."
     exit 0
 else
     echo "⚠️  SOME TESTS FAILED - Review the failures above"

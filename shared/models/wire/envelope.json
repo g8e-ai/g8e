@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wire envelope for all pub/sub messages crossing component boundaries. g8ee publishes VSOMessage (g8ee component), g8eo publishes ResultMessage (g8eo component). Both follow this shape. Consumers: g8ee (Python), g8eo (Go), VSOD (JS).",
+  "_comment": "Canonical wire envelope for all pub/sub messages crossing component boundaries. g8ee publishes G8eMessage (g8ee component), g8eo publishes ResultMessage (g8eo component). Both follow this shape. Consumers: g8ee (Python), g8eo (Go), g8ed (JS).",
 
   "envelope": {
     "_description": "Outer envelope wrapping every pub/sub message on any channel.",
@@ -19,7 +19,7 @@
       "source_component": {
         "type": "string",
         "required": true,
-        "values": ["g8ee", "g8eo", "vsod"],
+        "values": ["g8ee", "g8eo", "g8ed"],
         "description": "Component that published this message. See status.json component.name."
       },
       "event_type": {
@@ -83,6 +83,6 @@
   },
 
   "_comment.g8eo": "g8eo's ResultMessage uses `payload` as a raw JSON blob (json.RawMessage). Fields `instance_id` and `metadata` are absent in g8eo-originated messages. Fields `system_fingerprint` and `source_component` are always present in g8eo messages.",
-  "_comment.g8ee": "g8ee's VSOMessage uses `payload` as a typed dict. Fields `system_fingerprint` is absent in g8ee-originated messages.",
+  "_comment.g8ee": "g8ee's G8eMessage uses `payload` as a typed dict. Fields `system_fingerprint` is absent in g8ee-originated messages.",
   "_comment.channels": "Messages are published to channels defined in channels.json. The envelope is the same regardless of channel."
 }

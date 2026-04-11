@@ -31,15 +31,15 @@ from app.constants import (
 )
 from app.utils.timestamp import now
 
-from .base import VSOBaseModel, VSOIdentifiableModel
+from .base import G8eBaseModel, G8eIdentifiableModel
 from .grounding import GroundingMetadata
-from .http_context import BoundOperator, VSOHttpContext
+from .http_context import BoundOperator, G8eHttpContext
 from .memory import InvestigationMemory
 from .operators import OperatorDocument
 from .tool_results import TokenUsage
 
 
-class ConversationMessageMetadata(VSOBaseModel):
+class ConversationMessageMetadata(G8eBaseModel):
     """Base typed metadata for a conversation message.
 
     Use a typed subclass when the message category is known:
@@ -173,7 +173,7 @@ class FileEditMetadata(ConversationMessageMetadata):
     approval_id: str | None = Field(default=None, description="Approval ID if approval was required")
 
 
-class ConversationHistoryMessage(VSOIdentifiableModel):
+class ConversationHistoryMessage(G8eIdentifiableModel):
     """Single message in investigation conversation history."""
     sender: str = Field(..., description="Message sender path, e.g. user.chat")
     content: str = Field(default="", description="Message content")
@@ -181,7 +181,7 @@ class ConversationHistoryMessage(VSOIdentifiableModel):
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
 
 
-class ThinkingMessage(VSOBaseModel):
+class ThinkingMessage(G8eBaseModel):
     """A single AI thinking entry extracted from a conversation session."""
 
     timestamp: datetime = Field(..., description="Timestamp of the source message")
@@ -191,7 +191,7 @@ class ThinkingMessage(VSOBaseModel):
     response_source: EventType = Field(..., description="Source of the response")
 
 
-class Attachment(VSOIdentifiableModel):
+class Attachment(G8eIdentifiableModel):
     """File attachment metadata for investigations."""
     filename: str = Field(..., description="Original filename")
     content_type: str | None = Field(default=None, description="MIME content type")
@@ -199,7 +199,7 @@ class Attachment(VSOIdentifiableModel):
     uploaded_by: str | None = Field(default=None, description="User who uploaded the file")
 
 
-class InvestigationExecutionConstraints(VSOBaseModel):
+class InvestigationExecutionConstraints(G8eBaseModel):
     """Execution constraints for investigation work."""
     max_execution_time_seconds: int = Field(default=1800, ge=60, le=7200, description="Maximum execution time")
     allowed_commands: list[str] | None = Field(default=None, description="Allowed command patterns")
@@ -209,7 +209,7 @@ class InvestigationExecutionConstraints(VSOBaseModel):
     enable_runtime_execution: bool = Field(default=True, description="Whether runtime execution is enabled")
 
 
-class InvestigationCustomerContext(VSOBaseModel):
+class InvestigationCustomerContext(G8eBaseModel):
     """Customer context for investigation."""
     severity: Severity = Field(default=Severity.MEDIUM, description="Business impact level")
     affected_users: int | None = Field(default=None, ge=0, description="Number of affected users")
@@ -217,7 +217,7 @@ class InvestigationCustomerContext(VSOBaseModel):
     compliance_requirements: list[str] | None = Field(default=None, description="Compliance requirements")
 
 
-class InvestigationTechnicalContext(VSOBaseModel):
+class InvestigationTechnicalContext(G8eBaseModel):
     """Technical context for investigation."""
     primary_technology: str | None = Field(default=None, description="Primary technology stack")
     related_systems: list[str] = Field(default_factory=list, description="Related systems")
@@ -225,7 +225,7 @@ class InvestigationTechnicalContext(VSOBaseModel):
     log_sources: list[str] = Field(default_factory=list, description="Log source paths")
 
 
-class InvestigationCurrentState(VSOBaseModel):
+class InvestigationCurrentState(G8eBaseModel):
     """Current state tracking for investigation."""
     active_attempt: int = Field(default=1, ge=1, description="Current attempt number")
     pending_actions: list[str] = Field(default_factory=list, description="Pending actions")
@@ -234,25 +234,25 @@ class InvestigationCurrentState(VSOBaseModel):
     collaboration_status: dict[ComponentName, ComponentStatus] = Field(default_factory=dict, description="Component collaboration status")
 
 
-class ConversationUpdateOperation(VSOBaseModel):
+class ConversationUpdateOperation(G8eBaseModel):
     """Typed operation for batch_update_conversation_history."""
     investigation_id: str = Field(..., description="Target investigation ID")
     message: ConversationHistoryMessage = Field(..., description="Message to append")
     case_id: str | None = Field(default=None, description="Associated case ID")
 
 
-class InvestigationHistoryEntry(VSOBaseModel):
+class InvestigationHistoryEntry(G8eBaseModel):
     """Single entry in investigation history trail."""
     attempt_number: int = Field(..., ge=1, description="Attempt number for this entry")
     timestamp: datetime = Field(default_factory=now, description="When this event occurred")
     event_type: EventType = Field(..., description="Type of event")
     actor: ComponentName = Field(..., description="Who performed this action")
     summary: str = Field(..., description="Brief summary of what happened")
-    investigation_attempt: VSOBaseModel | None = Field(default=None, description="Investigation attempt data")
+    investigation_attempt: G8eBaseModel | None = Field(default=None, description="Investigation attempt data")
     details: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Detailed event information")
 
 
-class InvestigationModel(VSOIdentifiableModel):
+class InvestigationModel(G8eIdentifiableModel):
     """Investigation model representing collaborative AI agent work on technical issues."""
 
     case_id: str = Field(..., description="Associated case ID")
@@ -276,7 +276,7 @@ class InvestigationModel(VSOIdentifiableModel):
     case_source: str | None = Field(default=None, description="Source of the case that triggered this investigation")
     attachments: list[Attachment] = Field(default_factory=list, description="List of file attachment metadata")
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list, description="Sequential chat messages managed by g8ee - includes all user and AI messages including proposed solutions")
-    history_trail: list[InvestigationHistoryEntry] = Field(default_factory=list, description="Task creation/completion events managed by VSOO - does NOT include conversation data")
+    history_trail: list[InvestigationHistoryEntry] = Field(default_factory=list, description="Task creation/completion events managed by g8ee - does NOT include conversation data")
     current_state: InvestigationCurrentState | None = Field(default=None, description="Current state tracking")
 
     @field_validator("user_id", mode="before")
@@ -359,7 +359,7 @@ class InvestigationModel(VSOIdentifiableModel):
         actor: ComponentName,
         summary: str,
         attempt_number: int | None = None,
-        investigation_attempt: VSOBaseModel | None = None,
+        investigation_attempt: G8eBaseModel | None = None,
         details: ConversationMessageMetadata | None = None
     ) -> None:
         if attempt_number is None:
@@ -400,7 +400,7 @@ class InvestigationModel(VSOIdentifiableModel):
         )
 
 
-class InvestigationCreateRequest(VSOBaseModel):
+class InvestigationCreateRequest(G8eBaseModel):
     """Request model for creating new investigations."""
     case_id: str = Field(..., description="Associated case ID")
     case_title: str = Field(..., description="Associated case title")
@@ -422,7 +422,7 @@ class InvestigationCreateRequest(VSOBaseModel):
     )
 
 
-class InvestigationUpdateRequest(VSOBaseModel):
+class InvestigationUpdateRequest(G8eBaseModel):
     """Request model for updating investigations."""
     status: InvestigationStatus | None = Field(default=None, description="New status")
     priority: Priority | None = Field(default=None, description="Updated priority")
@@ -435,7 +435,7 @@ class InvestigationUpdateRequest(VSOBaseModel):
     )
 
 
-class InvestigationQueryRequest(VSOBaseModel):
+class InvestigationQueryRequest(G8eBaseModel):
     """Request model for querying investigations."""
     case_id: str | None = Field(default=None, description="Filter by case ID")
     task_id: str | None = Field(default=None, description="Filter by task ID")
@@ -461,7 +461,7 @@ class EnrichedInvestigationContext(InvestigationModel):
 
     operator_documents: list[OperatorDocument] = Field(default_factory=list, description="Bound OperatorDocument instances")
     memory: InvestigationMemory | None = Field(default=None, description="Attached InvestigationMemory for AI context")
-    bound_operators: list[BoundOperator] = Field(default_factory=list, description="BoundOperator instances from VSOHttpContext")
+    bound_operators: list[BoundOperator] = Field(default_factory=list, description="BoundOperator instances from G8eHttpContext")
     operator_session_token: str | None = Field(default=None, description="Transient operator session token for authorization validation")
 
     @property
@@ -470,11 +470,11 @@ class EnrichedInvestigationContext(InvestigationModel):
         return self.id
 
     @property
-    def vso_context(self) -> VSOHttpContext:
-        """Create a VSOHttpContext from this investigation context for agent compatibility."""
+    def g8e_context(self) -> G8eHttpContext:
+        """Create a G8eHttpContext from this investigation context for agent compatibility."""
         from app.constants import ComponentName
         
-        return VSOHttpContext(
+        return G8eHttpContext(
             web_session_id=self.web_session_id or "",
             user_id=self.user_id,
             organization_id=self.organization_id,

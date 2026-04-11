@@ -25,11 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestHistoryService(t *testing.T) (*HistoryService, *MockVSODBPubSubClient) {
+func newTestHistoryService(t *testing.T) (*HistoryService, *MockG8esPubSubClient) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 	return NewHistoryService(cfg, logger, db), db
 }

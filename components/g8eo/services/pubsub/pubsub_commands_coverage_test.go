@@ -194,7 +194,7 @@ func TestPubSubCommandService_SendAutomaticHeartbeat_WithContext(t *testing.T) {
 func TestPubSubCommandService_SetResultsService_PropagatesPublisher(t *testing.T) {
 	f := newPubsubFixture(t)
 
-	db2 := NewMockVSODBPubSubClient()
+	db2 := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db2.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(f.Cfg, f.Logger, db2, nil)

@@ -17,7 +17,7 @@ from typing import Any
 from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
 from app.models.errors import ErrorCauseDetail, ErrorDetail
 
-class VSOError(Exception):
+class G8eError(Exception):
     def __init__(
         self,
         message: str,
@@ -104,7 +104,7 @@ class VSOError(Exception):
 
 
 # Configuration Errors
-class ConfigurationError(VSOError):
+class ConfigurationError(G8eError):
     def __init__(
         self,
         message: str,
@@ -131,7 +131,7 @@ class MissingBootstrapSecretError(ConfigurationError):
 
 
 # Database Errors
-class DatabaseError(VSOError):
+class DatabaseError(G8eError):
     def __init__(
         self,
         message: str,
@@ -159,7 +159,7 @@ class DatabaseQueryError(DatabaseError):
         )
 
 
-class PubSubError(VSOError):
+class PubSubError(G8eError):
     def __init__(
         self,
         message: str,
@@ -178,7 +178,7 @@ class PubSubError(VSOError):
         )
 
 
-class StorageError(VSOError):
+class StorageError(G8eError):
     def __init__(
         self,
         message: str,
@@ -197,7 +197,7 @@ class StorageError(VSOError):
         )
 
 
-class ResourceNotFoundError(VSOError):
+class ResourceNotFoundError(G8eError):
     def __init__(
         self,
         message: str,
@@ -224,7 +224,7 @@ class ResourceNotFoundError(VSOError):
             component=component
         )
 
-class ResourceConflictError(VSOError):
+class ResourceConflictError(G8eError):
     def __init__(self, message: str, resource_type: str | None = None, resource_id: str | None = None):
         super().__init__(
             message,
@@ -235,7 +235,7 @@ class ResourceConflictError(VSOError):
 
 
 # Auth Errors
-class AuthenticationError(VSOError):
+class AuthenticationError(G8eError):
     def __init__(
         self,
         message: str = "Authentication failed",
@@ -256,7 +256,7 @@ class TokenExpiredError(AuthenticationError):
     def __init__(self):
         super().__init__("Token has expired", code=ErrorCode.TOKEN_EXPIRED)
 
-class AuthorizationError(VSOError):
+class AuthorizationError(G8eError):
     def __init__(self, message: str = "Insufficient permissions", component: str = "g8ee"):
         super().__init__(
             message,
@@ -268,7 +268,7 @@ class AuthorizationError(VSOError):
 
 
 # Validation Errors
-class ValidationError(VSOError):
+class ValidationError(G8eError):
     def __init__(
         self,
         message: str,
@@ -297,7 +297,7 @@ class MissingRequiredFieldError(ValidationError):
 
 
 # Network & External Service Errors
-class NetworkError(VSOError):
+class NetworkError(G8eError):
     def __init__(
         self,
         message: str,
@@ -319,7 +319,7 @@ class NetworkError(VSOError):
             component=component,
         )
 
-class RateLimitError(VSOError):
+class RateLimitError(G8eError):
     def __init__(self, message: str = "Rate limit exceeded", component: str = "g8ee"):
         super().__init__(
             message,
@@ -329,7 +329,7 @@ class RateLimitError(VSOError):
             component=component
         )
 
-class VSOTimeoutError(VSOError):
+class G8eTimeoutError(G8eError):
     def __init__(self, message: str = "Operation timed out", component: str = "g8ee"):
         super().__init__(
             message,
@@ -339,7 +339,7 @@ class VSOTimeoutError(VSOError):
             component=component
         )
 
-class ExternalServiceError(VSOError):
+class ExternalServiceError(G8eError):
     def __init__(
         self,
         message: str,
@@ -367,7 +367,7 @@ class ExternalServiceError(VSOError):
 
 
 # Business Logic Errors
-class BusinessLogicError(VSOError):
+class BusinessLogicError(G8eError):
     def __init__(
         self,
         message: str,
@@ -384,7 +384,7 @@ class BusinessLogicError(VSOError):
         )
 
 # Infrastructure Errors
-class ServiceUnavailableError(VSOError):
+class ServiceUnavailableError(G8eError):
     def __init__(self, message: str = "Service unavailable", component: str = "g8ee"):
         super().__init__(
             message,
@@ -396,7 +396,7 @@ class ServiceUnavailableError(VSOError):
 
 
 # Catch-all
-class InternalUnexpectedError(VSOError):
+class InternalUnexpectedError(G8eError):
     def __init__(self, message: str = "An unexpected internal error occurred", cause: Exception | None = None):
         super().__init__(
             message,

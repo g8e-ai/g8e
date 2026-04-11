@@ -16,10 +16,10 @@ from pydantic import Field
 
 from app.constants import Platform
 
-from .base import VSOBaseModel
+from .base import G8eBaseModel
 
 
-class CommandValidationResult(VSOBaseModel):
+class CommandValidationResult(G8eBaseModel):
     """Result of command validation against whitelist."""
     is_valid: bool
     command: str

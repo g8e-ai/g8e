@@ -40,7 +40,7 @@ type envVarKeys struct {
 	// OpenClaw
 	OpenClawGatewayToken EnvVarKey
 
-	// VSODB configuration
+	// g8es configuration
 	OperatorPubSubURL EnvVarKey
 
 	// Test environment

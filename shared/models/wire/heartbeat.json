@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Heartbeat wire payload published by g8eo to the heartbeat:{operator_id}:{operator_session_id} pub/sub channel. This is the full message shape — it IS the envelope (g8eo does not wrap heartbeats in a VSOMessage). Consumers: g8ee (Python G8eoHeartbeatPayload in pubsub_messages.py → OperatorHeartbeat.from_wire), VSOD (JS HeartbeatSnapshot.fromHeartbeat + SystemInfo.mergeFromHeartbeat).",
+  "_comment": "Canonical Heartbeat wire payload published by g8eo to the heartbeat:{operator_id}:{operator_session_id} pub/sub channel. This is the full message shape — it IS the envelope (g8eo does not wrap heartbeats in a G8eMessage). Consumers: g8ee (Python G8eoHeartbeatPayload in pubsub_messages.py → OperatorHeartbeat.from_wire), g8ed (JS HeartbeatSnapshot.fromHeartbeat + SystemInfo.mergeFromHeartbeat).",
 
   "heartbeat": {
     "_description": "Full heartbeat message published by g8eo. Contains both the routing envelope fields and the telemetry payload inline.",
@@ -140,5 +140,5 @@
     }
   },
 
-  "_comment.field_mapping": "g8ee validates payload as G8eoHeartbeatPayload (pubsub_messages.py) then calls OperatorHeartbeat.from_wire: performance_metrics -> performance, uptime_info.uptime -> uptime.uptime_display, network_info -> network, capability_flags -> local_storage_enabled/git_available/ledger_enabled. VSOD's HeartbeatSnapshot.fromHeartbeat reads performance_metrics and uptime_info directly. SystemInfo.mergeFromHeartbeat reads system_identity and network_info."
+  "_comment.field_mapping": "g8ee validates payload as G8eoHeartbeatPayload (pubsub_messages.py) then calls OperatorHeartbeat.from_wire: performance_metrics -> performance, uptime_info.uptime -> uptime.uptime_display, network_info -> network, capability_flags -> local_storage_enabled/git_available/ledger_enabled. g8ed's HeartbeatSnapshot.fromHeartbeat reads performance_metrics and uptime_info directly. SystemInfo.mergeFromHeartbeat reads system_identity and network_info."
 }

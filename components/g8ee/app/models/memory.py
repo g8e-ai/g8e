@@ -13,10 +13,10 @@
 
 from app.constants import InvestigationStatus
 
-from .base import Field, VSOBaseModel, VSOIdentifiableModel
+from .base import Field, G8eBaseModel, G8eIdentifiableModel
 
 
-class InvestigationMemory(VSOIdentifiableModel):
+class InvestigationMemory(G8eIdentifiableModel):
     case_id: str = Field(..., description="Associated case ID")
     investigation_id: str = Field(..., description="Investigation this memory represents")
     user_id: str = Field(..., description="User ID who owns this investigation")
@@ -30,7 +30,7 @@ class InvestigationMemory(VSOIdentifiableModel):
     interaction_style: str = Field(default="", description="Meta-preferences about questions, context, and follow-ups")
 
 
-class MemoryAnalysis(VSOBaseModel):
+class MemoryAnalysis(G8eBaseModel):
     investigation_summary: str = Field(default="", description="High-level summary of the conversation. No system names, hostnames, IPs, or sensitive identifiers. Use generic terms: 'a Linux system', 'their Docker setup'.")
     communication_preferences: str = Field(default="", description="How the user prefers to communicate: verbosity, tone, format.")
     technical_background: str = Field(default="", description="User's technical experience level and areas of expertise.")

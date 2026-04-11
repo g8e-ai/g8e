@@ -20,18 +20,18 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class BootstrapServiceProtocol(Protocol):
-    """Protocol for bootstrap services that load VSODB volume data."""
+    """Protocol for bootstrap services that load g8es volume data."""
 
     def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from VSODB volume."""
+        """Load internal auth token from g8es volume."""
         ...
 
     def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from VSODB volume."""
+        """Load session encryption key from g8es volume."""
         ...
 
     def load_ca_cert_path(self) -> str | None:
-        """Load CA certificate path from VSODB volume."""
+        """Load CA certificate path from g8es volume."""
         ...
 
     def is_available(self) -> bool:
@@ -40,13 +40,13 @@ class BootstrapServiceProtocol(Protocol):
 
 
 class BootstrapService:
-    """Service responsible for loading bootstrap data from VSODB volume.
+    """Service responsible for loading bootstrap data from g8es volume.
 
-    This service is ONLY responsible for loading values from the VSODB data volume.
+    This service is ONLY responsible for loading values from the g8es data volume.
     It does not perform any settings management or configuration logic.
     """
 
-    def __init__(self, volume_path: str = "/vsodb") -> None:
+    def __init__(self, volume_path: str = "/g8es") -> None:
         self._volume_path = Path(volume_path)
         self._logger = logging.getLogger(__name__)
         self._cached_token: str | None = None
@@ -54,7 +54,7 @@ class BootstrapService:
         self._cached_ca_path: str | None = None
 
     def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from VSODB volume."""
+        """Load internal auth token from g8es volume."""
         if self._cached_token is not None:
             return self._cached_token
 
@@ -62,17 +62,17 @@ class BootstrapService:
         try:
             if token_path.exists():
                 self._cached_token = token_path.read_text().strip()
-                self._logger.info("Loaded internal auth token from VSODB volume")
+                self._logger.info("Loaded internal auth token from g8es volume")
                 return self._cached_token
             else:
-                self._logger.info("Internal auth token not found in VSODB volume")
+                self._logger.info("Internal auth token not found in g8es volume")
                 return None
         except Exception as e:
             self._logger.warning(f"Failed to read internal auth token: {e}")
             return None
 
     def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from VSODB volume."""
+        """Load session encryption key from g8es volume."""
         if self._cached_key is not None:
             return self._cached_key
 
@@ -80,17 +80,17 @@ class BootstrapService:
         try:
             if key_path.exists():
                 self._cached_key = key_path.read_text().strip()
-                self._logger.info("Loaded session encryption key from VSODB volume")
+                self._logger.info("Loaded session encryption key from g8es volume")
                 return self._cached_key
             else:
-                self._logger.info("Session encryption key not found in VSODB volume")
+                self._logger.info("Session encryption key not found in g8es volume")
                 return None
         except Exception as e:
             self._logger.warning(f"Failed to read session encryption key: {e}")
             return None
 
     def load_ca_cert_path(self) -> str | None:
-        """Load CA certificate path from VSODB volume."""
+        """Load CA certificate path from g8es volume."""
         if self._cached_ca_path is not None:
             return self._cached_ca_path
 
@@ -104,12 +104,12 @@ class BootstrapService:
             try:
                 if ca_path.exists():
                     self._cached_ca_path = str(ca_path)
-                    self._logger.info(f"Loaded CA cert path from VSODB volume: {self._cached_ca_path}")
+                    self._logger.info(f"Loaded CA cert path from g8es volume: {self._cached_ca_path}")
                     return self._cached_ca_path
             except Exception as e:
                 self._logger.warning(f"Failed to read CA cert at {ca_path}: {e}")
 
-        self._logger.info("CA certificate not found in VSODB volume")
+        self._logger.info("CA certificate not found in g8es volume")
         return None
 
     def is_available(self) -> bool:

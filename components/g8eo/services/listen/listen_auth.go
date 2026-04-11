@@ -104,7 +104,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			// Allow VSOD to connect via WebSocket during bootstrap
+			// Allow g8ed to connect via WebSocket during bootstrap
 			if strings.HasPrefix(r.URL.Path, "/ws/") {
 				next.ServeHTTP(w, r)
 				return

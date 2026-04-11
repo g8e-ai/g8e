@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-PubSubClient — WebSocket-based Pub/Sub client for VSODB.
+PubSubClient — WebSocket-based Pub/Sub client for g8es.
 
 Talks to the Operator in --listen mode via WebSocket.
 Supports: subscribe, psubscribe, publish,
@@ -37,14 +37,14 @@ from app.constants import (
     PubSubField,
     PubSubWireEventType,
 )
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 
 logger = logging.getLogger(__name__)
 
 
 class PubSubClient:
     """
-    Async WebSocket client for VSODB pub/sub.
+    Async WebSocket client for g8es pub/sub.
     """
 
     def __init__(
@@ -269,7 +269,7 @@ class PubSubClient:
                 delay = min(delay * 2, max_delay)
 
     async def connect(self) -> bool:
-        """Verify connectivity to the VSODB pub/sub service."""
+        """Verify connectivity to the g8es pub/sub service."""
         try:
             await self._ensure_ws()
             return True
@@ -480,7 +480,7 @@ class PubSubClient:
         self,
         operator_id: str,
         operator_session_id: str,
-        command_data: VSOMessage
+        command_data: G8eMessage
     ) -> int:
         channel = PubSubChannel.cmd(operator_id, operator_session_id)
         
@@ -640,7 +640,7 @@ class PubSubClient:
         )
         
         try:
-            ping = VSOMessage(
+            ping = G8eMessage(
                 source_component=self.component_name,
                 event_type=EventType.OPERATOR_HEARTBEAT_REQUESTED,
                 operator_id=operator_id,

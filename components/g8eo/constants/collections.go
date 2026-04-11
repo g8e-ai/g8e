@@ -13,7 +13,7 @@
 
 package constants
 
-// CollectionName defines canonical collection names for VSODB.
+// CollectionName defines canonical collection names for g8es.
 type CollectionName string
 
 const (
@@ -37,7 +37,7 @@ const (
 	CollectionPasskeyChallenges CollectionName = "passkey_challenges"
 )
 
-// DocumentID defines canonical document IDs for VSODB.
+// DocumentID defines canonical document IDs for g8es.
 type DocumentID string
 
 const (

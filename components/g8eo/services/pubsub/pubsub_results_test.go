@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func requireLastPublished(t *testing.T, db *MockVSODBPubSubClient) []byte {
+func requireLastPublished(t *testing.T, db *MockG8esPubSubClient) []byte {
 	t.Helper()
 	published := db.LastPublished()
 	require.NotNil(t, published, "expected a message to be published")
@@ -38,7 +38,7 @@ func requireLastPublished(t *testing.T, db *MockVSODBPubSubClient) []byte {
 
 func TestNewPubSubResultsService(t *testing.T) {
 	t.Run("creates service", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -55,7 +55,7 @@ func TestNewPubSubResultsService(t *testing.T) {
 
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -101,7 +101,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 			"CRITICAL BUG: Result contains hostname instead of operator_id")
 
 		// CRITICAL: return_code must be an integer, not a pointer address string
-		var parsedMsg models.VSOMessage
+		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
 
 		var payload models.ExecutionResultsPayload
@@ -111,7 +111,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	})
 
 	t.Run("return_code type validation", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -139,7 +139,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 
 		receivedMsg := requireLastPublished(t, db)
 
-		var parsedMsg models.VSOMessage
+		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
 
 		var payload models.ExecutionResultsPayload
@@ -152,7 +152,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -190,7 +190,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	})
 
 	t.Run("failed file edit result", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -227,7 +227,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 	t.Run("successful heartbeat publish", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -251,7 +251,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 	})
 
 	t.Run("heartbeat with system info", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -291,7 +291,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 		}
 
 		// Simulate what would be published
-		envelope, err := models.NewVSOMessage(
+		envelope, err := models.NewG8eMessage(
 			result.ExecutionID, constants.Event.Operator.Command.Completed, result.CaseID,
 			"", "", "", result,
 		)
@@ -312,7 +312,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 			Status:      constants.ExecutionStatusCompleted,
 		}
 
-		envelope, err := models.NewVSOMessage(
+		envelope, err := models.NewG8eMessage(
 			result.ExecutionID, constants.Event.Operator.FileEdit.Completed, result.CaseID,
 			"", "", "", result,
 		)
@@ -326,7 +326,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResultWithTaskAndInvestigation(t *testing.T) {
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -364,7 +364,7 @@ func TestPubSubResultsService_PublishExecutionResultWithTaskAndInvestigation(t *
 }
 
 func TestPubSubResultsService_PublishExecutionResultFailed(t *testing.T) {
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -396,7 +396,7 @@ func TestPubSubResultsService_PublishExecutionResultFailed(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResultTimeout(t *testing.T) {
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -428,7 +428,7 @@ func TestPubSubResultsService_PublishExecutionResultTimeout(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFileEditResultWithBackup(t *testing.T) {
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -475,7 +475,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 	// - Output is ALWAYS transmitted in status updates (after sentinel.Sentinel scrubbing by caller)
 
 	t.Run("status update sets stored_locally flag when LFAA enabled", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -507,7 +507,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 
 		receivedMsg := requireLastPublished(t, db)
 
-		var parsedMsg models.VSOMessage
+		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
 
 		var payload models.ExecutionStatusPayload
@@ -522,7 +522,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 	})
 
 	t.Run("status update includes output without stored_locally when LFAA disabled", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -547,7 +547,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 
 		receivedMsg := requireLastPublished(t, db)
 
-		var parsedMsg models.VSOMessage
+		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
 
 		var payload models.ExecutionStatusPayload
@@ -560,7 +560,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 
 func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	t.Run("successful fs list publish", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -605,7 +605,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	})
 
 	t.Run("failed fs list result", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -640,7 +640,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	})
 
 	t.Run("truncated fs list result", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -674,7 +674,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishResult(t *testing.T) {
 	t.Run("publishes generic result", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -686,7 +686,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 			CustomField string `json:"custom_field"`
 			Count       int    `json:"count"`
 		}
-		result, err := models.NewVSOMessage(
+		result, err := models.NewG8eMessage(
 			"test-id-1", "custom.event.type", "test-case",
 			cfg.OperatorID, cfg.OperatorSessionId, "",
 			customPayload{CustomField: "custom_value", Count: 42},
@@ -702,7 +702,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 	})
 
 	t.Run("publishes result with complex payload", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -717,7 +717,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 			Nested map[string]interface{} `json:"nested"`
 			Array  []string               `json:"array"`
 		}
-		result, err := models.NewVSOMessage(
+		result, err := models.NewG8eMessage(
 			"test-id-2", "nested.event", "test-case",
 			"test-operator-complex", "test-session-complex", "",
 			nestedPayload{
@@ -732,7 +732,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 	})
 
 	t.Run("auto-populates missing fields", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -740,7 +740,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		result, err := models.NewVSOMessage(
+		result, err := models.NewG8eMessage(
 			"", "test.auto.populate", "test-case",
 			"", "", "",
 			struct{}{},
@@ -759,7 +759,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 	t.Run("publishes cancellation result", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -796,7 +796,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 	})
 
 	t.Run("publishes cancellation with task and investigation IDs", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -836,7 +836,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 
 func TestResultMessage_APIKeyPropagation(t *testing.T) {
 	t.Run("execution result carries api_key from config", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -866,14 +866,14 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		published := db.LastPublished()
 		require.NotNil(t, published, "must have published a message")
 
-		var msg models.VSOMessage
+		var msg models.G8eMessage
 		require.NoError(t, json.Unmarshal(published.Data, &msg))
 		assert.Equal(t, "g8e_test_key_abc123", msg.APIKey,
 			"ResultMessage must carry api_key from config")
 	})
 
 	t.Run("cancellation result carries api_key from config", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -901,14 +901,14 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		published := db.LastPublished()
 		require.NotNil(t, published)
 
-		var msg models.VSOMessage
+		var msg models.G8eMessage
 		require.NoError(t, json.Unmarshal(published.Data, &msg))
 		assert.Equal(t, "g8e_cancel_key", msg.APIKey,
 			"Cancellation ResultMessage must carry api_key from config")
 	})
 
 	t.Run("empty api_key is omitted from json", func(t *testing.T) {
-		msg := &models.VSOMessage{
+		msg := &models.G8eMessage{
 			ID:        "msg-no-key",
 			EventType: "test.event",
 		}
@@ -919,7 +919,7 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 	})
 
 	t.Run("non-empty api_key is present in json", func(t *testing.T) {
-		msg := &models.VSOMessage{
+		msg := &models.G8eMessage{
 			ID:        "msg-with-key",
 			EventType: "test.event",
 			APIKey:    "g8e_present_key",
@@ -946,7 +946,7 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 
 	for _, tt := range tests {
 		t.Run(string(tt.status), func(t *testing.T) {
-			db := NewMockVSODBPubSubClient()
+			db := NewMockG8esPubSubClient()
 			defer db.Close()
 
 			cfg := testutil.NewTestConfig(t)
@@ -968,7 +968,7 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 			published := db.LastPublished()
 			require.NotNil(t, published, "must have published a message for status %s", tt.status)
 
-			var msg models.VSOMessage
+			var msg models.G8eMessage
 			require.NoError(t, json.Unmarshal(published.Data, &msg))
 			assert.Equal(t, tt.expectedEvent, msg.EventType,
 				"execution status %q must emit event type %q on the wire", tt.status, tt.expectedEvent)
@@ -978,7 +978,7 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 
 func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 	t.Run("heartbeat carries api_key from config via buildHeartbeat", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -1007,7 +1007,7 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 	})
 
 	t.Run("heartbeat api_key appears in published json", func(t *testing.T) {
-		db := NewMockVSODBPubSubClient()
+		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)

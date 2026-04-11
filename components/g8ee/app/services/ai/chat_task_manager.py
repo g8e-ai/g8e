@@ -17,10 +17,10 @@ import asyncio
 import logging
 
 from app.constants import EventType
-from app.models.vsod_client import AiProcessingStoppedPayload
+from app.models.g8ed_client import AiProcessingStoppedPayload
 from app.utils.timestamp import now
 from app.models.events import SessionEvent
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +71,13 @@ class ChatTaskManager:
         web_session_id: str,
         user_id: str,
         case_id: str,
-        vsod_event_service: EventService,
+        g8ed_event_service: EventService,
     ) -> bool:
         """Cancel active AI processing for an investigation.
 
         Returns True if a task was cancelled, False if no active task existed.
-        Publishes AI_PROCESSING_STOPPED via vsod_event_service when both
-        web_session_id and vsod_event_service are provided.
+        Publishes AI_PROCESSING_STOPPED via g8ed_event_service when both
+        web_session_id and g8ed_event_service are provided.
         """
         async with self._task_lock:
             task = self._active_tasks.get(investigation_id)
@@ -96,9 +96,9 @@ class ChatTaskManager:
                 extra={"investigation_id": investigation_id, "reason": reason},
             )
 
-        if web_session_id and case_id and vsod_event_service:
+        if web_session_id and case_id and g8ed_event_service:
             try:
-                await vsod_event_service.publish(
+                await g8ed_event_service.publish(
                     SessionEvent(
                         event_type=EventType.LLM_CHAT_ITERATION_STOPPED,
                         payload=AiProcessingStoppedPayload(
@@ -113,9 +113,9 @@ class ChatTaskManager:
                 )
             except Exception as e:
                 logger.warning("Failed to send stop event: %s", e)
-        elif not vsod_event_service:
+        elif not g8ed_event_service:
             logger.warning(
-                "Cannot send ai.processing_stopped event - no vsod_event_service provided",
+                "Cannot send ai.processing_stopped event - no g8ed_event_service provided",
                 extra={"investigation_id": investigation_id},
             )
         elif not web_session_id:

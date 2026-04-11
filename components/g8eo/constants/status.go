@@ -100,7 +100,7 @@ type versionStabilityValues struct {
 type componentNameValues struct {
 	G8EE string
 	G8EO string
-	VSOD string
+	G8ED string
 }
 
 // platformValues mirrors shared/constants/status.json platform.
@@ -132,7 +132,7 @@ type aiTaskIDValues struct {
 	FetchFileDiff    string
 }
 
-// listenModeValues holds HTTP response constants for the VSODB listen-mode HTTP API.
+// listenModeValues holds HTTP response constants for the g8es listen-mode HTTP API.
 type listenModeValues struct {
 	StatusOK string
 	Mode     string
@@ -196,7 +196,7 @@ var Status = statusValues{
 	ComponentName: componentNameValues{
 		G8EE: "g8ee",
 		G8EO: "g8eo",
-		VSOD: "vsod",
+		G8ED: "g8ed",
 	},
 	Platform: platformValues{
 		Linux:   "linux",

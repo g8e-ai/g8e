@@ -35,7 +35,7 @@ var configCounter atomic.Int64
 //
 // Each call produces a unique OperatorID and OperatorSessionId derived from the
 // test name and a process-local counter.  This guarantees that every test gets
-// its own VSODB pub/sub channels and no cross-test message bleed can occur.
+// its own g8es pub/sub channels and no cross-test message bleed can occur.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
 
@@ -57,7 +57,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		AuthMode:           constants.Status.AuthMode.APIKey,
 		OperatorID:         operatorID,
 		OperatorSessionId:  operatorSessionID,
-		PubSubURL:          GetTestVSODBDirectURL(),
+		PubSubURL:          GetTestG8esDirectURL(),
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  30 * time.Second,
@@ -85,11 +85,11 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// GetTestVSODBDirectURL returns the VSOD WebSocket gateway base URL for g8eo pub/sub tests.
-// g8eo connects to pub/sub via VSOD (the single external entry point) at port 443; VSOD
-// proxies /ws/pubsub to VSODB internally. VSODB is not directly accessible from outside
+// GetTestG8esDirectURL returns the g8ed WebSocket gateway base URL for g8eo pub/sub tests.
+// g8eo connects to pub/sub via g8ed (the single external entry point) at port 443; g8ed
+// proxies /ws/pubsub to g8es internally. g8es is not directly accessible from outside
 // the docker network. Must not include a path — callers append /ws/pubsub as needed.
-func GetTestVSODBDirectURL() string {
+func GetTestG8esDirectURL() string {
 	if u := os.Getenv(string(constants.EnvVar.OperatorPubSubURL)); u != "" {
 		return u
 	}

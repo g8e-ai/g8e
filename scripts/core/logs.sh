@@ -21,14 +21,14 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/../../docker-compose.yml"
 
-CORE_SERVICES="vsodb g8ee vsod g8ep"
-ALL_SERVICES="vsodb g8ee vsod g8ep"
+CORE_SERVICES="g8es g8ee g8ed g8ep"
+ALL_SERVICES="g8es g8ee g8ed g8ep"
 
 usage() {
     echo "Usage: ./g8e platform logs [options] [service...]"
     echo ""
     echo "Search and display platform logs across all components in time order."
-    echo "Default: last 200 lines from core services (vsodb, g8ee, vsod), no follow."
+    echo "Default: last 200 lines from core services (g8es, g8ee, g8ed), no follow."
     echo ""
     echo "Filter options:"
     echo "  -g, --grep <pattern>    Include lines matching pattern (grep -Ei, case-insensitive)"
@@ -42,7 +42,7 @@ usage() {
     echo "  --all                   Include g8ep/operator (default: core only)"
     echo ""
     echo "Services (optional, space-separated, overrides defaults):"
-    echo "  vsodb  g8ee  vsod  g8ep"
+    echo "  g8es  g8ee  g8ed  g8ep"
     echo ""
     echo "Examples:"
     echo "  ./g8e platform logs                          # last 200 lines, all core services"
@@ -52,7 +52,7 @@ usage() {
     echo "  ./g8e platform logs --since 5m               # last 5 minutes"
     echo "  ./g8e platform logs --since 1h --level error # errors in last hour"
     echo "  ./g8e platform logs --invert 'cache (HIT|MISS)|healthcheck'"
-    echo "  ./g8e platform logs g8ee vsod --tail 50"
+    echo "  ./g8e platform logs g8ee g8ed --tail 50"
     echo "  ./g8e platform logs g8ep              # operator process output (via supervisord)"
     exit 0
 }
@@ -84,7 +84,7 @@ while [[ $# -gt 0 ]]; do
                 *) echo "[g8e] unknown level: '$2' (valid: error, warn, info, debug)" >&2; exit 1 ;;
             esac
             shift 2 ;;
-        vsodb|g8ee|vsod|g8ep) SERVICES+=("$1"); shift ;;
+        g8es|g8ee|g8ed|g8ep) SERVICES+=("$1"); shift ;;
         *) echo "[g8e] unknown logs option: '$1'" >&2; exit 1 ;;
     esac
 done

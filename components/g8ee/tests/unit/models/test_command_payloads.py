@@ -19,11 +19,11 @@ Covers FsListPayload and FsReadPayload:
 - flatten_for_wire() produces only canonical wire fields
 - flatten_for_wire() excludes None-valued optional fields
 - Pydantic rejects invalid types
-- Model is a VSOBaseModel subclass
+- Model is a G8eBaseModel subclass
 """
 
 import pytest
-from app.models.base import ValidationError, VSOBaseModel
+from app.models.base import ValidationError, G8eBaseModel
 from app.models.command_payloads import FetchLogsPayload, FsListPayload, FsReadPayload
 
 pytestmark = [pytest.mark.unit]
@@ -50,8 +50,8 @@ class TestFsListPayload:
         assert p.max_depth is None
         assert p.max_entries is None
 
-    def test_is_vso_base_model(self):
-        assert issubclass(FsListPayload, VSOBaseModel)
+    def test_is_g8e_base_model(self):
+        assert issubclass(FsListPayload, G8eBaseModel)
 
     def test_flatten_for_wire_includes_set_fields(self):
         p = FsListPayload(path="/app", execution_id="exec-1", max_depth=1, max_entries=50)
@@ -110,8 +110,8 @@ class TestFsReadPayload:
         assert p.execution_id is None
         assert p.max_size is None
 
-    def test_is_vso_base_model(self):
-        assert issubclass(FsReadPayload, VSOBaseModel)
+    def test_is_g8e_base_model(self):
+        assert issubclass(FsReadPayload, G8eBaseModel)
 
     def test_flatten_for_wire_includes_set_fields(self):
         p = FsReadPayload(path="/etc/passwd", execution_id="exec-2", max_size=4096)
@@ -165,8 +165,8 @@ class TestFetchLogsPayload:
         p = FetchLogsPayload(execution_id="exec-abc")
         assert p.sentinel_mode is None
 
-    def test_is_vso_base_model(self):
-        assert issubclass(FetchLogsPayload, VSOBaseModel)
+    def test_is_g8e_base_model(self):
+        assert issubclass(FetchLogsPayload, G8eBaseModel)
 
     def test_flatten_for_wire_includes_set_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="raw")

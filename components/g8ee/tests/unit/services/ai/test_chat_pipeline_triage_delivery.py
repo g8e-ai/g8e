@@ -37,7 +37,7 @@ from app.models.agent import AgentStreamContext
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_enriched_context,
 )
 from tests.fakes.fake_event_service import FakeEventService as create_mock_event_service
@@ -63,7 +63,7 @@ LOW_CONFIDENCE_TRIAGE_RESULT = TriageResult(
 
 def _make_pipeline() -> ChatPipelineService:
     svc = ChatPipelineService.__new__(ChatPipelineService)
-    svc.vsod_event_service = create_mock_event_service()
+    svc.g8ed_event_service = create_mock_event_service()
     svc.g8e_agent = MagicMock()
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
@@ -76,13 +76,13 @@ def _make_pipeline() -> ChatPipelineService:
 
 def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
     inv = build_enriched_context(investigation_id="inv-1")
-    vso_ctx = build_vso_http_context(user_id="user-1")
+    g8e_ctx = build_g8e_http_context(user_id="user-1")
     from app.models.settings import G8eeUserSettings, LLMSettings
     request_settings = G8eeUserSettings(llm=LLMSettings())
     
     streaming = AgentStreamContext(
         investigation=inv,
-        vso_context=vso_ctx,
+        g8e_context=g8e_ctx,
         request_settings=request_settings,
         case_id="case-1",
         investigation_id="inv-1",
@@ -93,7 +93,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
     
     agent_ctx = AgentStreamContext(
         investigation=inv,
-        vso_context=vso_ctx,
+        g8e_context=g8e_ctx,
         request_settings=request_settings,
         case_id="case-1",
         investigation_id="inv-1",
@@ -104,7 +104,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
     
     return AgentStreamContext(
         investigation=inv,
-        vso_context=vso_ctx,
+        g8e_context=g8e_ctx,
         request_settings=request_settings,
         agent_mode=AgentMode.OPERATOR_NOT_BOUND,
         operator_bound=False,
@@ -130,7 +130,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
 
 async def test_run_chat_impl_short_circuits_correctly():
     svc = _make_pipeline()
-    vso_ctx = build_vso_http_context(investigation_id="inv-1", web_session_id="web-1")
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
     ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     
     # Mock _prepare_chat_context to return our prepared context
@@ -139,7 +139,7 @@ async def test_run_chat_impl_short_circuits_correctly():
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
         await svc._run_chat_impl(
             message="hello",
-            vso_context=vso_ctx,
+            g8e_context=g8e_ctx,
             attachments=[],
             sentinel_mode=True,
             llm_primary_model="main-model",
@@ -149,7 +149,7 @@ async def test_run_chat_impl_short_circuits_correctly():
     
     # 1. Verify event publishing
     # We use our FakeEventService which records events
-    events = svc.vsod_event_service.published
+    events = svc.g8ed_event_service.published
     
     # Filter for our investigation and event types
     chunk_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
@@ -159,7 +159,7 @@ async def test_run_chat_impl_short_circuits_correctly():
     assert len(complete_events) == 1
     
     # Verify Chunk Payload
-    from app.models.vsod_client import ChatResponseChunkPayload, ChatResponseCompletePayload
+    from app.models.g8ed_client import ChatResponseChunkPayload, ChatResponseCompletePayload
     assert isinstance(chunk_events[0].payload, ChatResponseChunkPayload)
     assert chunk_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     

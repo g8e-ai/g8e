@@ -166,7 +166,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 }
 
 func (hs *HistoryService) publishFetchLogsPayload(ctx context.Context, msg PubSubCommandMessage, payload models.FetchLogsResultPayload) {
-	resultMsg, err := models.NewVSOMessage(
+	resultMsg, err := models.NewG8eMessage(
 		msg.ID, constants.Event.Operator.FetchLogs.Completed, msg.CaseID,
 		hs.config.OperatorID, hs.config.OperatorSessionId, hs.config.SystemFingerprint, payload,
 	)
@@ -198,7 +198,7 @@ func (hs *HistoryService) publishFetchLogsError(ctx context.Context, msg PubSubC
 		OperatorSessionID: hs.config.OperatorSessionId,
 	}
 
-	resultMsg, err := models.NewVSOMessage(
+	resultMsg, err := models.NewG8eMessage(
 		msg.ID, constants.Event.Operator.FetchLogs.Failed, msg.CaseID,
 		hs.config.OperatorID, hs.config.OperatorSessionId, hs.config.SystemFingerprint, payload,
 	)

@@ -29,7 +29,7 @@ import (
 
 // ListenDBService provides the unified SQLite persistence layer for listen mode.
 // Three subsystems:
-//   - Document store: collection/id based CRUD (replaces VSOD+g8ee separate SQLite DBs)
+//   - Document store: collection/id based CRUD (replaces g8ed+g8ee separate SQLite DBs)
 //   - KV store with TTL: key/value with optional expiration
 //   - SSE event buffer: per-session event ring buffer
 type ListenDBService struct {

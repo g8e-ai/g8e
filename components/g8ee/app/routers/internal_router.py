@@ -14,7 +14,7 @@
 """
 Internal API Router for g8ee
 
-Cluster-internal HTTP endpoints for direct communication from other VSO components.
+Cluster-internal HTTP endpoints for direct communication from other g8e components.
 NOT exposed via Ingress - only accessible from pods within the Kubernetes cluster.
 
 Note: g8eo Operator commands still use PubSub (external agent communication).
@@ -77,7 +77,7 @@ from ..dependencies import (
     get_g8ee_heartbeat_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
-    get_vso_http_context,
+    get_g8e_http_context,
     get_g8ee_user_settings,
 )
 from ..services.ai.chat_pipeline import ChatPipelineService
@@ -86,8 +86,8 @@ from ..services.cache.cache_aside import CacheAsideService
 from ..services.data.attachment_store_service import AttachmentService
 from ..services.data.case_data_service import CaseDataService
 from ..services.investigation.investigation_service import InvestigationService
-from ..services.infra.vsod_event_service import EventService
-from ..models.http_context import VSOHttpContext
+from ..services.infra.g8ed_event_service import EventService
+from ..models.http_context import G8eHttpContext
 from ..services.operator.approval_service import OperatorApprovalService
 from ..services.operator.command_service import OperatorCommandService
 from ..services.operator.heartbeat_service import OperatorHeartbeatService
@@ -112,7 +112,7 @@ async def internal_chat(
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     attachment_service: AttachmentService = Depends(get_g8ee_attachment_service),
     event_service: EventService = Depends(get_g8ee_event_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     """
     Non-streaming chat endpoint — default path for browser sessions.
@@ -126,22 +126,22 @@ async def internal_chat(
     logger.info(
         "[INTERNAL-HTTP] Non-streaming chat request received",
         extra={
-            "case_id": vso_context.case_id,
-            "investigation_id": vso_context.investigation_id,
-            "new_case": vso_context.new_case,
-            "web_session_id": vso_context.web_session_id[:8] + "...",
+            "case_id": g8e_context.case_id,
+            "investigation_id": g8e_context.investigation_id,
+            "new_case": g8e_context.new_case,
+            "web_session_id": g8e_context.web_session_id[:8] + "...",
             "message_length": len(request.message),
         }
     )
 
-    if vso_context.new_case:
+    if g8e_context.new_case:
         case_create_data = CaseCreateRequest(
             initial_message=request.message,
             attachments=request.attachments or [],
             sentinel_mode=request.sentinel_mode,
-            user_id=vso_context.user_id,
-            web_session_id=vso_context.web_session_id,
-            organization_id=vso_context.organization_id,
+            user_id=g8e_context.user_id,
+            web_session_id=g8e_context.web_session_id,
+            organization_id=g8e_context.organization_id,
         )
         case = await case_service.create_case(case_create_data, generated_title=None)
 
@@ -149,7 +149,7 @@ async def internal_chat(
             case_id=case.id,
             case_title=case.title,
             case_description=case.description,
-            web_session_id=vso_context.web_session_id,
+            web_session_id=g8e_context.web_session_id,
             priority=Priority(case.priority) if isinstance(case.priority, str) else case.priority,
             user_email=case.user_email,
             user_id=case.user_id,
@@ -159,7 +159,7 @@ async def internal_chat(
         )
         investigation = await investigation_service.create_investigation(investigation_request)
 
-        vso_context = vso_context.model_copy(update={
+        g8e_context = g8e_context.model_copy(update={
             "case_id": case.id,
             "investigation_id": investigation.id,
         })
@@ -190,8 +190,8 @@ async def internal_chat(
 
             asyncio.create_task(
                 _generate_and_push_title(
-                    vso_context.case_id, vso_context.investigation_id,
-                    request.message, vso_context.web_session_id, user_settings,
+                    g8e_context.case_id, g8e_context.investigation_id,
+                    request.message, g8e_context.web_session_id, user_settings,
                 )
             )
 
@@ -200,21 +200,21 @@ async def internal_chat(
                 SessionEvent(
                     event_type=EventType.CASE_CREATED,
                     payload=CaseCreatedPayload(title=case.title),
-                    web_session_id=vso_context.web_session_id,
-                    user_id=vso_context.user_id,
-                    case_id=vso_context.case_id,
-                    investigation_id=vso_context.investigation_id,
+                    web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    case_id=g8e_context.case_id,
+                    investigation_id=g8e_context.investigation_id,
                 )
             )
         except Exception as sse_err:
             logger.warning(
                 "[INTERNAL-HTTP] Failed to publish g8e.v1.app.case.created SSE — case created successfully, continuing",
-                extra={"case_id": vso_context.case_id, "error": str(sse_err)},
+                extra={"case_id": g8e_context.case_id, "error": str(sse_err)},
             )
 
         logger.info(
             "[INTERNAL-HTTP] New conversation created inline",
-            extra={"case_id": vso_context.case_id, "investigation_id": vso_context.investigation_id}
+            extra={"case_id": g8e_context.case_id, "investigation_id": g8e_context.investigation_id}
         )
 
     resolved_attachments = []
@@ -228,21 +228,21 @@ async def internal_chat(
             logger.error(f"[INTERNAL-HTTP] Failed to retrieve attachments: {att_err}")
 
     # Validate investigation_id exists before proceeding (allow NEW_CASE_ID for new cases)
-    if not vso_context.investigation_id or vso_context.investigation_id == "unknown":
+    if not g8e_context.investigation_id or g8e_context.investigation_id == "unknown":
         logger.error(
             "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing or unknown",
-            extra={"case_id": vso_context.case_id, "web_session_id": vso_context.web_session_id[:8] + "..."}
+            extra={"case_id": g8e_context.case_id, "web_session_id": g8e_context.web_session_id[:8] + "..."}
         )
         return ChatStartedResponse(
             success=False,
-            case_id=vso_context.case_id,
-            investigation_id=vso_context.investigation_id,
+            case_id=g8e_context.case_id,
+            investigation_id=g8e_context.investigation_id,
         )
 
     asyncio.create_task(
         chat_pipeline.run_chat(
             message=request.message,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             attachments=resolved_attachments,
             sentinel_mode=request.sentinel_mode,
             llm_primary_model=request.llm_primary_model,
@@ -254,22 +254,22 @@ async def internal_chat(
 
     return ChatStartedResponse(
         success=True,
-        case_id=vso_context.case_id,
-        investigation_id=vso_context.investigation_id,
+        case_id=g8e_context.case_id,
+        investigation_id=g8e_context.investigation_id,
     )
 
 
 @router.post(API_PATHS["g8ee"]["chat_stop"], response_model=StopAIResponse)
 async def stop_ai_processing(
     request: StopAIRequest,
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     chat_task_manager: ChatTaskManager = Depends(get_g8ee_chat_task_manager),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
 ):
     """
     Stop active AI processing for an investigation - internal cluster use only.
 
-    Called by VSOD when user clicks the stop button in the UI.
+    Called by g8ed when user clicks the stop button in the UI.
     Gracefully cancels the asyncio task processing the AI response.
     """
     investigation_id = request.investigation_id
@@ -281,7 +281,7 @@ async def stop_ai_processing(
         extra={
             "investigation_id": investigation_id,
             "reason": reason,
-            "user_id": vso_context.user_id
+            "user_id": g8e_context.user_id
         }
     )
 
@@ -289,9 +289,9 @@ async def stop_ai_processing(
         investigation_id=investigation_id,
         reason=reason,
         web_session_id=web_session_id,
-        user_id=vso_context.user_id,
-        case_id=vso_context.case_id,
-        vsod_event_service=chat_pipeline.vsod_event_service,
+        user_id=g8e_context.user_id,
+        case_id=g8e_context.case_id,
+        g8ed_event_service=chat_pipeline.g8ed_event_service,
     )
 
     if cancelled:
@@ -318,28 +318,28 @@ async def stop_ai_processing(
 @router.post(API_PATHS["g8ee"]["operator_approval_respond"], response_model=ApprovalRespondedResponse)
 async def operator_approval_respond(
     request: OperatorApprovalResponse,
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     approval_service: OperatorApprovalService = Depends(get_g8ee_approval_service),
 ):
     """
-    Handle Operator command approval response from VSOD.
-    Called directly by VSOD via HTTP when user approves/denies a command.
+    Handle Operator command approval response from g8ed.
+    Called directly by g8ed via HTTP when user approves/denies a command.
     """
-    bound_op = vso_context.bound_operators[0] if vso_context.bound_operators else None
+    bound_op = g8e_context.bound_operators[0] if g8e_context.bound_operators else None
     request.operator_session_id = bound_op.operator_session_id or "" if bound_op else ""
     request.operator_id = bound_op.operator_id if bound_op else ""
 
     logger.info(
-        "[INTERNAL-HTTP] Received approval response from VSOD",
+        "[INTERNAL-HTTP] Received approval response from g8ed",
         extra={
             "approval_id": request.approval_id,
             "approved": request.approved,
-            "case_id": vso_context.case_id,
-            "investigation_id": vso_context.investigation_id,
-            "web_session_id": vso_context.web_session_id[:12] + "..." if vso_context.web_session_id else None,
-            "bound_operators_count": len(vso_context.bound_operators),
+            "case_id": g8e_context.case_id,
+            "investigation_id": g8e_context.investigation_id,
+            "web_session_id": g8e_context.web_session_id[:12] + "..." if g8e_context.web_session_id else None,
+            "bound_operators_count": len(g8e_context.bound_operators),
             "operator_id": request.operator_id,
-            "user_id": vso_context.user_id,
+            "user_id": g8e_context.user_id,
         }
     )
 
@@ -381,40 +381,40 @@ async def get_pending_approvals(
 @router.post(API_PATHS["g8ee"]["operator_direct_command"], response_model=DirectCommandSentResponse)
 async def execute_direct_command(
     request: DirectCommandRequest,
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     operator_data_service: OperatorCommandService = Depends(get_g8ee_operator_command_service),
 ):
     logger.info(
         "[INTERNAL-HTTP] Direct command request received",
         extra={
             "command": request.command[:100] if len(request.command) > 100 else request.command,
-            "execution_id": vso_context.execution_id,
-            "web_session_id": vso_context.web_session_id[:12] + "...",
-            "source": vso_context.source_component,
-            "has_case_id": vso_context.case_id is not None,
-            "has_investigation_id": vso_context.investigation_id is not None,
+            "execution_id": g8e_context.execution_id,
+            "web_session_id": g8e_context.web_session_id[:12] + "...",
+            "source": g8e_context.source_component,
+            "has_case_id": g8e_context.case_id is not None,
+            "has_investigation_id": g8e_context.investigation_id is not None,
         }
     )
 
     await operator_data_service.send_command_to_operator(
         command_payload=request,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
     )
 
     await operator_data_service.send_direct_exec_audit_event(
         command=request.command,
-        execution_id=vso_context.execution_id,
-        vso_context=vso_context,
+        execution_id=g8e_context.execution_id,
+        g8e_context=g8e_context,
     )
 
     logger.info(
         "[INTERNAL-HTTP] Direct command sent to operator",
-        extra={"execution_id": vso_context.execution_id}
+        extra={"execution_id": g8e_context.execution_id}
     )
 
     return DirectCommandSentResponse(
         success=True,
-        execution_id=vso_context.execution_id,
+        execution_id=g8e_context.execution_id,
     )
 
 
@@ -422,7 +422,7 @@ async def execute_direct_command(
 async def get_case(
     case_id: str,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     """Get a case by ID - internal cluster use only."""
     case = await case_service.get_case(case_id)
@@ -434,14 +434,14 @@ async def update_case(
     case_id: str,
     updates: CaseUpdateRequest,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     """Update a case - internal cluster use only."""
     case = await case_service.update_case(case_id, updates)
-    if vso_context.web_session_id:
+    if g8e_context.web_session_id:
         await case_service.publish_case_update_sse(
             case_id=case_id,
-            web_session_id=vso_context.web_session_id,
+            web_session_id=g8e_context.web_session_id,
             payload=CaseEventPayload(
                 updated_at=case.updated_at,
                 title=case.title,
@@ -459,7 +459,7 @@ async def delete_case(
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     cache_aside_service: CacheAsideService = Depends(get_g8ee_cache_aside_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     """
     Delete a case and all related data - internal cluster use only.
@@ -543,14 +543,14 @@ async def delete_case(
 async def register_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
     Subscribe g8ee to the heartbeat pub/sub channel for an operator session.
 
-    Called by VSOD immediately after operator authentication succeeds so g8ee
+    Called by g8ed immediately after operator authentication succeeds so g8ee
     is listening before the first heartbeat arrives.
-    SECURITY: Internal only - VSOD component.
+    SECURITY: Internal only - g8ed component.
     """
     await heartbeat_service.register_operator_session(
         operator_id=request.operator_id,
@@ -576,13 +576,13 @@ async def register_operator_session(
 async def deregister_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
     Unsubscribe g8ee from the heartbeat pub/sub channel for an operator session.
 
-    Called by VSOD when an operator goes offline, is stopped, or is terminated.
-    SECURITY: Internal only - VSOD component.
+    Called by g8ed when an operator goes offline, is stopped, or is terminated.
+    SECURITY: Internal only - g8ed component.
     """
     await heartbeat_service.deregister_operator_session(
         operator_id=request.operator_id,
@@ -607,11 +607,11 @@ async def deregister_operator_session(
 @router.post(API_PATHS["g8ee"]["operators_stop"], response_model=OperatorStoppedResponse)
 async def stop_operator(
     request: StopOperatorRequest,
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service)
 ):
     """
-    Stop an Operator by sending shutdown command via VSODB pub/sub.
+    Stop an Operator by sending shutdown command via g8es pub/sub.
     The Operator will receive the shutdown command and exit.
     """
     operator_id = request.operator_id
@@ -624,8 +624,8 @@ async def stop_operator(
             "operator_id": operator_id,
             "operator_session_id": operator_session_id,
             "user_id": user_id,
-            "web_session_id": vso_context.web_session_id[:12] + "..." if vso_context.web_session_id else None,
-            "validated_user": vso_context.user_id
+            "web_session_id": g8e_context.web_session_id[:12] + "..." if g8e_context.web_session_id else None,
+            "validated_user": g8e_context.user_id
         }
     )
 
@@ -664,18 +664,18 @@ async def stop_operator(
 async def query_investigations(
     request: Request,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     logger.info(
-        "[INTERNAL-HTTP] Investigation query via VSOHttpContext",
-        extra={"user_id": vso_context.user_id, "source": vso_context.source_component}
+        "[INTERNAL-HTTP] Investigation query via G8eHttpContext",
+        extra={"user_id": g8e_context.user_id, "source": g8e_context.source_component}
     )
 
     query_request = InvestigationQueryRequest(
         case_id=request.query_params.get("case_id"),
         task_id=request.query_params.get("task_id"),
         web_session_id=request.query_params.get("web_session_id"),
-        user_id=vso_context.user_id,
+        user_id=g8e_context.user_id,
         status=request.query_params.get("status"),
         priority=request.query_params.get("priority"),
         limit=int(request.query_params.get("limit", 20)),
@@ -691,15 +691,15 @@ async def query_investigations(
 async def get_investigation(
     investigation_id: str,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-    vso_context: VSOHttpContext = Depends(get_vso_http_context)
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context)
 ):
     """Get investigation by ID - internal cluster use only.
     
     SECURITY: Validates that the authenticated user owns the investigation.
     """
     logger.info(
-        "[INTERNAL-HTTP] Get investigation via VSOHttpContext",
-        extra={"user_id": vso_context.user_id, "investigation_id": investigation_id}
+        "[INTERNAL-HTTP] Get investigation via G8eHttpContext",
+        extra={"user_id": g8e_context.user_id, "investigation_id": investigation_id}
     )
 
     investigation = await investigation_service.get_investigation(investigation_id)
@@ -711,11 +711,11 @@ async def get_investigation(
             component="g8ee"
         )
 
-    if investigation.user_id != vso_context.user_id:
+    if investigation.user_id != g8e_context.user_id:
         logger.warning(
             "AUTHORIZATION VIOLATION: User attempted to access another user's investigation",
             extra={
-                "authenticated_user_id": vso_context.user_id,
+                "authenticated_user_id": g8e_context.user_id,
                 "investigation_owner": investigation.user_id,
                 "investigation_id": investigation_id
             }
@@ -732,17 +732,17 @@ async def get_investigation(
 
 @router.post(API_PATHS["g8ee"]["mcp_tools_list"], response_model=MCPToolListResponse)
 async def mcp_tools_list(
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     mcp_service: MCPGatewayService = Depends(get_g8ee_mcp_gateway_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
 ):
-    agent_mode = AgentMode.OPERATOR_BOUND if any(op.status == OperatorStatus.BOUND for op in vso_context.bound_operators) else AgentMode.OPERATOR_NOT_BOUND
+    agent_mode = AgentMode.OPERATOR_BOUND if any(op.status == OperatorStatus.BOUND for op in g8e_context.bound_operators) else AgentMode.OPERATOR_NOT_BOUND
 
     logger.info(
         "[INTERNAL-HTTP] MCP tools/list request",
         extra={
             "agent_mode": agent_mode.value,
-            "bound_operators": len(vso_context.bound_operators) if vso_context.bound_operators else 0,
+            "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
         }
     )
 
@@ -753,7 +753,7 @@ async def mcp_tools_list(
 @router.post(API_PATHS["g8ee"]["mcp_tools_call"], response_model=MCPToolCallResponse)
 async def mcp_tools_call(
     request: MCPToolCallRequest,
-    vso_context: VSOHttpContext = Depends(get_vso_http_context),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     mcp_service: MCPGatewayService = Depends(get_g8ee_mcp_gateway_service),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
 ):
@@ -762,7 +762,7 @@ async def mcp_tools_call(
         extra={
             "tool_name": request.tool_name,
             "request_id": request.request_id,
-            "bound_operators": len(vso_context.bound_operators) if vso_context.bound_operators else 0,
+            "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
         }
     )
 
@@ -770,7 +770,7 @@ async def mcp_tools_call(
         result = await mcp_service.call_tool(
             tool_name=request.tool_name,
             arguments=request.arguments,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             user_settings=user_settings,
             sentinel_mode=request.sentinel_mode,
         )

@@ -41,10 +41,10 @@ from app.constants.settings import (
 )
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_payloads import CheckPortArgs
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, VSOMessage
+from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, G8eMessage
 from app.models.tool_results import PortCheckToolResult
 from app.utils.timestamp import now, to_timestamp
 
@@ -68,13 +68,13 @@ class OperatorPortService:
         self,
         args: CheckPortArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> PortCheckToolResult:
         logger.info("[PORT_CHECK] Starting port check operation")
 
-        case_id = vso_context.case_id
-        user_id = vso_context.user_id
-        web_session_id = vso_context.web_session_id
+        case_id = g8e_context.case_id
+        user_id = g8e_context.user_id
+        web_session_id = g8e_context.web_session_id
 
         host = args.host.strip()
         port = args.port
@@ -144,7 +144,7 @@ class OperatorPortService:
                 request_id=execution_id,
             )
 
-            command_data = VSOMessage(
+            command_data = G8eMessage(
                 id=execution_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
@@ -157,18 +157,18 @@ class OperatorPortService:
                 payload=mcp_payload,
             )
 
-            logger.info("[PORT_CHECK] Publishing port check request via VSODB pub/sub")
+            logger.info("[PORT_CHECK] Publishing port check request via g8es pub/sub")
             await self.pubsub_service.register_operator_session(operator_id, operator_session_id)
 
             # Notify start
-            await self.execution_service.vsod_event_service.publish_command_event(
+            await self.execution_service.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"port_check {host}:{port} ({protocol})",
                     execution_id=execution_id,
                     operator_session_id=operator_session_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.PORT_CHECK,
             )
 
@@ -186,7 +186,7 @@ class OperatorPortService:
                 logger.warning("[PORT_CHECK] %s", timeout_error)
 
                 # Notify failure (timeout)
-                await self.execution_service.vsod_event_service.publish_command_event(
+                await self.execution_service.g8ed_event_service.publish_command_event(
                     EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
                     CommandResultBroadcastEvent(
                         execution_id=execution_id,
@@ -196,7 +196,7 @@ class OperatorPortService:
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.PORT_CHECK,
                 )
 
@@ -219,7 +219,7 @@ class OperatorPortService:
                     else EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 )
 
-                await self.execution_service.vsod_event_service.publish_command_event(
+                await self.execution_service.g8ed_event_service.publish_command_event(
                     completion_event_type,
                     CommandResultBroadcastEvent(
                         execution_id=execution_id,
@@ -230,7 +230,7 @@ class OperatorPortService:
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
-                    vso_context,
+                    g8e_context,
                     task_id=AITaskId.PORT_CHECK,
                 )
 

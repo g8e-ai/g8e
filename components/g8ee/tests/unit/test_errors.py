@@ -31,8 +31,8 @@ from app.errors import (
     ServiceUnavailableError,
     StorageError,
     ValidationError,
-    VSOError,
-    VSOTimeoutError,
+    G8eError,
+    G8eTimeoutError,
 )
 from app.models.errors import ErrorBody, ErrorCauseDetail, ErrorDetail, ErrorResponse
 
@@ -44,19 +44,19 @@ pytestmark = [pytest.mark.unit]
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def basic_error() -> VSOError:
-    return VSOError("basic error message", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, source="test")
+def basic_error() -> G8eError:
+    return G8eError("basic error message", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, source="test")
 
 
 @pytest.fixture
-def error_with_cause() -> VSOError:
+def error_with_cause() -> G8eError:
     cause = ValueError("root cause")
-    return VSOError("wrapping message", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, cause=cause, source="test")
+    return G8eError("wrapping message", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, cause=cause, source="test")
 
 
 @pytest.fixture
-def error_with_all_fields() -> VSOError:
-    return VSOError(
+def error_with_all_fields() -> G8eError:
+    return G8eError(
         message="full error",
         code=ErrorCode.DB_WRITE_ERROR,
         category=ErrorCategory.DATABASE,
@@ -211,10 +211,10 @@ class TestErrorBodyAndResponse:
 
 
 # ---------------------------------------------------------------------------
-# VSOError base class
+# G8eError base class
 # ---------------------------------------------------------------------------
 
-class TestVSOError:
+class TestG8eError:
     def test_basic_construction(self, basic_error):
         assert basic_error.error_detail.code == ErrorCode.GENERIC_ERROR
         assert basic_error.error_detail.message == "basic error message"
@@ -224,7 +224,7 @@ class TestVSOError:
 
     def test_str_without_cause(self, basic_error):
         result = str(basic_error)
-        assert "VSO-1000" in result
+        assert "G8E-1000" in result
         assert "basic error message" in result
         assert "Caused by" not in result
 
@@ -242,14 +242,14 @@ class TestVSOError:
 
     def test_cause_captured_in_error_detail(self, error_with_cause):
         assert error_with_cause.error_detail.cause is not None
-        # VSOError.cause stores the raw Exception, but ErrorDetail.cause is a model with cause_message
+        # G8eError.cause stores the raw Exception, but ErrorDetail.cause is a model with cause_message
         assert error_with_cause.error_detail.cause.cause_message == "root cause"
         assert isinstance(error_with_cause.error_detail.cause.cause_stack_trace, list)
         assert len(error_with_cause.error_detail.cause.cause_stack_trace) > 0
 
     def test_cause_without_traceback(self):
         cause = Exception("no traceback")
-        error = VSOError("wrapped", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, cause=cause, source="test")
+        error = G8eError("wrapped", code=ErrorCode.GENERIC_ERROR, category=ErrorCategory.INTERNAL, cause=cause, source="test")
         assert error.error_detail.cause is not None
         assert error.error_detail.cause.cause_message == "no traceback"
 
@@ -257,7 +257,7 @@ class TestVSOError:
         assert isinstance(basic_error, Exception)
 
     def test_can_be_raised_and_caught(self, basic_error):
-        with pytest.raises(VSOError):
+        with pytest.raises(G8eError):
             raise basic_error
 
 
@@ -285,7 +285,7 @@ class TestGetHttpStatus:
         (ErrorCategory.CONFIGURATION, 500),
     ])
     def test_status_mapping(self, category, expected_status):
-        error = VSOError("msg", code=ErrorCode.GENERIC_ERROR, category=category)
+        error = G8eError("msg", code=ErrorCode.GENERIC_ERROR, category=category)
         assert error.get_http_status() == expected_status
 
 
@@ -397,8 +397,8 @@ class TestErrorSubclasses:
         assert e.get_http_status() == 502
         assert e.error_detail.details["service_name"] == "unknown"
 
-    def test_vso_timeout_error_defaults(self):
-        e = VSOTimeoutError("timed out")
+    def test_g8e_timeout_error_defaults(self):
+        e = G8eTimeoutError("timed out")
         assert e.code == ErrorCode.API_TIMEOUT_ERROR
         assert e.category == ErrorCategory.TIMEOUT
         assert e.retry_suggested is True
@@ -414,8 +414,8 @@ class TestErrorSubclasses:
         assert e.code == ErrorCode.DB_QUERY_ERROR
         assert e.category == ErrorCategory.DATABASE
 
-    def test_all_subclasses_are_vso_error(self):
-        subclasses: list[VSOError] = [
+    def test_all_subclasses_are_g8e_error(self):
+        subclasses: list[G8eError] = [
             ConfigurationError("x"),
             DatabaseError("x"),
             ResourceNotFoundError("x", "type", "id"),
@@ -430,8 +430,8 @@ class TestErrorSubclasses:
             ResourceConflictError("x"),
             ServiceUnavailableError("x"),
             ExternalServiceError("x"),
-            VSOTimeoutError("x"),
+            G8eTimeoutError("x"),
         ]
         for e in subclasses:
-            assert isinstance(e, VSOError)
+            assert isinstance(e, G8eError)
             assert isinstance(e, Exception)

@@ -1,12 +1,12 @@
 {
-  "_comment": "Canonical OperatorDocument shape. VSOD is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via VSOD HTTP API and VSODB KV cache. g8eo is the source of runtime data (heartbeats, system_info) that VSOD merges into this document. A field mismatch between VSOD and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats, system_info) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
 
-  "_authority": "VSOD (SQLite)",
+  "_authority": "g8ed (SQLite)",
   "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
-  "_cache_aside": "VSODB KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
+  "_cache_aside": "g8es KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
-    "_description": "Full operator record as stored in VSOD SQLite and returned by GET /api/internal/operators/:operatorId/status and GET /api/operators/status.",
+    "_description": "Full operator record as stored in g8ed SQLite and returned by GET /api/internal/operators/:operatorId/status and GET /api/operators/status.",
 
     "core_identity": {
       "operator_id": {
@@ -51,12 +51,12 @@
       "api_key": {
         "type": "string",
         "required": false,
-        "description": "Platform API key used by this operator for VSOD authentication (hashed form for validation)"
+        "description": "Platform API key used by this operator for g8ed authentication (hashed form for validation)"
       },
       "operator_api_key": {
         "type": "string",
         "required": false,
-        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to VSOD."
+        "description": "Per-operator API key provisioned in the slot. Used by g8eo to authenticate to g8ed."
       },
       "operator_api_key_created_at": {
         "type": "string",
@@ -71,7 +71,7 @@
     },
 
     "certificate": {
-      "_description": "Per-operator mTLS certificate provisioned by VSOD.",
+      "_description": "Per-operator mTLS certificate provisioned by g8ed.",
       "operator_cert": {
         "type": "string",
         "required": false,
@@ -121,7 +121,7 @@
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "When the operator process first authenticated with VSOD"
+        "description": "When the operator process first authenticated with g8ed"
       },
       "terminated_at": {
         "type": "string",
@@ -143,7 +143,7 @@
     },
 
     "slot_metadata": {
-      "_description": "Operator slot provisioning fields. Slots are pre-created by VSOD for each user.",
+      "_description": "Operator slot provisioning fields. Slots are pre-created by g8ed for each user.",
       "slot_number": {
         "type": "integer",
         "required": false,
@@ -239,8 +239,8 @@
         "local_storage_enabled":{ "type": "boolean", "description": "True when local SQLite storage is enabled (--local-storage flag)" },
         "no_git":               { "type": "boolean", "description": "True when ledger is disabled (--no-git flag)" },
         "log_level":            { "type": "string",  "description": "Active log level (info, debug, error)" },
-        "wss_port":             { "type": "integer", "description": "WSS port dialled on VSODB for pub/sub" },
-        "http_port":            { "type": "integer", "description": "HTTPS port dialled on VSODB for auth/bootstrap" }
+        "wss_port":             { "type": "integer", "description": "WSS port dialled on g8es for pub/sub" },
+        "http_port":            { "type": "integer", "description": "HTTPS port dialled on g8es for auth/bootstrap" }
       }
     },
 
@@ -289,7 +289,7 @@
       "type": "array",
       "required": true,
       "default": [],
-      "description": "Chronological log of operator lifecycle events managed by VSOD.",
+      "description": "Chronological log of operator lifecycle events managed by g8ed.",
       "items": {
         "timestamp": { "type": "string", "format": "iso8601", "required": true },
         "event_type": {
@@ -301,7 +301,7 @@
         "actor": {
           "type": "string",
           "required": true,
-          "description": "Component or entity that caused this event. Values: vsod, user, g8eo, system"
+          "description": "Component or entity that caused this event. Values: g8ed, user, g8eo, system"
         },
         "details": { "type": "object", "required": false, "default": {} }
       }
@@ -338,7 +338,7 @@
       "session_token": {
         "type": "string",
         "required": false,
-        "description": "Active session token for session-based auth validation. Set by VSOD at bootstrap time."
+        "description": "Active session token for session-based auth validation. Set by g8ed at bootstrap time."
       },
       "session_expires_at": {
         "type": "string",

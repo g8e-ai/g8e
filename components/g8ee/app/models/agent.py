@@ -27,9 +27,9 @@ from app.constants import (
     OperatorType,
     AgentMode,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.models.grounding import GroundingMetadata
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
 from app.models.settings import G8eeUserSettings
@@ -67,7 +67,7 @@ class OperatorCommandArgs(TargetedOperatorArgs):
     execution_id: str | None = Field(default=None, alias="execution_id")
     web_session_id: str | None = Field(default=None, alias="_web_session_id")
 
-class OperatorContext(VSOBaseModel):
+class OperatorContext(G8eBaseModel):
     """Typed system context extracted from a single OperatorDocument model."""
     operator_id: str
     operator_session_id: str | None = None
@@ -100,7 +100,7 @@ class OperatorContext(VSOBaseModel):
     memory_available_mb: float | None = None
 
 
-class AgentStreamContext(VSOBaseModel):
+class AgentStreamContext(G8eBaseModel):
     """Typed context passed through g8eAgent stream methods. """
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -109,7 +109,7 @@ class AgentStreamContext(VSOBaseModel):
     investigation_id: str | None = None
     investigation: EnrichedInvestigationContext
     user_id: str | None = None
-    vso_context: VSOHttpContext
+    g8e_context: G8eHttpContext
     web_session_id: str | None = None
     agent_mode: AgentMode
     request_settings: G8eeUserSettings
@@ -140,7 +140,7 @@ class AgentStreamContext(VSOBaseModel):
         pass
 
 
-class StreamChunkData(VSOBaseModel):
+class StreamChunkData(G8eBaseModel):
     """Typed data for StreamChunkFromModel, replacing Dict[str, Any].
 
     Covers all chunk types: TEXT, THINKING, TOOL_CALL, TOOL_RESULT,
@@ -174,7 +174,7 @@ class StreamChunkData(VSOBaseModel):
     case_id: str | None = None
 
 
-class StreamChunkFromModel(VSOBaseModel):
+class StreamChunkFromModel(G8eBaseModel):
     """Typed chunk for streaming responses."""
     type: StreamChunkFromModelType
     data: StreamChunkData

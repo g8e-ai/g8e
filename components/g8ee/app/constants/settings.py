@@ -349,10 +349,10 @@ UNKNOWN_ERROR_MESSAGE           = "Unknown error"
 
 EVENT_PUBLISH_SUCCESS           = "http-success"
 
-VSOD_CLIENT_TIMEOUT             = 10.0
-VSOD_CLIENT_MAX_RETRIES         = 2
-VSOD_CLIENT_FAILURE_THRESHOLD   = 5
-VSOD_CLIENT_RECOVERY_TIME       = 30.0
+G8ED_CLIENT_TIMEOUT             = 10.0
+G8ED_CLIENT_MAX_RETRIES         = 2
+G8ED_CLIENT_FAILURE_THRESHOLD   = 5
+G8ED_CLIENT_RECOVERY_TIME       = 30.0
 
 WEB_SEARCH_CLIENT_TIMEOUT       = 30.0
 WEB_SEARCH_CLIENT_MAX_RETRIES   = 3
@@ -438,7 +438,7 @@ INVESTIGATION_LOOKUP_MAX_RETRIES     = 3
 INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
-NEW_CASE_ID  = "new-case-via-vsod"
+NEW_CASE_ID  = "new-case-via-g8ed"
 
 FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = (
     "sudo",
@@ -463,8 +463,8 @@ G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
 CORS_ALLOWED_ORIGIN_G8EE             = "https://g8ee"
-CORS_ALLOWED_ORIGIN_VSOD_HTTP       = "https://vsod"
-CORS_ALLOWED_ORIGIN_VSOD_HTTPS      = "https://vsod"
+CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "https://g8ed"
+CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://g8ed"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
 CORS_ALLOWED_ORIGIN_G8E             = "https://g8e.local"
 

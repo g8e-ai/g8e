@@ -14,7 +14,7 @@
 """Typed fake for PubSubServiceProtocol."""
 
 from typing import Any, Callable, Coroutine
-from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.protocols import PubSubServiceProtocol
 
 
@@ -32,7 +32,7 @@ class FakePubSubService:
         self.stopped = False
         self.registered_sessions: list[tuple[str, str]] = []
         self.deregistered_sessions: list[tuple[str, str]] = []
-        self.published_commands: list[VSOMessage] = []
+        self.published_commands: list[G8eMessage] = []
         self._pubsub_client: object
         self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
 
@@ -50,7 +50,7 @@ class FakePubSubService:
     def set_pubsub_client(self, client: object) -> None:
         self._pubsub_client = client
 
-    def _install_msg_capture(self) -> list[VSOMessage]:
+    def _install_msg_capture(self) -> list[G8eMessage]:
         """Capture all published commands for verification in tests."""
         return self.published_commands
 
@@ -79,7 +79,7 @@ class FakePubSubService:
         self,
         operator_id: str,
         operator_session_id: str,
-        command_data: VSOMessage,
+        command_data: G8eMessage,
     ) -> int:
         self.published_commands.append(command_data)
         return 1

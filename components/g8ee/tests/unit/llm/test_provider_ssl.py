@@ -29,7 +29,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 
-INTERNAL_CA = "/vsodb/ca.crt"
+INTERNAL_CA = "/g8es/ca.crt"
 
 pytestmark = [pytest.mark.unit]
 
@@ -85,7 +85,7 @@ class TestOpenAICompatibleProviderSSL:
         from app.llm.utils import is_internal_endpoint
         assert is_internal_endpoint("https://localhost:11434/v1") is True
         assert is_internal_endpoint("https://127.0.0.1:11434/v1") is True
-        assert is_internal_endpoint("https://vsod:3000/api") is True
+        assert is_internal_endpoint("https://g8ed:3000/api") is True
         assert is_internal_endpoint("https://g8eo:9000/api") is True
         assert is_internal_endpoint("https://my-server.local:8080") is True
         assert is_internal_endpoint("https://api.openai.com/v1") is False

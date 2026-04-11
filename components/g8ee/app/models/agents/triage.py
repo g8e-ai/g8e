@@ -12,7 +12,7 @@
 # limitations under the License.
 
 from pydantic import Field
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
@@ -24,7 +24,7 @@ from app.models.investigations import ConversationHistoryMessage
 from app.models.settings import G8eeUserSettings
 
 
-class TriageRequest(VSOBaseModel):
+class TriageRequest(G8eBaseModel):
     """Request model for triage operation."""
     message: str = Field(description="The user message to triage.")
     agent_mode: AgentMode | None = Field(default=None, description="The current agent mode.")
@@ -40,7 +40,7 @@ class TriageRequest(VSOBaseModel):
     )
 
 
-class TriageResult(VSOBaseModel):
+class TriageResult(G8eBaseModel):
     """The outcome of a triage operation."""
     complexity: TriageComplexityClassification = Field(description="How complex the task is.")
     complexity_confidence: TriageConfidence = Field(

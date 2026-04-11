@@ -19,7 +19,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 )
 
-type VSOMessage struct {
+type G8eMessage struct {
 	ID                string          `json:"id"`
 	Timestamp         string          `json:"timestamp"`
 	SourceComponent   string          `json:"source_component"`
@@ -34,12 +34,12 @@ type VSOMessage struct {
 	InvestigationID   string          `json:"investigation_id"`
 }
 
-func NewVSOMessage(id, eventType, caseID, operatorID, operatorSessionID, systemFingerprint string, payload interface{}) (*VSOMessage, error) {
+func NewG8eMessage(id, eventType, caseID, operatorID, operatorSessionID, systemFingerprint string, payload interface{}) (*G8eMessage, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
-	return &VSOMessage{
+	return &G8eMessage{
 		ID:                id,
 		Timestamp:         NowTimestamp(),
 		SourceComponent:   constants.Status.ComponentName.G8EO,
@@ -52,7 +52,7 @@ func NewVSOMessage(id, eventType, caseID, operatorID, operatorSessionID, systemF
 	}, nil
 }
 
-func (r *VSOMessage) Marshal() ([]byte, error) {
+func (r *G8eMessage) Marshal() ([]byte, error) {
 	return json.Marshal(r)
 }
 
@@ -290,7 +290,7 @@ type FingerprintDetails struct {
 }
 
 // RuntimeConfig captures the CLI flags and env var overrides active when the operator was started.
-// Sent to VSOD at bootstrap and stored in operator_document.runtime_config.
+// Sent to g8ed at bootstrap and stored in operator_document.runtime_config.
 type RuntimeConfig struct {
 	CloudMode           bool   `json:"cloud_mode"`
 	CloudProvider       string `json:"cloud_provider,omitempty"`

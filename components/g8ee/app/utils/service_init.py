@@ -21,7 +21,7 @@ from app.llm.factory import set_settings
 logger = logging.getLogger(__name__)
 
 
-async def initialize_vso_service(
+async def initialize_g8e_service(
     service_name: str,
     settings: G8eePlatformSettings,
     cache_aside_service: CacheAsideService,
@@ -30,7 +30,7 @@ async def initialize_vso_service(
     if use_db_config:
         if cache_aside_service is None:
             raise ConfigurationError("cache_aside_service is required when use_db_config=True")
-        logger.info("Loading configuration from VSODB platform_settings for %s", service_name)
+        logger.info("Loading configuration from g8es platform_settings for %s", service_name)
         
         from app.services.infra.settings_service import SettingsService
         from app.services.infra.bootstrap_service import BootstrapService

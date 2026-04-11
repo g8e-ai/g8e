@@ -49,7 +49,7 @@ from app.services.ai.command_generator import (
     generate_command,
     TribunalEmitter,
 )
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 
 
 class TestResolveModel:
@@ -446,7 +446,7 @@ class TestGenerateCommandOutcomes:
             os_name="linux",
             shell="bash",
             working_directory="/tmp",
-            vsod_event_service=AsyncMock(),
+            g8ed_event_service=AsyncMock(),
             web_session_id="ws-1",
             user_id="user-1",
             case_id="case-1",
@@ -485,7 +485,7 @@ class TestGenerateCommandSystemError:
                     os_name="linux",
                     shell="bash",
                     working_directory="/tmp",
-                    vsod_event_service=MagicMock(),
+                    g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -521,7 +521,7 @@ class TestGenerateCommandSystemError:
                     os_name="linux",
                     shell="bash",
                     working_directory="/tmp",
-                    vsod_event_service=MagicMock(),
+                    g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -566,7 +566,7 @@ class TestGenerateCommandSystemError:
                 os_name="linux",
                 shell="bash",
                 working_directory="/tmp",
-                vsod_event_service=MagicMock(),
+                g8ed_event_service=MagicMock(),
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -614,7 +614,7 @@ class TestMixedErrorFallback:
                     os_name="linux",
                     shell="bash",
                     working_directory="/tmp",
-                    vsod_event_service=MagicMock(),
+                    g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -668,7 +668,7 @@ class TestTribunalProviderUnavailableError:
                     os_name="linux",
                     shell="bash",
                     working_directory="/tmp",
-                    vsod_event_service=mock_event_service,
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",

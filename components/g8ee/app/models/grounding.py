@@ -16,35 +16,35 @@ from pydantic import Field
 
 from app.constants.settings import GroundingSource
 
-from .base import VSOBaseModel
+from .base import G8eBaseModel
 
 
-class GroundingChunk(VSOBaseModel):
+class GroundingChunk(G8eBaseModel):
     """A single grounding chunk referencing a web source."""
     uri: str = Field(default="", description="Source URI")
     title: str = Field(default="", description="Source title or domain")
 
 
-class GroundingSegment(VSOBaseModel):
+class GroundingSegment(G8eBaseModel):
     """A text segment within the response that is grounded by a source."""
     start_index: int = Field(default=0, description="Start character index in the response text")
     end_index: int = Field(default=0, description="End character index in the response text")
     text: str = Field(default="", description="The grounded text segment")
 
 
-class GroundingSupport(VSOBaseModel):
+class GroundingSupport(G8eBaseModel):
     """Maps a grounded text segment to one or more grounding chunk indices."""
     segment: GroundingSegment = Field(default_factory=GroundingSegment)
     grounding_chunk_indices: list[int] = Field(default_factory=list, description="Indices into grounding_chunks list")
     text: str = Field(default="", description="Convenience copy of segment.text")
 
 
-class SearchEntryPoint(VSOBaseModel):
+class SearchEntryPoint(G8eBaseModel):
     """Provider-native search entry point widget rendered content (e.g. Gemini Search widget)."""
     rendered_content: str = Field(default="", description="HTML rendered search widget content")
 
 
-class GroundingSourceInfo(VSOBaseModel):
+class GroundingSourceInfo(G8eBaseModel):
     """Resolved display information for a single grounding source, with citation assignment."""
     uri: str = Field(default="", description="Source URI")
     domain: str = Field(default="", description="Cleaned domain name")
@@ -55,7 +55,7 @@ class GroundingSourceInfo(VSOBaseModel):
     segments: list[str] = Field(default_factory=list, description="Text segments supported by this source")
 
 
-class GroundingMetadata(VSOBaseModel):
+class GroundingMetadata(G8eBaseModel):
     """Typed grounding metadata for a single AI response turn.
 
     Produced by GroundingService.extract_provider_grounding() from SdkGroundingRawData

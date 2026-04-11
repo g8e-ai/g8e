@@ -24,7 +24,7 @@ Headers (for HTTP requests):
 - X-Request-Timestamp: ISO 8601 timestamp of when request was created
 - X-Request-Nonce: Unique request identifier for replay prevention
 
-Message Fields (for VSODB pub/sub messages):
+Message Fields (for g8es pub/sub messages):
 - request_timestamp: ISO 8601 timestamp in message metadata
 - request_nonce: Unique identifier in message metadata
 """
@@ -42,7 +42,7 @@ from app.constants import (
     NonceErrorCode,
     TimestampErrorCode,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.utils.timestamp import ensure_utc, now, parse_iso
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 _nonce_cache: dict[str, datetime] = {}
 
 
-class TimestampValidationResult(VSOBaseModel):
+class TimestampValidationResult(G8eBaseModel):
     """Result of timestamp validation."""
     is_valid: bool
     error: str | None = None
@@ -58,7 +58,7 @@ class TimestampValidationResult(VSOBaseModel):
     skew_seconds: float = 0.0
 
 
-class NonceCheckResult(VSOBaseModel):
+class NonceCheckResult(G8eBaseModel):
     """Result of nonce check operation."""
     success: bool
     is_replay: bool = False
@@ -66,7 +66,7 @@ class NonceCheckResult(VSOBaseModel):
     error_code: NonceErrorCode = NonceErrorCode.CHECK_FAILED
 
 
-class RequestValidationResult(VSOBaseModel):
+class RequestValidationResult(G8eBaseModel):
     """Result of full request validation (timestamp + optional nonce)."""
     is_valid: bool
     error: str | None = None
@@ -142,7 +142,7 @@ async def check_nonce_kv(
     cache_aside_service: "CacheAsideService"
 ) -> NonceCheckResult:
     """
-    Check and mark nonce using VSODB KV store.
+    Check and mark nonce using g8es KV store.
 
     Args:
         nonce: Unique request nonce
@@ -165,7 +165,7 @@ async def check_nonce_kv(
         return NonceCheckResult(success=True, is_replay=is_replay)
 
     except Exception as e:
-        logger.warning("VSODB nonce check failed: %s", e)
+        logger.warning("g8es nonce check failed: %s", e)
         return NonceCheckResult(
             success=False,
             error=str(e),
@@ -336,7 +336,7 @@ def validate_message_timestamp(
 
 class RequestTimestampValidator:
     """
-    Request timestamp validator with optional VSODB KV support.
+    Request timestamp validator with optional g8es KV support.
 
     Provides both sync and async validation methods.
     """
@@ -358,7 +358,7 @@ class RequestTimestampValidator:
         nonce: str,
         context: dict[str, object]
     ) -> RequestValidationResult:
-        """Async validation with VSODB KV support."""
+        """Async validation with g8es KV support."""
         return await validate_request_timestamp(
             timestamp_str=timestamp_str,
             nonce=nonce,

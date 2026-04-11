@@ -26,7 +26,7 @@ from app.constants import OperatorStatus
 from app.llm.llm_types import ToolCall
 from app.models.settings import G8eeUserSettings, LLMSettings
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_enriched_investigation,
     build_bound_operator,
     build_operator_document,
@@ -57,7 +57,7 @@ async def test_orchestrate_tool_execution_no_bound_operator(
         operator_documents=[],
     )
 
-    vso_context = build_vso_http_context(
+    g8e_context = build_g8e_http_context(
         web_session_id=unique_web_session_id,
         user_id="user-test-001",
         bound_operators=[],
@@ -76,7 +76,7 @@ async def test_orchestrate_tool_execution_no_bound_operator(
         tool_name=tool_call.name,
         tool_args=tool_call.args,
         investigation=investigation,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         request_settings=user_settings,
     )
 
@@ -116,7 +116,7 @@ async def test_orchestrate_tool_execution_security_violation(
         status=OperatorStatus.BOUND,
     )
 
-    vso_context = build_vso_http_context(
+    g8e_context = build_g8e_http_context(
         web_session_id=unique_web_session_id,
         user_id="user-test-001",
         bound_operators=[bound_op],
@@ -135,7 +135,7 @@ async def test_orchestrate_tool_execution_security_violation(
         tool_name=tool_call.name,
         tool_args=tool_call.args,
         investigation=investigation,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         request_settings=user_settings,
     )
 

@@ -449,6 +449,6 @@ func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionReque
 		InvestigationID: msg.InvestigationID,
 		Command:         p.Command,
 		TimeoutSeconds:  timeoutSeconds,
-		RequestedBy:     "vso-system",
+		RequestedBy:     "g8e-system",
 	}, nil
 }

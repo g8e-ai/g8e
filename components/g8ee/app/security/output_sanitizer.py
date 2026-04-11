@@ -23,7 +23,7 @@ from app.constants import (
     OUTPUT_TRUNCATION_SUFFIX,
     SuspiciousPatternType,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ SUSPICIOUS_PATTERNS = [
 _COMPILED_PATTERNS = [(re.compile(pattern), name) for pattern, name in SUSPICIOUS_PATTERNS]
 
 
-class SanitizationResult(VSOBaseModel):
+class SanitizationResult(G8eBaseModel):
     sanitized_output: str
     was_modified: bool
     truncated: bool

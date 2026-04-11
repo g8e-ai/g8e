@@ -50,7 +50,7 @@ from app.models.pubsub_messages import (
     ShutdownAckPayload,
     G8eoResultEnvelope,
     G8eoResultPayload,
-    VSOMessage,
+    G8eMessage,
 )
 from app.services.mcp.adapter import parse_tool_call_result
 from app.constants.status import ExecutionStatus
@@ -166,10 +166,10 @@ class OperatorPubSubService:
         self.pubsub_client = client
         logger.info("[PUBSUB] Pub/sub client configured")
 
-    def _install_msg_capture(self) -> list[VSOMessage]:
+    def _install_msg_capture(self) -> list[G8eMessage]:
         """Capture all published commands for verification in tests."""
         if not hasattr(self, "_captured_publish_commands"):
-            self._captured_publish_commands: list[VSOMessage] = []
+            self._captured_publish_commands: list[G8eMessage] = []
 
         async def _capture_publish(operator_id, operator_session_id, command_data):
             self._captured_publish_commands.append(command_data)
@@ -222,7 +222,7 @@ class OperatorPubSubService:
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
         await self._unsubscribe_results_channel(operator_id, operator_session_id)
 
-    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: VSOMessage) -> int:
+    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int:
         if hasattr(self, "_capture_publish_internal"):
             return await self._capture_publish_internal(operator_id, operator_session_id, command_data)
         if self.pubsub_client is None:

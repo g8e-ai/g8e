@@ -21,7 +21,7 @@ from app.clients.blob_client import BlobClient
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants import (
     ComponentName,
-    VSOHeaders,
+    G8eHeaders,
 )
 from app.errors import (
     AuthenticationError,
@@ -30,7 +30,7 @@ from app.errors import (
 )
 from app.models.auth import AuthenticatedUser
 from app.models.health import HealthCheckResult
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.services.cache.cache_aside import CacheAsideService
 from app.utils.timestamp import now
 from app.security.auth import (
@@ -52,7 +52,7 @@ from .services.ai.chat_task_manager import ChatTaskManager
 from .services.data.attachment_store_service import AttachmentService
 from .db.blob_service import BlobService
 from .services.protocols import ExecutionRegistryProtocol, SettingsServiceProtocol
-from .services.infra.vsod_event_service import EventService
+from .services.infra.g8ed_event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
@@ -266,26 +266,26 @@ async def get_g8ee_attachment_service(request: Request) -> AttachmentService:
     return service
 
 
-async def get_g8ee_vsod_http_client(request: Request) -> InternalHttpClient:
+async def get_g8ee_g8ed_http_client(request: Request) -> InternalHttpClient:
     client = getattr(request.app.state, "internal_http_client", None)
     if not client:
-        logger.error("VSOD HTTP client not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("VSOD HTTP client not available")
+        logger.error("g8ed HTTP client not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("g8ed HTTP client not available")
 
     return client
 
 
 async def get_g8ee_event_service(request: Request) -> EventService:
-    service = getattr(request.app.state, "vsod_event_service", None)
+    service = getattr(request.app.state, "g8ed_event_service", None)
     if not service:
-        logger.error("VSOD event service not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("VSOD event service not available")
+        logger.error("g8ed event service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("g8ed event service not available")
 
     return service
 
 
-async def get_vso_http_context(request: Request) -> VSOHttpContext:
-    return await VSOHttpContext.from_request(request)
+async def get_g8e_http_context(request: Request) -> G8eHttpContext:
+    return await G8eHttpContext.from_request(request)
 
 
 async def get_g8ee_user_settings(
@@ -294,10 +294,10 @@ async def get_g8ee_user_settings(
 ) -> G8eeUserSettings:
     """Load per-request G8eeUserSettings following Platform Settings < User Settings.
 
-    Extracts user_id from the VSOHeaders.USER_ID header and overlays user-specific
+    Extracts user_id from the G8eHeaders.USER_ID header and overlays user-specific
     settings on top of the platform settings loaded at startup.
     """
-    user_id = request.headers.get(VSOHeaders.USER_ID.lower())
+    user_id = request.headers.get(G8eHeaders.USER_ID.lower())
     if not user_id:
         # We need to return G8eeUserSettings, so we'll get it via the service 
         # which will handle the merging logic.
@@ -343,9 +343,9 @@ __all__ = [
     "get_g8ee_approval_service",
     "get_g8ee_operator_command_service",
     "get_g8ee_attachment_service",
-    "get_g8ee_vsod_http_client",
+    "get_g8ee_g8ed_http_client",
     "get_g8ee_event_service",
-    "get_vso_http_context",
+    "get_g8e_http_context",
     "get_g8ee_current_active_user",
     "require_proxy_auth",
     "require_internal_origin",

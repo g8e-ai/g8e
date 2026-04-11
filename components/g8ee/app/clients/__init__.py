@@ -14,7 +14,7 @@
 """
 g8ee Clients
 
-Core VSODB transport clients: DBClient, KVCacheClient, PubSubClient, BlobClient, HTTPClient.
+Core g8es transport clients: DBClient, KVCacheClient, PubSubClient, BlobClient, HTTPClient.
 """
 
 from .blob_client import BlobClient

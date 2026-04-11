@@ -2,7 +2,7 @@
 
 g8e is a local-only, air-gapped, portable platform. It runs entirely via `docker-compose` on-premises — no cloud deployment, no SaaS backend, no external network dependency. This document is the deep-reference security guide for the platform, covering every enforcement layer in detail.
 
-For component-level overviews, see: [g8ee](../components/g8ee.md), [VSOD](../components/vsod.md), [g8eo](../components/g8eo.md).
+For component-level overviews, see: [g8ee](../components/g8ee.md), [g8ed](../components/g8ed.md), [g8eo](../components/g8eo.md).
 
 ---
 
@@ -34,13 +34,13 @@ Human control is a first-class architectural property. Every enforcement mechani
 Browser
   │  HTTPS + Passkey Auth (FIDO2/WebAuthn) + Encrypted Session Cookie
   ▼
-VSOD  (Node.js — web gateway, SSE relay, Operator panel)
+g8ed  (Node.js — web gateway, SSE relay, Operator panel)
   │  Internal HTTP — X-Internal-Auth shared secret (constant-time comparison)
   ▼
 g8ee   (Python/FastAPI — AI engine, Sentinel scrubbing, AI safety analysis)
   │  HTTP + WebSocket pub/sub
   ▼
-VSODB (g8eo binary in --listen mode — document store, KV store, pub/sub broker)
+g8es (g8eo binary in --listen mode — document store, KV store, pub/sub broker)
   │
   │  WebSocket + mTLS + Certificate Pinning + Replay Protection
   ▼
@@ -54,14 +54,14 @@ Host Filesystem / AWS / Target System
 
 | Boundary | Mechanism |
 |---|---|
-| **Browser → VSOD** | HTTPS/TLS 1.3, FIDO2/WebAuthn passkeys, encrypted `HttpOnly` session cookie, `SameSite=lax` CSRF protection |
-| **VSOD → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
-| **g8ee → VSODB** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by VSODB/g8eo in `--listen` mode) |
-| **VSOD → VSODB** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by VSODB/g8eo in `--listen` mode) |
+| **Browser → g8ed** | HTTPS/TLS 1.3, FIDO2/WebAuthn passkeys, encrypted `HttpOnly` session cookie, `SameSite=lax` CSRF protection |
+| **g8ed → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
+| **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
+| **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
-| **VSOD → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
+| **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
-| **Data at Rest (VSODB)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by VSOD before persistence; **internal_auth_token persisted in SSL volume** |
+| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **internal_auth_token persisted in SSL volume** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
 
 ### Network Isolation
@@ -78,8 +78,8 @@ g8e uses a layered configuration model designed for zero-trust local deployments
 
 All components resolve configuration values in the following order (highest priority wins):
 
-1.  **User Settings (DB)**: Individual user overrides stored in VSODB `user_settings` collection.
-2.  **Platform Settings (DB)**: Global platform values stored in VSODB `platform_settings` collection.
+1.  **User Settings (DB)**: Individual user overrides stored in g8es `user_settings` collection.
+2.  **Platform Settings (DB)**: Global platform values stored in g8es `platform_settings` collection.
 3.  **Environment Variables**: Canonical `G8E_*` variables provided at container runtime.
 4.  **Schema Defaults**: Hardcoded safe defaults defined in the component's configuration service.
 
@@ -96,15 +96,15 @@ The platform handles two critical secrets that are required for component-to-com
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
 **1. Authoritative Source (The Volume)**
-The `g8es-ssl` volume (mounted at `/vsodb/ssl`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
-- `internal_auth_token` is stored at `/vsodb/ssl/internal_auth_token`.
-- `session_encryption_key` is stored at `/vsodb/ssl/session_encryption_key`.
+The `g8es-ssl` volume (mounted at `/g8es/ssl`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
+- `internal_auth_token` is stored at `/g8es/ssl/internal_auth_token`.
+- `session_encryption_key` is stored at `/g8es/ssl/session_encryption_key`.
 
 **2. Generation and Persistence**
-On the first platform start, **VSODB** (g8eo in `--listen` mode) checks if these secrets exist on the volume. If they are missing, VSODB generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
+On the first platform start, **g8es** (g8eo in `--listen` mode) checks if these secrets exist on the volume. If they are missing, g8es generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
 
 **3. Automatic Discovery**
-VSOD and g8ee automatically discover these tokens by reading the files from the shared volume at startup. This enables a "zero-config" secure bootstrap without database dependencies for core identity.
+g8ed and g8ee automatically discover these tokens by reading the files from the shared volume at startup. This enables a "zero-config" secure bootstrap without database dependencies for core identity.
 
 **4. Elimination of DB Storage**
 Unlike other configuration, these secrets are never stored in the `platform_settings` database document. This ensures that even a full database wipe or reset does not compromise the platform's internal authentication or session encryption keys, as long as the SSL volume is preserved.
@@ -119,19 +119,19 @@ On the first start of a new deployment, the platform automatically **seeds** the
 - **Transport Security**: Bootstrap transport URLs (`G8E_INTERNAL_HTTP_URL`, `G8E_INTERNAL_PUBSUB_URL`) are read once at startup to reach the database; all other configuration is then loaded from the database.
 - **Sensitive Fields**: Sensitive fields in the database (API keys, session tokens) are application-layer encrypted before storage.
 
-All `X-VSO-*` identity headers are **injected by VSOD from the verified server-side session** — never accepted from the untrusted request body. User identity cannot be forged by a client.
+All `X-G8E-*` identity headers are **injected by g8ed from the verified server-side session** — never accepted from the untrusted request body. User identity cannot be forged by a client.
 
 | Header | Purpose |
 |---|---|
-| `X-VSO-WebSession-ID` | Browser session identifier |
-| `X-VSO-User-ID` | Authenticated user identity |
-| `X-VSO-Organization-ID` | Multi-tenant isolation |
-| `X-VSO-Case-ID` | Active case correlation |
-| `X-VSO-Investigation-ID` | Active investigation correlation |
-| `X-VSO-Task-ID` | Active task correlation |
-| `X-VSO-Bound-Operators` | JSON array of all operators bound to the session |
-| `X-VSO-Request-ID` | Per-request tracing identifier |
-| `X-VSO-Source-Component` | Source component name (validated against `ComponentName` enum) |
+| `X-G8E-WebSession-ID` | Browser session identifier |
+| `X-G8E-User-ID` | Authenticated user identity |
+| `X-G8E-Organization-ID` | Multi-tenant isolation |
+| `X-G8E-Case-ID` | Active case correlation |
+| `X-G8E-Investigation-ID` | Active investigation correlation |
+| `X-G8E-Task-ID` | Active task correlation |
+| `X-G8E-Bound-Operators` | JSON array of all operators bound to the session |
+| `X-G8E-Request-ID` | Per-request tracing identifier |
+| `X-G8E-Source-Component` | Source component name (validated against `ComponentName` enum) |
 
 ---
 
@@ -142,11 +142,11 @@ All `X-VSO-*` identity headers are **injected by VSOD from the verified server-s
 g8e operates its own private CA. There is no dependency on any public CA.
 
 - **Algorithm:** ECDSA with P-384. **Protocol:** TLS 1.3 only on all external and Operator-facing endpoints.
-- **Generation:** CA and server certificates are generated at runtime by the VSODB operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8es-ssl` volume (`/ssl` inside vsodb). Never baked into any Docker image.
-- **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/vsodb/ssl` on VSOD, g8ee, and g8ep. Both services read CA and server certificates from `/vsodb/ssl/`. VSOD's `CertificateService` reads the CA cert and key from `/vsodb/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
+- **Generation:** CA and server certificates are generated at runtime by the g8es operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8es-ssl` volume (`/ssl` inside g8es). Never baked into any Docker image.
+- **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es/ssl` on g8ed, g8ee, and g8ep. Both services read CA and server certificates from `/g8es/ssl/`. g8ed's `CertificateService` reads the CA cert and key from `/g8es/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
 - **Volume isolation:** SSL certs live in a dedicated volume (`g8es-ssl`) separate from the SQLite DB volume (`g8es-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
-- **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that VSODB actually generated, not a stale one. Inside the Docker network, the `vsodb-ssl` volume provides the CA at `/vsodb/ca.crt` — no network fetch occurs.
-- **Per-operator client certificates:** Issued dynamically at claim time during Operator bootstrap, transmitted to the Operator exactly once. Not stored in recoverable form by VSOD.
+- **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
+- **Per-operator client certificates:** Issued dynamically at claim time during Operator bootstrap, transmitted to the Operator exactly once. Not stored in recoverable form by g8ed.
 - **Validity:** CA — 10 years (3650 days); server certificate — 90 days. Both renewed automatically on restart if expired.
 - **CA private key:** Accessible only to the core authentication service; never exposed via any API.
 
@@ -154,8 +154,8 @@ g8e operates its own private CA. There is no dependency on any public CA.
 
 The g8eo binary (field operator mode) loads the platform CA at startup using a two-stage strategy:
 
-1. **Local discovery** (preferred): When `--ca-url` is not set, the binary scans `/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, and `/data/ssl/ca.crt` in order. The first path that exists and contains valid PEM is accepted immediately via `certs.SetCA` — no network request is made. This is the normal path for containerized operators (e.g., g8ep), where the `vsodb-ssl` Docker volume provides the CA locally.
-2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `https://<endpoint>/ssl/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [drop script](../components/vsod.md#operator-drop-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
+1. **Local discovery** (preferred): When `--ca-url` is not set, the binary scans `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, and `/data/ssl/ca.crt` in order. The first path that exists and contains valid PEM is accepted immediately via `certs.SetCA` — no network request is made. This is the normal path for containerized operators (e.g., g8ep), where the `g8es-ssl` Docker volume provides the CA locally.
+2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `https://<endpoint>/ssl/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [drop script](../components/g8ed.md#operator-drop-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
 
 Once stored in the runtime CA store, all subsequent TLS connections are verified against it. Public CAs are not trusted.
 
@@ -163,11 +163,11 @@ If both stages fail (no local file, hub unreachable, bad PEM, non-200 response),
 
 ### Mutual TLS (mTLS)
 
-All Operator-to-VSOD connections require mutual TLS:
-- **Server side:** VSOD presents its server certificate (signed by the platform CA).
+All Operator-to-g8ed connections require mutual TLS:
+- **Server side:** g8ed presents its server certificate (signed by the platform CA).
 - **Client side:** g8eo presents its per-operator client certificate (issued at claim time).
 
-An Operator cannot connect without a valid platform-issued certificate. VSOD cannot be impersonated by anything not signed by the pinned CA.
+An Operator cannot connect without a valid platform-issued certificate. g8ed cannot be impersonated by anything not signed by the pinned CA.
 
 ### Workstation CA Trust
 
@@ -175,33 +175,33 @@ Because g8e uses a locally generated CA, users must configure their workstation 
 
 | OS | Installation Method |
 |---|---|
-| **macOS** | 1-Click Installer (`.sh`) downloads the CA from VSOD, removes old g8e certs, and installs the new CA into the system keychain. The raw `.crt` remains available for manual trust flows. |
-| **Windows** | 1-Click Installer (`.bat`) self-elevates via UAC, downloads the CA from VSOD, removes old g8e certs, and installs the new CA via `certutil`. |
-| **Linux** | 1-Click Installer (`.sh`) downloads the CA from VSOD, removes old g8e certs, copies the new CA into the system trust store, and refreshes trusted certificates. |
+| **macOS** | 1-Click Installer (`.sh`) downloads the CA from g8ed, removes old g8e certs, and installs the new CA into the system keychain. The raw `.crt` remains available for manual trust flows. |
+| **Windows** | 1-Click Installer (`.bat`) self-elevates via UAC, downloads the CA from g8ed, removes old g8e certs, and installs the new CA via `certutil`. |
+| **Linux** | 1-Click Installer (`.sh`) downloads the CA from g8ed, removes old g8e certs, copies the new CA into the system trust store, and refreshes trusted certificates. |
 | **iOS** | Download the raw `.crt`, install the profile, then explicitly enable full trust in Certificate Trust Settings. |
 | **Android** | Download the raw `.crt`, open it from Downloads, and install it as a CA certificate. |
 
-The HTTP onboarding page is informational and bootstrap-only. Once the workstation trusts the CA, normal browser access moves to HTTPS on port 443. Operator traffic also depends on the same CA chain — browser HTTPS and Operator mTLS both anchor to the VSODB-generated platform CA.
+The HTTP onboarding page is informational and bootstrap-only. Once the workstation trusts the CA, normal browser access moves to HTTPS on port 443. Operator traffic also depends on the same CA chain — browser HTTPS and Operator mTLS both anchor to the g8es-generated platform CA.
 
 ### Certificate Revocation
 
-Revoked certificate serials are tracked in-memory by `CertificateService` for the lifetime of the VSOD process. Revocation is triggered automatically by API key refresh, Operator decommission, or manual security response. Revoked serials are also recorded in the Operator document for audit.
+Revoked certificate serials are tracked in-memory by `CertificateService` for the lifetime of the g8ed process. Revocation is triggered automatically by API key refresh, Operator decommission, or manual security response. Revoked serials are also recorded in the Operator document for audit.
 
 ---
 
 ## Web Session Security
 
-Sessions are a critical security boundary — both web user sessions and Operator sessions are centrally managed by VSODB.
+Sessions are a critical security boundary — both web user sessions and Operator sessions are centrally managed by g8es.
 
 ### Web Session Lifecycle
 
-1. Created by VSOD on successful passkey verification.
+1. Created by g8ed on successful passkey verification.
 2. Session ID is cryptographically secure and globally unique (`session_{timestamp}_{uuid}`).
-3. Stored in VSODB KV with TTL; subject to both idle timeout (8 hours, configurable) and absolute hard lifetime (24 hours, configurable).
+3. Stored in g8es KV with TTL; subject to both idle timeout (8 hours, configurable) and absolute hard lifetime (24 hours, configurable).
 4. Transmitted to the browser as an encrypted, `HttpOnly`, `Secure`, `SameSite=lax` cookie.
-5. Sensitive session metadata (`api_key` field) is encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY` before write to VSODB.
-6. On every request, the session is validated against the stored VSODB record and the client's context markers (IP, user-agent). IP changes are tracked; suspicious activity is flagged after 4+ IP changes.
-7. Revocation is immediate — invalidating a session in VSODB takes effect on the next request.
+5. Sensitive session metadata (`api_key` field) is encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY` before write to g8es.
+6. On every request, the session is validated against the stored g8es record and the client's context markers (IP, user-agent). IP changes are tracked; suspicious activity is flagged after 4+ IP changes.
+7. Revocation is immediate — invalidating a session in g8es takes effect on the next request.
 
 ### Web Session Security Properties
 
@@ -209,10 +209,10 @@ Sessions are a critical security boundary — both web user sessions and Operato
 |---|---|
 | Idle timeout | 8 hours (`SESSION_TTL_SECONDS`) |
 | Absolute timeout | 24 hours (`ABSOLUTE_SESSION_TIMEOUT_SECONDS`) |
-| Concurrent sessions | Tracked per user in VSODB KV (unlimited active allowed) |
+| Concurrent sessions | Tracked per user in g8es KV (unlimited active allowed) |
 | Cookie flags | `HttpOnly`, `Secure`, `SameSite=Lax` |
 | CSRF protection | `SameSite=Lax` — no additional tokens required |
-| `api_key` field | Encrypted with AES-256-GCM at application layer before VSODB write |
+| `api_key` field | Encrypted with AES-256-GCM at application layer before g8es write |
 
 ### `requireAuth` Middleware
 
@@ -269,7 +269,7 @@ Role escalation is not possible through any public-facing API. Roles are validat
 - Bound to both the Operator's API key and its permanent system fingerprint.
 - Scoped to specific pub/sub channels: `cmd:{operator_id}:{operator_session_id}` (inbound commands), `results:{operator_id}:{operator_session_id}` (outbound results), `heartbeat:{operator_id}:{operator_session_id}` (heartbeat telemetry).
 - `operator_id` field is encrypted with AES-256-GCM in the session document.
-- Strictly isolated from web sessions — a user's web session and their bound Operator's session are separate security principals, linked via VSODB KV keys.
+- Strictly isolated from web sessions — a user's web session and their bound Operator's session are separate security principals, linked via g8es KV keys.
 - API key refresh terminates the old Operator immediately, creates a new slot, and requires full re-authentication.
 
 ### Session Type Isolation
@@ -280,7 +280,7 @@ Web user sessions and Operator sessions are strictly partitioned. Authentication
 
 Every Operator request carries:
 - `X-Request-Timestamp` — accepted within a ±5-minute window only.
-- `X-Request-Nonce` (optional) — unique per request; validated against the nonce cache (in-memory by default; VSODB KV when configured, 10-minute TTL) to prevent replay of captured traffic.
+- `X-Request-Nonce` (optional) — unique per request; validated against the nonce cache (in-memory by default; g8es KV when configured, 10-minute TTL) to prevent replay of captured traffic.
 
 Requests outside the timestamp window or with a replayed nonce are rejected outright.
 
@@ -299,9 +299,9 @@ Operators (g8eo) authenticate via one of three methods. All result in the same b
 ### Bootstrap Sequence (all methods)
 
 1. Operator POSTs to `/api/auth/operator` with API key or device token.
-2. VSOD verifies credentials and validates the system fingerprint binding (permanent after first use).
-3. VSOD issues a per-operator mTLS client certificate and returns it with the operator session ID exactly once. The certificate is not stored in recoverable form by VSOD.
-4. The Operator connects to VSODB pub/sub over WSS using that mTLS client certificate.
+2. g8ed verifies credentials and validates the system fingerprint binding (permanent after first use).
+3. g8ed issues a per-operator mTLS client certificate and returns it with the operator session ID exactly once. The certificate is not stored in recoverable form by g8ed.
+4. The Operator connects to g8es pub/sub over WSS using that mTLS client certificate.
 
 ### System Fingerprint Binding
 
@@ -333,7 +333,7 @@ The API key path is the standard long-running operator authentication method, ha
 **Validation sequence:**
 
 1. **Header extraction** — API key extracted from `Authorization: Bearer <key>`. Missing or malformed header → 400.
-2. **Key validation** — `ApiKeyService.validateApiKey` performs a cache-aside lookup (VSODB KV first, document store fallback). Checks: `vso_` prefix format, `status === ACTIVE`, `expires_at` not in the past. Invalid → 401.
+2. **Key validation** — `ApiKeyService.validateApiKey` performs a cache-aside lookup (g8es KV first, document store fallback). Checks: `g8e_` prefix format, `status === ACTIVE`, `expires_at` not in the past. Invalid → 401.
 3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DROP_KEY`) fetch the binary; they cannot authenticate an operator process.
 4. **`last_used_at` update** — `ApiKeyService.updateLastUsed` called after successful validation (non-blocking; errors are logged and do not fail auth).
 5. **User existence check** — `UserService.getUser(user_id)` from key data → 404 if not found.
@@ -371,7 +371,7 @@ Called by g8eo when it first presents a `--device-token dlk_...` token. This pha
 
 **Single-operator link (`PENDING` status):**
 1. Token format validated against `dlk_[A-Za-z0-9_-]{32}`.
-2. Token fetched from VSODB KV; expiry checked.
+2. Token fetched from g8es KV; expiry checked.
 3. `REVOKED` → 403; `USED` → 403.
 4. `DeviceRegistrationService.registerDevice` called with `operator_id` from the link data: creates operator session, claims or reconnects the pre-designated operator slot, activates the operator, fires `OPERATOR_STATUS_UPDATED` SSE to the linked web session.
 5. Token status set to `USED` with device info recorded; token remains in KV until natural TTL expiry.
@@ -412,7 +412,7 @@ g8e uses passkey-only authentication. No passwords are stored anywhere in the pl
 **Login flow:**
 1. On first platform access with no existing users, a guided setup creates the initial administrative account.
 2. The user registers a passkey — the private key stays on their device; only the public key is stored server-side.
-3. On login, VSOD generates a cryptographic challenge with a 5-minute TTL. The browser signs it with the device private key. VSOD verifies the signature against the stored public key.
+3. On login, g8ed generates a cryptographic challenge with a 5-minute TTL. The browser signs it with the device private key. g8ed verifies the signature against the stored public key.
 4. A successful verification creates a server-side session. The browser receives an encrypted, `HttpOnly`, `Secure`, `SameSite=lax` session cookie.
 
 **Key security properties:**
@@ -442,18 +442,18 @@ A heartbeat from an unauthenticated or fingerprint-mismatched Operator is reject
 g8eo (every 10s)
     │ WebSocket (mTLS)
     ▼
-VSODB pub/sub → g8ee (OperatorHeartbeatService)
-                    │ write last_heartbeat, latest_heartbeat_snapshot to VSODB
+g8es pub/sub → g8ee (OperatorHeartbeatService)
+                    │ write last_heartbeat, latest_heartbeat_snapshot to g8es
                     │ detect staleness, manage operator status transitions
                     │ publish OPERATOR_HEARTBEAT_RECEIVED internal event
                     ▼
-                  VSOD (SessionAuthListener)
+                  g8ed (SessionAuthListener)
                     │ broadcast SSE operator.heartbeat.received
                     ▼
                   Browser
 ```
 
-g8ee is the source of truth for heartbeat data and all operator status transitions. VSOD only invalidates its cache and relays the SSE event — it never writes heartbeat data to VSODB directly.
+g8ee is the source of truth for heartbeat data and all operator status transitions. g8ed only invalidates its cache and relays the SSE event — it never writes heartbeat data to g8es directly.
 
 ---
 
@@ -465,17 +465,17 @@ The Operator's API key is held in process memory for the lifetime of the process
 
 ### Outbound-Only Architecture
 
-g8eo Operators open no inbound ports. All communication is Operator-initiated — an outbound WebSocket to VSODB on port 443. Operators function behind any NAT, corporate firewall, or VPC without special network configuration.
+g8eo Operators open no inbound ports. All communication is Operator-initiated — an outbound WebSocket to g8es on port 443. Operators function behind any NAT, corporate firewall, or VPC without special network configuration.
 
 ### Operator Startup Security Sequence
 
 1. Load settings from environment + CLI flags.
-2. Load the platform CA certificate using local-first discovery (scan `/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`), falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` if no local file is found. If all paths fail, the operator exits immediately.
+2. Load the platform CA certificate using local-first discovery (scan `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`), falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` if no local file is found. If all paths fail, the operator exits immediately.
 3. Authenticate (API key, device token, or pre-authorized session).
 4. POST to `/api/auth/operator` — receive bootstrap config and per-operator mTLS certificate.
 5. Initialize local storage: scrubbed vault, raw vault, audit vault.
 6. Initialize LFAA audit vault and git ledger.
-7. Connect to VSODB pub/sub over WSS using the issued mTLS client certificate.
+7. Connect to g8es pub/sub over WSS using the issued mTLS client certificate.
 8. Subscribe to `cmd:{operator_id}:{operator_session_id}` channel.
 9. Begin heartbeat telemetry. Enter idle — await binding.
 
@@ -582,10 +582,10 @@ Authentication is not the same as authorization to receive commands. After an Op
 
 **Binding is an explicit user action.** On confirmation, the platform performs the following writes via `BoundSessionsService` (`services/auth/bound_sessions_service.js`):
 
-1. Two **bidirectional VSODB KV keys** are written:
+1. Two **bidirectional g8es KV keys** are written:
    - `sessionBindOperators(operatorSessionId)` → `webSessionId` — authoritative lookup for SSE routing
    - `sessionWebBind(webSessionId)` → `operatorSessionId` (as a SET member) — authoritative lookup for approval routing
-2. A **`bound_sessions` document** is created or updated in the VSODB document store (keyed by `web_session_id`) as the durable, auditable record.
+2. A **`bound_sessions` document** is created or updated in the g8es document store (keyed by `web_session_id`) as the durable, auditable record.
 
 The KV keys are the authoritative runtime state; the document store is the durable backing store. Partial failures leave the platform in a detectable inconsistent state rather than a silently broken one.
 
@@ -597,18 +597,18 @@ The KV keys are the authoritative runtime state; the document store is the durab
 - The `sessionBindOperators` key is the fast-path lookup for SSE routing: `internal_sse_routes.js` and `internal_operator_routes.js` call `getWebSessionForOperator(operatorSessionId)` to resolve where to deliver events.
 - The `sessionWebBind` key is the fast-path lookup for approval routing: `operator_approval_routes.js` calls `getBoundOperatorSessionIds(webSessionId)` to find the active operator.
 
-### `buildVSOContext` — Bound Operator Resolution
+### `buildG8eContext` — Bound Operator Resolution
 
-`buildVSOContext` in `routes/platform/chat_routes.js` is the single point where VSOD resolves bound operators before every chat request. It executes at request time — **no cached result**.
+`buildG8eContext` in `routes/platform/chat_routes.js` is the single point where g8ed resolves bound operators before every chat request. It executes at request time — **no cached result**.
 
 **Resolution steps (per chat request):**
 1. `getBindingService().getBoundOperatorSessionIds(webSessionId)` — reads `sessionWebBind` KV key.
 2. For each operator session ID: `getOperatorSessionService().validateSession(operatorSessionId)` — confirms the session is live and retrieves `operator_id`.
 3. Verify the reverse binding: `getBindingService().getWebSessionForOperator(operatorSessionId)` — confirms `sessionBindOperators` resolves back to this web session. Mismatch → skipped.
-4. Fetch the operator document from VSODB for current `status`, `system_info`, `operator_type`.
-5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-VSO-Bound-Operators`.
+4. Fetch the operator document from g8es for current `status`, `system_info`, `operator_type`.
+5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-G8E-Bound-Operators`.
 
-`X-VSO-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent operator lookup to resolve binding state — if `vso_context.bound_operators` is empty, the session has no bound operators.
+`X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent operator lookup to resolve binding state — if `g8e_context.bound_operators` is empty, the session has no bound operators.
 
 ---
 
@@ -719,7 +719,7 @@ LFAA audit vault fields (`content`, `stdout`, `stderr`) are encrypted at rest us
 
 Every action through g8e is auditable from two independent locations:
 
-**1. Platform-side (VSOD console)** — records metadata for all administrative actions, authentication events, session lifecycle events, and operator status changes. Authoritative for platform-level events.
+**1. Platform-side (g8ed console)** — records metadata for all administrative actions, authentication events, session lifecycle events, and operator status changes. Authoritative for platform-level events.
 
 **2. Operator-side (`.g8e/` in the deployment directory)** — the authoritative record for everything that happened on that system:
 - Every user message and AI response in every session.
@@ -799,7 +799,7 @@ When the AI determines it needs AWS permissions, it calls `grant_intent_permissi
 
 | Threat | Controls |
 |---|---|
-| **Session hijacking** | `HttpOnly` + `Secure` cookies; session bound to client IP + user-agent; immediate VSODB revocation |
+| **Session hijacking** | `HttpOnly` + `Secure` cookies; session bound to client IP + user-agent; immediate g8es revocation |
 | **Operator impersonation** | Permanent system fingerprint binding; mTLS client certificate required; duplicate sessions rejected |
 | **Credential brute force** | Passkeys are inherently immune (private key never leaves device); API keys use high-entropy generation + constant-time comparison; rate limiting on all auth endpoints |
 | **Session replay** | Sessions expire; Operator requests require timestamp within ±5 min + optional nonce |
@@ -834,42 +834,42 @@ Every service in the g8e stack runs as a dedicated non-root user (`g8e`, UID/GID
 | Service | User | UID | GID |
 |---|---|---|---|
 | g8ee (`g8ee`) | `g8e` | 1001 | 1001 |
-| VSOD (`g8e-dashboard`) | `g8e` | 1001 | 1001 |
-| VSODB (`g8es`) | `g8e` | 1001 | 1001 |
+| g8ed (`g8ed`) | `g8e` | 1001 | 1001 |
+| g8es (`g8es`) | `g8e` | 1001 | 1001 |
 | g8e node | `g8e` | 1001 | 1001 |
 
 No service runs as root. This is the primary container escape mitigation — a container escape from a non-root process lands as UID 1001 on the host, not root.
 
 ### Linux Capabilities
 
-g8ee, VSOD, and g8e node use `cap_drop: ALL` and add back only the minimum required. VSODB uses default Docker capabilities:
+g8ee, g8ed, and g8e node use `cap_drop: ALL` and add back only the minimum required. g8es uses default Docker capabilities:
 
 | Service | Added capabilities | Reason |
 |---|---|---|
 | g8ee | none | No privileged operations |
-| VSOD | none | No privileged operations |
-| VSODB | default | No `cap_drop` directive |
+| g8ed | none | No privileged operations |
+| g8es | default | No `cap_drop` directive |
 | g8e node | none | No privileged operations |
 
 ### Docker Socket Access
 
-VSOD and g8e node mount `/var/run/docker.sock`. The threat — the Docker socket is equivalent to host root — is mitigated by:
+g8ed and g8e node mount `/var/run/docker.sock`. The threat — the Docker socket is equivalent to host root — is mitigated by:
 
 - Both services run as UID 1001, not root.
 - `group_add: [${DOCKER_GID}]` grants socket access via the `docker` group only; root is not required.
 - `no-new-privileges: true` on all services prevents setuid/setgid escalation.
-- VSOD's socket interaction is isolated to a single internal service (`G8ENodeOperatorService`) and is never reachable from any unauthenticated request path.
+- g8ed's socket interaction is isolated to a single internal service (`G8ENodeOperatorService`) and is never reachable from any unauthenticated request path.
 
 ### Secrets Model
 
-No secrets are stored in environment variable files (`.env`), baked into images, or written to the host filesystem. All runtime secrets are managed by VSODB:
+No secrets are stored in environment variable files (`.env`), baked into images, or written to the host filesystem. All runtime secrets are managed by g8es:
 
 | Secret | Storage | Injection mechanism |
 |---|---|---|
-| `INTERNAL_AUTH_TOKEN` | VSODB `platform_settings` document | Read from VSODB at service startup |
-| `SESSION_ENCRYPTION_KEY` | VSODB `platform_settings` document | Read from VSODB at service startup |
-| LLM API keys | VSODB `platform_settings` document | Read from VSODB at service startup |
-| SSL certificates and CA | VSODB volume (`/vsodb/ssl/`) | Mounted read-only into all services |
+| `INTERNAL_AUTH_TOKEN` | g8es `platform_settings` document | Read from g8es at service startup |
+| `SESSION_ENCRYPTION_KEY` | g8es `platform_settings` document | Read from g8es at service startup |
+| LLM API keys | g8es `platform_settings` document | Read from g8es at service startup |
+| SSL certificates and CA | g8es volume (`/g8es/ssl/`) | Mounted read-only into all services |
 | Per-operator mTLS certificates | In-memory only | Issued once at claim time; never persisted |
 
 ---
@@ -900,7 +900,7 @@ Security scan scripts live in `components/g8ep/scripts/security/` and are volume
 **Authentication and Sessions**
 - [ ] New endpoints have mandatory authentication middleware — no unauthenticated access paths.
 - [ ] Session identifiers are not logged, not transmitted in URLs, not stored in client-accessible storage.
-- [ ] New session-related fields written to VSODB are encrypted at the application layer.
+- [ ] New session-related fields written to g8es are encrypted at the application layer.
 
 **Authorization**
 - [ ] Resource IDs are validated against the authenticated user's ownership before any operation.
@@ -908,7 +908,7 @@ Security scan scripts live in `components/g8ep/scripts/security/` and are volume
 - [ ] No client-supplied values are accepted as authorization context (user ID, role, org ID must come from the server-side session).
 
 **Data Handling**
-- [ ] No secrets or credentials hardcoded anywhere — all injected via environment variables or loaded from VSODB `platform_settings`.
+- [ ] No secrets or credentials hardcoded anywhere — all injected via environment variables or loaded from g8es `platform_settings`.
 - [ ] Logs do not contain PII, API keys, tokens, or session identifiers.
 - [ ] Raw command output is never persisted on the platform side — only metadata with `stored_locally=true`.
 - [ ] New wire boundary values are correctly typed — no `JSON.stringify`, `String()`, or inline coercion as a fallback.

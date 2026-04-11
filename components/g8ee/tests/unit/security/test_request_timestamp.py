@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.constants import KVKey, NonceErrorCode, TimestampErrorCode
-from tests.fakes.fake_vsodb_clients import FakeKVClient
+from tests.fakes.fake_g8es_clients import FakeKVClient
 from tests.fakes.builder import create_mock_cache_aside_service
 from app.security.request_timestamp import (
     NONCE_TTL_SECONDS,

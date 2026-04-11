@@ -16,11 +16,11 @@ from datetime import datetime
 from pydantic import Field
 
 from app.constants import ChatSessionStatus, EntityType
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.models.investigations import ConversationHistoryMessage
 
 
-class ChatSessionResponse(VSOBaseModel):
+class ChatSessionResponse(G8eBaseModel):
     """Response model for GET /chat/sessions/{web_session_id}."""
     web_session_id: str = Field(..., description="Chat session identifier")
     created_at: datetime = Field(..., description="Session creation timestamp")
@@ -29,7 +29,7 @@ class ChatSessionResponse(VSOBaseModel):
     entity_type: EntityType = Field(default=EntityType.MESSAGE, description="Entity type")
 
 
-class ChatSessionDetailsResponse(VSOBaseModel):
+class ChatSessionDetailsResponse(G8eBaseModel):
     """Detailed session response including conversation history."""
     id: str = Field(..., description="Session identifier")
     case_id: str = Field(..., description="Associated case ID")
@@ -40,7 +40,7 @@ class ChatSessionDetailsResponse(VSOBaseModel):
     is_active: bool = Field(..., description="Whether the session is active")
 
 
-class LatestChatSessionResponse(VSOBaseModel):
+class LatestChatSessionResponse(G8eBaseModel):
     """Response model for GET /chat/cases/{case_id}/latest-session."""
     success: bool = Field(..., description="Whether the request was successful")
     session: ChatSessionDetailsResponse | None = Field(default=None, description="Latest chat session data")

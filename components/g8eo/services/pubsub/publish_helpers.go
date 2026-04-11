@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
-// publishLFAATypedResponseTo builds a VSOMessage from a typed payload and publishes it to the
+// publishLFAATypedResponseTo builds a G8eMessage from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
 	ctx context.Context,
@@ -35,7 +35,7 @@ func publishLFAATypedResponseTo(
 	eventType string,
 	payload interface{},
 ) {
-	resultMsg, err := models.NewVSOMessage(
+	resultMsg, err := models.NewG8eMessage(
 		msg.ID, eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
@@ -81,7 +81,7 @@ func publishLFAATypedResponseTo(
 	logger.Info("LFAA typed response published", "event_type", eventType)
 }
 
-// publishLFAAErrorTo builds an error VSOMessage and publishes it to the results channel.
+// publishLFAAErrorTo builds an error G8eMessage and publishes it to the results channel.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -97,7 +97,7 @@ func publishLFAAErrorTo(
 		OperatorSessionID: cfg.OperatorSessionId,
 	}
 
-	resultMsg, err := models.NewVSOMessage(
+	resultMsg, err := models.NewG8eMessage(
 		msg.ID, eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
@@ -150,7 +150,7 @@ func publishLFAAResponseTo(
 	eventType string,
 	responseJSON []byte,
 ) {
-	resultMsg, err := models.NewVSOMessage(
+	resultMsg, err := models.NewG8eMessage(
 		msg.ID, eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		json.RawMessage(responseJSON),

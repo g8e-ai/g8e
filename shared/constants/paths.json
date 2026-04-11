@@ -1,8 +1,8 @@
 {
   "infra": {
     "db_path": "/data/g8e.db",
-    "ca_cert_path": "/vsodb/ca.crt",
-    "ssl_dir": "/vsodb",
+    "ca_cert_path": "/g8es/ca.crt",
+    "ssl_dir": "/g8es",
     "docs_dir": "/docs",
     "shared_dir": "/app/shared",
     "shared_constants_dir": "/app/shared/constants",
@@ -13,10 +13,10 @@
     "config_dir": "/app/components/g8ee/config",
     "tests_dir": "/app/components/g8ee/tests"
   },
-  "vsod": {
-    "app_dir": "/app/components/vsod",
-    "views_dir": "/app/components/vsod/views",
-    "node_modules_dir": "/app/components/vsod/node_modules"
+  "g8ed": {
+    "app_dir": "/app/components/g8ed",
+    "views_dir": "/app/components/g8ed/views",
+    "node_modules_dir": "/app/components/g8ed/node_modules"
   },
   "g8e_pod": {
     "scripts_dir": "/app/components/g8ep/scripts",

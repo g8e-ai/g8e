@@ -22,7 +22,7 @@ These tests are the enforcement mechanism that detects drift between the JSON
 source of truth and the Go consumer structs.
 
 Coverage:
-  - envelope.json    -> VSOMessage (wire.go)
+  - envelope.json    -> G8eMessage (wire.go)
   - heartbeat.json   -> Heartbeat (heartbeat.go)
   - system_info.json -> SystemInfo (wire.go)
   - result_payloads.json -> ExecutionResultsPayload, CancellationResultPayload,
@@ -106,11 +106,11 @@ func assertFieldPresent(t *testing.T, structTags map[string]bool, fieldName stri
 }
 
 // =============================================================================
-// envelope.json -> VSOMessage
+// envelope.json -> G8eMessage
 // =============================================================================
 
-func TestVSOMessageMatchesEnvelopeSchema(t *testing.T) {
-	tags := jsonTagsOf(models.VSOMessage{})
+func TestG8eMessageMatchesEnvelopeSchema(t *testing.T) {
+	tags := jsonTagsOf(models.G8eMessage{})
 
 	// All required fields from envelope.json that g8eo populates
 	requiredFields := []string{
@@ -125,7 +125,7 @@ func TestVSOMessageMatchesEnvelopeSchema(t *testing.T) {
 		"payload",
 	}
 	for _, f := range requiredFields {
-		assertFieldPresent(t, tags, f, "VSOMessage")
+		assertFieldPresent(t, tags, f, "G8eMessage")
 	}
 
 	// Optional fields g8eo includes
@@ -135,7 +135,7 @@ func TestVSOMessageMatchesEnvelopeSchema(t *testing.T) {
 		"operator_session_id",
 	}
 	for _, f := range optionalFields {
-		assertFieldPresent(t, tags, f, "VSOMessage")
+		assertFieldPresent(t, tags, f, "G8eMessage")
 	}
 }
 

@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-JSON Utilities for VSO Components
+JSON Utilities for g8e Components
 
 Shared utilities for JSON serialization and deserialization.
 """

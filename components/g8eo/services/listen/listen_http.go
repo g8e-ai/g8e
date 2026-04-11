@@ -487,8 +487,8 @@ func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Reque
 // GET /binary/{os}/{arch}  → stream operator binary for the given platform
 //
 // Binaries are served directly from BinaryDir on the local filesystem.
-// The VSODB container has the operator binary baked in at /usr/local/bin,
-// so VSOD and g8ee can fetch binaries on demand without any local caching.
+// The g8es container has the operator binary baked in at /usr/local/bin,
+// so g8ed and g8ee can fetch binaries on demand without any local caching.
 //
 // Path format: /binary/linux/amd64, /binary/linux/arm64, /binary/linux/386
 // =============================================================================

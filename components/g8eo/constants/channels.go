@@ -15,9 +15,9 @@ package constants
 
 import "fmt"
 
-// Channel naming convention (shared across VSOD, g8ee, g8eo):
+// Channel naming convention (shared across g8ed, g8ee, g8eo):
 // Canonical values defined in shared/constants/channels.json (the source of truth).
-// g8ee and VSOD are also consumers of that same JSON file.
+// g8ee and g8ed are also consumers of that same JSON file.
 //
 //	cmd:{operator_id}:{operator_session_id}       g8ee -> Operator
 //	results:{operator_id}:{operator_session_id}    Operator -> g8ee

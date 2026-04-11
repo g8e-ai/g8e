@@ -13,7 +13,7 @@
 
 """
 SSE delivery — translates StreamChunkFromModel events produced by the agent
-streaming loop into VSOD EventService pub/sub calls for browser delivery.
+streaming loop into g8ed EventService pub/sub calls for browser delivery.
 """
 
 import asyncio
@@ -33,7 +33,7 @@ from app.models.agent import (
     AgentStreamContext,
     StreamChunkFromModel,
 )
-from app.models.vsod_client import (
+from app.models.g8ed_client import (
     AISearchWebPayload,
     ChatCitationsReadyPayload,
     ChatErrorPayload,
@@ -44,7 +44,7 @@ from app.models.vsod_client import (
     OperatorNetworkPortCheckPayload,
 )
 from app.errors import ValidationError
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 async def deliver_via_sse(
     stream: AsyncGenerator[StreamChunkFromModel, None],
     agent_streaming_context: AgentStreamContext,
-    vsod_event_service: EventService,
+    g8ed_event_service: EventService,
 ) -> None:
     """
     Consume a StreamChunkFromModel async generator and deliver each event to
@@ -94,7 +94,7 @@ async def deliver_via_sse(
         async for chunk in stream:
             if chunk.type == StreamChunkFromModelType.TEXT:
                 agent_streaming_context.response_text += chunk.data.content or ""
-                await vsod_event_service.publish_investigation_event(
+                await g8ed_event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                     payload=ChatResponseChunkPayload(content=chunk.data.content),
@@ -109,7 +109,7 @@ async def deliver_via_sse(
                 action_type = ThinkingActionType.START if not _thinking_started else ThinkingActionType.UPDATE
                 _thinking_started = True
                 
-                await vsod_event_service.publish_investigation_event(
+                await g8ed_event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
                     payload=ChatThinkingPayload(
@@ -125,7 +125,7 @@ async def deliver_via_sse(
                 agent_streaming_context.set_thinking_ended()
                 _thinking_started = False
                 # Emit thinking event with END action to indicate thinking phase is complete
-                await vsod_event_service.publish_investigation_event(
+                await g8ed_event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
                     payload=ChatThinkingPayload(
@@ -143,7 +143,7 @@ async def deliver_via_sse(
                     exec_id = chunk.data.execution_id or ""
                     query = chunk.data.display_detail
                     _pending_search_calls[exec_id] = query
-                    await vsod_event_service.publish_investigation_event(
+                    await g8ed_event_service.publish_investigation_event(
                         investigation_id=investigation_id,
                         event_type=EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
                         payload=AISearchWebPayload(
@@ -156,7 +156,7 @@ async def deliver_via_sse(
                         user_id=user_id,
                     )
                 elif fn == OperatorToolName.CHECK_PORT:
-                    await vsod_event_service.publish_investigation_event(
+                    await g8ed_event_service.publish_investigation_event(
                         investigation_id=investigation_id,
                         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
                         payload=OperatorNetworkPortCheckPayload(
@@ -174,7 +174,7 @@ async def deliver_via_sse(
                 if exec_id in _pending_search_calls:
                     query = _pending_search_calls.pop(exec_id)
                     succeeded = chunk.data.success is not False
-                    await vsod_event_service.publish_investigation_event(
+                    await g8ed_event_service.publish_investigation_event(
                         investigation_id=investigation_id,
                         event_type=(
                             EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
@@ -192,7 +192,7 @@ async def deliver_via_sse(
                     )
 
                 _turn += 1
-                await vsod_event_service.publish_investigation_event(
+                await g8ed_event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_COMPLETED,
                     payload=ChatTurnCompletePayload(turn=_turn),
@@ -205,7 +205,7 @@ async def deliver_via_sse(
                 agent_streaming_context.grounding_metadata = chunk.data.grounding_metadata
                 grounding_metadata = chunk.data.grounding_metadata
                 if grounding_metadata and grounding_metadata.grounding_used:
-                    await vsod_event_service.publish_investigation_event(
+                    await g8ed_event_service.publish_investigation_event(
                         investigation_id=investigation_id,
                         event_type=EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
                         payload=ChatCitationsReadyPayload(
@@ -241,7 +241,7 @@ async def deliver_via_sse(
                 )
                 
                 # Publish the error event and continue - don't raise exception
-                await vsod_event_service.publish_investigation_event(
+                await g8ed_event_service.publish_investigation_event(
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=error_message),
@@ -256,7 +256,7 @@ async def deliver_via_sse(
         token_usage = agent_streaming_context.token_usage
         has_citations = bool(grounding_metadata and grounding_metadata.grounding_used)
 
-        await vsod_event_service.publish_investigation_event(
+        await g8ed_event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
             payload=ChatResponseCompletePayload(
@@ -281,7 +281,7 @@ async def deliver_via_sse(
 
     except asyncio.CancelledError:
         logger.info("[SSE] Cancelled for investigation %s", investigation_id)
-        await vsod_event_service.publish_investigation_event(
+        await g8ed_event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=EventType.LLM_CHAT_ITERATION_FAILED,
             payload=ChatErrorPayload(error="AI processing stopped"),
@@ -293,7 +293,7 @@ async def deliver_via_sse(
 
     except Exception as e:
         logger.error("[SSE] Error: %s", e, exc_info=True)
-        await vsod_event_service.publish_investigation_event(
+        await g8ed_event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=EventType.LLM_CHAT_ITERATION_FAILED,
             payload=ChatErrorPayload(error=str(e)),

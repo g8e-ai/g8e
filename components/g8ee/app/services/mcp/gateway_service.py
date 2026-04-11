@@ -20,7 +20,7 @@ from typing import Any
 from app.constants.prompts import AgentMode
 from app.constants.settings import MCP_TOOL_CALL_TIMEOUT_SECONDS
 from app.constants.status import OperatorStatus, OperatorToolName
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
 from app.services.ai.tool_service import AIToolService
@@ -44,7 +44,7 @@ MCP_SERVER_INFO = {
 class MCPGatewayService:
     """Translates MCP JSON-RPC tool calls into internal g8e tool execution.
 
-    This service sits between the VSOD HTTP gateway and the existing
+    This service sits between the g8ed HTTP gateway and the existing
     AIToolService pipeline. It converts MCP tool declarations and call
     results between MCP wire format and the internal ToolResult types.
     """
@@ -80,7 +80,7 @@ class MCPGatewayService:
         self,
         tool_name: str,
         arguments: dict[str, Any],
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         user_settings: G8eeUserSettings | None = None,
         sentinel_mode: bool = True,
     ) -> dict[str, Any]:
@@ -88,17 +88,17 @@ class MCPGatewayService:
 
         Returns an MCP CallToolResult dict: { content: [...], isError: bool }.
         """
-        investigation = await self._build_investigation_context(vso_context, sentinel_mode)
+        investigation = await self._build_investigation_context(g8e_context, sentinel_mode)
 
         context_token = self._tool_service.start_invocation_context(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
         )
         try:
             result = await asyncio.wait_for(
                 self._tool_service.execute_tool(
                     tool_name=tool_name,
                     tool_args=arguments,
-                    vso_context=vso_context,
+                    g8e_context=g8e_context,
                     investigation=investigation,
                     request_settings=user_settings,
                 ),
@@ -127,17 +127,17 @@ class MCPGatewayService:
 
     async def _build_investigation_context(
         self,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         sentinel_mode: bool = True,
     ) -> EnrichedInvestigationContext:
-        """Build a synthetic EnrichedInvestigationContext from VSOHttpContext.
+        """Build a synthetic EnrichedInvestigationContext from G8eHttpContext.
 
         External MCP callers may not have an active investigation. We build a
         minimal context with operator documents resolved from bound_operators,
         reusing the same operator-data lookup path as InvestigationService.
         """
         operator_docs = []
-        for bound_op in (vso_context.bound_operators or []):
+        for bound_op in (g8e_context.bound_operators or []):
             if bound_op.status != OperatorStatus.BOUND:
                 continue
             try:
@@ -151,14 +151,14 @@ class MCPGatewayService:
                 )
 
         return EnrichedInvestigationContext(
-            id=vso_context.execution_id or "mcp-gateway",
-            case_id=vso_context.case_id or "mcp-gateway",
-            user_id=vso_context.user_id,
-            organization_id=vso_context.organization_id,
-            web_session_id=vso_context.web_session_id,
+            id=g8e_context.execution_id or "mcp-gateway",
+            case_id=g8e_context.case_id or "mcp-gateway",
+            user_id=g8e_context.user_id,
+            organization_id=g8e_context.organization_id,
+            web_session_id=g8e_context.web_session_id,
             sentinel_mode=sentinel_mode,
             operator_documents=operator_docs,
-            bound_operators=vso_context.bound_operators or [],
+            bound_operators=g8e_context.bound_operators or [],
         )
 
     @staticmethod

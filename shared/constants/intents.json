@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical AWS intent names for Cloud Operator IAM policy management. Shared across g8ee (Python), VSOD (JavaScript). Must stay in sync with CloudFormation managed policies (ami/cloudformation/cloud-operator.yaml Intent-* resources).",
+  "_comment": "Canonical AWS intent names for Cloud Operator IAM policy management. Shared across g8ee (Python), g8ed (JavaScript). Must stay in sync with CloudFormation managed policies (ami/cloudformation/cloud-operator.yaml Intent-* resources).",
 
   "intents": {
     "ec2_discovery":              { "category": "compute",           "question": "Should I be able to see other EC2 instances in your account?",                              "verification_action": "ec2:DescribeInstances",                       "dependencies": [] },

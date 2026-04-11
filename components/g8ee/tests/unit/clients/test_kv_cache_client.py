@@ -26,7 +26,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def disconnected_client():
     client = KVCacheClient(
-        http_url="https://vsodb:9000",
+        http_url="https://g8es:9000",
         component_name=ComponentName.G8EE,
     )
     return client
@@ -40,7 +40,7 @@ class TestKVCacheClientInit:
 
     def test_trailing_slash_stripped_from_urls(self):
         client = KVCacheClient(
-            http_url="https://vsodb:9000/",
+            http_url="https://g8es:9000/",
         )
         assert not client.http_url.endswith("/")
 

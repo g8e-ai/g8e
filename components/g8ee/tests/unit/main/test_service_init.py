@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-Unit tests for initialize_vso_service.
+Unit tests for initialize_g8e_service.
 
 Covers:
-- use_db_config=True: loads config from VSODB via cache_aside_service
+- use_db_config=True: loads config from g8es via cache_aside_service
 - use_db_config=True without cache_aside_service: raises ValueError
 - use_db_config=False with explicit settings: uses supplied settings object
 - use_db_config=False without settings: creates G8eePlatformSettings()
@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.settings import G8eePlatformSettings
-from app.utils.service_init import initialize_vso_service
+from app.utils.service_init import initialize_g8e_service
 from app.errors import ConfigurationError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -44,7 +44,7 @@ class TestUseDbConfigTrue:
 
     async def test_requires_cache_aside_service(self):
         with pytest.raises(ConfigurationError, match="cache_aside_service"):
-            await initialize_vso_service(
+            await initialize_g8e_service(
                 "test-service",
                 settings=MagicMock(),
                 cache_aside_service=None,
@@ -60,7 +60,7 @@ class TestUseDbConfigTrue:
             new_callable=AsyncMock,
             return_value=expected_settings,
         ) as mock_from_db:
-            result = await initialize_vso_service(
+            result = await initialize_g8e_service(
                 "test-service",
                 settings=MagicMock(),
                 cache_aside_service=cache_svc,
@@ -79,7 +79,7 @@ class TestUseDbConfigTrue:
             new_callable=AsyncMock,
             return_value=loaded_settings,
         ):
-            result = await initialize_vso_service(
+            result = await initialize_g8e_service(
                 "my-service",
                 settings=MagicMock(),
                 cache_aside_service=cache_svc,
@@ -93,7 +93,7 @@ class TestUseDbConfigFalse:
 
     async def test_uses_provided_settings_when_given(self):
         explicit_settings = _make_settings()
-        result = await initialize_vso_service(
+        result = await initialize_g8e_service(
             "test-service",
             settings=explicit_settings,
             cache_aside_service=MagicMock(),
@@ -105,7 +105,7 @@ class TestUseDbConfigFalse:
         with patch("app.utils.service_init.G8eePlatformSettings") as mock_settings_class:
             mock_settings_instance = MagicMock(spec=G8eePlatformSettings)
             mock_settings_class.return_value = mock_settings_instance
-            result = await initialize_vso_service(
+            result = await initialize_g8e_service(
                 "test-service",
                 settings=None,
                 cache_aside_service=MagicMock(),

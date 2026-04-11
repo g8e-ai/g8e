@@ -31,7 +31,7 @@ All other concerns live in dedicated modules:
                            finish reason normalization, retry classification
   agent_tool_loop.py — tool call dispatch, sequential execution,
                            tool display metadata, grounding merge
-  agent_sse.py           — SSE translation and VSOD event delivery
+  agent_sse.py           — SSE translation and g8ed event delivery
   investigation_service.py — operator context extraction
 """
 
@@ -69,7 +69,7 @@ from app.services.ai.agent_turn import (
 )
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ class g8eAgent:
         generation_config: types.GenerateContentConfig,
         model_name: str,
         context: AgentStreamContext,
-        vsod_event_service: EventService,
+        g8ed_event_service: EventService,
         llm_provider: LLMProvider | None = None,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         """
@@ -130,10 +130,10 @@ class g8eAgent:
         case_id = context.case_id
         investigation_id = context.investigation_id
         user_id = context.user_id
-        vso_context = context.vso_context
+        g8e_context = context.g8e_context
         agent_mode = context.agent_mode
 
-        _bound_count = len(vso_context.bound_operators) if vso_context else 0
+        _bound_count = len(g8e_context.bound_operators) if g8e_context else 0
         logger.info(
             "[AGENT] stream_response start: model=%s investigation_id=%s case_id=%s "
             "workflow=%s bound_operators=%d contents=%d user_id=%s",
@@ -166,7 +166,7 @@ class g8eAgent:
                     model_name=model_name,
                     context=context,
                     llm_provider=llm_provider,
-                    vsod_event_service=vsod_event_service,
+                    g8ed_event_service=g8ed_event_service,
                 ):
                     if chunk.type == StreamChunkFromModelType.TEXT:
                         streaming_started = True
@@ -201,7 +201,7 @@ class g8eAgent:
         model_name: str,
         agent_streaming_context: AgentStreamContext,
         context: AgentStreamContext,
-        vsod_event_service: EventService,
+        g8ed_event_service: EventService,
         llm_provider: LLMProvider,
     ) -> None:
         """
@@ -223,10 +223,10 @@ class g8eAgent:
             model_name, agent_streaming_context.agent_mode,
             agent_streaming_context.sentinel_mode, len(contents),
         )
-        if not context.vso_context:
-            raise ValidationError("VSOHttpContext is required for run_with_sse", field="vso_context", constraint="required")
+        if not context.g8e_context:
+            raise ValidationError("G8eHttpContext is required for run_with_sse", field="g8e_context", constraint="required")
         context_token = self._tool_executor.start_invocation_context(
-            vso_context=context.vso_context,
+            g8e_context=context.g8e_context,
         )
         try:
             await deliver_via_sse(
@@ -237,10 +237,10 @@ class g8eAgent:
                     model_name=model_name,
                     context=context,
                     llm_provider=llm_provider,
-                    vsod_event_service=vsod_event_service,
+                    g8ed_event_service=g8ed_event_service,
                 ),
                 agent_streaming_context=agent_streaming_context,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
             )
         finally:
             self._tool_executor.reset_invocation_context(context_token)
@@ -252,7 +252,7 @@ class g8eAgent:
         model_name: str,
         context: AgentStreamContext,
         llm_provider: LLMProvider | None,
-        vsod_event_service: EventService,
+        g8ed_event_service: EventService,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         """
         ReAct function-calling loop.
@@ -321,10 +321,10 @@ class g8eAgent:
                 pending_tool_calls=turn_result.pending_tool_calls,
                 tool_executor=self._tool_executor,
                 investigation=context.investigation,
-                vso_context=context.vso_context,
+                g8e_context=context.g8e_context,
                 result_out=fc_responses_out,
                 request_settings=context.request_settings,
-                vsod_event_service=vsod_event_service,
+                g8ed_event_service=g8ed_event_service,
             ):
                 yield chunk
 

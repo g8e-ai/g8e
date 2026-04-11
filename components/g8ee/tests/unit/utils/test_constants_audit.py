@@ -37,7 +37,7 @@ from app.models.operators import (
     CommandExecutingBroadcastEvent,
     CommandFailedBroadcastEvent,
 )
-from tests.fakes.factories import build_vso_http_context, create_investigation_data
+from tests.fakes.factories import build_g8e_http_context, create_investigation_data
 
 pytestmark = [pytest.mark.unit]
 
@@ -177,19 +177,19 @@ class TestInvestigationServiceHistoryEventTypes:
 
 class TestBroadcastEventModelsAreTyped:
     def test_command_failed_broadcast_event_is_pydantic_model(self):
-        from app.models.base import VSOBaseModel
+        from app.models.base import G8eBaseModel
 
-        assert issubclass(CommandFailedBroadcastEvent, VSOBaseModel)
+        assert issubclass(CommandFailedBroadcastEvent, G8eBaseModel)
 
     def test_command_executing_broadcast_event_is_pydantic_model(self):
-        from app.models.base import VSOBaseModel
+        from app.models.base import G8eBaseModel
 
-        assert issubclass(CommandExecutingBroadcastEvent, VSOBaseModel)
+        assert issubclass(CommandExecutingBroadcastEvent, G8eBaseModel)
 
     def test_batch_command_broadcast_event_is_pydantic_model(self):
-        from app.models.base import VSOBaseModel
+        from app.models.base import G8eBaseModel
 
-        assert issubclass(BatchCommandBroadcastEvent, VSOBaseModel)
+        assert issubclass(BatchCommandBroadcastEvent, G8eBaseModel)
 
     def test_command_failed_broadcast_event_construction(self):
         from app.constants import CommandErrorType
@@ -318,21 +318,21 @@ class TestBroadcastEventTypedFields:
 class TestTypedCommandOperationResults:
     """Verify cancel_command and send_command_to_operator return typed models."""
 
-    def test_cancel_command_result_is_vso_base_model(self):
-        from app.models.base import VSOBaseModel
+    def test_cancel_command_result_is_g8e_base_model(self):
+        from app.models.base import G8eBaseModel
         from app.models.operators import CancelCommandResult
 
-        assert issubclass(CancelCommandResult, VSOBaseModel)
+        assert issubclass(CancelCommandResult, G8eBaseModel)
 
     def test_cancel_command_result_exported_from_models_init(self):
         from app.models import CancelCommandResult
         assert CancelCommandResult is not None
 
-    def test_direct_command_result_is_vso_base_model(self):
-        from app.models.base import VSOBaseModel
+    def test_direct_command_result_is_g8e_base_model(self):
+        from app.models.base import G8eBaseModel
         from app.models.operators import DirectCommandResult
 
-        assert issubclass(DirectCommandResult, VSOBaseModel)
+        assert issubclass(DirectCommandResult, G8eBaseModel)
 
     def test_direct_command_result_exported_from_models_init(self):
         from app.models import DirectCommandResult

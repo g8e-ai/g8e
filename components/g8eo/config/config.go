@@ -28,8 +28,8 @@ type LoadOptions struct {
 	// Required
 	APIKey           string
 	OperatorEndpoint string
-	WSSPort          int // WSS port to dial on VSODB (default: 443)
-	HTTPPort         int // HTTP port to dial on VSODB for auth proxy (default: 443)
+	WSSPort          int // WSS port to dial on g8es (default: 443)
+	HTTPPort         int // HTTP port to dial on g8es for auth proxy (default: 443)
 
 	// Authentication mode
 	AuthMode          string // "api_key" or "operator_session"
@@ -70,7 +70,7 @@ type LoadOptions struct {
 type ListenConfig struct {
 	Enabled     bool
 	WSSPort     int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort    int    // TLS/HTTPS port for internal g8ee/VSOD traffic (default: 443)
+	HTTPPort    int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
 	DataDir     string // Root directory for SQLite database (default: .g8e/data in working directory)
 	SSLDir      string // Directory for TLS certificates (default: DataDir/ssl; override with --ssl-dir)
 	BinaryDir   string // Directory containing platform binaries to serve (default: .g8e/bin in working directory)
@@ -128,7 +128,7 @@ type Config struct {
 	CloudMode     bool   // True if running as cloud Operator (--cloud flag)
 	CloudProvider string // Cloud provider: 'aws', 'gcp', 'azure' (empty unless --cloud is set)
 
-	// Endpoint is the VSOD host or IP used for all HTTP and WebSocket connections.
+	// Endpoint is the g8ed host or IP used for all HTTP and WebSocket connections.
 	Endpoint string
 
 	// TLSServerName overrides the hostname used for TLS certificate verification.
@@ -136,10 +136,10 @@ type Config struct {
 	// (which carries a hostname SAN, not an IP SAN) still validates correctly.
 	TLSServerName string
 
-	// VSODB connection ports (operator dials these on the remote host)
-	PubSubURL string // WebSocket base URL for VSODB pub/sub (e.g., wss://192.168.1.10:443) — no path; client appends /ws/pubsub
+	// g8es connection ports (operator dials these on the remote host)
+	PubSubURL string // WebSocket base URL for g8es pub/sub (e.g., wss://192.168.1.10:443) — no path; client appends /ws/pubsub
 	WSSPort   int    // WSS port used to build PubSubURL (default: 443)
-	HTTPPort  int    // HTTPS port for auth/bootstrap requests via VSODB proxy (default: 443)
+	HTTPPort  int    // HTTPS port for auth/bootstrap requests via g8es proxy (default: 443)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)

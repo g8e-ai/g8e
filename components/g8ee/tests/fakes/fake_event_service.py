@@ -49,15 +49,15 @@ class FakeEventService:
     async def publish_command_event(
         self,
         event_type: EventType,
-        data: "VSOBaseModel",
-        vso_context: "VSOHttpContext",
+        data: "G8eBaseModel",
+        g8e_context: "G8eHttpContext",
         *,
         task_id: str,
     ) -> None:
         self.command_events.append({
             "event_type": event_type,
             "data": data,
-            "vso_context": vso_context,
+            "g8e_context": g8e_context,
             "task_id": task_id,
         })
         # Converge command events into the main published list as SessionEvents
@@ -65,10 +65,10 @@ class FakeEventService:
         event = SessionEvent(
             event_type=event_type,
             payload=data,
-            web_session_id=vso_context.web_session_id,
-            user_id=vso_context.user_id,
-            case_id=vso_context.case_id,
-            investigation_id=vso_context.investigation_id,
+            web_session_id=g8e_context.web_session_id,
+            user_id=g8e_context.user_id,
+            case_id=g8e_context.case_id,
+            investigation_id=g8e_context.investigation_id,
             task_id=task_id,
         )
         # CRITICAL: We MUST call self.publish() which is an AsyncMock.
@@ -79,7 +79,7 @@ class FakeEventService:
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | "VSOBaseModel",
+        payload: dict[str, object] | "G8eBaseModel",
         web_session_id: str,
         case_id: str,
         user_id: str,

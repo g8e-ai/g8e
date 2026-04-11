@@ -24,7 +24,7 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    VSOHeaders,
+    G8eHeaders,
 )
 from app.errors import AuthenticationError, AuthorizationError
 from app.models.auth import AuthenticatedUser
@@ -150,23 +150,23 @@ async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatfor
         )
 
     if verify_internal_auth_token(request, settings):
-        vso_user_id = request.headers.get(VSOHeaders.USER_ID.lower())
-        vso_session_id = request.headers.get(VSOHeaders.WEB_SESSION_ID.lower())
-        vso_org_id = request.headers.get(VSOHeaders.ORGANIZATION_ID.lower())
+        g8e_user_id = request.headers.get(G8eHeaders.USER_ID.lower())
+        g8e_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
+        g8e_org_id = request.headers.get(G8eHeaders.ORGANIZATION_ID.lower())
 
-        if vso_user_id:
+        if g8e_user_id:
             logger.info(
                 "[g8ee] Authenticated via internal auth token",
                 extra={
-                    "user_id": vso_user_id,
-                    "web_session_id": vso_session_id[:12] + "..." if vso_session_id else None
+                    "user_id": g8e_user_id,
+                    "web_session_id": g8e_session_id[:12] + "..." if g8e_session_id else None
                 }
             )
             return AuthenticatedUser(
-                uid=vso_user_id,
-                user_id=vso_user_id,
-                organization_id=vso_org_id,
-                web_session_id=vso_session_id,
+                uid=g8e_user_id,
+                user_id=g8e_user_id,
+                organization_id=g8e_org_id,
+                web_session_id=g8e_session_id,
                 auth_method=AuthMethod.INTERNAL,
             )
 

@@ -14,7 +14,7 @@
 """
 Bootstrap Service for g8ee
 
-This service is ONLY responsible for loading values from the VSODB data volume.
+This service is ONLY responsible for loading values from the g8es data volume.
 It does not perform any settings management or configuration logic.
 """
 
@@ -27,14 +27,14 @@ logger = logging.getLogger(__name__)
 
 
 class BootstrapService:
-    """Bootstrap service for loading VSODB volume data."""
+    """Bootstrap service for loading g8es volume data."""
     
-    def __init__(self, volume_path: str = "/vsodb"):
+    def __init__(self, volume_path: str = "/g8es"):
         """
         Initialize bootstrap service.
         
         Args:
-            volume_path: Path to VSODB volume (default: /vsodb)
+            volume_path: Path to g8es volume (default: /g8es)
         """
         self.volume_path = volume_path
         self._cached_token: Optional[str] = None
@@ -43,7 +43,7 @@ class BootstrapService:
     
     def load_internal_auth_token(self) -> Optional[str]:
         """
-        Load internal auth token from VSODB volume.
+        Load internal auth token from g8es volume.
         
         Returns:
             The internal auth token or None if not found
@@ -55,10 +55,10 @@ class BootstrapService:
         try:
             if token_path.exists():
                 self._cached_token = token_path.read_text().strip()
-                logger.info("[BOOTSTRAP-SERVICE] Loaded internal auth token from VSODB volume")
+                logger.info("[BOOTSTRAP-SERVICE] Loaded internal auth token from g8es volume")
                 return self._cached_token
             else:
-                logger.info("[BOOTSTRAP-SERVICE] Internal auth token not found in VSODB volume")
+                logger.info("[BOOTSTRAP-SERVICE] Internal auth token not found in g8es volume")
                 return None
         except Exception as err:
             logger.warning("[BOOTSTRAP-SERVICE] Failed to read internal auth token", 
@@ -67,7 +67,7 @@ class BootstrapService:
     
     def load_session_encryption_key(self) -> Optional[str]:
         """
-        Load session encryption key from VSODB volume.
+        Load session encryption key from g8es volume.
         
         Returns:
             The session encryption key or None if not found
@@ -79,10 +79,10 @@ class BootstrapService:
         try:
             if key_path.exists():
                 self._cached_key = key_path.read_text().strip()
-                logger.info("[BOOTSTRAP-SERVICE] Loaded session encryption key from VSODB volume")
+                logger.info("[BOOTSTRAP-SERVICE] Loaded session encryption key from g8es volume")
                 return self._cached_key
             else:
-                logger.info("[BOOTSTRAP-SERVICE] Session encryption key not found in VSODB volume")
+                logger.info("[BOOTSTRAP-SERVICE] Session encryption key not found in g8es volume")
                 return None
         except Exception as err:
             logger.warning("[BOOTSTRAP-SERVICE] Failed to read session encryption key", 
@@ -91,7 +91,7 @@ class BootstrapService:
     
     def load_ca_cert_path(self) -> Optional[str]:
         """
-        Load CA certificate path from VSODB volume.
+        Load CA certificate path from g8es volume.
         
         Returns:
             The CA certificate path or None if not found
@@ -109,14 +109,14 @@ class BootstrapService:
             try:
                 if ca_path.exists():
                     self._cached_ca_path = str(ca_path)
-                    logger.info("[BOOTSTRAP-SERVICE] Loaded CA cert path from VSODB volume", 
+                    logger.info("[BOOTSTRAP-SERVICE] Loaded CA cert path from g8es volume", 
                                extra={"path": self._cached_ca_path})
                     return self._cached_ca_path
             except Exception as err:
                 logger.warning("[BOOTSTRAP-SERVICE] Failed to read CA cert", 
                                extra={"path": str(ca_path), "error": str(err)})
         
-        logger.info("[BOOTSTRAP-SERVICE] CA certificate not found in VSODB volume")
+        logger.info("[BOOTSTRAP-SERVICE] CA certificate not found in g8es volume")
         return None
     
     def get_ssl_dir(self) -> str:

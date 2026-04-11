@@ -59,7 +59,7 @@ from .attachments import (
     AttachmentMetadata,
     ProcessedAttachment,
 )
-from .base import VSOAuditableModel, VSOBaseModel, VSOIdentifiableModel, VSOTimestampedModel
+from .base import G8eAuditableModel, G8eBaseModel, G8eIdentifiableModel, G8eTimestampedModel
 from .cache import (
     BatchOperationResult,
     BatchWriteOperation,
@@ -117,7 +117,7 @@ from .health import (
 )
 from .http_context import (
     BoundOperator,
-    VSOHttpContext,
+    G8eHttpContext,
 )
 from .investigations import (
     AIResponseMetadata,
@@ -199,7 +199,7 @@ from .pubsub_messages import (
     G8eoResultEnvelope,
     G8eoResultPayload,
     G8eoHeartbeatPayload,
-    VSOMessage,
+    G8eMessage,
 )
 from .tool_results import (
     AuditEvent,
@@ -232,7 +232,7 @@ from .tool_results import (
     ToolResult,
 )
 # from .triage import TriageResult  # Removed - moved to .agents
-from .vsod_client import (
+from .g8ed_client import (
     IntentOperationResult,
 )
 from .whitelist import (

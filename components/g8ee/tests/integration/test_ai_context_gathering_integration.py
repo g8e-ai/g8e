@@ -28,7 +28,7 @@ used by the AI agent. All tests use real services and infrastructure.
       Test bound operator resolution, system context extraction, and multi-operator scenarios.
 
     Segment 4 — Complete context assembly end-to-end
-      Full pipeline from VSOHttpContext to EnrichedInvestigationContext with all components.
+      Full pipeline from G8eHttpContext to EnrichedInvestigationContext with all components.
 
     Segment 5 — Error handling and edge cases
       Missing investigations, operator lookup failures, and partial context scenarios.
@@ -43,7 +43,7 @@ Real code under test:
     CacheAsideService (app/services/cache/cache_aside.py)
     extract_system_context, extract_all_operators_context
 
-All tests use real VSODB and cache services — no mocks allowed per testing guidelines.
+All tests use real g8es and cache services — no mocks allowed per testing guidelines.
 """
 
 import asyncio
@@ -64,7 +64,7 @@ from app.constants import (
     Priority,
 )
 from app.errors import ResourceNotFoundError, ExternalServiceError
-from app.models.http_context import VSOHttpContext, BoundOperator
+from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import (
     EnrichedInvestigationContext,
     InvestigationModel,
@@ -99,7 +99,7 @@ from tests.fakes.factories import (
     create_investigation_memory,
     create_investigation_request,
     build_operator_document,
-    build_vso_http_context,
+    build_g8e_http_context,
 )
 
 pytestmark = [pytest.mark.integration]
@@ -514,13 +514,13 @@ class TestOperatorEnrichment:
         )
         await operator_data_service.create_operator(operator)
         
-        # Create VSO context with bound operator
+        # Create g8e context with bound operator
         bound_operator = BoundOperator(
             operator_id=operator.operator_id,
             operator_session_id=operator.operator_session_id,
             status=OperatorStatus.BOUND,
         )
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
         
@@ -534,7 +534,7 @@ class TestOperatorEnrichment:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify
@@ -576,7 +576,7 @@ class TestOperatorEnrichment:
         await operator_data_service.create_operator(operator2)
         await operator_data_service.create_operator(operator3)
         
-        # Create VSO context with multiple bound operators
+        # Create g8e context with multiple bound operators
         bound_operators = [
             BoundOperator(
                 operator_id=op.operator_id,
@@ -585,7 +585,7 @@ class TestOperatorEnrichment:
             )
             for op in [operator1, operator2, operator3]
         ]
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             bound_operators=bound_operators
         )
         
@@ -597,7 +597,7 @@ class TestOperatorEnrichment:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify
@@ -642,7 +642,7 @@ class TestOperatorEnrichment:
         await operator_data_service.create_operator(claimed_operator)
         await operator_data_service.create_operator(offline_operator)
         
-        # Create VSO context with mixed status operators
+        # Create g8e context with mixed status operators
         bound_operators = [
             BoundOperator(
                 operator_id=op.operator_id,
@@ -651,7 +651,7 @@ class TestOperatorEnrichment:
             )
             for op in [bound_operator, claimed_operator, offline_operator]
         ]
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             bound_operators=bound_operators
         )
         
@@ -663,7 +663,7 @@ class TestOperatorEnrichment:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify - only BOUND operator should be enriched
@@ -695,13 +695,13 @@ class TestOperatorEnrichment:
             )
         )
         
-        # Create VSO context with non-existent operator
+        # Create g8e context with non-existent operator
         bound_operator = BoundOperator(
             operator_id=unique_operator_id,
             operator_session_id=unique_session_id,
             status=OperatorStatus.BOUND,
         )
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
         
@@ -713,7 +713,7 @@ class TestOperatorEnrichment:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify - no operators should be enriched
@@ -751,13 +751,13 @@ class TestOperatorEnrichment:
         )
         await operator_data_service.create_operator(cloud_operator)
         
-        # Create VSO context and enrich
+        # Create g8e context and enrich
         bound_operator = BoundOperator(
             operator_id=cloud_operator.operator_id,
             operator_session_id=cloud_operator.operator_session_id,
             status=OperatorStatus.BOUND,
         )
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
         
@@ -768,7 +768,7 @@ class TestOperatorEnrichment:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify cloud-specific context
@@ -790,7 +790,7 @@ class TestOperatorEnrichment:
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.integration
 class TestCompleteContextAssembly:
-    """Test complete context assembly from VSOHttpContext to final context."""
+    """Test complete context assembly from G8eHttpContext to final context."""
 
     async def test_full_pipeline_with_all_components(
         self, cache_aside_service, test_settings, all_services, cleanup
@@ -834,7 +834,7 @@ class TestCompleteContextAssembly:
         await operator_data_service.create_operator(operator1)
         await operator_data_service.create_operator(operator2)
         
-        # Create VSO context with both operators
+        # Create g8e context with both operators
         bound_operators = [
             BoundOperator(
                 operator_id=op.operator_id,
@@ -843,7 +843,7 @@ class TestCompleteContextAssembly:
             )
             for op in [operator1, operator2]
         ]
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             user_id=created_investigation.user_id,
             case_id=created_investigation.case_id,
             investigation_id=created_investigation.id,
@@ -858,7 +858,7 @@ class TestCompleteContextAssembly:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify complete assembly
@@ -906,8 +906,8 @@ class TestCompleteContextAssembly:
             )
         )
         
-        # Create VSO context with no bound operators
-        vso_context = build_vso_http_context(
+        # Create g8e context with no bound operators
+        g8e_context = build_g8e_http_context(
             user_id=created_investigation.user_id,
             case_id=created_investigation.case_id,
             investigation_id=created_investigation.id,
@@ -922,7 +922,7 @@ class TestCompleteContextAssembly:
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
         
         # Verify minimal context

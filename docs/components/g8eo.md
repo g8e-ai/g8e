@@ -56,13 +56,13 @@ g8eo is the Go-based agent component of the g8e platform. It provides secure, re
                               │
                               ▼ WebSocket (mTLS)
 ┌─────────────────────────────────────────────────────────────────┐
-│                           VSOD                                  │
-│     Gateway Protocol — bridges Operators ↔ VSODB pub/sub        │
+│                           g8ed                                  │
+│     Gateway Protocol — bridges Operators ↔ g8es pub/sub        │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                         VSODB                                   │
+│                         g8es                                   │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐ │
 │  │  Pub/Sub    │  │  Document   │  │  KV Store               │ │
 │  │  (channels) │  │  Store      │  │  (operator sessions)    │ │
@@ -72,7 +72,7 @@ g8eo is the Go-based agent component of the g8e platform. It provides secure, re
               ┌───────────────┴───────────────┐
               ▼                               ▼
 ┌─────────────────────────┐       ┌─────────────────────────┐
-│       g8ee (AI Engine)   │       │   VSOD (Dashboard)      │
+│       g8ee (AI Engine)   │       │   g8ed (Dashboard)      │
 │  - Command dispatch     │       │  - Operator panel UI    │
 │  - Result aggregation   │       │  - SSE broadcast        │
 │  - Session management   │       │  - Status computation   │
@@ -95,7 +95,7 @@ g8eo is the Go-based agent component of the g8e platform. It provides secure, re
 
 - All session ID fields use `snake_case` in JSON/API payloads (`operator_session_id`)
 - Channel pattern: `{resource}:{operator_id}:{operator_session_id}`
-- Canonical channel listing and wire format: [components/vsodb.md — Channel Naming Convention](vsodb.md#channel-naming-convention)
+- Canonical channel listing and wire format: [components/g8es.md — Channel Naming Convention](g8es.md#channel-naming-convention)
 
 ### Multi-Operator Binding
 
@@ -114,7 +114,7 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 
 1. **API Key Authentication** — Required for all operations before any bootstrap config is returned
 2. **mTLS (Mutual TLS)** — Both sides present certificates; g8eo rejects the connection if the server certificate isn't signed by the pinned CA
-3. **CA Trust Bootstrap** — Local-first discovery: scans volume mount paths (`/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`) before falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt`. Only trusts that exact CA; never embedded in the binary
+3. **CA Trust Bootstrap** — Local-first discovery: scans volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt`. Only trusts that exact CA; never embedded in the binary
 4. **TLS Kill Switch** — Self-terminates with exit code 7 (`ExitCertTrustFailure`) on cert verification failure; connection never downgraded
 5. **Fingerprint Binding** — System fingerprint permanently locked to the Operator slot on first auth; mismatches rejected
 6. **Replay Protection** — `X-Request-Timestamp` (±5 min window) + optional `X-Request-Nonce` validated against nonce cache
@@ -147,19 +147,19 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 User approves command
         │
         ▼
-g8ee ──publishes──► VSODB pub/sub: cmd:{id}:{session}
+g8ee ──publishes──► g8es pub/sub: cmd:{id}:{session}
         │
         ▼
-VSOD Gateway ──bridges──► g8eo WebSocket
+g8ed ──bridges──► g8eo WebSocket
         │
         ▼
 g8eo executes command locally
         │
         ▼
-g8eo ──publishes──► VSODB pub/sub: results:{id}:{session}
+g8eo ──publishes──► g8es pub/sub: results:{id}:{session}
         │
         ▼
-VSOD Gateway ──bridges──► g8ee
+g8ed ──bridges──► g8ee
         │
         ▼
 g8ee returns result to AI
@@ -167,7 +167,7 @@ g8ee returns result to AI
 
 ### Heartbeat Flow
 
-g8eo calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to VSODB pub/sub. From there, g8ee and VSOD handle persistence and SSE fan-out — see [components/vsod.md — Heartbeat Architecture](vsod.md#heartbeat-architecture) for the full end-to-end flow.
+g8eo calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to g8es pub/sub. From there, g8ee and g8ed handle persistence and SSE fan-out — see [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow.
 
 ---
 
@@ -206,19 +206,19 @@ This is the standard operating mode for remote systems and the `g8ep`.
 
 ### Internal Platform Authentication
 
-g8e components (VSOD, g8ee, and g8eo in `--listen` mode) communicate over an internal network using a shared secret called the `internal_auth_token`.
+g8e components (g8ed, g8ee, and g8eo in `--listen` mode) communicate over an internal network using a shared secret called the `internal_auth_token`.
 
-- **Authoritative Source**: The `g8es-ssl` volume (mounted at `/vsodb/ssl`) is the sole authoritative source of truth. The token is stored in plain text at `/vsodb/ssl/internal_auth_token`.
-- **Generation**: On the first platform start, VSODB (g8eo in `--listen` mode) generates a cryptographically secure 32-byte hex token if one does not exist and writes it to the SSL volume.
-- **Discovery**: VSOD and g8ee discover this token by reading the file from the shared volume at startup.
+- **Authoritative Source**: The `g8es-ssl` volume (mounted at `/g8es/ssl`) is the sole authoritative source of truth. The token is stored in plain text at `/g8es/ssl/internal_auth_token`.
+- **Generation**: On the first platform start, g8es (g8eo in `--listen` mode) generates a cryptographically secure 32-byte hex token if one does not exist and writes it to the SSL volume.
+- **Discovery**: g8ed and g8ee discover this token by reading the file from the shared volume at startup.
 - **Enforcement**: Every internal HTTP request must include the `x-internal-auth` header matching this token.
 - **Diagnostics**: The `./g8e platform settings` command displays a truncated version of the active token (e.g., `f5037487...6c5f`) for verification.
 
 ### Listen Mode (`--listen`)
 
-In this mode, the Operator acts as **VSODB** (`g8es`), the platform's central backend and pub/sub broker.
+In this mode, the Operator acts as **g8es** (`g8es`), the platform's central backend and pub/sub broker.
 
-- **Connectivity**: **Inbound-only**. It listens for connections from other platform components (g8ee, VSOD, and Outbound Operators).
+- **Connectivity**: **Inbound-only**. It listens for connections from other platform components (g8ee, g8ed, and Outbound Operators).
 - **Role**: Backend store (SQLite) and Pub/Sub broker. It does **not** execute commands or initiate outbound connections.
 - **Ports**:
   - `443` (WSS/HTTPS): Unified port for all incoming traffic (WebSocket, document store, KV, etc.).
@@ -329,11 +329,11 @@ g8eo startup is a two-phase process:
 
 ### Phase 1 — `NewG8eoService` (pre-auth)
 
-Only `BootstrapService` is constructed. Before this, the CA is loaded using a local-first strategy — scanning well-known volume mount paths (`/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`) before falling back to `FetchAndSetCA` for a remote HTTPS fetch. The mTLS HTTP client is then built using that CA via `certs.GetTLSConfig`. For testing, `BootstrapService` provides `SetHTTPClient` to allow mocking the authentication endpoint.
+Only `BootstrapService` is constructed. Before this, the CA is loaded using a local-first strategy — scanning well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before falling back to `FetchAndSetCA` for a remote HTTPS fetch. The mTLS HTTP client is then built using that CA via `certs.GetTLSConfig`. For testing, `BootstrapService` provides `SetHTTPClient` to allow mocking the authentication endpoint.
 
 ### Phase 2 — `G8eoService.Start()` (post-auth)
 
-After `BootstrapService.RequestBootstrapConfig()` authenticates with VSOD and `ApplyBootstrapConfig()` applies the returned configuration (operator ID, session ID, heartbeat interval, per-operator mTLS cert), the remaining services are instantiated in order:
+After `BootstrapService.RequestBootstrapConfig()` authenticates with g8ed and `ApplyBootstrapConfig()` applies the returned configuration (operator ID, session ID, heartbeat interval, per-operator mTLS cert), the remaining services are instantiated in order:
 
 1. **`ExecutionService`** — shell command execution, concurrency-controlled via semaphore
 2. **`FileEditService`** — file read/write/patch operations with automatic backups
@@ -342,7 +342,7 @@ After `BootstrapService.RequestBootstrapConfig()` authenticates with VSOD and `A
 5. **`AuditVaultService`** — LFAA audit log; always initialized
 6. **`LedgerService`** *(if git available and not disabled)* — wraps `AuditVaultService`
 7. **`HistoryHandler`** — wraps `AuditVaultService` + optional `LedgerService`
-8. **`PubSubClient`** — persistent WebSocket connection to VSODB pub/sub endpoint. Implements the `PubSubClient` interface to allow for test doubles (e.g. `MockVSODBPubSubClient`). Injected via `SetPubSubClient` if a custom implementation is required for testing.
+8. **`PubSubClient`** — persistent WebSocket connection to g8es pub/sub endpoint. Implements the `PubSubClient` interface to allow for test doubles (e.g. `MockG8esPubSubClient`). Injected via `SetPubSubClient` if a custom implementation is required for testing.
 9. **`PubSubResultsService`** — publishes to `results:{operator_id}:{session}` channel
 10. **`PubSubCommandService`** — subscribes to `cmd:{operator_id}:{session}` channel; orchestrates all sub-services. Created via `NewPubSubCommandService(CommandServiceConfig{...})`.
 11. **`Sentinel`** — pre-execution threat detector + post-execution scrubber; injected via `CommandServiceConfig`.
@@ -367,7 +367,7 @@ g8eo/
 │   ├── execution/         # Command execution, file edit, fs_list
 │   ├── listen/            # Listen mode (DB, HTTP, pub/sub broker)
 │   ├── openclaw/          # OpenClaw Node Host
-│   ├── pubsub/            # VSODB WebSocket transport
+│   ├── pubsub/            # g8es WebSocket transport
 │   ├── sentinel/          # Pre-execution threat detection + post-execution scrubbing
 │   ├── sqliteutil/        # Shared SQLite helpers
 │   ├── storage/           # Scrubbed vault, raw vault, audit vault, ledger, history handler

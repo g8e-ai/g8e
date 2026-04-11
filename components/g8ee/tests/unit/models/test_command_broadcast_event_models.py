@@ -26,7 +26,7 @@ pytestmark = pytest.mark.unit
 class TestCommandStatusBroadcastEventModel:
     """Sync model construction tests for CommandStatusBroadcastEvent.
 
-    VSOBaseModel uses `use_enum_values=True` — Pydantic stores the enum's
+    G8eBaseModel uses `use_enum_values=True` — Pydantic stores the enum's
     string value internally.  Equality against str,Enum members works because
     str,Enum members ARE their string values.
     """

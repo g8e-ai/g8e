@@ -540,7 +540,7 @@ func payloadToFileEditRequest(msg PubSubCommandMessage) (*models.FileEditRequest
 		InvestigationID: msg.InvestigationID,
 		Operation:       models.FileEditOperation(p.Operation),
 		FilePath:        p.FilePath,
-		RequestedBy:     "vso-system",
+		RequestedBy:     "g8e-system",
 		Justification:   justification,
 		CreateBackup:    p.CreateBackup,
 		CreateIfMissing: p.CreateIfMissing,
@@ -604,6 +604,6 @@ func payloadToFsListRequest(msg PubSubCommandMessage) (*models.FsListRequest, er
 		Path:            path,
 		MaxDepth:        p.MaxDepth,
 		MaxEntries:      maxEntries,
-		RequestedBy:     "vso-system",
+		RequestedBy:     "g8e-system",
 	}, nil
 }

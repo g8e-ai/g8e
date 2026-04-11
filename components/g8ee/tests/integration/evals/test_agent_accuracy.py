@@ -18,9 +18,9 @@ Tests the real ChatPipelineService.run_chat end-to-end. This is the full agent p
 user message in, investigation context assembly, triage, system prompt, LLM call,
 response persistence.
 
-The test creates a real investigation in VSODB, builds VSOHttpContext, calls
+The test creates a real investigation in g8es, builds G8EHttpContext, calls
 chat_pipeline.run_chat() with real services, reads the persisted AI response from
-VSODB, and grades it with EvalJudge (Primary Model grades Assistant Model).
+g8es, and grades it with EvalJudge (Primary Model grades Assistant Model).
 """
 
 import os
@@ -34,11 +34,11 @@ from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from app.llm.factory import get_llm_provider
 from app.models.settings import G8eeUserSettings
-from app.models.http_context import VSOHttpContext, BoundOperator
+from app.models.http_context import G8EHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_bound_operator,
     build_operator_document,
 )
@@ -75,12 +75,12 @@ async def test_agent_accuracy(
     Evaluate the AI agent's accuracy for a specific scenario using a Judge model.
 
     This test uses the real ChatPipelineService.run_chat end-to-end:
-    1. Creates a real investigation in VSODB
-    2. Builds VSOHttpContext with the investigation
+    1. Creates a real investigation in g8es
+    2. Builds G8EHttpContext with the investigation
     3. Calls chat_pipeline.run_chat() with real services
-    4. Reads conversation history from VSODB to extract AI response
+    4. Reads conversation history from g8es to extract AI response
     5. Grades with EvalJudge (Primary Model grades Assistant Model)
-    6. Cleanup: deletes investigation from VSODB
+    6. Cleanup: deletes investigation from g8es
     """
     start_time = datetime.now(timezone.utc)
     result_data = AccuracyTestResult(scenario_id=scenario["id"])
@@ -102,7 +102,7 @@ async def test_agent_accuracy(
         agent_mode_str = scenario["agent_mode"]
         agent_mode = AgentMode.OPERATOR_BOUND if agent_mode_str == "operator_bound" else AgentMode.OPERATOR_NOT_BOUND
 
-        # Build VSO context with bound operators for operator_bound scenarios
+        # Build G8E context with bound operators for operator_bound scenarios
         bound_operators = []
         if agent_mode == AgentMode.OPERATOR_BOUND:
             # Create a bound operator for testing with unique ID
@@ -126,7 +126,7 @@ async def test_agent_accuracy(
             logger.info(f"[EVAL] Seeded operator document in cache: {operator_doc.operator_id}")
             cleanup.track_operator(operator_id)
 
-        # Step 1: Create a real investigation in VSODB
+        # Step 1: Create a real investigation in g8es
         investigation_request = InvestigationCreateRequest(
             case_id=unique_case_id,
             case_title=f"Accuracy Test: {scenario['id']}",
@@ -138,8 +138,8 @@ async def test_agent_accuracy(
         logger.info(f"[EVAL] Created investigation {created_investigation.id} for scenario {scenario['id']}")
         cleanup.track_investigation(created_investigation.id)
 
-        # Step 2: Build VSOHttpContext with the investigation
-        vso_context = VSOHttpContext(
+        # Step 2: Build G8eHttpContext with the investigation
+        g8e_context = G8eHttpContext(
             web_session_id=unique_web_session_id,
             user_id=unique_user_id,
             case_id=unique_case_id,
@@ -165,7 +165,7 @@ async def test_agent_accuracy(
         # Call run_chat with the correct signature
         await chat_pipeline.run_chat(
             message=user_query,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             attachments=[],
             sentinel_mode=True,
             llm_primary_model=settings.llm.primary_model,
@@ -175,7 +175,7 @@ async def test_agent_accuracy(
             _track_task=False,  # Don't track task for eval tests
         )
 
-        # Step 4: Read conversation history from VSODB to extract AI response
+        # Step 4: Read conversation history from g8es to extract AI response
         conversation_history = await investigation_service.get_chat_messages(
             investigation_id=created_investigation.id
         )

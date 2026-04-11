@@ -1,10 +1,10 @@
 {
-  "_comment": "Canonical PlatformSettings document shape. VSODB (g8eo) is the initial authority for security secrets, while VSOD is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
+  "_comment": "Canonical PlatformSettings document shape. g8es (g8eo) is the initial authority for security secrets, while g8ed is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
 
-  "_authority": "VSODB (Secrets) / VSOD (Config)",
+  "_authority": "g8es (Secrets) / g8ed (Config)",
   "_consumers": [
     "g8ee (Python — reads at startup and on cache miss to build base Settings)",
-    "VSOD (JS — reads to serve internal settings API and UI dashboard)"
+    "g8ed (JS — reads to serve internal settings API and UI dashboard)"
   ],
   "_collection": "settings",
   "_document_id": "platform_settings",
@@ -16,7 +16,7 @@
       "internal_auth_token": {
         "type": "string",
         "required": true,
-        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> VSODB, VSOD <-> VSODB)."
+        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> g8es, g8ed <-> g8es)."
       },
       "session_encryption_key": {
         "type": "string",

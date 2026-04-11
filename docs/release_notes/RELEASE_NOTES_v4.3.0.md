@@ -11,10 +11,10 @@ Resolved two bugs that together prevented operators from ever appearing as **Act
 **`_completeAuthentication` was incomplete:**
 - `claimOperatorSlot` was never called, leaving operator status as `AVAILABLE` instead of `ACTIVE` or `BOUND`
 - `userService.updateUserOperator` was never called, so the user-level operator record was never updated
-- The g8ee relay was passed a plain object instead of a proper `VSOHttpContext` with a `bound_operators` array — g8ee rejected it and never subscribed to the heartbeat channel
+- The g8ee relay was passed a plain object instead of a proper `G8eHttpContext` with a `bound_operators` array — g8ee rejected it and never subscribed to the heartbeat channel
 
 **`device_registration_service.js` had the same relay bug:**
-- Both callers now construct a proper `VSOHttpContext` with `BoundOperatorContext` inside `bound_operators`, matching the pattern established by `operator_bind_service.js`
+- Both callers now construct a proper `G8eHttpContext` with `BoundOperatorContext` inside `bound_operators`, matching the pattern established by `operator_bind_service.js`
 
 **Status preservation on re-authentication:**
 - A BOUND operator that re-authenticates now stays BOUND instead of being downgraded to ACTIVE
@@ -52,7 +52,7 @@ Replaced the `PendingCommand` DB-polling loop with a fully event-driven approach
 
 ### Real-Time Command Lifecycle Events
 
-All operator services now broadcast lifecycle events (`STARTED`, `COMPLETED`, `FAILED`) to the VSOD dashboard via a new `EventService` (`vsod_event_service.py`).
+All operator services now broadcast lifecycle events (`STARTED`, `COMPLETED`, `FAILED`) to the g8ed dashboard via a new `EventService` (`g8ed_event_service.py`).
 
 - `EventService.publish_command_event()` wraps event construction with proper `SessionEvent` routing fields (`case_id`, `investigation_id`, `web_session_id`, `task_id`)
 - `EventService.publish_investigation_event()` provides investigation-scoped event publishing
@@ -79,7 +79,7 @@ Added a one-command `drop` script for deploying operators to any Linux system.
 
 ### Pub/Sub — Wire Protocol Constants & Reliability
 
-- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across g8ee (Python), g8eo (Go), and VSOD (JS)
+- Added `shared/constants/pubsub.json` — canonical wire-protocol constants shared across g8ee (Python), g8eo (Go), and g8ed (JS)
 - `PubSubMessageType` split into `PubSubWireEventType` (`MESSAGE`, `PMESSAGE`, `SUBSCRIBED`) and `PubSubContentType`; backward-compat alias maintained
 - `PubSubMessageType` enum in `channels.py` was missing `MESSAGE`, `PMESSAGE`, `SUBSCRIBED` — the `_ws_reader` referenced these non-existent members, causing `AttributeError` on the first message received and silently killing the reader task. Subscribe ACKs were never processed, causing all `subscribe()` calls to time out after 5 seconds
 - `psubscribe()` race condition fixed: `_subscribed_patterns.add(pattern)` now occurs after `_ensure_ws()` and ACK event setup, preventing double-subscription on reconnect before the ACK handler exists
@@ -108,7 +108,7 @@ Extracted `_initializeSlotsAndActivateG8eNode(user, session, context)` that sequ
 
 ### LLM SSL Fix — Cloud Provider TLS Isolation
 
-`G8E_SSL_CERT_FILE=/vsodb/ca.crt` (set globally in the container environment) was poisoning all outbound HTTPS requests — cloud APIs use public CAs, not the internal platform CA.
+`G8E_SSL_CERT_FILE=/g8es/ca.crt` (set globally in the container environment) was poisoning all outbound HTTPS requests — cloud APIs use public CAs, not the internal platform CA.
 
 - `AnthropicProvider`: Added `_is_internal_endpoint()`, uses `certifi.where()` for cloud endpoints
 - `OpenAICompatibleProvider`: Removed broken `ssl_context.load_default_certs()` block (method does not exist on `ssl.SSLContext`), uses `certifi.where()` for external endpoints
@@ -117,7 +117,7 @@ Extracted `_initializeSlotsAndActivateG8eNode(user, session, context)` that sequ
 
 ### LLM CLI Flags for AI Integration Testing
 
-Added `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, and `--llm-api-key` flags to `./g8e test`. These pass `TEST_LLM_*` environment variables into the g8ep container, allowing `ai_integration` tests to run against a real LLM without writing anything to VSODB.
+Added `--llm-provider`, `--primary-model`, `--assistant-model`, `--llm-endpoint-url`, and `--llm-api-key` flags to `./g8e test`. These pass `TEST_LLM_*` environment variables into the g8ep container, allowing `ai_integration` tests to run against a real LLM without writing anything to g8es.
 
 ### Getting Started UI
 
@@ -131,7 +131,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 
 ## Bug Fixes
 
-- **Operator auth** — `_completeAuthentication` now completes the full activation lifecycle (claim slot, update user record, relay to g8ee with proper `VSOHttpContext`)
+- **Operator auth** — `_completeAuthentication` now completes the full activation lifecycle (claim slot, update user record, relay to g8ee with proper `G8eHttpContext`)
 - **Tribunal** — Fixed `NameError: name 'types' is not defined` in `_run_generation_pass` and `_run_verifier`; fixed provider mismatch when assistant model belongs to a different provider than the primary
 - **Approvals (HTTP 500)** — `ApprovalRespondRequest` fields `operator_session_id`/`operator_id` were `required: true` but the frontend never sends them (server resolves them). Changed to `default: null`
 - **Approvals (500 on respond)** — `operator_approval_routes.js` accessed `req.services.operatorService` which was never attached. Fixed by constructing `OperatorRelayService` directly in the route constructor
@@ -141,9 +141,9 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - **`llm_command_gen_passes` TypeError** — `max(1, None)` crashed all AI tool calls; `llm_command_gen_passes` now defaults to `3`, `settings_service.py` adds None-guards for all four `command_gen` fields
 - **KV silent failures** — `keys()` and `scan()` on `KVCacheClient` silently returned empty results on failure, causing `_invalidateQueryCache` to no-op and stale query cache entries to serve empty operator lists. Now throw `KVOperationError`
 - **Build tag display** — `build.sh` was not displaying the correct git tag in the build output
-- **VSODB URL port** — `fetch-key-and-run.sh` was missing port 9000 on the `VSODB_URL`; now correctly uses port 9000
-- **g8ep CA cert** — `fetch-key-and-run.sh` was passing `--ca-url` to the operator, which forced a network CA fetch — a chicken-and-egg TLS problem. Removed; operator discovers the CA cert from the local `/vsodb/ca.crt` mount
-- **Operator launch** — `fetch-key-and-run.sh` improved with binary download from blob store, architecture auto-detection, and retry logic for transient VSODB unavailability
+- **g8es URL port** — `fetch-key-and-run.sh` was missing port 9000 on the `G8ES_URL`; now correctly uses port 9000
+- **g8ep CA cert** — `fetch-key-and-run.sh` was passing `--ca-url` to the operator, which forced a network CA fetch — a chicken-and-egg TLS problem. Removed; operator discovers the CA cert from the local `/g8es/ca.crt` mount
+- **Operator launch** — `fetch-key-and-run.sh` improved with binary download from blob store, architecture auto-detection, and retry logic for transient g8es unavailability
 
 ## Code Quality
 
@@ -157,7 +157,7 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - Removed unused `crypto` import from approval routes
 - Removed dead `UserRole` import from `post_login_service.js`
 - Extracted `AIGenerationConfigBuilder` as a stateless config factory, separating config construction from request assembly
-- Added `shared/constants/document_ids.json` — canonical document ID constants shared across g8ee and VSOD
+- Added `shared/constants/document_ids.json` — canonical document ID constants shared across g8ee and g8ed
 - Escalated `_invalidateQueryCache` error log from `warn` to `error` with "stale results may be served" message
 
 ## Testing
@@ -168,11 +168,11 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 - G8EE: `test_operator_port_service.py` — expanded with full lifecycle event assertions and error path coverage
 - G8EE: `test_agent_execute_tool_call.py` — expanded with command lifecycle event broadcasting assertions
 - G8EE: `test_operator_command_service.py` — expanded with typed approval request and execution result assertions
-- VSOD: Regression tests for operator activation, BoundOperatorContext relay structure, approval route fixes, g8e script generation, cert installer error handling
-- VSOD: `shared-pubsub-constants.test.js` — 9 contract tests verifying JS constants against `shared/constants/pubsub.json`
-- VSOD: `terminal-output-rendering.unit.test.js` — terminal output rendering tests
-- VSOD: `cache_aside_service.unit.test.js` — `_invalidateQueryCache` tests for `KVOperationError` non-propagation
-- VSOD: `vsodb_kv_cache_client.unit.test.js` — updated for `KVOperationError` throw behavior
+- G8ED: Regression tests for operator activation, BoundOperatorContext relay structure, approval route fixes, g8e script generation, cert installer error handling
+- G8ED: `shared-pubsub-constants.test.js` — 9 contract tests verifying JS constants against `shared/constants/pubsub.json`
+- G8ED: `terminal-output-rendering.unit.test.js` — terminal output rendering tests
+- G8ED: `cache_aside_service.unit.test.js` — `_invalidateQueryCache` tests for `KVOperationError` non-propagation
+- G8ED: `g8es_kv_cache_client.unit.test.js` — updated for `KVOperationError` throw behavior
 - G8EO: `TestSharedPubSubWireMatchesGoConstants` — Go contract tests against `shared/constants/pubsub.json`
 
 ## Component Summary
@@ -180,9 +180,9 @@ Replaced the plain CLI reference text in the operator deployment panel with a st
 | Component | Changes |
 |-----------|---------|
 | **g8ee** | Execution registry redesign, real-time command lifecycle events, typed approval API, Tribunal hardening, LLM SSL isolation, pub/sub reliability, `AIGenerationConfigBuilder`, memory generation |
-| **VSOD** | Operator activation fix, g8e script, getting started UI, approval route fixes, `resolveBoundOperators` rewrite, race condition fix, `KVOperationError`, terminal output rendering |
+| **g8ed** | Operator activation fix, g8e script, getting started UI, approval route fixes, `resolveBoundOperators` rewrite, race condition fix, `KVOperationError`, terminal output rendering |
 | **g8eo** | Pub/sub wire protocol contract tests |
-| **g8ep** | VSODB URL port fix, CA cert bootstrap fix, operator binary fetch improvements, sudoers hardening |
+| **g8ep** | g8es URL port fix, CA cert bootstrap fix, operator binary fetch improvements, sudoers hardening |
 
 ## Quick Start
 

@@ -68,7 +68,7 @@ from app.services.operator.command_service import OperatorCommandService
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_bound_operator,
 )
 
@@ -101,8 +101,8 @@ def mock_web_search_provider():
 
 
 @pytest.fixture
-def mock_vsod_event_service():
-    """Mock VSOD event service for deterministic testing."""
+def mock_g8ed_event_service():
+    """Mock g8ed event service for deterministic testing."""
     service = AsyncMock()
     service.publish_event = AsyncMock()
     return service
@@ -123,13 +123,13 @@ def tool_service(
 
 
 @pytest.fixture
-def sample_vso_context():
-    """Sample VSO HTTP context for testing."""
+def sample_g8e_context():
+    """Sample g8e HTTP context for testing."""
     bound_operator = build_bound_operator(
         operator_id="op-123",
         operator_session_id="session-456",
     )
-    return build_vso_http_context(
+    return build_g8e_http_context(
         case_id="case-789",
         investigation_id="inv-101",
         web_session_id="web-202",
@@ -170,11 +170,11 @@ class TestCommandExecutionTools:
     """Test AI command execution tool payload handling."""
 
     async def test_run_commands_tool_payload_validation(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test run_commands_with_operator tool validates and processes payloads correctly."""
         # Set tool context
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful command execution
@@ -203,7 +203,7 @@ class TestCommandExecutionTools:
                 tool_name=OperatorToolName.RUN_COMMANDS,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -225,10 +225,10 @@ class TestCommandExecutionTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_run_commands_tool_payload_error_handling(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test run_commands_with_operator tool handles payload errors correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock command execution failure
@@ -246,7 +246,7 @@ class TestCommandExecutionTools:
                     tool_name=OperatorToolName.RUN_COMMANDS,
                     tool_args=tool_args,
                     investigation=sample_investigation,
-                    vso_context=sample_vso_context,
+                    g8e_context=sample_g8e_context,
                     request_settings=request_settings,
                 )
 
@@ -256,10 +256,10 @@ class TestCommandExecutionTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_run_commands_tool_security_validation(
-        self, tool_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test run_commands_with_operator tool validates security constraints."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Test payload with sudo command (should be blocked)
@@ -273,7 +273,7 @@ class TestCommandExecutionTools:
                 tool_name=OperatorToolName.RUN_COMMANDS,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -296,10 +296,10 @@ class TestFileOperationTools:
     """Test AI file operation tool payload handling."""
 
     async def test_file_create_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_create_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file creation
@@ -325,7 +325,7 @@ class TestFileOperationTools:
                 tool_name=OperatorToolName.FILE_CREATE,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -345,10 +345,10 @@ class TestFileOperationTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_file_write_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_write_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file write
@@ -374,7 +374,7 @@ class TestFileOperationTools:
                 tool_name=OperatorToolName.FILE_WRITE,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -394,10 +394,10 @@ class TestFileOperationTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_file_read_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_read_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file read
@@ -423,7 +423,7 @@ class TestFileOperationTools:
                 tool_name=OperatorToolName.FILE_READ,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -443,10 +443,10 @@ class TestFileOperationTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_file_update_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_update_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file update
@@ -473,7 +473,7 @@ class TestFileOperationTools:
                 tool_name=OperatorToolName.FILE_UPDATE,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -504,10 +504,10 @@ class TestFileSystemTools:
     """Test AI file system tool payload handling."""
 
     async def test_list_files_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test list_files_and_directories_with_detailed_metadata tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful directory listing
@@ -539,7 +539,7 @@ class TestFileSystemTools:
                 tool_name=OperatorToolName.LIST_FILES,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -559,10 +559,10 @@ class TestFileSystemTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_read_file_content_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test read_file_content tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file content read
@@ -588,7 +588,7 @@ class TestFileSystemTools:
                 tool_name=OperatorToolName.FILE_READ,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -608,10 +608,10 @@ class TestFileSystemTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_fetch_file_history_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test fetch_file_history tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file history fetch
@@ -640,7 +640,7 @@ class TestFileSystemTools:
                 tool_name=OperatorToolName.FETCH_FILE_HISTORY,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -660,10 +660,10 @@ class TestFileSystemTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_restore_file_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test restore_file tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file restore
@@ -689,7 +689,7 @@ class TestFileSystemTools:
                 tool_name=OperatorToolName.FILE_UPDATE,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -710,10 +710,10 @@ class TestFileSystemTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_fetch_file_diff_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test fetch_file_diff tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful file diff fetch
@@ -751,7 +751,7 @@ class TestFileSystemTools:
                 tool_name=OperatorToolName.FETCH_FILE_DIFF,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -781,10 +781,10 @@ class TestNetworkSearchTools:
     """Test AI network and search tool payload handling."""
 
     async def test_check_port_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test check_port_status tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful port check
@@ -811,7 +811,7 @@ class TestNetworkSearchTools:
                 tool_name=OperatorToolName.CHECK_PORT,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -831,10 +831,10 @@ class TestNetworkSearchTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_search_web_tool_payload_processing(
-        self, tool_service, mock_web_search_provider, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_web_search_provider, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test g8e_web_search tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful web search
@@ -866,7 +866,7 @@ class TestNetworkSearchTools:
                 tool_name=OperatorToolName.G8E_SEARCH_WEB,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -884,7 +884,7 @@ class TestNetworkSearchTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_search_web_tool_unavailable_handling(
-        self, tool_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test g8e_web_search tool handles unavailable provider correctly."""
         # Create tool service without web search provider
@@ -894,7 +894,7 @@ class TestNetworkSearchTools:
             web_search_provider=None,  # No provider
         )
         
-        context_token = tool_service_no_search.start_invocation_context(sample_vso_context)
+        context_token = tool_service_no_search.start_invocation_context(sample_g8e_context)
 
         try:
             # Test payload for web search when provider is unavailable
@@ -909,7 +909,7 @@ class TestNetworkSearchTools:
                     tool_name=OperatorToolName.G8E_SEARCH_WEB,
                     tool_args=tool_args,
                     investigation=sample_investigation,
-                    vso_context=sample_vso_context,
+                    g8e_context=sample_g8e_context,
                     request_settings=request_settings,
                 )
         finally:
@@ -926,10 +926,10 @@ class TestPermissionSessionTools:
     """Test AI permission and session tool payload handling."""
 
     async def test_grant_intent_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test grant_intent_permission tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful intent grant
@@ -954,7 +954,7 @@ class TestPermissionSessionTools:
                 tool_name=OperatorToolName.GRANT_INTENT,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -974,10 +974,10 @@ class TestPermissionSessionTools:
             tool_service.reset_invocation_context(context_token)
 
     async def test_revoke_intent_tool_payload_processing(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test revoke_intent_permission tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful intent revoke
@@ -1000,7 +1000,7 @@ class TestPermissionSessionTools:
                 tool_name=OperatorToolName.REVOKE_INTENT,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 
@@ -1032,11 +1032,11 @@ class TestToolIntegration:
     """Test cross-tool integration and payload consistency."""
 
     async def test_tool_context_propagation(
-        self, tool_service, sample_vso_context
+        self, tool_service, sample_g8e_context
     ):
         """Test that tool context is properly propagated to all tool calls."""
         # Set tool context using proper method
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Verify context is set
@@ -1075,10 +1075,10 @@ class TestToolIntegration:
         assert registered_tools == expected_tools
 
     async def test_payload_serialization_consistency(
-        self, tool_service, mock_operator_command_service, sample_vso_context, sample_investigation, request_settings
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test that payloads are consistently serialized/deserialized."""
-        context_token = tool_service.start_invocation_context(sample_vso_context)
+        context_token = tool_service.start_invocation_context(sample_g8e_context)
 
         try:
             # Mock successful execution
@@ -1106,7 +1106,7 @@ class TestToolIntegration:
                 tool_name=OperatorToolName.RUN_COMMANDS,
                 tool_args=tool_args,
                 investigation=sample_investigation,
-                vso_context=sample_vso_context,
+                g8e_context=sample_g8e_context,
                 request_settings=request_settings,
             )
 

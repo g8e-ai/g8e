@@ -29,7 +29,7 @@ def _load(filename: str) -> dict:
 API_PATHS = _load("api_paths.json")
 
 class InternalApiPaths:
-    """Internal API paths shared across g8ee and VSOD."""
+    """Internal API paths shared across g8ee and g8ed."""
     PREFIX: str = API_PATHS["internal_prefix"]
     
     # g8ee Endpoints (relative to PREFIX)
@@ -49,8 +49,8 @@ class InternalApiPaths:
     G8EE_MCP_TOOLS_LIST: str = PREFIX + API_PATHS["g8ee"]["mcp_tools_list"]
     G8EE_MCP_TOOLS_CALL: str = PREFIX + API_PATHS["g8ee"]["mcp_tools_call"]
     
-    # VSOD Endpoints (relative to PREFIX)
-    VSOD_SSE_PUSH: str = "/sse/push"
-    VSOD_GRANT_INTENT: str = "/operators/{operator_id}/grant-intent"
-    VSOD_REVOKE_INTENT: str = "/operators/{operator_id}/revoke-intent"
-    VSOD_HEALTH: str = "/health"
+    # g8ed Endpoints (relative to PREFIX)
+    G8ED_SSE_PUSH: str = "/sse/push"
+    G8ED_GRANT_INTENT: str = "/operators/{operator_id}/grant-intent"
+    G8ED_REVOKE_INTENT: str = "/operators/{operator_id}/revoke-intent"
+    G8ED_HEALTH: str = "/health"
