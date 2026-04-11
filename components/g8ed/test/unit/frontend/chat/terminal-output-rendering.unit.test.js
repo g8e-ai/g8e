@@ -949,20 +949,17 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const executionId = 'exec-123';
             const command = 'ls -la';
 
-            // First, simulate the PREPARING event
             await terminal.handleCommandExecutionEvent({
                 eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
                 execution_id: executionId,
                 command: command
             });
 
-            // Verify the preparing indicator was created
             const preparingIndicator = terminal.outputContainer.querySelector('.anchored-terminal__executing');
             expect(preparingIndicator).not.toBeNull();
             expect(preparingIndicator.textContent).toContain(command);
             expect(terminal.activeExecutions.has(executionId)).toBe(true);
 
-            // Now simulate the REQUESTED event
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-456',
@@ -970,12 +967,10 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'Test justification'
             });
 
-            // Verify the preparing indicator was removed
             const preparingIndicatorAfter = terminal.outputContainer.querySelector('.anchored-terminal__executing');
             expect(preparingIndicatorAfter).toBeNull();
             expect(terminal.activeExecutions.has(executionId)).toBe(false);
 
-            // Verify the approval card was created
             const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
             expect(approvalCard).not.toBeNull();
             expect(approvalCard.dataset.approvalId).toBe('approval-456');
@@ -986,18 +981,15 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const executionId2 = 'exec-456';
             const command = 'ls -la';
 
-            // Create preparing indicator for execution 1
             await terminal.handleCommandExecutionEvent({
                 eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
                 execution_id: executionId1,
                 command: command
             });
 
-            // Verify preparing indicator exists
             const preparingIndicator = terminal.outputContainer.querySelector('.anchored-terminal__executing');
             expect(preparingIndicator).not.toBeNull();
 
-            // Send approval request for different execution
             await terminal.handleApprovalRequest({
                 execution_id: executionId2,
                 approval_id: 'approval-789',
@@ -1005,7 +997,6 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'Test justification'
             });
 
-            // Verify original preparing indicator is still there
             const preparingIndicatorAfter = terminal.outputContainer.querySelector('.anchored-terminal__executing');
             expect(preparingIndicatorAfter).not.toBeNull();
             expect(terminal.activeExecutions.has(executionId1)).toBe(true);
@@ -1014,7 +1005,6 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('handles approval.requested without preceding preparing event', async () => {
             const executionId = 'exec-123';
 
-            // Send approval request without preparing event
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-456',
@@ -1022,10 +1012,119 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'Test justification'
             });
 
-            // Should not throw and should create approval card
             const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
             expect(approvalCard).not.toBeNull();
             expect(approvalCard.dataset.approvalId).toBe('approval-456');
+        });
+    });
+
+    describe('Execution AI Bubble Wrapping', () => {
+        it('wraps preparing indicator inside an AI chat bubble', async () => {
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                execution_id: 'exec-bubble-1',
+                command: 'whoami'
+            });
+
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubble).not.toBeNull();
+            expect(bubble.getAttribute('data-execution-bubble')).toBeTruthy();
+
+            const indicator = bubble.querySelector('.anchored-terminal__executing');
+            expect(indicator).not.toBeNull();
+            expect(indicator.textContent).toContain('whoami');
+
+            const sender = bubble.querySelector('.anchored-terminal__ai-response-sender');
+            expect(sender.textContent).toBe('g8e');
+        });
+
+        it('wraps standalone executing indicator inside an AI chat bubble', async () => {
+            const id = await terminal.showExecutingIndicator('date');
+
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubble).not.toBeNull();
+
+            const indicator = bubble.querySelector('.anchored-terminal__executing');
+            expect(indicator).not.toBeNull();
+            expect(indicator.id).toBe(id);
+            expect(indicator.textContent).toContain('date');
+        });
+
+        it('reuses the preparing bubble for the approval card', async () => {
+            const executionId = 'exec-reuse-1';
+
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                execution_id: executionId,
+                command: 'rm -rf /tmp/test'
+            });
+
+            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubbleBefore).not.toBeNull();
+
+            await terminal.handleApprovalRequest({
+                execution_id: executionId,
+                approval_id: 'approval-reuse-1',
+                command: 'rm -rf /tmp/test',
+                justification: 'Cleanup'
+            });
+
+            const bubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__ai-response--execution');
+            expect(bubbles.length).toBe(1);
+
+            const approval = bubbles[0].querySelector('.anchored-terminal__approval');
+            expect(approval).not.toBeNull();
+            expect(approval.dataset.approvalId).toBe('approval-reuse-1');
+        });
+
+        it('creates a new bubble when approval arrives without preparing', async () => {
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-new-1',
+                approval_id: 'approval-new-1',
+                command: 'uname -a',
+                justification: 'System info'
+            });
+
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubble).not.toBeNull();
+
+            const approval = bubble.querySelector('.anchored-terminal__approval');
+            expect(approval).not.toBeNull();
+        });
+
+        it('removes empty bubble when hiding the only executing indicator', async () => {
+            const id = await terminal.showExecutingIndicator('echo test');
+
+            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubbleBefore).not.toBeNull();
+
+            terminal.hideExecutingIndicator(id);
+
+            const bubbleAfter = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubbleAfter).toBeNull();
+        });
+
+        it('keeps bubble when hiding indicator but approval card remains', async () => {
+            const executionId = 'exec-keep-1';
+
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                execution_id: executionId,
+                command: 'ls'
+            });
+
+            await terminal.handleApprovalRequest({
+                execution_id: executionId,
+                approval_id: 'approval-keep-1',
+                command: 'ls',
+                justification: 'List'
+            });
+
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            expect(bubble).not.toBeNull();
+
+            const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+            expect(content.children.length).toBeGreaterThan(0);
         });
     });
 });

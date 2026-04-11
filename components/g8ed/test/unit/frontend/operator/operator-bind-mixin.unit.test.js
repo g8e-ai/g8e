@@ -287,7 +287,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
     });
 
     describe('unbindOperator', () => {
-        it('calls operatorPanelService.unbindOperator with empty body when forceWithOperatorId is false', async () => {
+        it('calls operatorPanelService.unbindOperator with operator_id in body', async () => {
             const ctx = createMixinContext();
             const updateBindAllSpy = vi.spyOn(BindOperatorsMixin, 'updateBindAllButtonVisibility');
             const updateUnbindAllSpy = vi.spyOn(BindOperatorsMixin, 'updateUnbindAllButtonVisibility');
@@ -297,24 +297,11 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 json: async () => ({}),
             });
 
-            await ctx.unbindOperator(TEST_OPERATOR_ID, false);
-
-            expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({});
-            updateBindAllSpy.mockRestore();
-            updateUnbindAllSpy.mockRestore();
-        });
-
-        it('calls operatorPanelService.unbindOperator with operator_id in body when forceWithOperatorId is true', async () => {
-            const ctx = createMixinContext();
-            ctx.boundOperatorIds = [TEST_OPERATOR_ID];
-            operatorPanelService.unbindOperator.mockResolvedValue({
-                ok: true,
-                json: async () => ({}),
-            });
-
-            await ctx.unbindOperator(TEST_OPERATOR_ID, true);
+            await ctx.unbindOperator(TEST_OPERATOR_ID);
 
             expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({ operator_id: TEST_OPERATOR_ID });
+            updateBindAllSpy.mockRestore();
+            updateUnbindAllSpy.mockRestore();
         });
 
         it('removes operator ID from boundOperatorIds on successful unbind', async () => {

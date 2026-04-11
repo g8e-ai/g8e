@@ -26,18 +26,50 @@ export class TerminalExecutionMixin {
         this.executionResultsContainers = new Map();
     }
 
+    _createAIBubbleWrapper(bubbleId) {
+        const bubble = document.createElement('div');
+        bubble.className = 'anchored-terminal__ai-response anchored-terminal__ai-response--execution';
+        if (bubbleId) bubble.setAttribute('data-execution-bubble', bubbleId);
+
+        const header = document.createElement('div');
+        header.className = 'anchored-terminal__ai-response-header';
+
+        const sender = document.createElement('span');
+        sender.className = 'anchored-terminal__ai-response-sender';
+        sender.textContent = 'g8e';
+
+        const time = document.createElement('span');
+        time.className = 'anchored-terminal__ai-response-time';
+        time.textContent = this.formatTimestamp();
+
+        header.appendChild(time);
+        header.appendChild(sender);
+
+        const content = document.createElement('div');
+        content.className = 'anchored-terminal__ai-response-content';
+
+        bubble.appendChild(header);
+        bubble.appendChild(content);
+
+        return bubble;
+    }
+
     async showExecutingIndicator(command) {
         if (!this.outputContainer) return null;
 
         if (this._execCounter === undefined) this._execCounter = 0;
         const id = `exec-${Date.now()}-${++this._execCounter}`;
 
+        const bubble = this._createAIBubbleWrapper(id);
+        const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+
         const indicator = document.createElement('div');
         indicator.className = 'anchored-terminal__executing';
         indicator.id = id;
         await templateLoader.renderTo(indicator, 'executing-indicator', { command });
 
-        this.outputContainer.appendChild(indicator);
+        content.appendChild(indicator);
+        this.outputContainer.appendChild(bubble);
         this.scrollToBottom();
 
         return id;
@@ -49,12 +81,16 @@ export class TerminalExecutionMixin {
         if (this._execCounter === undefined) this._execCounter = 0;
         const id = `exec-${Date.now()}-${++this._execCounter}`;
 
+        const bubble = this._createAIBubbleWrapper(id);
+        const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+
         const indicator = document.createElement('div');
         indicator.className = 'anchored-terminal__executing';
         indicator.id = id;
         await templateLoader.renderTo(indicator, 'preparing-indicator', { command });
 
-        this.outputContainer.appendChild(indicator);
+        content.appendChild(indicator);
+        this.outputContainer.appendChild(bubble);
         this.scrollToBottom();
 
         return id;
@@ -90,13 +126,27 @@ export class TerminalExecutionMixin {
         return id;
     }
 
+    _findBubbleByExecId(execId) {
+        if (!this.outputContainer || !execId) return null;
+        return this.outputContainer.querySelector(
+            `.anchored-terminal__ai-response--execution[data-execution-bubble="${execId}"]`
+        );
+    }
+
     hideExecutingIndicator(id) {
         if (!this.outputContainer) return;
 
         if (id) {
             const indicator = document.getElementById(id);
             if (indicator) {
+                const parentBubble = indicator.closest('.anchored-terminal__ai-response--execution');
                 indicator.remove();
+                if (parentBubble) {
+                    const content = parentBubble.querySelector('.anchored-terminal__ai-response-content');
+                    if (content && content.children.length === 0) {
+                        parentBubble.remove();
+                    }
+                }
                 return;
             }
         }
@@ -111,17 +161,26 @@ export class TerminalExecutionMixin {
         const welcome = this.outputContainer.querySelector('.anchored-terminal__welcome');
         if (welcome) welcome.remove();
 
-        // Hide the "Preparing" indicator if it exists for this execution
         const execId = data.execution_id;
+        const approvalId = data.approval_id || data.execution_id;
+
+        let bubble = null;
         if (execId) {
             const preparingExec = this.activeExecutions.get(execId);
             if (preparingExec && preparingExec.indicatorId) {
-                this.hideExecutingIndicator(preparingExec.indicatorId);
+                bubble = this._findBubbleByExecId(preparingExec.indicatorId);
+                const indicator = document.getElementById(preparingExec.indicatorId);
+                if (indicator) indicator.remove();
                 this.activeExecutions.delete(execId);
             }
         }
 
-        const approvalId = data.approval_id || data.execution_id;
+        if (!bubble) {
+            bubble = this._createAIBubbleWrapper(approvalId);
+            this.outputContainer.appendChild(bubble);
+        }
+        bubble.setAttribute('data-execution-bubble', approvalId);
+
         const command = data.command;
         const justification = data.justification;
         const isFileEdit = data.file_path && data.operation;
@@ -191,7 +250,8 @@ export class TerminalExecutionMixin {
         approveBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, true));
         denyBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, false));
 
-        this.outputContainer.appendChild(approval);
+        const contentEl = bubble.querySelector('.anchored-terminal__ai-response-content');
+        contentEl.appendChild(approval);
         this.scrollToBottom();
     }
 
@@ -344,11 +404,13 @@ export class TerminalExecutionMixin {
         container.appendChild(toggle);
         container.appendChild(body);
 
-        if (approvalEl) {
-            if (approvalEl.nextSibling) {
-                this.outputContainer.insertBefore(container, approvalEl.nextSibling);
+        const parentBubble = approvalEl?.closest('.anchored-terminal__ai-response--execution');
+        if (parentBubble) {
+            const contentEl = parentBubble.querySelector('.anchored-terminal__ai-response-content');
+            if (contentEl) {
+                contentEl.appendChild(container);
             } else {
-                this.outputContainer.appendChild(container);
+                parentBubble.appendChild(container);
             }
         } else {
             this.outputContainer.appendChild(container);
@@ -637,10 +699,13 @@ export class TerminalExecutionMixin {
             statusClass,
             statusIcon,
             statusText,
-            timeHtml_raw: displayTime ? `<span class="approval-compact__time">${displayTime}</span>` : '' // for trusted rendering
+            timeHtml_raw: displayTime ? `<span class="approval-compact__time">${displayTime}</span>` : ''
         });
 
-        this.outputContainer.appendChild(entry);
+        const bubble = this._createAIBubbleWrapper(executionId);
+        const contentEl = bubble.querySelector('.anchored-terminal__ai-response-content');
+        contentEl.appendChild(entry);
+        this.outputContainer.appendChild(bubble);
 
         if (wasApproved && executionId) {
             await this._createResultsContainer(executionId, entry);

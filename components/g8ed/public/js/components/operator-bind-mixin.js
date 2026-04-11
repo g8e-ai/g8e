@@ -75,7 +75,7 @@ export const BindOperatorsMixin = {
         try {
             devLogger.log('[OPERATOR] Unbinding operator:', operatorId, { forceWithOperatorId });
 
-            const body = forceWithOperatorId ? { operator_id: operatorId } : {};
+            const body = { operator_id: operatorId };
             const response = await operatorPanelService.unbindOperator(body);
 
             if (!response.ok) {
