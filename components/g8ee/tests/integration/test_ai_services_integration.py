@@ -54,7 +54,6 @@ from app.constants import (
     TriageConfidence,
 )
 
-from app.llm.factory import get_settings
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
 from app.models.settings import G8eeUserSettings
@@ -342,8 +341,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_from_description(self, test_settings):
         """generate_case_title creates meaningful titles from descriptions."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.assistant_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with unique technical description
@@ -368,8 +367,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_from_short_description(self, test_settings):
         """generate_case_title handles short descriptions well."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.assistant_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with very short description
@@ -407,8 +406,8 @@ class TestTitleGenerationIntegration:
 
     async def test_generate_case_title_empty_description(self, test_settings):
         """generate_case_title handles empty/None descriptions."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.assistant_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with None description
@@ -456,8 +455,8 @@ class TestTriageServiceIntegration:
 
     async def test_triage_complexity_classification(self, test_settings):
         """TriageService correctly classifies case complexity."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test complex technical issue with specific entities
@@ -469,8 +468,7 @@ class TestTriageServiceIntegration:
         """
 
         agent = TriageAgent()
-        # Convert G8eePlatformSettings to G8eeUserSettings (only llm and search fields needed)
-        user_settings = G8eeUserSettings(llm=test_settings.llm, search=test_settings.search)
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=complex_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -489,16 +487,15 @@ class TestTriageServiceIntegration:
 
     async def test_triage_simple_issue(self, test_settings):
         """TriageService correctly classifies simple issues."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test simple issue
         simple_message = "What time is it?"
 
         agent = TriageAgent()
-        # Convert G8eePlatformSettings to G8eeUserSettings (only llm and search fields needed)
-        user_settings = G8eeUserSettings(llm=test_settings.llm, search=test_settings.search)
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=simple_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -521,16 +518,15 @@ class TestTriageServiceIntegration:
 
     async def test_triage_password_reset_complexity(self, test_settings):
         """TriageService correctly classifies password reset as complex due to security implications."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test password reset (security-sensitive)
         security_message = "I need help resetting my password. I forgot it and can't log in."
 
         agent = TriageAgent()
-        # Convert G8eePlatformSettings to G8eeUserSettings (only llm and search fields needed)
-        user_settings = G8eeUserSettings(llm=test_settings.llm, search=test_settings.search)
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=security_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -548,16 +544,15 @@ class TestTriageServiceIntegration:
 
     async def test_triage_ambiguous_request(self, test_settings):
         """TriageService handles ambiguous requests appropriately."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test ambiguous request
         ambiguous_message = "help"
 
         agent = TriageAgent()
-        # Convert G8eePlatformSettings to G8eeUserSettings (only llm and search fields needed)
-        user_settings = G8eeUserSettings(llm=test_settings.llm, search=test_settings.search)
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=ambiguous_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -593,8 +588,8 @@ class TestCommandGenerationIntegration:
 
     async def test_command_generation_interface(self, test_settings):
         """Test that command generation interface exists and can be called."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
         assert callable(generate_command)
 
@@ -617,8 +612,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyze_command_risk(self, test_settings):
         """AIResponseAnalyzer correctly analyzes command risk."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
@@ -650,8 +645,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyze_high_risk_command(self, test_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
@@ -682,8 +677,8 @@ class TestResponseAnalysisIntegration:
 
     async def test_analyzer_interface_exists(self, test_settings):
         """Test that AIResponseAnalyzer interface exists and can be instantiated."""
-        settings = get_settings()
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm = getattr(test_settings, 'llm', None)
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test that the class can be instantiated

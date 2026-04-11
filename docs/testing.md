@@ -904,7 +904,7 @@ Domain object fixtures (function scope):
 
 Integration test fixtures (session scope) — these connect to real g8es and are available to any test that needs live infrastructure:
 - `cache_aside_service` — real session-scoped `CacheAsideService` backed by a live `KVClient` and `DBClient`; required by `test_settings`, `kv_cache_client`, `pubsub_client`, `db_service`
-- `test_settings` — `Settings` loaded from the live DB via `Settings.from_db(cache_aside_service)`
+- `test_settings` — `G8eePlatformSettings` from the factory singleton (loaded from g8es during `pytest_configure`); LLM config is monkey-patched via `object.__setattr__` when `TEST_LLM_*` env vars are present — access via `getattr(test_settings, 'llm', None)`
 - `kv_cache_client` — real session-scoped `KVClient` connection; `db_client` is an alias
 - `pubsub_client` — real session-scoped `KVClient` connection used for pub/sub; `g8es_pubsub_client` is an alias
 - `db_service` — real `DBService` backed by a `DBClient` instance and `cache_aside_service`
@@ -920,7 +920,7 @@ Model config fixtures (function scope unless noted):
 - `mock_model_config_factory` — callable returning a `LLMModelConfig` with overridable fields (`name`, `supports_tools`, `supports_thinking`, `context_window_input`, `context_window_output`, `**kwargs`)
 
 Session output (via `pytest_sessionstart`):
-- Loads platform settings from g8es, then overlays any `TEST_LLM_*` env vars (from CLI flags) onto `settings.llm`
+- Loads platform settings from g8es, then monkey-patches any `TEST_LLM_*` env vars (from CLI flags) onto the settings singleton via `object.__setattr__` (since `G8eePlatformSettings` uses `extra="ignore"`, normal attribute assignment is blocked)
 - `_show_llm_config` in `run_tests.sh` prints the active LLM configuration before tests run
 
 **`tests/fixtures/` — importable test data builders and stubs**
@@ -1006,13 +1006,13 @@ Shared building blocks for any test that exercises `g8e agent` streaming, `run_w
 
 | Export | What it provides |
 |--------|-----------------|
-| `make_gen_config(workflow_type, system_instructions)` | `AIRequestBuilder` generation config with a mock function handler |
+| `make_gen_config(settings, agent_mode, system_instructions)` | `AIRequestBuilder` generation config with a mock function handler |
 | `make_agent_stream_context(**kwargs)` | `AgentStreamContext` with sensible defaults; auto-builds `g8e_context` from matching IDs |
 | `make_g8ed_event_service()` | Mock g8e event service with `publish` as `AsyncMock` |
-| `make_g8e_agent(provider, fn_handler)` | `g8e agent` with `fn_handler` pre-wired for `_stream_with_tool_loop` and `run_with_sse` (`_tool_declarations`, `start/reset_invocation_context` mocks — lifecycle is owned by `run_with_sse`, not `stream_response`) |
+| `make_g8e_agent(fn_handler)` | `g8e agent` with `fn_handler` pre-wired for `_stream_with_tool_loop` and `run_with_sse` (`_tool_declarations`, `start/reset_invocation_context` mocks — lifecycle is owned by `run_with_sse`, not `stream_response`; `llm_provider` is passed per-call to `stream_response`, not at construction time) |
 | `make_provider_chunk(*, thought, text, thought_signature, tool_calls, finish_reason)` | Minimal fake provider chunk matching the interface `process_provider_turn` and `_stream_with_tool_loop` read |
-| `FakeStreamProvider(chunks)` | Provider stub for single-turn scenarios; yields a fixed list from `generate_content_stream` |
-| `FakeMultiTurnStreamProvider(chunks_per_call)` | Provider stub for multi-turn function-call loops; yields successive chunk-lists across calls |
+| `FakeStreamProvider(chunks)` | Provider stub for single-turn scenarios; yields a fixed list from `generate_content_stream_primary` |
+| `FakeMultiTurnStreamProvider(chunks_per_call)` | Provider stub for multi-turn function-call loops; yields successive chunk-lists across `generate_content_stream_primary` calls |
 | `patch_stream_response(agent, chunks)` | Replaces `agent.stream_response` with an async generator yielding the given `StreamChunk` list |
 | `collect_stream_from_model_chunks(agent, context, gen_config, model_name)` | Drives `_stream_with_tool_loop` and returns all yielded `StreamChunkFromModel` objects |
 | `run_process_provider_turn(provider_chunks, model_name)` | Drives `process_provider_turn` directly; returns `(stream_chunks, model_response_parts)` |
