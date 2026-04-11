@@ -86,7 +86,7 @@ describe('g8ed Shared Definitions Contract', () => {
         it('AWS', () => expect(CloudOperatorSubtype.AWS).toBe(STATUS['cloud.subtype']['aws']));
         it('GCP', () => expect(CloudOperatorSubtype.GCP).toBe(STATUS['cloud.subtype']['gcp']));
         it('AZURE', () => expect(CloudOperatorSubtype.AZURE).toBe(STATUS['cloud.subtype']['azure']));
-        it('G8E_POD', () => expect(CloudOperatorSubtype.G8E_POD).toBe(STATUS['cloud.subtype']['g8e_pod']));
+        it('G8E_POD', () => expect(CloudOperatorSubtype.G8E_POD).toBe(STATUS['cloud.subtype']['g8ep']));
 
         it('covers all keys in shared JSON', () => {
             const jsonKeys = Object.keys(STATUS['cloud.subtype']);

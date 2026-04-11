@@ -73,7 +73,7 @@ class G8ENodeOperatorService {
     /**
      * Returns the specific g8ep operator slot for this user.
      *
-     * Queries for the operator with is_g8e_pod=true for the given user.
+     * Queries for the operator with is_g8ep=true for the given user.
      *
      * @param {string} user_id
      * @returns {Promise<{ operator: Object, alreadyActive: boolean }|null>}
@@ -84,7 +84,7 @@ class G8ENodeOperatorService {
         // Find the specific slot designated as the g8ep for this user
         const operators = await this._operatorService.queryOperators([
             { field: 'user_id', operator: '==', value: user_id },
-            { field: 'is_g8e_pod', operator: '==', value: true }
+            { field: 'is_g8ep', operator: '==', value: true }
         ]);
 
         const operatorData = operators && operators.length > 0 ? operators[0] : null;

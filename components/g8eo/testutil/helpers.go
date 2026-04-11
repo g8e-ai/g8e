@@ -51,7 +51,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 
 	return &config.Config{
 		ProjectID:          "test-project",
-		ServiceName:        constants.Status.ComponentName.G8EO,
+		ComponentName:      constants.Status.ComponentName.G8EO,
 		Version:            "test",
 		APIKey:             "test-api-key",
 		AuthMode:           constants.Status.AuthMode.APIKey,

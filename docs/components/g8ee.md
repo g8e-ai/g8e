@@ -216,7 +216,7 @@ Activated when at least one g8eo Operator has `status=bound`.
 - **Full tool suite** — command execution, file operations, directory listing, port checks, web search (if configured).
 - **Human-in-the-loop** — all state-changing operations require explicit user approval before execution.
 - **Thinking** — enabled for models that declare `supports_thinking=True`; uses the highest supported thinking level from the model's config.
-- **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8e_pod`) are a special type of cloud operator that provide direct system access and bypass the intent system.
+- **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provide direct system access and bypass the intent system.
 - **Multi-operator** — multiple operators may be bound simultaneously; the AI selects the target per command using `target_operator` (hostname, operator ID, or index). Batch operations use `target_operators` for unified single-approval execution across N systems.
 
 ### Operator Not Bound
@@ -421,7 +421,7 @@ While g8es stores a summary of recent activity, the **Operator remains the syste
 
 ## Cloud Operator & AWS Intents
 
-The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`. g8ep operators (`cloud_subtype=g8e_pod`) have direct system access and do not use the intent system.
+The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`. g8ep operators (`cloud_subtype=g8ep`) have direct system access and do not use the intent system.
 
 Cloud Operators for AWS implement a **Zero Standing Privileges** model. The Operator is started with `--cloud --provider aws` — either automatically on the g8ep sidecar (local dev, credentials from `~/.aws`) or deployed to an EC2 instance in the customer's VPC (credentials from IAM instance profile). In both cases the AI launches with only bootstrap permissions (STS identity, IAM role introspection) and dynamically requests additional permissions through the intent system.
 

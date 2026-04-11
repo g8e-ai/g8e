@@ -28,7 +28,7 @@
     "aws": "aws",
     "gcp": "gcp",
     "azure": "azure",
-    "g8e_pod": "g8e_pod"
+    "g8ep": "g8ep"
   },
 
   "execution.status": {

@@ -45,7 +45,7 @@ import {
     validatePlatformSettings
 } from '../../models/settings_model.js';
 import { BootstrapService } from './bootstrap_service.js';
-import { g8es_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
+import { G8ES_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
 import { now } from '../../models/base.js';
 
 
@@ -100,7 +100,7 @@ class SettingsService {
         const caCertPath = this.bootstrap.loadCaCertPath();
 
         logger.info('[SETTINGS-SERVICE] Initializing platform settings', {
-            g8esUrl: g8es_INTERNAL_HTTP_URL ,
+            g8esUrl: G8ES_INTERNAL_HTTP_URL ,
             hasInternalAuthToken: !!internalAuthToken,
             caCertPath,
             g8esVolumePath: this.bootstrap.volumePath

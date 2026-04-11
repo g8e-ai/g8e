@@ -717,9 +717,9 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 
 func (es *ExecutionService) collectEnvironmentInfo() *models.ExecutionEnvironmentInfo {
 	envInfo := &models.ExecutionEnvironmentInfo{
-		ServiceName: es.config.ServiceName,
-		ProjectID:   es.config.ProjectID,
-		MaxMemoryMB: es.maxMemoryMB,
+		ComponentName: es.config.ComponentName,
+		ProjectID:     es.config.ProjectID,
+		MaxMemoryMB:   es.maxMemoryMB,
 	}
 
 	es.logger.Info("Environment configuration collected",

@@ -174,7 +174,7 @@
         "values": ["aws", "gcp", "azure"],
         "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
       },
-      "is_g8e_pod": {
+      "is_g8ep": {
         "type": "boolean",
         "required": true,
         "default": false,

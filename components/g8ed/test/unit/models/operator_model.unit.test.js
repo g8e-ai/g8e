@@ -500,7 +500,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             slot_number: 1,
             operator_type: OperatorType.CLOUD,
             cloud_subtype: CloudOperatorSubtype.AWS,
-            is_g8e_pod: true,
+            is_g8ep: true,
         });
         expect(doc.operator_id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
@@ -511,7 +511,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.system_fingerprint).toBe(systemInfo.system_fingerprint);
         expect(doc.operator_type).toBe(OperatorType.CLOUD);
         expect(doc.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
-        expect(doc.is_g8e_pod).toBe(true);
+        expect(doc.is_g8ep).toBe(true);
         expect(doc.slot_cost).toBe(1);
         expect(doc.history_trail).toHaveLength(1);
         expect(doc.history_trail[0].event_type).toBe(HistoryEventType.CREATED);

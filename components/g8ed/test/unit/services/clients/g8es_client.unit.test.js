@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect } from 'vitest';
-import { g8esHttpClient, g8esDocumentClient, KVCacheClient, G8esPubSubClient } from '@g8ed/services/clients/g8es_client.js';
+import { G8esHttpClient, G8esDocumentClient, KVCacheClient, G8esPubSubClient } from '@g8ed/services/clients/g8es_client.js';
 
 describe('db_client.js exports', () => {
     it('should export all g8es client classes', () => {

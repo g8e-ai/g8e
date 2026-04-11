@@ -1024,7 +1024,7 @@ All magic strings and numbers used in frontend JS must be defined in `public/js/
 | File | Contains |
 |------|----------|
 | `api-paths.js` | `ApiPaths` builders — all g8ed endpoint path strings consumed by the frontend |
-| `service-client-constants.js` | `ServiceName`, `ServiceUrl`, `RequestTimeout`, `RetryConfig`, `RequestPath`, `HttpMethod`, `ServiceClientEvent`, HTTP header name constants, rate-limit constants — all values used by `ServiceClient` |
+| `service-client-constants.js` | `ComponentName`, `ComponentUrl`, `RequestTimeout`, `RetryConfig`, `RequestPath`, `HttpMethod`, `ServiceClientEvent`, HTTP header name constants, rate-limit constants — all values used by `ServiceClient` |
 | `events.js` | `EventType` (auto-generated flat frozen object from `shared/constants/events.json`), `StreamChunkType`, `MessageType`, `CitationLayout`, `TribunalOutcome`, `TribunalFallbackReason`, `ToolDisplayCategory`, `ThinkingActionType` — all SSE and AI event constants |
 | `auth-constants.js` | `UserRole`, `OperatorSessionRole`, `AuthProvider`, `DeviceLinkStatus`, `IntentStatus` — authentication and authorisation enums |
 | `operator-constants.js` | `OperatorStatus`, `OperatorType` — operator state enums |

@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { KVCacheClient, KVOperationError } from '@g8ed/services/clients/g8es_kv_cache_client.js';
-import { g8es_KV_CLIENT_STATUS_READY } from '@g8ed/constants/http_client.js';
+import { G8ES_KV_CLIENT_STATUS_READY } from '@g8ed/constants/http_client.js';
 
 describe('KVCacheClient', () => {
     const listenUrl = 'https://g8es:9000';
@@ -367,7 +367,7 @@ describe('KVCacheClient', () => {
 
     describe('Lifecycle and Utility', () => {
         it('should report status and handle termination', async () => {
-            expect(client.status).toBe(G8es_KV_CLIENT_STATUS_READY);
+            expect(client.status).toBe(G8ES_KV_CLIENT_STATUS_READY);
             
             vi.mocked(mockHttp.isTerminated).mockReturnValue(false);
             await client.quit();

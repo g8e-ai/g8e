@@ -16,7 +16,7 @@ import { nowISOString } from '../utils/timestamp.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { escapeHtml } from '../utils/html.js';
 import { webSessionService } from '../utils/web-session-service.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 
 export class TerminalExecutionMixin {

@@ -63,6 +63,19 @@ export const ServiceClientEvent = Object.freeze({
     READY: 'serviceClientReady',
 });
 
+export const ComponentName = Object.freeze({
+    G8EE: 'g8ee',
+    G8EO: 'g8eo',
+    G8ED: 'g8ed',
+    G8ES: 'g8es',
+});
+
+export const ComponentUrl = Object.freeze({
+    G8EE: 'https://g8ee',
+    G8ED: 'https://g8ed',
+    G8ES: 'https://g8es',
+});
+
 export const MAX_ATTACHMENT_SIZE              = 10 * 1024 * 1024;
 export const MAX_TOTAL_ATTACHMENT_SIZE        = 30 * 1024 * 1024;
 export const MAX_ATTACHMENT_FILES             = 3;

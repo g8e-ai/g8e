@@ -9,18 +9,18 @@ _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
 }
 
-_g8e_pod_running() {
+_g8ep_running() {
     docker ps --filter "name=^${CONTAINER}$" --filter "status=running" -q 2>/dev/null | grep -q .
 }
 
-_g8e_pod_exists() {
+_g8ep_exists() {
     docker ps -a --filter "name=^${CONTAINER}$" -q 2>/dev/null | grep -q .
 }
 
-_ensure_g8e_pod() {
+_ensure_g8ep() {
     local _cmd="${1:-}"
-    if ! _g8e_pod_running; then
-        if ! _g8e_pod_exists; then
+    if ! _g8ep_running; then
+        if ! _g8ep_exists; then
             [[ -n "$_cmd" ]] && echo "[g8e] Running: ./g8e $_cmd"
             echo "[g8e] g8ep is the sandboxed environment used to run this command."
             echo "[g8e] First run — building g8ep image (requires Docker)..."
@@ -33,7 +33,7 @@ _ensure_g8e_pod() {
 }
 
 _exec_in_pod() {
-    _ensure_g8e_pod "$TOP${SUB:+ $SUB}"
+    _ensure_g8ep "$TOP${SUB:+ $SUB}"
     if [ -t 0 ] && [ -t 1 ]; then
         exec docker exec -it "$CONTAINER" "$@"
     else
@@ -147,7 +147,7 @@ SUB="${2:-}"
 # This ensures that all subcommands have access to the token for internal API calls.
 INTERNAL_AUTH_TOKEN=""
 if [[ "$TOP" != "platform" || ("$SUB" != "start" && "$SUB" != "status" && "$SUB" != "stop" && "$SUB" != "restart" && "$SUB" != "rebuild" && "$SUB" != "reset" && "$SUB" != "wipe" && "$SUB" != "clean") ]]; then
-    if _g8e_pod_running; then
+    if _g8ep_running; then
         # Use docker exec to read the token directly from the SSL volume mount in g8ep
         INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /g8es/internal_auth_token 2>/dev/null || true)
     fi
@@ -261,7 +261,7 @@ case "$TOP" in
                 ;;
             reauth)
                 _banner "operator reauth"
-                _ensure_g8e_pod "operator reauth"
+                _ensure_g8ep "operator reauth"
 
                 USER_ID=""
                 EMAIL=""
@@ -315,7 +315,7 @@ case "$TOP" in
 
             init)
                 _banner "operator init"
-                _ensure_g8e_pod "operator init"
+                _ensure_g8ep "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
                 docker exec g8ep bash -c "
                     set -e
@@ -379,7 +379,7 @@ case "$TOP" in
                     echo "  Usage: ./g8e operator deploy <user@host> [options]" >&2
                     exit 1
                 fi
-                _ensure_g8e_pod "operator deploy"
+                _ensure_g8ep "operator deploy"
                 _REMOTE_EXEC="${_DEPLOY_DEST}"
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
                 echo "Fetching linux/${_DEPLOY_ARCH} operator from g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
@@ -404,7 +404,7 @@ case "$TOP" in
                 exit 0 ;;
             stream)
                 if [[ "${3:-}" == "-h" || "${3:-}" == "--help" || "${3:-}" == "" ]]; then
-                    _ensure_g8e_pod "operator stream"
+                    _ensure_g8ep "operator stream"
                     if [ -t 0 ] && [ -t 1 ]; then
                         exec docker exec -it "$CONTAINER" /home/g8e/g8e.operator stream --help
                     else
@@ -412,7 +412,7 @@ case "$TOP" in
                     fi
                 fi
                 _banner "operator stream ${@:3}"
-                _ensure_g8e_pod "operator stream"
+                _ensure_g8ep "operator stream"
                 if ! docker exec "$CONTAINER" test -f /home/g8e/g8e.operator 2>/dev/null; then
                     echo "[g8e] Operator binary not found in g8ep at /home/g8e/g8e.operator" >&2
                     echo "  Run: ./g8e operator build" >&2
@@ -479,7 +479,7 @@ case "$TOP" in
                 _exec_in_pod /app/scripts/security/manage-passkeys.py "${@:3}" ;;
             rotate-internal-token)
                 _banner "security rotate-internal-token"
-                _ensure_g8e_pod "security rotate-internal-token"
+                _ensure_g8ep "security rotate-internal-token"
                 echo "  Rotating internal auth token..."
                 _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-g8es.py settings rotate-token 2>&1)"
                 if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then

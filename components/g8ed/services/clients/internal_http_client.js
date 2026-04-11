@@ -71,8 +71,8 @@ class InternalHttpClient{
         return this._bootstrapService.loadInternalAuthToken();
     }
 
-    _resolveServiceUrl(service) {
-        if (service === 'g8ee') {
+    _resolveComponentUrl(component) {
+        if (component === 'g8ee') {
             const url = (this._settingsService && this._settingsService.g8ee_url) || G8EE_INTERNAL_URL;
             return url.endsWith('/') ? url.slice(0, -1) : url;
         }
@@ -147,18 +147,18 @@ class InternalHttpClient{
     /**
      * Make internal HTTP request with timeout and error handling.
      *
-     * @param {string} service - Key in SERVICES map
+     * @param {string} component - Key in COMPONENTS map
      * @param {string} path - URL path
      * @param {Object} options - Fetch options plus:
      *   options.g8eContext  {Object}      - G8eHttpContext for X-G8E-* headers
      *   options.signal      {AbortSignal} - Caller-supplied signal (e.g. req.signal)
      */
-    async request(service, path, options = {}) {
-        const url = `${this._resolveServiceUrl(service)}${path}`;
+    async request(component, path, options = {}) {
+        const url = `${this._resolveComponentUrl(component)}${path}`;
         const method = options.method || 'GET';
 
         logger.info('[HTTP-INTERNAL] Request started', {
-            service,
+            component,
             path,
             method,
             url
@@ -185,7 +185,7 @@ class InternalHttpClient{
         }
 
         // Add G8eHttpContext headers if context is provided
-        const contextHeaders = options.g8eContext ? this.buildG8eContextHeaders(options.g8eContext, service) : {};
+        const contextHeaders = options.g8eContext ? this.buildG8eContextHeaders(options.g8eContext, component) : {};
 
         const mergedHeaders = {
             ...baseHeaders,
@@ -212,7 +212,7 @@ class InternalHttpClient{
             // Handle 204 No Content responses (e.g., DELETE operations)
             if (response.status === 204) {
                 logger.info('[HTTP-INTERNAL] Request completed (No Content)', {
-                    service,
+                    component,
                     path,
                     method,
                     status: response.status
@@ -228,7 +228,7 @@ class InternalHttpClient{
             const data = await response.json();
 
             logger.info('[HTTP-INTERNAL] Request completed', {
-                service,
+                component,
                 path,
                 method,
                 status: response.status,
@@ -242,11 +242,11 @@ class InternalHttpClient{
 
             if (error.name === 'AbortError') {
                 if (options.signal?.aborted) {
-                    logger.info('[HTTP-INTERNAL] Request cancelled by caller', { service, path });
+                    logger.info('[HTTP-INTERNAL] Request cancelled by caller', { component, path });
                     throw error;
                 }
                 logger.error('[HTTP-INTERNAL] Request timeout', {
-                    service,
+                    component,
                     path,
                     timeout: this.timeout
                 });
@@ -254,7 +254,7 @@ class InternalHttpClient{
             }
 
             logger.error('[HTTP-INTERNAL] Request failed', {
-                service,
+                component,
                 path,
                 error: error.message
             });

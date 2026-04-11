@@ -72,7 +72,7 @@ if [ ! -x "${OPERATOR_BINARY}" ]; then
     _fetch_binary
 fi
 
-G8E_OPERATOR_API_KEY=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['settings']['g8e_pod_operator_api_key'])")
+G8E_OPERATOR_API_KEY=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['settings']['g8ep_operator_api_key'])")
 
 if [ -z "$G8E_OPERATOR_API_KEY" ]; then
     echo "[g8ep] Operator API key is empty in platform_settings" >&2
@@ -81,7 +81,7 @@ fi
 
 export G8E_OPERATOR_API_KEY
 
-OPERATOR_FLAGS=(--endpoint "$ENDPOINT" --working-dir /home/g8e --no-git --log "$LOG_LEVEL" --cloud --provider g8e_pod)
+OPERATOR_FLAGS=(--endpoint "$ENDPOINT" --working-dir /home/g8e --no-git --log "$LOG_LEVEL" --cloud --provider g8ep)
 
 if [ -n "$PUBSUB_URL" ]; then
     export G8E_OPERATOR_PUBSUB_URL="$PUBSUB_URL"

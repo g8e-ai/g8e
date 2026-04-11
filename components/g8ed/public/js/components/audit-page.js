@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { ApiPaths } from '../constants/api-paths.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { devLogger } from '../utils/dev-logger.js';
 
 function escHtml(str) {

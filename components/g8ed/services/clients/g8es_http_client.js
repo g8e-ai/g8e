@@ -12,9 +12,9 @@
 // limitations under the License.
 
 /**
- * g8esHttpClient — Purpose-built HTTP client for g8es.
+ * G8esHttpClient — Purpose-built HTTP client for g8es.
  * 
- * Shared base for g8esDocumentClient and KVCacheClient.
+ * Shared base for G8esDocumentClient and KVCacheClient.
  * Provides timeout, error logging, and auth header propagation
  * for all HTTP calls to g8es (Operator --listen mode).
  * 
@@ -24,10 +24,10 @@
  */
 
 import { logger } from '../../utils/logger.js';
-import { g8es_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
+import { G8ES_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER, HTTP_CONTENT_TYPE_HEADER } from '../../constants/headers.js';
 
-class g8esHttpError extends Error {
+class G8esHttpError extends Error {
     constructor(message, status) {
         super(message);
         this.name = 'G8esHttpError';
@@ -35,7 +35,7 @@ class g8esHttpError extends Error {
     }
 }
 
-class g8esHttpClient {
+class G8esHttpClient {
     /**
      * @param {object} config
      * @param {string} config.listenUrl - Base URL of g8es (e.g. $G8E_INTERNAL_HTTP_URL)
@@ -78,7 +78,7 @@ class g8esHttpClient {
 
         const url = `${this.listenUrl}${path}`;
         const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), g8es_HTTP_TIMEOUT_MS);
+        const timeoutId = setTimeout(() => timeoutController.abort(), G8ES_HTTP_TIMEOUT_MS);
 
         try {
             const fetchOptions = {
@@ -96,7 +96,7 @@ class g8esHttpClient {
             try {
                 data = JSON.parse(text);
             } catch {
-                throw new g8esHttpError(`g8es returned non-JSON response: ${text}`, res.status);
+                throw new G8esHttpError(`g8es returned non-JSON response: ${text}`, res.status);
             }
 
             if (!res.ok) {
@@ -106,13 +106,13 @@ class g8esHttpClient {
                 } else {
                     logger.error(`[${this.component}] ${method} ${path} failed: ${errMsg || `HTTP ${res.status}`}`);
                 }
-                throw new g8esHttpError(errMsg || `HTTP ${res.status}`, res.status);
+                throw new G8esHttpError(errMsg || `HTTP ${res.status}`, res.status);
             }
             return data;
         } catch (error) {
             clearTimeout(timeoutId);
 
-            if (error instanceof g8esHttpError) {
+            if (error instanceof G8esHttpError) {
                 throw error;
             }
 
@@ -227,4 +227,4 @@ class g8esHttpClient {
     }
 }
 
-export { g8esHttpClient, g8esHttpError };
+export { G8esHttpClient, G8esHttpError };

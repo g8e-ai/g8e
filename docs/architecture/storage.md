@@ -84,7 +84,7 @@ graph TD
 │  │         g8ee          │      │              g8ed                │ │
 │  │  (stateless)         │      │  (stateless)                     │ │
 │  │                      │      │                                  │ │
-│  │  DBClient         │      │  g8esDocumentClient             │ │
+│  │  DBClient         │      │  G8esDocumentClient             │ │
 │  │  (document store)    │      │  (document store)                │ │
 │  │                      │      │                                  │ │
 │  │  KVClient       │      │  KVClient                   │ │
@@ -401,7 +401,7 @@ Stored in the `operators` collection. g8ed writes lifecycle/auth fields; g8ee wr
 | `heartbeat_history` | array | g8ee | Rolling buffer of last 10 heartbeats |
 | `latest_heartbeat_snapshot` | object | g8ee | Most recent metrics: CPU, memory, disk, network |
 | `operator_session_id` | string | g8ed | Active session ID |
-| `is_g8e_pod` | boolean | g8ed | Set on g8ep sidecar operators |
+| `is_g8ep` | boolean | g8ed | Set on g8ep sidecar operators |
 | `created_at` | string | g8ed | ISO 8601 creation timestamp |
 | `updated_at` | string | g8ed/g8ee | ISO 8601 last-update timestamp |
 

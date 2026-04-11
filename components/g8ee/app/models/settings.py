@@ -209,8 +209,8 @@ class AuthSettings(G8eBaseModel):
     session_encryption_key: str | None = Field(None)
     g8e_api_key: str | None = Field(None)
 
-class ServiceURLsSettings(G8eBaseModel):
-    """Internal and external service URL configuration."""
+class ComponentURLsSettings(G8eBaseModel):
+    """Internal and external component URL configuration."""
     g8ee_url: str = Field("https://g8ee")
     g8ed_url: str = Field("https://g8ed")
 
@@ -318,7 +318,7 @@ class G8eePlatformSettings(G8eBaseModel):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     listen: ListenSettings = Field(default_factory=ListenSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
-    service_urls: ServiceURLsSettings = Field(default_factory=ServiceURLsSettings)
+    component_urls: ComponentURLsSettings = Field(default_factory=ComponentURLsSettings)
 
     docker_gid: str = Field("988")
     session_ttl: int = Field(28800)

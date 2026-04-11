@@ -148,7 +148,7 @@ _upload-blob:
 			-H 'Content-Type: application/octet-stream' \
 			-H 'X-Internal-Auth: $(AUTH_TOKEN)' \
 			--data-binary @$(BIN_PATH) \
-			'$(G8es_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
+			'$(G8ES_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
 		if [ "$$HTTP_CODE" = "200" ] || [ "$$HTTP_CODE" = "201" ]; then \
 			echo "  Uploaded linux/$(ARCH) to g8es blob store ($$SIZE)"; \
 		else \

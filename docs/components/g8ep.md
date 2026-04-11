@@ -186,12 +186,12 @@ POST /api/auth/login (or /register)
             │
             └─ 2. launchG8ENodeOperator(apiKey)
                     → reads operator.api_key from the operator document
-                    → savePlatformSettings({ g8e_pod_operator_api_key: apiKey })
+                    → savePlatformSettings({ g8ep_operator_api_key: apiKey })
                     → XML-RPC supervisor.startProcess('operator')
                     → supervisord runs fetch-key-and-run.sh:
                           curl g8es /db/settings/platform_settings (with retry)
                           → if binary absent: downloads from blob store (/blob/operator-binary/linux-{arch})
-                          → extracts g8e_pod_operator_api_key
+                          → extracts g8ep_operator_api_key
                           → exec g8e.operator --endpoint g8e.local --working-dir /home/g8e
                           → operator discovers CA cert locally at /g8es/ca.crt (no network fetch)
                     → binary authenticates with API key, slot is claimed, operator goes ACTIVE
@@ -394,7 +394,7 @@ Host jump.example.com
 
 g8ed manages the g8ep operator through the Operator Panel in the browser UI. The panel is implemented in `components/g8ed/public/js/components/operator-panel.js` and its mixin modules.
 
-The g8ep operator is sorted to the top of the operator list — it is identified by the `is_g8e_pod` flag on the operator document and always renders first, above all remote operators.
+The g8ep operator is sorted to the top of the operator list — it is identified by the `is_g8ep` flag on the operator document and always renders first, above all remote operators.
 
 **Actions available per operator card in the UI:**
 

@@ -196,7 +196,7 @@ def exec_get(args: argparse.Namespace) -> None:
 
 
 def _g8es_get_platform_settings() -> Dict[str, Any]:
-    result = get_document(G8es_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
+    result = get_document(G8ES_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
     return result if result else {}
 
 

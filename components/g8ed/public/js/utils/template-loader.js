@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { devLogger } from './dev-logger.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { escapeHtml, escapeHtmlAttribute } from './html.js';
 
 const TEMPLATES_BASE_PATH = '/js/components/templates/';

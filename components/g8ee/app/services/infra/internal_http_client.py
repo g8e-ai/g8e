@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_g8ed_url(settings: G8eePlatformSettings) -> str:
-    return settings.service_urls.g8ed_url
+    return settings.component_urls.g8ed_url
 
 
 class InternalHttpClient:

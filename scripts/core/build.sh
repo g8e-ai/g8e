@@ -138,7 +138,7 @@ _is_running() {
     docker ps --filter "name=^$1$" --filter "status=running" --format "{{.Names}}" | grep -q "^$1$"
 }
 
-_ensure_g8e_pod() {
+_ensure_g8ep() {
     if ! _is_running "g8ep"; then
         echo "g8ep container is not running — starting it..."
         docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8ep
@@ -358,7 +358,7 @@ fi
 
 if [[ "$COMMAND" == "wipe" ]]; then
     _preflight
-    _ensure_g8e_pod
+    _ensure_g8ep
 
     echo "Stopping g8ee, g8ed, and g8es..."
     docker compose stop g8ee g8ed g8es 2>/dev/null || true
@@ -556,7 +556,7 @@ fi
 # ─── operator-build ─────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build" ]]; then
-    _ensure_g8e_pod
+    _ensure_g8ep
     echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
     docker exec g8ep bash -c "cd /app/components/g8eo && make build"
     echo ""
@@ -567,7 +567,7 @@ fi
 # ─── operator-build-all ─────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
-    _ensure_g8e_pod
+    _ensure_g8ep
     echo "Building all operator architectures and uploading to g8es blob store..."
     docker exec g8ep bash -c "cd /app/components/g8eo && make build-all"
     echo ""

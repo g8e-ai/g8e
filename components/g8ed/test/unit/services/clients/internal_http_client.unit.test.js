@@ -66,11 +66,11 @@ describe('InternalHttpClient', () => {
             expect(bootstrapService.loadInternalAuthToken).toHaveBeenCalled();
         });
 
-        it('should resolve service URL from settingsService or default', () => {
-            expect(client._resolveServiceUrl('g8ee')).toBe('https://g8ee');
+        it('should resolve component URL from settingsService or default', () => {
+            expect(client._resolveComponentUrl('g8ee')).toBe('https://g8ee');
 
             const noSettingsClient = new InternalHttpClient({ bootstrapService });
-            expect(noSettingsClient._resolveServiceUrl('g8ee')).toBe('https://g8ee');
+            expect(noSettingsClient._resolveComponentUrl('g8ee')).toBe('https://g8ee');
         });
     });
 

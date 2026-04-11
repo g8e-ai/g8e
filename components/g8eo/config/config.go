@@ -111,9 +111,9 @@ func LoadOpenClaw(gatewayURL, token, nodeID, displayName, pathEnv, logLevel stri
 // Config holds all configuration for g8eo
 type Config struct {
 	// Basic configuration
-	ProjectID   string
-	ServiceName string
-	Version     string
+	ProjectID     string
+	ComponentName string
+	Version       string
 
 	// Authentication
 	APIKey   string
@@ -204,7 +204,7 @@ func LoadListen(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPath, 
 	}
 
 	return &Config{
-		ServiceName: "g8eo-listen",
+		ComponentName: "g8eo-listen",
 		Listen: ListenConfig{
 			Enabled:     true,
 			WSSPort:     wssPort,
@@ -276,7 +276,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		ProjectID:     "g8e",
 
 		// Fixed defaults
-		ServiceName:        constants.Status.ComponentName.G8EO,
+		ComponentName:      constants.Status.ComponentName.G8EO,
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  heartbeatIntervalOrDefault(opts.HeartbeatInterval),

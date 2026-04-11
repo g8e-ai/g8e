@@ -13,7 +13,7 @@
 
 import { EventType } from '../constants/events.js';
 import { SSEClientConfig } from '../constants/sse-constants.js';
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { devLogger } from './dev-logger.js';
 import { ApiPaths } from '../constants/api-paths.js';
 

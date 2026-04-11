@@ -167,7 +167,7 @@ On `_applyOperatorState`, the cause determines the update path:
 ### Operator List
 
 `OperatorListMixin.displayOperators(operators)` renders paginated operator cards. Sort priority:
-1. g8e node Operators (`is_g8e_pod`)
+1. g8e node Operators (`is_g8ep`)
 2. Bound to current web session
 3. Bound to another session
 4. Active

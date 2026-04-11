@@ -182,7 +182,7 @@ var Status = statusValues{
 		AWS:     "aws",
 		GCP:     "gcp",
 		Azure:   "azure",
-		G8eNode: "g8e_pod",
+		G8eNode: "g8ep",
 	},
 	VaultMode: vaultModeValues{
 		Raw:      "raw",

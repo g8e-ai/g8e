@@ -102,7 +102,7 @@ Rewrote `BoundSessionsService.resolveBoundOperators` to eliminate unnecessary wo
 
 ### Post-Login Race Condition Fix
 
-`onSuccessfulLogin` and `onSuccessfulRegistration` in `post_login_service.js` fired `initializeOperatorSlots` and `activateG8ENodeOperatorForUser` concurrently (fire-and-forget). `activateG8ENodeOperatorForUser` queries for `is_g8e_pod=true` slots, but `initializeOperatorSlots` creates those slots. When activation won the race, the query returned null and activation was silently skipped.
+`onSuccessfulLogin` and `onSuccessfulRegistration` in `post_login_service.js` fired `initializeOperatorSlots` and `activateG8ENodeOperatorForUser` concurrently (fire-and-forget). `activateG8ENodeOperatorForUser` queries for `is_g8ep=true` slots, but `initializeOperatorSlots` creates those slots. When activation won the race, the query returned null and activation was silently skipped.
 
 Extracted `_initializeSlotsAndActivateG8eNode(user, session, context)` that sequentially `await`s `initializeOperatorSlots` then `activateG8ENodeOperatorForUser`.
 

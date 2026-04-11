@@ -24,8 +24,8 @@ import {
     COOKIE_HEADER,
     WEB_SESSION_COOKIE_KEY,
     API_KEY_HEADER,
-    ServiceName,
-    ServiceUrl,
+    ComponentName,
+    ComponentUrl,
     RequestTimeout,
     RetryConfig,
     RequestPath,
@@ -36,6 +36,7 @@ import {
     MAX_TOTAL_ATTACHMENT_SIZE,
     MAX_ATTACHMENT_FILES,
 } from '@g8ed/public/js/constants/service-client-constants.js';
+import { ComponentName } from '@g8ed/public/js/models/investigation-models.js';
 
 let ServiceClient;
 let RateLimitError;
@@ -86,13 +87,13 @@ function makeErrorResponse(status, statusText, body = null) {
 }
 
 describe('service-client-constants contract [UNIT]', () => {
-    it('ServiceName values are correct', () => {
-        expect(ServiceName.G8EE).toBe('g8ee');
+    it('ComponentName values are correct', () => {
+        expect(ComponentName.G8EE).toBe('g8ee');
         expect(ComponentName.G8ED).toBe('g8ed');
     });
 
-    it('ServiceUrl.G8EE is the expected internal URL', () => {
-        expect(ServiceUrl.G8EE).toBe('https://g8ee');
+    it('ComponentUrl.G8EE is the expected internal URL', () => {
+        expect(ComponentUrl.G8EE).toBe('https://g8ee');
     });
 
     it('RequestTimeout values are positive integers', () => {
@@ -274,13 +275,13 @@ describe('ServiceClient.getServiceEndpoints [UNIT - jsdom]', () => {
         expect(endpoints).toEqual(['https://g8e.local']);
     });
 
-    it('returns ServiceUrl.G8EE for g8ee', () => {
-        const endpoints = client.getServiceEndpoints(ServiceName.G8EE);
-        expect(endpoints).toEqual([ServiceUrl.G8EE]);
+    it('returns ComponentUrl.G8EE for g8ee', () => {
+        const endpoints = client.getServiceEndpoints(ComponentName.G8EE);
+        expect(endpoints).toEqual([ComponentUrl.G8EE]);
     });
 
-    it('throws for an unknown service name', () => {
-        expect(() => client.getServiceEndpoints('unknown-service')).toThrow('Unknown service: unknown-service');
+    it('throws for an unknown component name', () => {
+        expect(() => client.getServiceEndpoints('unknown-component')).toThrow('Unknown component: unknown-component');
     });
 });
 
@@ -374,9 +375,9 @@ describe('ServiceClient.sendRequest — URL and fetch [UNIT - jsdom]', () => {
     });
 
     it('constructs URL from g8ee origin + path', async () => {
-        await client.sendRequest(ServiceName.G8EE, '/api/internal/health');
+        await client.sendRequest(ComponentName.G8EE, '/api/internal/health');
         expect(fetch).toHaveBeenCalledWith(
-            `${ServiceUrl.G8EE}/api/internal/health`,
+            `${ComponentUrl.G8EE}/api/internal/health`,
             expect.any(Object)
         );
     });

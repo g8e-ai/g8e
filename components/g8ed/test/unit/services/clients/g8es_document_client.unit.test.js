@@ -12,8 +12,8 @@
 // limitations under the License.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { g8esDocumentClient, g8esFieldValue } from '@g8ed/services/clients/g8es_document_client.js';
-import { g8esHttpError } from '@g8ed/services/clients/g8es_http_client.js';
+import { G8esDocumentClient, G8esFieldValuE } from '@g8ed/services/clients/g8es_document_client.js';
+import { G8esHttpError } from '@g8ed/services/clients/g8es_http_client.js';
 import { G8eBaseModel, F } from '@g8ed/models/base.js';
 
 class TestModel extends G8eBaseModel {
@@ -30,7 +30,7 @@ describe('G8esDocumentClient', () => {
     let mockHttp;
 
     beforeEach(() => {
-        client = new g8esDocumentClient({ listenUrl, internalAuthToken });
+        client = new G8esDocumentClient({ listenUrl, internalAuthToken });
         mockHttp = client._http;
         vi.spyOn(mockHttp, 'get');
         vi.spyOn(mockHttp, 'put');
@@ -41,25 +41,25 @@ describe('G8esDocumentClient', () => {
 
     describe('FieldValue', () => {
         it('should generate server timestamp', () => {
-            const ts = g8esFieldValue.serverTimestamp();
+            const ts = G8esFieldValuE.serverTimestamp();
             expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
         });
 
         it('should create increment op', () => {
-            expect(G8esFieldValue.increment(5)).toEqual({ __op: 'increment', value: 5 });
+            expect(G8esFieldValuE.increment(5)).toEqual({ __op: 'increment', value: 5 });
         });
 
         it('should create arrayUnion op', () => {
-            expect(G8esFieldValue.arrayUnion('a', 'b')).toEqual({ __op: 'arrayUnion', values: ['a', 'b'] });
-            expect(G8esFieldValue.arrayUnion(['a', 'b'])).toEqual({ __op: 'arrayUnion', values: ['a', 'b'] });
+            expect(G8esFieldValuE.arrayUnion('a', 'b')).toEqual({ __op: 'arrayUnion', values: ['a', 'b'] });
+            expect(G8esFieldValuE.arrayUnion(['a', 'b'])).toEqual({ __op: 'arrayUnion', values: ['a', 'b'] });
         });
 
         it('should create arrayRemove op', () => {
-            expect(G8esFieldValue.arrayRemove('a')).toEqual({ __op: 'arrayRemove', values: ['a'] });
+            expect(G8esFieldValuE.arrayRemove('a')).toEqual({ __op: 'arrayRemove', values: ['a'] });
         });
 
         it('should create delete op', () => {
-            expect(G8esFieldValue.delete()).toEqual({ __op: 'delete' });
+            expect(G8esFieldValuE.delete()).toEqual({ __op: 'delete' });
         });
     });
 
@@ -73,7 +73,7 @@ describe('G8esDocumentClient', () => {
         });
 
         it('getDocument should return null on 404', async () => {
-            vi.mocked(mockHttp.get).mockRejectedValueOnce(new g8esHttpError('Not Found', 404));
+            vi.mocked(mockHttp.get).mockRejectedValueOnce(new G8esHttpError('Not Found', 404));
 
             const result = await client.getDocument('users', '1');
             expect(result).toEqual({ success: true, data: null, error: 'Document not found' });
@@ -81,7 +81,7 @@ describe('G8esDocumentClient', () => {
 
         it('setDocument should handle models and field values', async () => {
             vi.mocked(mockHttp.put).mockResolvedValueOnce({ success: true });
-            const model = new TestModel({ name: 'test', count: g8esFieldValue.increment(1) });
+            const model = new TestModel({ name: 'test', count: G8esFieldValuE.increment(1) });
 
             const result = await client.setDocument('users', '1', model);
             

@@ -16,7 +16,7 @@ import { JSDOM } from 'jsdom';
 import { CasesManager } from '@g8ed/public/js/components/cases-manager.js';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
-import { ServiceName } from '@g8ed/public/js/constants/service-client-constants.js';
+import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 import { now } from '@test/fixtures/base.fixture.js';
 
 function flushPromises() {

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ServiceName } from '../constants/service-client-constants.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 
 /**
