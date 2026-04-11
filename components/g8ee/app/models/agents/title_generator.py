@@ -12,16 +12,16 @@
 # limitations under the License.
 
 from pydantic import Field
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class CaseTitleRequest(VSOBaseModel):
+class CaseTitleRequest(G8eBaseModel):
     """Request model for case title generation."""
     description: str = Field(description="The case description or initial message.")
     max_length: int = Field(default=80, ge=10, le=200, description="Maximum title length.")
 
 
-class CaseTitleResult(VSOBaseModel):
+class CaseTitleResult(G8eBaseModel):
     """The generated title from the utility."""
     generated_title: str = Field(description="The concise, meaningful generated title.")
     fallback: bool = Field(default=False, description="True if the title is a non-AI fallback.")

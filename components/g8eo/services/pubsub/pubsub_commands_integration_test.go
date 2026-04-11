@@ -157,7 +157,7 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 
 		// Subscribe to heartbeat channel (heartbeats publish to dedicated channel)
 		heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 		// Give listener time to start
 		time.Sleep(100 * time.Millisecond)
@@ -175,7 +175,7 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		// Wait for heartbeat response
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 2*time.Second)
@@ -216,7 +216,7 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 
 		// Subscribe to results channel
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		// Give listener time to start
 		time.Sleep(100 * time.Millisecond)
@@ -234,7 +234,7 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		// Wait for execution result
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
@@ -275,7 +275,7 @@ func TestPubSubCommandService_SendAutomaticHeartbeat_Integration(t *testing.T) {
 
 		// Subscribe to heartbeat channel before starting (heartbeats publish to dedicated channel)
 		heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 		// Start service (this starts heartbeat scheduler)
 		err = svc.Start(ctx)
@@ -346,7 +346,7 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 
 		// Subscribe to results channel
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		// Create command message
 		taskID := "task-123"
@@ -368,7 +368,7 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
 		assert.NotNil(t, receivedMsg)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal([]byte(string(receivedMsg)), &result)
 		require.NoError(t, err)
 
@@ -401,7 +401,7 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 
 		// Subscribe to results channel
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		// Create command message with invalid command
 		msg := PubSubCommandMessage{
@@ -420,7 +420,7 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
 		assert.NotNil(t, receivedMsg)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal([]byte(string(receivedMsg)), &result)
 		require.NoError(t, err)
 
@@ -469,8 +469,8 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 }
 
 // TestListenForCommands_MaxReconnectAttempts_Integration verifies that listenForCommands
-// stops after maxReconnectAttempts when the VSODB channel closes repeatedly.
-// Each attempt: the service subscribes successfully to real VSODB, we immediately
+// stops after maxReconnectAttempts when the g8es channel closes repeatedly.
+// Each attempt: the service subscribes successfully to real g8es, we immediately
 // close the underlying client (forcing the channel closed), triggering a reconnect.
 // After 3 closures the loop must exit on its own.
 func TestListenForCommands_MaxReconnectAttempts_Integration(t *testing.T) {
@@ -487,9 +487,9 @@ func TestListenForCommands_MaxReconnectAttempts_Integration(t *testing.T) {
 	// Zero out reconnect delay so the test runs fast.
 	svc.reconnectBaseDelay = 0
 
-	// Replace the client with a wrapper that dials real VSODB but closes the
+	// Replace the client with a wrapper that dials real g8es but closes the
 	// WS conn immediately after each subscribe, forcing the channel closed.
-	wsURL := testutil.GetTestVSODBDirectURL() + "/ws/pubsub"
+	wsURL := testutil.GetTestG8esDirectURL() + "/ws/pubsub"
 	attempts := 0
 	svc.client = &reconnectCountingClient{
 		t:      t,
@@ -518,7 +518,7 @@ func TestListenForCommands_MaxReconnectAttempts_Integration(t *testing.T) {
 	assert.Equal(t, 3, attempts, "expected exactly 3 subscribe attempts before giving up")
 }
 
-// reconnectCountingClient dials VSODB directly for each Subscribe call so it can
+// reconnectCountingClient dials g8es directly for each Subscribe call so it can
 // hold a reference to the underlying *websocket.Conn and close it immediately,
 // forcing the returned channel closed and triggering the reconnect logic.
 type reconnectCountingClient struct {
@@ -536,7 +536,7 @@ func (r *reconnectCountingClient) Subscribe(ctx context.Context, channel string)
 	}
 	ws, _, err := dialer.DialContext(ctx, r.wsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to VSODB pub/sub: %w", err)
+		return nil, fmt.Errorf("failed to connect to g8es pub/sub: %w", err)
 	}
 
 	subMsg := listen.PubSubMessage{Action: "subscribe", Channel: channel}
@@ -586,12 +586,12 @@ func (r *reconnectCountingClient) Publish(_ context.Context, _ string, _ []byte)
 func (r *reconnectCountingClient) Close()                                              {}
 
 // ---------------------------------------------------------------------------
-// Heartbeat interval — integration tests against real VSODB pub/sub
+// Heartbeat interval — integration tests against real g8es pub/sub
 // ---------------------------------------------------------------------------
 
 // TestHeartbeatInterval_Integration verifies that the HeartbeatInterval set via
 // config (equivalent to --heartbeat-interval) drives real automatic heartbeats
-// all the way through PubSubResultsService to the VSODB pub/sub broker.
+// all the way through PubSubResultsService to the g8es pub/sub broker.
 
 func TestHeartbeatInterval_ShortIntervalFiresOnRealBroker(t *testing.T) {
 	db := NewTestPubSubClient(t)
@@ -617,7 +617,7 @@ func TestHeartbeatInterval_ShortIntervalFiresOnRealBroker(t *testing.T) {
 	require.NoError(t, err)
 
 	heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -663,7 +663,7 @@ func TestHeartbeatInterval_ShortIntervalDeliversMulitpleTicks(t *testing.T) {
 	require.NoError(t, err)
 
 	heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -708,7 +708,7 @@ func TestHeartbeatInterval_PayloadFieldsFullyPlumbed(t *testing.T) {
 	require.NoError(t, err)
 
 	heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -759,8 +759,8 @@ func TestHeartbeatInterval_PublishesToCorrectChannel(t *testing.T) {
 	heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
 	resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
 
-	hbChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
-	resultsChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+	hbChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
+	resultsChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -803,7 +803,7 @@ func TestHeartbeatInterval_StopsOnServiceStop(t *testing.T) {
 	require.NoError(t, err)
 
 	heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), heartbeatChannel)
+	msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

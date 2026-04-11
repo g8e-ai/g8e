@@ -14,7 +14,7 @@
 """
 Health Router for g8ee
 
-Provides health check endpoints following the standard VSO pattern.
+Provides health check endpoints following the standard g8e pattern.
 """
 
 import logging
@@ -64,7 +64,7 @@ async def detailed_health_check(
     """Detailed health check endpoint that verifies all services are available."""
     clients_status = {
         "cache_aside_service": "up" if hasattr(request.app.state, "cache_aside_service") and request.app.state.cache_aside_service else "down",
-        "vsodb_kv": "up" if hasattr(request.app.state, "pubsub_client") and request.app.state.pubsub_client else "down",
+        "g8es_kv": "up" if hasattr(request.app.state, "pubsub_client") and request.app.state.pubsub_client else "down",
         "internal_http_client": "up" if hasattr(request.app.state, "internal_http_client") and request.app.state.internal_http_client else "down",
         "operator_command_service": "up" if hasattr(request.app.state, "operator_command_service") and request.app.state.operator_command_service else "down",
         "chat_pipeline": "up" if hasattr(request.app.state, "chat_pipeline") and request.app.state.chat_pipeline else "down"

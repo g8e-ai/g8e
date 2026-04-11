@@ -208,13 +208,13 @@ def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
 
 
 def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> "Schema":
-    """Derive a types.Schema from a VSOBaseModel subclass.
+    """Derive a types.Schema from a G8eBaseModel subclass.
 
     Uses model_json_schema() as the source of truth. Field descriptions come
     from Field(description=...) on the model — no inline redeclaration needed.
 
     Args:
-        model_cls: A VSOBaseModel subclass.
+        model_cls: A G8eBaseModel subclass.
         required_override: If provided, overrides the required field list. Use
             when the model has required fields that should be optional for the LLM,
             or vice versa.

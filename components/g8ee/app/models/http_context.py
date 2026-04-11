@@ -23,18 +23,18 @@ from app.constants import (
     ComponentName,
     OperatorStatus,
     OperatorType,
-    VSOHeaders,
+    G8eHeaders,
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
 
-from .base import Field, VSOBaseModel, field_validator
+from .base import Field, G8eBaseModel, field_validator
 
 if TYPE_CHECKING:
     from app.errors import AuthenticationError
 
 
-class BoundOperator(VSOBaseModel):
+class BoundOperator(G8eBaseModel):
     """Represents a bound operator in the HTTP context.
     
     Canonical wire shape: shared/models/wire/bound_operator_context.json
@@ -44,7 +44,7 @@ class BoundOperator(VSOBaseModel):
     status: OperatorStatus | None = Field(default=None, description="Operator status")
 
 
-class VSOHttpContext(VSOBaseModel):
+class G8eHttpContext(G8eBaseModel):
     """Standard context object for all internal HTTP requests."""
 
     web_session_id: str = Field(
@@ -81,7 +81,7 @@ class VSOHttpContext(VSOBaseModel):
     )
     new_case: bool = Field(
         default=False,
-        description="True when VSOD signals that no prior case exists and g8ee must create one inline"
+        description="True when g8ed signals that no prior case exists and g8ee must create one inline"
     )
     source_component: ComponentName = Field(
         description="Component that created this context"
@@ -105,34 +105,34 @@ class VSOHttpContext(VSOBaseModel):
         return any(op.status == OperatorStatus.BOUND for op in self.bound_operators)
 
     @classmethod
-    async def from_request(cls, request: Request) -> "VSOHttpContext":
-        """Extract and validate VSOHttpContext from FastAPI Request headers."""
+    async def from_request(cls, request: Request) -> "G8eHttpContext":
+        """Extract and validate G8eHttpContext from FastAPI Request headers."""
         from app.errors import AuthenticationError
         from app.logging import get_logger
         logger = get_logger(__name__)
 
-        web_session_id = request.headers.get(VSOHeaders.WEB_SESSION_ID.lower())
-        user_id = request.headers.get(VSOHeaders.USER_ID.lower())
-        raw_source_component = request.headers.get(VSOHeaders.SOURCE_COMPONENT.lower())
+        web_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
+        user_id = request.headers.get(G8eHeaders.USER_ID.lower())
+        raw_source_component = request.headers.get(G8eHeaders.SOURCE_COMPONENT.lower())
 
         if not web_session_id:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
-                VSOHeaders.WEB_SESSION_ID,
+                G8eHeaders.WEB_SESSION_ID,
                 extra={
                     "endpoint": request.url.path,
                     "source_component": raw_source_component,
                 }
             )
             raise AuthenticationError(
-                f"{VSOHeaders.WEB_SESSION_ID} header is required for all internal requests",
+                f"{G8eHeaders.WEB_SESSION_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
 
         if not user_id:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
-                VSOHeaders.USER_ID,
+                G8eHeaders.USER_ID,
                 extra={
                     "endpoint": request.url.path,
                     "web_session_id": web_session_id[:12] + "...",
@@ -140,18 +140,18 @@ class VSOHttpContext(VSOBaseModel):
                 }
             )
             raise AuthenticationError(
-                f"{VSOHeaders.USER_ID} header is required for all internal requests",
+                f"{G8eHeaders.USER_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
 
         if not raw_source_component:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
-                VSOHeaders.SOURCE_COMPONENT,
+                G8eHeaders.SOURCE_COMPONENT,
                 extra={"endpoint": request.url.path}
             )
             raise AuthenticationError(
-                f"{VSOHeaders.SOURCE_COMPONENT} header is required for all internal requests",
+                f"{G8eHeaders.SOURCE_COMPONENT} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
 
@@ -160,39 +160,39 @@ class VSOHttpContext(VSOBaseModel):
         except ValueError:
             logger.error(
                 "SECURITY VIOLATION: Invalid %s header value",
-                VSOHeaders.SOURCE_COMPONENT,
+                G8eHeaders.SOURCE_COMPONENT,
                 extra={"endpoint": request.url.path, "value": raw_source_component}
             )
             raise AuthenticationError(
-                f"{VSOHeaders.SOURCE_COMPONENT} header contains an unrecognised component name",
+                f"{G8eHeaders.SOURCE_COMPONENT} header contains an unrecognised component name",
                 component=ComponentName.G8EE,
             )
 
-        new_case = request.headers.get(VSOHeaders.NEW_CASE.lower(), "").lower() == "true"
+        new_case = request.headers.get(G8eHeaders.NEW_CASE.lower(), "").lower() == "true"
 
-        case_id = request.headers.get(VSOHeaders.CASE_ID.lower())
+        case_id = request.headers.get(G8eHeaders.CASE_ID.lower())
         if not case_id and not new_case:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
-                VSOHeaders.CASE_ID,
+                G8eHeaders.CASE_ID,
                 extra={"endpoint": request.url.path}
             )
             raise AuthenticationError(
-                f"{VSOHeaders.CASE_ID} header is required for all internal requests",
+                f"{G8eHeaders.CASE_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
         elif new_case and not case_id:
             case_id = NEW_CASE_ID
 
-        investigation_id = request.headers.get(VSOHeaders.INVESTIGATION_ID.lower())
+        investigation_id = request.headers.get(G8eHeaders.INVESTIGATION_ID.lower())
         if not investigation_id and not new_case:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
-                VSOHeaders.INVESTIGATION_ID,
+                G8eHeaders.INVESTIGATION_ID,
                 extra={"endpoint": request.url.path}
             )
             raise AuthenticationError(
-                f"{VSOHeaders.INVESTIGATION_ID} header is required for all internal requests",
+                f"{G8eHeaders.INVESTIGATION_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
         elif new_case and not investigation_id:
@@ -201,22 +201,22 @@ class VSOHttpContext(VSOBaseModel):
         context_kwargs: dict[str, Any] = {
             "web_session_id": web_session_id,
             "user_id": user_id,
-            "organization_id": request.headers.get(VSOHeaders.ORGANIZATION_ID.lower()),
+            "organization_id": request.headers.get(G8eHeaders.ORGANIZATION_ID.lower()),
             "case_id": case_id,
             "investigation_id": investigation_id,
             "new_case": new_case,
-            "task_id": request.headers.get(VSOHeaders.TASK_ID.lower()),
-            "bound_operators": request.headers.get(VSOHeaders.BOUND_OPERATORS.lower(), "[]"),
+            "task_id": request.headers.get(G8eHeaders.TASK_ID.lower()),
+            "bound_operators": request.headers.get(G8eHeaders.BOUND_OPERATORS.lower(), "[]"),
             "source_component": source_component,
         }
-        execution_id = request.headers.get(VSOHeaders.EXECUTION_ID.lower())
+        execution_id = request.headers.get(G8eHeaders.EXECUTION_ID.lower())
         if execution_id:
             context_kwargs["execution_id"] = execution_id
 
         context = cls(**context_kwargs)
 
         logger.info(
-            "VSOHttpContext validated and extracted",
+            "G8eHttpContext validated and extracted",
             extra={"web_session_id": web_session_id, "case_id": case_id, "investigation_id": investigation_id}
         )
 

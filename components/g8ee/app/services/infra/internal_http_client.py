@@ -19,18 +19,18 @@ from app.models.settings import G8eePlatformSettings
 from app.constants import (
     INTERNAL_AUTH_HEADER,
     UNKNOWN_ERROR_MESSAGE,
-    VSOD_CLIENT_FAILURE_THRESHOLD,
-    VSOD_CLIENT_MAX_RETRIES,
-    VSOD_CLIENT_RECOVERY_TIME,
-    VSOD_CLIENT_TIMEOUT,
+    G8ED_CLIENT_FAILURE_THRESHOLD,
+    G8ED_CLIENT_MAX_RETRIES,
+    G8ED_CLIENT_RECOVERY_TIME,
+    G8ED_CLIENT_TIMEOUT,
     ComponentName,
-    VSOHeaders,
+    G8eHeaders,
     InternalApiPaths,
 )
 from app.errors import ConfigurationError, NetworkError
 from app.models.events import BackgroundEvent, SessionEvent
-from app.models.http_context import VSOHttpContext
-from app.models.vsod_client import (
+from app.models.http_context import G8eHttpContext
+from app.models.g8ed_client import (
     GrantIntentResponse,
     IntentOperationResult,
     IntentRequestPayload,
@@ -41,31 +41,31 @@ from app.models.vsod_client import (
 logger = logging.getLogger(__name__)
 
 
-def get_vsod_url(settings: G8eePlatformSettings) -> str:
-    return settings.service_urls.vsod_url
+def get_g8ed_url(settings: G8eePlatformSettings) -> str:
+    return settings.service_urls.g8ed_url
 
 
 class InternalHttpClient:
 
     def __init__(self, settings: G8eePlatformSettings):
-        self.vsod_url = get_vsod_url(settings)
+        self.g8ed_url = get_g8ed_url(settings)
         self._settings = settings
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
-            base_url=self.vsod_url,
-            timeout=VSOD_CLIENT_TIMEOUT,
-            retry_config=RetryConfig(max_retries=VSOD_CLIENT_MAX_RETRIES),
+            base_url=self.g8ed_url,
+            timeout=G8ED_CLIENT_TIMEOUT,
+            retry_config=RetryConfig(max_retries=G8ED_CLIENT_MAX_RETRIES),
             circuit_breaker_config=CircuitBreakerConfig(
-                failure_threshold=VSOD_CLIENT_FAILURE_THRESHOLD,
-                recovery_time=VSOD_CLIENT_RECOVERY_TIME,
+                failure_threshold=G8ED_CLIENT_FAILURE_THRESHOLD,
+                recovery_time=G8ED_CLIENT_RECOVERY_TIME,
             ),
             auth_token=settings.auth.internal_auth_token or "",
             api_key=settings.auth.g8e_api_key or "",
-            headers={VSOHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
+            headers={G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
             ca_cert_path=settings.ca_cert_path,
         )
 
-        logger.info("InternalHttpClient initialized with URL: %s", self.vsod_url)
+        logger.info("InternalHttpClient initialized with URL: %s", self.g8ed_url)
 
     def configure(self, settings: G8eePlatformSettings) -> None:
         self._settings = settings
@@ -83,12 +83,12 @@ class InternalHttpClient:
         token = self.settings.auth.internal_auth_token
         if not token:
             raise ConfigurationError(
-                "INTERNAL_AUTH_TOKEN is not configured — g8ee cannot authenticate with VSOD",
+                "INTERNAL_AUTH_TOKEN is not configured — g8ee cannot authenticate with g8ed",
                 component=ComponentName.G8EE,
             )
         return {
             INTERNAL_AUTH_HEADER: token,
-            VSOHeaders.SOURCE_COMPONENT: ComponentName.G8EE,
+            G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE,
         }
 
     async def close(self) -> None:
@@ -104,7 +104,7 @@ class InternalHttpClient:
             event_type = wire.get("event", {}).get("type") or "None"
 
             logger.info(
-                "[HTTP-VSOD] Pushing SSE event",
+                "[HTTP-G8ED] Pushing SSE event",
                 extra={
                     "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
                     "event_type": event_type,
@@ -112,14 +112,14 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.PREFIX + InternalApiPaths.VSOD_SSE_PUSH,
+                InternalApiPaths.PREFIX + InternalApiPaths.G8ED_SSE_PUSH,
                 json_data=wire,
                 headers=self._auth_headers(),
             )
             if response.is_success:
                 result = SSEPushResponse.model_validate(response.json())
                 logger.info(
-                    "[HTTP-VSOD] SSE event delivered",
+                    "[HTTP-G8ED] SSE event delivered",
                     extra={
                         "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
                         "event_type": event_type,
@@ -129,14 +129,14 @@ class InternalHttpClient:
                 )
                 return result.success
             logger.error(
-                "[HTTP-VSOD] Failed to deliver SSE event",
+                "[HTTP-G8ED] Failed to deliver SSE event",
                 extra={"status": response.status_code, "error": response.text}
             )
             return False
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-VSOD] HTTP request failed: {e}",
+                f"[HTTP-G8ED] HTTP request failed: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             )
@@ -145,18 +145,18 @@ class InternalHttpClient:
         self,
         operator_id: str,
         intent: str,
-        context: VSOHttpContext,
+        context: G8eHttpContext,
     ) -> IntentOperationResult:
         try:
             logger.info(
-                "[HTTP-VSOD] Granting intent to operator",
+                "[HTTP-G8ED] Granting intent to operator",
                 extra={"operator_id": operator_id, "intent": intent}
             )
 
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.VSOD_GRANT_INTENT).format(operator_id=operator_id),
+                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_GRANT_INTENT).format(operator_id=operator_id),
                 json_data=request_payload.flatten_for_wire(),
                 headers=self._auth_headers(),
                 context=context,
@@ -164,7 +164,7 @@ class InternalHttpClient:
             result = GrantIntentResponse.model_validate(response.json())
             if response.is_success and result.success:
                 logger.info(
-                    "[HTTP-VSOD] Intent granted successfully",
+                    "[HTTP-G8ED] Intent granted successfully",
                     extra={
                         "operator_id": operator_id,
                         "intent": intent,
@@ -176,7 +176,7 @@ class InternalHttpClient:
                     granted_intents=result.granted_intents,
                 )
             logger.warning(
-                "[HTTP-VSOD] Failed to grant intent",
+                "[HTTP-G8ED] Failed to grant intent",
                 extra={
                     "operator_id": operator_id,
                     "intent": intent,
@@ -191,7 +191,7 @@ class InternalHttpClient:
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-VSOD] Failed to grant intent: {e}",
+                f"[HTTP-G8ED] Failed to grant intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             )
@@ -200,13 +200,13 @@ class InternalHttpClient:
         self,
         operator_id: str,
         intent: str,
-        context: VSOHttpContext,
+        context: G8eHttpContext,
     ) -> IntentOperationResult:
         try:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.VSOD_REVOKE_INTENT).format(operator_id=operator_id),
+                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_REVOKE_INTENT).format(operator_id=operator_id),
                 json_data=request_payload.flatten_for_wire(),
                 headers=self._auth_headers(),
                 context=context,
@@ -224,7 +224,7 @@ class InternalHttpClient:
 
         except Exception as e:
             raise NetworkError(
-                f"[HTTP-VSOD] Failed to revoke intent: {e}",
+                f"[HTTP-G8ED] Failed to revoke intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             )
@@ -233,7 +233,7 @@ class InternalHttpClient:
         self,
         operator_ids: list[str],
         web_session_id: str,
-        context: VSOHttpContext,
+        context: G8eHttpContext,
     ) -> bool:
         """Delegate to OperatorDataService for proper domain separation."""
         from app.main import app  # Import here to avoid circular dependency

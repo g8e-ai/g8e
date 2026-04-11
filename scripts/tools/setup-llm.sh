@@ -180,12 +180,12 @@ case "$COMMAND" in
     show)
         _header "Current LLM Settings"
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG
         exit 0
         ;;
     get)
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings get "${EXT_ARGS[@]}" $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings get "${EXT_ARGS[@]}" $USER_ID_ARG
         exit 0
         ;;
     set)
@@ -207,18 +207,18 @@ case "$COMMAND" in
         fi
 
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings set "${SET_ARGS[@]}" $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings set "${SET_ARGS[@]}" $USER_ID_ARG
         
         echo ""
         _header "Effective LLM Settings"
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG
         exit 0
         ;;
     restart)
         _header "Restarting LLM Services"
         # Since we are on the host, we can call docker compose if available, 
         # but the standard way in this repo is via build.sh
-        bash "$REPO_ROOT/scripts/core/build.sh" restart vsod g8ee
+        bash "$REPO_ROOT/scripts/core/build.sh" restart g8ed g8ee
         exit 0
         ;;
 esac
@@ -234,7 +234,7 @@ esac
 [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
 
 # Export all settings as JSON for robust extraction
-_SETTINGS_JSON="$(_exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings export --section llm $USER_ID_ARG 2>/dev/null || echo "{}")"
+_SETTINGS_JSON="$(_exec_in_pod python3 /app/scripts/data/manage-g8es.py settings export --section llm $USER_ID_ARG 2>/dev/null || echo "{}")"
 
 _get_setting() {
     echo "$_SETTINGS_JSON" | jq -r ".$1 // \"\""
@@ -575,13 +575,13 @@ _write_to_db() {
         return 1
     fi
 
-    if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
-        _ok "LLM settings written to DB (via VSOD)"
+    if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
+        _ok "LLM settings written to DB (via g8ed)"
         return 0
     fi
 
-    _info "VSOD unavailable — writing directly to VSODB"
-    if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
+    _info "g8ed unavailable — writing directly to g8es"
+    if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
         _ok "LLM settings written to DB (direct)"
         return 0
     fi
@@ -597,7 +597,7 @@ if [[ $_write_rc -eq 0 ]]; then
     echo ""
     _header "Effective LLM Settings"
     [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-    _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG 2>/dev/null || true
+    _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG 2>/dev/null || true
 fi
 
 # =============================================================================

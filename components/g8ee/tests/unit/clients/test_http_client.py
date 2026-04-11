@@ -45,10 +45,10 @@ from app.constants import (
     HTTP_API_KEY_HEADER,
     CircuitBreakerState,
     ComponentName,
-    VSOHeaders,
+    G8eHeaders,
 )
 from app.errors import NetworkError, ValidationError
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 
 pytestmark = pytest.mark.unit
 
@@ -61,7 +61,7 @@ pytestmark = pytest.mark.unit
 async def client():
     c = HTTPClient (
         component_id=ComponentName.G8EE,
-        base_url="https://vsod",
+        base_url="https://g8ed",
         timeout=DEFAULT_TIMEOUT,
         retry_config=RetryConfig(),
         circuit_breaker_config=CircuitBreakerConfig(),
@@ -78,7 +78,7 @@ async def client():
 async def authed_client():
     c = HTTPClient (
         component_id=ComponentName.G8EE,
-        base_url="https://vsod",
+        base_url="https://g8ed",
         timeout=DEFAULT_TIMEOUT,
         retry_config=RetryConfig(),
         circuit_breaker_config=CircuitBreakerConfig(),
@@ -92,24 +92,24 @@ async def authed_client():
 
 
 # =============================================================================
-# VSOHeaders — COMPONENT_ID must not exist (regression guard)
+# G8eHeaders — COMPONENT_ID must not exist (regression guard)
 # =============================================================================
 
-class TestVSOHeaders:
-    """VSOHeaders contract: required headers present, COMPONENT_ID absent."""
+class TestG8eHeaders:
+    """G8eHeaders contract: required headers present, COMPONENT_ID absent."""
 
     def test_component_id_absent(self):
-        assert not hasattr(VSOHeaders, "COMPONENT_ID")
+        assert not hasattr(G8eHeaders, "COMPONENT_ID")
 
-    def test_required_headers_present_in_vsoheaders(self):
-        assert hasattr(VSOHeaders, "EXECUTION_ID")
-        assert hasattr(VSOHeaders, "WEB_SESSION_ID")
-        assert hasattr(VSOHeaders, "USER_ID")
-        assert hasattr(VSOHeaders, "SOURCE_COMPONENT")
-        assert hasattr(VSOHeaders, "ORGANIZATION_ID")
-        assert hasattr(VSOHeaders, "CASE_ID")
-        assert hasattr(VSOHeaders, "INVESTIGATION_ID")
-        assert hasattr(VSOHeaders, "TASK_ID")
+    def test_required_headers_present_in_g8eheaders(self):
+        assert hasattr(G8eHeaders, "EXECUTION_ID")
+        assert hasattr(G8eHeaders, "WEB_SESSION_ID")
+        assert hasattr(G8eHeaders, "USER_ID")
+        assert hasattr(G8eHeaders, "SOURCE_COMPONENT")
+        assert hasattr(G8eHeaders, "ORGANIZATION_ID")
+        assert hasattr(G8eHeaders, "CASE_ID")
+        assert hasattr(G8eHeaders, "INVESTIGATION_ID")
+        assert hasattr(G8eHeaders, "TASK_ID")
 
 
 # =============================================================================
@@ -168,16 +168,16 @@ class TestRequestTrace:
 
     def test_from_headers_preserves_existing_request_id(self):
         trace = RequestTrace.from_headers(
-            {VSOHeaders.EXECUTION_ID: "exec-existing-123"}, component_id=ComponentName.G8EE
+            {G8eHeaders.EXECUTION_ID: "exec-existing-123"}, component_id=ComponentName.G8EE
         )
         assert trace.execution_id == "exec-existing-123"
 
     def test_from_headers_extracts_case_task_investigation_ids(self):
         trace = RequestTrace.from_headers(
             {
-                VSOHeaders.CASE_ID: "case-1",
-                VSOHeaders.TASK_ID: "task-1",
-                VSOHeaders.INVESTIGATION_ID: "inv-1",
+                G8eHeaders.CASE_ID: "case-1",
+                G8eHeaders.TASK_ID: "task-1",
+                G8eHeaders.INVESTIGATION_ID: "inv-1",
             },
             component_id=ComponentName.G8EE,
         )
@@ -202,17 +202,17 @@ class TestRequestTrace:
 
     def test_as_headers_contains_request_id(self):
         trace = RequestTrace.from_headers(
-            {VSOHeaders.EXECUTION_ID: "req-abc"}, component_id=ComponentName.G8EE
+            {G8eHeaders.EXECUTION_ID: "req-abc"}, component_id=ComponentName.G8EE
         )
         headers = trace.as_headers
-        assert headers[VSOHeaders.EXECUTION_ID] == "req-abc"
+        assert headers[G8eHeaders.EXECUTION_ID] == "req-abc"
 
     def test_as_headers_omits_none_optional_fields(self):
         trace = RequestTrace.from_headers({}, component_id=ComponentName.G8EE)
         headers = trace.as_headers
-        assert VSOHeaders.CASE_ID not in headers
-        assert VSOHeaders.TASK_ID not in headers
-        assert VSOHeaders.INVESTIGATION_ID not in headers
+        assert G8eHeaders.CASE_ID not in headers
+        assert G8eHeaders.TASK_ID not in headers
+        assert G8eHeaders.INVESTIGATION_ID not in headers
 
 
 # =============================================================================
@@ -248,7 +248,7 @@ class TestCircuitBreakerConfig:
         assert cfg.half_open_success_threshold == 3
 
     def test_circuit_breaker_initial_state_is_closed(self):
-        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://vsod")
+        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://g8ed")
         assert cb.state is CircuitBreakerState.CLOSED
 
 
@@ -267,7 +267,7 @@ class TestCircuitBreaker:
                 recovery_time=0.0,
                 half_open_success_threshold=1,
             ),
-            endpoint="https://vsod",
+            endpoint="https://g8ed",
         )
         assert cb.state is CircuitBreakerState.CLOSED
 
@@ -286,7 +286,7 @@ class TestCircuitBreaker:
     async def test_open_state_blocks_allow_request(self):
         cb = CircuitBreaker(
             CircuitBreakerConfig(failure_threshold=1, recovery_time=9999.0),
-            endpoint="https://vsod",
+            endpoint="https://g8ed",
         )
         await cb.record_failure()
         assert cb.state is CircuitBreakerState.OPEN
@@ -295,7 +295,7 @@ class TestCircuitBreaker:
     async def test_half_open_failure_transitions_back_to_open(self):
         cb = CircuitBreaker(
             CircuitBreakerConfig(failure_threshold=1, recovery_time=0.0),
-            endpoint="https://vsod",
+            endpoint="https://g8ed",
         )
         await cb.record_failure()
         await cb.allow_request()
@@ -306,7 +306,7 @@ class TestCircuitBreaker:
         assert isinstance(cb.state, CircuitBreakerState)
 
     async def test_closed_state_always_allows_requests(self):
-        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://vsod")
+        cb = CircuitBreaker(CircuitBreakerConfig(), endpoint="https://g8ed")
         assert await cb.allow_request() is True
 
 
@@ -314,16 +314,16 @@ class TestCircuitBreaker:
 # HTTPClient  — init and header injection
 # =============================================================================
 
-class TestVSOHTTPClientInit:
+class TestG8eHTTPClientInit:
     """HTTPClient  initialises correctly and does not inject forbidden headers."""
 
     def test_component_id_not_injected_into_default_headers(self, client):
-        assert "X-VSO-Component-ID" not in client.default_headers
+        assert "X-G8E-Component-ID" not in client.default_headers
 
     def test_custom_timeout_is_applied(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=15.0,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -337,7 +337,7 @@ class TestVSOHTTPClientInit:
     def test_default_timeout_matches_module_constant(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -360,16 +360,16 @@ class TestVSOHTTPClientInit:
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
-class TestVSOHTTPClientPrepareRequest:
+class TestG8eHTTPClientPrepareRequest:
     """_prepare_request must build correct headers from config and context."""
 
     async def test_prepare_request_injects_request_id(self, client):
         _url, headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert VSOHeaders.EXECUTION_ID in headers
+        assert G8eHeaders.EXECUTION_ID in headers
 
     async def test_prepare_request_never_injects_component_id_header(self, client):
         _url, headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert "X-VSO-Component-ID" not in headers
+        assert "X-G8E-Component-ID" not in headers
 
     async def test_prepare_request_auth_token_formatted_as_bearer(self, authed_client):
         _url, headers, _kw, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
@@ -381,7 +381,7 @@ class TestVSOHTTPClientPrepareRequest:
 
     async def test_prepare_request_joins_base_url_with_path(self, client):
         url, _headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert url == "https://vsod/api/health"
+        assert url == "https://g8ed/api/health"
 
     async def test_prepare_request_caller_headers_override_defaults(self, client):
         _url, headers, _kw, _trace = await client._prepare_request(
@@ -391,31 +391,31 @@ class TestVSOHTTPClientPrepareRequest:
 
     async def test_prepare_request_trace_id_propagated_to_headers(self, client):
         _url, headers, _kw, trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
-        assert headers[VSOHeaders.EXECUTION_ID] == trace.execution_id
+        assert headers[G8eHeaders.EXECUTION_ID] == trace.execution_id
 
-    async def test_prepare_request_vso_context_headers_propagated(self, client):
-        ctx = VSOHttpContext(
+    async def test_prepare_request_g8e_context_headers_propagated(self, client):
+        ctx = G8eHttpContext(
             web_session_id="sess-abc",
             user_id="user-123",
-            source_component=ComponentName.VSOD,
+            source_component=ComponentName.G8ED,
             case_id="case-456",
             investigation_id="inv-789",
         )
         _url, headers, _kw, _trace = await client._prepare_request(
             "POST", "/api/internal/chat/stream", headers={}, context=ctx
         )
-        assert headers[VSOHeaders.WEB_SESSION_ID] == "sess-abc"
-        assert headers[VSOHeaders.USER_ID] == "user-123"
-        assert headers[VSOHeaders.SOURCE_COMPONENT] == "vsod"
-        assert headers[VSOHeaders.CASE_ID] == "case-456"
-        assert headers[VSOHeaders.INVESTIGATION_ID] == "inv-789"
+        assert headers[G8eHeaders.WEB_SESSION_ID] == "sess-abc"
+        assert headers[G8eHeaders.USER_ID] == "user-123"
+        assert headers[G8eHeaders.SOURCE_COMPONENT] == "g8ed"
+        assert headers[G8eHeaders.CASE_ID] == "case-456"
+        assert headers[G8eHeaders.INVESTIGATION_ID] == "inv-789"
 
 
 # =============================================================================
 # HTTPClient  — circuit breaker per-endpoint isolation
 # =============================================================================
 
-class TestVSOHTTPClientCircuitBreakerIsolation:
+class TestG8eHTTPClientCircuitBreakerIsolation:
     """Each distinct URL endpoint gets its own CircuitBreaker instance."""
 
     pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -423,7 +423,7 @@ class TestVSOHTTPClientCircuitBreakerIsolation:
     async def test_distinct_url_paths_get_separate_circuit_breakers(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -433,8 +433,8 @@ class TestVSOHTTPClientCircuitBreakerIsolation:
             ca_cert_path="/mock/ca.crt",
         )
         try:
-            cb1 = c._get_circuit_breaker("https://vsod/api/health")
-            cb2 = c._get_circuit_breaker("https://vsod/api/chat/stream")
+            cb1 = c._get_circuit_breaker("https://g8ed/api/health")
+            cb2 = c._get_circuit_breaker("https://g8ed/api/chat/stream")
             assert cb1 is not cb2
         finally:
             await c.close()
@@ -442,7 +442,7 @@ class TestVSOHTTPClientCircuitBreakerIsolation:
     async def test_same_url_path_returns_cached_circuit_breaker(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -452,8 +452,8 @@ class TestVSOHTTPClientCircuitBreakerIsolation:
             ca_cert_path="/mock/ca.crt",
         )
         try:
-            cb1 = c._get_circuit_breaker("https://vsod/api/health")
-            cb2 = c._get_circuit_breaker("https://vsod/api/health")
+            cb1 = c._get_circuit_breaker("https://g8ed/api/health")
+            cb2 = c._get_circuit_breaker("https://g8ed/api/health")
             assert cb1 is cb2
         finally:
             await c.close()
@@ -463,7 +463,7 @@ class TestVSOHTTPClientCircuitBreakerIsolation:
 # HTTPClient  — context manager
 # =============================================================================
 
-class TestVSOHTTPClientContextManager:
+class TestG8eHTTPClientContextManager:
     """HTTPClient  must be usable as an async context manager."""
 
     pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -471,7 +471,7 @@ class TestVSOHTTPClientContextManager:
     async def test_context_manager_aenter_returns_client_instance(self):
         async with HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -485,7 +485,7 @@ class TestVSOHTTPClientContextManager:
     async def test_context_manager_aexit_closes_session(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -510,7 +510,7 @@ class TestGetServiceClient:
     def test_raises_validation_error_when_base_url_absent(self):
         with pytest.raises(ValidationError):
             get_service_client(
-                target_service=ComponentName.VSOD,
+                target_service=ComponentName.G8ED,
                 source_service=ComponentName.G8EE,
                 base_url="",
                 timeout=DEFAULT_TIMEOUT,
@@ -520,7 +520,7 @@ class TestGetServiceClient:
     def test_plain_value_error_never_raised_for_missing_base_url(self):
         with pytest.raises(Exception) as exc_info:
             get_service_client(
-                target_service=ComponentName.VSOD,
+                target_service=ComponentName.G8ED,
                 source_service=ComponentName.G8EE,
                 base_url="",
                 timeout=DEFAULT_TIMEOUT,
@@ -539,7 +539,7 @@ class TestShouldRetry:
     def test_returns_false_when_retry_count_exhausted(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=2),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -553,7 +553,7 @@ class TestShouldRetry:
     def test_returns_false_for_non_retryable_method(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -567,7 +567,7 @@ class TestShouldRetry:
     def test_returns_true_for_retryable_status_and_method(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -582,7 +582,7 @@ class TestShouldRetry:
     def test_returns_false_for_4xx_non_retryable(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -597,7 +597,7 @@ class TestShouldRetry:
     def test_returns_true_for_timeout_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -611,7 +611,7 @@ class TestShouldRetry:
     def test_returns_true_for_server_timeout_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -625,7 +625,7 @@ class TestShouldRetry:
     def test_returns_true_for_server_disconnected_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -639,7 +639,7 @@ class TestShouldRetry:
     def test_returns_false_for_non_retryable_exception(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -661,7 +661,7 @@ class TestCalculateBackoff:
     def test_backoff_is_non_negative(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -676,7 +676,7 @@ class TestCalculateBackoff:
     def test_backoff_increases_with_retry_count(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(retry_jitter_factor=0.0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -712,13 +712,13 @@ def _make_mock_response(status: int, body: bytes = b"") -> MagicMock:
 
 
 @pytest.mark.asyncio(loop_scope="session")
-class TestVSOHTTPClientRequest:
+class TestG8eHTTPClientRequest:
     """HTTPClient .request() — response and exception error branches."""
 
     async def _make_client_with_mock_session(self, mock_response_cm):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -747,7 +747,7 @@ class TestVSOHTTPClientRequest:
         resp = _make_mock_response(500, b'{"detail": "internal error"}')
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0, retry_methods=set()),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -775,7 +775,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -799,7 +799,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),
@@ -821,7 +821,7 @@ class TestVSOHTTPClientRequest:
     async def test_circuit_breaker_open_raises_without_making_request(self):
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(),
             circuit_breaker_config=CircuitBreakerConfig(failure_threshold=1, recovery_time=9999.0),
@@ -835,7 +835,7 @@ class TestVSOHTTPClientRequest:
         session.request = MagicMock()
         c._session = session
 
-        cb = c._get_circuit_breaker("https://vsod/api/test")
+        cb = c._get_circuit_breaker("https://g8ed/api/test")
         await cb.record_failure()
         assert cb.state is CircuitBreakerState.OPEN
 
@@ -862,7 +862,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=2,
@@ -894,7 +894,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=2,
@@ -924,7 +924,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(
                 max_retries=3,
@@ -955,7 +955,7 @@ class TestVSOHTTPClientRequest:
 
         c = HTTPClient (
             component_id=ComponentName.G8EE,
-            base_url="https://vsod",
+            base_url="https://g8ed",
             timeout=DEFAULT_TIMEOUT,
             retry_config=RetryConfig(max_retries=0),
             circuit_breaker_config=CircuitBreakerConfig(),

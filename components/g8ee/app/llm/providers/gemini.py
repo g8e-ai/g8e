@@ -72,7 +72,7 @@ from app.llm.llm_types import (
     ToolGroup,
     UsageMetadata,
 )
-from app.models.base import VSOBaseModel, Field, field_serializer, field_validator
+from app.models.base import G8eBaseModel, Field, field_serializer, field_validator
 from app.models.model_configs import get_model_config
 
 from ..provider import LLMProvider
@@ -83,25 +83,25 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # LLM-boundary models for the google.genai SDK
 #
-# These VSOBaseModel subclasses represent the known shapes of dicts passed to
+# These G8eBaseModel subclasses represent the known shapes of dicts passed to
 # the genai SDK. flatten_for_llm() is called at the LLM boundary to produce
 # the plain dicts the SDK expects.
 # =============================================================================
 
 
-class GenaiToolCallDict(VSOBaseModel):
+class GenaiToolCallDict(G8eBaseModel):
     id: str | None = None
     name: str
     args: dict[str, object]
 
 
-class GenaiToolResponseDict(VSOBaseModel):
+class GenaiToolResponseDict(G8eBaseModel):
     id: str | None = None
     name: str
     response: dict[str, object]
 
 
-class GenaiPartDict(VSOBaseModel):
+class GenaiPartDict(G8eBaseModel):
     text: str | None = None
     function_call: GenaiToolCallDict | None = Field(default=None, alias="function_call")
     function_response: GenaiToolResponseDict | None = Field(default=None, alias="function_response")
@@ -109,12 +109,12 @@ class GenaiPartDict(VSOBaseModel):
     thought_signature: str | None = None
 
 
-class GenaiContentDict(VSOBaseModel):
+class GenaiContentDict(G8eBaseModel):
     role: str
     parts: list[GenaiPartDict]
 
 
-class GenaiRequestKwargs(VSOBaseModel):
+class GenaiRequestKwargs(G8eBaseModel):
     model: str
     contents: list[dict[str, object]]
     config: Any

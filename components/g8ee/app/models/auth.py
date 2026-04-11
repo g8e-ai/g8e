@@ -13,10 +13,10 @@
 
 from app.constants import AuthMethod
 
-from .base import Field, VSOBaseModel
+from .base import Field, G8eBaseModel
 
 
-class AuthenticatedUser(VSOBaseModel):
+class AuthenticatedUser(G8eBaseModel):
     """Authenticated user context returned by g8ee auth dependencies."""
     uid: str = Field(description="User identifier (primary key)")
     user_id: str = Field(description="User identifier (alias for uid)")

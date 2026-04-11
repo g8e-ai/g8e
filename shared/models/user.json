@@ -1,12 +1,12 @@
 {
-  "_comment": "Canonical User document shape. VSOD is the authority — it creates and owns this document in SQLite. g8ee reads it via VSODB KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
+  "_comment": "Canonical User document shape. g8ed is the authority — it creates and owns this document in SQLite. g8ee reads it via g8es KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
 
-  "_authority": "VSOD (SQLite)",
-  "_consumers": ["g8ee (Python — reads user context from X-VSO-* headers that VSOD populates from this document)", "VSOD internal services (auth, session, API key validation)"],
-  "_cache_aside": "VSODB KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
+  "_authority": "g8ed (SQLite)",
+  "_consumers": ["g8ee (Python — reads user context from X-G8E-* headers that g8ed populates from this document)", "g8ed internal services (auth, session, API key validation)"],
+  "_cache_aside": "g8es KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {
-    "_description": "Full user document as stored in VSOD SQLite.",
+    "_description": "Full user document as stored in g8ed SQLite.",
 
     "core_identity": {
       "id": {
@@ -71,7 +71,7 @@
       "operator_id": {
         "type": "string",
         "required": false,
-        "description": "Primary operator ID currently associated with this user. Updated by VSOD on operator activation."
+        "description": "Primary operator ID currently associated with this user. Updated by g8ed on operator activation."
       },
       "operator_status": {
         "type": "string",
@@ -111,7 +111,7 @@
         "type": "array",
         "required": false,
         "default": [],
-        "description": "Active session tokens. Managed by VSOD session service."
+        "description": "Active session tokens. Managed by g8ed session service."
       }
     },
 

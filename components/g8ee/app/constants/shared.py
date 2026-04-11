@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Shared Constants Loader for Python
-# Mirrors VSOD's shared.js to provide a single entry point for shared constants.
+# Mirrors g8ed's shared.js to provide a single entry point for shared constants.
 
 logger = logging.getLogger(__name__)
 

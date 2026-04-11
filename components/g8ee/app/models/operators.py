@@ -14,7 +14,7 @@ from __future__ import annotations
 # limitations under the License.
 
 """
-Operator models for VSO system.
+Operator models for g8e system.
 
 Defines data structures for tracking g8eo operators and their runtime configurations.
 """
@@ -50,12 +50,12 @@ from app.models.tool_results import (
 )
 from app.utils.timestamp import now
 
-from .base import VSOBaseModel, VSOIdentifiableModel
+from .base import G8eBaseModel, G8eIdentifiableModel
 
 logger = logging.getLogger(__name__)
 
 
-class SystemInfoFingerprintDetails(VSOBaseModel):
+class SystemInfoFingerprintDetails(G8eBaseModel):
     """Structured fingerprint sub-fields from wire/system_info.json."""
     os: str | None = Field(default=None)
     architecture: str | None = Field(default=None)
@@ -63,14 +63,14 @@ class SystemInfoFingerprintDetails(VSOBaseModel):
     machine_id: str | None = Field(default=None)
 
 
-class SystemInfoOSDetails(VSOBaseModel):
+class SystemInfoOSDetails(G8eBaseModel):
     """OS detail sub-fields from wire/system_info.json."""
     kernel: str | None = Field(default=None)
     distro: str | None = Field(default=None)
     version: str | None = Field(default=None)
 
 
-class SystemInfoUserDetails(VSOBaseModel):
+class SystemInfoUserDetails(G8eBaseModel):
     """User detail sub-fields from wire/system_info.json."""
     username: str | None = Field(default=None)
     uid: str | None = Field(default=None)
@@ -80,7 +80,7 @@ class SystemInfoUserDetails(VSOBaseModel):
     shell: str | None = Field(default=None)
 
 
-class SystemInfoDiskDetails(VSOBaseModel):
+class SystemInfoDiskDetails(G8eBaseModel):
     """Root filesystem disk usage sub-fields from wire/system_info.json."""
     total_gb: float | None = Field(default=None)
     used_gb: float | None = Field(default=None)
@@ -88,7 +88,7 @@ class SystemInfoDiskDetails(VSOBaseModel):
     percent: float | None = Field(default=None)
 
 
-class SystemInfoMemoryDetails(VSOBaseModel):
+class SystemInfoMemoryDetails(G8eBaseModel):
     """Memory usage sub-fields from wire/system_info.json."""
     total_mb: int | None = Field(default=None)
     available_mb: int | None = Field(default=None)
@@ -96,7 +96,7 @@ class SystemInfoMemoryDetails(VSOBaseModel):
     percent: float | None = Field(default=None)
 
 
-class SystemInfoEnvironment(VSOBaseModel):
+class SystemInfoEnvironment(G8eBaseModel):
     """Environment and container context sub-fields from wire/system_info.json."""
     pwd: str | None = Field(default=None)
     lang: str | None = Field(default=None)
@@ -108,7 +108,7 @@ class SystemInfoEnvironment(VSOBaseModel):
     init_system: str | None = Field(default=None)
 
 
-class OperatorSystemInfo(VSOBaseModel):
+class OperatorSystemInfo(G8eBaseModel):
     """System information sent by g8eo.
 
     Canonical shape defined in shared/models/wire/system_info.json.
@@ -136,7 +136,7 @@ class OperatorSystemInfo(VSOBaseModel):
     local_storage_enabled: bool | None = Field(default=True, description="True when local vault storage is active")
 
 
-class AttachmentRecord(VSOIdentifiableModel):
+class AttachmentRecord(G8eIdentifiableModel):
     """Stored attachment metadata record (no binary data)."""
     filename: str | None = Field(default=None, description="Original filename")
     content_type: str | None = Field(default=None, description="MIME content type")
@@ -144,7 +144,7 @@ class AttachmentRecord(VSOIdentifiableModel):
     type: AttachmentType = Field(default=AttachmentType.OTHER, description="Classified attachment type")
 
 
-class CommandResultRecord(VSOBaseModel):
+class CommandResultRecord(G8eBaseModel):
     """Stored command execution metadata record (no stdout/stderr content)."""
     execution_id: str | None = Field(default=None, description="Unique execution identifier")
     command: str | None = Field(default=None, description="Command that was executed")
@@ -162,13 +162,13 @@ class CommandResultRecord(VSOBaseModel):
     operator_session_id: str | None = Field(default=None, description="Associated operator session ID")
 
 
-class OperatorDocument(VSOBaseModel):
-    """g8ee read-side projection of the VSOD OperatorDocument.
+class OperatorDocument(G8eBaseModel):
+    """g8ee read-side projection of the g8ed OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
-    Populated from VSODB KV cache keyed by KVKey.doc(Collections.OPERATORS, operator_id) or
+    Populated from g8es KV cache keyed by KVKey.doc(Collections.OPERATORS, operator_id) or
     GET /api/internal/operators/:operatorId/status.
-    VSOD is the authority — g8ee only reads this document.
+    g8ed is the authority — g8ee only reads this document.
     """
 
     operator_id: str = Field(description="Unique Operator identifier")
@@ -229,13 +229,13 @@ class OperatorDocument(VSOBaseModel):
 # HEARTBEAT DATA MODELS
 # =============================================================================
 # Clean, normalized heartbeat data structure for Operator telemetry.
-# Heartbeats are stored in database (operator document) and sent via SSE to VSOD.
+# Heartbeats are stored in database (operator document) and sent via SSE to g8ed.
 # Last 10 heartbeats are retained in a rolling buffer for historical context.
 # =============================================================================
 
 
 
-class HeartbeatSystemIdentity(VSOBaseModel):
+class HeartbeatSystemIdentity(G8eBaseModel):
     """System identity information from Operator heartbeat."""
     hostname: str | None = Field(default=None, description="System hostname")
     os: str | None = Field(default=None, description="Operating system name")
@@ -246,7 +246,7 @@ class HeartbeatSystemIdentity(VSOBaseModel):
     memory_mb: int | None = Field(default=None, description="Total system memory in MB")
 
 
-class HeartbeatPerformanceMetrics(VSOBaseModel):
+class HeartbeatPerformanceMetrics(G8eBaseModel):
     """Performance metrics from Operator heartbeat."""
     cpu_percent: float | None = Field(default=None, description="CPU usage percentage (0-100)")
     memory_percent: float | None = Field(default=None, description="Memory usage percentage (0-100)")
@@ -258,21 +258,21 @@ class HeartbeatPerformanceMetrics(VSOBaseModel):
     disk_total_gb: float | None = Field(default=None, description="Total disk in GB")
 
 
-class HeartbeatNetworkInterface(VSOBaseModel):
+class HeartbeatNetworkInterface(G8eBaseModel):
     """A single active network interface reported in a heartbeat."""
     name: str | None = Field(default=None, description="Interface name (e.g. eth0)")
     ip: str | None = Field(default=None, description="IP address assigned to the interface")
     mtu: int | None = Field(default=None, description="Interface MTU")
 
 
-class HeartbeatNetworkInfo(VSOBaseModel):
+class HeartbeatNetworkInfo(G8eBaseModel):
     """Network information from Operator heartbeat."""
     public_ip: str | None = Field(default=None, description="Public IP address")
     interfaces: list[str] | None = Field(default=None, description="List of network interface names")
     connectivity_status: list[HeartbeatNetworkInterface] | None = Field(default=None, description="Active network interfaces with IP and MTU")
 
 
-class HeartbeatUptimeInfo(VSOBaseModel):
+class HeartbeatUptimeInfo(G8eBaseModel):
     """Uptime information from Operator heartbeat."""
     uptime_display: str | None = Field(default=None, description="Human-readable uptime string")
     uptime_seconds: int | None = Field(default=None, description="Uptime in seconds")
@@ -293,14 +293,14 @@ def _coerce_heartbeat_type(value: object) -> HeartbeatType:
         return HeartbeatType.AUTOMATIC
 
 
-class HeartbeatVersionInfo(VSOBaseModel):
+class HeartbeatVersionInfo(G8eBaseModel):
     """Operator version metadata from heartbeat."""
     operator_version: str | None = Field(default=None, description="Operator (g8eo) binary version")
     status: VersionStability | None = Field(default=None, description="Version stability status")
 
 
 
-class OperatorHeartbeat(VSOBaseModel):
+class OperatorHeartbeat(G8eBaseModel):
     """
     Clean, normalized heartbeat data structure.
     
@@ -309,8 +309,8 @@ class OperatorHeartbeat(VSOBaseModel):
     
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
-    - Sent to VSOD via SSE for real-time UI updates
-    - NOT stored in VSODB cache
+    - Sent to g8ed via SSE for real-time UI updates
+    - NOT stored in g8es cache
     
     Usage:
     - AI context for understanding Operator system state
@@ -490,7 +490,7 @@ class OperatorHeartbeat(VSOBaseModel):
         )
 
     def to_sse_payload(self, operator_id: str) -> "HeartbeatSSEPayload":
-        """Convert to typed SSE payload for VSOD broadcasting to frontend."""
+        """Convert to typed SSE payload for g8ed broadcasting to frontend."""
         return HeartbeatSSEPayload(
             operator_id=operator_id,
             timestamp=self.timestamp,
@@ -524,7 +524,7 @@ class OperatorHeartbeat(VSOBaseModel):
         )
 
 
-class PendingApproval(VSOBaseModel):
+class PendingApproval(G8eBaseModel):
     """
     Typed state for a pending approval.
 
@@ -589,7 +589,7 @@ class PendingApproval(VSOBaseModel):
         await self._event.wait()
 
 
-class ApprovalResult(VSOBaseModel):
+class ApprovalResult(G8eBaseModel):
     """Return type for all approval request methods in ApprovalHandlerMixin."""
 
     approved: bool = Field(description="Whether the request was approved")
@@ -603,7 +603,7 @@ class ApprovalResult(VSOBaseModel):
     intent_name: str | None = Field(default=None, description="Normalized intent name (INTENT approvals only)")
 
 
-class TargetSystem(VSOBaseModel):
+class TargetSystem(G8eBaseModel):
     """Target system info for multi-operator batch approval display."""
     hostname: str = Field(description="Operator hostname")
     operator_id: str = Field(description="Operator identifier")
@@ -611,13 +611,13 @@ class TargetSystem(VSOBaseModel):
     operator_session_id: str = Field(default="", description="Operator session identifier")
 
 
-class ApprovalRequestBase(VSOBaseModel):
+class ApprovalRequestBase(G8eBaseModel):
     """Common context for all approval requests.
 
     Carries identity, routing, and timeout fields that every approval
     type needs. Type-specific subclasses add their own payload fields.
     """
-    vso_context: "VSOHttpContext" = Field(description="HTTP context with session/case/investigation identity")
+    g8e_context: "G8eHttpContext" = Field(description="HTTP context with session/case/investigation identity")
     timeout_seconds: int = Field(description="Approval timeout in seconds")
     justification: str = Field(description="AI justification for the operation")
     execution_id: str = Field(description="Unique execution identifier for tracking")
@@ -649,7 +649,7 @@ class IntentApprovalRequest(ApprovalRequestBase):
     operation_context: str | None = Field(default=None, description="Context for the operation")
 
 
-class BatchOperatorExecutionResult(VSOBaseModel):
+class BatchOperatorExecutionResult(G8eBaseModel):
     """Result of executing a command on a single operator within a batch execution."""
     hostname: str = Field(description="Operator hostname")
     operator_id: str = Field(description="Operator identifier")
@@ -659,7 +659,7 @@ class BatchOperatorExecutionResult(VSOBaseModel):
     error: str | None = Field(default=None, description="Error message if failed")
 
 
-class ApprovalContext(VSOBaseModel):
+class ApprovalContext(G8eBaseModel):
     """Shared routing context included in all approval event payloads."""
     approval_id: str = Field(description="Unique approval identifier")
     execution_id: str | None = Field(default=None, description="Operator execution ID at time of request")
@@ -671,7 +671,7 @@ class ApprovalContext(VSOBaseModel):
 
 
 class CommandApprovalEvent(ApprovalContext):
-    """Event payload published to VSOD when command approval is requested."""
+    """Event payload published to g8ed when command approval is requested."""
     command: str = Field(description="Command pending approval")
     risk_analysis: CommandRiskAnalysis | None = Field(default=None)
     target_systems: list[TargetSystem] = Field(default_factory=list)
@@ -683,14 +683,14 @@ class CommandApprovalEvent(ApprovalContext):
 
 
 class FileEditApprovalEvent(ApprovalContext):
-    """Event payload published to VSOD when file edit approval is requested."""
+    """Event payload published to g8ed when file edit approval is requested."""
     file_path: str = Field(description="File path pending approval")
     operation: FileOperation = Field(description="File operation type")
     risk_analysis: FileOperationRiskAnalysis | None = Field(default=None)
 
 
 class IntentApprovalEvent(ApprovalContext):
-    """Event payload published to VSOD when AWS intent approval is requested."""
+    """Event payload published to g8ed when AWS intent approval is requested."""
     intent_name: CloudIntent = Field(description="Normalized AWS intent name")
     all_intents: list[CloudIntent] = Field(description="All intents being requested")
     operation_context: str | None = Field(default=None, description="Context for the operation")
@@ -698,7 +698,7 @@ class IntentApprovalEvent(ApprovalContext):
     operator_id: str | None = Field(default=None)
 
 
-class TruncatedOutput(VSOBaseModel):
+class TruncatedOutput(G8eBaseModel):
     """
     Output that has been truncated for storage efficiency.
     
@@ -769,8 +769,8 @@ class TruncatedOutput(VSOBaseModel):
         return result
 
 
-class HeartbeatSSEPayload(VSOBaseModel):
-    """Typed SSE payload for VSOD broadcasting to frontend.
+class HeartbeatSSEPayload(G8eBaseModel):
+    """Typed SSE payload for g8ed broadcasting to frontend.
 
     Produced by OperatorHeartbeat.to_sse_payload(). Flattened structure
     optimized for UI display.
@@ -813,7 +813,7 @@ class HeartbeatSSEPayload(VSOBaseModel):
 # All timestamp fields use datetime (not str) — serialized to ISO on the wire.
 # =============================================================================
 
-class CommandFailedBroadcastEvent(VSOBaseModel):
+class CommandFailedBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_FAILED."""
     command: str
     execution_id: str | None = None
@@ -830,7 +830,7 @@ class CommandFailedBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class CommandExecutingBroadcastEvent(VSOBaseModel):
+class CommandExecutingBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_EXECUTING."""
     command: str
     execution_id: str | None = None
@@ -841,7 +841,7 @@ class CommandExecutingBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class CommandStatusBroadcastEvent(VSOBaseModel):
+class CommandStatusBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_STATUS."""
     execution_id: str
     command: str | None = None
@@ -853,7 +853,7 @@ class CommandStatusBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class CommandResultBroadcastEvent(VSOBaseModel):
+class CommandResultBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_COMPLETED / OPERATOR_COMMAND_FAILED (direct execution result)."""
     execution_id: str
     command: str | None = None
@@ -872,7 +872,7 @@ class CommandResultBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class CommandCancelledBroadcastEvent(VSOBaseModel):
+class CommandCancelledBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_CANCELLED."""
     execution_id: str
     command: str | None = None
@@ -883,7 +883,7 @@ class CommandCancelledBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class BatchCommandBroadcastEvent(VSOBaseModel):
+class BatchCommandBroadcastEvent(G8eBaseModel):
     """Broadcast payload for batch OPERATOR_COMMAND_COMPLETED / OPERATOR_COMMAND_FAILED."""
     command: str
     execution_id: str
@@ -897,10 +897,10 @@ class BatchCommandBroadcastEvent(VSOBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class OperatorPanelListUpdatedPayload(VSOBaseModel):
+class OperatorPanelListUpdatedPayload(G8eBaseModel):
     """Broadcast payload for OPERATOR_PANEL_LIST_UPDATED SSE events.
 
-    Pushed directly from g8ee to VSOD via EventService when operator context
+    Pushed directly from g8ee to g8ed via EventService when operator context
     changes (investigation_id or case_id updates on heartbeat).
     """
     operator_id: str
@@ -908,7 +908,7 @@ class OperatorPanelListUpdatedPayload(VSOBaseModel):
     investigation_id: str | None = None
 
 
-class FileEditBroadcastEvent(VSOBaseModel):
+class FileEditBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_FILE_EDIT_COMPLETED / OPERATOR_FILE_EDIT_FAILED."""
     file_path: str
     operation: str | None = None
@@ -931,7 +931,7 @@ class FileEditBroadcastEvent(VSOBaseModel):
 # Typed returns for cancel_command and send_command_to_operator.
 # =============================================================================
 
-class CancelCommandResult(VSOBaseModel):
+class CancelCommandResult(G8eBaseModel):
     """Typed result from cancel_command."""
     execution_id: str
     status: ExecutionStatus
@@ -939,7 +939,7 @@ class CancelCommandResult(VSOBaseModel):
     error: str | None = None
 
 
-class DirectCommandResult(VSOBaseModel):
+class DirectCommandResult(G8eBaseModel):
     """Typed result from send_command_to_operator (anchored terminal)."""
     execution_id: str | None = None
     status: ExecutionStatus
@@ -953,7 +953,7 @@ class DirectCommandResult(VSOBaseModel):
 # Pydantic models for validator return types.
 # =============================================================================
 
-class BindingValidationResult(VSOBaseModel):
+class BindingValidationResult(G8eBaseModel):
     """Result model for operator binding validation."""
     valid: bool = Field(description="Whether the binding is valid")
     reason: str = Field(description="Explanation of validation result")
@@ -966,7 +966,7 @@ class BindingValidationResult(VSOBaseModel):
     investigation_id: str | None = Field(default=None, description="Investigation ID for context")
 
 
-class HealthCheckResultModel(VSOBaseModel):
+class HealthCheckResultModel(G8eBaseModel):
     """Result model for operator health check.
 
     Replaces raw dict return in check_operator_health.

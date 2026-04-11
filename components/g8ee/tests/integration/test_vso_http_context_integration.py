@@ -12,20 +12,20 @@
 # limitations under the License.
 
 """
-Integration tests: VSOHttpContext header round-trip.
+Integration tests: G8eHttpContext header round-trip.
 
 These tests exercise the full path from raw HTTP headers through
-get_vso_http_context (app/dependencies.py) to a populated VSOHttpContext
+get_g8e_http_context (app/dependencies.py) to a populated G8eHttpContext
 object. Real parsing logic is used; no mocks.
 
     Segment 1 — happy-path extraction
-      All required headers present → fully populated VSOHttpContext.
+      All required headers present → fully populated G8eHttpContext.
 
     Segment 2 — bound_operators JSON round-trip
-      X-VSO-Bound-Operators JSON string → typed BoundOperator list.
+      X-G8E-Bound-Operators JSON string → typed BoundOperator list.
 
     Segment 3 — new_case sentinel
-      X-VSO-New-Case: true → new_case=True; case_id and investigation_id
+      X-G8E-New-Case: true → new_case=True; case_id and investigation_id
       fall back to NEW_CASE_ID when absent.
 
     Segment 4 — missing required headers raise AuthenticationError
@@ -38,8 +38,8 @@ object. Real parsing logic is used; no mocks.
       organization_id, task_id, execution_id forwarded correctly.
 
 Real code under test:
-    get_vso_http_context (app/dependencies.py)
-    VSOHttpContext (app/models/http_context.py)
+    get_g8e_http_context (app/dependencies.py)
+    G8eHttpContext (app/models/http_context.py)
     BoundOperator (app/models/http_context.py)
 
 Only request stub is mocked — the header-parsing function itself runs real.
@@ -49,10 +49,10 @@ import json
 import pytest
 from typing import Dict, Any
 
-from app.constants import ComponentName, OperatorStatus, NEW_CASE_ID, VSOHeaders, INTERNAL_AUTH_HEADER
-from app.dependencies import get_vso_http_context
+from app.constants import ComponentName, OperatorStatus, NEW_CASE_ID, G8eHeaders, INTERNAL_AUTH_HEADER
+from app.dependencies import get_g8e_http_context
 from app.errors import AuthenticationError
-from app.models.http_context import BoundOperator, VSOHttpContext
+from app.models.http_context import BoundOperator, G8eHttpContext
 
 
 # ---------------------------------------------------------------------------
@@ -62,47 +62,47 @@ from app.models.http_context import BoundOperator, VSOHttpContext
 
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.integration
-class TestVSOHttpContextHappyPath:
-    """All required headers present → fully populated VSOHttpContext."""
+class TestG8eHttpContextHappyPath:
+    """All required headers present → fully populated G8eHttpContext."""
 
     async def test_web_session_id_extracted(self):
         request = _make_request(_base_headers(web_session_id="sess-round-trip-001"))
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.web_session_id == "sess-round-trip-001"
 
     async def test_user_id_extracted(self):
         request = _make_request(_base_headers(user_id="user-round-trip-001"))
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.user_id == "user-round-trip-001"
 
     async def test_case_id_extracted(self):
         request = _make_request(_base_headers(case_id="case-round-trip-001"))
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.case_id == "case-round-trip-001"
 
     async def test_investigation_id_extracted(self):
         request = _make_request(_base_headers(investigation_id="inv-round-trip-001"))
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.investigation_id == "inv-round-trip-001"
 
     async def test_source_component_parsed_to_enum(self):
-        request = _make_request(_base_headers(source_component="vsod"))
-        ctx = await get_vso_http_context(request)
-        assert ctx.source_component == ComponentName.VSOD
+        request = _make_request(_base_headers(source_component="g8ed"))
+        ctx = await get_g8e_http_context(request)
+        assert ctx.source_component == ComponentName.G8ED
 
-    async def test_result_is_vso_http_context(self):
+    async def test_result_is_g8e_http_context(self):
         request = _make_request(_base_headers())
-        ctx = await get_vso_http_context(request)
-        assert isinstance(ctx, VSOHttpContext)
+        ctx = await get_g8e_http_context(request)
+        assert isinstance(ctx, G8eHttpContext)
 
     async def test_new_case_defaults_false(self):
         request = _make_request(_base_headers())
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.new_case is False
 
     async def test_bound_operators_defaults_empty_list(self):
         request = _make_request(_base_headers(bound_operators="[]"))
-        ctx = await get_vso_http_context(request)
+        ctx = await get_g8e_http_context(request)
         assert ctx.bound_operators == []
 
 
@@ -114,7 +114,7 @@ class TestVSOHttpContextHappyPath:
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.integration
 class TestBoundOperatorsRoundTrip:
-    """X-VSO-Bound-Operators JSON string parses to typed BoundOperator list."""
+    """X-G8E-Bound-Operators JSON string parses to typed BoundOperator list."""
 
     async def test_single_bound_operator_parsed(self):
         operators = [
@@ -125,7 +125,7 @@ class TestBoundOperatorsRoundTrip:
             }
         ]
         headers = _base_headers(bound_operators=json.dumps(operators))
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
 
         assert len(ctx.bound_operators) == 1
         op = ctx.bound_operators[0]
@@ -140,7 +140,7 @@ class TestBoundOperatorsRoundTrip:
             {"operator_id": "op-002", "operator_session_id": "sess-op-002", "status": "bound"},
         ]
         headers = _base_headers(bound_operators=json.dumps(operators))
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
 
         assert len(ctx.bound_operators) == 2
         assert ctx.bound_operators[0].operator_id == "op-001"
@@ -149,7 +149,7 @@ class TestBoundOperatorsRoundTrip:
     async def test_operator_without_session_id_allowed(self):
         operators = [{"operator_id": "op-003", "status": "bound"}]
         headers = _base_headers(bound_operators=json.dumps(operators))
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
 
         assert ctx.bound_operators[0].operator_id == "op-003"
         assert ctx.bound_operators[0].operator_session_id is None
@@ -157,18 +157,18 @@ class TestBoundOperatorsRoundTrip:
     async def test_has_bound_operator_true_when_status_bound(self):
         operators = [{"operator_id": "op-004", "status": "bound"}]
         headers = _base_headers(bound_operators=json.dumps(operators))
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.has_bound_operator() is True
 
     async def test_has_bound_operator_false_when_empty(self):
         headers = _base_headers(bound_operators="[]")
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.has_bound_operator() is False
 
     async def test_malformed_json_raises_validation_error(self):
         headers = _base_headers(bound_operators="{not-json}")
         with pytest.raises(Exception):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
 
 # ---------------------------------------------------------------------------
@@ -179,58 +179,58 @@ class TestBoundOperatorsRoundTrip:
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.integration
 class TestNewCaseSentinel:
-    """X-VSO-New-Case: true triggers new_case=True and NEW_CASE_ID fallbacks."""
+    """X-G8E-New-Case: true triggers new_case=True and NEW_CASE_ID fallbacks."""
 
     async def test_new_case_true_header_sets_flag(self):
         headers = {
-            VSOHeaders.WEB_SESSION_ID:       "sess-nc-001",
-            VSOHeaders.USER_ID:          "user-nc-001",
-            VSOHeaders.SOURCE_COMPONENT: "vsod",
-            VSOHeaders.NEW_CASE:         "true",
-            VSOHeaders.BOUND_OPERATORS:  "[]",
+            G8eHeaders.WEB_SESSION_ID:       "sess-nc-001",
+            G8eHeaders.USER_ID:          "user-nc-001",
+            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.NEW_CASE:         "true",
+            G8eHeaders.BOUND_OPERATORS:  "[]",
         }
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.new_case is True
 
     async def test_new_case_missing_case_id_falls_back_to_new_case_id(self):
         headers = {
-            VSOHeaders.WEB_SESSION_ID:       "sess-nc-002",
-            VSOHeaders.USER_ID:          "user-nc-002",
-            VSOHeaders.SOURCE_COMPONENT: "vsod",
-            VSOHeaders.NEW_CASE:         "true",
-            VSOHeaders.BOUND_OPERATORS:  "[]",
+            G8eHeaders.WEB_SESSION_ID:       "sess-nc-002",
+            G8eHeaders.USER_ID:          "user-nc-002",
+            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.NEW_CASE:         "true",
+            G8eHeaders.BOUND_OPERATORS:  "[]",
         }
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.case_id == NEW_CASE_ID
 
     async def test_new_case_missing_investigation_id_falls_back_to_new_case_id(self):
         headers = {
-            VSOHeaders.WEB_SESSION_ID:       "sess-nc-003",
-            VSOHeaders.USER_ID:          "user-nc-003",
-            VSOHeaders.SOURCE_COMPONENT: "vsod",
-            VSOHeaders.NEW_CASE:         "true",
-            VSOHeaders.BOUND_OPERATORS:  "[]",
+            G8eHeaders.WEB_SESSION_ID:       "sess-nc-003",
+            G8eHeaders.USER_ID:          "user-nc-003",
+            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.NEW_CASE:         "true",
+            G8eHeaders.BOUND_OPERATORS:  "[]",
         }
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.investigation_id == NEW_CASE_ID
 
     async def test_new_case_false_string_treated_as_false(self):
         headers = _base_headers()
-        headers[VSOHeaders.NEW_CASE] = "false"
-        ctx = await get_vso_http_context(_make_request(headers))
+        headers[G8eHeaders.NEW_CASE] = "false"
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.new_case is False
 
     async def test_new_case_with_explicit_ids_preserved(self):
         headers = {
-            VSOHeaders.WEB_SESSION_ID:       "sess-nc-004",
-            VSOHeaders.USER_ID:          "user-nc-004",
-            VSOHeaders.SOURCE_COMPONENT: "vsod",
-            VSOHeaders.NEW_CASE:         "true",
-            VSOHeaders.CASE_ID:          "case-provided",
-            VSOHeaders.INVESTIGATION_ID: "inv-provided",
-            VSOHeaders.BOUND_OPERATORS:  "[]",
+            G8eHeaders.WEB_SESSION_ID:       "sess-nc-004",
+            G8eHeaders.USER_ID:          "user-nc-004",
+            G8eHeaders.SOURCE_COMPONENT: "g8ed",
+            G8eHeaders.NEW_CASE:         "true",
+            G8eHeaders.CASE_ID:          "case-provided",
+            G8eHeaders.INVESTIGATION_ID: "inv-provided",
+            G8eHeaders.BOUND_OPERATORS:  "[]",
         }
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.case_id == "case-provided"
         assert ctx.investigation_id == "inv-provided"
 
@@ -247,33 +247,33 @@ class TestMissingRequiredHeaders:
 
     async def test_missing_session_id_raises(self):
         headers = _base_headers()
-        del headers[VSOHeaders.WEB_SESSION_ID]
+        del headers[G8eHeaders.WEB_SESSION_ID]
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
     async def test_missing_user_id_raises(self):
         headers = _base_headers()
-        del headers[VSOHeaders.USER_ID]
+        del headers[G8eHeaders.USER_ID]
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
     async def test_missing_source_component_raises(self):
         headers = _base_headers()
-        del headers[VSOHeaders.SOURCE_COMPONENT]
+        del headers[G8eHeaders.SOURCE_COMPONENT]
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
     async def test_missing_case_id_without_new_case_raises(self):
         headers = _base_headers()
-        del headers[VSOHeaders.CASE_ID]
+        del headers[G8eHeaders.CASE_ID]
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
     async def test_missing_investigation_id_without_new_case_raises(self):
         headers = _base_headers()
-        del headers[VSOHeaders.INVESTIGATION_ID]
+        del headers[G8eHeaders.INVESTIGATION_ID]
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
 
 # ---------------------------------------------------------------------------
@@ -289,17 +289,17 @@ class TestSourceComponentValidation:
     async def test_unrecognised_component_raises(self):
         headers = _base_headers(source_component="totally-unknown-service")
         with pytest.raises(AuthenticationError):
-            await get_vso_http_context(_make_request(headers))
+            await get_g8e_http_context(_make_request(headers))
 
     async def test_g8ee_component_accepted(self):
         headers = _base_headers(source_component="g8ee")
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.source_component == ComponentName.G8EE
 
-    async def test_vsod_component_accepted(self):
-        headers = _base_headers(source_component="vsod")
-        ctx = await get_vso_http_context(_make_request(headers))
-        assert ctx.source_component == ComponentName.VSOD
+    async def test_g8ed_component_accepted(self):
+        headers = _base_headers(source_component="g8ed")
+        ctx = await get_g8e_http_context(_make_request(headers))
+        assert ctx.source_component == ComponentName.G8ED
 
 
 # ---------------------------------------------------------------------------
@@ -314,35 +314,35 @@ class TestOptionalHeaderPassthrough:
 
     async def test_organization_id_forwarded(self):
         headers = _base_headers()
-        headers[VSOHeaders.ORGANIZATION_ID] = "org-passthrough-001"
-        ctx = await get_vso_http_context(_make_request(headers))
+        headers[G8eHeaders.ORGANIZATION_ID] = "org-passthrough-001"
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.organization_id == "org-passthrough-001"
 
     async def test_organization_id_none_when_absent(self):
         headers = _base_headers()
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.organization_id is None
 
     async def test_task_id_forwarded(self):
         headers = _base_headers()
-        headers[VSOHeaders.TASK_ID] = "task-passthrough-001"
-        ctx = await get_vso_http_context(_make_request(headers))
+        headers[G8eHeaders.TASK_ID] = "task-passthrough-001"
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.task_id == "task-passthrough-001"
 
     async def test_task_id_none_when_absent(self):
         headers = _base_headers()
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.task_id is None
 
     async def test_request_id_forwarded_when_present(self):
         headers = _base_headers()
-        headers[VSOHeaders.EXECUTION_ID] = "req-passthrough-001"
-        ctx = await get_vso_http_context(_make_request(headers))
+        headers[G8eHeaders.EXECUTION_ID] = "req-passthrough-001"
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.execution_id == "req-passthrough-001"
 
     async def test_request_id_auto_generated_when_absent(self):
         headers = _base_headers()
-        ctx = await get_vso_http_context(_make_request(headers))
+        ctx = await get_g8e_http_context(_make_request(headers))
         assert ctx.execution_id is not None
         assert len(ctx.execution_id) > 0
 
@@ -356,20 +356,20 @@ def _base_headers(
     user_id: str = "test-user-id", 
     case_id: str = "test-case-id",
     investigation_id: str = "test-investigation-id",
-    source_component: str = "vsod",
+    source_component: str = "g8ed",
     bound_operators: str = "[]",
     new_case: str = "false",
     **kwargs
 ) -> Dict[str, str]:
-    """Create base headers with all required VSO headers."""
+    """Create base headers with all required g8e headers."""
     headers = {
-        VSOHeaders.WEB_SESSION_ID: web_session_id,
-        VSOHeaders.USER_ID: user_id,
-        VSOHeaders.CASE_ID: case_id,
-        VSOHeaders.INVESTIGATION_ID: investigation_id,
-        VSOHeaders.SOURCE_COMPONENT: source_component,
-        VSOHeaders.BOUND_OPERATORS: bound_operators,
-        VSOHeaders.NEW_CASE: new_case,
+        G8eHeaders.WEB_SESSION_ID: web_session_id,
+        G8eHeaders.USER_ID: user_id,
+        G8eHeaders.CASE_ID: case_id,
+        G8eHeaders.INVESTIGATION_ID: investigation_id,
+        G8eHeaders.SOURCE_COMPONENT: source_component,
+        G8eHeaders.BOUND_OPERATORS: bound_operators,
+        G8eHeaders.NEW_CASE: new_case,
         INTERNAL_AUTH_HEADER: "test-auth-token",
     }
     

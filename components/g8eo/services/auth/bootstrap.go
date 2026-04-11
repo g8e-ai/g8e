@@ -103,7 +103,7 @@ type AuthServicesResponse struct {
 	OperatorCertKey   string           `json:"operator_cert_key"`
 }
 
-// RequestBootstrapConfig authenticates with VSOD and receives bootstrap configuration.
+// RequestBootstrapConfig authenticates with g8ed and receives bootstrap configuration.
 // Supports two authentication modes:
 // - API key auth: POST /api/auth/operator with Bearer token
 // - OperatorSession auth: Device link flow using pre-authorized operator session IDs

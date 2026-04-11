@@ -28,7 +28,7 @@ import (
 // TestPubSubAvailable
 // ---------------------------------------------------------------------------
 
-func TestPubSubAvailable_ConnectsToLiveVSODB(t *testing.T) {
+func TestPubSubAvailable_ConnectsToLiveG8es(t *testing.T) {
 	TestPubSubAvailable(t)
 }
 
@@ -40,7 +40,7 @@ func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
 	TestPubSubAvailable(t)
 
 	channel := CreateTestChannel(t, "integration")
-	baseURL := GetTestVSODBDirectURL()
+	baseURL := GetTestG8esDirectURL()
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
@@ -62,7 +62,7 @@ func TestSubscribeToChannel_MultipleMessages(t *testing.T) {
 	TestPubSubAvailable(t)
 
 	channel := CreateTestChannel(t, "integration")
-	baseURL := GetTestVSODBDirectURL()
+	baseURL := GetTestG8esDirectURL()
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
@@ -85,7 +85,7 @@ func TestPublishTestMessage_NonJSONPayload_WrappedAsString(t *testing.T) {
 	TestPubSubAvailable(t)
 
 	channel := CreateTestChannel(t, "integration")
-	baseURL := GetTestVSODBDirectURL()
+	baseURL := GetTestG8esDirectURL()
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
@@ -102,7 +102,7 @@ func TestAssertMessageReceived_Integration(t *testing.T) {
 	TestPubSubAvailable(t)
 
 	channel := CreateTestChannel(t, "integration")
-	baseURL := GetTestVSODBDirectURL()
+	baseURL := GetTestG8esDirectURL()
 
 	ch := SubscribeToChannel(t, baseURL, channel)
 
@@ -118,7 +118,7 @@ func TestAssertMessageReceived_Integration(t *testing.T) {
 func TestSubscribeToChannel_IsolatedChannels_NoBleed(t *testing.T) {
 	TestPubSubAvailable(t)
 
-	baseURL := GetTestVSODBDirectURL()
+	baseURL := GetTestG8esDirectURL()
 	ch1 := CreateTestChannel(t, "ch1")
 	ch2 := CreateTestChannel(t, "ch2")
 

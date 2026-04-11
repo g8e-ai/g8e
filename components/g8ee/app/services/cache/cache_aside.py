@@ -42,7 +42,7 @@ from app.constants import (
 )
 
 from app.errors import DatabaseError
-from app.models.base import recursive_serialize, VSOBaseModel
+from app.models.base import recursive_serialize, G8eBaseModel
 from app.models.cache import (
     BatchCreateDocumentOperation,
     BatchOperationResult,
@@ -112,7 +112,7 @@ class CacheAsideService(CacheAsideProtocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, Any] | VSOBaseModel,
+        data: dict[str, Any] | G8eBaseModel,
         ttl: int | None = None
     ) -> CacheOperationResult:
         # Check if document exists first to ensure "Create" fails if it exists
@@ -161,7 +161,7 @@ class CacheAsideService(CacheAsideProtocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, Any] | VSOBaseModel,
+        data: dict[str, Any] | G8eBaseModel,
         merge: bool = True,
         ttl: int | None = None
     ) -> CacheOperationResult:

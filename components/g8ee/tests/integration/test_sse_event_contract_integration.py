@@ -14,7 +14,7 @@
 """
 SSE Event Contract Integration Tests
 
-Ensures g8ee and VSOD emit/consume SSE events that match the shared fixture
+Ensures g8ee and g8ed emit/consume SSE events that match the shared fixture
 definitions in shared/test-fixtures/sse-events.json. This prevents drift
 between components and ensures wire compatibility.
 """
@@ -28,7 +28,7 @@ from app.models.agent import StreamChunkData, StreamChunkFromModel, StreamChunkF
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
     make_streaming_context,
-    make_vsod_event_service,
+    make_g8ed_event_service,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -62,7 +62,7 @@ class TestSSEEventContract:
             web_session_id="contract-test-sess-001",
             user_id="contract-test-user-001",
         )
-        event_svc = make_vsod_event_service()
+        event_svc = make_g8ed_event_service()
 
         # Create a text chunk stream
         async def _text_stream():
@@ -78,7 +78,7 @@ class TestSSEEventContract:
         await deliver_via_sse(
             stream=_text_stream(),
             agent_streaming_context=streaming_ctx,
-            vsod_event_service=event_svc,
+            g8ed_event_service=event_svc,
         )
 
         # Get published events
@@ -110,7 +110,7 @@ class TestSSEEventContract:
             web_session_id="contract-test-sess-002",
             user_id="contract-test-user-002",
         )
-        event_svc = make_vsod_event_service()
+        event_svc = make_g8ed_event_service()
 
         async def _completed_stream():
             yield StreamChunkFromModel(
@@ -125,7 +125,7 @@ class TestSSEEventContract:
         await deliver_via_sse(
             stream=_completed_stream(),
             agent_streaming_context=streaming_ctx,
-            vsod_event_service=event_svc,
+            g8ed_event_service=event_svc,
         )
 
         published = event_svc._published_events
@@ -151,7 +151,7 @@ class TestSSEEventContract:
             web_session_id="contract-test-sess-003",
             user_id="contract-test-user-003",
         )
-        event_svc = make_vsod_event_service()
+        event_svc = make_g8ed_event_service()
 
         async def _failing_stream():
             yield StreamChunkFromModel(
@@ -163,7 +163,7 @@ class TestSSEEventContract:
         await deliver_via_sse(
             stream=_failing_stream(),
             agent_streaming_context=streaming_ctx,
-            vsod_event_service=event_svc,
+            g8ed_event_service=event_svc,
         )
 
         published = event_svc._published_events
@@ -192,7 +192,7 @@ class TestSSEEventContract:
             web_session_id="contract-test-sess-004",
             user_id="contract-test-user-004",
         )
-        event_svc = make_vsod_event_service()
+        event_svc = make_g8ed_event_service()
 
         # Create search web tool call stream
         async def _search_web_stream():
@@ -213,7 +213,7 @@ class TestSSEEventContract:
         await deliver_via_sse(
             stream=_search_web_stream(),
             agent_streaming_context=streaming_ctx,
-            vsod_event_service=event_svc,
+            g8ed_event_service=event_svc,
         )
 
         published = event_svc._published_events
@@ -240,7 +240,7 @@ class TestSSEEventContract:
             web_session_id="contract-test-sess-005",
             user_id="contract-test-user-005",
         )
-        event_svc = make_vsod_event_service()
+        event_svc = make_g8ed_event_service()
 
         async def _multi_event_stream():
             yield StreamChunkFromModel(
@@ -255,7 +255,7 @@ class TestSSEEventContract:
         await deliver_via_sse(
             stream=_multi_event_stream(),
             agent_streaming_context=streaming_ctx,
-            vsod_event_service=event_svc,
+            g8ed_event_service=event_svc,
         )
 
         published = event_svc._published_events

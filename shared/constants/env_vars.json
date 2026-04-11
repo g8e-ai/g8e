@@ -39,10 +39,10 @@
     "G8E_GOOGLE_SEARCH_API_KEY": "google_search.api_key",
     "G8E_GOOGLE_SEARCH_ENGINE_ID": "google_search.engine_id"
   },
-  "vsodb": {
+  "g8es": {
     "G8E_INTERNAL_HTTP_URL": "listen.http_url",
     "G8E_INTERNAL_PUBSUB_URL": "listen.pubsub_url",
-    "G8E_VSODB_BLOB_URL": "listen.blob_url"
+    "G8E_G8ES_BLOB_URL": "listen.blob_url"
   },
   "platform": {
     "G8E_DOCKER_GID": "platform.docker_gid",
@@ -58,7 +58,7 @@
   },
   "service_urls": {
     "G8EE_URL": "service_urls.g8ee_url",
-    "G8E_VSOD_URL": "service_urls.vsod_url",
+    "G8E_G8ED_URL": "service_urls.g8ed_url",
     "G8E_OPERATOR_ENDPOINT": "service_urls.operator_endpoint"
   },
   "command_validation": {

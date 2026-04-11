@@ -35,11 +35,11 @@ func TestTranslateToolCallToCommand(t *testing.T) {
 		Method:  "tools/call",
 		Params:  json.RawMessage(`{"name":"run_commands_with_operator","arguments":{"command":"ls -la"}}`),
 	}
-	vsoMsg, err := TranslateToolCallToCommand(req)
+	g8eMsg, err := TranslateToolCallToCommand(req)
 	assert.NoError(t, err)
-	assert.Equal(t, "test-id", vsoMsg.ID)
-	assert.Equal(t, constants.Event.Operator.Command.Requested, vsoMsg.EventType)
-	assert.Contains(t, string(vsoMsg.Payload), "ls -la")
+	assert.Equal(t, "test-id", g8eMsg.ID)
+	assert.Equal(t, constants.Event.Operator.Command.Requested, g8eMsg.EventType)
+	assert.Contains(t, string(g8eMsg.Payload), "ls -la")
 
 	// 2. Unsupported method
 	req.Method = "unknown"

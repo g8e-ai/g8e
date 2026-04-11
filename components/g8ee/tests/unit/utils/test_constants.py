@@ -262,8 +262,8 @@ class TestComponentNameMatchesSharedJSON:
     def test_g8eo(self, status):
         assert status["component.name"]["g8eo"] == ComponentName.G8EO
 
-    def test_vsod(self, status):
-        assert status["component.name"]["vsod"] == ComponentName.VSOD
+    def test_g8ed(self, status):
+        assert status["component.name"]["g8ed"] == ComponentName.G8ED
 
 
 class TestComponentStatusMatchesSharedJSON:
@@ -1361,18 +1361,18 @@ class TestOperatorTypeValidation:
 
 from app.models.settings import G8eeUserSettings, LLMSettings
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_enriched_context,
 )
 
 class TestAgentModeValidation:
     def test_accepts_enum(self):
         inv = build_enriched_context(investigation_id="inv-1")
-        vso_ctx = build_vso_http_context(user_id="user-1")
+        g8e_ctx = build_g8e_http_context(user_id="user-1")
         request_settings = G8eeUserSettings(llm=LLMSettings())
         ctx = AgentStreamContext(
             investigation=inv,
-            vso_context=vso_ctx,
+            g8e_context=g8e_ctx,
             request_settings=request_settings,
             agent_mode=AgentMode.OPERATOR_BOUND
         )

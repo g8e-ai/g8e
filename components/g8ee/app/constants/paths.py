@@ -27,8 +27,8 @@ def _load_paths() -> dict:
         return {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": "/vsodb/ca.crt",
-                "ssl_dir": "/vsodb",
+                "ca_cert_path": "/g8es/ca.crt",
+                "ssl_dir": "/g8es",
                 "docs_dir": "/docs",
                 "shared_constants_dir": "/app/shared/constants"
             }

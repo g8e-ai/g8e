@@ -30,24 +30,24 @@ from app.models.internal_api import (
     DirectCommandRequest,
 )
 from app.models.cases import CaseUpdateRequest
-from app.models.http_context import BoundOperator, VSOHttpContext
+from app.models.http_context import BoundOperator, G8eHttpContext
 from app.errors import ResourceNotFoundError
 from tests.fakes.factories import build_case_model, create_investigation_data
 
 @pytest.fixture
-def vso_context():
-    return VSOHttpContext(
+def g8e_context():
+    return G8eHttpContext(
         user_id="user-123",
         web_session_id="session-123",
         case_id="case-123",
         investigation_id="inv-123",
         organization_id="org-123",
-        source_component=ComponentName.VSOD
+        source_component=ComponentName.G8ED
     )
 
 @pytest.mark.asyncio
-async def test_internal_chat_new_case(vso_context, task_tracker):
-    vso_context.new_case = True
+async def test_internal_chat_new_case(g8e_context, task_tracker):
+    g8e_context.new_case = True
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
     
     # Mock dependencies
@@ -75,7 +75,7 @@ async def test_internal_chat_new_case(vso_context, task_tracker):
             investigation_service=mock_investigation_service,
             attachment_service=mock_attachment_service,
             event_service=mock_event_service,
-            vso_context=vso_context
+            g8e_context=g8e_context
         )
 
     assert response.success is True
@@ -85,7 +85,7 @@ async def test_internal_chat_new_case(vso_context, task_tracker):
     mock_investigation_service.create_investigation.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_stop_ai_processing(vso_context):
+async def test_stop_ai_processing(g8e_context):
     request = StopAIRequest(investigation_id="inv-123", reason="user cancel", web_session_id="session-123")
     mock_task_manager = MagicMock()
     mock_task_manager.cancel = AsyncMock(return_value=True)
@@ -93,7 +93,7 @@ async def test_stop_ai_processing(vso_context):
     
     response = await stop_ai_processing(
         request=request,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         chat_task_manager=mock_task_manager,
         chat_pipeline=mock_pipeline
     )
@@ -103,8 +103,8 @@ async def test_stop_ai_processing(vso_context):
     mock_task_manager.cancel.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_operator_approval_respond(vso_context):
-    vso_context.bound_operators = [
+async def test_operator_approval_respond(g8e_context):
+    g8e_context.bound_operators = [
         BoundOperator(operator_id="op-1", operator_session_id="opsess-1")
     ]
     request = OperatorApprovalResponse(approval_id="app-123", approved=True)
@@ -113,7 +113,7 @@ async def test_operator_approval_respond(vso_context):
 
     response = await operator_approval_respond(
         request=request,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         approval_service=mock_approval_service,
     )
 
@@ -123,7 +123,7 @@ async def test_operator_approval_respond(vso_context):
     assert request.operator_id == "op-1"
 
 @pytest.mark.asyncio
-async def test_execute_direct_command(vso_context):
+async def test_execute_direct_command(g8e_context):
     request = DirectCommandRequest(command="ls", execution_id="exec-123")
     mock_exec_service = MagicMock()
     mock_exec_service.send_command_to_operator = AsyncMock()
@@ -131,7 +131,7 @@ async def test_execute_direct_command(vso_context):
     
     response = await execute_direct_command(
         request=request,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         operator_data_service=mock_exec_service
     )
     
@@ -140,7 +140,7 @@ async def test_execute_direct_command(vso_context):
     mock_exec_service.send_direct_exec_audit_event.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_update_case_with_sse(vso_context):
+async def test_update_case_with_sse(g8e_context):
     case_id = "case-123"
     updates = CaseUpdateRequest(title="New Title")
     mock_case_service = MagicMock()
@@ -152,7 +152,7 @@ async def test_update_case_with_sse(vso_context):
         case_id=case_id,
         updates=updates,
         case_service=mock_case_service,
-        vso_context=vso_context
+        g8e_context=g8e_context
     )
     
     assert response.success is True
@@ -160,7 +160,7 @@ async def test_update_case_with_sse(vso_context):
     mock_case_service.publish_case_update_sse.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_delete_case_success(vso_context):
+async def test_delete_case_success(g8e_context):
     case_id = "case-123"
     mock_case_service = MagicMock()
     mock_case_service.get_case = AsyncMock()
@@ -180,13 +180,13 @@ async def test_delete_case_success(vso_context):
         case_service=mock_case_service,
         investigation_service=mock_inv_service,
         cache_aside_service=mock_cache,
-        vso_context=vso_context
+        g8e_context=g8e_context
     )
     
     mock_case_service.delete_case.assert_called_once_with(case_id)
 
 @pytest.mark.asyncio
-async def test_delete_case_not_found_idempotent(vso_context):
+async def test_delete_case_not_found_idempotent(g8e_context):
     case_id = "case-missing"
     mock_case_service = MagicMock()
     mock_case_service.get_case = AsyncMock(side_effect=ResourceNotFoundError(
@@ -201,7 +201,7 @@ async def test_delete_case_not_found_idempotent(vso_context):
         case_service=mock_case_service,
         investigation_service=MagicMock(),
         cache_aside_service=MagicMock(),
-        vso_context=vso_context
+        g8e_context=g8e_context
     )
     
     mock_case_service.delete_case.assert_not_called()

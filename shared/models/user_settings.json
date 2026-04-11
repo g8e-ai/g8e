@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical UserSettings document shape. VSOD is the authority — it creates and updates this document in the user_settings collection. g8ee reads it at request time to resolve per-user LLM configuration. Document ID is the user_id.",
+  "_comment": "Canonical UserSettings document shape. g8ed is the authority — it creates and updates this document in the user_settings collection. g8ee reads it at request time to resolve per-user LLM configuration. Document ID is the user_id.",
 
-  "_authority": "VSOD",
+  "_authority": "g8ed",
   "_consumers": ["g8ee (Python — reads at request time to build per-user Settings)"],
   "_collection": "settings",
   "_document_id": "user_settings_{user_id}",

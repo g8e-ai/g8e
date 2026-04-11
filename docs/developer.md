@@ -68,13 +68,13 @@ To ensure long-term maintainability and strict separation of concerns, all compo
 ./g8e platform setup
 ```
 
-Only Docker required. `platform setup` is the all-inclusive first-run command: it builds the g8ep image, generates TLS certificates if missing, compiles the Operator binary, and does a full no-cache rebuild of all platform services (VSODB, g8ee, VSOD).
+Only Docker required. `platform setup` is the all-inclusive first-run command: it builds the g8ep image, generates TLS certificates if missing, compiles the Operator binary, and does a full no-cache rebuild of all platform services (G8es, g8ee, g8ed).
 
 After `platform setup` completes, open `https://localhost` — on first run you will be redirected to the setup wizard. The wizard lets you trust the CA certificate (download button + per-OS instructions built in), register your admin account, configure the platform hostname, and set up your LLM provider.
 
 All configuration — LLM provider, API keys, passkey config, cert paths, session tuning, app URL, CORS — flows through `SettingsService.getConfig()`. Use `./g8e platform restart` to apply changes made via CLI or UI.
 
-Three core services run: VSODB (persistence + pub/sub), g8ee (AI engine), and VSOD (web frontend + Operator gateway). All data stays on your infrastructure. The only external network connection is to the configured LLM endpoint.
+Three core services run: g8es (persistence + pub/sub), g8ee (AI engine), and g8ed (web frontend + Operator gateway). All data stays on your infrastructure. The only external network connection is to the configured LLM endpoint.
 
 ### Subsequent rebuilds
 
@@ -148,7 +148,7 @@ Go to `https://console.cloud.google.com/gen-app-builder/engines`, click **Create
 ./g8e search setup
 ```
 
-Walks through collecting and validating the GCP project ID, engine ID, API key, and location, then writes them to the platform database (VSODB). Run `./g8e platform restart` to apply.
+Walks through collecting and validating the GCP project ID, engine ID, API key, and location, then writes them to the platform database (g8es). Run `./g8e platform restart` to apply.
 
 Non-interactive (CI/scripted):
 
@@ -169,7 +169,7 @@ To remove the configuration:
 
 ## SSL Setup
 
-g8e runs over HTTPS. VSODB (g8es) generates the CA and server certificates automatically on first start and stores them in its data volume (`g8es-data`). You only need to interact with cert management to trust the CA in your browser (once, to eliminate warnings) or to force regeneration after a `reset` or `clean` (both destroy the vsodb volume). `wipe` preserves certs — it only clears the g8ee and vsod app data volumes.
+g8e runs over HTTPS. g8es (g8es) generates the CA and server certificates automatically on first start and stores them in its data volume (`g8es-data`). You only need to interact with cert management to trust the CA in your browser (once, to eliminate warnings) or to force regeneration after a `reset` or `clean` (both destroy the g8es volume). `wipe` preserves certs — it only clears the g8ee and g8ed app data volumes.
 
 ### 1. Check Certificate Status
 
@@ -179,14 +179,14 @@ g8e runs over HTTPS. VSODB (g8es) generates the CA and server certificates autom
 
 ### 2. Generate or Rotate Certificates
 
-Certs are generated automatically when VSODB starts — no manual step required for a fresh install. If you need to force regeneration:
+Certs are generated automatically when g8es starts — no manual step required for a fresh install. If you need to force regeneration:
 
 ```bash
 ./g8e security certs generate   # Ensure certs exist — no-op if already present
 ./g8e security certs rotate     # Force-regenerate CA + server cert
 ```
 
-After `rotate`, restart the platform so VSOD and g8ee reload the new certificates. The Operator binary does not need to be rebuilt — it discovers the CA at startup (from the local SSL volume or via HTTPS fetch), so it will automatically pick up the new CA on next launch.
+After `rotate`, restart the platform so g8ed and g8ee reload the new certificates. The Operator binary does not need to be rebuilt — it discovers the CA at startup (from the local SSL volume or via HTTPS fetch), so it will automatically pick up the new CA on next launch.
 
 ```bash
 ./g8e platform restart
@@ -255,7 +255,7 @@ Manual equivalent (Administrator PowerShell):
 Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like '*g8e*' } | Remove-Item
 
 # Fetch and save
-ssh admin@10.0.0.2 "docker exec g8ep cat /vsodb/ssl/ca.crt" | Out-File -Encoding ascii $env:USERPROFILE\Downloads\g8e-ca.crt
+ssh admin@10.0.0.2 "docker exec g8ep cat /g8es/ssl/ca.crt" | Out-File -Encoding ascii $env:USERPROFILE\Downloads\g8e-ca.crt
 
 # Import
 Import-Certificate -FilePath "$env:USERPROFILE\Downloads\g8e-ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
@@ -271,16 +271,16 @@ Import-Certificate -FilePath "$env:USERPROFILE\Downloads\g8e-ca.crt" -CertStoreL
 
 ```
 docker-compose.yml
-├── vsodb       # Persistence + pub/sub (g8e.operator --listen)
+├── g8es       # Persistence + pub/sub (g8e.operator --listen)
 ├── g8ee         # AI engine (Python/FastAPI)
-├── vsod        # Web frontend + Gateway Protocol (Node.js/Express)
+├── g8ed        # Web frontend + Gateway Protocol (Node.js/Express)
 └── g8ep    # Unified test/security/build environment
 ```
 
 ```bash
 ./g8e platform start            # Start all services
 ./g8e platform stop             # Stop all services (data preserved)
-./g8e platform wipe             # Clear app data (g8ee, vsod); preserve vsodb
+./g8e platform wipe             # Clear app data (g8ee, g8ed); preserve g8es
 ./g8e platform reset            # Wipe ALL data volumes and rebuild from scratch (destructive)
 ```
 
@@ -292,18 +292,18 @@ docker-compose.yml
 
 ### Configuration and Environment Variables
 
-Platform settings (LLM provider, API keys, passkey config, web search, SSL, etc.) are stored in VSODB (`components/platform_settings`) and managed via the browser Settings page, `./g8e llm setup`, or `./g8e search setup`. On first boot, VSODB auto-generates bootstrap secrets (`INTERNAL_AUTH_TOKEN`, `SESSION_ENCRYPTION_KEY`) during database initialization and persists them to the `platform_settings` document — no manual pre-configuration required.
+Platform settings (LLM provider, API keys, passkey config, web search, SSL, etc.) are stored in g8es (`components/platform_settings`) and managed via the browser Settings page, `./g8e llm setup`, or `./g8e search setup`. On first boot, g8es auto-generates bootstrap secrets (`INTERNAL_AUTH_TOKEN`, `SESSION_ENCRYPTION_KEY`) during database initialization and persists them to the `platform_settings` document — no manual pre-configuration required.
 
-**Configuration flows through the platform_settings pipeline — not environment variables.** At runtime, VSOD reads all settings via `SettingsService` (populated from VSODB on startup) and g8ee reads all settings via `Settings` (loaded from VSODB via `Settings.from_db()`). Neither component reads `process.env` or `os.environ` for any runtime configuration.
+**Configuration flows through the platform_settings pipeline — not environment variables.** At runtime, g8ed reads all settings via `SettingsService` (populated from g8es on startup) and g8ee reads all settings via `Settings` (loaded from g8es via `Settings.from_db()`). Neither component reads `process.env` or `os.environ` for any runtime configuration.
 
-The only two legitimate environment variable reads at runtime are the bootstrap transport URLs used by VSOD's `initialization.js` before VSODB is reachable:
+The only two legitimate environment variable reads at runtime are the bootstrap transport URLs used by g8ed's `initialization.js` before g8es is reachable:
 
 | Variable | Purpose | Default |
 |----------|---------|--------|
-| `G8E_INTERNAL_HTTP_URL` | VSODB HTTP URL — needed to reach VSODB before settings can be loaded | `https://vsodb` |
-| `G8E_INTERNAL_PUBSUB_URL` | VSODB pub/sub WebSocket URL — needed to establish the pub/sub connection before settings can be loaded | `wss://vsodb` |
+| `G8E_INTERNAL_HTTP_URL` | g8ed HTTP URL — needed to reach g8es before settings can be loaded | `https://g8es` |
+| `G8E_INTERNAL_PUBSUB_URL` | g8es pub/sub WebSocket URL — needed to establish the pub/sub connection before settings can be loaded | `wss://g8es` |
 
-All other variables in the table below are **Docker Compose environment block entries** that feed into the VSODB `platform_settings` document on first boot only. They do not persist as runtime env var reads in the application code.
+All other variables in the table below are **Docker Compose environment block entries** that feed into the g8es `platform_settings` document on first boot only. They do not persist as runtime env var reads in the application code.
 
 Never use `.env` files for secrets.
 
@@ -311,19 +311,19 @@ Never use `.env` files for secrets.
 
 `INTERNAL_AUTH_TOKEN` and `SESSION_ENCRYPTION_KEY` follow a volume-only lifecycle:
 
-1.  On first start, **VSODB** (`g8e.operator --listen`) checks for these secrets on its SSL volume (`g8es-ssl`, mounted at `/ssl` in the container).
-2.  If missing, VSODB generates cryptographically secure 32-byte hex values and writes them to `/ssl/internal_auth_token` and `/ssl/session_encryption_key`.
-3.  **VSOD** and **g8ee** mount the same volume at `/vsodb/ssl` and read these secrets directly from the filesystem at startup.
+1.  On first start, **g8es** (`g8e.operator --listen`) checks for these secrets on its SSL volume (`g8es-ssl`, mounted at `/ssl` in the container).
+2.  If missing, g8es generates cryptographically secure 32-byte hex values and writes them to `/ssl/internal_auth_token` and `/ssl/session_encryption_key`.
+3.  **g8ed** and **g8ee** mount the same volume at `/g8es/ssl` and read these secrets directly from the filesystem at startup.
 4.  These secrets are **never stored in the database** and cannot be managed via the UI. This ensures platform identity and session encryption are decoupled from the database lifecycle, surviving full database wipes or resets as long as the SSL volume is preserved.
 
-To rotate these secrets, manually delete the files from the volume and restart the platform. VSODB will regenerate them on the next boot.
+To rotate these secrets, manually delete the files from the volume and restart the platform. g8es will regenerate them on the next boot.
 
-**Docker Compose environment entries (feed into VSODB on first boot — not runtime env var reads):**
+**Docker Compose environment entries (feed into g8es on first boot — not runtime env var reads):**
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `APP_URL` | Platform base URL — source for passkey and hostname defaults | `https://localhost` |
-| `G8E_OPERATOR_PUBSUB_URL` | VSODB pub/sub WebSocket URL for operators — external connection via VSOD on port 443 | `wss://localhost:443` |
+| `G8E_OPERATOR_PUBSUB_URL` | g8es pub/sub WebSocket URL for operators — external connection via g8ed on port 443 | `wss://localhost:443` |
 | `LLM_PROVIDER` | LLM backend type | `gemini` |
 | `OPENAI_ENDPOINT` | OpenAI API base URL | `https://api.openai.com/v1` |
 | `OLLAMA_ENDPOINT` | Ollama API base URL | `https://localhost:11434/v1` |
@@ -335,7 +335,7 @@ To rotate these secrets, manually delete the files from the volume and restart t
 | `GEMINI_API_KEY` | Gemini API key | *(empty)* |
 | `ANTHROPIC_API_KEY` | Anthropic API key | *(empty)* |
 | `G8E_DB_PATH` | SQLite path per component | `/data/g8e.db` |
-| `INTERNAL_AUTH_TOKEN` | Shared secret for inter-service authentication (VSOD ↔ g8ee ↔ VSODB) | *(auto-generated on first boot)* |
+| `INTERNAL_AUTH_TOKEN` | Shared secret for inter-service authentication (g8ed ↔ g8ee ↔ g8es) | *(auto-generated on first boot)* |
 | `PASSKEY_RP_ID` | WebAuthn relying party ID — must match the hostname users browse to (no scheme, no port) | *(derived from `APP_URL`)* |
 | `PASSKEY_ORIGIN` | WebAuthn expected origin — must match the exact origin users browse to (`scheme://host`) | *(derived from `APP_URL`)* |
 | `PASSKEY_RP_NAME` | WebAuthn relying party display name | `g8e` |
@@ -351,8 +351,8 @@ The `g8e` bash script is the authoritative router — host commands (platform, o
 ./g8e platform setup              # Build all images, generate certs, and build operator (alias: setup)
 ./g8e platform settings          # Show effective platform settings (requires platform running)
 ./g8e platform update            # Pull latest changes (with confirmation) and rebuild
-./g8e platform rebuild           # No-cache rebuild of vsodb, g8ee, vsod + restart (volumes preserved)
-./g8e platform wipe              # Clear app data (g8ee, vsod); preserve vsodb
+./g8e platform rebuild           # No-cache rebuild of g8es, g8ee, g8ed + restart (volumes preserved)
+./g8e platform wipe              # Clear app data (g8ee, g8ed); preserve g8es
 ./g8e platform reset             # Wipe ALL data volumes and rebuild from scratch (destructive)
 ./g8e platform start             # Start the platform (no rebuild)
 ./g8e platform restart           # Restart all services (no rebuild)
@@ -372,7 +372,7 @@ The `g8e` bash script is the authoritative router — host commands (platform, o
 ```bash
 # From components/g8eo/
 make build-local-all  # All Linux platforms (amd64, arm64, 386) — release build
-make build-local      # Linux amd64 only — fast, uploads to local VSODB
+make build-local      # Linux amd64 only — fast, uploads to local g8es
 ```
 
 ---
@@ -387,7 +387,7 @@ See [testing.md](testing.md) for complete testing documentation — shared princ
 
 ### Universal Rules
 
-These apply to every component — g8eo, g8ee, VSOD — without exception.
+These apply to every component — g8eo, g8ee, g8ed — without exception.
 
 - **No emojis** in application code, comments, log messages, or any runtime strings (markdown docs only)
 - **No inline styles** in HTML — use proper CSS, leverage existing definitions before creating new ones
@@ -419,9 +419,9 @@ These apply to every component — g8eo, g8ee, VSOD — without exception.
 | `status.json` | All status strings — operator status, execution status, heartbeat type, vault mode, component name, platform, etc. |
 | `channels.json` | Pub/sub channel prefix patterns and auth channel patterns |
 | `senders.json` | `EventType` sender paths, `StreamChunkType` |
-| `collections.json` | VSODB collection names |
+| `collections.json` | g8es collection names |
 | `kv_keys.json` | KV key prefix patterns and cache version |
-| `headers.json` | Shared HTTP header names (`x-vso.*` and standard HTTP) |
+| `headers.json` | Shared HTTP header names (`x-g8e.*` and standard HTTP) |
 | `pubsub.json` | Pub/sub wire protocol actions, event types, and fields |
 | `document_ids.json` | Canonical document IDs for database collections |
 | `intents.json` | Intent type strings for AI command classification |
@@ -434,18 +434,18 @@ These apply to every component — g8eo, g8ee, VSOD — without exception.
 
 | File | Authoritative writer |
 |------|---------------------|
-| `operator_document.json` | VSOD |
-| `conversation.json` | VSOD |
-| `user.json` | VSOD |
+| `operator_document.json` | g8ed |
+| `conversation.json` | g8ed |
+| `user.json` | g8ed |
 | `investigation.json` | g8ee |
 | `case.json` | g8ee |
-| `conversation_message.json` | g8ee (publisher), VSOD (consumer) |
-| `tool_results.json` | g8ee (publisher), VSOD (consumer) |
-| `wire/envelope.json` | g8eo (publisher), g8ee/VSOD (consumers) |
-| `wire/heartbeat.json` | g8eo (publisher), g8ee/VSOD (consumers) |
-| `wire/result_payloads.json` | g8eo (publisher), g8ee/VSOD (consumers) |
-| `wire/command_payloads.json` | VSOD/g8ee (publishers), g8eo (consumer) |
-| `wire/system_info.json` | g8eo (publisher), VSOD (consumer) |
+| `conversation_message.json` | g8ee (publisher), g8ed (consumer) |
+| `tool_results.json` | g8ee (publisher), g8ed (consumer) |
+| `wire/envelope.json` | g8eo (publisher), g8ee/g8ed (consumers) |
+| `wire/heartbeat.json` | g8eo (publisher), g8ee/g8ed (consumers) |
+| `wire/result_payloads.json` | g8eo (publisher), g8ee/g8ed (consumers) |
+| `wire/command_payloads.json` | g8ed/g8ee (publishers), g8eo (consumer) |
+| `wire/system_info.json` | g8eo (publisher), g8ed (consumer) |
 
 **Rule:** When adding or renaming a field on any shared model, update `shared/models/` first. Then update all component implementations in the same change. A field mismatch between the JSON definition and a component struct is a wire-protocol breaking change.
 
@@ -496,7 +496,7 @@ volumes:
 
 `app/constants/events.py`, `app/constants/channels.py`, `app/constants/intents.py`, `app/constants/prompts.py`, `app/constants/headers.py` contain hardcoded constants and do not load from shared JSON. `app/constants/config.py` and `app/constants/platform.py` contain g8ee-internal constants only.
 
-#### VSOD (Node.js) — runtime loading via `constants/shared.js`
+#### g8ed (Node.js) — runtime loading via `constants/shared.js`
 
 All shared JSON is loaded through a single entry point: `constants/shared.js`. It uses Node's `createRequire` to load every shared JSON file at module import time and re-exports each as a named binding:
 
@@ -507,9 +507,9 @@ export const _STATUS      = require('../../../shared/constants/status.json');
 // ... etc.
 ```
 
-Individual VSOD constants files (`events.js`, `channels.js`, `collections.js`, etc.) import their needed binding from `shared.js` and construct `Object.freeze`d constants objects by pulling values from the JSON dict. This means the JSON is loaded once when `shared.js` is first imported and every downstream constants file reads from the already-parsed object.
+Individual g8ed constants files (`events.js`, `channels.js`, `collections.js`, etc.) import their needed binding from `shared.js` and construct `Object.freeze`d constants objects by pulling values from the JSON dict. This means the JSON is loaded once when `shared.js` is first imported and every downstream constants file reads from the already-parsed object.
 
-The `shared/` directory is mounted read-only into the VSOD container at `/shared`:
+The `shared/` directory is mounted read-only into the g8ed container at `/shared`:
 
 ```yaml
 volumes:
@@ -518,7 +518,7 @@ volumes:
 
 `constants/shared.js` resolves the path from the root `/shared/constants/` in production, or via relative paths in development/test.
 
-| VSOD constants file | Shared binding(s) consumed |
+| g8ed constants file | Shared binding(s) consumed |
 |---------------------|---------------------------|
 | `constants/events.js` | `_EVENTS` |
 | `constants/channels.js` | `_CHANNELS`, `_PUBSUB` |
@@ -539,38 +539,38 @@ Three contract test files enforce correctness:
 |-----------|-----------------|
 | `test/contracts/shared-loader.test.js` | `constants/shared.js` resolves to the correct path and loads all JSON without error |
 | `test/contracts/shared-pubsub-constants.test.js` | Verifies PubSubAction and PubSubMessageType values against `shared/constants/pubsub.json` |
-| `test/contracts/shared-definitions.test.js` | Every VSOD constant loaded from shared JSON exactly matches the value in the source JSON — catches key renames and value drift |
+| `test/contracts/shared-definitions.test.js` | Every g8ed constant loaded from shared JSON exactly matches the value in the source JSON — catches key renames and value drift |
 | `test/contracts/constants-enforcement.test.js` | Scans `services/`, `routes/`, `middleware/`, `models/`, and `utils/` for raw string literals that duplicate a value already defined in `constants/` |
 | `test/frontend/constants/api-paths.unit.test.js` | Verifies that `InternalApiPaths` matches the shared `api_paths.json` contract |
 
 ---
 
-## g8ee ↔ VSOD Integration
+## g8ee ↔ g8ed Integration
 
-g8ee and VSOD are the two halves of the g8e backend. Every user action that reaches g8ee originates in VSOD. Every SSE event the browser receives originates in g8ee and is routed through VSOD. The integration surface is the set of HTTP calls between them, the shared constant and model definitions that both sides must agree on, and the `VSOHttpContext` headers that carry identity and business context across the boundary.
+g8ee and g8ed are the two halves of the g8e backend. Every user action that reaches g8ee originates in g8ed. Every SSE event the browser receives originates in g8ee and is routed through g8ed. The integration surface is the set of HTTP calls between them, the shared constant and model definitions that both sides must agree on, and the `G8eHttpContext` headers that carry identity and business context across the boundary.
 
 ```
-Browser ←→ VSOD (Node.js/Express) ←→ g8ee (Python/FastAPI) ←→ g8eo (Go operator binary)
+Browser ←→ g8ed (Node.js/Express) ←→ g8ee (Python/FastAPI) ←→ g8eo (Go operator binary)
                 ↕                           ↕
-              VSODB (pub/sub + document store)
+              g8es (pub/sub + document store)
 ```
 
 ### Communication Patterns
 
 | Direction | Mechanism | Purpose |
 |-----------|-----------|---------|
-| VSOD → g8ee | HTTP (`InternalHttpClient`) | Chat, operator lifecycle, approval, direct command, MCP gateway |
-| g8ee → VSOD | HTTP (`InternalHttpClient `) | SSE push, intent grant/revoke, heartbeat broadcast, operator context update |
-| g8ee → g8eo | VSODB pub/sub | Command dispatch, shutdown |
-| g8eo → g8ee | VSODB pub/sub | Execution results, heartbeats |
+| g8ed → g8ee | HTTP (`InternalHttpClient`) | Chat, operator lifecycle, approval, direct command, MCP gateway |
+| g8ee → g8ed | HTTP (`InternalHttpClient `) | SSE push, intent grant/revoke, heartbeat broadcast, operator context update |
+| g8ee → g8eo | g8es pub/sub | Command dispatch, shutdown |
+| g8eo → g8ee | g8es pub/sub | Execution results, heartbeats |
 
 ### Integration Surface Map
 
-This is the complete set of HTTP calls between VSOD and g8ee with the request model name on both sides. Both sides must agree on field names and types.
+This is the complete set of HTTP calls between g8ed and g8ee with the request model name on both sides. Both sides must agree on field names and types.
 
-#### VSOD → g8ee (via `InternalHttpClient`)
+#### g8ed → g8ee (via `InternalHttpClient`)
 
-| VSOD caller | Path | VSOD request model | g8ee handler | g8ee request model |
+| g8ed caller | Path | g8ed request model | g8ee handler | g8ee request model |
 |-------------|------|--------------------|-------------|-------------------|
 | `chat_routes.js` | `POST /api/internal/chat` | `ChatMessageRequest.forWire()` | `internal_router.py::internal_chat` | `ChatMessageRequest` (internal_api.py) |
 | `chat_routes.js` | `POST /api/internal/chat/stop` | `StopAIRequest.forWire()` | `internal_router.py::stop_ai_processing` | `StopAIRequest` (internal_api.py) |
@@ -582,69 +582,69 @@ This is the complete set of HTTP calls between VSOD and g8ee with the request mo
 | `OperatorService` | `POST /api/internal/operators/register-operator-session` | `OperatorSessionRegistrationRequest.forWire()` | `internal_router.py::register_operator_session` | `OperatorSessionRegistrationRequest` (internal_api.py) |
 | `OperatorService` | `POST /api/internal/operators/deregister-operator-session` | `OperatorSessionRegistrationRequest.forWire()` | `internal_router.py::deregister_operator_session` | `OperatorSessionRegistrationRequest` (internal_api.py) |
 | `OperatorService` | `POST /api/internal/operators/stop` | `StopOperatorRequest.forWire()` | `internal_router.py::stop_operator` | `StopOperatorRequest` (internal_api.py) |
-| `mcp_routes.js` | `POST /api/internal/mcp/tools/list` | `{}` (empty body) | `internal_router.py::mcp_tools_list` | — (uses VSOHttpContext only) |
+| `mcp_routes.js` | `POST /api/internal/mcp/tools/list` | `{}` (empty body) | `internal_router.py::mcp_tools_list` | — (uses G8eHttpContext only) |
 | `mcp_routes.js` | `POST /api/internal/mcp/tools/call` | `{ tool_name, arguments, request_id }` | `internal_router.py::mcp_tools_call` | `MCPToolCallRequest` (internal_api.py) |
 
-#### g8ee → VSOD (via `InternalHttpClient `)
+#### g8ee → g8ed (via `InternalHttpClient `)
 
-| g8ee caller | Path | g8ee request model | VSOD handler | VSOD response model |
+| g8ee caller | Path | g8ee request model | g8ed handler | g8ed response model |
 |------------|------|-------------------|--------------|---------------------|
-| `vsod_event_service.py` | `POST /api/internal/sse/push` | `SSEPushPayload` | `internal_sse_routes.js` | `{ success, delivered }` → `SSEPushResponse` |
+| `g8ed_event_service.py` | `POST /api/internal/sse/push` | `SSEPushPayload` | `internal_sse_routes.js` | `{ success, delivered }` → `SSEPushResponse` |
 | `internal_http_client.py` (intent_service) | `POST /api/internal/operators/:id/grant-intent` | `IntentRequestPayload` | `internal_operator_routes.js` | `{ success, granted_intents, expires_at }` → `GrantIntentResponse` |
 | `internal_http_client.py` (intent_service) | `POST /api/internal/operators/:id/revoke-intent` | `IntentRequestPayload` | `internal_operator_routes.js` | `{ success, granted_intents }` → `RevokeIntentResponse` |
 
 ### Cross-Boundary Model Name Alignment
 
-The following model pairs are the same shape on both sides of the VSOD→g8ee boundary and must remain synchronized. Any field rename must happen in both simultaneously.
+The following model pairs are the same shape on both sides of the g8ed→g8ee boundary and must remain synchronized. Any field rename must happen in both simultaneously.
 
-| Concept | VSOD model | g8ee model | Notes |
+| Concept | g8ed model | g8ee model | Notes |
 |---------|-----------|-----------|-------|
 | Chat message | `ChatMessageRequest` (request_models.js) | `ChatMessageRequest` (internal_api.py) | Body only — identity via headers |
 | Stop AI | `StopAIRequest` (request_models.js) | `StopAIRequest` (internal_api.py) | Aligned |
-| Approval respond | `ApprovalRespondRequest` (request_models.js) | `OperatorApprovalResponse` (internal_api.py) | Names differ — wire body carries `approval_id`, `approved`, `reason`; g8ee router enriches `operator_session_id`/`operator_id` from `VSOHttpContext.bound_operators[0]` before passing to `approval_service` |
-| Direct command | `DirectCommandRequest` (request_models.js) | `DirectCommandRequest` (internal_api.py) | Aligned — body-only payload (`command`, `execution_id`, `hostname`); all identity via `VSOHttpContext` |
+| Approval respond | `ApprovalRespondRequest` (request_models.js) | `OperatorApprovalResponse` (internal_api.py) | Names differ — wire body carries `approval_id`, `approved`, `reason`; g8ee router enriches `operator_session_id`/`operator_id` from `G8eHttpContext.bound_operators[0]` before passing to `approval_service` |
+| Direct command | `DirectCommandRequest` (request_models.js) | `DirectCommandRequest` (internal_api.py) | Aligned — body-only payload (`command`, `execution_id`, `hostname`); all identity via `G8eHttpContext` |
 | Operator session registration | `OperatorSessionRegistrationRequest` (request_models.js) | `OperatorSessionRegistrationRequest` (internal_api.py) | Aligned |
 | Stop operator | `StopOperatorRequest` (request_models.js) | `StopOperatorRequest` (internal_api.py) | Aligned |
-| Bound operator context | `BoundOperatorContext` (request_models.js) | `BoundOperator` (http_context.py) | Names differ but shapes aligned — both serialize into `X-VSO-Bound-Operators` JSON array |
+| Bound operator context | `BoundOperatorContext` (request_models.js) | `BoundOperator` (http_context.py) | Names differ but shapes aligned — both serialize into `X-G8E-Bound-Operators` JSON array |
 
-**Name divergence (`ApprovalRespondRequest` vs `OperatorApprovalResponse`):** The VSOD model is named a *Request* and the g8ee model is named a *Response*. Both carry only approval-specific fields (`approval_id`, `approved`, `reason`). All identity and routing context (`user_id`, `web_session_id`, `case_id`, `investigation_id`, `task_id`, `bound_operators`) travels via `VSOHttpContext` headers. The naming asymmetry is confusing but not a wire bug.
+**Name divergence (`ApprovalRespondRequest` vs `OperatorApprovalResponse`):** The g8ed model is named a *Request* and the g8ee model is named a *Response*. Both carry only approval-specific fields (`approval_id`, `approved`, `reason`). All identity and routing context (`user_id`, `web_session_id`, `case_id`, `investigation_id`, `task_id`, `bound_operators`) travels via `G8eHttpContext` headers. The naming asymmetry is confusing but not a wire bug.
 
-**`BoundOperatorContext` vs `BoundOperator`:** VSOD serializes `BoundOperatorContext` instances into the `X-VSO-Bound-Operators` JSON header. g8ee deserializes them as `BoundOperator` instances. The field shapes are aligned (`operator_id`, `operator_session_id` (optional), `status`, `operator_type`, `system_info`). The name difference is safe as long as `forWire()` output matches `BoundOperator` field names exactly.
+**`BoundOperatorContext` vs `BoundOperator`:** g8ed serializes `BoundOperatorContext` instances into the `X-G8E-Bound-Operators` JSON header. g8ee deserializes them as `BoundOperator` instances. The field shapes are aligned (`operator_id`, `operator_session_id` (optional), `status`, `operator_type`, `system_info`). The name difference is safe as long as `forWire()` output matches `BoundOperator` field names exactly.
 
-### `VSOHttpContext` Flow — End-to-End
+### `G8eHttpContext` Flow — End-to-End
 
-These traces show how context flows from a browser action through VSOD to g8ee for the critical paths.
+These traces show how context flows from a browser action through g8ed to g8ee for the critical paths.
 
 #### Chat message (new conversation)
 
 ```
 Browser: POST /api/chat/send  { message, sentinel_mode, llm_primary_model, llm_assistant_model }
-  VSOD chat_routes.js:
-    vsoContext = { web_session_id, user_id, org_id, case_id: null, investigation_id: null, bound_operators }
+  g8ed chat_routes.js:
+    g8eContext = { web_session_id, user_id, org_id, case_id: null, investigation_id: null, bound_operators }
     ChatMessageRequest.forWire() → body (message, attachments, sentinel_mode, llm_primary_model, llm_assistant_model)
-  → InternalHttpClient.sendChatMessage(body, vsoContext)
-  → HTTP POST /api/internal/chat + X-VSO-* headers
+  → InternalHttpClient.sendChatMessage(body, g8eContext)
+  → HTTP POST /api/internal/chat + X-G8E-* headers
   g8ee internal_router.py::internal_chat:
-    vso_context = get_vso_http_context(...)  ← case_id/investigation_id ABSENT
-    not vso_context.case_id → True
+    g8e_context = get_g8e_http_context(...)  ← case_id/investigation_id ABSENT
+    not g8e_context.case_id → True
     → creates case + investigation inline
-    → vso_context = vso_context.model_copy(update={"case_id": ..., "investigation_id": ...})
+    → g8e_context = g8e_context.model_copy(update={"case_id": ..., "investigation_id": ...})
     → fires asyncio.create_task(chat_pipeline.run_chat(...))
     → returns ChatStartedResponse(case_id, investigation_id)
 ```
 
-New vs existing conversation is derived entirely from `vso_context.case_id` — empty string means g8ee creates case + investigation inline; non-empty means existing conversation, no creation.
+New vs existing conversation is derived entirely from `g8e_context.case_id` — empty string means g8ee creates case + investigation inline; non-empty means existing conversation, no creation.
 
 #### Chat message (existing conversation)
 
 ```
 Browser: POST /api/chat/send  { message, case_id: "...", investigation_id: "...", ... }
-  VSOD:
-    vsoContext = { ..., case_id: "...", investigation_id: "..." }
-  → HTTP POST /api/internal/chat + X-VSO-Case-ID + X-VSO-Investigation-ID headers
+  G8ED:
+    g8eContext = { ..., case_id: "...", investigation_id: "..." }
+  → HTTP POST /api/internal/chat + X-G8E-Case-ID + X-G8E-Investigation-ID headers
   G8EE:
-    vso_context.case_id = "..."  (populated)
-    not vso_context.case_id → False
+    g8e_context.case_id = "..."  (populated)
+    not g8e_context.case_id → False
     → skips case/investigation creation
     → fires run_chat with existing case/investigation
 ```
@@ -653,57 +653,57 @@ Browser: POST /api/chat/send  { message, case_id: "...", investigation_id: "..."
 
 ```
 Browser: POST /api/operators/approval/respond  { approval_id, approved, reason, case_id, investigation_id, task_id }
-  VSOD operator_approval_routes.js:
+  g8ed operator_approval_routes.js:
     ApprovalRespondRequest.parse(req.body) → validates approval_id, approved, reason
-    { case_id, investigation_id, task_id } read directly from req.body for VSOHttpContext
+    { case_id, investigation_id, task_id } read directly from req.body for G8eHttpContext
     bound_operators = await resolveBoundOperators(web_session_id)
-    vsoContext = { web_session_id, user_id, org_id, case_id, investigation_id, task_id, bound_operators }
+    g8eContext = { web_session_id, user_id, org_id, case_id, investigation_id, task_id, bound_operators }
     ApprovalRespondRequest.forWire() → body (approval_id, approved, reason)
-  → HTTP POST /api/internal/operator/approval/respond + all X-VSO-* headers
+  → HTTP POST /api/internal/operator/approval/respond + all X-G8E-* headers
   g8ee internal_router.py::operator_approval_respond:
-    vso_context = get_vso_http_context(...)  ← case_id + investigation_id from headers
+    g8e_context = get_g8e_http_context(...)  ← case_id + investigation_id from headers
     response = OperatorApprovalResponse(approval_id, approved, reason)
-    response.operator_session_id = vso_context.bound_operators[0].operator_session_id
-    response.operator_id = vso_context.bound_operators[0].operator_id
+    response.operator_session_id = g8e_context.bound_operators[0].operator_session_id
+    response.operator_id = g8e_context.bound_operators[0].operator_id
     → approval_service.handle_approval_response(response: OperatorApprovalResponse)
 ```
 
-`case_id`, `investigation_id`, and `task_id` are context fields sent by the browser but consumed exclusively via `VSOHttpContext` headers — they are not part of `ApprovalRespondRequest`. The body carries only the user's approval action (`approval_id`, `approved`, `reason`). Identity fields (`user_id`, `web_session_id`) are resolved server-side from the authenticated session and never sent by the frontend. Operator identity is resolved via `resolveBoundOperators()` and travels in `VSOHttpContext.bound_operators`.
+`case_id`, `investigation_id`, and `task_id` are context fields sent by the browser but consumed exclusively via `G8eHttpContext` headers — they are not part of `ApprovalRespondRequest`. The body carries only the user's approval action (`approval_id`, `approved`, `reason`). Identity fields (`user_id`, `web_session_id`) are resolved server-side from the authenticated session and never sent by the frontend. Operator identity is resolved via `resolveBoundOperators()` and travels in `G8eHttpContext.bound_operators`.
 
 #### Direct command (anchored terminal)
 
 ```
 Browser: POST /api/operators/approval/direct-command  { command, hostname, case_id?, investigation_id? }
-  VSOD operator_approval_routes.js:
+  g8ed operator_approval_routes.js:
     bound_operators = await resolveBoundOperators(web_session_id)
-    vsoContext = { web_session_id, user_id, org_id, case_id, investigation_id, bound_operators }
+    g8eContext = { web_session_id, user_id, org_id, case_id, investigation_id, bound_operators }
     DirectCommandRequest.forWire() → body (command, execution_id, hostname)
-  → HTTP POST /api/internal/operator/direct-command + all X-VSO-* headers
+  → HTTP POST /api/internal/operator/direct-command + all X-G8E-* headers
   g8ee internal_router.py::execute_direct_command:
-    vso_context = get_vso_http_context(...)  ← operator resolved from bound_operators[0]
-    → operator_data_service.send_command_to_operator(command_payload, vso_context)
-       resolves operator_id/operator_session_id from vso_context.bound_operators[0]
-    → operator_data_service.send_direct_exec_audit_event(command, execution_id, vso_context)
-       reads case_id/investigation_id from vso_context
+    g8e_context = get_g8e_http_context(...)  ← operator resolved from bound_operators[0]
+    → operator_data_service.send_command_to_operator(command_payload, g8e_context)
+       resolves operator_id/operator_session_id from g8e_context.bound_operators[0]
+    → operator_data_service.send_direct_exec_audit_event(command, execution_id, g8e_context)
+       reads case_id/investigation_id from g8e_context
 ```
 
-No investigation fallback query. All identity flows through `VSOHttpContext`.
+No investigation fallback query. All identity flows through `G8eHttpContext`.
 
-### Settings Contract — VSOD ↔ g8ee
+### Settings Contract — g8ed ↔ g8ee
 
-g8ee reads platform configuration at startup via `Settings.from_db()`, which loads the `components/platform_settings` document created by VSODB during initialization and managed by VSOD.
+g8ee reads platform configuration at startup via `Settings.from_db()`, which loads the `components/platform_settings` document created by g8es during initialization and managed by g8ed.
 
 ```
-Admin UI → PUT /api/settings → VSOD SettingsService.saveSettings() → DB document
+Admin UI → PUT /api/settings → g8ed SettingsService.saveSettings() → DB document
                                                                               ↓
                                               g8ee Settings.from_db() reads on startup
 ```
 
-VSOD is the **write boundary**. g8ee is the **read boundary**. Invalid values must be rejected by VSOD before they reach the DB — g8ee must never need to fall back to a default due to a bad value that VSOD accepted.
+g8ed is the **write boundary**. g8ee is the **read boundary**. Invalid values must be rejected by g8ed before they reach the DB — g8ee must never need to fall back to a default due to a bad value that g8ed accepted.
 
 #### Settings document structure
 
-VSOD writes settings into two collections:
+g8ed writes settings into two collections:
 - `platform_settings`: Global configuration (e.g. LLM provider, URLs, cert paths). Document ID is `platform_settings`.
 - `user_settings`: Individual user overrides for overridable keys (e.g. primary model, temperature). Document ID is the `userId`.
 
@@ -719,9 +719,9 @@ Settings are resolved with the following priority (highest wins):
 
 #### Field alignment
 
-Every g8ee `LLMSettings` field must have a corresponding VSOD `USER_SETTINGS` entry and be present in the `getConfig()` result, all sharing the same default value. `PLATFORM_SETTINGS` keys (cert paths, SSL dirs, session tuning) are deployment-time only and have no g8ee counterpart.
+Every g8ee `LLMSettings` field must have a corresponding g8ed `USER_SETTINGS` entry and be present in the `getConfig()` result, all sharing the same default value. `PLATFORM_SETTINGS` keys (cert paths, SSL dirs, session tuning) are deployment-time only and have no g8ee counterpart.
 
-| DB key | VSOD `USER_SETTINGS` default | g8ee `LLMSettings` field | g8ee type | g8ee default |
+| DB key | g8ed `USER_SETTINGS` default | g8ee `LLMSettings` field | g8ee type | g8ee default |
 |--------|-------------------------------|-------------------------|----------|-------------|
 | `llm_provider` | `''` (empty string) | `provider` | `LLMProvider` | `OLLAMA` |
 | `llm_model` | Provider-specific (OpenAI: GPT_5_4, Ollama: GEMMA3_1B, Gemini: FLASH_PREVIEW, Anthropic: CLAUDE_OPUS_4_5) | `primary_model` (alias: `llm_model`) | `str\|None` | `None` |
@@ -746,7 +746,7 @@ The `USER_SETTINGS` schema declares a `validate` function on numeric entries. `S
 
 #### g8ee read behaviour
 
-g8ee loads settings from VSODB on startup and during session initialization. It respects the same precedence logic when fetching from the `platform_settings` and `user_settings` collections.
+g8ee loads settings from g8es on startup and during session initialization. It respects the same precedence logic when fetching from the `platform_settings` and `user_settings` collections.
 
 #### Settings invariant
 
@@ -782,7 +782,7 @@ Defaults must be declared in exactly one place: the `LLMSettings` field definiti
 - Never use `map[string]interface{}` or `json.RawMessage` for a known structured payload — always define a typed struct with JSON tags.
 - All inbound payload types live in `models/commands.go`. All outbound result types live in `models/wire.go`, `models/file_edit.go`, or `models/fs_list.go`.
 - Internal structs use `*time.Time` pointer fields set to UTC. Wire models use RFC3339Nano strings.
-- g8eo does not own any document models — it never writes to the VSODB document store directly.
+- g8eo does not own any document models — it never writes to the g8es document store directly.
 
 #### Services and Error Handling
 
@@ -801,7 +801,7 @@ g8eo's operator runtime is built around a pub/sub dispatch loop. All inbound com
 
 | File | Type | Responsibility |
 |------|------|----------------|
-| `vsodb_pubsub_client.go` | `VSODBPubSubClient` | WebSocket connection to VSODB pub/sub. `Subscribe` blocks until the broker confirms the subscription is registered before returning the message channel — this prevents the race where a published message arrives before the subscriber is live. |
+| `g8es_pubsub_client.go` | `G8esPubSubClient` | WebSocket connection to g8es pub/sub. `Subscribe` blocks until the broker confirms the subscription is registered before returning the message channel — this prevents the race where a published message arrives before the subscriber is live. |
 | `dispatch_service.go` | `DispatchService` | Top-level pub/sub loop. Subscribes to the operator channel, demultiplexes inbound messages by event type, and routes each to the appropriate handler service. |
 | `command_service.go` | `CommandService` | Handles `OPERATOR_COMMAND_REQUESTED` and `OPERATOR_COMMAND_CANCEL_REQUESTED`. Runs the sentinel pre-execution guard, drives the execution goroutine with a periodic status ticker, then delegates all dual-vault writes to `VaultWriter`. |
 | `file_ops_service.go` | `FileOpsService` | Handles file edit, fs list, and fs read requests. Runs the sentinel file-op guard for mutating operations, delegates dual-vault writes to `VaultWriter`. |
@@ -833,12 +833,12 @@ A `nil` field in `CommandServiceConfig` is treated as disabled — the service p
 
 **Loopback tests**
 
-`services/pubsub/` has two loopback test files that run an in-process `PubSubBroker` via `httptest.NewServer` — no external VSODB required:
+`services/pubsub/` has two loopback test files that run an in-process `PubSubBroker` via `httptest.NewServer` — no external g8es required:
 
 | File | Coverage |
 |------|----------|
-| `vsodb_pubsub_loopback_test.go` | Client subscribe/publish, ACK waiting, message delivery |
-| `vsodb_pubsub_dispatch_loopback_test.go` | End-to-end dispatch: command execution, cancellation, file ops, heartbeat |
+| `g8es_pubsub_loopback_test.go` | Client subscribe/publish, ACK waiting, message delivery |
+| `g8es_pubsub_dispatch_loopback_test.go` | End-to-end dispatch: command execution, cancellation, file ops, heartbeat |
 
 #### Tests
 
@@ -858,8 +858,8 @@ See [testing.md — g8eo](testing.md#g8eo--go) for test infrastructure, `testuti
 
 #### Models
 
-- Only files under `app/models/` may import directly from `pydantic`. All other files import `Field`, `ValidationError`, and `VSOBaseModel` exclusively from `app.models.base`.
-- Never use `Dict[str, Any]` for a known structured shape — always define a typed `VSOBaseModel` subclass.
+- Only files under `app/models/` may import directly from `pydantic`. All other files import `Field`, `ValidationError`, and `G8eBaseModel` exclusively from `app.models.base`.
+- Never use `Dict[str, Any]` for a known structured shape — always define a typed `G8eBaseModel` subclass.
 - Never use `Any` in service, handler, or router code for a parameter or return type that has a known shape — always use the concrete typed model.
 - Service method signatures must use concrete typed models. Never accept raw dicts or untyped collections (`list[object]`, `dict`) at the application barrier — callers are responsible for constructing typed instances before calling service methods. No `isinstance` + `model_validate` fallbacks inside service methods.
 - Never call `model_dump()` outside `app/models/base.py`. Use the named boundary methods:
@@ -871,16 +871,16 @@ All g8ee domain models inherit from one of four base classes in `app/models/base
 
 | Class | Use for |
 |-------|---------|
-| `VSOBaseModel` | Value objects, request DTOs, config structs, response shapes |
-| `VSOTimestampedModel` | Sub-documents that track mutation time but are not persisted as their own document |
-| `VSOIdentifiableModel` | Persisted entities with a stable document identity |
-| `VSOAuditableModel` | Identifiable entities that also need actor-level audit trails |
+| `G8eBaseModel` | Value objects, request DTOs, config structs, response shapes |
+| `G8eTimestampedModel` | Sub-documents that track mutation time but are not persisted as their own document |
+| `G8eIdentifiableModel` | Persisted entities with a stable document identity |
+| `G8eAuditableModel` | Identifiable entities that also need actor-level audit trails |
 
-`id` is inherited from `VSOIdentifiableModel` — never redeclare it in a subclass.
+`id` is inherited from `G8eIdentifiableModel` — never redeclare it in a subclass.
 
-#### `VSODEventData` — Correlation ID Contract
+#### `g8edEventData` — Correlation ID Contract
 
-`VSODEventData` owns three correlation ID fields at the envelope level: `investigation_id`, `case_id`, and `web_session_id`. Payload models passed to `VSODEventData` (or to `EventService.publish_event_to_vsod`) must not declare fields with any of these names.  Fix the payload model; never add a workaround at the call site.
+`g8edEventData` owns three correlation ID fields at the envelope level: `investigation_id`, `case_id`, and `web_session_id`. Payload models passed to `g8edEventData` (or to `EventService.publish_event_to_g8ed`) must not declare fields with any of these names.  Fix the payload model; never add a workaround at the call site.
 
 #### Services
 
@@ -890,13 +890,13 @@ All core services are instantiated once at startup in `app/main.py` and stored o
 
 | Service file | Class | Responsibility |
 |--------------|-------|----------------|
-| `pubsub_service.py` | `OperatorPubSubService` | VSODB pub/sub lifecycle — publish, wait, session register/deregister |
+| `pubsub_service.py` | `OperatorPubSubService` | g8es pub/sub lifecycle — publish, wait, session register/deregister |
 | `approval_service.py` | `OperatorApprovalService` | Approval request/response/query surface |
 | `execution_service.py` | `OperatorExecutionService` | Command dispatch, operator resolution, security constraints |
 | `file_service.py` | `OperatorFileService` | File edit operations |
 | `filesystem_service.py` | `OperatorFilesystemService` | Filesystem list/read operations |
 | `audit_service.py` | `OperatorAuditService` | Fetch logs, session history, file history, file diffs, file restores |
-| `intent_service.py` | `OperatorIntentService` | Intent grant/revoke via VSOD |
+| `intent_service.py` | `OperatorIntentService` | Intent grant/revoke via g8ed |
 | `lfaa_service.py` | `OperatorLFAAService` | LFAA audit event publishing |
 | `port_service.py` | `OperatorPortService` | Port check operations |
 
@@ -904,37 +904,37 @@ The circular dependency between `OperatorPubSubService` is resolved by the facto
 
 **Pub/sub subscribe-and-wait rule:** Every channel subscription must confirm the broker ack before any publish occurs on that channel. `KVClient.subscribe()` enforces this — it sends the subscribe action, waits for the `{"type":"subscribed"}` ack from the broker (5-second timeout), and only then returns. `OperatorPubSubService.register_operator_session()` relies on this guarantee: it calls `subscribe()` before recording the session as active, so `publish_command()` is never reachable on an unconfirmed channel. Never publish to a channel before `subscribe()` has returned. Never introduce `asyncio.sleep` as a substitute for the ack — that is a race condition, not a fix.
 
-**Pyright strict gate:** `pyrightconfig.services.json` enforces `typeCheckingMode: strict` on `app/services/`. Run via `./g8e test g8ee --pyright` before submitting changes to service code. Any type error in `app/services/` blocks the gate. Never use bare `Any` in a service method signature — if a type has a known shape, define a `Protocol` or `VSOBaseModel` for it.
+**Pyright strict gate:** `pyrightconfig.services.json` enforces `typeCheckingMode: strict` on `app/services/`. Run via `./g8e test g8ee --pyright` before submitting changes to service code. Any type error in `app/services/` blocks the gate. Never use bare `Any` in a service method signature — if a type has a known shape, define a `Protocol` or `G8eBaseModel` for it.
 
-#### HTTP Context — `VSOHttpContext`
+#### HTTP Context — `G8eHttpContext`
 
-All internal HTTP calls from VSOD to g8ee carry a `VSOHttpContext` (`app/models/http_context.py`) built from `X-VSO-*` request headers. It is the single object that propagates session identity, business context, and bound operator metadata across the cluster.
+All internal HTTP calls from g8ed to g8ee carry a `G8eHttpContext` (`app/models/http_context.py`) built from `X-G8E-*` request headers. It is the single object that propagates session identity, business context, and bound operator metadata across the cluster.
 
-`VSOHttpContext` fields:
+`G8eHttpContext` fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `web_session_id` | yes | Browser session — used to route SSE events to the correct tab |
 | `user_id` | yes | Authenticated user — used for data ownership checks |
-| `source_component` | yes | Component that issued the call (`vsod`) |
+| `source_component` | yes | Component that issued the call (`g8ed`) |
 | `case_id` | yes | Active case identifier (falls back to NEW_CASE_ID when new_case is true) |
 | `investigation_id` | yes | Active investigation (AI chat session) identifier (falls back to NEW_CASE_ID when new_case is true) |
 | `organization_id` | no | Multi-tenant isolation key |
 | `task_id` | no | Active task identifier |
-| `bound_operators` | no | All operators bound to the web session — serialised from `X-VSO-Bound-Operators` JSON header |
+| `bound_operators` | no | All operators bound to the web session — serialised from `X-G8E-Bound-Operators` JSON header |
 | `execution_id` | no | Per-request trace ID for logging correlation |
-| `new_case` | no | True when VSOD signals that no prior case exists and g8ee must create one inline |
+| `new_case` | no | True when g8ed signals that no prior case exists and g8ee must create one inline |
 | `timestamp` | no | Timestamp of context creation |
 
 **g8ee rules:**
-- Always use the `get_vso_http_context` or `get_vso_http_context_for_chat` dependency from `app/dependencies.py` via `Depends()` to obtain `VSOHttpContext` in a router handler. Never parse `X-VSO-*` headers manually.
+- Always use the `get_g8e_http_context` or `get_g8e_http_context_for_chat` dependency from `app/dependencies.py` via `Depends()` to obtain `G8eHttpContext` in a router handler. Never parse `X-G8E-*` headers manually.
 - The dependency enforces all required fields (`web_session_id`, `user_id`, `source_component`, `case_id`, `investigation_id`) and raises `AuthenticationError` if any are absent — do not add duplicate checks in handlers.
-- Thread `vso_context` through to every service method and down-call that needs it. Never reconstruct it or read request headers from inside a service.
-- Use `vso_context.bound_operators` to access operator context. The `parse_bound_operators` validator on the model handles deserialisation from the JSON header string.
+- Thread `g8e_context` through to every service method and down-call that needs it. Never reconstruct it or read request headers from inside a service.
+- Use `g8e_context.bound_operators` to access operator context. The `parse_bound_operators` validator on the model handles deserialisation from the JSON header string.
 
 #### Data Access — `CacheAsideService`
 
-All reads and writes to the VSODB document store must go through `CacheAsideService` (`app/services/cache/cache_aside.py`). Never call `DBClient` or `KVClient` directly from a service or handler for document operations.
+All reads and writes to the g8es document store must go through `CacheAsideService` (`app/services/cache/cache_aside.py`). Never call `DBClient` or `KVClient` directly from a service or handler for document operations.
 
 **Pattern:** DB is authoritative for all writes. KV cache is the read path. Cache failure is never fatal to a write.
 
@@ -958,7 +958,7 @@ All reads and writes to the VSODB document store must go through `CacheAsideServ
 
 #### Error Handling
 
-All exceptions must be `VSOError` subclasses from `app/errors.py`. Never raise `HTTPException`, `Exception`, `ValueError`, or `RuntimeError` directly.
+All exceptions must be `G8eError` subclasses from `app/errors.py`. Never raise `HTTPException`, `Exception`, `ValueError`, or `RuntimeError` directly.
 
 | Class | HTTP | When to use |
 |-------|------|-------------|
@@ -971,7 +971,7 @@ All exceptions must be `VSOError` subclasses from `app/errors.py`. Never raise `
 | `AuthorizationError` | 403 | Authenticated user lacks access |
 | `ServiceUnavailableError` | 503 | Required service not initialised on `app.state` |
 | `ResourceConflictError` | 409 | Conflict with an existing resource |
-| `VSOTimeoutError` | 504 | Operation timed out |
+| `G8eTimeoutError` | 504 | Operation timed out |
 | `ConfigurationError` | 500 | Invalid or missing configuration |
 | `PubSubError` | 500 | Pub/sub connection or publish failure |
 | `StorageError` | 500 | Storage layer connection or operation failure |
@@ -988,7 +988,7 @@ See [testing.md — g8ee](testing.md#g8ee--python) for test infrastructure, pyte
 
 ---
 
-### VSOD (Node.js/Express)
+### g8ed (Node.js/Express)
 
 #### Constants
 
@@ -1003,7 +1003,7 @@ See [testing.md — g8ee](testing.md#g8ee--python) for test infrastructure, pyte
 | `shared/constants/events.json` | `_EVENTS` | SSE event type strings, pub/sub event routing |
 | `shared/constants/status.json` | `_STATUS` | All status enums |
 | `shared/constants/senders.json` | `_MSG` | `EventType` sender paths, `StreamChunkType` |
-| `shared/constants/collections.json` | `_COLLECTIONS` | VSODB collection name strings |
+| `shared/constants/collections.json` | `_COLLECTIONS` | g8es collection name strings |
 | `shared/constants/kv_keys.json` | `_KV` | KV key prefix constants |
 | `shared/constants/channels.json` | `_CHANNELS` | Pub/sub channel prefix constants |
 | `shared/constants/pubsub.json` | `_PUBSUB` | Pub/sub wire protocol constants |
@@ -1023,7 +1023,7 @@ All magic strings and numbers used in frontend JS must be defined in `public/js/
 
 | File | Contains |
 |------|----------|
-| `api-paths.js` | `ApiPaths` builders — all VSOD endpoint path strings consumed by the frontend |
+| `api-paths.js` | `ApiPaths` builders — all g8ed endpoint path strings consumed by the frontend |
 | `service-client-constants.js` | `ServiceName`, `ServiceUrl`, `RequestTimeout`, `RetryConfig`, `RequestPath`, `HttpMethod`, `ServiceClientEvent`, HTTP header name constants, rate-limit constants — all values used by `ServiceClient` |
 | `events.js` | `EventType` (auto-generated flat frozen object from `shared/constants/events.json`), `StreamChunkType`, `MessageType`, `CitationLayout`, `TribunalOutcome`, `TribunalFallbackReason`, `ToolDisplayCategory`, `ThinkingActionType` — all SSE and AI event constants |
 | `auth-constants.js` | `UserRole`, `OperatorSessionRole`, `AuthProvider`, `DeviceLinkStatus`, `IntentStatus` — authentication and authorisation enums |
@@ -1038,16 +1038,16 @@ All magic strings and numbers used in frontend JS must be defined in `public/js/
 
 #### Models
 
-Use `VSOBaseModel` or `VSOIdentifiableModel` from `models/base.js`:
+Use `G8eBaseModel` or `G8eIdentifiableModel` from `models/base.js`:
 
 | Base class | Use for |
 |---|---|
-| `VSOBaseModel` | Transient value objects, SSE event payloads, request/response models, nested sub-objects |
-| `VSOIdentifiableModel` | Every persistent document stored in VSODB — adds `id`, `created_at`, `updated_at` |
+| `G8eBaseModel` | Transient value objects, SSE event payloads, request/response models, nested sub-objects |
+| `G8eIdentifiableModel` | Every persistent document stored in g8es — adds `id`, `created_at`, `updated_at` |
 
 - Declare `static fields` on every model subclass. `parse(raw)` is the factory for all inbound data (DB reads, wire payloads, request bodies) — it validates, coerces, and strips unknown fields. Use `new ClassName(fields)` only for already-typed data inside the application boundary.
 
-**Important:** The `VSOBaseModel` constructor parameter is named `fields` (not `data`) to prevent the anti-pattern of generic data containers. Always construct models with explicit field names rather than wrapping data in a generic `data` field.
+**Important:** The `G8eBaseModel` constructor parameter is named `fields` (not `data`) to prevent the anti-pattern of generic data containers. Always construct models with explicit field names rather than wrapping data in a generic `data` field.
 - Use `Object.freeze` for all constant objects. Use `now()`, `addSeconds()`, and `toISOString()` from `models/base.js` for all time operations.
 
 #### Serialization
@@ -1056,37 +1056,37 @@ Call the named boundary method at every boundary crossing. Never call `_flatten`
 
 | Method | Boundary |
 |--------|----------|
-| `.forDB()` | Called internally by `CacheAsideService` and `VSODBDocumentClient` when a `VSOBaseModel` instance is passed. Callers pass model instances directly — never call `.forDB()` at the call site. For plain-object patches (partial updates), pre-flatten any nested model values with `.forDB()` before including them in the patch object. |
+| `.forDB()` | Called internally by `CacheAsideService` and `G8esDocumentClient` when a `G8eBaseModel` instance is passed. Callers pass model instances directly — never call `.forDB()` at the call site. For plain-object patches (partial updates), pre-flatten any nested model values with `.forDB()` before including them in the patch object. |
 | `.forWire()` | Outbound fetch to g8ee only. Never call at `publishEvent` call sites — `SSEService.publishEvent` requires a typed model instance and calls `.forWire()` internally. |
 | `.forClient()` | `res.json()` to the browser — strips secrets (`api_key`, `operator_cert`). |
-| `.forKV()` | Returns a plain object. Pass to `client.set_json(key, model.forKV(), ttl)` — the client serializes. For pub/sub: pass `.forKV()` as the `data` argument to `VSODBPubSubClient.publish()` — the client owns serialization. |
+| `.forKV()` | Returns a plain object. Pass to `client.set_json(key, model.forKV(), ttl)` — the client serializes. For pub/sub: pass `.forKV()` as the `data` argument to `G8esPubSubClient.publish()` — the client owns serialization. |
 
-`SSEService.publishEvent(sessionId, event)` requires a typed `VSOBaseModel` instance — it enforces this at runtime and calls `.forWire()` internally. Never pass a pre-serialized plain object.
+`SSEService.publishEvent(sessionId, event)` requires a typed `G8eBaseModel` instance — it enforces this at runtime and calls `.forWire()` internally. Never pass a pre-serialized plain object.
 
 Every value that crosses an inbound wire boundary (DB read, pub/sub message, HTTP request body) must be parsed through the model's `.parse(raw)` factory before use. All date fields must be declared `F.date` and will be coerced to `Date` objects at the boundary — never compare them to raw ISO strings.
 
 **No type coercion fallbacks.** Never use `JSON.stringify`, `String()`, or any inline coercion as a fallback for an untyped value at a boundary. If a value is not the expected type, that is a model violation — fix the model or the caller. Fallbacks hide contract bugs and produce silent wire corruption.
 
-**VSODB pub/sub wire protocol.** The VSODB broker (`g8e.operator --listen`) defines `PubSubMessage.Data` as `json.RawMessage` — the `data` field on the wire must be a raw JSON object, never a pre-serialized string. `VSODBPubSubClient.publish(channel, data)` enforces this: it accepts a plain object and owns serialization. Callers pass `model.forKV()` directly — never `JSON.stringify(model.forKV())`. Passing a string produces double-encoded JSON that subscribers cannot unmarshal.
+**g8es pub/sub wire protocol.** The g8es broker (`g8e.operator --listen`) defines `PubSubMessage.Data` as `json.RawMessage` — the `data` field on the wire must be a raw JSON object, never a pre-serialized string. `G8esPubSubClient.publish(channel, data)` enforces this: it accepts a plain object and owns serialization. Callers pass `model.forKV()` directly — never `JSON.stringify(model.forKV())`. Passing a string produces double-encoded JSON that subscribers cannot unmarshal.
 
 #### Operator Document Ownership
 
-g8ee owns all operator document writes after initial operator authentication. VSOD writes only during the auth/lifecycle flow (create, activate, bind, stop). Heartbeat payloads from g8eo are forwarded by VSOD to pub/sub as a gateway — VSOD never writes to the operator document from a heartbeat. g8ee processes heartbeats, updates `latest_heartbeat_snapshot`, `last_heartbeat`, and all other operator activity fields, then sends the processed data back to VSOD via HTTP for SSE broadcast to the frontend only. VSOD does not persist any of that data.
+g8ee owns all operator document writes after initial operator authentication. g8ed writes only during the auth/lifecycle flow (create, activate, bind, stop). Heartbeat payloads from g8eo are forwarded by g8ed to pub/sub as a gateway — g8ed never writes to the operator document from a heartbeat. g8ee processes heartbeats, updates `latest_heartbeat_snapshot`, `last_heartbeat`, and all other operator activity fields, then sends the processed data back to g8ed via HTTP for SSE broadcast to the frontend only. g8ed does not persist any of that data.
 
 #### Service Architecture and Dependency Injection
 
-VSOD uses a factory-based dependency injection (DI) pattern for its services and routers. This ensures that services are decoupled, easier to test, and have clear lifecycle management.
+g8ed uses a factory-based dependency injection (DI) pattern for its services and routers. This ensures that services are decoupled, easier to test, and have clear lifecycle management.
 
 #### 1. Service Factory Pattern
 
-All services are defined as classes and instantiated via a centralized `initializeServices` function in `@vsod/services/initialization.js`. Services are accessed via getter functions (e.g., `getCacheAsideService()`, `getUserService()`) rather than a service locator object.
+All services are defined as classes and instantiated via a centralized `initializeServices` function in `@g8ed/services/initialization.js`. Services are accessed via getter functions (e.g., `getCacheAsideService()`, `getUserService()`) rather than a service locator object.
 
 #### 2. Router Factory Pattern
 
 Routers are defined as factory functions that accept the initialized services they require.
 
 ```js
-// @vsod/routes/operator/operator_routes.js
+// @g8ed/routes/operator/operator_routes.js
 export function createOperatorRouter({ settings, operatorDownloadService, downloadAuthService, authorizationMiddleware }) {
     const router = express.Router();
     
@@ -1101,7 +1101,7 @@ export function createOperatorRouter({ settings, operatorDownloadService, downlo
 
 #### 3. Application Bootstrapping
 
-The main entry point (`server.js`) calls `initializeServices`, then builds a services object by calling the individual getter functions, and passes this to `createVSODApp()`.
+The main entry point (`server.js`) calls `initializeServices`, then builds a services object by calling the individual getter functions, and passes this to `createG8edApp()`.
 
 ```js
 // server.js
@@ -1113,7 +1113,7 @@ this.services = {
     operatorService: getOperatorService(),
     // ... all other services
 };
-const app = createVSODApp({ services, /* other options */ });
+const app = createG8edApp({ services, /* other options */ });
 ```
 
 #### 4. Testing with DI
@@ -1121,7 +1121,7 @@ const app = createVSODApp({ services, /* other options */ });
 When writing unit tests, you should instantiate the service class directly and manually inject mock dependencies.
 
 ```js
-// @vsod/test/unit/services/operator/operator-service.unit.test.js
+// @g8ed/test/unit/services/operator/operator-service.unit.test.js
 const mocks = {
     operatorDataService: { /* mock methods */ },
     userService: { /* mock methods */ },
@@ -1152,17 +1152,17 @@ Route handlers must be thin: **parse → validate → call service → respond**
 
 All service instances are accessed via getter functions from `services/initialization.js` — never instantiated directly in routes or handlers.
 
-All backend HTTP calls from VSOD to g8ee go through `InternalHttpClient` from `services/clients/internal_http_client.js`. Never use raw `fetch()` for g8ee calls. All frontend HTTP calls go through `window.serviceClient` — never use raw `fetch()` in browser component code.
+All backend HTTP calls from g8ed to g8ee go through `InternalHttpClient` from `services/clients/internal_http_client.js`. Never use raw `fetch()` for g8ee calls. All frontend HTTP calls go through `window.serviceClient` — never use raw `fetch()` in browser component code.
 
-#### HTTP Context — `VSOHttpContext`
+#### HTTP Context — `G8eHttpContext`
 
-All VSOD→g8ee HTTP calls must carry a `VSOHttpContext` built at the route level and passed to `InternalHttpClient` as `options.vsoContext`. The client translates it into `X-VSO-*` headers via `buildVSOContextHeaders()` and enforces required fields — it will throw if `web_session_id` is missing.
+All g8ed→g8ee HTTP calls must carry a `G8eHttpContext` built at the route level and passed to `InternalHttpClient` as `options.g8eContext`. The client translates it into `X-G8E-*` headers via `buildG8eContextHeaders()` and enforces required fields — it will throw if `web_session_id` is missing.
 
 Context is assembled explicitly at the route handler with named fields:
 
 ```js
 const boundOperators = await getBindingService().resolveBoundOperators(req.webSessionId);
-const vsoContext = {
+const g8eContext = {
     web_session_id: req.webSessionId,
     user_id:        req.userId,
     organization_id: req.session?.organization_id || null,
@@ -1175,15 +1175,15 @@ const vsoContext = {
 
 `resolveBoundOperators(webSessionId)` on `BoundSessionsService` looks up all operator sessions bound to the web session, validates each reverse binding, and returns a `BoundOperatorContext[]`.
 
-**VSOD rules:**
-- Always construct `vsoContext` explicitly with named fields at the route level before any g8ee call. Never build it inside a service.
-- Pass context to `InternalHttpClient.request()` as `options.vsoContext` — never set `X-VSO-*` headers manually.
+**g8ed rules:**
+- Always construct `g8eContext` explicitly with named fields at the route level before any g8ee call. Never build it inside a service.
+- Pass context to `InternalHttpClient.request()` as `options.g8eContext` — never set `X-G8E-*` headers manually.
 - Include all known business context (`case_id`, `investigation_id`, `task_id`) when available. g8ee uses these fields for data ownership enforcement and event correlation downstream — omitting them will cause missing correlation IDs on SSE events.
 - Never derive or reconstruct context from session fields inside a service or helper function. The route handler owns context construction.
 
 #### Data Access — `CacheAsideService`
 
-All reads and writes to the VSODB document store must go through `CacheAsideService` (`services/cache/cache_aside_service.js`). Never call the VSODB document client or KV client directly from a service or route for document operations.
+All reads and writes to the g8es document store must go through `CacheAsideService` (`services/cache/cache_aside_service.js`). Never call the g8es document client or KV client directly from a service or route for document operations.
 
 **Pattern:** DB is authoritative for all writes. KV cache is the read path. Cache failure on write is non-fatal — logged as a warning; the DB write still succeeds.
 
@@ -1202,7 +1202,7 @@ All reads and writes to the VSODB document store must go through `CacheAsideServ
 | Operator read | `getOperator(operatorId)` | Typed shortcut — returns a validated `OperatorDocument` or `null`. Does not re-cache `STOPPED` operators. |
 
 **Rules:**
-- Pass `VSOBaseModel` instances directly to `createDocument` — the service calls `.forDB()` internally. For plain-object patches passed to `updateDocument`, pre-flatten any nested model fields with `.forDB()` before including them in the patch object.
+- Pass `G8eBaseModel` instances directly to `createDocument` — the service calls `.forDB()` internally. For plain-object patches passed to `updateDocument`, pre-flatten any nested model fields with `.forDB()` before including them in the patch object.
 - Never call `.forDB()` on the data before passing to `createDocument` — the service handles serialization. Calling it twice produces double-serialized nested objects.
 - `getQueryResult` returns `null` on a miss — always check for `null` and fall back to the DB query, then call `setQueryResult` with the result.
 - Collection-specific TTLs are applied automatically based on `TTL_STRATEGIES`. Do not pass a custom `ttl` unless the collection has a non-standard retention requirement.
@@ -1210,9 +1210,9 @@ All reads and writes to the VSODB document store must go through `CacheAsideServ
 
 #### Tests
 
-See [testing.md — VSOD](testing.md#vsod--nodejs) for test infrastructure, fixture files, mock factories, helpers, contract tests, and how to run tests.
+See [testing.md — g8ed](testing.md#g8ed--nodejs) for test infrastructure, fixture files, mock factories, helpers, contract tests, and how to run tests.
 
-- Create test users only via `userModel.createUser()` (`userModel` is the `userService` alias returned by `getTestServices()`) — it writes VSODB, KV cache, and org in one operation.
+- Create test users only via `userModel.createUser()` (`userModel` is the `userService` alias returned by `getTestServices()`) — it writes g8es, KV cache, and org in one operation.
 - Never use `setTimeout(resolve, N)` to wait for async behavior — use `vi.useFakeTimers()` + `vi.advanceTimersByTime()`.
 - The `// @vitest-environment jsdom` directive is the correct way to activate jsdom — never mix it with `new JSDOM()` + manual `global.*` assignment.
 - Use status enum constants in all assertions — never raw string literals.
@@ -1244,13 +1244,13 @@ See [testing.md — VSOD](testing.md#vsod--nodejs) for test infrastructure, fixt
 │   │       │   └── infra/      # EventService, InternalHttpClient  wrappers
 │   │       ├── security/       # Sentinel scrubber, command validation
 │   │       └── prompts_data/   # Modular prompt system
-│   ├── vsod/           # Web frontend (Node.js/Express)
+│   ├── g8ed/           # Web frontend (Node.js/Express)
 │   │   ├── routes/         # API, Gateway Protocol, pub/sub proxy, page routes
-│   │   ├── services/       # Auth, sessions, operators, VSODB client
+│   │   ├── services/       # Auth, sessions, operators, g8es client
 │   │   ├── middleware/     # Auth, CSP, rate limiting
 │   │   ├── views/          # EJS templates
 │   │   └── public/         # Static assets (JS, CSS)
-│   ├── vsodb/          # VSODB Dockerfile (runs g8e.operator --listen)
+│   ├── g8es/          # g8es Dockerfile (runs g8e.operator --listen)
 ├── scripts/            # Internal build, test, and security scripts (run via g8ep)
 ├── docs/               # Full documentation
 └── docker-compose.yml  # Single deployment configuration
@@ -1264,7 +1264,7 @@ Full index at [index.md](index.md).
 
 | Category | Location |
 |----------|---------|
-| **Components** | [components/](components/) — g8eo, g8ee, VSOD, VSODB, g8e node (authoritative component reference) |
+| **Components** | [components/](components/) — g8eo, g8ee, g8ed, g8es, g8e node (authoritative component reference) |
 | **Architecture** | [architecture/ai_agents.md](architecture/ai_agents.md) — AI agent pipeline; [architecture/storage.md](architecture/storage.md) — storage and data flows; [architecture/security.md](architecture/security.md) — security architecture |
 | **Testing** | [testing.md](testing.md) — shared principles, g8ep environment, component test guides, CI workflow |
 | **Glossary** | [glossary.md](glossary.md) — all platform terminology |

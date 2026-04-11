@@ -17,12 +17,12 @@ v4.3.1 is a hotfix release resolving two critical bugs affecting user authentica
 
 ### Operator Panel SSE Race Condition Fix
 
-**Root cause:** SSE event pushes from g8ee to VSOD were missing the `user_id` field. The `SSEPushRequest` model did not require `user_id`, and g8ee services were not including it when publishing events. This caused operator panel updates to fail silently when the heartbeat service attempted to push events without the required user context.
+**Root cause:** SSE event pushes from g8ee to g8ed were missing the `user_id` field. The `SSEPushRequest` model did not require `user_id`, and g8ee services were not including it when publishing events. This caused operator panel updates to fail silently when the heartbeat service attempted to push events without the required user context.
 
 **Fix:**
 - Added `user_id` as a required field to `SSEPushRequest` in `request_models.js`
 - Updated `HeartbeatService` to validate both `web_session_id` and `user_id` before pushing SSE events. Missing `user_id` now logs a warning and skips the push instead of failing
-- Updated all g8ee services to include `user_id` when publishing events via `vsod_event_service`:
+- Updated all g8ee services to include `user_id` when publishing events via `g8ed_event_service`:
   - `AgentSSEService`
   - `AgentToolLoop`
   - `ChatPipeline`
@@ -40,7 +40,7 @@ v4.3.1 is a hotfix release resolving two critical bugs affecting user authentica
 - **SSE push** — `SSEPushRequest` now requires `user_id` as a mandatory field
 - **Heartbeat service** — Validates both `web_session_id` and `user_id` before pushing SSE events; logs warning and skips push if missing
 - **Operator panel list updated** — Internal SSE route now properly constructs `OperatorListUpdatedEvent` from operator list payload
-- **g8ee event publishing** — All g8ee services now include `user_id` when publishing events via `vsod_event_service`
+- **g8ee event publishing** — All g8ee services now include `user_id` when publishing events via `g8ed_event_service`
 - **Terminal CSS** — Fixed max-width constraints to prevent overflow on wide screens
 
 ## Component Summary
@@ -48,7 +48,7 @@ v4.3.1 is a hotfix release resolving two critical bugs affecting user authentica
 | Component | Changes |
 |-----------|---------|
 | **g8ee** | Added `user_id` to all event publishing calls across 7 services |
-| **VSOD** | Added `user_id` to `SSEPushRequest`, fixed passkey response model, fixed SSE route event construction |
+| **g8ed** | Added `user_id` to `SSEPushRequest`, fixed passkey response model, fixed SSE route event construction |
 | **Demo** | Automated SSH streaming configuration in `make up` |
 
 ## Quick Start

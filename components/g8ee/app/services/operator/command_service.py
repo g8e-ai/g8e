@@ -28,14 +28,14 @@ from app.models.command_payloads import (
     GrantIntentArgs,
     RevokeIntentArgs,
 )
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
     CommandApprovalRequest,
     CommandExecutingBroadcastEvent,
     TargetSystem,
 )
-from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileHistoryToolResult,
@@ -64,7 +64,7 @@ from app.services.protocols import (
     LFAAServiceProtocol,
     PortServiceProtocol,
     PubSubServiceProtocol,
-    VSODClientProtocol,
+    G8edClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
 from .operator_data_service import OperatorDataService
@@ -114,7 +114,7 @@ class OperatorCommandService:
         self.cache_aside_service = cache_aside_service
         self.operator_data_service = operator_data_service
         self.investigation_service = investigation_service
-        self.vsod_event_service = execution_service.vsod_event_service
+        self.g8ed_event_service = execution_service.g8ed_event_service
         self._settings = settings
 
         from app.models.operators import CommandResultBroadcastEvent, CommandExecutingBroadcastEvent
@@ -134,11 +134,11 @@ class OperatorCommandService:
         cache_aside_service: CacheAsideService,
         operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
-        vsod_event_service: EventServiceProtocol,
+        g8ed_event_service: EventServiceProtocol,
         execution_registry: ExecutionRegistryProtocol,
         settings: G8eePlatformSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
-        internal_http_client: VSODClientProtocol,
+        internal_http_client: G8edClientProtocol,
         approval_service: ApprovalServiceProtocol,
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
@@ -152,7 +152,7 @@ class OperatorCommandService:
             pubsub_service=pubsub_service,
             execution_registry=execution_registry,
             approval_service=approval_service,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             settings=settings,
             ai_response_analyzer=ai_response_analyzer,
             operator_data_service=operator_data_service,
@@ -176,7 +176,7 @@ class OperatorCommandService:
             pubsub_service=pubsub_service,
             execution_registry=execution_registry,
             approval_service=approval_service,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             execution_service=execution_service,
             ai_response_analyzer=ai_response_analyzer,
             investigation_service=investigation_service,
@@ -185,9 +185,9 @@ class OperatorCommandService:
         intent_service = OperatorIntentService(
             approval_service=approval_service,
             execution_service=execution_service,
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             investigation_service=investigation_service,
-            vsod_client=internal_http_client,
+            g8ed_client=internal_http_client,
         )
 
         async def _on_g8eo_result(envelope: G8eoResultEnvelope) -> None:
@@ -232,7 +232,7 @@ class OperatorCommandService:
     async def execute_command(
         self,
         args: OperatorCommandArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings | None = None,
     ) -> CommandExecutionResult:
@@ -282,14 +282,14 @@ class OperatorCommandService:
         execution_id = generate_command_execution_id()
 
         # Notify preparing (UI status update)
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
             self._CommandExecutingBroadcastEvent(
                 command=command,
                 execution_id=execution_id,
                 operator_session_id=operator_session_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.COMMAND,
         )
 
@@ -303,7 +303,7 @@ class OperatorCommandService:
         # 3. Approval gate
         approval_result = await self._approval_service.request_command_approval(
             CommandApprovalRequest(
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 timeout_seconds=args.timeout_seconds,
                 justification=justification,
                 execution_id=execution_id,
@@ -336,21 +336,21 @@ class OperatorCommandService:
             request_id=execution_id,
         )
 
-        vso_message = VSOMessage(
+        g8e_message = G8eMessage(
             id=execution_id,
             source_component=ComponentName.G8EE,
             event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-            case_id=vso_context.case_id,
+            case_id=g8e_context.case_id,
             task_id=AITaskId.COMMAND,
-            investigation_id=vso_context.investigation_id,
-            web_session_id=vso_context.web_session_id,
+            investigation_id=g8e_context.investigation_id,
+            web_session_id=g8e_context.web_session_id,
             operator_session_id=operator_session_id,
             operator_id=operator_id,
             payload=mcp_payload,
         )
 
         # Notify start
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_STARTED,
             self._CommandExecutingBroadcastEvent(
                 command=command,
@@ -358,14 +358,14 @@ class OperatorCommandService:
                 operator_session_id=operator_session_id,
                 approval_id=approval_result.approval_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.COMMAND,
         )
 
         logger.info("[COMMAND] Executing: %s", command)
         internal_result = await self._execution_service.execute(
-            vso_message=vso_message,
-            vso_context=vso_context,
+            g8e_message=g8e_message,
+            g8e_context=g8e_context,
             timeout_seconds=args.timeout_seconds,
         )
         logger.info("[COMMAND] Execution finished: status=%s", internal_result.status)
@@ -377,7 +377,7 @@ class OperatorCommandService:
             else EventType.OPERATOR_COMMAND_FAILED
         )
         
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             completion_event_type,
             self._CommandResultBroadcastEvent(
                 execution_id=execution_id,
@@ -392,7 +392,7 @@ class OperatorCommandService:
                 operator_session_id=operator_session_id,
                 approval_id=approval_result.approval_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.COMMAND,
         )
 
@@ -407,32 +407,32 @@ class OperatorCommandService:
             execution_result=internal_result,
         )
 
-    async def execute_file_edit(self, args: FileEditPayload, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult:
-        return await self._file_service.execute_file_edit(args, vso_context, investigation, execution_id)
+    async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult:
+        return await self._file_service.execute_file_edit(args, g8e_context, investigation, execution_id)
 
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> PortCheckToolResult:
-        return await self._port_service.execute_port_check(args, investigation, vso_context=vso_context)
+    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
+        return await self._port_service.execute_port_check(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> FsListToolResult:
-        return await self._filesystem_service.execute_fs_list(args, investigation, vso_context=vso_context)
+    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
+        return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> FsReadToolResult:
-        return await self._filesystem_service.execute_fs_read(args, investigation, vso_context=vso_context)
+    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+        return await self._filesystem_service.execute_fs_read(args, investigation, g8e_context=g8e_context)
 
-    async def execute_intent_permission_request(self, args: GrantIntentArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
+    async def execute_intent_permission_request(self, args: GrantIntentArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
         return await self._intent_service.execute_intent_permission_request(
-            args=args, vso_context=vso_context, investigation=investigation
+            args=args, g8e_context=g8e_context, investigation=investigation
         )
 
-    async def execute_intent_revocation(self, args: RevokeIntentArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
+    async def execute_intent_revocation(self, args: RevokeIntentArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
         return await self._intent_service.execute_intent_revocation(
-            args=args, vso_context=vso_context, investigation=investigation
+            args=args, g8e_context=g8e_context, investigation=investigation
         )
 
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
-        return await self._file_service.execute_fetch_file_history(args, vso_context, investigation)
+    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
+        return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation)
 
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
-        return await self._file_service.execute_fetch_file_diff(args, vso_context, investigation)
+    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
+        return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation)
 
 __all__ = ["OperatorCommandService"]

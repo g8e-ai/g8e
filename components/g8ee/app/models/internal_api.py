@@ -14,19 +14,19 @@
 from pydantic import Field
 
 from app.models.attachments import AttachmentMetadata
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.models.cases import CaseModel
 from app.models.operators import PendingApproval
 
 
-class ChatMessageRequest(VSOBaseModel):
+class ChatMessageRequest(G8eBaseModel):
     """Request model for chat messages -- user-provided content only.
 
     Identity and business context (case_id, investigation_id, web_session_id,
-    user_id) come exclusively from VSOHttpContext headers set by VSOD.
+    user_id) come exclusively from G8eHttpContext headers set by g8ed.
     The request body carries only user-controlled content.
 
-    Whether to create a new case+investigation is derived from vso_context.case_id
+    Whether to create a new case+investigation is derived from g8e_context.case_id
     being empty — no flag needed in the body.
     """
     message: str = Field(..., description="Chat message content")
@@ -36,58 +36,58 @@ class ChatMessageRequest(VSOBaseModel):
     llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
 
 
-class ChatStartedResponse(VSOBaseModel):
+class ChatStartedResponse(G8eBaseModel):
     """Response for POST /chat — returns the case and investigation IDs created or resolved."""
     success: bool
     case_id: str
     investigation_id: str
 
 
-class StopAIResponse(VSOBaseModel):
+class StopAIResponse(G8eBaseModel):
     """Response for POST /chat/stop."""
     success: bool
     investigation_id: str
     was_active: bool
 
 
-class ApprovalRespondedResponse(VSOBaseModel):
+class ApprovalRespondedResponse(G8eBaseModel):
     """Response for POST /operator/approval/respond."""
     success: bool
     approval_id: str
     approved: bool
 
 
-class DirectCommandSentResponse(VSOBaseModel):
+class DirectCommandSentResponse(G8eBaseModel):
     """Response for POST /operator/direct-command."""
     success: bool
     execution_id: str
 
 
-class CaseResponse(VSOBaseModel):
+class CaseResponse(G8eBaseModel):
     """Response for GET/PATCH /cases/{case_id}."""
     success: bool
     case: CaseModel
 
 
-class OperatorStoppedResponse(VSOBaseModel):
+class OperatorStoppedResponse(G8eBaseModel):
     """Response for POST /operators/stop."""
     success: bool
     operator_id: str
     subscribers: int
 
 
-class OperatorSessionRegisteredResponse(VSOBaseModel):
+class OperatorSessionRegisteredResponse(G8eBaseModel):
     """Response for POST /operators/register-operator-session and deregister-operator-session."""
     success: bool
     operator_id: str
     operator_session_id: str
 
 
-class OperatorApprovalResponse(VSOBaseModel):
+class OperatorApprovalResponse(G8eBaseModel):
     """Request model for operator command approval response.
 
     Identity/business context (case_id, investigation_id, etc.) comes from
-    VSOHttpContext headers. Only approval-specific fields are in the body.
+    G8eHttpContext headers. Only approval-specific fields are in the body.
     The router enriches this with operator_session_id / operator_id from
     the bound operator before passing it to the approval service.
     """
@@ -98,7 +98,7 @@ class OperatorApprovalResponse(VSOBaseModel):
     operator_id: str = Field(default="", description="Operator ID (set by router from bound operator)")
 
 
-class PendingApprovalsResponse(VSOBaseModel):
+class PendingApprovalsResponse(G8eBaseModel):
     """Response for GET /operator/approval/pending.
 
     Returns all pending approvals currently waiting for user response.
@@ -106,35 +106,35 @@ class PendingApprovalsResponse(VSOBaseModel):
     pending_approvals: dict[str, PendingApproval] = Field(default_factory=dict, description="Pending approvals keyed by approval_id")
 
 
-class StopAIRequest(VSOBaseModel):
+class StopAIRequest(G8eBaseModel):
     """Request model for stopping active AI processing."""
     investigation_id: str = Field(..., description="Investigation ID to stop processing for")
     reason: str = Field(default="User requested stop", description="Reason for stopping")
     web_session_id: str | None = Field(default=None, description="Web session ID for SSE routing")
 
 
-class StopOperatorRequest(VSOBaseModel):
+class StopOperatorRequest(G8eBaseModel):
     """Request model for stopping an operator via pub/sub shutdown command."""
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
     user_id: str | None = Field(default=None, description="User ID")
 
 
-class OperatorSessionRegistrationRequest(VSOBaseModel):
+class OperatorSessionRegistrationRequest(G8eBaseModel):
     """Request model for registering or deregistering an operator session heartbeat subscription.
 
-    Called by VSOD when an operator authenticates (register) or goes offline/stops (deregister).
+    Called by g8ed when an operator authenticates (register) or goes offline/stops (deregister).
     Triggers g8ee to subscribe or unsubscribe from the heartbeat pub/sub channel for this session.
     """
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
 
 
-class MCPToolCallRequest(VSOBaseModel):
+class MCPToolCallRequest(G8eBaseModel):
     """Request model for MCP tool/call via the gateway.
 
-    The external MCP client sends a JSON-RPC tools/call; VSOD unwraps it and
-    forwards tool_name + arguments here. Identity comes from VSOHttpContext headers.
+    The external MCP client sends a JSON-RPC tools/call; g8ed unwraps it and
+    forwards tool_name + arguments here. Identity comes from G8eHttpContext headers.
     """
     tool_name: str = Field(..., description="MCP tool name (e.g. run_commands_with_operator)")
     arguments: dict = Field(default_factory=dict, description="Tool arguments")
@@ -142,12 +142,12 @@ class MCPToolCallRequest(VSOBaseModel):
     sentinel_mode: bool = Field(default=True, description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data")
 
 
-class MCPToolListResponse(VSOBaseModel):
+class MCPToolListResponse(G8eBaseModel):
     """Response for POST /mcp/tools/list."""
     tools: list = Field(default_factory=list, description="MCP tool definitions")
 
 
-class MCPToolCallResponse(VSOBaseModel):
+class MCPToolCallResponse(G8eBaseModel):
     """Response for POST /mcp/tools/call -- wraps the result as MCP JSON-RPC."""
     jsonrpc: str = Field(default="2.0")
     id: str = Field(..., description="Correlated JSON-RPC request id")
@@ -155,12 +155,12 @@ class MCPToolCallResponse(VSOBaseModel):
     error: dict | None = Field(default=None, description="JSON-RPC error on failure")
 
 
-class DirectCommandRequest(VSOBaseModel):
+class DirectCommandRequest(G8eBaseModel):
     """Request model for direct command execution (bypasses AI).
 
     Body carries only command-specific payload. All identity and context
     (user_id, web_session_id, operator_id, operator_session_id, case_id,
-    investigation_id) come from VSOHttpContext headers.
+    investigation_id) come from G8eHttpContext headers.
     """
     command: str = Field(..., description="Command to execute on operator")
     execution_id: str = Field(..., description="Execution ID for tracking")

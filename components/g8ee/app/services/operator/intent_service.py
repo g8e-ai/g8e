@@ -23,7 +23,7 @@ from app.services.protocols import (
     EventServiceProtocol,
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
-    VSODClientProtocol,
+    G8edClientProtocol,
 )
 from app.constants.status import (
     AITaskId,
@@ -43,11 +43,11 @@ from app.constants.intents import (
     CloudIntent,
 )
 from app.models.command_payloads import GrantIntentArgs, RevokeIntentArgs
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult
 from app.models.operators import IntentApprovalRequest, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent, CloudSubtype
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 from app.services.operator.iam_command_builder import IamCommandBuilder
 from app.utils.ids import (
     generate_iam_execution_id,
@@ -67,15 +67,15 @@ class OperatorIntentService:
         self,
         approval_service: ApprovalServiceProtocol,
         execution_service: ExecutionServiceProtocol,
-        vsod_event_service: EventServiceProtocol,
+        g8ed_event_service: EventServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
-        vsod_client: VSODClientProtocol,
+        g8ed_client: G8edClientProtocol,
     ) -> None:
         self.approval_service = approval_service
         self.execution_service = execution_service
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
-        self.vsod_client = vsod_client
+        self.g8ed_client = g8ed_client
         self._iam_builder = IamCommandBuilder()
 
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:
@@ -106,7 +106,7 @@ class OperatorIntentService:
         self,
         *,
         args: GrantIntentArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> IntentPermissionResult:
         intent_names_raw = args.intent_name.strip()
@@ -153,7 +153,7 @@ class OperatorIntentService:
 
         approval_result = await self.approval_service.request_intent_approval(
             IntentApprovalRequest(
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 timeout_seconds=600,
                 justification=justification,
                 execution_id=execution_id,
@@ -166,7 +166,7 @@ class OperatorIntentService:
         )
 
         # Notify start
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
             CommandExecutingBroadcastEvent(
                 command=f"intent_grant {', '.join(requested_intents)}",
@@ -174,13 +174,13 @@ class OperatorIntentService:
                 operator_session_id=operator_session_id,
                 approval_id=None, # Approval ID not generated yet or managed by service
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.INTENT_GRANT,
         )
 
         if not approval_result.approved:
             # Notify failure
-            await self.vsod_event_service.publish_command_event(
+            await self.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_INTENT_DENIED,
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
@@ -191,7 +191,7 @@ class OperatorIntentService:
                     operator_session_id=operator_session_id,
                     approval_id=approval_result.approval_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.INTENT_GRANT,
             )
 
@@ -209,7 +209,7 @@ class OperatorIntentService:
         final_op_id = approval_result.operator_id or operator_id
 
         # Notify completion
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_INTENT_GRANTED,
             CommandResultBroadcastEvent(
                 execution_id=execution_id,
@@ -220,7 +220,7 @@ class OperatorIntentService:
                 operator_session_id=final_session_id,
                 approval_id=approval_result.approval_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.INTENT_GRANT,
         )
 
@@ -239,20 +239,20 @@ class OperatorIntentService:
                 },
                 request_id=exec_id,
             )
-            msg = VSOMessage(
+            msg = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.COMMAND,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 operator_session_id=final_session_id,
                 operator_id=final_op_id,
                 payload=mcp_payload,
             )
             
-            iam_result = await self.execution_service.execute(msg, vso_context)
+            iam_result = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=iam_result))
 
             if iam_result.status != ExecutionStatus.COMPLETED:
@@ -271,19 +271,19 @@ class OperatorIntentService:
                         },
                         request_id=v_exec_id,
                     )
-                    v_msg = VSOMessage(
+                    v_msg = G8eMessage(
                         id=v_exec_id,
                         source_component=ComponentName.G8EE,
                         event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                        case_id=vso_context.case_id,
+                        case_id=g8e_context.case_id,
                         task_id=AITaskId.COMMAND,
-                        investigation_id=vso_context.investigation_id,
-                        web_session_id=vso_context.web_session_id,
+                        investigation_id=g8e_context.investigation_id,
+                        web_session_id=g8e_context.web_session_id,
                         operator_session_id=final_session_id,
                         operator_id=final_op_id,
                         payload=v_mcp_payload,
                     )
-                    await self.execution_service.execute(v_msg, vso_context)
+                    await self.execution_service.execute(v_msg, g8e_context)
 
         if failed_intents:
             return IntentPermissionResult(success=False, approved=True, error="Partial IAM failure", failed_intents=failed_intents, iam_results=iam_results)
@@ -297,7 +297,7 @@ class OperatorIntentService:
         self,
         *,
         args: RevokeIntentArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> IntentPermissionResult:
         intent_names_raw = args.intent_name.strip()
@@ -326,14 +326,14 @@ class OperatorIntentService:
         execution_id = generate_intent_execution_id()
 
         # Notify start
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_INTENT_REVOCATION_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"intent_revoke {', '.join(requested_intents)}",
                 execution_id=execution_id,
                 operator_session_id=op_doc.operator_session_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.INTENT_REVOKE,
         )
 
@@ -350,25 +350,25 @@ class OperatorIntentService:
                 },
                 request_id=exec_id,
             )
-            msg = VSOMessage(
+            msg = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.COMMAND,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 operator_session_id=op_doc.operator_session_id,
                 operator_id=op_doc.operator_id,
                 payload=mcp_payload,
             )
-            res = await self.execution_service.execute(msg, vso_context)
+            res = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
-            if res.status == ExecutionStatus.COMPLETED and self.vsod_client:
-                await self.vsod_client.revoke_intent(op_doc.operator_id, intent, vso_context)
+            if res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
+                await self.g8ed_client.revoke_intent(op_doc.operator_id, intent, g8e_context)
 
         # Notify completion
-        await self.vsod_event_service.publish_command_event(
+        await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_INTENT_REVOKED,
             CommandResultBroadcastEvent(
                 execution_id=execution_id,
@@ -378,7 +378,7 @@ class OperatorIntentService:
                 operator_id=op_doc.operator_id,
                 operator_session_id=op_doc.operator_session_id,
             ),
-            vso_context,
+            g8e_context,
             task_id=AITaskId.INTENT_REVOKE,
         )
 

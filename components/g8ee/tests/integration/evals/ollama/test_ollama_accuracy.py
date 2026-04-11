@@ -16,12 +16,12 @@ Ollama Model Accuracy Evaluation Test Suite.
 
 Tests raw Ollama model quality without the ChatPipeline. This is a direct
 LLM evaluation that tests the model's ability to respond to scenarios in the
-gold set without any pipeline overhead, investigation context, or VSODB I/O.
+gold set without any pipeline overhead, investigation context, or g8es I/O.
 
 Test flow:
 1. Build system prompt via build_modular_system_prompt
 2. Build GenerateContentConfig via AIGenerationConfigBuilder.build_config
-3. Call llm_provider.generate_content directly (no pipeline, no VSODB)
+3. Call llm_provider.generate_content directly (no pipeline, no g8es)
 4. Extract response text from GenerateContentResponse
 5. Grade with EvalJudge
 

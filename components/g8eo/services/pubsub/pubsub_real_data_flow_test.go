@@ -34,7 +34,7 @@ import (
 // TestRealDataFlow_CommandExecution tests real command execution through the full g8eo stack
 func TestRealDataFlow_CommandExecution(t *testing.T) {
 
-	t.Run("executes echo command and receives result via VSODB pub/sub", func(t *testing.T) {
+	t.Run("executes echo command and receives result via g8es pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -65,7 +65,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -82,12 +82,12 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal(received, &result)
 		require.NoError(t, err)
 
@@ -132,7 +132,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -149,12 +149,12 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal(received, &result)
 		require.NoError(t, err)
 
@@ -195,7 +195,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -212,12 +212,12 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal(received, &result)
 		require.NoError(t, err)
 
@@ -262,13 +262,13 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		tmpFile := filepath.Join(t.TempDir(), "vsodb-flow-test.txt")
+		tmpFile := filepath.Join(t.TempDir(), "g8es-flow-test.txt")
 
 		// Step 1: Write file
 		writeMsg := PubSubCommandMessage{
@@ -288,7 +288,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		writeMsgJSON, err := json.Marshal(writeMsg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(writeMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(writeMsgJSON))
 
 		writeResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, writeResult)
@@ -310,7 +310,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		readMsgJSON, err := json.Marshal(readMsg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(readMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(readMsgJSON))
 
 		readResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult)
@@ -335,7 +335,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		replaceMsgJSON, err := json.Marshal(replaceMsg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(replaceMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(replaceMsgJSON))
 
 		replaceResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, replaceResult)
@@ -357,7 +357,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		readMsg2JSON, err := json.Marshal(readMsg2)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(readMsg2JSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(readMsg2JSON))
 
 		readResult2 := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult2)
@@ -365,7 +365,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		assert.Contains(t, string(readResult2), "modified content")
 	})
 
-	t.Run("handles large payload through VSODB pub/sub", func(t *testing.T) {
+	t.Run("handles large payload through g8es pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -396,7 +396,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -413,12 +413,12 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 10*time.Second)
 		require.NotNil(t, received)
 
-		var result models.VSOMessage
+		var result models.G8eMessage
 		err = json.Unmarshal(received, &result)
 		require.NoError(t, err)
 
@@ -460,7 +460,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestVSODBDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -477,7 +477,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestVSODBDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)

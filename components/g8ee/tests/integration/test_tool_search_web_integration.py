@@ -63,8 +63,8 @@ from app.models.grounding import GroundingMetadata
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.agent_sse import deliver_via_sse
-from tests.fakes.agent_helpers import make_streaming_context, make_vsod_event_service
-from tests.fakes.factories import build_enriched_context, build_vso_http_context
+from tests.fakes.agent_helpers import make_streaming_context, make_g8ed_event_service
+from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 from tests.fakes.builder import create_mock_tool_executor
 from tests.fakes.fake_web_search_provider import FakeWebSearchProvider
 from tests.fakes.tool_helpers import create_tool_service_fake
@@ -103,19 +103,19 @@ def _investigation():
     return build_enriched_context()
 
 
-def _vso_context():
-    return build_vso_http_context()
+def _g8e_context():
+    return build_g8e_http_context()
 
 
 async def _collect_sse_events(chunks, ctx=None):
     streaming_ctx = ctx or make_streaming_context()
-    event_svc = make_vsod_event_service()
+    event_svc = make_g8ed_event_service()
 
     async def _gen():
         for c in chunks:
             yield c
 
-    await deliver_via_sse(stream=_gen(), agent_streaming_context=streaming_ctx, vsod_event_service=event_svc)
+    await deliver_via_sse(stream=_gen(), agent_streaming_context=streaming_ctx, g8ed_event_service=event_svc)
     # Check both publish and publish_investigation_event calls for compatibility
     events = []
     for call in event_svc.publish.call_args_list:
@@ -180,7 +180,7 @@ class TestSearchWebRouting:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "kubernetes node pressure"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -194,7 +194,7 @@ class TestSearchWebRouting:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "linux disk usage"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -209,7 +209,7 @@ class TestSearchWebRouting:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "docker container logs"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -222,7 +222,7 @@ class TestSearchWebRouting:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "nginx access log format"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -253,7 +253,7 @@ class TestSearchWebResponseShape:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "multi result"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -269,7 +269,7 @@ class TestSearchWebResponseShape:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "go documentation"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -291,7 +291,7 @@ class TestSearchWebResponseShape:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "prometheus monitoring"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -322,7 +322,7 @@ class TestSearchWebFailureHandling:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "bad query"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -340,7 +340,7 @@ class TestSearchWebFailureHandling:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "no hits"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -566,7 +566,7 @@ class TestSearchWebObservability:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "recorded query"},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 
@@ -582,7 +582,7 @@ class TestSearchWebObservability:
                 OperatorToolName.G8E_SEARCH_WEB,
                 {"query": query},
                 _investigation(),
-                _vso_context(),
+                _g8e_context(),
                 G8eeUserSettings(llm=LLMSettings()),
             )
 
@@ -597,7 +597,7 @@ class TestSearchWebObservability:
             OperatorToolName.G8E_SEARCH_WEB,
             {"query": "num test", "num": 10},
             _investigation(),
-            _vso_context(),
+            _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
         )
 

@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-Timestamp utilities for VSO platform.
+Timestamp utilities for g8e platform.
 
 Provides standardized timezone-aware timestamp functions for consistent
-time handling across all VSO components.
+time handling across all g8e components.
 """
 
 

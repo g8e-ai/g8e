@@ -71,7 +71,7 @@ func newTLSPubSubServer(t *testing.T) string {
 
 // TestPubSubAvailable_ReachableServer exercises the full dial path of
 // TestPubSubAvailable against an in-process TLS server.
-// G8E_OPERATOR_PUBSUB_URL is overridden so GetTestVSODBDirectURL() returns
+// G8E_OPERATOR_PUBSUB_URL is overridden so GetTestG8esDirectURL() returns
 // the in-process address; certs.SetCA is overridden so the dialer trusts it.
 func TestPubSubAvailable_ReachableServer(t *testing.T) {
 	wssBase := newTLSPubSubServer(t)

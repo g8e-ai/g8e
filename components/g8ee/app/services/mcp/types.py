@@ -15,26 +15,26 @@ from typing import Any, Optional
 
 from pydantic import Field
 
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
 # MCP JSON-RPC 2.0 wire types
 # See: https://modelcontextprotocol.io/docs/concepts/transports#json-rpc-20
 
-class JSONRPCError(VSOBaseModel):
+class JSONRPCError(G8eBaseModel):
     code: int
     message: str
     data: Any | None = None
 
 
-class JSONRPCRequest(VSOBaseModel):
+class JSONRPCRequest(G8eBaseModel):
     jsonrpc: str = "2.0"
     id: str
     method: str
     params: dict[str, Any] | None = None
 
 
-class JSONRPCResponse(VSOBaseModel):
+class JSONRPCResponse(G8eBaseModel):
     jsonrpc: str = "2.0"
     id: str
     result: Optional[object] = None
@@ -43,14 +43,14 @@ class JSONRPCResponse(VSOBaseModel):
 
 # Content and Resource types
 
-class ResourceContent(VSOBaseModel):
+class ResourceContent(G8eBaseModel):
     uri: str
     mimeType: str | None = None
     text: str | None = None
     blob: str | None = None  # Base64 encoded
 
 
-class Content(VSOBaseModel):
+class Content(G8eBaseModel):
     type: str  # text, image, resource
     text: str | None = None
     data: str | None = None  # Base64 for images
@@ -60,12 +60,12 @@ class Content(VSOBaseModel):
 
 # Tool call types
 
-class CallToolParams(VSOBaseModel):
+class CallToolParams(G8eBaseModel):
     name: str
     arguments: dict[str, Any] | None = None
 
 
-class CallToolResult(VSOBaseModel):
+class CallToolResult(G8eBaseModel):
     content: list[Content]
     isError: bool = False
     metadata: dict[str, Any] | None = Field(None, alias="_metadata")
@@ -79,25 +79,25 @@ class CallToolResult(VSOBaseModel):
 
 # Resource types
 
-class Resource(VSOBaseModel):
+class Resource(G8eBaseModel):
     uri: str
     name: str
     description: Optional[str] = None
     mimeType: Optional[str] = None
 
 
-class ListResourcesParams(VSOBaseModel):
+class ListResourcesParams(G8eBaseModel):
     cursor: str | None = None
 
 
-class ListResourcesResult(VSOBaseModel):
+class ListResourcesResult(G8eBaseModel):
     resources: list[Resource]
     nextCursor: str | None = None
 
 
-class ReadResourceParams(VSOBaseModel):
+class ReadResourceParams(G8eBaseModel):
     uri: str
 
 
-class ReadResourceResult(VSOBaseModel):
+class ReadResourceResult(G8eBaseModel):
     contents: list[ResourceContent]

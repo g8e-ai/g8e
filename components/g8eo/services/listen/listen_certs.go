@@ -95,7 +95,7 @@ func (cs *CertStore) EnsureCerts(extraIPs []net.IP) error {
 		if err := cs.generateCA(caKeyPath, caCertPath); err != nil {
 			return fmt.Errorf("CA generation failed: %w", err)
 		}
-		// Mirror ca.crt to ssl root for g8ee/VSOD consumers
+		// Mirror ca.crt to ssl root for g8ee/g8ed consumers
 		caCertPEM, err := os.ReadFile(caCertPath)
 		if err != nil {
 			return fmt.Errorf("failed to read generated CA cert: %w", err)
@@ -279,7 +279,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		return err
 	}
 
-	dnsNames := []string{"g8e.local", "localhost", "vsodb", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.VSOD}
+	dnsNames := []string{"g8e.local", "localhost", "g8es", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	now := time.Now().UTC()

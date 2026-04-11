@@ -12,12 +12,12 @@
 # limitations under the License.
 
 """
-DBClient — VSODB Document Store shim.
+DBClient — g8es Document Store shim.
 
-Wraps the VSODB (Operator --listen mode) Document Store HTTP API.
-No local database — every call goes to VSODB over HTTP.
+Wraps the g8es (Operator --listen mode) Document Store HTTP API.
+No local database — every call goes to g8es over HTTP.
 
-VSODB endpoints:
+g8es endpoints:
     GET    /db/{collection}/{id}       → get document
     PUT    /db/{collection}/{id}       → set (create/replace) document
     PATCH  /db/{collection}/{id}       → update (merge) document
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 
 class DBClient:
-    """HTTP shim over the VSODB Document Store API."""
+    """HTTP shim over the g8es Document Store API."""
 
     def __init__(
         self, 
@@ -73,7 +73,7 @@ class DBClient:
         self._session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
-        """Verify connectivity to the VSODB Document Store service."""
+        """Verify connectivity to the g8es Document Store service."""
         try:
             # Document store doesn't have a dedicated /health yet, but we can check the base URL
             # or just assume session creation is enough for now, but to match KVCacheClient:
@@ -110,7 +110,7 @@ class DBClient:
             if resp.status == 404:
                 return None
             if resp.status >= 400:
-                raise NetworkError(f"VSODB HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
 
     async def _request_list(self, method: str, path: str, **kwargs: Any) -> list[dict[str, object]]:
@@ -122,7 +122,7 @@ class DBClient:
             if resp.status == 404:
                 return []
             if resp.status >= 400:
-                raise NetworkError(f"VSODB HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
             return json.loads(text)
 
     async def _request_void(self, method: str, path: str, **kwargs: Any) -> None:
@@ -132,7 +132,7 @@ class DBClient:
         async with session.request(method, url, **kwargs) as resp:
             if resp.status >= 400:
                 text = await resp.text()
-                raise NetworkError(f"VSODB HTTP {resp.status}: {text}", component="g8ee")
+                raise NetworkError(f"g8ed HTTP {resp.status}: {text}", component="g8ee")
 
     async def close(self) -> None:
         try:
@@ -258,7 +258,7 @@ class DBClient:
         """POST /db/{collection}/_query.
 
         Translates the order_by dict (e.g. {"created_at": "desc"})
-        into the VSODB wire format ("created_at DESC").
+        into the g8es wire format ("created_at DESC").
         """
         try:
             body: dict[str, object] = {}

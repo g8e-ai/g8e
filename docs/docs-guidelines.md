@@ -42,7 +42,7 @@ docs/
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
 ├── architecture/         # Cross-component internals: storage, security, AI agents
-├── components/           # Per-component reference: g8eo, g8ee, VSOD, VSODB, g8ep
+├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
 
@@ -57,11 +57,11 @@ docs/
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/vsodb.md` | `vsod.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
-| KV key namespace and patterns | `docs/components/vsodb.md` | `vsod.md`, `g8ee.md` |
-| `VSOHttpContext` internal HTTP header full listing | `docs/components/vsod.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `vsodb.md`, `g8ee.md`, `vsod.md` |
-| Heartbeat end-to-end flow | `docs/components/vsod.md` | `g8eo.md`, `g8ee.md` |
+| Pub/sub channel names and wire format | `docs/components/g8es.md` | `g8ed.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
+| KV key namespace and patterns | `docs/components/g8es.md` | `g8ed.md`, `g8ee.md` |
+| `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
+| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `g8es.md`, `g8ee.md`, `g8ed.md` |
+| Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
 | Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
@@ -101,11 +101,11 @@ One or two sentence summary of what this document covers and who it is for.
 ## Writing Style
 
 - Write in the present tense — "g8eo sends a heartbeat every 30 seconds", not "g8eo will send".
-- Use active voice — "VSOD validates the session", not "the session is validated by VSOD".
+- Use active voice — "g8ed validates the session", not "the session is validated by g8ed".
 - Be direct and specific — avoid vague terms like "handles", "manages", "deals with".
 - No filler phrases — "Note that", "Please be aware", "It is important to".
 - No emojis anywhere in documentation.
-- Refer to components by their canonical names: g8eo, g8ee, VSOD, VSODB.
+- Refer to components by their canonical names: g8eo, g8ee, g8ed, g8es.
 
 ---
 

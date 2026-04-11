@@ -27,11 +27,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestPortService(t *testing.T) (*PortService, *MockVSODBPubSubClient) {
+func newTestPortService(t *testing.T) (*PortService, *MockG8esPubSubClient) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 	return NewPortService(cfg, logger, db), db
 }

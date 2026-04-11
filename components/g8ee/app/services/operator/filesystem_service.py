@@ -35,12 +35,12 @@ from app.services.mcp.adapter import build_tool_call_request
 from app.constants.events import (
     EventType,
 )
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.command_payloads import FsListArgs, FsReadArgs
 from app.models.operators import OperatorDocument, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
@@ -65,10 +65,10 @@ class OperatorFilesystemService:
         self,
         args: FsListArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FsListToolResult:
-        if vso_context is None:
-             raise ValidationError("vso_context is required", field="vso_context", constraint="required")
+        if g8e_context is None:
+             raise ValidationError("g8e_context is required", field="g8e_context", constraint="required")
 
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
@@ -89,34 +89,34 @@ class OperatorFilesystemService:
                 request_id=execution_id,
             )
 
-            vso_message = VSOMessage(
+            g8e_message = G8eMessage(
                 id=execution_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.FS_LIST,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
                 operator_id=resolved_operator.operator_id,
                 payload=mcp_payload,
             )
 
             # Notify start
-            await self.execution_service.vsod_event_service.publish_command_event(
+            await self.execution_service.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_FILESYSTEM_LIST_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"ls {args.path}",
                     execution_id=execution_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FS_LIST,
             )
 
             internal_result = await self.execution_service.execute(
-                vso_message=vso_message,
-                vso_context=vso_context,
+                g8e_message=g8e_message,
+                g8e_context=g8e_context,
                 timeout_seconds=60,
             )
 
@@ -134,7 +134,7 @@ class OperatorFilesystemService:
                 else EventType.OPERATOR_FILESYSTEM_LIST_FAILED
             )
 
-            await self.execution_service.vsod_event_service.publish_command_event(
+            await self.execution_service.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
@@ -145,7 +145,7 @@ class OperatorFilesystemService:
                     operator_id=resolved_operator.operator_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FS_LIST,
             )
 
@@ -162,10 +162,10 @@ class OperatorFilesystemService:
         self,
         args: FsReadArgs,
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
-        if vso_context is None:
-             raise ValidationError("vso_context is required", field="vso_context", constraint="required")
+        if g8e_context is None:
+             raise ValidationError("g8e_context is required", field="g8e_context", constraint="required")
 
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
@@ -186,34 +186,34 @@ class OperatorFilesystemService:
                 request_id=execution_id,
             )
 
-            vso_message = VSOMessage(
+            g8e_message = G8eMessage(
                 id=execution_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.FS_READ,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
                 operator_id=resolved_operator.operator_id,
                 payload=mcp_payload,
             )
 
             # Notify start
-            await self.execution_service.vsod_event_service.publish_command_event(
+            await self.execution_service.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_FILESYSTEM_READ_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"cat {args.path}",
                     execution_id=execution_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FS_READ,
             )
 
             internal_result = await self.execution_service.execute(
-                vso_message=vso_message,
-                vso_context=vso_context,
+                g8e_message=g8e_message,
+                g8e_context=g8e_context,
                 timeout_seconds=60,
             )
 
@@ -231,7 +231,7 @@ class OperatorFilesystemService:
                 else EventType.OPERATOR_FILESYSTEM_READ_FAILED
             )
 
-            await self.execution_service.vsod_event_service.publish_command_event(
+            await self.execution_service.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
@@ -242,7 +242,7 @@ class OperatorFilesystemService:
                     operator_id=resolved_operator.operator_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
-                vso_context,
+                g8e_context,
                 task_id=AITaskId.FS_READ,
             )
 

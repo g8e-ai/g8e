@@ -26,7 +26,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// pubsubEvent is the wire format for VSODB pub/sub WebSocket messages
+// pubsubEvent is the wire format for g8es pub/sub WebSocket messages
 type pubsubEvent struct {
 	Type    string          `json:"type"`
 	Channel string          `json:"channel"`
@@ -40,39 +40,39 @@ type pubsubAction struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// TestPubSubAvailable checks if the VSOD pub/sub gateway is reachable.
-// Fatally fails the test when VSOD is unavailable — all callers are integration
+// TestPubSubAvailable checks if the g8ed pub/sub gateway is reachable.
+// Fatally fails the test when g8ed is unavailable — all callers are integration
 // tests that require a live stack.
 func TestPubSubAvailable(t *testing.T) {
 	t.Helper()
-	wsURL := GetTestVSODBDirectURL() + "/ws/pubsub"
+	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("VSOD pub/sub TLS setup failed: %v", err)
+		t.Fatalf("g8ed pub/sub TLS setup failed: %v", err)
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("VSOD pub/sub not available at %s: %v", GetTestVSODBDirectURL(), err)
+		t.Fatalf("g8ed pub/sub not available at %s: %v", GetTestG8esDirectURL(), err)
 	}
 	ws.Close()
 }
 
-// SubscribeToChannel subscribes to a VSODB pub/sub channel and returns a channel for receiving raw JSON payloads.
+// SubscribeToChannel subscribes to a g8es pub/sub channel and returns a channel for receiving raw JSON payloads.
 // baseURL is accepted for API compatibility but ignored — subscriptions always go to the
-// VSODB pub/sub endpoint at GetTestVSODBDirectURL() using the TLS-aware dialer.
+// g8es pub/sub endpoint at GetTestG8esDirectURL() using the TLS-aware dialer.
 // The subscription runs until the test ends (via t.Cleanup).
 func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 	t.Helper()
 
-	wsURL := GetTestVSODBDirectURL() + "/ws/pubsub"
+	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for VSODB pub/sub: %v", err)
+		t.Fatalf("Failed to build TLS dialer for g8es pub/sub: %v", err)
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("Failed to connect to VSODB pub/sub at %s: %v", wsURL, err)
+		t.Fatalf("Failed to connect to g8es pub/sub at %s: %v", wsURL, err)
 	}
 
 	subMsg := pubsubAction{Action: constants.PubSubActionSubscribe, Channel: channel}
@@ -115,14 +115,14 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 	return out
 }
 
-// PublishTestMessage publishes a message to a pub/sub channel via the VSOD WebSocket gateway.
-// VSOD is the single external entry point — VSODB is not directly accessible from outside
+// PublishTestMessage publishes a message to a pub/sub channel via the g8ed WebSocket gateway.
+// g8ed is the single external entry point — g8es is not directly accessible from outside
 // the docker network. baseURL is accepted for API compatibility but ignored; all publishes
-// go through GetTestVSODBDirectURL() (VSOD:443) which proxies to VSODB internally.
+// go through GetTestG8esDirectURL() (g8ed:443) which proxies to g8es internally.
 func PublishTestMessage(t *testing.T, _ string, channel string, message string) {
 	t.Helper()
 
-	wsURL := GetTestVSODBDirectURL() + "/ws/pubsub"
+	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
@@ -130,7 +130,7 @@ func PublishTestMessage(t *testing.T, _ string, channel string, message string) 
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("Failed to connect to VSOD pub/sub for publish on channel %s: %v", channel, err)
+		t.Fatalf("Failed to connect to g8ed pub/sub for publish on channel %s: %v", channel, err)
 	}
 	defer ws.Close()
 

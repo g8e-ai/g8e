@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-KVCacheClient — HTTP-based Key-Value client for VSODB.
+KVCacheClient — HTTP-based Key-Value client for g8es.
 
 Talks to the Operator in --listen mode via HTTP (KV store).
 API: get, set, delete, exists, expire, ttl, keys,
@@ -47,7 +47,7 @@ def _encode_key(key: str) -> str:
 
 class KVCacheClient:
     """
-    Async HTTP client for the VSODB KV store.
+    Async HTTP client for the g8es KV store.
     """
 
     def __init__(
@@ -121,7 +121,7 @@ class KVCacheClient:
             )
 
     async def connect(self) -> bool:
-        """Verify connectivity to the VSODB KV service."""
+        """Verify connectivity to the g8es KV service."""
         try:
             result = await self._request("GET", "/health")
             self._healthy = result.get("status") == "ok"

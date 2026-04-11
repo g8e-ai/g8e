@@ -19,7 +19,7 @@ from starlette.responses import Response
 
 from app.constants import ComponentName
 from app.errors import AuthorizationError, ResourceNotFoundError, ServiceUnavailableError
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,9 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
 
-        vso_context = self._extract_vso_context(request)
+        g8e_context = self._extract_g8e_context(request)
 
-        if vso_context and self._is_user_scoped_path(request.url.path):
+        if g8e_context and self._is_user_scoped_path(request.url.path):
             query_params = dict(request.query_params)
             path_params = request.path_params if hasattr(request, "path_params") else {}
 
@@ -56,11 +56,11 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
             )
 
             if user_id_in_request:
-                if user_id_in_request != vso_context.user_id:
+                if user_id_in_request != g8e_context.user_id:
                     logger.error(
                         "AUTHORIZATION VIOLATION: User attempted to access another user's data",
                         extra={
-                            "authenticated_user_id": vso_context.user_id,
+                            "authenticated_user_id": g8e_context.user_id,
                             "requested_user_id": user_id_in_request,
                             "path": request.url.path,
                             "method": request.method,
@@ -81,7 +81,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 await self._validate_investigation_ownership(
                     request,
                     investigation_id,
-                    vso_context.user_id
+                    g8e_context.user_id
                 )
 
             case_id = (
@@ -93,15 +93,15 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 await self._validate_case_ownership(
                     request,
                     case_id,
-                    vso_context.user_id
+                    g8e_context.user_id
                 )
 
         response = await call_next(request)
         return response
 
-    def _extract_vso_context(self, request: Request) -> VSOHttpContext | None:
-        if hasattr(request.state, "vso_context"):
-            return request.state.vso_context
+    def _extract_g8e_context(self, request: Request) -> G8eHttpContext | None:
+        if hasattr(request.state, "g8e_context"):
+            return request.state.g8e_context
         return None
 
     def _is_user_scoped_path(self, path: str) -> bool:

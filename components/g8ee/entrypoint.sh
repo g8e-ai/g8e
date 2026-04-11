@@ -1,29 +1,29 @@
 #!/bin/sh
-# g8ee Entrypoint script - waits for VSODB then starts the application
+# g8ee Entrypoint script - waits for g8es then starts the application
 
 set -e
 
-SSL_DIR="/vsodb"
+SSL_DIR="/g8es"
 
-# Wait for VSODB to be ready
-echo "[G8EE-ENTRYPOINT] Waiting for VSODB health check..."
+# Wait for g8es to be ready
+echo "[G8EE-ENTRYPOINT] Waiting for g8es health check..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    # Check if VSODB is responding on the health endpoint
+    # Check if g8es is responding on the health endpoint
     # The health endpoint is now open without a token.
-    if curl -s --cacert "${SSL_DIR}/ca.crt" https://vsodb:9000/health > /dev/null; then
-        echo "[G8EE-ENTRYPOINT] VSODB is ready"
+    if curl -s --cacert "${SSL_DIR}/ca.crt" https://g8es:9000/health > /dev/null; then
+        echo "[G8EE-ENTRYPOINT] g8es is ready"
         break
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
-    echo "[G8EE-ENTRYPOINT] VSODB not ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), waiting 2s..."
+    echo "[G8EE-ENTRYPOINT] g8es not ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), waiting 2s..."
     sleep 2
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo "[G8EE-ENTRYPOINT] ERROR: VSODB health check failed after $MAX_RETRIES attempts"
+    echo "[G8EE-ENTRYPOINT] ERROR: g8es health check failed after $MAX_RETRIES attempts"
     exit 1
 fi
 

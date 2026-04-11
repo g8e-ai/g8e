@@ -42,7 +42,7 @@ from app.services.operator.operator_data_service import OperatorDataService
 from tests.fakes.factories import (
     build_bound_operator,
     build_operator_document,
-    build_vso_http_context,
+    build_g8e_http_context,
 )
 
 pytestmark = pytest.mark.unit
@@ -131,14 +131,14 @@ class TestCallTool:
             output="hello world",
         ))
 
-        ctx = build_vso_http_context(
+        ctx = build_g8e_http_context(
             bound_operators=[build_bound_operator(operator_id="op-1")]
         )
 
         result = await gateway.call_tool(
             tool_name=OperatorToolName.RUN_COMMANDS,
             arguments={"command": "echo hello"},
-            vso_context=ctx,
+            g8e_context=ctx,
         )
 
         assert result["isError"] is False
@@ -157,12 +157,12 @@ class TestCallTool:
             error="No operators available",
         ))
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         result = await gateway.call_tool(
             tool_name=OperatorToolName.RUN_COMMANDS,
             arguments={"command": "ls"},
-            vso_context=ctx,
+            g8e_context=ctx,
         )
 
         assert result["isError"] is True
@@ -180,13 +180,13 @@ class TestCallTool:
 
         tool_service.execute_tool = AsyncMock(side_effect=_hang_forever)
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         with patch("app.services.mcp.gateway_service.MCP_TOOL_CALL_TIMEOUT_SECONDS", 0.05):
             result = await gateway.call_tool(
                 tool_name=OperatorToolName.RUN_COMMANDS,
                 arguments={"command": "ls"},
-                vso_context=ctx,
+                g8e_context=ctx,
             )
 
         assert result["isError"] is True
@@ -206,13 +206,13 @@ class TestCallTool:
 
         tool_service.execute_tool = AsyncMock(side_effect=_hang_forever)
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         with patch("app.services.mcp.gateway_service.MCP_TOOL_CALL_TIMEOUT_SECONDS", 0.05):
             await gateway.call_tool(
                 tool_name="some_tool",
                 arguments={},
-                vso_context=ctx,
+                g8e_context=ctx,
             )
 
         tool_service.reset_invocation_context.assert_called_once_with("token")
@@ -225,13 +225,13 @@ class TestCallTool:
         tool_service.reset_invocation_context = MagicMock()
         tool_service.execute_tool = AsyncMock(side_effect=RuntimeError("boom"))
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         with pytest.raises(RuntimeError, match="boom"):
             await gateway.call_tool(
                 tool_name="bad_tool",
                 arguments={},
-                vso_context=ctx,
+                g8e_context=ctx,
             )
 
         tool_service.reset_invocation_context.assert_called_once_with("token")
@@ -249,7 +249,7 @@ class TestBuildInvestigationContext:
         op_doc = build_operator_document(operator_id="op-1", user_id="u-1")
         operator_data_service.get_operator = AsyncMock(return_value=op_doc)
 
-        ctx = build_vso_http_context(
+        ctx = build_g8e_http_context(
             bound_operators=[build_bound_operator(operator_id="op-1")]
         )
 
@@ -264,7 +264,7 @@ class TestBuildInvestigationContext:
 
         operator_data_service.get_operator = AsyncMock()
 
-        ctx = build_vso_http_context(
+        ctx = build_g8e_http_context(
             bound_operators=[
                 build_bound_operator(operator_id="op-1", status=OperatorStatus.AVAILABLE),
             ]
@@ -280,7 +280,7 @@ class TestBuildInvestigationContext:
 
         operator_data_service.get_operator = AsyncMock(return_value=None)
 
-        ctx = build_vso_http_context(
+        ctx = build_g8e_http_context(
             bound_operators=[build_bound_operator(operator_id="op-missing")]
         )
 
@@ -293,7 +293,7 @@ class TestBuildInvestigationContext:
 
         operator_data_service.get_operator = AsyncMock(return_value=None)
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         investigation = await gateway._build_investigation_context(ctx)
 
@@ -304,7 +304,7 @@ class TestBuildInvestigationContext:
 
         operator_data_service.get_operator = AsyncMock(return_value=None)
 
-        ctx = build_vso_http_context()
+        ctx = build_g8e_http_context()
 
         investigation = await gateway._build_investigation_context(ctx, sentinel_mode=False)
 

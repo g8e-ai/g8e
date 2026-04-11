@@ -28,13 +28,13 @@ from app.services.investigation.memory_data_service import MemoryDataService
 from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
-from tests.fakes.fake_vsodb_clients import FakeKVClient, FakeDBClient, FakePubSubClient
+from tests.fakes.fake_g8es_clients import FakeKVClient, FakeDBClient, FakePubSubClient
 from .fake_execution_registry import FakeExecutionRegistry
 from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
 from .fake_investigation_service import FakeInvestigationService
-from .fake_vsod_client import FakeVSODClient
+from .fake_g8ed_client import FakeG8edClient
 from .fake_pubsub_service import FakePubSubService
 from .fake_operator_cache import FakeOperatorCache
 
@@ -119,7 +119,7 @@ def build_command_service(
     event_service: FakeEventService | None = None,
     db_service: FakeDBService | None = None,
     ai_response_analyzer: FakeAIResponseAnalyzer | None = None,
-    vsod_client: FakeVSODClient | None = None,
+    g8ed_client: FakeG8edClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
     execution_registry: FakeExecutionRegistry | None = None,
     pubsub_client: FakePubSubClient | None = None,
@@ -133,7 +133,7 @@ def build_command_service(
     or assert on. Omitted deps default to a fresh fake with sensible defaults.
     """
     cache_aside_service = create_mock_cache_aside_service()
-    internal_http_client = vsod_client or FakeVSODClient()
+    internal_http_client = g8ed_client or FakeG8edClient()
     
     # Ensure all required fakes are present
     event_service = event_service or FakeEventService()
@@ -149,7 +149,7 @@ def build_command_service(
     svc = OperatorCommandService.build(
         cache_aside_service=cache_aside_service,
         operator_data_service=operator_data_service,
-        vsod_event_service=event_service,
+        g8ed_event_service=event_service,
         execution_registry=execution_registry,
         settings=settings,
         ai_response_analyzer=ai_response_analyzer,
@@ -170,13 +170,13 @@ def build_intent_service(
     execution_service: FakeExecutionService | None = None,
     event_service: FakeEventService | None = None,
     investigation_service: FakeInvestigationService | None = None,
-    vsod_client: FakeVSODClient | None = None,
+    g8ed_client: FakeG8edClient | None = None,
 ) -> OperatorIntentService:
     """Build an OperatorIntentService with typed fakes for all dependencies."""
     return OperatorIntentService(
         approval_service=approval_service or FakeApprovalService(),
         execution_service=execution_service or FakeExecutionService(),
-        vsod_event_service=event_service or FakeEventService(),
+        g8ed_event_service=event_service or FakeEventService(),
         investigation_service=investigation_service or FakeInvestigationService(),
-        vsod_client=vsod_client or FakeVSODClient(),
+        g8ed_client=g8ed_client or FakeG8edClient(),
     )

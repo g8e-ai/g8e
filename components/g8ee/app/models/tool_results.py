@@ -34,10 +34,10 @@ from app.constants import (
     NetworkProtocol,
     RiskLevel,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class FsListEntry(VSOBaseModel):
+class FsListEntry(G8eBaseModel):
     """A single directory entry returned by an fs_list operation.
 
     Canonical shape: shared/models/wire/result_payloads.json fs_list_result entries items.
@@ -56,7 +56,7 @@ class FsListEntry(VSOBaseModel):
     nlink: int | None = None
 
 
-class AuditFileMutation(VSOBaseModel):
+class AuditFileMutation(G8eBaseModel):
     """A single file mutation record embedded in an AuditEvent.
 
     Canonical shape: shared/models/wire/result_payloads.json fetch_history_result events file_mutations items.
@@ -69,7 +69,7 @@ class AuditFileMutation(VSOBaseModel):
     diff_stat: str | None = None
 
 
-class AuditEvent(VSOBaseModel):
+class AuditEvent(G8eBaseModel):
     """A single audit event record returned by fetch_session_history.
 
     Canonical shape: shared/models/wire/result_payloads.json fetch_history_result events items.
@@ -90,7 +90,7 @@ class AuditEvent(VSOBaseModel):
     file_mutations: list[AuditFileMutation] = Field(default_factory=list)
 
 
-class FileHistoryEntry(VSOBaseModel):
+class FileHistoryEntry(G8eBaseModel):
     """A single commit history entry returned by fetch_file_history.
 
     Canonical shape: shared/models/wire/result_payloads.json fetch_file_history_result history items.
@@ -100,7 +100,7 @@ class FileHistoryEntry(VSOBaseModel):
     message: str
 
 
-class CommandInternalResult(VSOBaseModel):
+class CommandInternalResult(G8eBaseModel):
     """Typed result returned by _execute_command_internal — the pub/sub wire boundary.
 
     Built from the raw operator response once it arrives over the pub/sub channel.
@@ -136,27 +136,27 @@ class CommandInternalResult(VSOBaseModel):
         return "\n".join(first) + f"\n\n... [{middle_count} lines truncated] ...\n\n" + "\n".join(last)
 
 
-class CommandRiskContext(VSOBaseModel):
+class CommandRiskContext(G8eBaseModel):
     working_directory: str = Field(default="", description="Working directory for the command")
     git_status: str = Field(default="", description="Git repository status")
 
 
-class ErrorAnalysisContext(VSOBaseModel):
+class ErrorAnalysisContext(G8eBaseModel):
     retry_count: int = Field(default=0, description="Number of retry attempts so far")
     working_directory: str = Field(default="", description="Working directory when the error occurred")
     execution_id: str | None = Field(default=None, description="Execution ID for correlation")
 
 
-class FileOperationRiskContext(VSOBaseModel):
+class FileOperationRiskContext(G8eBaseModel):
     git_status: str = Field(default="", description="Git repository status")
     backup_available: bool = Field(default=False, description="Whether a backup exists for the target file")
 
 
-class CommandRiskAnalysis(VSOBaseModel):
+class CommandRiskAnalysis(G8eBaseModel):
     risk_level: RiskLevel = Field(description="Classified risk level")
 
 
-class ErrorAnalysisResult(VSOBaseModel):
+class ErrorAnalysisResult(G8eBaseModel):
     error_category: ErrorAnalysisCategory = Field(description="LLM-classified failure category")
     root_cause: str = Field(description="Brief root cause analysis")
     can_auto_fix: bool = Field(description="Whether the error can be automatically fixed")
@@ -167,7 +167,7 @@ class ErrorAnalysisResult(VSOBaseModel):
     user_message: str = Field(description="Brief message to show the user")
 
 
-class FileOperationRiskAnalysis(VSOBaseModel):
+class FileOperationRiskAnalysis(G8eBaseModel):
     risk_level: RiskLevel = Field(description="Classified risk level")
     is_system_file: bool | None = Field(default=None, description="Whether the target is a system file")
     safe_to_proceed: bool = Field(default=True, description="Whether the operation is safe to proceed")
@@ -176,7 +176,7 @@ class FileOperationRiskAnalysis(VSOBaseModel):
 
 
 
-class FileEditResult(VSOBaseModel):
+class FileEditResult(G8eBaseModel):
     """Result returned by FileEditMixin._execute_file_edit."""
     success: bool = True
     error: str | None = None
@@ -193,7 +193,7 @@ class FileEditResult(VSOBaseModel):
     risk_analysis: FileOperationRiskAnalysis | None = None
 
 
-class PortCheckToolResult(VSOBaseModel):
+class PortCheckToolResult(G8eBaseModel):
     """Result returned by PortOperationsMixin._execute_port_check."""
     success: bool = True
     error: str | None = None
@@ -205,7 +205,7 @@ class PortCheckToolResult(VSOBaseModel):
     latency_ms: float | None = None
 
 
-class FsListToolResult(VSOBaseModel):
+class FsListToolResult(G8eBaseModel):
     """Result returned by FilesystemMixin._execute_fs_list."""
     success: bool = True
     error: str | None = None
@@ -216,7 +216,7 @@ class FsListToolResult(VSOBaseModel):
     truncated: bool = False
 
 
-class FsReadToolResult(VSOBaseModel):
+class FsReadToolResult(G8eBaseModel):
     """Result returned by FilesystemMixin._execute_fs_read."""
     success: bool = True
     error: str | None = None
@@ -227,7 +227,7 @@ class FsReadToolResult(VSOBaseModel):
     truncated: bool = False
 
 
-class FetchLogsToolResult(VSOBaseModel):
+class FetchLogsToolResult(G8eBaseModel):
     """Result returned by ExecutionLogMixin._execute_fetch_logs."""
     success: bool = True
     error: str | None = None
@@ -242,7 +242,7 @@ class FetchLogsToolResult(VSOBaseModel):
     timestamp: datetime | None = None
 
 
-class AuditSessionMetadata(VSOBaseModel):
+class AuditSessionMetadata(G8eBaseModel):
     """Session metadata returned by fetch_session_history.
 
     Canonical shape: shared/models/wire/result_payloads.json fetch_history_result.session.
@@ -253,7 +253,7 @@ class AuditSessionMetadata(VSOBaseModel):
     user_identity: str
 
 
-class FileDiffEntry(VSOBaseModel):
+class FileDiffEntry(G8eBaseModel):
     """Single file diff record from the operator ledger.
 
     Canonical shape: shared/models/wire/result_payloads.json file_diff_entry.
@@ -270,7 +270,7 @@ class FileDiffEntry(VSOBaseModel):
     operator_session_id: str
 
 
-class FetchHistoryToolResult(VSOBaseModel):
+class FetchHistoryToolResult(G8eBaseModel):
     """Result returned by AuditHistoryMixin._execute_fetch_history."""
     success: bool = True
     error: str | None = None
@@ -283,7 +283,7 @@ class FetchHistoryToolResult(VSOBaseModel):
     offset: int = 0
 
 
-class FetchFileHistoryToolResult(VSOBaseModel):
+class FetchFileHistoryToolResult(G8eBaseModel):
     """Result returned by AuditHistoryMixin._execute_fetch_file_history."""
     success: bool = True
     error: str | None = None
@@ -292,7 +292,7 @@ class FetchFileHistoryToolResult(VSOBaseModel):
     history: list[FileHistoryEntry] = Field(default_factory=list)
 
 
-class RestoreFileToolResult(VSOBaseModel):
+class RestoreFileToolResult(G8eBaseModel):
     """Result returned by LedgerMirrorMixin._execute_restore_file."""
     success: bool = True
     error: str | None = None
@@ -302,7 +302,7 @@ class RestoreFileToolResult(VSOBaseModel):
     message: str | None = None
 
 
-class FetchFileDiffToolResult(VSOBaseModel):
+class FetchFileDiffToolResult(G8eBaseModel):
     """Result returned by LedgerMirrorMixin._execute_fetch_file_diff."""
     success: bool = True
     error: str | None = None
@@ -313,19 +313,19 @@ class FetchFileDiffToolResult(VSOBaseModel):
     operator_session_id: str | None = None
 
 
-class IamIntentResult(VSOBaseModel):
+class IamIntentResult(G8eBaseModel):
     """Result of a single IAM policy attach/detach operation for one intent."""
     intent: str
     result: Optional["CommandInternalResult"] = None
 
 
-class FailedIntentResult(VSOBaseModel):
+class FailedIntentResult(G8eBaseModel):
     """A single intent that failed during IAM policy attach/detach."""
     intent: str
     error: str
 
 
-class IntentPermissionResult(VSOBaseModel):
+class IntentPermissionResult(G8eBaseModel):
     """Result returned by _execute_intent_permission_request and _execute_intent_revocation."""
     success: bool = True
     error: str | None = None
@@ -351,14 +351,14 @@ class IntentPermissionResult(VSOBaseModel):
     revoked_intents: list[str] | None = None
 
 
-class WebSearchResultItem(VSOBaseModel):
+class WebSearchResultItem(G8eBaseModel):
     """A single item returned by the Google Custom Search API."""
     title: str = Field(default="", description="Result page title")
     link: str = Field(default="", description="Result page URL")
     snippet: str = Field(default="", description="Snippet of matching content")
 
 
-class SearchWebResult(VSOBaseModel):
+class SearchWebResult(G8eBaseModel):
     """Result returned by the search_web tool executor."""
     success: bool = True
     error: str | None = None
@@ -368,7 +368,7 @@ class SearchWebResult(VSOBaseModel):
     total_results: str | None = None
 
 
-class CommandExecutionResult(VSOBaseModel):
+class CommandExecutionResult(G8eBaseModel):
     """Typed result returned by _execute_g8eo_command through the entire call chain.
 
     Replaces all Dict[str, Any] returns from command_executor -> tool_executor -> agent.
@@ -408,7 +408,7 @@ class CommandExecutionResult(VSOBaseModel):
     rule: str | None = Field(default=None)
 
 
-class TokenUsage(VSOBaseModel):
+class TokenUsage(G8eBaseModel):
     """Token usage reported by the LLM for a streaming response."""
     input_tokens: int = 0
     output_tokens: int = 0

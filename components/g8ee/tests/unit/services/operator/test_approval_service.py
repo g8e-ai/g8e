@@ -37,7 +37,7 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.events import SessionEvent
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.tool_results import RiskLevel
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.protocols import (
@@ -53,30 +53,30 @@ class TestOperatorApprovalServiceInit:
 
     def test_constructor_with_dependencies(self):
         """Constructor accepts all required protocol dependencies."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
 
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
-        assert service.vsod_event_service is vsod_event_service
+        assert service.g8ed_event_service is g8ed_event_service
         assert service.operator_data_service is operator_data_service
         assert service.investigation_data_service is investigation_data_service
         assert service.get_pending_approvals() == {}
 
     def test_constructor_with_callback(self):
         """Constructor accepts optional on_approval_requested callback."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
 
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -86,11 +86,11 @@ class TestOperatorApprovalServiceInit:
 
     def test_set_on_approval_requested(self):
         """set_on_approval_requested updates the callback."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -106,11 +106,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_success(self):
         """Successfully processes an approval response."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -146,11 +146,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_unknown_approval_id(self):
         """Logs warning for unknown approval_id and returns early."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -167,11 +167,11 @@ class TestHandleApprovalResponse:
 
     async def test_handle_approval_response_missing_approval_id(self):
         """Raises ValidationError when approval_id is empty string."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -193,11 +193,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_filters_by_investigation(self):
         """Marks approvals as feedback only for matching investigation."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -239,11 +239,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_filters_by_user_id(self):
         """Marks approvals as feedback only for matching user."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -285,11 +285,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_skips_responded(self):
         """Skips approvals that already have a response."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -318,11 +318,11 @@ class TestMarkPendingApprovalsAsFeedback:
 
     def test_mark_pending_approvals_as_feedback_no_matching(self):
         """Returns zero when no matching approvals found."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -343,12 +343,12 @@ class TestRequestCommandApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_granted(self, mock_pending_approval_class, mock_generate_approval_id):
         """Successfully requests and receives command approval granted."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -357,7 +357,7 @@ class TestRequestCommandApproval:
         approval_id = "test-approval-id"
         mock_generate_approval_id.return_value = approval_id
 
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -365,7 +365,7 @@ class TestRequestCommandApproval:
             source_component="g8ee",
         )
         request = CommandApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -393,23 +393,23 @@ class TestRequestCommandApproval:
 
         assert result.approved is True
         assert result.approval_id == approval_id
-        assert vsod_event_service.publish.called
+        assert g8ed_event_service.publish.called
         assert callback.called
 
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_rejected(self, mock_pending_approval_class):
         """Successfully requests and receives command approval rejected."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
         approval_id = generate_approval_id()
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -417,7 +417,7 @@ class TestRequestCommandApproval:
             source_component="g8ee",
         )
         request = CommandApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -449,17 +449,17 @@ class TestRequestCommandApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_command_approval_with_risk_analysis(self, mock_pending_approval_class):
         """Command approval with risk analysis logs risk level."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
         approval_id = generate_approval_id()
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -468,7 +468,7 @@ class TestRequestCommandApproval:
         )
         risk_analysis = CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
         request = CommandApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -504,18 +504,18 @@ class TestRequestFileEditApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_file_edit_approval_granted(self, mock_pending_approval_class, mock_generate_approval_id):
         """Successfully requests and receives file edit approval granted."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
         approval_id = "test-approval-id"
         mock_generate_approval_id.return_value = approval_id
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -523,7 +523,7 @@ class TestRequestFileEditApproval:
             source_component="g8ee",
         )
         request = FileEditApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -559,18 +559,18 @@ class TestRequestIntentApproval:
     @patch("app.services.operator.approval_service.PendingApproval")
     async def test_request_intent_approval_granted(self, mock_pending_approval_class, mock_generate_intent_approval_id):
         """Successfully requests and receives intent approval granted."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
         approval_id = "test-intent-approval-id"
         mock_generate_intent_approval_id.return_value = approval_id
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -578,7 +578,7 @@ class TestRequestIntentApproval:
             source_component="g8ee",
         )
         request = IntentApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -608,16 +608,16 @@ class TestRequestIntentApproval:
 
     async def test_request_intent_approval_invalid_intent(self):
         """Returns error result for invalid intent name."""
-        vsod_event_service = AsyncMock(spec=EventServiceProtocol)
+        g8ed_event_service = AsyncMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -625,7 +625,7 @@ class TestRequestIntentApproval:
             source_component="g8ee",
         )
         request = IntentApprovalRequest(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             timeout_seconds=30,
             justification="test justification",
             execution_id="exec-1",
@@ -648,12 +648,12 @@ class TestRegisterPending:
 
     def test_register_pending_with_callback(self):
         """Registers pending approval and calls callback if set."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock()
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -678,11 +678,11 @@ class TestRegisterPending:
 
     def test_register_pending_without_callback(self):
         """Registers pending approval without calling callback when not set."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
@@ -705,12 +705,12 @@ class TestRegisterPending:
 
     def test_register_pending_callback_exception_logged(self):
         """Logs error when callback raises exception."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = MagicMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = MagicMock(spec=InvestigationDataServiceProtocol)
         callback = MagicMock(side_effect=RuntimeError("Callback failed"))
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
             on_approval_requested=callback,
@@ -738,16 +738,16 @@ class TestAudit:
 
     async def test_audit_with_operator_id(self):
         """Records audit to both operator activity_log and conversation_history."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -765,7 +765,7 @@ class TestAudit:
             operator_id="op-1",
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             log_tag="APPROVAL",
         )
 
@@ -774,16 +774,16 @@ class TestAudit:
 
     async def test_audit_without_operator_id(self):
         """Records audit only to conversation_history when operator_id is None."""
-        vsod_event_service = MagicMock(spec=EventServiceProtocol)
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
         operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
         investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
         service = OperatorApprovalService(
-            vsod_event_service=vsod_event_service,
+            g8ed_event_service=g8ed_event_service,
             operator_data_service=operator_data_service,
             investigation_data_service=investigation_data_service,
         )
 
-        vso_context = VSOHttpContext(
+        g8e_context = G8eHttpContext(
             case_id="case-1",
             investigation_id="inv-1",
             web_session_id="session-1",
@@ -801,7 +801,7 @@ class TestAudit:
             operator_id=None,
             event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
             metadata=metadata,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             log_tag="APPROVAL",
         )
 

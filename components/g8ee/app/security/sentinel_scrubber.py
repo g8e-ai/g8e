@@ -39,12 +39,12 @@ sensitive data from reaching the cloud AI.
 import logging
 import re
 
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 logger = logging.getLogger(__name__)
 
 
-class SentinelConfig(VSOBaseModel):
+class SentinelConfig(G8eBaseModel):
     """Configuration for the Sentinel scrubber."""
     enabled: bool = True
     strict_mode: bool = False
@@ -52,7 +52,7 @@ class SentinelConfig(VSOBaseModel):
     log_scrubs: bool = True
 
 
-class ScrubResult(VSOBaseModel):
+class ScrubResult(G8eBaseModel):
     """Result of Sentinel scrubbing."""
     scrubbed_text: str
     was_modified: bool

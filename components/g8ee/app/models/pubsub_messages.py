@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-VSOMessage models for VSODB pub/sub messaging.
+G8eMessage models for g8es pub/sub messaging.
 
-This module defines the standardized message format for all VSO component
-communication via VSODB pub/sub.
+This module defines the standardized message format for all g8e component
+communication via g8es pub/sub.
 """
 
 from datetime import datetime
@@ -26,13 +26,13 @@ from pydantic import Field, field_serializer, field_validator
 
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
 
-from .base import VSOBaseModel, _to_iso_z
+from .base import G8eBaseModel, _to_iso_z
 from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
 
 from app.utils.timestamp import now, parse_iso
 
 
-class ExecutionResultsPayload(VSOBaseModel):
+class ExecutionResultsPayload(G8eBaseModel):
     """Typed payload for operator.command.completed / operator.command.failed."""
     execution_id: str = Field(..., description="Unique execution identifier")
     status: ExecutionStatus = Field(..., description="Final execution status")
@@ -61,7 +61,7 @@ class ExecutionResultsPayload(VSOBaseModel):
         raise ValueError(f"completed_at must be a datetime or ISO string, got {type(v).__name__}")
 
 
-class ExecutionStatusPayload(VSOBaseModel):
+class ExecutionStatusPayload(G8eBaseModel):
     """Typed payload for operator.command.status."""
     execution_id: str = Field(..., description="Unique execution identifier")
     status: ExecutionStatus = Field(..., description="Current execution status")
@@ -73,7 +73,7 @@ class ExecutionStatusPayload(VSOBaseModel):
     stored_locally: bool = Field(False)
 
 
-class CancellationResultPayload(VSOBaseModel):
+class CancellationResultPayload(G8eBaseModel):
     """Typed payload for operator.command.cancelled."""
     execution_id: str = Field(..., description="Unique execution identifier of the cancelled command")
     status: ExecutionStatus = Field(ExecutionStatus.CANCELLED)
@@ -81,7 +81,7 @@ class CancellationResultPayload(VSOBaseModel):
     error_type: str | None = Field(None)
 
 
-class FileEditResultPayload(VSOBaseModel):
+class FileEditResultPayload(G8eBaseModel):
     """Typed payload for operator.file.edit.completed / operator.file.edit.failed."""
     execution_id: str = Field(..., description="Unique execution identifier")
     operation: str = Field(..., description="File operation performed")
@@ -116,7 +116,7 @@ class FileEditResultPayload(VSOBaseModel):
         raise ValueError(f"completed_at must be a datetime or ISO string, got {type(v).__name__}")
 
 
-class FsListResultPayload(VSOBaseModel):
+class FsListResultPayload(G8eBaseModel):
     """Typed payload for operator.fs.list.completed / operator.fs.list.failed."""
     execution_id: str = Field(..., description="Unique execution identifier")
     path: str | None = Field(default=None, description="Resolved absolute path that was listed")
@@ -134,7 +134,7 @@ class FsListResultPayload(VSOBaseModel):
     error_type: str | None = Field(None)
 
 
-class FsReadResultPayload(VSOBaseModel):
+class FsReadResultPayload(G8eBaseModel):
     """Typed payload for operator.fs.read.completed / operator.fs.read.failed."""
     execution_id: str = Field(..., description="Unique execution identifier")
     path: str | None = Field(None)
@@ -152,7 +152,7 @@ class FsReadResultPayload(VSOBaseModel):
     error_type: str | None = Field(None)
 
 
-class FetchLogsResultPayload(VSOBaseModel):
+class FetchLogsResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed."""
     execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
     command: str = Field(default="", description="Original command string")
@@ -178,7 +178,7 @@ class FetchLogsResultPayload(VSOBaseModel):
         raise ValueError(f"timestamp must be a datetime or ISO string, got {type(v).__name__}")
 
 
-class FetchHistoryResultPayload(VSOBaseModel):
+class FetchHistoryResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.history.completed / operator.fetch.history.failed."""
     success: bool = Field(..., description="Whether the fetch succeeded")
     operator_session_id: str | None = Field(default=None, description="Operator session ID that was queried")
@@ -195,7 +195,7 @@ class FetchHistoryResultPayload(VSOBaseModel):
         return v if isinstance(v, list) else []
 
 
-class FetchFileHistoryResultPayload(VSOBaseModel):
+class FetchFileHistoryResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.history.completed / operator.fetch.file.history.failed."""
     success: bool = Field(..., description="Whether the fetch succeeded")
     file_path: str | None = Field(default=None, description="Absolute path of the file queried")
@@ -203,7 +203,7 @@ class FetchFileHistoryResultPayload(VSOBaseModel):
     error: str | None = Field(None)
 
 
-class RestoreFileResultPayload(VSOBaseModel):
+class RestoreFileResultPayload(G8eBaseModel):
     """Typed payload for operator.restore.file.completed / operator.restore.file.failed."""
     success: bool = Field(..., description="Whether the restore succeeded")
     file_path: str | None = Field(default=None, description="Absolute path of the restored file")
@@ -211,7 +211,7 @@ class RestoreFileResultPayload(VSOBaseModel):
     error: str | None = Field(None)
 
 
-class FetchFileDiffResultPayload(VSOBaseModel):
+class FetchFileDiffResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.diff.completed / operator.fetch.file.diff.failed."""
     success: bool = Field(..., description="Whether the fetch succeeded")
     diff: FileDiffEntry | None = Field(default=None, description="Single file diff entry")
@@ -221,7 +221,7 @@ class FetchFileDiffResultPayload(VSOBaseModel):
     error: str | None = Field(None)
 
 
-class PortCheckResultPayload(VSOBaseModel):
+class PortCheckResultPayload(G8eBaseModel):
     """Typed payload for operator.port.check.completed / operator.port.check.failed."""
     execution_id: str | None = Field(default=None, description="Unique execution identifier")
     host: str | None = Field(default=None, description="Target host")
@@ -232,12 +232,12 @@ class PortCheckResultPayload(VSOBaseModel):
     error: str | None = Field(default=None, description="Error message on failure")
 
 
-class ShutdownAckPayload(VSOBaseModel):
+class ShutdownAckPayload(G8eBaseModel):
     """Typed payload for operator.shutdown.acknowledged."""
     status: str = Field("acknowledged")
 
 
-class G8eoHeartbeatSystemIdentity(VSOBaseModel):
+class G8eoHeartbeatSystemIdentity(G8eBaseModel):
     """system_identity block from heartbeat.json."""
     hostname: str | None = None
     os: str | None = None
@@ -248,33 +248,33 @@ class G8eoHeartbeatSystemIdentity(VSOBaseModel):
     memory_mb: int | None = None
 
 
-class NetworkConnectivityStatus(VSOBaseModel):
+class NetworkConnectivityStatus(G8eBaseModel):
     """Single network interface entry from connectivity_status in heartbeat.json."""
     name: str | None = None
     ip: str | None = None
     mtu: int | None = None
 
 
-class G8eoHeartbeatNetworkInfo(VSOBaseModel):
+class G8eoHeartbeatNetworkInfo(G8eBaseModel):
     """network_info block from heartbeat.json."""
     public_ip: str | None = None
     interfaces: list[str] | None = None
     connectivity_status: list[NetworkConnectivityStatus] | None = None
 
 
-class G8eoHeartbeatVersionInfo(VSOBaseModel):
+class G8eoHeartbeatVersionInfo(G8eBaseModel):
     """version_info block from heartbeat.json."""
     operator_version: str | None = None
     status: str | None = None
 
 
-class G8eoHeartbeatUptimeInfo(VSOBaseModel):
+class G8eoHeartbeatUptimeInfo(G8eBaseModel):
     """uptime_info block from heartbeat.json."""
     uptime: str | None = None
     uptime_seconds: int | None = None
 
 
-class G8eoHeartbeatPerformanceMetrics(VSOBaseModel):
+class G8eoHeartbeatPerformanceMetrics(G8eBaseModel):
     """performance_metrics block from heartbeat.json."""
     cpu_percent: float | None = None
     memory_percent: float | None = None
@@ -286,14 +286,14 @@ class G8eoHeartbeatPerformanceMetrics(VSOBaseModel):
     disk_total_gb: float | None = None
 
 
-class G8eoHeartbeatOSDetails(VSOBaseModel):
+class G8eoHeartbeatOSDetails(G8eBaseModel):
     """os_details block from heartbeat.json (ref: system_info.json)."""
     kernel: str | None = None
     distro: str | None = None
     version: str | None = None
 
 
-class G8eoHeartbeatUserDetails(VSOBaseModel):
+class G8eoHeartbeatUserDetails(G8eBaseModel):
     """user_details block from heartbeat.json (ref: system_info.json)."""
     username: str | None = None
     uid: str | None = None
@@ -303,7 +303,7 @@ class G8eoHeartbeatUserDetails(VSOBaseModel):
     shell: str | None = None
 
 
-class G8eoHeartbeatDiskDetails(VSOBaseModel):
+class G8eoHeartbeatDiskDetails(G8eBaseModel):
     """disk_details block from heartbeat.json (ref: system_info.json)."""
     total_gb: float | None = None
     used_gb: float | None = None
@@ -311,7 +311,7 @@ class G8eoHeartbeatDiskDetails(VSOBaseModel):
     percent: float | None = None
 
 
-class G8eoHeartbeatMemoryDetails(VSOBaseModel):
+class G8eoHeartbeatMemoryDetails(G8eBaseModel):
     """memory_details block from heartbeat.json (ref: system_info.json)."""
     total_mb: int | None = None
     available_mb: int | None = None
@@ -319,7 +319,7 @@ class G8eoHeartbeatMemoryDetails(VSOBaseModel):
     percent: float | None = None
 
 
-class G8eoHeartbeatEnvironment(VSOBaseModel):
+class G8eoHeartbeatEnvironment(G8eBaseModel):
     """environment block from heartbeat.json (ref: system_info.json)."""
     pwd: str | None = None
     lang: str | None = None
@@ -331,7 +331,7 @@ class G8eoHeartbeatEnvironment(VSOBaseModel):
     init_system: str | None = None
 
 
-class G8eoHeartbeatFingerprintDetails(VSOBaseModel):
+class G8eoHeartbeatFingerprintDetails(G8eBaseModel):
     """fingerprint_details block from heartbeat.json."""
     os: str | None = None
     architecture: str | None = None
@@ -339,14 +339,14 @@ class G8eoHeartbeatFingerprintDetails(VSOBaseModel):
     machine_id: str | None = None
 
 
-class G8eoHeartbeatCapabilityFlags(VSOBaseModel):
+class G8eoHeartbeatCapabilityFlags(G8eBaseModel):
     """capability_flags block from heartbeat.json."""
     local_storage_enabled: bool = False
     git_available: bool = False
     ledger_enabled: bool = False
 
 
-class G8eoHeartbeatPayload(VSOBaseModel):
+class G8eoHeartbeatPayload(G8eBaseModel):
     """Typed wire model for the g8eo heartbeat pub/sub payload.
 
     Canonical shape defined in shared/models/wire/heartbeat.json.
@@ -407,7 +407,7 @@ G8eoResultPayload = Union[
 ]
 
 
-class G8eoResultEnvelope(VSOBaseModel):
+class G8eoResultEnvelope(G8eBaseModel):
     """Inbound-only envelope parsed from the g8eo results pub/sub channel.
 
     Carries routing fields and a typed payload parsed at the wire boundary.
@@ -424,8 +424,8 @@ class G8eoResultEnvelope(VSOBaseModel):
     payload: G8eoResultPayload | None = Field(default=None, description="Typed payload — always a G8eoResultPayload subclass post-parse")
 
 
-class VSOMessage(VSOBaseModel):
-    """Standardized message for VSODB pub/sub communication between VSO components."""
+class G8eMessage(G8eBaseModel):
+    """Standardized message for g8es pub/sub communication between g8e components."""
 
     id: str = Field(..., description="Unique message identifier")
     timestamp: datetime = Field(default_factory=now, description="When the message was created (UTC)")
@@ -440,14 +440,14 @@ class VSOMessage(VSOBaseModel):
     operator_session_id: str | None = Field(default=None, description="Operator session ID for g8eo Operator identification")
     operator_id: str | None = Field(default=None, description="Operator ID for g8eo Operator identification")
     api_key: str | None = Field(default=None, description="Operator API key carried on pub/sub messages for identity continuity")
-    payload: VSOBaseModel | None = Field(default=None, description="Typed payload for this message")
+    payload: G8eBaseModel | None = Field(default=None, description="Typed payload for this message")
 
     @field_serializer("timestamp")
     def serialize_timestamp(self, dt: datetime) -> str:
         return _to_iso_z(dt)
 
     @field_serializer("payload")
-    def serialize_payload(self, v: VSOBaseModel | None) -> dict | None:
+    def serialize_payload(self, v: G8eBaseModel | None) -> dict | None:
         if v is None:
             return None
         return v.flatten_for_wire()

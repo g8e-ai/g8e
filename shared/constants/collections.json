@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical database collection names shared across g8ee (Python) and VSOD (JS).",
+  "_comment": "Canonical database collection names shared across g8ee (Python) and g8ed (JS).",
 
   "collections": {
     "users": "users",

@@ -32,12 +32,12 @@ from app.services.operator.command_service import OperatorCommandService
 from app.services.service_factory import ServiceFactory
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.models.agent import AgentStreamContext
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import (
     build_enriched_context,
-    build_vso_http_context,
+    build_g8e_http_context,
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.slow]
@@ -66,7 +66,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
-    event_service = all_services['vsod_event_service']
+    event_service = all_services['g8ed_event_service']
     operator_command_service = all_services['operator_command_service']
     tool_executor = all_services['tool_executor']
     agent = all_services['g8e_agent']
@@ -91,8 +91,8 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         operator_documents=[],
     )
     
-    # Create VSO HTTP context
-    vso_context = build_vso_http_context(
+    # Create g8e HTTP context
+    g8e_context = build_g8e_http_context(
         case_id="case-puzzle-1",
         investigation_id="inv-puzzle-1",
         web_session_id="ws-puzzle-1",
@@ -106,7 +106,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         investigation_id="inv-puzzle-1",
         web_session_id="ws-puzzle-1",
         agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         user_id="user-puzzle-1",
         investigation=investigation_ctx,
         request_settings=G8eeUserSettings(llm=LLMSettings()),
@@ -142,7 +142,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         model_name=model_name,
         agent_streaming_context=agent_ctx,
         context=agent_ctx,
-        vsod_event_service=event_service,
+        g8ed_event_service=event_service,
         llm_provider=llm_provider,
     )
     

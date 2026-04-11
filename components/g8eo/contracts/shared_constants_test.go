@@ -286,7 +286,7 @@ type sharedVersionStabilityValues struct {
 type sharedComponentNameValues struct {
 	G8EE string `json:"g8ee"`
 	G8EO string `json:"g8eo"`
-	VSOD string `json:"vsod"`
+	G8ED string `json:"g8ed"`
 }
 
 type sharedPlatformValues struct {
@@ -410,18 +410,18 @@ type sharedPubSubJSON struct {
 // ---------------------------------------------------------------------------
 
 type sharedHeadersJSON struct {
-	VSOSessionID       string `json:"x-vso.session-id"`
-	VSOUserID          string `json:"x-vso.user-id"`
-	VSOOrganizationID  string `json:"x-vso.organization-id"`
-	VSOCaseID          string `json:"x-vso.case-id"`
-	VSOInvestigationID string `json:"x-vso.investigation-id"`
-	VSOTaskID          string `json:"x-vso.task-id"`
-	VSOSourceComponent string `json:"x-vso.source-component"`
-	VSOBoundOperators  string `json:"x-vso.bound-operators"`
-	VSORequestID       string `json:"x-vso.execution-id"`
-	VSOService         string `json:"x-vso.service"`
-	VSOClient          string `json:"x-vso.client"`
-	VSOOperatorStatus  string `json:"x-vso.operator-status"`
+	G8eSessionID       string `json:"x-g8e.session-id"`
+	G8eUserID          string `json:"x-g8e.user-id"`
+	G8eOrganizationID  string `json:"x-g8e.organization-id"`
+	G8eCaseID          string `json:"x-g8e.case-id"`
+	G8eInvestigationID string `json:"x-g8e.investigation-id"`
+	G8eTaskID          string `json:"x-g8e.task-id"`
+	G8eSourceComponent string `json:"x-g8e.source-component"`
+	G8eBoundOperators  string `json:"x-g8e.bound-operators"`
+	G8eRequestID       string `json:"x-g8e.execution-id"`
+	G8eService         string `json:"x-g8e.service"`
+	G8eClient          string `json:"x-g8e.client"`
+	G8eOperatorStatus  string `json:"x-g8e.operator-status"`
 	Authorization      string `json:"http.authorization"`
 	UserAgent          string `json:"http.user-agent"`
 	ContentType        string `json:"http.content-type"`
@@ -612,7 +612,7 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 	t.Run("component.name", func(t *testing.T) {
 		assert.Equal(t, st.ComponentName.G8EE, constants.Status.ComponentName.G8EE)
 		assert.Equal(t, st.ComponentName.G8EO, constants.Status.ComponentName.G8EO)
-		assert.Equal(t, st.ComponentName.VSOD, constants.Status.ComponentName.VSOD)
+		assert.Equal(t, st.ComponentName.G8ED, constants.Status.ComponentName.G8ED)
 	})
 
 	t.Run("platform", func(t *testing.T) {
@@ -684,19 +684,19 @@ func TestSharedHeartbeatTypeMatchesGoConstants(t *testing.T) {
 func TestSharedHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
-	t.Run("x-vso headers", func(t *testing.T) {
-		assert.Equal(t, h.VSOSessionID, constants.HeaderVSOWebSessionID)
-		assert.Equal(t, h.VSOUserID, constants.HeaderVSOUserID)
-		assert.Equal(t, h.VSOOrganizationID, constants.HeaderVSOOrganizationID)
-		assert.Equal(t, h.VSOCaseID, constants.HeaderVSOCaseID)
-		assert.Equal(t, h.VSOInvestigationID, constants.HeaderVSOInvestigationID)
-		assert.Equal(t, h.VSOTaskID, constants.HeaderVSOTaskID)
-		assert.Equal(t, h.VSOSourceComponent, constants.HeaderVSOSourceComponent)
-		assert.Equal(t, h.VSOBoundOperators, constants.HeaderVSOBoundOperators)
-		assert.Equal(t, h.VSORequestID, constants.HeaderVSORequestID)
-		assert.Equal(t, h.VSOService, constants.HeaderVSOService)
-		assert.Equal(t, h.VSOClient, constants.HeaderVSOClient)
-		assert.Equal(t, h.VSOOperatorStatus, constants.HeaderVSOOperatorStatus)
+	t.Run("x-g8e headers", func(t *testing.T) {
+		assert.Equal(t, h.G8eSessionID, constants.HeaderG8eWebSessionID)
+		assert.Equal(t, h.G8eUserID, constants.HeaderG8eUserID)
+		assert.Equal(t, h.G8eOrganizationID, constants.HeaderG8eOrganizationID)
+		assert.Equal(t, h.G8eCaseID, constants.HeaderG8eCaseID)
+		assert.Equal(t, h.G8eInvestigationID, constants.HeaderG8eInvestigationID)
+		assert.Equal(t, h.G8eTaskID, constants.HeaderG8eTaskID)
+		assert.Equal(t, h.G8eSourceComponent, constants.HeaderG8eSourceComponent)
+		assert.Equal(t, h.G8eBoundOperators, constants.HeaderG8eBoundOperators)
+		assert.Equal(t, h.G8eRequestID, constants.HeaderG8eRequestID)
+		assert.Equal(t, h.G8eService, constants.HeaderG8eService)
+		assert.Equal(t, h.G8eClient, constants.HeaderG8eClient)
+		assert.Equal(t, h.G8eOperatorStatus, constants.HeaderG8eOperatorStatus)
 	})
 
 	t.Run("standard http headers", func(t *testing.T) {

@@ -42,13 +42,13 @@ class FakeExecutionService:
         output: str = "fake output",
         resolved_operator: OperatorDocument = _default_operator,
         resolve_error: Exception | None = None,
-        vsod_event_service: Any = None,
+        g8ed_event_service: Any = None,
     ) -> None:
         self._exit_code = exit_code
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
 

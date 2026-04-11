@@ -19,10 +19,10 @@ from enum import Enum
 import pytest
 from app.models.base import (
     Field,
-    VSOAuditableModel,
-    VSOBaseModel,
-    VSOIdentifiableModel,
-    VSOTimestampedModel,
+    G8eAuditableModel,
+    G8eBaseModel,
+    G8eIdentifiableModel,
+    G8eTimestampedModel,
     _to_iso_z,
 )
 
@@ -36,17 +36,17 @@ class _Status(str, Enum):
     INACTIVE = "inactive"
 
 
-class _SampleModel(VSOBaseModel):
+class _SampleModel(G8eBaseModel):
     name: str
     value: int | None = None
     status: _Status | None = None
 
 
-class _AuditableChild(VSOAuditableModel):
+class _AuditableChild(G8eAuditableModel):
     label: str = Field(default="")
 
 
-class TestVSOBaseModel:
+class TestG8eBaseModel:
 
     def test_instantiation_with_required_fields(self):
         m = _SampleModel(name="test")
@@ -127,7 +127,7 @@ class TestVSOBaseModel:
         assert "value" not in m.flatten_for_wire()
 
     def test_flatten_serializes_nested_model(self):
-        class _Outer(VSOBaseModel):
+        class _Outer(G8eBaseModel):
             inner: _SampleModel
 
         m = _Outer(inner=_SampleModel(name="nested", value=7))
@@ -165,9 +165,9 @@ class TestToIsoZ:
         assert _ISO_Z_RE.match(_to_iso_z(dt))
 
 
-class TestVSOTimestampedModel:
+class TestG8eTimestampedModel:
 
-    class _TimestampedChild(VSOTimestampedModel):
+    class _TimestampedChild(G8eTimestampedModel):
         label: str = ""
 
     def test_created_at_set_on_instantiation(self):
@@ -236,9 +236,9 @@ class TestVSOTimestampedModel:
         assert _ISO_Z_RE.match(dumped["created_at"]), f"Pattern mismatch: {dumped['created_at']}"
 
 
-class TestVSOIdentifiableModel:
+class TestG8eIdentifiableModel:
 
-    class _IdentifiableChild(VSOIdentifiableModel):
+    class _IdentifiableChild(G8eIdentifiableModel):
         label: str = ""
 
     def test_id_field_auto_generated_on_instantiation(self):
@@ -263,28 +263,28 @@ class TestVSOIdentifiableModel:
         assert isinstance(dumped["id"], str)
 
     def test_generate_id_returns_uuid_string(self):
-        id_val = VSOIdentifiableModel.generate_id()
+        id_val = G8eIdentifiableModel.generate_id()
         assert isinstance(id_val, str)
         assert len(id_val) == 36
         parts = id_val.split("-")
         assert len(parts) == 5
 
     def test_generate_id_with_prefix(self):
-        id_val = VSOIdentifiableModel.generate_id(prefix="inv")
+        id_val = G8eIdentifiableModel.generate_id(prefix="inv")
         assert id_val.startswith("inv-")
         remainder = id_val[4:]
         assert len(remainder) == 36
 
     def test_generate_id_without_prefix_no_dash_prefix(self):
-        id_val = VSOIdentifiableModel.generate_id()
+        id_val = G8eIdentifiableModel.generate_id()
         assert not id_val.startswith("-")
 
     def test_generate_id_uniqueness(self):
-        ids = {VSOIdentifiableModel.generate_id() for _ in range(100)}
+        ids = {G8eIdentifiableModel.generate_id() for _ in range(100)}
         assert len(ids) == 100
 
     def test_generate_id_with_prefix_uniqueness(self):
-        ids = {VSOIdentifiableModel.generate_id(prefix="op") for _ in range(50)}
+        ids = {G8eIdentifiableModel.generate_id(prefix="op") for _ in range(50)}
         assert len(ids) == 50
 
     def test_inherits_timestamps(self):
@@ -314,7 +314,7 @@ class TestVSOIdentifiableModel:
         assert result["id"] == m.id
 
 
-class TestVSOAuditableModel:
+class TestG8eAuditableModel:
 
     def test_created_by_is_none_by_default(self):
         m = _AuditableChild()
@@ -394,72 +394,72 @@ class TestVSOAuditableModel:
 class TestHierarchyContracts:
     """Enforce structural contracts on the base model hierarchy."""
 
-    def test_vso_timestamped_is_subclass_of_vso_base(self):
-        assert issubclass(VSOTimestampedModel, VSOBaseModel)
+    def test_g8e_timestamped_is_subclass_of_g8e_base(self):
+        assert issubclass(G8eTimestampedModel, G8eBaseModel)
 
-    def test_vso_identifiable_is_subclass_of_vso_timestamped(self):
-        assert issubclass(VSOIdentifiableModel, VSOTimestampedModel)
+    def test_g8e_identifiable_is_subclass_of_g8e_timestamped(self):
+        assert issubclass(G8eIdentifiableModel, G8eTimestampedModel)
 
-    def test_vso_auditable_is_subclass_of_vso_identifiable(self):
-        assert issubclass(VSOAuditableModel, VSOIdentifiableModel)
+    def test_g8e_auditable_is_subclass_of_g8e_identifiable(self):
+        assert issubclass(G8eAuditableModel, G8eIdentifiableModel)
 
-    def test_vso_base_has_no_id_field(self):
-        assert "id" not in VSOBaseModel.model_fields
+    def test_g8e_base_has_no_id_field(self):
+        assert "id" not in G8eBaseModel.model_fields
 
-    def test_vso_timestamped_has_no_id_field(self):
-        assert "id" not in VSOTimestampedModel.model_fields
+    def test_g8e_timestamped_has_no_id_field(self):
+        assert "id" not in G8eTimestampedModel.model_fields
 
-    def test_vso_identifiable_has_id_field(self):
-        assert "id" in VSOIdentifiableModel.model_fields
+    def test_g8e_identifiable_has_id_field(self):
+        assert "id" in G8eIdentifiableModel.model_fields
 
-    def test_vso_identifiable_has_created_at_field(self):
-        assert "created_at" in VSOIdentifiableModel.model_fields
+    def test_g8e_identifiable_has_created_at_field(self):
+        assert "created_at" in G8eIdentifiableModel.model_fields
 
-    def test_vso_auditable_has_created_by_field(self):
-        assert "created_by" in VSOAuditableModel.model_fields
+    def test_g8e_auditable_has_created_by_field(self):
+        assert "created_by" in G8eAuditableModel.model_fields
 
-    def test_vso_auditable_has_updated_by_field(self):
-        assert "updated_by" in VSOAuditableModel.model_fields
+    def test_g8e_auditable_has_updated_by_field(self):
+        assert "updated_by" in G8eAuditableModel.model_fields
 
     def test_investigation_model_is_identifiable(self):
         from app.models.investigations import InvestigationModel
-        assert issubclass(InvestigationModel, VSOIdentifiableModel)
+        assert issubclass(InvestigationModel, G8eIdentifiableModel)
 
     def test_investigation_model_has_no_standalone_id_override(self):
         from app.models.investigations import InvestigationModel
         assert "id" not in InvestigationModel.__annotations__, \
-            "InvestigationModel must not redefine 'id' — it inherits from VSOIdentifiableModel"
+            "InvestigationModel must not redefine 'id' — it inherits from G8eIdentifiableModel"
 
     def test_case_model_is_identifiable(self):
         from app.models.cases import CaseModel
-        assert issubclass(CaseModel, VSOIdentifiableModel)
+        assert issubclass(CaseModel, G8eIdentifiableModel)
 
     def test_investigation_create_request_is_not_identifiable(self):
         from app.models.investigations import InvestigationCreateRequest
-        assert not issubclass(InvestigationCreateRequest, VSOIdentifiableModel)
-        assert issubclass(InvestigationCreateRequest, VSOBaseModel)
+        assert not issubclass(InvestigationCreateRequest, G8eIdentifiableModel)
+        assert issubclass(InvestigationCreateRequest, G8eBaseModel)
 
     def test_investigation_update_request_is_not_identifiable(self):
         from app.models.investigations import InvestigationUpdateRequest
-        assert not issubclass(InvestigationUpdateRequest, VSOIdentifiableModel)
+        assert not issubclass(InvestigationUpdateRequest, G8eIdentifiableModel)
 
     def test_investigation_query_request_is_not_identifiable(self):
         from app.models.investigations import InvestigationQueryRequest
-        assert not issubclass(InvestigationQueryRequest, VSOIdentifiableModel)
+        assert not issubclass(InvestigationQueryRequest, G8eIdentifiableModel)
 
     def test_investigation_customer_context_is_not_identifiable(self):
         from app.models.investigations import InvestigationCustomerContext
-        assert not issubclass(InvestigationCustomerContext, VSOIdentifiableModel)
+        assert not issubclass(InvestigationCustomerContext, G8eIdentifiableModel)
 
     def test_investigation_technical_context_is_not_identifiable(self):
         from app.models.investigations import InvestigationTechnicalContext
-        assert not issubclass(InvestigationTechnicalContext, VSOIdentifiableModel)
+        assert not issubclass(InvestigationTechnicalContext, G8eIdentifiableModel)
 
     def test_investigation_current_state_is_not_identifiable(self):
         from app.models.investigations import InvestigationCurrentState
-        assert not issubclass(InvestigationCurrentState, VSOIdentifiableModel)
+        assert not issubclass(InvestigationCurrentState, G8eIdentifiableModel)
 
     def test_investigation_history_entry_is_not_identifiable(self):
         from app.models.investigations import InvestigationHistoryEntry
-        assert not issubclass(InvestigationHistoryEntry, VSOIdentifiableModel)
+        assert not issubclass(InvestigationHistoryEntry, G8eIdentifiableModel)
 

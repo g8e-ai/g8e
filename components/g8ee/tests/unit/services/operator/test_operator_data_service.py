@@ -32,13 +32,13 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 class TestOperatorDataService:
     @pytest.fixture
-    def mock_vsod_http_client(self):
+    def mock_g8ed_http_client(self):
         return AsyncMock(spec=HTTPClient )
 
     @pytest.fixture
-    def service(self, mock_cache_aside_service, mock_vsod_http_client):
+    def service(self, mock_cache_aside_service, mock_g8ed_http_client):
         from app.models.cache import CacheOperationResult
-        return OperatorDataService(mock_cache_aside_service, mock_vsod_http_client)
+        return OperatorDataService(mock_cache_aside_service, mock_g8ed_http_client)
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):

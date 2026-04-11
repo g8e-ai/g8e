@@ -13,7 +13,7 @@ Focused on improving AI interaction reliability, execution tracing, and g8eo lis
 ### Component Improvements
 - **g8eo (Virtual Security Agent)** - Enhanced listen mode testability and hardened internal auth token handling.
 - **g8ee (Virtual Execution Engine)** - Optimized DB client token loading and synchronized settings definitions.
-- **VSOD (Virtual Security Operations Dashboard)** - Improved diagram generation for infrastructure visualization and aligned internal API endpoints.
+- **g8ed (Virtual Security Operations Dashboard)** - Improved diagram generation for infrastructure visualization and aligned internal API endpoints.
 
 ### CI/CD & DX
 - **GitHub Actions Integration** - New automated workflow for pull requests to ensure code quality and test coverage.

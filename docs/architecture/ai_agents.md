@@ -69,10 +69,10 @@ flowchart TD
 2. **LLM Proposer call** — The **High Reasoning Agent** (Primary model) performs deep logical pathfinding using high thinking levels.
 3. **Tool execution** — Tool calls are dispatched sequentially through `AIToolService`. 
 4. **Tribunal Refinement** — Operator commands pass through a **Voting Swarm** and **Final Verifier** for syntactic precision before approval.
-5. **SSE delivery** — Chunks are translated and forwarded to the browser via VSOD in real time.
-6. **Persistence** — Results are saved to VSODB via authenticated HTTP calls (`X-Internal-Auth`); background memory update tasks are fired.
+5. **SSE delivery** — Chunks are translated and forwarded to the browser via g8ed in real time.
+6. **Persistence** — Results are saved to g8es via authenticated HTTP calls (`X-Internal-Auth`); background memory update tasks are fired.
 
-All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in VSODB (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with VSODB are strictly authenticated via the `X-Internal-Auth` shared secret.
+All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in g8es (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with g8es are strictly authenticated via the `X-Internal-Auth` shared secret.
 
 ---
 
@@ -86,14 +86,14 @@ All state-changing operator actions require explicit user approval. The platform
 
 **Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the agent proceeds without it.
 
-**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `vso_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
+**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
 
 **Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, public IP, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields (type, subtype, intents).
 
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records from the cache.
 - `memory` — the attached `InvestigationMemory` (or `None`).
-- `bound_operators` — `BoundOperator` instances from `VSOHttpContext`.
+- `bound_operators` — `BoundOperator` instances from `G8eHttpContext`.
 - `operator_session_token` — transient operator session token for authorization validation.
 
 ### Security
@@ -172,7 +172,7 @@ Each mode directory provides up to three sections: `capabilities`, `execution`, 
 2. `MemoryGenerationService.update_memory_from_conversation` fetches or creates the `InvestigationMemory` document, then calls `_ai_update_memory`.
 3. `_ai_update_memory` takes the last 20 messages (skipping thinking messages), sends them with `build_memory_analysis_system_instruction` as the system prompt and `build_memory_analysis_request` as the closing user turn. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
 4. Non-null fields from the AI response overwrite the existing memory fields; existing values are preserved when the AI returns null.
-5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to VSODB KV via authenticated HTTP).
+5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to g8es KV via authenticated HTTP).
 
 ### Injection on the Next Turn
 
@@ -198,7 +198,7 @@ After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sen
 
 ### Command Execution Audit
 
-When the agent proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via VSOD SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through VSOD back to G8EE. The result is then fed back into the agent's ReAct loop as a function response.
+When the agent proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via g8ed SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the agent's ReAct loop as a function response.
 
 ---
 
@@ -207,7 +207,7 @@ When the agent proposes a command via `run_commands_with_operator`, the tool rou
 ```mermaid
 sequenceDiagram
     participant Browser
-    participant VSOD
+    participant g8ed
     participant G8ee_Pipeline as ChatPipelineService
     participant CtxMgr as InvestigationService
     participant Triage
@@ -218,8 +218,8 @@ sequenceDiagram
     participant Tribunal as Tribunal
     participant g8eo
 
-    Browser->>VSOD: POST /api/chat {message}
-    VSOD->>G8ee_Pipeline: run_chat(message, vso_context)
+    Browser->>g8ed: POST /api/chat {message}
+    G8ed->>G8ee_Pipeline: run_chat(message, g8e_context)
 
     G8ee_Pipeline->>CtxMgr: get_investigation_context(investigation_id)
     CtxMgr->>CtxMgr: _attach_memory_context
@@ -248,10 +248,10 @@ sequenceDiagram
                 Tools->>Tribunal: generate_command (N passes + verifier)
                 Tribunal-->>Tools: CommandGenerationResult
                 end
-                Tools->>VSOD: approval request SSE event
-                VSOD->>Browser: g8e.v1.operator.command.approval.requested
-                Browser->>VSOD: approve
-                VSOD->>G8eo: pub/sub command dispatch
+                Tools->>g8ed: approval request SSE event
+                G8ed->>Browser: g8e.v1.operator.command.approval.requested
+                Browser->>g8ed: approve
+                G8ed->>G8eo: pub/sub command dispatch
                 G8eo-->>G8ee_Pipeline: command result
             end
             Tools-->>Agent: ToolCallResponse list
@@ -259,8 +259,8 @@ sequenceDiagram
         end
     end
 
-    Agent->>VSOD: g8e.v1.ai.llm.chat.iteration.text.completed (via EventService)
-    VSOD->>Browser: SSE stream
+    Agent->>g8ed: g8e.v1.ai.llm.chat.iteration.text.completed (via EventService)
+    G8ed->>Browser: SSE stream
 
     G8ee_Pipeline->>G8ee_Pipeline: persist AI response to DB
     G8ee_Pipeline->>G8ee_Pipeline: asyncio.create_task(_background_memory_update)
@@ -271,7 +271,7 @@ sequenceDiagram
 
 ## SSE Event Flow Architecture
 
-The SSE (Server-Sent Events) system provides real-time event delivery from g8ee to the browser through VSOD. The flow is unidirectional: g8ee → VSOD → Frontend.
+The SSE (Server-Sent Events) system provides real-time event delivery from g8ee to the browser through g8ed. The flow is unidirectional: g8ee → g8ed → Frontend.
 
 ### End-to-End Flow
 
@@ -280,10 +280,10 @@ flowchart LR
     subgraph g8ee [g8ee Component]
         A[ChatPipelineService / Agent] --> B[deliver_via_sse]
         B --> C[EventService.publish_investigation_event]
-        C --> D[HTTP POST to VSOD /internal/sse/push]
+        C --> D[HTTP POST to g8ed /internal/sse/push]
     end
 
-    subgraph VSOD [VSOD Component]
+    subgraph g8ed [g8ed Component]
         D --> E[internal_sse_routes.js]
         E --> F{Special Event?}
         F -- OPERATOR_PANEL_LIST_UPDATED --> G[OperatorService.getUserOperators]
@@ -315,40 +315,40 @@ flowchart LR
 g8ee publishes events using `EventType` constants defined in `components/g8ee/app/constants/events.py`. Events are published via:
 
 **`deliver_via_sse`** (`components/g8ee/app/services/ai/agent_sse.py`)
-- Translates `StreamChunkFromModel` objects into VSOD EventService pub/sub calls
+- Translates `StreamChunkFromModel` objects into g8ed EventService pub/sub calls
 - Maps stream chunk types to EventType constants:
   - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`
   - `THINKING` → `LLM_CHAT_ITERATION_THINKING_STARTED`
   - `TOOL_CALL` → Tool-specific events (e.g., `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
   - `COMPLETE` → `LLM_CHAT_ITERATION_TEXT_COMPLETED` or `LLM_CHAT_ITERATION_FAILED`
 
-**`EventService.publish_investigation_event`** (`components/g8ee/app/services/infra/vsod_event_service.py`)
-- HTTP POST to VSOD internal endpoint `/internal/sse/push`
+**`EventService.publish_investigation_event`** (`components/g8ee/app/services/infra/g8ed_event_service.py`)
+- HTTP POST to g8ed internal endpoint `/internal/sse/push`
 - Payload includes: `web_session_id`, `user_id`, `event_type`, `payload`, routing fields (`case_id`, `investigation_id`)
 
-### VSOD Event Receiving and Transformation
+### g8ed Event Receiving and Transformation
 
-**`internal_sse_routes.js`** (`components/vsod/routes/internal/internal_sse_routes.js`)
+**`internal_sse_routes.js`** (`components/g8ed/routes/internal/internal_sse_routes.js`)
 - Internal HTTP endpoint that receives SSE push requests from g8ee
 - Applies special transformations for specific event types:
 
 | Event Type | Transformation | Purpose |
 |---|---|---|
-| `OPERATOR_PANEL_LIST_UPDATED` | Replaces g8ee's single-operator payload with VSOD's full operator list via `OperatorService.getUserOperators()` | Frontend needs complete operator panel state, not just the changed operator |
+| `OPERATOR_PANEL_LIST_UPDATED` | Replaces g8ee's single-operator payload with g8ed's full operator list via `OperatorService.getUserOperators()` | Frontend needs complete operator panel state, not just the changed operator |
 | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` | Normalizes `citation_num` values to sequential 1-based integers via `normalizeCitationNums()` | g8ee may emit non-sequential citation numbers; frontend requires sequential display |
 
 - Fallback behavior: If operator list fetch fails, logs error and falls back to original g8ee event (prevents silent data loss)
 - Wraps all other events in `G8eePassthroughEvent` for passthrough delivery
 
-**`SSEService.publishEvent`** (`components/vsod/services/platform/sse_service.js`)
+**`SSEService.publishEvent`** (`components/g8ed/services/platform/sse_service.js`)
 - Publishes events to local SSE connections
 - Fire-and-forget design: returns `true` even when no connection exists
 - Logs warning when no active SSE connection exists for a session (includes event type for debugging)
 
 ### Frontend Event Handling
 
-**`SSEConnectionManager`** (`components/vsod/public/js/utils/sse-connection-manager.js`)
-- Establishes SSE connection to VSOD `/sse/events` endpoint
+**`SSEConnectionManager`** (`components/g8ed/public/js/utils/sse-connection-manager.js`)
+- Establishes SSE connection to g8ed `/sse/events` endpoint
 - Receives events via `EventSource.onmessage`
 - Parses JSON and calls `handleSSEEvent(data)`
 
@@ -376,13 +376,13 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 **Single source of truth**: `shared/constants/events.json`
 - g8ee loads from `components/g8ee/app/constants/events.py` (Python `EventType` enum)
-- VSOD loads from `components/vsod/constants/events.js` (via `shared.js` → `events.json`)
-- Frontend loads from `components/vsod/public/js/constants/events.js`
+- g8ed loads from `components/g8ed/constants/events.js` (via `shared.js` → `events.json`)
+- Frontend loads from `components/g8ed/public/js/constants/events.js`
 - All components use identical event type strings
 
 ### Frontend Event Handlers
 
-**`chat-sse-handlers.js`** (`components/vsod/public/js/components/chat-sse-handlers.js`)
+**`chat-sse-handlers.js`** (`components/g8ed/public/js/components/chat-sse-handlers.js`)
 - Mixin that registers event bus listeners for all g8ee chat pipeline events
 - Maps each event type to a handler method:
   - `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` → `handleAITextChunk`
@@ -392,7 +392,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
   - `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` → `handleSearchWebIndicator`
   - `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` → `handleNetworkPortCheckIndicator`
 
-**`thinking.js`** (`components/vsod/public/js/components/thinking.js`)
+**`thinking.js`** (`components/g8ed/public/js/components/thinking.js`)
 - Handles `LLM_CHAT_ITERATION_THINKING_STARTED` events
 - Displays thinking indicator in the UI
 
@@ -401,11 +401,11 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 **g8ee side**:
 - `deliver_via_sse` catches exceptions during streaming:
   - `CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with fixed error message, re-raises
-  - `VSOError` subclasses (OperationError, NetworkError, RateLimitError): Populates `payload.error` with `str(e)`
+  - `G8eError` subclasses (OperationError, NetworkError, RateLimitError): Populates `payload.error` with `str(e)`
   - Generic `Exception`: Logs error, publishes `LLM_CHAT_ITERATION_FAILED`, does not re-raise
 - Retry loop for transient errors (429, 503) with exponential backoff
 
-**VSOD side**:
+**g8ed side**:
 - `internal_sse_routes.js`: Returns 500 on publish failures, logs error details
 - `SSEService.publishEvent`: Fire-and-forget design — logs warning when no connection exists
 - Fallback for operator list fetch: Logs error, sends original event to prevent data loss
@@ -423,13 +423,13 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 - Tests event contract compliance for all g8ee chat pipeline events
 - Validates routing fields (`web_session_id`, `investigation_id`, `case_id`)
 
-**VSOD unit tests** (`components/vsod/test/unit/routes/internal/internal_sse_routes.unit.test.js`):
+**g8ed unit tests** (`components/g8ed/test/unit/routes/internal/internal_sse_routes.unit.test.js`):
 - Tests citation normalization for `LLM_CHAT_ITERATION_CITATIONS_RECEIVED`
 - Tests operator list replacement for `OPERATOR_PANEL_LIST_UPDATED`
 - Tests fallback behavior when operator list fetch fails
 - Tests malformed event payload handling
 
-**Frontend unit tests** (`components/vsod/test/unit/frontend/sse/sse-connection-manager.unit.test.js`):
+**Frontend unit tests** (`components/g8ed/test/unit/frontend/sse/sse-connection-manager.unit.test.js`):
 - Tests event payload validation for all g8ee chat pipeline event types
 - Tests infrastructure event handling
 - Tests malformed payload rejection
@@ -452,9 +452,9 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch + grounding merge |
 | `execute_tool_call` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Single function dispatch — Tribunal gate for `run_commands` |
-| `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → VSOD SSE event translation |
+| `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation |
 | `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier |
-| `EventService` | `components/g8ee/app/services/infra/vsod_event_service.py` | g8ee → VSOD HTTP event push |
+| `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push |
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts |
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction |
 | `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
@@ -765,7 +765,7 @@ The provider abstraction lives in `components/g8ee/app/llm/provider.py` (`LLMPro
 
 ## Using `scripts/tools/setup-llm.sh`
 
-`setup-llm.sh` configures the LLM provider for G8EE. It writes settings directly to the platform DB via `manage-vsodb.py settings` running inside the `g8ep` container. Settings take effect on the next platform restart — no rebuild required.
+`setup-llm.sh` configures the LLM provider for G8EE. It writes settings directly to the platform DB via `manage-g8es.py settings` running inside the `g8ep` container. Settings take effect on the next platform restart — no rebuild required.
 
 Run via the `g8e` CLI:
 
@@ -822,7 +822,7 @@ Examples:
 
 ### What Gets Written to DB
 
-The script calls `manage-vsodb.py settings set` inside the running `g8ep` container with these keys:
+The script calls `manage-g8es.py settings set` inside the running `g8ep` container with these keys:
 
 | DB Key | Maps To |
 |---|---|
@@ -834,7 +834,7 @@ The script calls `manage-vsodb.py settings set` inside the running `g8ep` contai
 | `gemini_api_key` | `GEMINI_API_KEY` (Gemini only) |
 | `anthropic_api_key` | `ANTHROPIC_API_KEY` (Anthropic only) |
 
-If the platform is running, the script writes via the VSOD internal API. If VSOD is unavailable, it falls back to writing directly to VSODB. If the platform is not running at all, the DB write is skipped and a warning is printed.
+If the platform is running, the script writes via the g8ed internal API. If g8ed is unavailable, it falls back to writing directly to g8es. If the platform is not running at all, the DB write is skipped and a warning is printed.
 
 Apply settings without a full rebuild:
 

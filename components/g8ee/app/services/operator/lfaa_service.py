@@ -20,7 +20,7 @@ over pub/sub. Pure fire-and-forget publish — no approval, no pending store.
 import logging
 import uuid
 
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 from app.services.protocols import PubSubServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -34,19 +34,19 @@ class OperatorLFAAService:
 
     async def send_audit_event(
         self,
-        vso_message: VSOMessage,
+        g8e_message: G8eMessage,
     ) -> bool:
         """
-        Publishes a pre-constructed VSOMessage as an LFAA audit event.
+        Publishes a pre-constructed G8eMessage as an LFAA audit event.
         """
-        operator_id = vso_message.operator_id
-        operator_session_id = vso_message.operator_session_id
+        operator_id = g8e_message.operator_id
+        operator_session_id = g8e_message.operator_session_id
 
-        if not vso_message.payload or not operator_id or not operator_session_id:
+        if not g8e_message.payload or not operator_id or not operator_session_id:
             logger.info(
                 "[LFAA] Skipping audit event - missing required fields",
                 extra={
-                    "has_payload": bool(vso_message.payload),
+                    "has_payload": bool(g8e_message.payload),
                     "has_operator_id": bool(operator_id),
                     "has_operator_session_id": bool(operator_session_id),
                 },
@@ -61,14 +61,14 @@ class OperatorLFAAService:
             subscribers = await self.pubsub_service.publish_command(
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
-                command_data=vso_message,
+                command_data=g8e_message,
             )
 
             if subscribers > 0:
                 logger.info(
                     "[LFAA] Sent audit event to operator",
                     extra={
-                        "event_type": vso_message.event_type,
+                        "event_type": g8e_message.event_type,
                         "operator_id": operator_id,
                     },
                 )

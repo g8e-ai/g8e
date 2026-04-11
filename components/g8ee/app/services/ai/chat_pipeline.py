@@ -47,14 +47,14 @@ from app.llm import get_llm_provider
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.agent import AgentStreamContext
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
     AIResponseMetadata,
 )
 from app.llm.prompts import build_modular_system_prompt
 
 from ..investigation.investigation_data_service import InvestigationDataService
-from ..infra.vsod_event_service import EventService
+from ..infra.g8ed_event_service import EventService
 from ..operator.command_service import OperatorCommandService
 from .agent import g8eAgent
 from ..investigation.investigation_service import extract_all_operators_context, InvestigationService
@@ -79,7 +79,7 @@ class ChatPipelineService:
     def __init__(
         self,
         investigation_data_service: InvestigationDataService,
-        vsod_event_service: EventService,
+        g8ed_event_service: EventService,
         investigation_service: InvestigationService,
         operator_command_service: OperatorCommandService,
         request_builder: AIRequestBuilder,
@@ -90,7 +90,7 @@ class ChatPipelineService:
         settings: G8eePlatformSettings,
     ) -> None:
         self.investigation_data_service = investigation_data_service
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
         self.operator_command_service = operator_command_service
         self.request_builder = request_builder
@@ -106,7 +106,7 @@ class ChatPipelineService:
     async def _prepare_chat_context(
         self,
         message: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
@@ -132,9 +132,9 @@ class ChatPipelineService:
         14. Build contents from history
         15. Assemble AgentStreamContext
         """
-        case_id = vso_context.case_id
-        investigation_id = vso_context.investigation_id
-        user_id = vso_context.user_id
+        case_id = g8e_context.case_id
+        investigation_id = g8e_context.investigation_id
+        user_id = g8e_context.user_id
         
         logger.info(
             "[SSE-CHAT] _prepare_chat_context started: investigation_id=%s case_id=%s",
@@ -143,7 +143,7 @@ class ChatPipelineService:
         
         logger.info(
             "[SSE-CHAT] Extracted context: case_id=%s investigation_id=%s web_session_id=%s user_id=%s",
-            case_id, investigation_id, vso_context.web_session_id, user_id
+            case_id, investigation_id, g8e_context.web_session_id, user_id
         )
 
         if not investigation_id or investigation_id == NEW_CASE_ID:
@@ -156,7 +156,7 @@ class ChatPipelineService:
             investigation_id=investigation_id, user_id=user_id
         )
         investigation = await self.investigation_service.get_enriched_investigation_context(
-            investigation=investigation, user_id=user_id, vso_context=vso_context
+            investigation=investigation, user_id=user_id, g8e_context=g8e_context
         )
 
         current_sentinel_mode = investigation.sentinel_mode
@@ -167,7 +167,7 @@ class ChatPipelineService:
             )
             investigation.sentinel_mode = sentinel_mode
 
-        operator_bound = any(op.status == OperatorStatus.BOUND for op in vso_context.bound_operators)
+        operator_bound = any(op.status == OperatorStatus.BOUND for op in g8e_context.bound_operators)
         agent_mode = AgentMode.OPERATOR_BOUND if operator_bound else AgentMode.OPERATOR_NOT_BOUND
 
         prior_history = await self.investigation_service.get_chat_messages(
@@ -282,12 +282,12 @@ class ChatPipelineService:
         )
 
         return AgentStreamContext(
-            case_id=vso_context.case_id,
-            investigation_id=vso_context.investigation_id,
+            case_id=g8e_context.case_id,
+            investigation_id=g8e_context.investigation_id,
             investigation=investigation,
-            user_id=vso_context.user_id,
-            vso_context=vso_context,
-            web_session_id=vso_context.web_session_id,
+            user_id=g8e_context.user_id,
+            g8e_context=g8e_context,
+            web_session_id=g8e_context.web_session_id,
             agent_mode=agent_mode,
             request_settings=request_settings,
             operator_bound=operator_bound,
@@ -304,21 +304,21 @@ class ChatPipelineService:
 
     async def _persist_ai_response(
         self,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         ctx: AgentStreamContext,
         user_settings: G8eeUserSettings,
     ) -> None:
         """Persist AI response to database and trigger memory updates."""
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
-            getattr(vso_context, 'investigation_id', 'unknown') if vso_context else 'None',
+            getattr(g8e_context, 'investigation_id', 'unknown') if g8e_context else 'None',
             len(ctx.response_text) if ctx else 0
         )
         
         response_text = ctx.response_text
 
         await self.investigation_service.add_chat_message(
-            investigation_id=vso_context.investigation_id or "",
+            investigation_id=g8e_context.investigation_id or "",
             content=response_text,
             sender=MessageSender.AI_PRIMARY,
             metadata=AIResponseMetadata(
@@ -329,7 +329,7 @@ class ChatPipelineService:
         )
         logger.info("[SSE-CHAT] AI response persisted to database")
 
-        if ctx.investigation and vso_context.investigation_id:
+        if ctx.investigation and g8e_context.investigation_id:
             investigation = ctx.investigation
             conversation_history = ctx.conversation_history
             try:
@@ -353,7 +353,7 @@ class ChatPipelineService:
     async def run_chat(
         self,
         message: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
         llm_primary_model: str,
@@ -362,20 +362,20 @@ class ChatPipelineService:
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
     ) -> None:
-        """Non-streaming chat path — AI response delivered via SSE through VSOD.
+        """Non-streaming chat path — AI response delivered via SSE through g8ed.
 
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
         """
         logger.info(
             "[SSE-CHAT] run_chat started: new_case=%s case_id=%s investigation_id=%s web_session_id=%s",
-            getattr(vso_context, 'new_case', 'unknown') if vso_context else 'None',
-            getattr(vso_context, 'case_id', 'unknown') if vso_context else 'None',
-            getattr(vso_context, 'investigation_id', 'unknown') if vso_context else 'None',
-            getattr(vso_context, 'web_session_id', 'unknown') if vso_context else 'None',
+            getattr(g8e_context, 'new_case', 'unknown') if g8e_context else 'None',
+            getattr(g8e_context, 'case_id', 'unknown') if g8e_context else 'None',
+            getattr(g8e_context, 'investigation_id', 'unknown') if g8e_context else 'None',
+            getattr(g8e_context, 'web_session_id', 'unknown') if g8e_context else 'None',
         )
         
-        investigation_id = vso_context.investigation_id if vso_context else None
+        investigation_id = g8e_context.investigation_id if g8e_context else None
         logger.info("[SSE-CHAT] Extracted investigation_id: %s", investigation_id)
         
         task = None
@@ -391,7 +391,7 @@ class ChatPipelineService:
             )
             await self._run_chat_impl(
                 message=message,
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 attachments=attachments,
                 sentinel_mode=sentinel_mode,
                 llm_primary_model=llm_primary_model,
@@ -407,8 +407,8 @@ class ChatPipelineService:
         except Exception as e:
             # Defensive logging to identify what is None
             logger.error(
-                "[SSE-CHAT] Debug info before error: vso_context=%s, investigation_id=%s",
-                "None" if vso_context is None else f"case_id={getattr(vso_context, 'case_id', 'missing')}",
+                "[SSE-CHAT] Debug info before error: g8e_context=%s, investigation_id=%s",
+                "None" if g8e_context is None else f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
                 investigation_id
             )
             logger.error(
@@ -422,7 +422,7 @@ class ChatPipelineService:
     async def _run_chat_impl(
         self,
         message: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
         llm_primary_model: str,
@@ -431,8 +431,8 @@ class ChatPipelineService:
     ) -> None:
         """Run the chat implementation - main logic flow."""
         logger.info(
-            "[SSE-CHAT] _run_chat_impl started: vso_context=%s attachments_count=%d",
-            "None" if vso_context is None else f"case_id={getattr(vso_context, 'case_id', 'missing')}",
+            "[SSE-CHAT] _run_chat_impl started: g8e_context=%s attachments_count=%d",
+            "None" if g8e_context is None else f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
             len(attachments) if attachments else 0
         )
         
@@ -443,7 +443,7 @@ class ChatPipelineService:
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         ctx = await self._prepare_chat_context(
             message=message,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             request_settings=resolved_settings,
             attachments=attachments,
             sentinel_mode=sentinel_mode,
@@ -452,7 +452,7 @@ class ChatPipelineService:
         )
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
-        from app.models.vsod_client import ChatResponseChunkPayload, ChatResponseCompletePayload
+        from app.models.g8ed_client import ChatResponseChunkPayload, ChatResponseCompletePayload
         
         logger.info(
             "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
@@ -467,26 +467,26 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
             
             # 1. Deliver text chunk
-            await self.vsod_event_service.publish_investigation_event(
-                investigation_id=vso_context.investigation_id,
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
                 event_type=EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
                 payload=ChatResponseChunkPayload(content=follow_up),
-                web_session_id=vso_context.web_session_id,
-                case_id=vso_context.case_id,
-                user_id=vso_context.user_id,
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
             )
             
             # 2. Deliver completion event
-            await self.vsod_event_service.publish_investigation_event(
-                investigation_id=vso_context.investigation_id,
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
                 event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
                 payload=ChatResponseCompletePayload(
                     content=follow_up,
                     finish_reason="stop",
                 ),
-                web_session_id=vso_context.web_session_id,
-                case_id=vso_context.case_id,
-                user_id=vso_context.user_id,
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
             )
             ctx.response_text = follow_up
         elif ctx.model_to_use and ctx.generation_config:
@@ -497,7 +497,7 @@ class ChatPipelineService:
                 model_name=ctx.model_to_use,
                 agent_streaming_context=ctx,
                 context=ctx,
-                vsod_event_service=self.vsod_event_service,
+                g8ed_event_service=self.g8ed_event_service,
                 llm_provider=llm_provider,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
@@ -508,7 +508,7 @@ class ChatPipelineService:
             )
 
         await self._persist_ai_response(
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             ctx=ctx,
             user_settings=user_settings,
         )

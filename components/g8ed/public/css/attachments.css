@@ -1,0 +1,331 @@
+/**
+ * g8ed Attachments UI Styles
+ * 
+ * Clean, modern styling for the attachments utility
+ */
+
+.attachments-display {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.25rem;
+    margin: 8px 0;
+    padding: 12px;
+    backdrop-filter: blur(10px);
+}
+
+.attachments-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.attachments-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.clear-attachments-btn {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.clear-attachments-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    transform: scale(1.1);
+}
+
+.attachments-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.attachment-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0.25rem;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.attachment-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.attachment-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.attachment-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.attachment-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0; /* Allow text truncation */
+}
+
+.attachment-name {
+    font-size: 13px;
+    color: #e0e0e0;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.attachment-size {
+    font-size: 11px;
+    color: #a0a0a0;
+}
+
+.remove-attachment-btn {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px 6px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.remove-attachment-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    transform: scale(1.1);
+}
+
+.attachment-error {
+    background: rgba(255, 107, 107, 0.1) !important;
+    color: #ff6b6b !important;
+    border: 1px solid rgba(255, 107, 107, 0.2);
+    padding: 8px 12px !important;
+    border-radius: 4px !important;
+    margin: 4px 0 !important;
+    font-size: 12px !important;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Attach button styling */
+.attach-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 0.25rem;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.attach-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.attach-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.attach-icon {
+    font-size: 16px;
+}
+
+/* Compact Attachments Display - Inline with paperclip icon */
+.compact-attachments-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 8px;
+    flex-wrap: wrap;
+    max-width: 400px;
+}
+
+.compact-attachments-list {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.compact-attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #e0e0e0;
+    transition: all 0.2s ease;
+    max-width: 120px;
+}
+
+.compact-attachment-item:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.compact-attachment-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.compact-attachment-name {
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.compact-remove-btn {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.compact-remove-btn:hover {
+    background: rgba(255, 107, 107, 0.2);
+    transform: scale(1.1);
+}
+
+.compact-clear-btn {
+    background: none;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.compact-clear-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    border-color: rgba(255, 107, 107, 0.5);
+    transform: scale(1.05);
+}
+
+.compact-attachment-error {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    animation: slideInCompact 0.3s ease;
+}
+
+@keyframes slideInCompact {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .attachment-name {
+        max-width: 150px;
+    }
+    
+    .attachments-display {
+        margin: 4px 0;
+        padding: 6px;
+    }
+    
+    .attachment-item {
+        padding: 4px 6px;
+        gap: 4px;
+    }
+    
+    .attachments-header {
+        margin-bottom: 4px;
+        padding-bottom: 4px;
+    }
+    
+    .attachments-list {
+        gap: 4px;
+    }
+
+    .compact-attachments-display {
+        max-width: 250px;
+        gap: 4px;
+        margin-right: 4px;
+    }
+    
+    .compact-attachments-list {
+        gap: 4px;
+    }
+
+    .compact-attachment-item {
+        max-width: 100px;
+        padding: 2px 6px;
+        border-radius: 12px;
+    }
+
+    .compact-attachment-name {
+        max-width: 60px;
+    }
+    
+    .attach-btn {
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+    
+    .compact-attachment-error {
+        padding: 2px 6px;
+    }
+}

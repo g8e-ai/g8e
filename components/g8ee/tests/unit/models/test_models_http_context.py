@@ -15,7 +15,7 @@
 Unit tests for app/models/http_context.py, app/models/health.py, app/models/auth.py
 
 Covers: DependencyStatus, HealthCheckResult, WorkflowHealthResult,
-        ServiceHealthResult, AuthenticatedUser, BoundOperator, VSOHttpContext
+        ServiceHealthResult, AuthenticatedUser, BoundOperator, G8eHttpContext
 """
 
 import json
@@ -40,7 +40,7 @@ from app.models.health import (
 )
 from app.models.http_context import (
     BoundOperator,
-    VSOHttpContext,
+    G8eHttpContext,
 )
 from app.models.operators import OperatorSystemInfo
 
@@ -96,7 +96,7 @@ class TestHealthCheckResult:
         defaults = dict(
             timestamp=_TS,
             component="g8ee",
-            dependencies={"vsodb": DependencyStatus(status=HealthStatus.HEALTHY)},
+            dependencies={"g8es": DependencyStatus(status=HealthStatus.HEALTHY)},
             overall_status=HealthStatus.HEALTHY,
         )
         defaults.update(overrides)
@@ -115,16 +115,16 @@ class TestHealthCheckResult:
 
     def test_dependencies_map_contains_dependency_status(self):
         result = self._make()
-        assert "vsodb" in result.dependencies
-        assert isinstance(result.dependencies["vsodb"], DependencyStatus)
+        assert "g8es" in result.dependencies
+        assert isinstance(result.dependencies["g8es"], DependencyStatus)
 
     def test_unhealthy_dependencies_defaults_to_none(self):
         result = self._make()
         assert result.unhealthy_dependencies is None
 
     def test_unhealthy_dependencies_can_be_set(self):
-        result = self._make(unhealthy_dependencies=["vsodb", "redis"])
-        assert result.unhealthy_dependencies == ["vsodb", "redis"]
+        result = self._make(unhealthy_dependencies=["g8es", "redis"])
+        assert result.unhealthy_dependencies == ["g8es", "redis"]
 
     def test_timestamp_is_datetime(self):
         result = self._make()
@@ -188,7 +188,7 @@ class TestServiceHealthResult:
         defaults = dict(
             service=HealthStatus.HEALTHY,
             timestamp=_TS,
-            checks={"vsodb": DependencyStatus(status=HealthStatus.HEALTHY)},
+            checks={"g8es": DependencyStatus(status=HealthStatus.HEALTHY)},
         )
         defaults.update(overrides)
         return ServiceHealthResult(**defaults)
@@ -197,7 +197,7 @@ class TestServiceHealthResult:
         result = self._make()
         assert result.service == HealthStatus.HEALTHY
         assert isinstance(result.timestamp, datetime)
-        assert "vsodb" in result.checks
+        assert "g8es" in result.checks
 
     def test_service_is_enum(self):
         result = self._make(service=HealthStatus.UNHEALTHY)
@@ -362,7 +362,7 @@ class TestBoundOperator:
         assert not hasattr(op, "injected")
 
 
-class TestVSOHttpContext:
+class TestG8eHttpContext:
 
     def _make(self, **overrides):
         defaults = dict(
@@ -370,36 +370,36 @@ class TestVSOHttpContext:
             user_id="user-uuid-456",
             case_id="case-test-001",
             investigation_id="inv-test-001",
-            source_component=ComponentName.VSOD,
+            source_component=ComponentName.G8ED,
         )
         defaults.update(overrides)
-        return VSOHttpContext(**defaults)
+        return G8eHttpContext(**defaults)
 
     def test_instantiation_with_required_fields(self):
         ctx = self._make()
         assert ctx.web_session_id == "session_abc_123"
         assert ctx.user_id == "user-uuid-456"
-        assert ctx.source_component == ComponentName.VSOD
+        assert ctx.source_component == ComponentName.G8ED
 
     def test_web_session_id_required(self):
         with pytest.raises(ValidationError):
-            VSOHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.VSOD)
+            G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8ED)
 
     def test_user_id_required(self):
         with pytest.raises(ValidationError):
-            VSOHttpContext(web_session_id="s", case_id="c", investigation_id="i", source_component=ComponentName.VSOD)
+            G8eHttpContext(web_session_id="s", case_id="c", investigation_id="i", source_component=ComponentName.G8ED)
 
     def test_case_id_required(self):
         with pytest.raises(ValidationError):
-            VSOHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.VSOD)
+            G8eHttpContext(web_session_id="s", user_id="u", investigation_id="i", source_component=ComponentName.G8ED)
 
     def test_investigation_id_required(self):
         with pytest.raises(ValidationError):
-            VSOHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.VSOD)
+            G8eHttpContext(web_session_id="s", user_id="u", case_id="c", source_component=ComponentName.G8ED)
 
     def test_source_component_required(self):
         with pytest.raises(ValidationError):
-            VSOHttpContext(web_session_id="s", user_id="u", case_id="c", investigation_id="i")
+            G8eHttpContext(web_session_id="s", user_id="u", case_id="c", investigation_id="i")
 
     def test_source_component_is_enum(self):
         ctx = self._make(source_component=ComponentName.G8EE)
@@ -412,8 +412,8 @@ class TestVSOHttpContext:
             assert ctx.source_component == component
 
     def test_source_component_accepts_string_value_via_coercion(self):
-        ctx = self._make(source_component=ComponentName.VSOD)
-        assert ctx.source_component == ComponentName.VSOD
+        ctx = self._make(source_component=ComponentName.G8ED)
+        assert ctx.source_component == ComponentName.G8ED
 
     def test_optional_fields_default_to_none(self):
         ctx = self._make()
@@ -497,9 +497,9 @@ class TestVSOHttpContext:
         assert ctx.timestamp == _TS
 
     def test_model_dump_serializes_source_component_as_string(self):
-        ctx = self._make(source_component=ComponentName.VSOD)
+        ctx = self._make(source_component=ComponentName.G8ED)
         dumped = ctx.model_dump()
-        assert dumped["source_component"] == "vsod"
+        assert dumped["source_component"] == "g8ed"
 
     def test_model_dump_excludes_none_by_default(self):
         ctx = self._make()

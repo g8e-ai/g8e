@@ -13,9 +13,9 @@
 
 from pydantic import Field
 
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class VersionInfo(VSOBaseModel):
-    """Version information for a VSO component."""
+class VersionInfo(G8eBaseModel):
+    """Version information for a g8e component."""
     version: str = Field(description="Semver version string (e.g. v4.2.0)")

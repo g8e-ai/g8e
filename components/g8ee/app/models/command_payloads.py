@@ -25,10 +25,10 @@ shared/models/wire/command_payloads.json.
 from pydantic import Field
 
 from app.constants import FileOperation
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class TargetedOperatorArgs(VSOBaseModel):
+class TargetedOperatorArgs(G8eBaseModel):
     """Base class for tool args that can be routed to a specific operator."""
     target_operator: str | None = Field(
         default=None,
@@ -40,7 +40,7 @@ class TargetedOperatorArgs(VSOBaseModel):
     )
 
 
-class CommandPayload(VSOBaseModel):
+class CommandPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_COMMAND_REQUESTED."""
     command: str = Field(..., description="Shell command string to execute")
     execution_id: str | None = Field(default=None, description="Unique execution identifier")
@@ -49,7 +49,7 @@ class CommandPayload(VSOBaseModel):
     timeout_seconds: int | None = Field(default=None, description="Execution timeout override in seconds")
 
 
-class CommandCancelPayload(VSOBaseModel):
+class CommandCancelPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_COMMAND_CANCEL_REQUESTED."""
     execution_id: str = Field(..., description="execution_id of the running command to cancel")
 
@@ -73,7 +73,7 @@ class FileEditPayload(TargetedOperatorArgs):
     create_if_missing: bool = Field(default=False, description="Create the file if it does not exist (write operation)")
 
 
-class FsListPayload(VSOBaseModel):
+class FsListPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILESYSTEM_LIST_REQUESTED."""
     path: str | None = Field(default=None, description="Directory path to list. Defaults to current working directory.")
     execution_id: str | None = Field(default=None, description="Unique execution identifier")
@@ -81,20 +81,20 @@ class FsListPayload(VSOBaseModel):
     max_entries: int | None = Field(default=None, description="Maximum number of entries to return. Max 500.")
 
 
-class FsReadPayload(VSOBaseModel):
+class FsReadPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILESYSTEM_READ_REQUESTED."""
     path: str = Field(..., description="Absolute or relative path to the file to read")
     execution_id: str | None = Field(default=None, description="Unique execution identifier")
     max_size: int | None = Field(default=None, description="Maximum number of bytes to read. Defaults to 100 KiB.")
 
 
-class FetchLogsPayload(VSOBaseModel):
+class FetchLogsPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_LOGS_FETCH_REQUESTED."""
     execution_id: str = Field(..., description="execution_id of the stored execution to fetch logs for")
     sentinel_mode: str | None = Field(default=None, description="Vault scrubbing mode to use when reading")
 
 
-class FetchHistoryPayload(VSOBaseModel):
+class FetchHistoryPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_HISTORY_FETCH_REQUESTED."""
     operator_session_id: str | None = Field(default=None, description="Operator session ID to scope history to")
     limit: int | None = Field(default=None, description="Maximum number of history entries to return")
@@ -103,13 +103,13 @@ class FetchHistoryPayload(VSOBaseModel):
     include_file_mutations: bool | None = Field(default=None, description="Include file mutation entries")
 
 
-class FetchFileHistoryPayload(VSOBaseModel):
+class FetchFileHistoryPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED."""
     file_path: str = Field(..., description="Absolute path to the file to retrieve edit history for")
     limit: int | None = Field(default=None, description="Maximum number of history entries to return")
 
 
-class FetchFileDiffPayload(VSOBaseModel):
+class FetchFileDiffPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED."""
     diff_id: str | None = Field(default=None, description="Specific diff entry ID to fetch")
     operator_session_id: str | None = Field(default=None, description="Fetch all diffs for an operator session")
@@ -117,7 +117,7 @@ class FetchFileDiffPayload(VSOBaseModel):
     limit: int | None = Field(default=None, description="Maximum number of diff entries to return")
 
 
-class RestoreFilePayload(VSOBaseModel):
+class RestoreFilePayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILE_RESTORE_REQUESTED."""
     file_path: str = Field(..., description="Absolute path of the file to restore")
     commit_hash: str = Field(..., description="Git commit hash to restore the file to")
@@ -187,7 +187,7 @@ class FileUpdateArgs(TargetedOperatorArgs):
     create_backup: bool = Field(default=True, description="Create backup before modifying. Default: true.")
 
 
-class SearchWebArgs(VSOBaseModel):
+class SearchWebArgs(G8eBaseModel):
     """LLM tool call args for OperatorToolName.G8E_SEARCH_WEB."""
     query: str = Field(..., description="The search query. Be specific and technical for best results.")
     num: int = Field(default=5, description="Number of results to return (1-10). Default: 5.")
@@ -267,7 +267,7 @@ class FetchFileDiffArgs(TargetedOperatorArgs):
     limit: int | None = Field(default=None, description="Maximum number of diffs to return (default: 50, only used with operator_session_id).")
 
 
-class GrantIntentArgs(VSOBaseModel):
+class GrantIntentArgs(G8eBaseModel):
     """LLM tool call args for OperatorToolName.GRANT_INTENT."""
     intent_name: str = Field(
         ...,
@@ -308,7 +308,7 @@ class GrantIntentArgs(VSOBaseModel):
     )
 
 
-class RevokeIntentArgs(VSOBaseModel):
+class RevokeIntentArgs(G8eBaseModel):
     """LLM tool call args for OperatorToolName.REVOKE_INTENT."""
     intent_name: str = Field(
         ...,

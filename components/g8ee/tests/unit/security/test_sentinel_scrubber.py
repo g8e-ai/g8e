@@ -13,7 +13,7 @@
 
 import pytest
 from app.constants import ScrubType
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 from app.security.sentinel_scrubber import (
     ScrubResult,
@@ -43,12 +43,12 @@ class TestSentinelConfig:
         assert cfg.log_scrubs is False
 
     def test_is_pydantic_model(self):
-        assert issubclass(SentinelConfig, VSOBaseModel)
+        assert issubclass(SentinelConfig, G8eBaseModel)
 
 
 class TestScrubResult:
     def test_is_pydantic_model(self):
-        assert issubclass(ScrubResult, VSOBaseModel)
+        assert issubclass(ScrubResult, G8eBaseModel)
 
     def test_fields(self):
         result = ScrubResult(

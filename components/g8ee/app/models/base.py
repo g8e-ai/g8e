@@ -21,10 +21,10 @@ __all__ = [
     "ConfigDict",
     "Field",
     "ValidationError",
-    "VSOAuditableModel",
-    "VSOBaseModel",
-    "VSOIdentifiableModel",
-    "VSOTimestampedModel",
+    "G8eAuditableModel",
+    "G8eBaseModel",
+    "G8eIdentifiableModel",
+    "G8eTimestampedModel",
     "_to_iso_z",
     "field_validator",
     "recursive_serialize",
@@ -60,8 +60,8 @@ def recursive_serialize(value: Any) -> Any:
     return value
 
 
-class VSOBaseModel(BaseModel):
-    """Base model for all VSO domain objects.
+class G8eBaseModel(BaseModel):
+    """Base model for all g8e domain objects.
 
     Enforces:
     - ``extra='ignore'``: unknown fields are silently dropped (safe deserialization from wire/DB)
@@ -112,12 +112,12 @@ class VSOBaseModel(BaseModel):
         return recursive_serialize(self)
 
 
-class VSOTimestampedModel(VSOBaseModel):
-    """Adds UTC timestamps to any VSO model.
+class G8eTimestampedModel(G8eBaseModel):
+    """Adds UTC timestamps to any g8e model.
 
     Use for any object that needs creation/mutation time tracking but does not
     need a stable document identity (i.e. is not persisted as its own document).
-    For persisted entities use ``VSOIdentifiableModel``.
+    For persisted entities use ``G8eIdentifiableModel``.
     """
 
     created_at: datetime = Field(default_factory=now, description="When the entity was created (UTC)")
@@ -144,15 +144,15 @@ class VSOTimestampedModel(VSOBaseModel):
         self.updated_at = now()
 
 
-class VSOIdentifiableModel(VSOTimestampedModel):
-    """Adds a stable document identity to a timestamped VSO entity.
+class G8eIdentifiableModel(G8eTimestampedModel):
+    """Adds a stable document identity to a timestamped g8e entity.
 
     Use for any object that is persisted as its own document in the database
     and needs a stable, addressable ID. The ``id`` field defaults to a UUID4
     string via ``generate_id()``.
 
     Do NOT use this for value objects, request DTOs, or config structs — those
-    belong on ``VSOBaseModel`` directly. Misusing this class as a generic base
+    belong on ``G8eBaseModel`` directly. Misusing this class as a generic base
     pollutes every payload with ``id``, ``created_at``, and ``updated_at`` fields
     that have no meaning for ephemeral objects.
     """
@@ -173,8 +173,8 @@ class VSOIdentifiableModel(VSOTimestampedModel):
         return f"{prefix}-{base_id}" if prefix else base_id
 
 
-class VSOAuditableModel(VSOIdentifiableModel):
-    """Adds actor-level audit fields to an identifiable VSO entity.
+class G8eAuditableModel(G8eIdentifiableModel):
+    """Adds actor-level audit fields to an identifiable g8e entity.
 
     Use for entities where you need to track which user or service created
     and last updated the record, in addition to the standard timestamps.

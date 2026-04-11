@@ -51,10 +51,10 @@ from app.constants import (
     QWEN3_CODER_30B,
     ThinkingLevel,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class LLMModelConfig(VSOBaseModel):
+class LLMModelConfig(G8eBaseModel):
     """Configuration for an LLM model including capability constraints."""
 
     name: str
@@ -230,7 +230,7 @@ def _highest_thinking_level(config: "LLMModelConfig") -> "ThinkingLevel | None":
     return None
 
 
-class LLMModelRegistry(VSOBaseModel):
+class LLMModelRegistry(G8eBaseModel):
     """Registry of all known LLM model configurations."""
 
     configs: list[LLMModelConfig] = Field(default_factory=list)

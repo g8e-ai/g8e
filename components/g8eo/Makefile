@@ -18,12 +18,12 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 # =============================================================================
 BINARY_NAME := g8e.operator
 CERTS_DIR := certs
-VSOD_SSL_CA_CERT := ../../ssl/ca.crt
+G8ED_SSL_CA_CERT := ../../ssl/ca.crt
 BUILD_DIR := /home/g8e/build
 BLOB_NAMESPACE := operator-binary
-VSODB_URL := https://vsodb:9000
-CA_CERT := /vsodb/ca.crt
-AUTH_TOKEN := $(shell cat /vsodb/internal_auth_token 2>/dev/null | tr -d ' \n\r')
+G8ES_URL := https://g8es:9000
+CA_CERT := /g8es/ca.crt
+AUTH_TOKEN := $(shell cat /g8es/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
 # =============================================================================
 # ARCHITECTURES
@@ -42,7 +42,7 @@ help:
 	@echo "  build-all         Build all architectures inside g8ep container (CI)"
 	@echo ""
 	@echo "Build (local Go):"
-	@echo "  build-local       Build linux/amd64 locally and upload to VSODB"
+	@echo "  build-local       Build linux/amd64 locally and upload to g8es"
 	@echo "  build-local-all   Build all Linux architectures locally (release)"
 	@echo "  build-linux-amd64 Build linux/amd64 only"
 	@echo "  build-linux-arm64 Build linux/arm64 only"
@@ -73,7 +73,7 @@ help:
 build:
 	@echo "Building Operator (linux/amd64)..."
 	@mkdir -p certs
-	@[ -f /vsodb/ssl/ca.crt ] && cp /vsodb/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
@@ -88,7 +88,7 @@ build:
 build-all:
 	@echo "Building Operator (all architectures)..."
 	@mkdir -p certs
-	@[ -f /vsodb/ssl/ca.crt ] && cp /vsodb/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \
@@ -112,11 +112,11 @@ build-all:
 	fi
 	@echo ""
 	@echo "All architectures built successfully."
-	@echo "Uploading binaries to VSODB blob store..."
+	@echo "Uploading binaries to g8es blob store..."
 	@for arch in amd64 arm64 386; do \
 		$(MAKE) _upload-blob ARCH=$$arch BIN_PATH=$(BUILD_DIR)/linux-$$arch/g8e.operator || exit 1; \
 	done
-	@echo "All binaries uploaded to VSODB blob store."
+	@echo "All binaries uploaded to g8es blob store."
 
 # =============================================================================
 # BUILD TARGETS — local Go
@@ -148,9 +148,9 @@ _upload-blob:
 			-H 'Content-Type: application/octet-stream' \
 			-H 'X-Internal-Auth: $(AUTH_TOKEN)' \
 			--data-binary @$(BIN_PATH) \
-			'$(VSODB_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
+			'$(G8es_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
 		if [ "$$HTTP_CODE" = "200" ] || [ "$$HTTP_CODE" = "201" ]; then \
-			echo "  Uploaded linux/$(ARCH) to VSODB blob store ($$SIZE)"; \
+			echo "  Uploaded linux/$(ARCH) to g8es blob store ($$SIZE)"; \
 		else \
 			echo "  ERROR: Upload failed for linux/$(ARCH) (HTTP $$HTTP_CODE)" >&2; \
 			exit 1; \
@@ -201,20 +201,20 @@ _build-release:
 # =============================================================================
 .PHONY: check-certs
 check-certs:
-	@if [ ! -f "$(VSOD_SSL_CA_CERT)" ]; then \
-		echo "ERROR: VSOD server CA not found at $(VSOD_SSL_CA_CERT)"; \
+	@if [ ! -f "$(G8ED_SSL_CA_CERT)" ]; then \
+		echo "ERROR: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
 		echo "  Run: scripts/security/generate-certs.sh"; \
 		echo "  Or:  scripts/core/build.sh --generate-ssl"; \
 		exit 1; \
 	fi
 	@mkdir -p $(CERTS_DIR)
-	@cp $(VSOD_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt
-	@echo "Synced VSOD server CA to $(CERTS_DIR)/server_ca.crt"
+	@cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt
+	@echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"
 
 .PHONY: clean-certs
 clean-certs:
 	@rm -f $(CERTS_DIR)/server_ca.crt
-	@echo "Removed $(CERTS_DIR)/server_ca.crt (source at $(VSOD_SSL_CA_CERT) is unchanged)"
+	@echo "Removed $(CERTS_DIR)/server_ca.crt (source at $(G8ED_SSL_CA_CERT) is unchanged)"
 
 # =============================================================================
 # CODE QUALITY

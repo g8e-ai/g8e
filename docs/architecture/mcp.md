@@ -25,11 +25,11 @@ External Protocol (e.g., MCP)
            │
            ▼
     g8e Event System
-    (VSODB pub/sub)
+    (g8es pub/sub)
            │
            ▼
     Component Execution
-    (g8ee, g8eo, VSOD)
+    (g8ee, g8eo, g8ed)
 ```
 
 **Key Design Principle:** The platform never speaks external protocols directly to its core logic. All external protocols are translated to internal event types at the edge, and core components only understand event types. This enables adding new protocols by implementing a new translator without touching core business logic.
@@ -91,7 +91,7 @@ func MCPToolNameToEventType(toolName string) string {
 
 **Translation Functions:**
 
-- `TranslateToolCallToCommand()` - Converts MCP `tools/call` JSON-RPC to internal `VSOMessage`
+- `TranslateToolCallToCommand()` - Converts MCP `tools/call` JSON-RPC to internal `G8eMessage`
 - `TranslateResourceReadToCommand()` - Converts MCP `resources/read` to internal event
 - `TranslateResourceListToCommand()` - Converts MCP `resources/list` to internal event
 - `TranslateResultToMCP()` - Converts internal g8e payload to MCP JSON-RPC response
@@ -151,19 +151,19 @@ async def call_tool(
     self,
     tool_name: str,
     arguments: dict[str, Any],
-    vso_context: VSOHttpContext,
+    g8e_context: G8eHttpContext,
     user_settings: G8eeUserSettings | None = None,
     sentinel_mode: bool = True,
 ) -> dict[str, Any]:
-    investigation = await self._build_investigation_context(vso_context, sentinel_mode)
+    investigation = await self._build_investigation_context(g8e_context, sentinel_mode)
     
-    context_token = self._tool_service.start_invocation_context(vso_context=vso_context)
+    context_token = self._tool_service.start_invocation_context(g8e_context=g8e_context)
     try:
         result = await asyncio.wait_for(
             self._tool_service.execute_tool(
                 tool_name=tool_name,
                 tool_args=arguments,
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 investigation=investigation,
                 request_settings=user_settings,
             ),
@@ -190,9 +190,9 @@ async def call_tool(
 
 MCP tool calls have a 30-second timeout (`MCP_TOOL_CALL_TIMEOUT_SECONDS`). If a tool requires human approval and the user is away, the MCP client receives a graceful error explaining the approval is pending, rather than blocking indefinitely.
 
-#### VSOD - HTTP Gateway
+#### g8ed - HTTP Gateway
 
-**Location:** `components/vsod/routes/platform/mcp_routes.js`
+**Location:** `components/g8ed/routes/platform/mcp_routes.js`
 
 **Endpoint:** `POST /mcp`
 
@@ -219,7 +219,7 @@ Dispatch table:
    - Does not require a web session
    - Bound operators are resolved by user ID instead of web session ID
 
-**Context:** `buildVSOContext` resolves bound operators before every request:
+**Context:** `buildG8eContext` resolves bound operators before every request:
 - For session authentication: resolves by web session ID via `resolveBoundOperators(webSessionId)`
 - For OAuth Client ID authentication: resolves by user ID via `resolveBoundOperatorsForUser(userId)`
 
@@ -269,13 +269,13 @@ MCP events are integrated into the g8e event system via dedicated event types un
 Claude Code (MCP client)
     │ POST /mcp
     ▼
-VSOD (mcp_routes.js)
+g8ed (mcp_routes.js)
     │ POST /api/internal/mcp/tools/call
     ▼
 g8ee (MCPGatewayService.call_tool)
     │ AIToolService.execute_tool
     ▼
-VSODB pub/sub: g8e.v1.operator.mcp.tools.call
+g8es pub/sub: g8e.v1.operator.mcp.tools.call
     │
     ▼
 g8eo (pubsub_commands.go)
@@ -285,7 +285,7 @@ g8eo (pubsub_commands.go)
 g8eo executes command (using translated event type)
     │
     ▼
-VSODB pub/sub: g8e.v1.operator.mcp.tools.result
+g8es pub/sub: g8e.v1.operator.mcp.tools.result
     │
     ▼
 g8ee (pubsub_service.py)
@@ -335,14 +335,14 @@ func NewProtocolToolNameToEventType(toolName string) string {
     }
 }
 
-// TranslateToolCallToCommand converts protocol request to internal VSOMessage
-func TranslateToolCallToCommand(req *ProtocolRequest) (*models.VSOMessage, error) {
+// TranslateToolCallToCommand converts protocol request to internal G8eMessage
+func TranslateToolCallToCommand(req *ProtocolRequest) (*models.G8eMessage, error) {
     eventType := NewProtocolToolNameToEventType(req.ToolName)
     if eventType == "" {
         return nil, fmt.Errorf("unsupported tool: %s", req.ToolName)
     }
     
-    return &models.VSOMessage{
+    return &models.G8eMessage{
         ID:        req.ID,
         EventType: eventType,
         Payload:   req.Arguments,
@@ -356,7 +356,7 @@ Update `components/g8eo/services/pubsub/pubsub_commands.go` to call the new tran
 
 ```go
 if msg.EventType == constants.Event.Operator.NewProtocolToolsCall {
-    vsoMsg, err := new_protocol.TranslateToolCallToCommand(&req)
+    g8eMsg, err := new_protocol.TranslateToolCallToCommand(&req)
     if err != nil {
         rs.logger.Error("Failed to translate new protocol tool call", "error", err)
         return
@@ -369,9 +369,9 @@ if msg.EventType == constants.Event.Operator.NewProtocolToolsCall {
 
 If the protocol needs external client access, create `components/g8ee/app/services/new_protocol/gateway_service.py` following the MCP pattern.
 
-### Step 5: Add VSOD Routes (Optional)
+### Step 5: Add g8ed Routes (Optional)
 
-Create `components/vsod/routes/platform/new_protocol_routes.js` to expose HTTP endpoints for the protocol.
+Create `components/g8ed/routes/platform/new_protocol_routes.js` to expose HTTP endpoints for the protocol.
 
 ---
 
@@ -464,7 +464,7 @@ g8e supports two authentication methods for the MCP endpoint:
 ```
 Claude Code sends MCP request with x-oauth-client-id header
     ▼
-VSOD mcp_routes.js validates OAuth Client ID as a G8eKey
+g8ed mcp_routes.js validates OAuth Client ID as a G8eKey
     ▼
 ApiKeyService.validateKey() checks key format, expiry, revocation status
     ▼
@@ -608,8 +608,8 @@ curl -X POST https://your-g8e-instance.com/mcp \
 - `components/g8ee/tests/unit/services/mcp/test_adapter.py` - Adapter function tests
 - `components/g8ee/tests/unit/services/mcp/test_types.py` - Type model tests
 
-**VSOD (JavaScript):**
-- `components/vsod/test/unit/routes/platform/mcp_routes.unit.test.js` - Route handler tests
+**g8ed (JavaScript):**
+- `components/g8ed/test/unit/routes/platform/mcp_routes.unit.test.js` - Route handler tests
 
 ### Contract Tests
 
@@ -627,4 +627,4 @@ These verify that Python and Go implementations match the canonical `shared/mode
 - [MCP JSON-RPC Transport](https://modelcontextprotocol.io/docs/concepts/transports#json-rpc-20)
 - [g8ee Component Documentation](../components/g8ee.md)
 - [g8eo Component Documentation](../components/g8eo.md)
-- [VSOD Component Documentation](../components/vsod.md)
+- [g8ed Component Documentation](../components/g8ed.md)

@@ -1,20 +1,20 @@
 #!/bin/bash
-# Fetch Operator API Key from VSODB and Launch Operator
+# Fetch Operator API Key from g8es and Launch Operator
 #
 # Called by supervisord as the operator program command.
-# Retries the VSODB fetch with exponential backoff to handle
+# Retries the g8es fetch with exponential backoff to handle
 # transient unavailability during container restarts.
 
 set -euo pipefail
 
-SSL_DIR="${G8E_SSL_DIR:-/vsodb}"
+SSL_DIR="${G8E_SSL_DIR:-/g8es}"
 AUTH_TOKEN="${G8E_INTERNAL_AUTH_TOKEN:-}"
 ENDPOINT="${G8E_OPERATOR_ENDPOINT:-${G8E_GATEWAY_OPERATOR_ENDPOINT:-g8e.local}}"
 LOG_LEVEL="${G8E_LOG_LEVEL:-info}"
 PUBSUB_URL="${G8E_OPERATOR_PUBSUB_URL:-}"
-VSODB_URL="https://vsodb:9000/db/settings/platform_settings"
+G8ES_URL="https://g8es:9000/db/settings/platform_settings"
 OPERATOR_BINARY="/home/g8e/g8e.operator"
-BLOB_URL="https://vsodb:9000/blob/operator-binary"
+BLOB_URL="https://g8es:9000/blob/operator-binary"
 
 MAX_RETRIES=5
 RETRY_DELAY=2
@@ -31,7 +31,7 @@ _detect_arch() {
 _fetch_binary() {
     local arch
     arch=$(_detect_arch)
-    echo "[g8ep] Downloading operator binary (linux/${arch}) from VSODB blob store..." >&2
+    echo "[g8ep] Downloading operator binary (linux/${arch}) from g8es blob store..." >&2
 
     local http_code
     http_code=$(curl -sf -o "${OPERATOR_BINARY}" -w '%{http_code}' \
@@ -56,14 +56,14 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     response=$(curl -sf \
         -H "X-Internal-Auth: ${AUTH_TOKEN}" \
         --cacert "${SSL_DIR}/ca.crt" \
-        "${VSODB_URL}" 2>/dev/null) && break
+        "${G8ES_URL}" 2>/dev/null) && break
 
     if [ "$attempt" -eq "$MAX_RETRIES" ]; then
-        echo "[g8ep] Failed to reach VSODB after ${MAX_RETRIES} attempts" >&2
+        echo "[g8ep] Failed to reach g8es after ${MAX_RETRIES} attempts" >&2
         exit 1
     fi
 
-    echo "[g8ep] VSODB not ready (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}s..." >&2
+    echo "[g8ep] g8es not ready (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}s..." >&2
     sleep "$RETRY_DELAY"
     RETRY_DELAY=$((RETRY_DELAY * 2))
 done

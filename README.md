@@ -44,7 +44,7 @@ g8e is a security-first, self-hosted platform for AI-augmented infrastructure op
 
 1.  **The Operator (g8eo):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
 2.  **The Engine (g8ee):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
-3.  **The Dashboard (VSOD):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
+3.  **The Dashboard (g8ed):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
 
 See [docs/architecture/about.md](docs/architecture/about.md) for philosophy, governance, and origins.
 
@@ -131,9 +131,9 @@ flowchart TD
 
 | Service | Container | Language | Role |
 |---------|-----------|----------|------|
-| **vsodb** | `g8es` | Go | Persistence (SQLite), KV store, pub/sub broker |
+| **g8es** | `g8es` | Go | Persistence (SQLite), KV store, pub/sub broker |
 | **g8ee** | `g8ee` | Python | AI engine, LLM orchestration, tool calling |
-| **vsod** | `g8e-dashboard` | Node.js | Web UI, auth, mTLS gateway, TLS termination |
+| **g8ed** | `g8ed` | Node.js | Web UI, auth, mTLS gateway, TLS termination |
 | **g8ep** | `g8ep` | Multi | CLI runner, Operator build, SSL management |
 | **Operator** | *(runs on target)* | Go | Execution agent on managed systems |
 
@@ -143,31 +143,31 @@ Detailed documentation in [docs/architecture/](docs/architecture/) and [docs/com
 
 ## Data Plane Architecture
 
-The Operator is the central data plane for the entire platform. In `--listen` mode (VSODB), it provides the persistence and messaging backbone for g8ee and VSOD. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
+The Operator is the central data plane for the entire platform. In `--listen` mode (g8es), it provides the persistence and messaging backbone for g8ee and g8ed. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
 
 ```mermaid
 graph TD
     subgraph "Control & Persistence Plane (Self-Hosted Hub)"
         direction TB
-        VSODB[("<b>VSODB</b><br/>Operator in --listen mode<br/>(Central Data Plane)")]
+        g8es[("<b>g8es</b><br/>Operator in --listen mode<br/>(Central Data Plane)")]
         
-        subgraph "VSODB Services"
+        subgraph "g8es Services"
             direction LR
             DS["Document Store<br/>(Platform Data)"]
             KS["KV Store<br/>(Ephemeral State)"]
             PS["PubSub Broker<br/>(Message Routing)"]
             BS["Blob Store<br/>(Artifacts)"]
         end
-        VSODB --- DS
-        VSODB --- KS
-        VSODB --- PS
-        VSODB --- BS
+        g8es --- DS
+        g8es --- KS
+        g8es --- PS
+        g8es --- BS
         
         g8ee["<b>g8ee</b><br/>AI Engine"]
-        VSOD["<b>VSOD</b><br/>Dashboard & Gateway"]
+        g8ed["<b>g8ed</b><br/>Dashboard & Gateway"]
         
-        g8ee -- "REST / PubSub" --> VSODB
-        VSOD -- "REST" --> VSODB
+        g8ee -- "REST / PubSub" --> g8es
+        g8ed -- "REST" --> g8es
     end
 
     subgraph "Execution Plane (Managed Hosts)"
@@ -188,15 +188,15 @@ graph TD
     end
 
     %% Data Paths
-    OPA -- "mTLS WebSocket (Pub/Sub)" --> VSOD
-    VSOD -- "Internal Proxy" --> VSODB
+    OPA -- "mTLS WebSocket (Pub/Sub)" --> g8ed
+    g8ed -- "Internal Proxy" --> g8es
     
     %% Annotations
     classDef hub fill:#f5f5f5,stroke:#333,stroke-width:2px;
     classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
     classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
     
-    class VSODB,g8ee,VSOD hub;
+    class g8es,g8ee,g8ed hub;
     class OPA operator;
     class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
 ```

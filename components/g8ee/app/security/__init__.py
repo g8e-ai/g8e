@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""VSO Security utilities."""
+"""g8e Security utilities."""
 
 from .operator_command_validator import OperatorCommandValidator
 from .output_sanitizer import (

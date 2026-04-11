@@ -48,10 +48,10 @@ from app.models.operators import (
     OperatorDocument,
     TargetSystem,
 )
-from app.models.pubsub_messages import VSOMessage
+from app.models.pubsub_messages import G8eMessage
 from app.services.mcp.adapter import build_tool_call_request
 from app.models.tool_results import CommandInternalResult
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eePlatformSettings
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         pubsub_service: PubSubServiceProtocol,
         execution_registry: ExecutionRegistryProtocol,
         approval_service: ApprovalServiceProtocol,
-        vsod_event_service: EventServiceProtocol,
+        g8ed_event_service: EventServiceProtocol,
         settings: G8eePlatformSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         operator_data_service: OperatorDataServiceProtocol,
@@ -74,7 +74,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self.pubsub_service = pubsub_service
         self.execution_registry = execution_registry
         self.approval_service = approval_service
-        self.vsod_event_service = vsod_event_service
+        self.g8ed_event_service = g8ed_event_service
         self._settings = settings
         self.operator_data_service = operator_data_service
         self.ai_response_analyzer = ai_response_analyzer
@@ -96,7 +96,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         error_msg: str,
         error_type: CommandErrorType,
         command: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         *,
         execution_id: str,
         operator_session_id: str,
@@ -108,7 +108,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         feedback_reason: str,
     ) -> CommandExecutionResult:
         try:
-            await self.vsod_event_service.publish_command_event(
+            await self.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_FAILED,
                 CommandFailedBroadcastEvent(
                     command=command,
@@ -124,10 +124,10 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                     violations=violations,
                     approval_id=approval_id,
                 ),
-                vso_context,
+                g8e_context,
             )
         except Exception as e:
-            logger.warning("Failed to broadcast command event %s to VSOD: %s", EventType.OPERATOR_COMMAND_FAILED, e)
+            logger.warning("Failed to broadcast command event %s to g8ed: %s", EventType.OPERATOR_COMMAND_FAILED, e)
         return CommandExecutionResult(
             success=False,
             error=error_msg,
@@ -247,23 +247,23 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
     async def execute(
         self,
-        vso_message: VSOMessage,
-        vso_context: VSOHttpContext,
+        g8e_message: G8eMessage,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
     ) -> CommandInternalResult:
-        """Generic execution entry point for any VSOMessage."""
-        return await self.dispatch_command(vso_message, vso_context, timeout_seconds)
+        """Generic execution entry point for any G8eMessage."""
+        return await self.dispatch_command(g8e_message, g8e_context, timeout_seconds)
 
     async def dispatch_command(
         self,
-        vso_message: VSOMessage,
-        vso_context: VSOHttpContext,
+        g8e_message: G8eMessage,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
     ) -> CommandInternalResult:
-        """Authors authoritative execution for any VSOMessage."""
-        execution_id = vso_message.id
-        operator_id = vso_message.operator_id
-        operator_session_id = vso_message.operator_session_id
+        """Authors authoritative execution for any G8eMessage."""
+        execution_id = g8e_message.id
+        operator_id = g8e_message.operator_id
+        operator_session_id = g8e_message.operator_session_id
 
         if not operator_id or not operator_session_id:
             raise ValidationError("operator_id and operator_session_id are required", component="g8ee")
@@ -282,7 +282,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         subscribers = await self.pubsub_service.publish_command(
             operator_id=operator_id,
             operator_session_id=operator_session_id,
-            command_data=vso_message,
+            command_data=g8e_message,
         )
 
         if subscribers == 0:
@@ -338,19 +338,19 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         execution_id: str,
         operator_id: str,
         operator_session_id: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> CancelCommandResult:
         try:
-            cancel_data = VSOMessage(
+            cancel_data = G8eMessage(
                 id=f"cancel_{execution_id}",
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_COMMAND_CANCEL_REQUESTED,
-                case_id=vso_context.case_id,
+                case_id=g8e_context.case_id,
                 task_id=AITaskId.COMMAND,
                 operator_session_id=operator_session_id,
                 operator_id=operator_id,
-                investigation_id=vso_context.investigation_id,
-                web_session_id=vso_context.web_session_id,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
                 payload=CommandCancelPayload(execution_id=execution_id),
             )
 
@@ -366,11 +366,11 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     async def send_command_to_operator(
         self,
         command_payload: DirectCommandRequest,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> DirectCommandResult:
-        if not vso_context.bound_operators:
+        if not g8e_context.bound_operators:
             raise ValidationError("No bound operators", component="g8ee")
-        bound = vso_context.bound_operators[0]
+        bound = g8e_context.bound_operators[0]
         if not bound.operator_session_id:
             raise ValidationError("Operator not bound", component="g8ee")
 
@@ -388,14 +388,14 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             request_id=execution_id,
         )
 
-        command_data = VSOMessage(
+        command_data = G8eMessage(
             id=execution_id,
             source_component=ComponentName.G8EE,
             event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-            case_id=vso_context.case_id,
+            case_id=g8e_context.case_id,
             task_id=AITaskId.DIRECT_COMMAND,
-            investigation_id=vso_context.investigation_id,
-            web_session_id=vso_context.web_session_id,
+            investigation_id=g8e_context.investigation_id,
+            web_session_id=g8e_context.web_session_id,
             operator_session_id=operator_session_id,
             operator_id=operator_id,
             payload=mcp_payload,

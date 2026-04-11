@@ -16,26 +16,26 @@ from pydantic import Field
 
 from app.constants import AttachmentType
 
-from .base import VSOBaseModel
+from .base import G8eBaseModel
 
 
-class AttachmentMetadata(VSOBaseModel):
+class AttachmentMetadata(G8eBaseModel):
     """
-    Attachment reference passed from VSOD to G8EE.
+    Attachment reference passed from g8ed to G8EE.
 
-    Contains the VSODB KV store key and file metadata needed to retrieve
-    the full attachment data. VSOD stores the binary content; g8ee retrieves
+    Contains the g8es KV store key and file metadata needed to retrieve
+    the full attachment data. g8ed stores the binary content; g8ee retrieves
     it via this key before processing.
     """
-    store_key: str | None = Field(default=None, description="Primary VSODB KV key (attachment:{inv_id}:{att_id})")
+    store_key: str | None = Field(default=None, description="Primary g8es KV key (attachment:{inv_id}:{att_id})")
     filename: str = Field(..., description="Original filename")
     file_size: int | None = Field(default=None, description="File size in bytes")
     content_type: str = Field(default="application/octet-stream", description="MIME content type")
 
 
-class AttachmentData(VSOBaseModel):
+class AttachmentData(G8eBaseModel):
     """
-    Full attachment payload retrieved from VSODB KV store.
+    Full attachment payload retrieved from g8es KV store.
 
     Produced by AttachmentService.get_attachments_by_metadata() and consumed by
     AttachmentService.process_attachments() for classification and LLM formatting.
@@ -46,7 +46,7 @@ class AttachmentData(VSOBaseModel):
     base64_data: str = Field(default="", description="Base64-encoded file content")
 
 
-class ProcessedAttachment(VSOBaseModel):
+class ProcessedAttachment(G8eBaseModel):
     """
     Attachment after classification by AttachmentService.
 

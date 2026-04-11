@@ -30,7 +30,7 @@ import (
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
 
-// PubSubCommandMessage is the inbound wire message received from VSODB pub/sub.
+// PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
 type PubSubCommandMessage struct {
 	ID                string          `json:"id"`
 	EventType         string          `json:"event_type"`
@@ -43,7 +43,7 @@ type PubSubCommandMessage struct {
 	Timestamp         time.Time       `json:"timestamp"`
 }
 
-// PubSubCommandService manages the VSODB pub/sub connection and dispatches inbound
+// PubSubCommandService manages the g8es pub/sub connection and dispatches inbound
 // operator commands to the appropriate first-class service handler.
 type PubSubCommandService struct {
 	client  PubSubClient
@@ -90,9 +90,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	client := c.PubSubClient
 	if client == nil && c.Config.PubSubURL != "" {
 		var err error
-		client, err = NewVSODBPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
+		client, err = NewG8esPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create VSODB pub/sub client: %w", err)
+			return nil, fmt.Errorf("failed to create g8es pub/sub client: %w", err)
 		}
 	}
 
@@ -158,7 +158,7 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	rs.heartbeat.ctx = rs.ctx
 
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
-	rs.logger.Info("Establishing connection with VSOD",
+	rs.logger.Info("Establishing connection with g8ed",
 		"operator_id", rs.config.OperatorID,
 		"operator_session_id", rs.config.OperatorSessionId)
 
@@ -226,7 +226,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 		}
 
 		if rs.client == nil {
-			rs.logger.Error("[RECONNECT] No VSODB pub/sub client configured")
+			rs.logger.Error("[RECONNECT] No g8es pub/sub client configured")
 			return
 		}
 
@@ -375,7 +375,7 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 		return
 	}
 
-	vsoMsg, err := mcp.TranslateToolCallToCommand(&req)
+	g8eMsg, err := mcp.TranslateToolCallToCommand(&req)
 	if err != nil {
 		rs.logger.Error("Failed to translate MCP tool call", "error", err)
 
@@ -390,13 +390,13 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 		}
 
 		// We need a way to publish this back. We can use rs.results.PublishResult
-		// but we need to build a VSOMessage for it.
+		// but we need to build a G8eMessage for it.
 		if msg.OperatorID == nil {
 			rs.logger.Error("Cannot send MCP error response: operator_id is nil (required for routing)")
 			return
 		}
 		payloadRaw, _ := json.Marshal(errResp)
-		respMsg := &models.VSOMessage{
+		respMsg := &models.G8eMessage{
 			ID:                req.ID,
 			EventType:         constants.Event.Operator.MCP.ToolsResult,
 			CaseID:            msg.CaseID,
@@ -414,11 +414,11 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 	// Update the message with translated data but keep the EventType as MCP.ToolsCall
 	// so the results publisher knows to wrap the result.
 	// We only change the Payload to what the handlers expect.
-	msg.Payload = vsoMsg.Payload
-	msg.ID = vsoMsg.ID // MCP request ID
+	msg.Payload = g8eMsg.Payload
+	msg.ID = g8eMsg.ID // MCP request ID
 
 	// Now dispatch based on the translated EventType
-	switch vsoMsg.EventType {
+	switch g8eMsg.EventType {
 	case constants.Event.Operator.Command.Requested:
 		rs.commands.HandleExecutionRequest(ctx, msg)
 	case constants.Event.Operator.FileEdit.Requested:
@@ -434,7 +434,7 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 	case constants.Event.Operator.FetchFileDiff.Requested:
 		rs.history.HandleFetchFileDiffRequest(ctx, msg)
 	default:
-		rs.logger.Warn("Unsupported MCP tool event type", "event_type", vsoMsg.EventType)
+		rs.logger.Warn("Unsupported MCP tool event type", "event_type", g8eMsg.EventType)
 	}
 }
 

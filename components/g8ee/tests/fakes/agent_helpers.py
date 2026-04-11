@@ -23,7 +23,7 @@ from app.models.agent import AgentStreamContext, StreamChunkFromModel, TurnResul
 from app.services.ai.agent import g8eAgent
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
-from tests.fakes.factories import build_vso_http_context
+from tests.fakes.factories import build_g8e_http_context
 
 
 def make_gen_config(
@@ -56,7 +56,7 @@ def make_agent_stream_context(
     user_id: str = "user-test-001",
     agent_mode: AgentMode = AgentMode.OPERATOR_BOUND,
     investigation=None,
-    vso_context=None,
+    g8e_context=None,
     **kwargs,
 ) -> AgentStreamContext:
     """Build an AgentStreamContext with sensible test defaults."""
@@ -67,7 +67,7 @@ def make_agent_stream_context(
         user_id=user_id,
         agent_mode=agent_mode,
         investigation=investigation,
-        vso_context=vso_context or build_vso_http_context(
+        g8e_context=g8e_context or build_g8e_http_context(
             web_session_id=web_session_id,
             user_id=user_id,
         ),
@@ -98,7 +98,7 @@ def make_agent_streaming_context(
             sentinel_mode=sentinel_mode,
         )
     
-    vso_context = build_vso_http_context(
+    g8e_context = build_g8e_http_context(
         web_session_id=web_session_id,
         user_id=user_id,
     )
@@ -115,7 +115,7 @@ def make_agent_streaming_context(
         agent_mode=agent_mode,
         sentinel_mode=sentinel_mode,
         investigation=investigation,
-        vso_context=vso_context,
+        g8e_context=g8e_context,
         request_settings=request_settings,
         **kwargs,
     )
@@ -206,7 +206,7 @@ async def collect_stream_from_model_chunks(
     context: AgentStreamContext,
     gen_config=None,
     model_name: str = "test-model",
-    vsod_event_service: Any = None,
+    g8ed_event_service: Any = None,
     llm_provider: Any = None,
 ) -> list[StreamChunkFromModel]:
     """Consume agent._stream_with_tool_loop and return all yielded chunks."""
@@ -218,15 +218,15 @@ async def collect_stream_from_model_chunks(
         generation_config=gen_config,
         model_name=model_name,
         context=context,
-        vsod_event_service=vsod_event_service or make_vsod_event_service(),
+        g8ed_event_service=g8ed_event_service or make_g8ed_event_service(),
         llm_provider=llm_provider,
     ):
         chunks.append(chunk)
     return chunks
 
 
-def make_vsod_event_service():
-    """Build a mock EventService for VSOD SSE publishing."""
+def make_g8ed_event_service():
+    """Build a mock EventService for g8ed SSE publishing."""
     from app.models.events import SessionEvent
     
     svc = MagicMock()

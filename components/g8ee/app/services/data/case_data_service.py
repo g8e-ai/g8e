@@ -30,7 +30,7 @@ from app.errors import (
     DatabaseError,
     ResourceNotFoundError,
     ValidationError,
-    VSOError,
+    G8eError,
 )
 from app.models import (
     CaseCreateRequest,
@@ -42,7 +42,7 @@ from app.models.cases import CaseModel, HistoryEntry
 from app.models.events import SessionEvent
 from app.models.db_queries import CaseHistoryQuery
 from app.services.cache.cache_aside import CacheAsideService
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ class CaseDataService:
             logger.info(f"Case created: {case_id}", extra={"case_id": case_id})
             return case
 
-        except VSOError:
+        except G8eError:
             raise
         except Exception as e:
             logger.error(f"Failed to create case {case_id}: {e}", exc_info=True)
@@ -167,7 +167,7 @@ class CaseDataService:
             doc_data["id"] = case_id
             return CaseModel.model_validate(doc_data)
 
-        except VSOError:
+        except G8eError:
             raise
         except Exception as e:
             logger.error(f"Failed to retrieve case {case_id}: {e}", exc_info=True)
@@ -222,7 +222,7 @@ class CaseDataService:
             logger.info(f"Case updated: {case_id}", extra={"case_id": case_id})
             return updated
 
-        except VSOError:
+        except G8eError:
             raise
         except Exception as e:
             logger.error(f"Failed to update case {case_id}: {e}", exc_info=True)
@@ -253,7 +253,7 @@ class CaseDataService:
 
             logger.info(f"Case deleted: {case_id}", extra={"case_id": case_id})
 
-        except VSOError:
+        except G8eError:
             raise
         except Exception as e:
             logger.error(f"Failed to delete case {case_id}: {e}", exc_info=True)

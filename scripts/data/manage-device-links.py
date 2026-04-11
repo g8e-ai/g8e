@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Device Link Management Script for VSO Platform
+Device Link Management Script for g8e Platform
 
-Manage device link tokens via the VSOD internal HTTP API.
-Runs inside g8ep and communicates with g8e-dashboard over the internal network.
+Manage device link tokens via the g8ed internal HTTP API.
+Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-vsodb.py device-links list --user-id USER_ID
-    python manage-vsodb.py device-links list --email user@example.com
-    python manage-vsodb.py device-links create --user-id USER_ID
-    python manage-vsodb.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50 --expires-in-hours 24
-    python manage-vsodb.py device-links create --email user@example.com --name "staging"
-    python manage-vsodb.py device-links revoke --token dlk_...
-    python manage-vsodb.py device-links delete --token dlk_...
+    python manage-g8es.py device-links list --user-id USER_ID
+    python manage-g8es.py device-links list --email user@example.com
+    python manage-g8es.py device-links create --user-id USER_ID
+    python manage-g8es.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50 --expires-in-hours 24
+    python manage-g8es.py device-links create --email user@example.com --name "staging"
+    python manage-g8es.py device-links revoke --token dlk_...
+    python manage-g8es.py device-links delete --token dlk_...
 """
 
 import argparse
@@ -32,13 +32,13 @@ import sys
 from typing import Optional, Dict, Any, List
 
 from _lib import (
-    VSOD_BASE_URL,
+    G8ED_BASE_URL,
     print_banner,
     resolve_user_id,
-    vsod_request,
+    g8ed_request,
 )
 
-INTERNAL_DEVICE_LINKS_BASE = f'{VSOD_BASE_URL}/api/internal/device-links'
+INTERNAL_DEVICE_LINKS_BASE = f'{G8ED_BASE_URL}/api/internal/device-links'
 
 TOKEN_RE_PREFIX = 'dlk_'
 
@@ -69,7 +69,7 @@ class DeviceLinkManager:
         uid = resolve_user_id(user_id, email)
         if not uid:
             raise RuntimeError('Provide --user-id or --email')
-        result = vsod_request('GET', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}')
+        result = g8ed_request('GET', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}')
         if not result.get('success'):
             raise RuntimeError(result.get('error', 'Failed to list device links'))
 
@@ -102,7 +102,7 @@ class DeviceLinkManager:
         if expires_in_hours is not None:
             body['expires_in_hours'] = expires_in_hours
 
-        result = vsod_request('POST', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}', body)
+        result = g8ed_request('POST', f'{INTERNAL_DEVICE_LINKS_BASE}/user/{uid}', body)
         if not result.get('success'):
             raise RuntimeError(result.get('error', 'Failed to create device link'))
 
@@ -122,7 +122,7 @@ class DeviceLinkManager:
             print(f"Invalid token format: {token}")
             return False
 
-        result = vsod_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}')
+        result = g8ed_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
                 print(f"\nDevice link not found: {token}")
@@ -145,7 +145,7 @@ class DeviceLinkManager:
                 print("Deletion cancelled.")
                 return False
 
-        result = vsod_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}?action=delete')
+        result = g8ed_request('DELETE', f'{INTERNAL_DEVICE_LINKS_BASE}/{token}?action=delete')
         if not result.get('success'):
             if result.get('_status_code') == 404:
                 print(f"\nDevice link not found: {token}")
@@ -166,17 +166,17 @@ def _add_user_args(p: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Device Link Management Script for VSO Platform',
+        description='Device Link Management Script for g8e Platform',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-vsodb.py device-links list --user-id USER_ID
-  python manage-vsodb.py device-links list --email user@example.com
-  python manage-vsodb.py device-links create --user-id USER_ID
-  python manage-vsodb.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50
-  python manage-vsodb.py device-links create --email user@example.com --expires-in-hours 48
-  python manage-vsodb.py device-links revoke --token dlk_...
-  python manage-vsodb.py device-links delete --token dlk_...
+  python manage-g8es.py device-links list --user-id USER_ID
+  python manage-g8es.py device-links list --email user@example.com
+  python manage-g8es.py device-links create --user-id USER_ID
+  python manage-g8es.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50
+  python manage-g8es.py device-links create --email user@example.com --expires-in-hours 48
+  python manage-g8es.py device-links revoke --token dlk_...
+  python manage-g8es.py device-links delete --token dlk_...
         """
     )
 
@@ -211,7 +211,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-vsodb.py device-links', ' '.join(argv))
+    print_banner('manage-g8es.py device-links', ' '.join(argv))
     manager = DeviceLinkManager()
 
     try:
@@ -230,7 +230,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'delete':
             manager.delete_link(args.token, force=args.force)
     except RuntimeError as e:
-        print(f'[manage-vsodb device-links] {e}', file=sys.stderr)
+        print(f'[manage-g8es device-links] {e}', file=sys.stderr)
         return 1
 
     return 0

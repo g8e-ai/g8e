@@ -64,8 +64,8 @@ import logging
 from collections import defaultdict
 
 from app.models.settings import LLMSettings, G8eeUserSettings
-from app.models.base import VSOBaseModel
-from app.models.http_context import VSOHttpContext
+from app.models.base import G8eBaseModel
+from app.models.http_context import G8eHttpContext
 from app.constants import (
     CommandGenerationOutcome,
     ComponentName,
@@ -103,7 +103,7 @@ from app.models.agents.tribunal import (
 )
 from app.models.model_configs import get_lowest_thinking_level
 from app.models.events import SessionEvent
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 
 logger = logging.getLogger(__name__)
 
@@ -332,12 +332,12 @@ class TribunalEmitter:
     def __init__(
         self,
         event_service: EventService | None,
-        vso_context: VSOHttpContext | None,
+        g8e_context: G8eHttpContext | None,
     ):
         self.svc = event_service
-        self.ctx = vso_context
+        self.ctx = g8e_context
 
-    async def emit(self, event_type: EventType, payload: VSOBaseModel) -> None:
+    async def emit(self, event_type: EventType, payload: G8eBaseModel) -> None:
         """Fire-and-forget SSE event. Swallows errors to prevent pipeline stalls."""
         if not self.svc or not self.ctx or not self.ctx.web_session_id or not self.ctx.user_id:
             return
@@ -513,7 +513,7 @@ async def generate_command(
     os_name: str,
     shell: str,
     working_directory: str,
-    vsod_event_service: EventService,
+    g8ed_event_service: EventService,
     web_session_id: str,
     user_id: str,
     case_id: str,
@@ -521,14 +521,14 @@ async def generate_command(
     settings: G8eeUserSettings,
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to refine a command string."""
-    vso_context = VSOHttpContext(
+    g8e_context = G8eHttpContext(
         web_session_id=web_session_id,
         user_id=user_id,
         case_id=case_id,
         investigation_id=investigation_id,
         source_component=ComponentName.G8EE,
     )
-    emitter = TribunalEmitter(vsod_event_service, vso_context)
+    emitter = TribunalEmitter(g8ed_event_service, g8e_context)
     resolved_settings = settings
 
     if not resolved_settings.llm.llm_command_gen_enabled:

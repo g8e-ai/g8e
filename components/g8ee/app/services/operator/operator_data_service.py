@@ -32,7 +32,7 @@ from app.constants.status import (
     OperatorStatus,
 )
 from app.errors import ExternalServiceError, NetworkError, ValidationError
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
 from app.models.operators import (
     CommandResultRecord,
@@ -242,9 +242,9 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self,
         operator_ids: list[str],
         web_session_id: str,
-        context: VSOHttpContext,
+        context: G8eHttpContext,
     ) -> bool:
-        """Bind operators to a web session via VSOD."""
+        """Bind operators to a web session via g8ed."""
         if not operator_ids:
             raise ValidationError("operator_ids must be a non-empty list")
         if not web_session_id:

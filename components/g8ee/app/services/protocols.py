@@ -21,7 +21,7 @@ from app.constants import (
     FileOperation,
     OperatorStatus,
 )
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
     CacheOperationResult,
@@ -30,7 +30,7 @@ from app.models.cache import (
     QueryResult,
 )
 from app.models.events import BackgroundEvent, SessionEvent
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.infra import HTTPClientStatus, HTTPServiceStatus
 from app.models.investigations import (
     ConversationHistoryMessage,
@@ -55,7 +55,7 @@ from app.models.operators import (
     PendingApproval,
     TargetSystem,
 )
-from app.models.pubsub_messages import VSOMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
@@ -83,7 +83,7 @@ from app.models.command_payloads import (
 )
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.models.tool_results import ToolResult
-from app.models.vsod_client import IntentOperationResult
+from app.models.g8ed_client import IntentOperationResult
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
@@ -96,7 +96,7 @@ class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Retrieve platform-level settings from VSODB with cache-aside."""
+        """Retrieve platform-level settings from g8es with cache-aside."""
         ...
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
@@ -119,8 +119,8 @@ class EventServiceProtocol(Protocol):
     async def publish_command_event(
         self,
         event_type: EventType,
-        data: VSOBaseModel,
-        vso_context: VSOHttpContext,
+        data: G8eBaseModel,
+        g8e_context: G8eHttpContext,
         *,
         task_id: str,
     ) -> None:
@@ -131,7 +131,7 @@ class EventServiceProtocol(Protocol):
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | VSOBaseModel,
+        payload: dict[str, object] | G8eBaseModel,
         web_session_id: str,
         case_id: str,
         user_id: str | None = None,
@@ -189,7 +189,7 @@ class DBServiceProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
     ) -> CacheOperationResult:
         """Create a new document in a collection."""
         ...
@@ -198,7 +198,7 @@ class DBServiceProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
         merge: bool = True,
     ) -> CacheOperationResult:
         """Update or replace an existing document."""
@@ -274,7 +274,7 @@ class CacheAsideProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Create a document with optional caching/TTL."""
@@ -284,7 +284,7 @@ class CacheAsideProtocol(Protocol):
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
         merge: bool = True,
         ttl: int | None = None,
     ) -> CacheOperationResult:
@@ -443,7 +443,7 @@ class InvestigationServiceProtocol(Protocol):
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol: ...
     async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext: ...
-    async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, vso_context: VSOHttpContext) -> EnrichedInvestigationContext: ...
+    async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext: ...
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None: ...
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]: ...
     async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], merge: bool = True) -> None: ...
@@ -497,11 +497,11 @@ class InvestigationServiceProtocol(Protocol):
 
 
 @runtime_checkable
-class VSODClientProtocol(Protocol):
+class G8edClientProtocol(Protocol):
     async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> bool: ...
-    async def grant_intent(self, operator_id: str, intent: str, context: VSOHttpContext) -> IntentOperationResult: ...
-    async def revoke_intent(self, operator_id: str, intent: str, context: VSOHttpContext) -> IntentOperationResult: ...
-    async def bind_operators(self, operator_ids: list[str], web_session_id: str, context: VSOHttpContext) -> bool: ...
+    async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
+    async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
+    async def bind_operators(self, operator_ids: list[str], web_session_id: str, context: G8eHttpContext) -> bool: ...
 
 @runtime_checkable
 class AIResponseAnalyzerProtocol(Protocol):
@@ -529,7 +529,7 @@ class PubSubServiceProtocol(Protocol):
     async def stop(self) -> None: ...
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
-    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: VSOMessage) -> int: ...
+    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int: ...
 
 @runtime_checkable
 class OperatorHeartbeatServiceProtocol(Protocol):
@@ -549,12 +549,12 @@ class ApprovalServiceProtocol(Protocol):
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
-    vsod_event_service: EventServiceProtocol
+    g8ed_event_service: EventServiceProtocol
     ai_response_analyzer: AIResponseAnalyzerProtocol
     async def execute(
         self,
-        vso_message: VSOMessage,
-        vso_context: VSOHttpContext,
+        g8e_message: G8eMessage,
+        g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
     ) -> CommandInternalResult: ...
     def resolve_target_operator(self, operator_documents: list[OperatorDocument], target_operator: str) -> OperatorDocument: ...
@@ -565,19 +565,19 @@ class ExecutionServiceProtocol(Protocol):
 class LFAAServiceProtocol(Protocol):
     async def send_audit_event(
         self,
-        vso_message: VSOMessage,
+        g8e_message: G8eMessage,
     ) -> bool: ...
 
 @runtime_checkable
 class FileServiceProtocol(Protocol):
-    async def execute_file_edit(self, args: FileEditPayload, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult: ...
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult: ...
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, vso_context: VSOHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult: ...
+    async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult: ...
+    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult: ...
+    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult: ...
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> FsListToolResult: ...
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> FsReadToolResult: ...
+    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult: ...
+    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult: ...
 
 @runtime_checkable
 class IntentServiceProtocol(Protocol):
@@ -585,21 +585,21 @@ class IntentServiceProtocol(Protocol):
         self,
         *,
         args: GrantIntentArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> IntentPermissionResult: ...
     async def execute_intent_revocation(
         self,
         *,
         args: RevokeIntentArgs,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext
     ) -> IntentPermissionResult: ...
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]: ...
 
 @runtime_checkable
 class PortServiceProtocol(Protocol):
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, vso_context: VSOHttpContext) -> PortCheckToolResult: ...
+    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult: ...
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):
@@ -614,7 +614,7 @@ class ToolExecutorProtocol(Protocol):
         tool_name: str,
         args: dict[str, Any],
         investigation: EnrichedInvestigationContext,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
     ) -> ToolResult: ...
     @property

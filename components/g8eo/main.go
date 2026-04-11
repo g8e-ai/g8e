@@ -107,8 +107,8 @@ func main() {
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&wssPort, "wss-port", 443, "WSS port to dial on VSODB (default: 443)")
-	flag.IntVar(&httpPort, "http-port", 443, "HTTPS port for auth/bootstrap via VSODB proxy (default: 443)")
+	flag.IntVar(&wssPort, "wss-port", 443, "WSS port to dial on g8es (default: 443)")
+	flag.IntVar(&httpPort, "http-port", 443, "HTTPS port for auth/bootstrap via g8es proxy (default: 443)")
 	flag.StringVar(&apiKey, "key", "", "API key")
 	flag.StringVar(&operatorSessionID, "operator_session", "", "Pre-authorized operator session ID (from device link auth)")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
@@ -124,7 +124,7 @@ func main() {
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
 	flag.IntVar(&listenWSSPort, "wss-listen-port", 443, "WSS/TLS port for operator pub/sub connections (default: 443)")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", 443, "HTTPS port for internal g8ee/VSOD service traffic (default: 443)")
+	flag.IntVar(&listenHTTPPort, "http-listen-port", 443, "HTTPS port for internal g8ee/g8ed service traffic (default: 443)")
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&listenSSLDir, "ssl-dir", "", "Directory for TLS certificates (default: data-dir/ssl)")
 	flag.StringVar(&listenBinaryDir, "binary-dir", "", "Directory containing operator binaries to serve (default: .g8e/bin in working directory)")
@@ -150,11 +150,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -S, --session <id>      Pre-authorized operator session ID (from device link auth)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
-		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running VSODB\n")
+		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running g8es\n")
 		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: https://<endpoint>/ssl/ca.crt)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on VSODB for pub/sub (default: 443)\n")
+		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on g8es for pub/sub (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
 		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
@@ -167,7 +167,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
 		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: 443)\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/VSOD traffic (default: 443)\n")
+		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/g8ed traffic (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --ssl-dir <dir>             Directory for TLS certificates (default: data-dir/ssl)\n")
 		fmt.Fprintf(os.Stderr, "  --binary-dir <dir>          Directory containing operator binaries to serve (default: .g8e/bin in working directory)\n")
@@ -235,7 +235,7 @@ func main() {
 	// Try to read CA from local SSL volume first (when running in container)
 	if caURL == "" {
 		// Check common SSL volume mount points
-		sslPaths := []string{"/ssl/ca.crt", "/vsodb/ca.crt", "/vsodb/ssl/ca.crt", "/data/ssl/ca.crt"}
+		sslPaths := []string{"/ssl/ca.crt", "/g8es/ca.crt", "/g8es/ssl/ca.crt", "/data/ssl/ca.crt"}
 		for _, path := range sslPaths {
 			if pemData, err := os.ReadFile(path); err == nil {
 				logger.Info("Loading CA certificate from local SSL volume", "path", path)
@@ -490,10 +490,10 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 }
 
 // runListenMode starts the Operator in listen mode — the platform's central
-// persistence (VSODB) and pub/sub broker. In this mode, the Operator does
+// persistence (g8es) and pub/sub broker. In this mode, the Operator does
 // NOT execute commands, initiate outbound connections, or perform
 // authentication against a remote hub. It is strictly an inbound service
-// for g8ee, VSOD, and Outbound Operators.
+// for g8ee, g8ed, and Outbound Operators.
 func runListenMode(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPath, tlsKeyPath string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
@@ -501,7 +501,7 @@ func runListenMode(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPat
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator — Listen Mode (VSODB)", "version", version, "build", buildID)
+	logger.Info("g8e Operator — Listen Mode (g8es)", "version", version, "build", buildID)
 
 	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, sslDir, binaryDir, tlsCertPath, tlsKeyPath)
 	if err != nil {
@@ -634,7 +634,7 @@ func handleVerifyVault(vault *vault.Vault, apiKey string, logger *slog.Logger) {
 // runOpenClawMode starts the Operator as an OpenClaw Node Host.
 // The Operator connects to the OpenClaw Gateway via WebSocket, advertises
 // system.run and system.which, and executes shell commands on demand.
-// No g8e infrastructure (g8ee, VSOD) is required.
+// No g8e infrastructure (g8ee, g8ed) is required.
 func runOpenClawMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {

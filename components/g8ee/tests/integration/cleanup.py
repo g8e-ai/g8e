@@ -13,7 +13,7 @@
 
 """Integration test cleanup tracker.
 
-Provides a centralized mechanism for tracking VSODB documents created
+Provides a centralized mechanism for tracking g8es documents created
 during integration tests so they can be reliably cleaned up after each
 test, even on assertion failure or unexpected exceptions.
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 class IntegrationCleanupTracker:
-    """Tracks VSODB documents for automatic post-test deletion."""
+    """Tracks g8es documents for automatic post-test deletion."""
 
     def __init__(self, cache_aside_service: CacheAsideService) -> None:
         self._cache_aside = cache_aside_service

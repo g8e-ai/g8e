@@ -53,7 +53,7 @@ from app.models.settings import LLMSettings, G8eeUserSettings
 from app.services.ai.agent_tool_loop import orchestrate_tool_execution
 from app.services.ai.tool_service import AIToolService
 from tests.fakes.factories import (
-    build_vso_http_context,
+    build_g8e_http_context,
     build_enriched_context as create_enriched_context,
     build_bound_operator,
 )
@@ -133,7 +133,7 @@ INVESTIGATION = create_enriched_context(
     ],
 )
 
-VSO_CONTEXT = build_vso_http_context(
+G8E_CONTEXT = build_g8e_http_context(
     user_id="user-exec-test",
     case_id="case-exec-test",
     investigation_id="inv-exec-test",
@@ -156,8 +156,8 @@ class TestExecutionIdGeneration:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -174,10 +174,10 @@ class TestExecutionIdGeneration:
                     ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "whoami"}),
                     tool_executor=executor,
                     investigation=INVESTIGATION,
-                    vso_context=VSO_CONTEXT,
+                    g8e_context=G8E_CONTEXT,
                     web_session_id="web-001",
                     investigation_id="inv-001",
-                    vsod_event_service=AsyncMock(),
+                    g8ed_event_service=AsyncMock(),
                     request_settings=REQUEST_SETTINGS,
                 )
                 ids.append(result.call_info.execution_id)
@@ -193,8 +193,8 @@ class TestExecutionIdGeneration:
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -211,8 +211,8 @@ class TestExecutionIdGeneration:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "id"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -237,8 +237,8 @@ class TestOperatorToolDetection:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -252,8 +252,8 @@ class TestOperatorToolDetection:
             ToolCall(name=OperatorToolName.FILE_READ, args={"file_path": "/etc/hosts"}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -269,8 +269,8 @@ class TestOperatorToolDetection:
             ToolCall(name=OperatorToolName.G8E_SEARCH_WEB, args={"query": "test"}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -285,8 +285,8 @@ class TestOperatorToolDetection:
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -304,7 +304,7 @@ class TestToolArgsInjection:
         _mock_executor_success(executor)
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -316,8 +316,8 @@ class TestToolArgsInjection:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "df -h"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -328,7 +328,7 @@ class TestToolArgsInjection:
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -340,8 +340,8 @@ class TestToolArgsInjection:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "uptime"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -351,7 +351,7 @@ class TestToolArgsInjection:
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -362,8 +362,8 @@ class TestToolArgsInjection:
             ToolCall(name=NON_OPERATOR_FUNCTION, args={"query": "linux memory usage"}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -373,7 +373,7 @@ class TestToolArgsInjection:
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -388,8 +388,8 @@ class TestToolArgsInjection:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -414,8 +414,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -430,8 +430,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -447,8 +447,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "pwd"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -465,8 +465,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "echo hello"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -482,8 +482,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -499,8 +499,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "bad"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -516,8 +516,8 @@ class TestToolCallResultStructure:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "id"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -539,8 +539,8 @@ class TestToolNameExtraction:
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -560,8 +560,8 @@ class TestToolNameExtraction:
             NoNameToolCall(),
             tool_executor=executor,
             investigation=INVESTIGATION,
-            vso_context=VSO_CONTEXT,
-            vsod_event_service=AsyncMock(),
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
             request_settings=REQUEST_SETTINGS,
         )
 
@@ -587,8 +587,8 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -610,8 +610,8 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -621,7 +621,7 @@ class TestTribunalRefinement:
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -639,8 +639,8 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -650,7 +650,7 @@ class TestTribunalRefinement:
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, vso_context, **kwargs):
+        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
             nonlocal captured_args
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
@@ -665,8 +665,8 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -703,12 +703,12 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=investigation,
-                vso_context=build_vso_http_context(
+                g8e_context=build_g8e_http_context(
                     user_id="user-os-test",
                     case_id="case-os-test",
                     investigation_id="inv-os-test",
                 ),
-                vsod_event_service=AsyncMock(),
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -729,8 +729,8 @@ class TestTribunalRefinement:
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -757,8 +757,8 @@ class TestTribunalSystemErrorHaltsExecution:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "rm -rf /"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -783,8 +783,8 @@ class TestTribunalSystemErrorHaltsExecution:
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
-                vso_context=VSO_CONTEXT,
-                vsod_event_service=AsyncMock(),
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -839,7 +839,7 @@ class TestTargetOperatorResolution:
             ],
         )
 
-        self.multi_op_vso_context = build_vso_http_context(
+        self.multi_op_g8e_context = build_g8e_http_context(
             user_id="user-multi-test",
             case_id="case-multi-test",
             investigation_id="inv-multi-test",
@@ -865,8 +865,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -890,8 +890,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -915,8 +915,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -939,8 +939,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -963,8 +963,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 
@@ -987,8 +987,8 @@ class TestTargetOperatorResolution:
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
-                vso_context=self.multi_op_vso_context,
-                vsod_event_service=AsyncMock(),
+                g8e_context=self.multi_op_g8e_context,
+                g8ed_event_service=AsyncMock(),
                 request_settings=REQUEST_SETTINGS,
             )
 

@@ -37,7 +37,7 @@ def _hex() -> str:
 
 
 def generate_execution_id() -> str:
-    """Generate a unique execution tracking ID for VSOHttpContext."""
+    """Generate a unique execution tracking ID for G8eHttpContext."""
     return f"exec_{_hex()}"
 
 

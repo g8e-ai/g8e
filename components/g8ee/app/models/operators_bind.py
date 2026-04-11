@@ -1,11 +1,11 @@
 from pydantic import Field
-from .base import VSOBaseModel
+from .base import G8eBaseModel
 
-class BindOperatorsRequest(VSOBaseModel):
+class BindOperatorsRequest(G8eBaseModel):
     """Request to bind multiple operators."""
     operator_ids: list[str] = Field(description="List of operator IDs to bind")
 
-class BindOperatorsResponse(VSOBaseModel):
+class BindOperatorsResponse(G8eBaseModel):
     """Response for bulk operator binding."""
     success: bool = Field(description="Whether the operation succeeded")
     bound_count: int = Field(default=0)
@@ -16,11 +16,11 @@ class BindOperatorsResponse(VSOBaseModel):
     statusCode: int = Field(default=200)
     error: str | None = Field(default=None)
 
-class UnbindOperatorsRequest(VSOBaseModel):
+class UnbindOperatorsRequest(G8eBaseModel):
     """Request to unbind multiple operators."""
     operator_ids: list[str] = Field(description="List of operator IDs to unbind")
 
-class UnbindOperatorsResponse(VSOBaseModel):
+class UnbindOperatorsResponse(G8eBaseModel):
     """Response for bulk operator unbinding."""
     success: bool = Field(description="Whether the operation succeeded")
     unbound_count: int = Field(default=0)

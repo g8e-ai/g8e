@@ -14,7 +14,7 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.models.base import ValidationError, VSOBaseModel
+from app.models.base import ValidationError, G8eBaseModel
 
 from app.constants import ErrorAnalysisCategory, ExecutionStatus, RiskLevel
 from app.models.tool_results import (
@@ -43,7 +43,7 @@ class TestCommandRiskContext:
         assert ctx.git_status == "clean"
 
     def test_is_pydantic_model(self):
-        assert issubclass(CommandRiskContext, VSOBaseModel)
+        assert issubclass(CommandRiskContext, G8eBaseModel)
 
 
     def test_partial_override_keeps_other_defaults(self):
@@ -79,7 +79,7 @@ class TestErrorAnalysisContext:
         assert ctx.execution_id == "exec-xyz"
 
     def test_is_pydantic_model(self):
-        assert issubclass(ErrorAnalysisContext, VSOBaseModel)
+        assert issubclass(ErrorAnalysisContext, G8eBaseModel)
 
 
     def test_retry_count_zero_does_not_trigger_escalation_flag(self):
@@ -104,7 +104,7 @@ class TestFileOperationRiskContext:
         assert ctx.backup_available is True
 
     def test_is_pydantic_model(self):
-        assert issubclass(FileOperationRiskContext, VSOBaseModel)
+        assert issubclass(FileOperationRiskContext, G8eBaseModel)
 
     def test_backup_available_defaults_false(self):
         ctx = FileOperationRiskContext(git_status="clean")

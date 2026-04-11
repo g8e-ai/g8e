@@ -264,7 +264,7 @@ def _web_search_settings_from_env() -> SearchSettings | None:
     )
 
 
-async def _load_settings_from_vsodb(timeout: float = 5.0) -> G8eePlatformSettings:
+async def _load_settings_from_g8es(timeout: float = 5.0) -> G8eePlatformSettings:
     """Load platform settings via SettingsService with a timeout."""
     import asyncio
     settings_service = SettingsService()
@@ -299,10 +299,10 @@ async def _load_settings_from_vsodb(timeout: float = 5.0) -> G8eePlatformSetting
                 await kv_client.close()
                 await db_client.close()
     except TimeoutError:
-        logger.warning("Timed out loading platform settings from VSODB (limit %ds)", timeout)
+        logger.warning("Timed out loading platform settings from g8es (limit %ds)", timeout)
         return bootstrap_settings
     except Exception as e:
-        logger.warning("Failed to load platform settings from VSODB: %s", e)
+        logger.warning("Failed to load platform settings from g8es: %s", e)
         return bootstrap_settings
 
 
@@ -314,9 +314,9 @@ def pytest_configure(config):
 
     # Only load settings if they haven't been set yet
     try:
-        settings = asyncio.run(_load_settings_from_vsodb())
+        settings = asyncio.run(_load_settings_from_g8es())
     except Exception as e:
-        logger.warning(f"Failed to load settings from VSODB: {e}")
+        logger.warning(f"Failed to load settings from g8es: {e}")
         from app.services.infra.settings_service import SettingsService
         settings = SettingsService().get_local_settings()
 
@@ -579,7 +579,7 @@ async def probed_capabilities(test_settings):
 def test_settings():
     """Returns the globally configured Settings object.
     
-    In a real test run, this is loaded from VSODB by pytest_sessionstart.
+    In a real test run, this is loaded from g8es by pytest_sessionstart.
     """
     from app.llm.factory import get_settings
     return get_settings()
@@ -619,9 +619,9 @@ def mock_settings():
 
 
 @pytest.fixture
-def mock_vsod_http_client():
-    from tests.fakes.fake_vsod_client import FakeVSODClient
-    return FakeVSODClient()
+def mock_g8ed_http_client():
+    from tests.fakes.fake_g8ed_client import FakeG8edClient
+    return FakeG8edClient()
 
 
 @pytest.fixture
@@ -764,14 +764,14 @@ def real_provider_config(test_settings):
 
 
 # ---------------------------------------------------------------------------
-# Real VSODB fixtures for integration tests
+# Real g8es fixtures for integration tests
 # ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service):
     """Integration test cleanup tracker.
 
-    Tracks VSODB documents created during tests and automatically
+    Tracks g8es documents created during tests and automatically
     cleans them up after each test, even on assertion failure.
 
     Usage:

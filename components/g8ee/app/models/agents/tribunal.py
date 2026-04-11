@@ -12,7 +12,7 @@
 # limitations under the License.
 
 from pydantic import Field
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.constants import (
     CommandGenerationOutcome,
     TribunalFallbackReason,
@@ -87,14 +87,14 @@ class TribunalVerifierFailedError(Exception):
         )
 
 
-class TribunalMemberResult(VSOBaseModel):
+class TribunalMemberResult(G8eBaseModel):
     """The structured output of a single Tribunal member."""
     reasoning: str = Field(description="The logical basis for the member's verdict.")
     command: str = Field(description="The proposed or refined command string.")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence in the proposal.")
 
 
-class CandidateCommand(VSOBaseModel):
+class CandidateCommand(G8eBaseModel):
     """A single command candidate produced by one Tribunal generation pass."""
     command: str
     pass_index: int = Field(ge=0, description="Zero-based index of the generation pass that produced this candidate")
@@ -102,7 +102,7 @@ class CandidateCommand(VSOBaseModel):
     reasoning: str | None = Field(default=None, description="The reasoning behind this candidate")
 
 
-class CommandGenerationResult(VSOBaseModel):
+class CommandGenerationResult(G8eBaseModel):
     """Result of the Tribunal command generation pipeline for a single tool call."""
     original_command: str = Field(description="Command string proposed by the Large LLM")
     final_command: str = Field(description="Command string chosen by the tribunal pipeline")
@@ -132,7 +132,7 @@ class CommandGenerationResult(VSOBaseModel):
     verifier_reason: str | None = Field(default=None, description="The verifier's stated reason.")
 
 
-class TribunalPassCompletedPayload(VSOBaseModel):
+class TribunalPassCompletedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_PASS_COMPLETED events."""
     pass_index: int = Field(ge=0)
     member: TribunalMember
@@ -141,12 +141,12 @@ class TribunalPassCompletedPayload(VSOBaseModel):
     error: str | None = None
 
 
-class TribunalVerifierStartedPayload(VSOBaseModel):
+class TribunalVerifierStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_REVIEW_STARTED events."""
     candidate_command: str
 
 
-class TribunalVerifierCompletedPayload(VSOBaseModel):
+class TribunalVerifierCompletedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_REVIEW_COMPLETED events."""
     passed: bool
     revision: str | None = None
@@ -154,7 +154,7 @@ class TribunalVerifierCompletedPayload(VSOBaseModel):
     error: str | None = None
 
 
-class TribunalSessionStartedPayload(VSOBaseModel):
+class TribunalSessionStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_STARTED events."""
     original_command: str
     model: str
@@ -164,7 +164,7 @@ class TribunalSessionStartedPayload(VSOBaseModel):
     shell: str
 
 
-class TribunalFallbackPayload(VSOBaseModel):
+class TribunalFallbackPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_FALLBACK_TRIGGERED events."""
     reason: TribunalFallbackReason
     original_command: str
@@ -173,7 +173,7 @@ class TribunalFallbackPayload(VSOBaseModel):
     pass_errors: list[str] | None = None
 
 
-class TribunalVotingCompletedPayload(VSOBaseModel):
+class TribunalVotingCompletedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_CONSENSUS_REACHED events."""
     vote_winner: str
     vote_score: float
@@ -181,7 +181,7 @@ class TribunalVotingCompletedPayload(VSOBaseModel):
     original_command: str
 
 
-class TribunalSessionCompletedPayload(VSOBaseModel):
+class TribunalSessionCompletedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_COMPLETED events."""
     original_command: str
     final_command: str

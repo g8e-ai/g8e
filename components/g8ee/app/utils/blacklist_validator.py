@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""VSO command blacklist validator."""
+"""g8e command blacklist validator."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ class CommandBlacklistResult:
 
 
 class CommandBlacklistValidator:
-    """Validates commands against the strict VSO blacklist."""
+    """Validates commands against the strict g8e blacklist."""
 
     def __init__(self, blacklist_path: str) -> None:
         self._config: dict[str, list[dict[str, str]]] = {}

@@ -16,35 +16,35 @@ from typing import Literal
 from pydantic import Field
 
 from app.constants import BatchWriteOpType
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class DocumentResult(VSOBaseModel):
+class DocumentResult(G8eBaseModel):
     """Result of a get_document call."""
     success: bool = Field(..., description="Whether the operation succeeded")
     data: dict[str, object] | None = Field(default=None, description="Document data, or None if not found")
 
 
-class QueryResult(VSOBaseModel):
+class QueryResult(G8eBaseModel):
     """Result of a query_collection call."""
     success: bool = Field(..., description="Whether the operation succeeded")
     data: list[dict[str, object]] = Field(default_factory=list, description="List of matching documents")
 
 
-class FieldFilter(VSOBaseModel):
+class FieldFilter(G8eBaseModel):
     """A single field filter for collection queries."""
     field: str = Field(..., description="Document field name to filter on")
     op: Literal["==", "!=", "<", "<=", ">", ">=", "in", "not-in", "array-contains"] = Field(..., description="Comparison operator")
     value: object = Field(..., description="Value to compare against")
 
 
-class QueryOrderBy(VSOBaseModel):
+class QueryOrderBy(G8eBaseModel):
     """Ordering clause for collection queries."""
     field: str = Field(..., description="Field to sort by")
     direction: Literal["asc", "desc"] = Field(default="asc", description="Sort direction")
 
 
-class CacheOperationResult(VSOBaseModel):
+class CacheOperationResult(G8eBaseModel):
     """Result of a cache operation (create, update, delete)."""
     success: bool = Field(..., description="Whether the operation succeeded")
     document_id: str | None = Field(default=None, description="Document ID involved in the operation")
@@ -53,14 +53,14 @@ class CacheOperationResult(VSOBaseModel):
     error: str | None = Field(default=None, description="Error message if operation failed")
 
 
-class BatchOperationResult(VSOBaseModel):
+class BatchOperationResult(G8eBaseModel):
     """Result of a batch cache operation."""
     success: bool = Field(..., description="Whether the batch operation succeeded")
     count: int = Field(default=0, description="Number of documents processed")
     error: str | None = Field(default=None, description="Error message if operation failed")
 
 
-class CacheWarmResult(VSOBaseModel):
+class CacheWarmResult(G8eBaseModel):
     """Result of a full user cache warm operation."""
     user_id: str = Field(..., description="User whose cache was warmed")
     cases_count: int = Field(default=0, description="Number of cases warmed")
@@ -70,21 +70,21 @@ class CacheWarmResult(VSOBaseModel):
     error: str | None = Field(default=None, description="Error message if operation failed")
 
 
-class CacheContextWarmResult(VSOBaseModel):
+class CacheContextWarmResult(G8eBaseModel):
     """Result of warming cache for a specific case context."""
     case: bool = Field(default=False, description="Whether the case was successfully warmed")
     investigation: bool = Field(default=False, description="Whether the investigation was successfully warmed")
     memory: bool = Field(default=False, description="Whether the memory was successfully warmed")
 
 
-class BatchCreateDocumentOperation(VSOBaseModel):
+class BatchCreateDocumentOperation(G8eBaseModel):
     """Input model for batch create document operations."""
     collection: str = Field(..., description="Target collection name")
     document_id: str = Field(..., description="Document ID")
     data: dict[str, object] = Field(..., description="Document data")
 
 
-class BatchWriteOperation(VSOBaseModel):
+class BatchWriteOperation(G8eBaseModel):
     """A single operation entry for batch_write."""
     op_type: BatchWriteOpType = Field(default=BatchWriteOpType.SET, description="Operation type")
     collection: str = Field(..., description="Target collection name")
@@ -111,7 +111,7 @@ class ArrayRemove:
         self.values = values
 
 
-class CacheStats(VSOBaseModel):
+class CacheStats(G8eBaseModel):
     """Statistics snapshot for the KV cache service."""
     enabled: bool = Field(..., description="Whether caching is enabled")
     healthy: bool = Field(..., description="Whether the KV backend is healthy")

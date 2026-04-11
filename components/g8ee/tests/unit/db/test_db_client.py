@@ -13,8 +13,8 @@
 
 """Unit tests for DBClient.
 
-DBClient is an HTTP shim over VSODB. Tests mock the HTTP layer via
-InMemoryVSODB to validate all client-side logic: CRUD, timestamp resolution,
+DBClient is an HTTP shim over g8es. Tests mock the HTTP layer via
+InMemoryG8es to validate all client-side logic: CRUD, timestamp resolution,
 ArrayUnion/ArrayRemove, batch_write, and typed error propagation.
 """
 
@@ -30,7 +30,7 @@ from app.errors import NetworkError, ResourceNotFoundError
 from app.models.cache import BatchWriteOperation
 
 
-class InMemoryVSODB:
+class InMemoryG8es:
     """In-memory backend wired to DBClient typed _request variants for unit tests."""
 
     def __init__(self):
@@ -101,7 +101,7 @@ class InMemoryVSODB:
 
 @pytest.fixture
 def db_client():
-    store = InMemoryVSODB()
+    store = InMemoryG8es()
     client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token="mock-token")
     client._request_json = store.handle_json
     client._request_list = store.handle_list
@@ -114,7 +114,7 @@ def db_client_http_error():
     client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token="mock-token")
 
     async def raise_network_error(method, path, **kwargs):
-        raise NetworkError("VSODB HTTP 500: internal error", component="g8ee")
+        raise NetworkError("g8ed HTTP 500: internal error", component="g8ee")
 
     client._request_json = raise_network_error
     client._request_list = raise_network_error
@@ -477,7 +477,7 @@ class TestBatchWrite:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
-                raise NetworkError("VSODB HTTP 500: mid-batch failure", component="g8ee")
+                raise NetworkError("g8ed HTTP 500: mid-batch failure", component="g8ee")
 
         db_client._request_void = fail_on_second
         with pytest.raises(NetworkError):

@@ -46,7 +46,7 @@ func MCPToolNameToEventType(toolName string) string {
 }
 
 // TranslateToolCallToCommand converts an MCP JSON-RPC tool call into an internal g8e message.
-func TranslateToolCallToCommand(req *JSONRPCRequest) (*models.VSOMessage, error) {
+func TranslateToolCallToCommand(req *JSONRPCRequest) (*models.G8eMessage, error) {
 	if req.Method != "tools/call" {
 		return nil, fmt.Errorf("method not found: %s", req.Method)
 	}
@@ -61,19 +61,19 @@ func TranslateToolCallToCommand(req *JSONRPCRequest) (*models.VSOMessage, error)
 		return nil, fmt.Errorf("unsupported tool: %s", params.Name)
 	}
 
-	// For the first pass, we map the MCP request ID as the VSO message ID.
+	// For the first pass, we map the MCP request ID as the g8e message ID.
 	// This ensures the ID travels with the request through the execution pipeline.
-	vsoMsg := &models.VSOMessage{
+	g8eMsg := &models.G8eMessage{
 		ID:        req.ID,
 		EventType: eventType,
 		Payload:   params.Arguments,
 	}
 
-	return vsoMsg, nil
+	return g8eMsg, nil
 }
 
 // TranslateResourceReadToCommand converts an MCP JSON-RPC resources/read into an internal g8e message.
-func TranslateResourceReadToCommand(req *JSONRPCRequest) (*models.VSOMessage, error) {
+func TranslateResourceReadToCommand(req *JSONRPCRequest) (*models.G8eMessage, error) {
 	if req.Method != "resources/read" {
 		return nil, fmt.Errorf("method not found: %s", req.Method)
 	}
@@ -83,28 +83,28 @@ func TranslateResourceReadToCommand(req *JSONRPCRequest) (*models.VSOMessage, er
 		return nil, fmt.Errorf("failed to unmarshal read resource params: %w", err)
 	}
 
-	vsoMsg := &models.VSOMessage{
+	g8eMsg := &models.G8eMessage{
 		ID:        req.ID,
 		EventType: constants.Event.Operator.MCP.ResourcesRead,
 		Payload:   req.Params, // Pass raw params for now
 	}
 
-	return vsoMsg, nil
+	return g8eMsg, nil
 }
 
 // TranslateResourceListToCommand converts an MCP JSON-RPC resources/list into an internal g8e message.
-func TranslateResourceListToCommand(req *JSONRPCRequest) (*models.VSOMessage, error) {
+func TranslateResourceListToCommand(req *JSONRPCRequest) (*models.G8eMessage, error) {
 	if req.Method != "resources/list" {
 		return nil, fmt.Errorf("method not found: %s", req.Method)
 	}
 
-	vsoMsg := &models.VSOMessage{
+	g8eMsg := &models.G8eMessage{
 		ID:        req.ID,
 		EventType: constants.Event.Operator.MCP.ResourcesList,
 		Payload:   req.Params, // Pass raw params for now
 	}
 
-	return vsoMsg, nil
+	return g8eMsg, nil
 }
 
 // TranslateResultToMCP wraps a g8e result payload into an MCP JSON-RPC response.
@@ -261,7 +261,7 @@ func TranslateResultToMCP(requestID string, executionID string, eventType string
 	}, nil
 }
 
-// WrapResult converts a g8e result payload into an MCP-formatted VSOMessage payload.
+// WrapResult converts a g8e result payload into an MCP-formatted G8eMessage payload.
 func WrapResult(requestID string, executionID string, eventType string, payload interface{}) ([]byte, error) {
 	mcpResp, err := TranslateResultToMCP(requestID, executionID, eventType, payload)
 	if err != nil {

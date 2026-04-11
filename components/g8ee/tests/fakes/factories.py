@@ -37,7 +37,7 @@ from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
 )
-from app.models.http_context import BoundOperator, VSOHttpContext
+from app.models.http_context import BoundOperator, G8eHttpContext
 from app.models.cases import CaseModel
 from app.models.investigations import (
     ConversationHistoryMessage,
@@ -199,22 +199,22 @@ def create_conversation_message(
 # HTTP & Auth Factories
 # ---------------------------------------------------------------------------
 
-def build_vso_http_context(
+def build_g8e_http_context(
     web_session_id: str = "test-web-session",
     user_id: str = "test-user-id",
     case_id: str | None = None,
     investigation_id: str | None = None,
     organization_id: str | None = None,
     bound_operators: list[BoundOperator] | None = None,
-    source_component: ComponentName = ComponentName.VSOD,
+    source_component: ComponentName = ComponentName.G8ED,
     new_case: bool = False,
-) -> VSOHttpContext:
-    """Build a VSOHttpContext with fixed deterministic defaults for unit tests."""
+) -> G8eHttpContext:
+    """Build a G8eHttpContext with fixed deterministic defaults for unit tests."""
     resolved_inv_id = investigation_id
     if resolved_inv_id is None:
         resolved_inv_id = NEW_CASE_ID if new_case else "test-investigation-id"
 
-    return VSOHttpContext(
+    return G8eHttpContext(
         web_session_id=web_session_id,
         user_id=user_id,
         case_id=case_id or ("test-case-id" if not new_case else NEW_CASE_ID),
@@ -302,7 +302,7 @@ def build_case_model(
     web_session_id: str = "session-test-123",
     status: CaseStatus = CaseStatus.NEW,
     description: str = "Test description",
-    source: ComponentName = ComponentName.VSOD,
+    source: ComponentName = ComponentName.G8ED,
     priority: Priority = Priority.MEDIUM,
     severity: Severity = Severity.LOW,
 ) -> CaseModel:

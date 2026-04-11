@@ -15,7 +15,7 @@
 Contract test: g8ee BoundOperator model fields must exactly match the canonical
 wire shape defined in shared/models/wire/bound_operator_context.json.
 
-Prevents desynchronization between VSOD's BoundOperatorContext.forWire() output
+Prevents desynchronization between g8ed's BoundOperatorContext.forWire() output
 and g8ee's BoundOperator parsing logic.
 """
 

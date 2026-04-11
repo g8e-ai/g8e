@@ -31,7 +31,7 @@ from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.infra.vsod_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.services.operator.execution_registry import ExecutionRegistryService
@@ -63,24 +63,24 @@ class ServiceFactory:
         """Create core services that other services depend on."""
         from app.services.infra.internal_http_client import InternalHttpClient
         from app.services.infra.http_service import HTTPService
-        from app.services.infra.vsod_event_service import EventService
+        from app.services.infra.g8ed_event_service import EventService
 
         # Create HTTP service first to manage all HTTP clients
         http_service: "HTTPServiceProtocol" = HTTPService()
 
         internal_http_client = InternalHttpClient(settings)
 
-        # Register VSOD HTTP client with the HTTP service
-        http_service.set_http_client(internal_http_client.client, "vsod")
+        # Register g8ed HTTP client with the HTTP service
+        http_service.set_http_client(internal_http_client.client, "g8ed")
 
-        vsod_event_service: "EventServiceProtocol" = EventService(
+        g8ed_event_service: "EventServiceProtocol" = EventService(
             internal_http_client=internal_http_client
         )
 
         return {
             'http_service': http_service,
             'internal_http_client': internal_http_client,
-            'vsod_event_service': vsod_event_service,
+            'g8ed_event_service': g8ed_event_service,
         }
     
     @staticmethod
@@ -106,7 +106,7 @@ class ServiceFactory:
         case_data_service = CaseDataService(
             settings=settings,
             cache=cache_aside_service,
-            event_service=cast("EventServiceProtocol", core_services['vsod_event_service']),
+            event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
         )
 
         return {
@@ -142,7 +142,7 @@ class ServiceFactory:
         """Create operator-specific services."""
         heartbeat_service = OperatorHeartbeatService(
             operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
-            event_service=cast("EventServiceProtocol", core_services['vsod_event_service']),
+            event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
         )
 
         execution_registry = ExecutionRegistryService()
@@ -189,7 +189,7 @@ class ServiceFactory:
         from app.services.protocols import EventServiceProtocol
 
         approval_service = OperatorApprovalService(
-            vsod_event_service=cast(EventServiceProtocol, core_services['vsod_event_service']),
+            g8ed_event_service=cast(EventServiceProtocol, core_services['g8ed_event_service']),
             operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
             investigation_data_service=cast("InvestigationDataServiceProtocol", data_services['investigation_data_service']),
         )
@@ -198,7 +198,7 @@ class ServiceFactory:
             cache_aside_service=cache_aside_service,
             operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
             investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
-            vsod_event_service=cast(EventServiceProtocol, core_services['vsod_event_service']),
+            g8ed_event_service=cast(EventServiceProtocol, core_services['g8ed_event_service']),
             execution_registry=cast("ExecutionRegistryProtocol", operator_services['execution_registry']),
             settings=settings,
             ai_response_analyzer=response_analyzer,
@@ -238,7 +238,7 @@ class ServiceFactory:
 
         chat_pipeline = ChatPipelineService(
             investigation_data_service=cast("InvestigationDataServiceProtocol", data_services['investigation_data_service']),
-            vsod_event_service=cast("EventServiceProtocol", core_services['vsod_event_service']),
+            g8ed_event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
             investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
             operator_command_service=operator_command_service,
             request_builder=request_builder,

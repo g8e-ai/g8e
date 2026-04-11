@@ -15,16 +15,16 @@ from datetime import datetime
 
 from app.constants import HealthStatus
 
-from .base import Field, VSOBaseModel
+from .base import Field, G8eBaseModel
 
 
-class DependencyStatus(VSOBaseModel):
+class DependencyStatus(G8eBaseModel):
     """Health status of a single dependency."""
     status: HealthStatus
     error: str | None = None
 
 
-class HealthCheckResult(VSOBaseModel):
+class HealthCheckResult(G8eBaseModel):
     """Result of a full dependency health check."""
     timestamp: datetime
     component: str
@@ -33,13 +33,13 @@ class HealthCheckResult(VSOBaseModel):
     unhealthy_dependencies: list[str] | None = None
 
 
-class WorkflowHealthResult(VSOBaseModel):
+class WorkflowHealthResult(G8eBaseModel):
     """Health check result for a collection of workflows."""
     status: HealthStatus
     workflows: dict[str, DependencyStatus]
 
 
-class ServiceHealthResult(VSOBaseModel):
+class ServiceHealthResult(G8eBaseModel):
     """Top-level health check result for a g8ee service."""
     service: HealthStatus
     timestamp: datetime

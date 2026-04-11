@@ -67,7 +67,7 @@ class TestOperatorCommandServiceInit:
                 cache_aside_service=None,
                 operator_data_service=None,
                 # investigation_service is missing
-                vsod_event_service=None,
+                g8ed_event_service=None,
                 execution_registry=None,
                 settings=None,
                 ai_response_analyzer=None,
@@ -146,61 +146,61 @@ class TestBroadcastCommandEvent:
 
     pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
-    async def test_publishes_event_to_vsod(self):
-        """OperatorExecutionService publishes events via vsod_event_service.publish_command_event."""
+    async def test_publishes_event_to_g8ed(self):
+        """OperatorExecutionService publishes events via g8ed_event_service.publish_command_event."""
         from unittest.mock import AsyncMock as _AsyncMock
-        from app.models.base import VSOBaseModel
-        from tests.fakes.factories import build_vso_http_context
+        from app.models.base import G8eBaseModel
+        from tests.fakes.factories import build_g8e_http_context
         service = _make_service()
         execution_svc = service._execution_service
-        execution_svc.vsod_event_service.publish_command_event = _AsyncMock()
+        execution_svc.g8ed_event_service.publish_command_event = _AsyncMock()
 
-        class _TestEvent(VSOBaseModel):
+        class _TestEvent(G8eBaseModel):
             operator_session_id: str
 
         data = _TestEvent(operator_session_id="sess-abc")
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             web_session_id="web-abc",
             user_id="user-abc",
             case_id="case-xyz",
             investigation_id="inv-111",
         )
-        await execution_svc.vsod_event_service.publish_command_event(
+        await execution_svc.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_REQUESTED,
             data,
-            vso_context=vso_context,
+            g8e_context=g8e_context,
             task_id="task-123",
         )
 
-        execution_svc.vsod_event_service.publish_command_event.assert_awaited_once()
-        call_args = execution_svc.vsod_event_service.publish_command_event.call_args
+        execution_svc.g8ed_event_service.publish_command_event.assert_awaited_once()
+        call_args = execution_svc.g8ed_event_service.publish_command_event.call_args
         assert call_args.args[0] == EventType.OPERATOR_COMMAND_REQUESTED
-        assert call_args.kwargs["vso_context"].web_session_id == "web-abc"
-        assert call_args.kwargs["vso_context"].case_id == "case-xyz"
+        assert call_args.kwargs["g8e_context"].web_session_id == "web-abc"
+        assert call_args.kwargs["g8e_context"].case_id == "case-xyz"
 
-    async def test_swallows_vsod_publish_exception(self):
-        """VSOD publish exceptions from execute_command_internal paths must not propagate."""
-        from app.models.base import VSOBaseModel
-        from tests.fakes.factories import build_vso_http_context
+    async def test_swallows_g8ed_publish_exception(self):
+        """g8ed publish exceptions from execute_command_internal paths must not propagate."""
+        from app.models.base import G8eBaseModel
+        from tests.fakes.factories import build_g8e_http_context
         service = _make_service()
         execution_svc = service._execution_service
-        execution_svc.vsod_event_service.publish_command_event = AsyncMock(
-            side_effect=Exception("VSOD unreachable")
+        execution_svc.g8ed_event_service.publish_command_event = AsyncMock(
+            side_effect=Exception("g8ed unreachable")
         )
-        class _EmptyEvent(VSOBaseModel):
+        class _EmptyEvent(G8eBaseModel):
             pass
         
-        vso_context = build_vso_http_context(
+        g8e_context = build_g8e_http_context(
             web_session_id="web-abc",
             user_id="user-abc",
             case_id="case-xyz",
             investigation_id="inv-111",
         )
         try:
-            await execution_svc.vsod_event_service.publish_command_event(
+            await execution_svc.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_REQUESTED,
                 _EmptyEvent(),
-                vso_context=vso_context,
+                g8e_context=g8e_context,
                 task_id="task-123",
             )
         except Exception:
@@ -304,10 +304,10 @@ class TestExecuteCommandTargetSystems:
             operator_documents=operators,
         )
 
-    def _make_vso_context(self):
-        from app.models.http_context import VSOHttpContext
+    def _make_g8e_context(self):
+        from app.models.http_context import G8eHttpContext
         from app.constants.status import ComponentName
-        return VSOHttpContext(
+        return G8eHttpContext(
             web_session_id="ws-1",
             user_id="user-1",
             case_id="case-1",
@@ -326,10 +326,10 @@ class TestExecuteCommandTargetSystems:
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
-        vso_context = self._make_vso_context()
+        g8e_context = self._make_g8e_context()
         args = OperatorCommandArgs(command="ls", justification="test")
 
-        await service.execute_command(args, vso_context, investigation)
+        await service.execute_command(args, g8e_context, investigation)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]
@@ -349,7 +349,7 @@ class TestExecuteCommandTargetSystems:
         op1 = self._make_operator("op-1", "sess-1", "web-1")
         op2 = self._make_operator("op-2", "sess-2", "web-2")
         investigation = self._make_investigation([op1, op2])
-        vso_context = self._make_vso_context()
+        g8e_context = self._make_g8e_context()
         args = OperatorCommandArgs(
             command="uptime",
             justification="batch check",
@@ -357,7 +357,7 @@ class TestExecuteCommandTargetSystems:
             target_operators=["op-1", "op-2"],
         )
 
-        await service.execute_command(args, vso_context, investigation)
+        await service.execute_command(args, g8e_context, investigation)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]
@@ -376,10 +376,10 @@ class TestExecuteCommandTargetSystems:
 
         op = self._make_operator("op-abc", "sess-abc", "db-server")
         investigation = self._make_investigation([op])
-        vso_context = self._make_vso_context()
+        g8e_context = self._make_g8e_context()
         args = OperatorCommandArgs(command="df -h", justification="disk check")
 
-        await service.execute_command(args, vso_context, investigation)
+        await service.execute_command(args, g8e_context, investigation)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]

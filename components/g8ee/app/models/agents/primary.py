@@ -12,14 +12,14 @@
 # limitations under the License.
 
 from pydantic import Field
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
 from app.models.investigations import ConversationHistoryMessage
 from app.llm.llm_types import ToolCall
 
 
-class PrimaryRequest(VSOBaseModel):
+class PrimaryRequest(G8eBaseModel):
     """Request model for the Primary agent."""
     message: str = Field(description="The user message to process.")
     investigation_id: str = Field(description="The current investigation ID.")
@@ -34,7 +34,7 @@ class PrimaryRequest(VSOBaseModel):
     )
 
 
-class PrimaryResult(VSOBaseModel):
+class PrimaryResult(G8eBaseModel):
     """The result of a Primary agent operation."""
     content: str | None = Field(default=None, description="The primary text output of the AI.")
     tool_calls: list[ToolCall] = Field(

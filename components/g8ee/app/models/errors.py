@@ -16,19 +16,19 @@ from datetime import datetime
 
 from pydantic import field_validator
 from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
-from app.models.base import Field, VSOBaseModel
+from app.models.base import Field, G8eBaseModel
 from app.utils.timestamp import now
 
 
-class ErrorCauseDetail(VSOBaseModel):
-    """Structured cause information captured when a VSOError wraps another exception."""
+class ErrorCauseDetail(G8eBaseModel):
+    """Structured cause information captured when a G8eError wraps another exception."""
 
     cause_message: str
     cause_stack_trace: list[str]
 
 
-class ErrorDetail(VSOBaseModel):
-    """Internal error detail — attached to every VSOError instance."""
+class ErrorDetail(G8eBaseModel):
+    """Internal error detail — attached to every G8eError instance."""
 
     code: ErrorCode
     message: str
@@ -52,7 +52,7 @@ class ErrorDetail(VSOBaseModel):
         return v
 
 
-class ErrorBody(VSOBaseModel):
+class ErrorBody(G8eBaseModel):
     """HTTP response body for a single error — included inside ErrorResponse."""
 
     code: ErrorCode
@@ -66,7 +66,7 @@ class ErrorBody(VSOBaseModel):
     cause_stack_trace: list[str] | None = None
 
 
-class ErrorResponse(VSOBaseModel):
+class ErrorResponse(G8eBaseModel):
     """Top-level HTTP error response envelope returned by setup_exception_handlers."""
 
     error: ErrorBody

@@ -26,7 +26,7 @@ from app.constants import (
 )
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
-from app.models.http_context import VSOHttpContext
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
     EnrichedInvestigationContext,
     InvestigationModel,
@@ -168,21 +168,21 @@ class InvestigationService:
         self,
         investigation: EnrichedInvestigationContext,
         user_id: str,
-        vso_context: VSOHttpContext,
+        g8e_context: G8eHttpContext,
     ) -> EnrichedInvestigationContext:
         logger.info(
             "Enriching investigation context with Operator details",
             extra={
                 "investigation_id": investigation.id,
                 "user_id": user_id,
-                "bound_operator_count": len(vso_context.bound_operators) if vso_context else 0,
+                "bound_operator_count": len(g8e_context.bound_operators) if g8e_context else 0,
                 "case_id": investigation.case_id
             }
         )
 
         # 1. Populate operator documents from bound operators in context
         operator_docs = []
-        bound_in_context = vso_context.bound_operators if vso_context else []
+        bound_in_context = g8e_context.bound_operators if g8e_context else []
         for bound_op in bound_in_context:
             if bound_op.status != OperatorStatus.BOUND:
                 continue

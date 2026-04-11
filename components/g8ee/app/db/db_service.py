@@ -14,7 +14,7 @@
 import logging
 
 from app.clients.db_client import DBClient
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 from app.models.cache import (
     CacheOperationResult,
     DocumentResult,
@@ -35,11 +35,11 @@ class DBService:
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
     ) -> CacheOperationResult:
         # DBClient implementation only accepts dict[str, object] for now.
-        # Use flatten_for_db if it is a VSOBaseModel.
-        if isinstance(data, VSOBaseModel):
+        # Use flatten_for_db if it is a G8eBaseModel.
+        if isinstance(data, G8eBaseModel):
             data = data.flatten_for_db()
         return await self.client.create_document(
             collection=collection, document_id=document_id, data=data
@@ -49,10 +49,10 @@ class DBService:
         self,
         collection: str,
         document_id: str,
-        data: dict[str, object] | VSOBaseModel,
+        data: dict[str, object] | G8eBaseModel,
         merge: bool = True,
     ) -> CacheOperationResult:
-        if isinstance(data, VSOBaseModel):
+        if isinstance(data, G8eBaseModel):
             data = data.flatten_for_db()
         return await self.client.update_document(
             collection=collection, document_id=document_id, data=data, merge=merge

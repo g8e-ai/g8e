@@ -114,7 +114,7 @@ _read_env() {
 _write_to_db() {
     local db_args=("$@")
     if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
-        if docker exec g8ep python3 /app/scripts/data/manage-vsodb.py settings set "${db_args[@]}" 2>/dev/null; then
+        if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set "${db_args[@]}" 2>/dev/null; then
             _ok "Settings written to DB"
         else
             _warn "Could not write to DB — settings will apply after next platform restart"

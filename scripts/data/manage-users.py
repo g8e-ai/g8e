@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-User Management Script for VSO Platform
+User Management Script for g8e Platform
 
-Manage platform users via the VSOD internal HTTP API.
-Runs inside g8ep and communicates with g8e-dashboard over the internal network.
+Manage platform users via the g8ed internal HTTP API.
+Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-vsodb.py users list
-    python manage-vsodb.py users get --id USER_ID
-    python manage-vsodb.py users get --email user@example.com
-    python manage-vsodb.py users search "john"
-    python manage-vsodb.py users create --email user@example.com --name "John Doe"
-    python manage-vsodb.py users update-role --id USER_ID --role admin
-    python manage-vsodb.py users delete --id USER_ID
-    python manage-vsodb.py users stats
+    python manage-g8es.py users list
+    python manage-g8es.py users get --id USER_ID
+    python manage-g8es.py users get --email user@example.com
+    python manage-g8es.py users search "john"
+    python manage-g8es.py users create --email user@example.com --name "John Doe"
+    python manage-g8es.py users update-role --id USER_ID --role admin
+    python manage-g8es.py users delete --id USER_ID
+    python manage-g8es.py users stats
 """
 
 import argparse
@@ -36,9 +36,9 @@ from typing import Optional, List, Dict, Any
 
 from _lib import (
     PROJECT_ROOT,
-    VSOD_BASE_URL,
+    G8ED_BASE_URL,
     print_banner,
-    vsod_request,
+    g8ed_request,
 )
 
 _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
@@ -47,16 +47,16 @@ with open(_SHARED_CONSTANTS / 'status.json') as _f:
     _STATUS = json.load(_f)
 VALID_ROLES: List[str] = list(_STATUS['user.role'].values())
 
-INTERNAL_API_BASE = f'{VSOD_BASE_URL}/api/internal/users'
+INTERNAL_API_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
 def _api_request(method: str, path: str, body: Optional[Dict] = None) -> Dict:
-    return vsod_request(method, f'{INTERNAL_API_BASE}{path}', body)
+    return g8ed_request(method, f'{INTERNAL_API_BASE}{path}', body)
 
 
 class UserManager:
     """
-    Manage platform users via the VSOD internal HTTP API.
+    Manage platform users via the g8ed internal HTTP API.
     """
 
     def _format_user_summary(self, user: Dict[str, Any]) -> str:
@@ -262,18 +262,18 @@ class UserManager:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='User Management Script for VSO Platform',
+        description='User Management Script for g8e Platform',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-vsodb.py users list
-  python manage-vsodb.py users get --email user@example.com
-  python manage-vsodb.py users search "john"
-  python manage-vsodb.py users create --email new@example.com --name "New User"
-  python manage-vsodb.py users update-role --id USER_ID --role admin
-  python manage-vsodb.py users update-role --id USER_ID --role admin --action add
-  python manage-vsodb.py users delete --id USER_ID
-  python manage-vsodb.py users stats
+  python manage-g8es.py users list
+  python manage-g8es.py users get --email user@example.com
+  python manage-g8es.py users search "john"
+  python manage-g8es.py users create --email new@example.com --name "New User"
+  python manage-g8es.py users update-role --id USER_ID --role admin
+  python manage-g8es.py users update-role --id USER_ID --role admin --action add
+  python manage-g8es.py users delete --id USER_ID
+  python manage-g8es.py users stats
         """
     )
 
@@ -319,7 +319,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-vsodb.py users', ' '.join(argv))
+    print_banner('manage-g8es.py users', ' '.join(argv))
     manager = UserManager()
 
     try:
@@ -341,7 +341,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'stats':
             manager.stats()
     except RuntimeError as e:
-        print(f'[manage-vsodb users] {e}', file=sys.stderr)
+        print(f'[manage-g8es users] {e}', file=sys.stderr)
         return 1
 
     return 0

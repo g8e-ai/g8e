@@ -53,7 +53,7 @@ g8e implements defense-in-depth:
 - **Sentinel post-execution** -- 27 scrubbing patterns remove credentials, PII, and secrets before data leaves the Operator
 - **Forbidden operations** -- `sudo`, `su`, `pkexec`, and privilege escalation are unconditionally blocked
 - **mTLS** -- three-layer Operator authentication: API key + server certificate pinning + mTLS client certs
-- **CA cert containment** -- the platform CA never leaves the `vsodb-data` volume; `./g8e security certs trust` streams it directly from the `g8ep` container via `docker exec` with no intermediate file written to the host; remote workstation instructions use SSH streaming (`ssh <host> "docker exec g8ep cat /vsodb/ssl/ca.crt"`) for the same reason
+- **CA cert containment** -- the platform CA never leaves the `g8es-data` volume; `./g8e security certs trust` streams it directly from the `g8ep` container via `docker exec` with no intermediate file written to the host; remote workstation instructions use SSH streaming (`ssh <host> "docker exec g8ep cat /g8es/ssl/ca.crt"`) for the same reason
 - **Encrypted sessions** -- AES-256-GCM on sensitive session fields
 - **Local-First Audit** -- raw command output is stored only on the Operator in encrypted SQLite vaults
 

@@ -52,7 +52,7 @@ class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Retrieve platform-level settings from VSODB with cache-aside."""
+        """Retrieve platform-level settings from g8es with cache-aside."""
         ...
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
@@ -77,7 +77,7 @@ class SettingsService:
         self._logger = logging.getLogger(__name__)
 
     def _get_env(self, env_key: str, default: str | None = None) -> str | None:
-        """DEPRECATED: Configuration is now loaded from VSODB or bootstrap volumes.
+        """DEPRECATED: Configuration is now loaded from g8es or bootstrap volumes.
         """
         return default
 
@@ -85,7 +85,7 @@ class SettingsService:
         """Load settings using canonical defaults and bootstrap service.
         
         This replaces legacy configuration with platform defaults and
-        secure bootstrap service for secrets from VSODB volume.
+        secure bootstrap service for secrets from g8es volume.
         """
         settings = G8eePlatformSettings(port=443) # Default port
         
@@ -129,7 +129,7 @@ class SettingsService:
             
         # Do NOT provide platform-level defaults for temperature/max_tokens if not explicitly set.
         # Our agents use unique temperatures and we should not override them with a platform default
-        # unless the user has explicitly configured one in VSODB.
+        # unless the user has explicitly configured one in g8es.
         
         return settings
 
@@ -179,7 +179,7 @@ class SettingsService:
         return llm
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Load platform settings from VSODB via CacheAsideService."""
+        """Load platform settings from g8es via CacheAsideService."""
         if not self._cache_aside:
             return self.get_local_settings()
 
@@ -190,7 +190,7 @@ class SettingsService:
 
         if not doc_dict:
             raise ConfigurationError(
-                "g8ee cannot start: platform_settings document missing in VSODB",
+                "g8ee cannot start: platform_settings document missing in g8es",
                 code=ErrorCode.DB_QUERY_ERROR
             )
 

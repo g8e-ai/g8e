@@ -21,13 +21,13 @@ import (
 
 // ResultsPublisher is the transport-agnostic interface for publishing results
 // from the g8eo Operator back to AI Agent Services (g8ee).
-// Implemented by PubSubResultsService (VSODB pub/sub via VSOD proxy).
+// Implemented by PubSubResultsService (g8es pub/sub via g8ed proxy).
 type ResultsPublisher interface {
 	PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error
 	PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error
 	PublishFileEditResult(ctx context.Context, result *models.FileEditResult, originalMsg PubSubCommandMessage) error
 	PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error
 	PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error
-	PublishResult(ctx context.Context, result *models.VSOMessage) error
+	PublishResult(ctx context.Context, result *models.G8eMessage) error
 	PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error
 }

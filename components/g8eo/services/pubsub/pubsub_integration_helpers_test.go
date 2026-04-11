@@ -21,15 +21,15 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 )
 
-// NewTestPubSubClient returns a real VSODBPubSubClient connected to the test VSODB instance.
-// Fatally fails the test if VSODB is not available.
-func NewTestPubSubClient(t *testing.T) *VSODBPubSubClient {
+// NewTestPubSubClient returns a real G8esPubSubClient connected to the test g8es instance.
+// Fatally fails the test if g8es is not available.
+func NewTestPubSubClient(t *testing.T) *G8esPubSubClient {
 	t.Helper()
 	testutil.TestPubSubAvailable(t)
 	logger := testutil.NewTestLogger()
-	client, err := NewVSODBPubSubClient(testutil.GetTestVSODBDirectURL(), "", logger)
+	client, err := NewG8esPubSubClient(testutil.GetTestG8esDirectURL(), "", logger)
 	if err != nil {
-		t.Fatalf("Failed to create VSODBPubSubClient: %v", err)
+		t.Fatalf("Failed to create G8esPubSubClient: %v", err)
 	}
 	t.Cleanup(func() { client.Close() })
 	return client

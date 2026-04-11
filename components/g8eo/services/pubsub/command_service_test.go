@@ -33,7 +33,7 @@ func newTestCommandService(t *testing.T) *CommandService {
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileEditSvc := execution.NewFileEditService(cfg, logger)
 
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -160,7 +160,7 @@ func (m *MockResultsPublisher) PublishFsListResult(ctx context.Context, result *
 func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishResult(ctx context.Context, result *models.VSOMessage) error {
+func (m *MockResultsPublisher) PublishResult(ctx context.Context, result *models.G8eMessage) error {
 	return nil
 }
 func (m *MockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error {

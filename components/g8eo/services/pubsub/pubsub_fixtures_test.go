@@ -29,7 +29,7 @@ import (
 // All tests must construct services via helpers in this file — no raw struct literals
 // accessing internal sub-service fields.
 type pubsubFixture struct {
-	DB      *MockVSODBPubSubClient
+	DB      *MockG8esPubSubClient
 	Cfg     *config.Config
 	Logger  *slog.Logger
 	Svc     *PubSubCommandService
@@ -39,7 +39,7 @@ type pubsubFixture struct {
 // newPubsubFixture creates a fully wired PubSubCommandService for unit tests.
 func newPubsubFixture(t *testing.T) *pubsubFixture {
 	t.Helper()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	cfg := testutil.NewTestConfig(t)
@@ -75,7 +75,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 // newPubsubFixtureWithAuditVault creates a fixture with a real, enabled AuditVaultService.
 func newPubsubFixtureWithAuditVault(t *testing.T) (*pubsubFixture, *storage.AuditVaultService) {
 	t.Helper()
-	db := NewMockVSODBPubSubClient()
+	db := NewMockG8esPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	cfg := testutil.NewTestConfig(t)

@@ -40,7 +40,7 @@ from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
     build_enriched_context,
     build_operator_document,
-    build_vso_http_context,
+    build_g8e_http_context,
 )
 from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.fake_execution_registry import FakeExecutionRegistry
@@ -82,7 +82,7 @@ def _make_service(
     registry = FakeExecutionRegistry()
     operator = resolved_operator or _make_operator()
     event_service = FakeEventService()
-    execution = FakeExecutionService(resolved_operator=operator, resolve_error=resolve_error, vsod_event_service=event_service)
+    execution = FakeExecutionService(resolved_operator=operator, resolve_error=resolve_error, g8ed_event_service=event_service)
     service = OperatorPortService(
         pubsub_service=pubsub,
         execution_registry=registry,
@@ -110,7 +110,7 @@ def _make_investigation(operators: list[OperatorDocument] | None = None):
 
 
 def _make_context():
-    return build_vso_http_context()
+    return build_g8e_http_context()
 
 
 def _make_success_envelope(

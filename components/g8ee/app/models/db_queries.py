@@ -16,10 +16,10 @@ from datetime import datetime
 from pydantic import Field
 
 from app.constants import EventType, InvestigationStatus
-from app.models.base import VSOBaseModel
+from app.models.base import G8eBaseModel
 
 
-class CaseHistoryQuery(VSOBaseModel):
+class CaseHistoryQuery(G8eBaseModel):
     """Query parameters for case history operations."""
     case_id: str
     start_time: datetime | None = None
@@ -28,7 +28,7 @@ class CaseHistoryQuery(VSOBaseModel):
     limit: int = 100
 
 
-class InvestigationQuery(VSOBaseModel):
+class InvestigationQuery(G8eBaseModel):
     """Query parameters for investigation operations."""
     case_id: str
     investigation_id: str | None = None
@@ -36,7 +36,7 @@ class InvestigationQuery(VSOBaseModel):
     limit: int = 50
 
 
-class AnalysisQuery(VSOBaseModel):
+class AnalysisQuery(G8eBaseModel):
     """Query parameters for analysis searches."""
     case_id: str | None = Field(default=None, description="Filter by case ID")
     task_id: str | None = Field(default=None, description="Filter by task ID")
