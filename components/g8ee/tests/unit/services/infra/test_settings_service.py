@@ -113,37 +113,52 @@ class TestSettingsService:
         )
 
     async def test_llm_settings_no_overrides(self):
-        """Test that llm_temperature and llm_max_tokens are None if not provided."""
+        """Test that llm_temperature and llm_max_tokens are None if not provided.
+
+        LLM settings are now built via get_user_settings (platform fallback path).
+        """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
-        
-        # Mock platform document with NO temperature or max_tokens
+
+        user_id = "user_temp"
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
+
         platform_data = PlatformSettingsData(
             llm_provider=LLMProvider.OLLAMA,
             llm_model="gemma3:27b",
-            # llm_temperature and llm_max_tokens left as None
         )
         platform_doc = PlatformSettingsDocument(
             settings=platform_data,
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z"
         )
-        
-        cache_mock.get_document.return_value = platform_doc.model_dump()
-        
+
+        def get_doc_mock(collection, document_id):
+            if document_id == user_doc_id:
+                return None
+            if document_id == PLATFORM_SETTINGS_DOC:
+                return platform_doc.model_dump()
+            return None
+
+        cache_mock.get_document.side_effect = get_doc_mock
+
         service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_platform_settings()
-        
-        # These MUST be None to allow agent-specific unique values
+        settings = await service.get_user_settings(user_id)
+
         assert settings.llm.llm_temperature is None
         assert settings.llm.llm_max_tokens is None
 
     async def test_llm_settings_with_overrides(self):
-        """Test that llm_max_tokens ARE set if provided."""
+        """Test that llm_max_tokens ARE set if provided.
+
+        LLM settings are now built via get_user_settings (platform fallback path).
+        """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
-        
-        # Mock platform document WITH max_tokens
+
+        user_id = "user_override"
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
+
         platform_data = PlatformSettingsData(
             llm_provider=LLMProvider.OLLAMA,
             llm_model="gemma3:27b",
@@ -154,21 +169,32 @@ class TestSettingsService:
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z"
         )
-        
-        cache_mock.get_document.return_value = platform_doc.model_dump()
-        
+
+        def get_doc_mock(collection, document_id):
+            if document_id == user_doc_id:
+                return None
+            if document_id == PLATFORM_SETTINGS_DOC:
+                return platform_doc.model_dump()
+            return None
+
+        cache_mock.get_document.side_effect = get_doc_mock
+
         service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_platform_settings()
-        
+        settings = await service.get_user_settings(user_id)
+
         assert settings.llm.llm_max_tokens == 2048
 
     async def test_command_gen_defaults_preserved_when_db_has_no_values(self):
         """Regression: llm_command_gen_passes=None caused TypeError in max(1, None).
 
         When the DB has no command_gen settings, LLMSettings defaults must survive.
+        LLM settings are now built via get_user_settings (platform fallback path).
         """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
+
+        user_id = "user_cmdgen"
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         platform_data = PlatformSettingsData(
             llm_provider=LLMProvider.OLLAMA,
@@ -179,19 +205,33 @@ class TestSettingsService:
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z",
         )
-        cache_mock.get_document.return_value = platform_doc.model_dump()
+
+        def get_doc_mock(collection, document_id):
+            if document_id == user_doc_id:
+                return None
+            if document_id == PLATFORM_SETTINGS_DOC:
+                return platform_doc.model_dump()
+            return None
+
+        cache_mock.get_document.side_effect = get_doc_mock
 
         service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_platform_settings()
+        settings = await service.get_user_settings(user_id)
 
         assert settings.llm.llm_command_gen_passes == 3
         assert settings.llm.llm_command_gen_enabled is True
         assert settings.llm.llm_command_gen_verifier is True
 
     async def test_command_gen_overrides_applied_when_db_has_values(self):
-        """Explicit DB values for command_gen fields override the defaults."""
+        """Explicit DB values for command_gen fields override the defaults.
+
+        LLM settings are now built via get_user_settings (platform fallback path).
+        """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
+
+        user_id = "user_cmdgen_override"
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
         platform_data = PlatformSettingsData(
             llm_provider=LLMProvider.OLLAMA,
@@ -205,10 +245,18 @@ class TestSettingsService:
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z",
         )
-        cache_mock.get_document.return_value = platform_doc.model_dump()
+
+        def get_doc_mock(collection, document_id):
+            if document_id == user_doc_id:
+                return None
+            if document_id == PLATFORM_SETTINGS_DOC:
+                return platform_doc.model_dump()
+            return None
+
+        cache_mock.get_document.side_effect = get_doc_mock
 
         service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_platform_settings()
+        settings = await service.get_user_settings(user_id)
 
         assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is False
@@ -243,12 +291,17 @@ class TestSettingsService:
         assert settings.llm.llm_command_gen_enabled is True
         assert settings.llm.llm_command_gen_verifier is True
 
-    async def test_llm_settings_undefined_provider_skips(self):
-        """Test that 'undefined' provider results in None in LLMSettings."""
+    async def test_llm_settings_undefined_provider_falls_back_to_default(self):
+        """Test that 'undefined' provider falls back to default OLLAMA.
+
+        LLM settings are now built via get_user_settings (platform fallback path).
+        """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
-        
-        # Mock platform document with 'undefined' provider
+
+        user_id = "user_undefined"
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
+
         platform_data = PlatformSettingsData(
             llm_provider="undefined",
             llm_model="gemma3:27b"
@@ -258,11 +311,17 @@ class TestSettingsService:
             created_at="2026-04-04T00:00:00Z",
             updated_at="2026-04-04T00:00:00Z"
         )
-        
-        cache_mock.get_document.return_value = platform_doc.model_dump()
-        
+
+        def get_doc_mock(collection, document_id):
+            if document_id == user_doc_id:
+                return None
+            if document_id == PLATFORM_SETTINGS_DOC:
+                return platform_doc.model_dump()
+            return None
+
+        cache_mock.get_document.side_effect = get_doc_mock
+
         service = SettingsService(cache_aside_service=cache_mock)
-        settings = await service.get_platform_settings()
-        
-        # Should NOT be set if provider is 'undefined'
-        assert settings.llm.provider == LLMProvider.OLLAMA # Default from G8eePlatformSettings
+        settings = await service.get_user_settings(user_id)
+
+        assert settings.llm.provider == LLMProvider.OLLAMA

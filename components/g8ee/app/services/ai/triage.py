@@ -136,52 +136,48 @@ class TriageAgent:
             )
 
         try:
-            provider = get_llm_provider(request.settings.llm)
+            async with get_llm_provider(request.settings.llm) as provider:
+                model = request.model_override or request.settings.llm.primary_model
 
-            # Triage defaults to primary model for accuracy
-            model = request.model_override or request.settings.llm.primary_model
+                conversation_tail = self._build_conversation_tail(request.conversation_history)
 
-            conversation_tail = self._build_conversation_tail(request.conversation_history)
-
-            prompt = _TRIAGE_PROMPT_TEMPLATE.format(
-                conversation_tail=conversation_tail,
-                message=request.message,
-            )
-
-            config = AIGenerationConfigBuilder.get_lite_generation_config(
-                max_tokens=None,
-                model=model,
-                temperature=None,
-                system_instruction="",
-            )
-
-            response = await provider.generate_content(
-                model=model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                config=config,
-                tools=[],
-                system_instruction="",
-            )
-
-            if not response or not response.text:
-                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
-                return self._fallback_result("Could not determine intent (no model response).")
-
-            try:
-                result = self._parse_response(response.text)
-                
-                logger.info(
-                    "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
-                    result.complexity,
-                    result.intent_confidence,
-                    model,
-                    result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
+                prompt = _TRIAGE_PROMPT_TEMPLATE.format(
+                    conversation_tail=conversation_tail,
+                    message=request.message,
                 )
-                return result
 
-            except (ValueError, Exception) as e:
-                logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
-                return self._fallback_result("Could not parse intent summary from model response.")
+                config = AIGenerationConfigBuilder.build_lite_settings(
+                    model=model,
+                    temperature=None,
+                    max_tokens=None,
+                    system_instruction="",
+                )
+
+                response = await provider.generate_content_lite(
+                    model=model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    lite_llm_settings=config,
+                )
+
+                if not response or not response.text:
+                    logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
+                    return self._fallback_result("Could not determine intent (no model response).")
+
+                try:
+                    result = self._parse_response(response.text)
+
+                    logger.info(
+                        "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
+                        result.complexity,
+                        result.intent_confidence,
+                        model,
+                        result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
+                    )
+                    return result
+
+                except (ValueError, Exception) as e:
+                    logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
+                    return self._fallback_result("Could not parse intent summary from model response.")
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")

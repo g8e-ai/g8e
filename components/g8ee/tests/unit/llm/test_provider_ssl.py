@@ -150,51 +150,16 @@ class TestGeminiProviderSSL:
         params = list(sig.parameters.keys())
         assert "ca_cert_path" not in params
 
-    def test_get_client_creates_genai_client(self):
-        import asyncio
+    def test_constructor_creates_genai_client(self):
         from app.llm.providers.gemini import GeminiProvider
 
-        provider = GeminiProvider(api_key="test-key")
         mock_client = MagicMock()
 
         with patch("google.genai.Client", return_value=mock_client) as mock_ctor:
-            loop = asyncio.new_event_loop()
-            try:
-                provider._loop = None
-                provider._client = None
-
-                async def run():
-                    return provider._get_client()
-                result = loop.run_until_complete(run())
-            finally:
-                loop.close()
+            provider = GeminiProvider(api_key="test-key")
 
             mock_ctor.assert_called_once_with(api_key="test-key")
-            assert result is mock_client
-
-    def test_get_client_is_lazy_singleton(self):
-        import asyncio
-        from app.llm.providers.gemini import GeminiProvider
-
-        provider = GeminiProvider(api_key="test-key")
-        mock_client = MagicMock()
-
-        with patch("google.genai.Client", return_value=mock_client) as mock_ctor:
-            loop = asyncio.new_event_loop()
-            try:
-                provider._loop = None
-                provider._client = None
-
-                async def run():
-                    first = provider._get_client()
-                    second = provider._get_client()
-                    return first, second
-                first, second = loop.run_until_complete(run())
-            finally:
-                loop.close()
-
-            mock_ctor.assert_called_once()
-            assert first is second
+            assert provider._client is mock_client
 
 
 class TestFactorySSL:

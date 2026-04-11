@@ -121,9 +121,10 @@ export const LLMProvider = Object.freeze({
  * Must match g8ee's constants/settings.py GEMINI_* constants exactly.
  */
 export const GeminiModel = Object.freeze({
-    PRO_PREVIEW:        'gemini-3.1-pro-preview',
-    FLASH_PREVIEW:      'gemini-3-flash-preview',
-    FLASH_LITE_PREVIEW: 'gemini-3.1-flash-lite-preview',
+    PRO_PREVIEW:              'gemini-3.1-pro-preview',
+    PRO_PREVIEW_CUSTOMTOOLS:  'gemini-3.1-pro-preview-customtools',
+    FLASH_PREVIEW:            'gemini-3-flash-preview',
+    FLASH_LITE_PREVIEW:       'gemini-3.1-flash-lite-preview',
 });
 
 /**

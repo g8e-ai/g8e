@@ -329,7 +329,9 @@ class TestExecuteCommandTargetSystems:
         g8e_context = self._make_g8e_context()
         args = OperatorCommandArgs(command="ls", justification="test")
 
-        await service.execute_command(args, g8e_context, investigation)
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]
@@ -357,7 +359,9 @@ class TestExecuteCommandTargetSystems:
             target_operators=["op-1", "op-2"],
         )
 
-        await service.execute_command(args, g8e_context, investigation)
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]
@@ -379,7 +383,9 @@ class TestExecuteCommandTargetSystems:
         g8e_context = self._make_g8e_context()
         args = OperatorCommandArgs(command="df -h", justification="disk check")
 
-        await service.execute_command(args, g8e_context, investigation)
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
         req = approval_service.command_approval_calls[0]

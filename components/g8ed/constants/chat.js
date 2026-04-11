@@ -95,7 +95,7 @@ export const EventType = Object.freeze({
 
 /**
  * Stream Chunk Types
- * Types of chunks emitted by the g8eAgent streaming pipeline.
+ * Types of chunks emitted by the g8eEngine streaming pipeline.
  */
 export const StreamChunkType = Object.freeze({
     TEXT:            'text',

@@ -376,6 +376,42 @@ class ThinkingConfig:
 
 
 @dataclass
+class PrimaryLLMSettings:
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float = 1.0
+    top_k_filtering: int = 40
+    stop_sequences: list[str] = field(default_factory=list)
+    response_modalities: list[str] = field(default_factory=list)
+    tools: list[ToolGroup] = field(default_factory=list)
+    system_instruction: str = ""
+    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
+    tool_config: ToolConfig = None
+
+
+@dataclass
+class AssistantLLMSettings:
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float = 1.0
+    top_k_filtering: int = 40
+    stop_sequences: list[str] = field(default_factory=list)
+    system_instruction: str = ""
+    response_format: ResponseFormat = None
+
+
+@dataclass
+class LiteLLMSettings:
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float = 1.0
+    top_k_filtering: int = 40
+    stop_sequences: list[str] = field(default_factory=list)
+    system_instruction: str = ""
+    response_format: ResponseFormat = None
+
+
+@dataclass
 class GenerateContentConfig:
     temperature: float
     max_output_tokens: int

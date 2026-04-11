@@ -20,7 +20,7 @@ gold set without any pipeline overhead, investigation context, or g8es I/O.
 
 Test flow:
 1. Build system prompt via build_modular_system_prompt
-2. Build GenerateContentConfig via AIGenerationConfigBuilder.build_config
+2. Build PrimaryLLMSettings via AIGenerationConfigBuilder.build_primary_settings
 3. Call llm_provider.generate_content directly (no pipeline, no g8es)
 4. Extract response text from GenerateContentResponse
 5. Grade with EvalJudge
@@ -101,8 +101,8 @@ async def test_ollama_accuracy(
             g8e_web_search_available=False,
         )
 
-        # Step 2: Build GenerateContentConfig (no tools)
-        generation_config = AIGenerationConfigBuilder.build_config(
+        # Step 2: Build PrimaryLLMSettings (no tools)
+        generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
             temperature=settings.llm.llm_temperature,
             max_tokens=settings.llm.llm_max_tokens or 4096,
@@ -110,15 +110,15 @@ async def test_ollama_accuracy(
             tools=[],
         )
 
-        # Step 3: Call llm_provider.generate_content directly
+        # Step 3: Call llm_provider.generate_content_primary directly
         user_query = scenario["user_query"]
         contents = [types.Content(role="user", parts=[types.Part.from_text(text=user_query)])]
 
         try:
-            response = await llm_provider.generate_content(
+            response = await llm_provider.generate_content_primary(
                 model=model_name,
                 contents=contents,
-                config=generation_config,
+                primary_llm_settings=generation_settings,
             )
         except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             pytest.skip(

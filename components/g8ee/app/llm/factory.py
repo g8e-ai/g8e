@@ -16,9 +16,14 @@ LLM Provider Factory
 
 One entry point:
 
-  get_llm_provider(settings) — per-request factory. Constructs a fresh
-      LLMProvider from the given Settings instance. Used by the chat pipeline
-      so each request uses the resolved Defaults < Platform < User settings.
+  get_llm_provider(settings) — constructs an LLMProvider from the given
+      LLMSettings. The provider type is always settings.provider; the model
+      is passed per-call to generate_content_stream_primary /
+      generate_content_assistant. Callers MUST use ``async with`` to
+      ensure the provider is closed::
+
+          async with get_llm_provider(settings.llm) as provider:
+              stream = provider.generate_content_stream_primary(model=..., ...)
 
 All Gemini-specific logic lives in app.llm.providers.gemini.
 """
@@ -69,46 +74,6 @@ def get_llm_provider(settings: LLMSettings) -> LLMProviderBase:
     from app.errors import ConfigurationError
 
     provider_type = settings.provider
-
-    platform_settings = get_settings()
-    ca_cert_path = platform_settings.ca_cert_path if platform_settings else None
-
-    if provider_type == LLMProvider.OLLAMA:
-        return OpenAICompatibleProvider(
-            endpoint=settings.ollama_endpoint,
-            api_key=settings.ollama_api_key,
-            ca_cert_path=ca_cert_path,
-        )
-    elif provider_type == LLMProvider.OPENAI:
-        return OpenAICompatibleProvider(
-            endpoint=settings.openai_endpoint,
-            api_key=settings.openai_api_key,
-            ca_cert_path=ca_cert_path,
-        )
-    elif provider_type == LLMProvider.GEMINI:
-        return GeminiProvider(api_key=settings.gemini_api_key)
-    elif provider_type == LLMProvider.ANTHROPIC:
-        return AnthropicProvider(
-            endpoint=settings.anthropic_endpoint,
-            api_key=settings.anthropic_api_key,
-            ca_cert_path=ca_cert_path,
-        )
-
-    raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
-
-
-def get_llm_provider_for_provider(
-    provider_type: LLMProvider,
-    settings: LLMSettings,
-) -> LLMProviderBase:
-    """Return a configured LLMProvider for an explicit provider type.
-
-    Unlike get_llm_provider() which uses settings.provider, this function
-    routes to the given provider_type while still reading credentials and
-    endpoints from the LLMSettings instance.  Used by the Tribunal when
-    the resolved model belongs to a different provider than the primary.
-    """
-    from app.errors import ConfigurationError
 
     platform_settings = get_settings()
     ca_cert_path = platform_settings.ca_cert_path if platform_settings else None

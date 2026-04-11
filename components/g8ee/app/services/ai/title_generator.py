@@ -25,6 +25,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleRequest, CaseTitleResult
 from app.llm.llm_types import Content, Part
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.llm.llm_types import AssistantLLMSettings
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +56,10 @@ async def generate_case_title(
         )
 
     try:
-        provider = get_llm_provider(settings.llm)
-        model = settings.llm.assistant_model
+        async with get_llm_provider(settings.llm) as provider:
+            model = settings.llm.assistant_model
 
-        prompt = f"""<task>
+            prompt = f"""<task>
 Generate a concise, specific title for this conversation.
 </task>
 
@@ -76,42 +77,46 @@ Generate a concise, specific title for this conversation.
 
 Title:"""
 
-        logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
+            logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
-        response = await provider.generate_content(
-            model=model,
-            contents=[Content(role=Role.USER, parts=[Part(text=prompt)])],
-            config=AIGenerationConfigBuilder.get_title_generation_config(model=model),
-            tools=[],
-            system_instruction="",
-        )
-
-        if not response or not response.text:
-            logger.warning("[TITLE-GEN] No response from LLM, using fallback title")
-            return CaseTitleResult(
-                generated_title=_create_fallback_title(description, max_length),
-                fallback=True
+            settings = AssistantLLMSettings(
+                temperature=0.7,
+                max_output_tokens=100,
+                stop_sequences=["\n"],
+                system_instruction="",
+            )
+            response = await provider.generate_content_assistant(
+                model=model,
+                contents=[Content(role=Role.USER, parts=[Part(text=prompt)])],
+                assistant_llm_settings=settings,
             )
 
-        generated_title = response.text.strip()
+            if not response or not response.text:
+                logger.warning("[TITLE-GEN] No response from LLM, using fallback title")
+                return CaseTitleResult(
+                    generated_title=_create_fallback_title(description, max_length),
+                    fallback=True
+                )
 
-        if generated_title.startswith('"') and generated_title.endswith('"'):
-            generated_title = generated_title[1:-1]
-        if generated_title.startswith("'") and generated_title.endswith("'"):
-            generated_title = generated_title[1:-1]
+            generated_title = response.text.strip()
 
-        if len(generated_title) > max_length:
-            generated_title = generated_title[:max_length-3] + "..."
+            if generated_title.startswith('"') and generated_title.endswith('"'):
+                generated_title = generated_title[1:-1]
+            if generated_title.startswith("'") and generated_title.endswith("'"):
+                generated_title = generated_title[1:-1]
 
-        if not generated_title or len(generated_title.strip()) < 5:
-            return CaseTitleResult(
-                generated_title=_create_fallback_title(description, max_length),
-                fallback=True
-            )
+            if len(generated_title) > max_length:
+                generated_title = generated_title[:max_length-3] + "..."
 
-        logger.info("[TITLE-GEN] Title generated: %s", generated_title)
+            if not generated_title or len(generated_title.strip()) < 5:
+                return CaseTitleResult(
+                    generated_title=_create_fallback_title(description, max_length),
+                    fallback=True
+                )
 
-        return CaseTitleResult(generated_title=generated_title, fallback=False)
+            logger.info("[TITLE-GEN] Title generated: %s", generated_title)
+
+            return CaseTitleResult(generated_title=generated_title, fallback=False)
 
     except Exception as e:
         logger.error("[TITLE-GEN] Failed to generate title: %s", e)

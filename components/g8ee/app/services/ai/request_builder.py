@@ -25,7 +25,7 @@ Separation of Concerns:
 - AIEventPublisher: HOW to publish events to frontend
 - AIResponseAnalyzer: HOW to analyze AI responses
 - AIToolExecutor: HOW to execute AI tool calls
-- g8eAgent: Core streaming loop (uses all above)
+- g8eEngine: Core streaming loop (uses all above)
 """
 
 import logging
@@ -33,6 +33,7 @@ from typing import Protocol, runtime_checkable
 
 from app.models.settings import G8eeUserSettings
 import app.llm.llm_types as types
+from app.llm.llm_types import PrimaryLLMSettings
 from app.constants import ATTACHMENT_FILENAMES_PREFIX_TEMPLATE, EventType, AgentMode
 from app.constants.message_sender import MessageSender
 from app.models.attachments import ProcessedAttachment
@@ -148,9 +149,9 @@ class AIRequestBuilder:
         agent_mode: AgentMode,
         max_tokens: int | None = None,
         model_override: str | None = None,
-    ) -> types.GenerateContentConfig:
+    ) -> PrimaryLLMSettings:
         """
-        Build GenerateContentConfig for main-model generate_content calls.
+        Build PrimaryLLMSettings for main-model generate_content calls.
 
         Args:
             system_instructions: System instructions with senior engineer methodologies
@@ -160,7 +161,7 @@ class AIRequestBuilder:
             model_override: Model name override (Pro, Flash, etc.)
 
         Returns:
-            types.GenerateContentConfig ready for generate_content_stream()
+            PrimaryLLMSettings ready for generate_content_stream_primary()
         """
         if agent_mode is None:
             agent_mode = AgentMode.OPERATOR_NOT_BOUND
@@ -168,7 +169,7 @@ class AIRequestBuilder:
         model = model_override or settings.llm.primary_model
         tools = self.tool_executor.get_tools(agent_mode, model) if self.tool_executor else []
 
-        return AIGenerationConfigBuilder.build_config(
+        return AIGenerationConfigBuilder.build_primary_settings(
             model=model,
             temperature=settings.llm.llm_temperature,
             max_tokens=max_tokens or settings.llm.llm_max_tokens,

@@ -22,7 +22,7 @@ from app.constants import ErrorAnalysisCategory, RiskLevel
 from app.llm.llm_types import Content, Part, GenerateContentResponse, Candidate
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from tests.fakes.fake_llm_provider import FakeLLMProvider
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
     CommandRiskContext,
     ErrorAnalysisContext,
@@ -47,10 +47,9 @@ def create_real_llm_response(text: str | None) -> GenerateContentResponse:
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import G8eePlatformSettings
-    settings = G8eePlatformSettings(port=443)
-    settings.llm.ollama_assistant_model = "lite-model"
-    return settings
+    llm = LLMSettings()
+    llm.assistant_model = "lite-model"
+    return G8eeUserSettings(llm=llm)
 
 
 @pytest.fixture
@@ -59,8 +58,8 @@ def fake_provider():
 
 
 @pytest.fixture
-def analyzer(mock_settings):
-    return AIResponseAnalyzer(settings=mock_settings)
+def analyzer():
+    return AIResponseAnalyzer()
 
 
 # ---------------------------------------------------------------------------

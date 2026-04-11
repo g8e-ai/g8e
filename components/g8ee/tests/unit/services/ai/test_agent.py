@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Unit tests for g8eAgent (agent.py).
+Unit tests for g8eEngine (agent.py).
 
 Tests:
 - Constructor initialization with required and optional dependencies
@@ -54,7 +54,7 @@ from app.models.agent import (
 )
 from app.models.tool_results import SearchWebResult
 from app.models.grounding import GroundingMetadata
-from app.services.ai.agent import g8eAgent
+from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_tool_loop import ToolCallResponse
 from tests.fakes.agent_helpers import (
     FakeMultiTurnStreamProvider,
@@ -74,23 +74,19 @@ pytestmark = pytest.mark.unit
 # TEST: Constructor
 # =============================================================================
 
-class TestG8eAgentConstructor:
+class Testg8eEngineConstructor:
 
     def test_constructor_with_required_dependencies(self):
-        llm_provider = MagicMock()
         tool_executor = MagicMock()
-        agent = g8eAgent(llm_provider=llm_provider, tool_executor=tool_executor)
+        agent = g8eEngine(tool_executor=tool_executor)
 
-        assert agent._llm_provider is llm_provider
         assert agent._tool_executor is tool_executor
         assert agent._grounding_service is not None
 
     def test_constructor_with_optional_grounding_service(self):
-        llm_provider = MagicMock()
         tool_executor = MagicMock()
         grounding_service = MagicMock()
-        agent = g8eAgent(
-            llm_provider=llm_provider,
+        agent = g8eEngine(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
         )
@@ -98,10 +94,8 @@ class TestG8eAgentConstructor:
         assert agent._grounding_service is grounding_service
 
     def test_constructor_creates_default_grounding_service_when_none(self):
-        llm_provider = MagicMock()
         tool_executor = MagicMock()
-        agent = g8eAgent(
-            llm_provider=llm_provider,
+        agent = g8eEngine(
             tool_executor=tool_executor,
             grounding_service=None,
         )
@@ -114,7 +108,7 @@ class TestG8eAgentConstructor:
 # TEST: Property Accessors
 # =============================================================================
 
-class TestG8eAgentProperties:
+class Testg8eEngineProperties:
 
     def test_tool_executor_property_returns_executor(self):
         tool_executor = MagicMock()
@@ -162,9 +156,9 @@ class TestStreamResponseRetryLoop:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = failing_stream
+        provider.generate_content_stream_primary = failing_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -177,6 +171,7 @@ class TestStreamResponseRetryLoop:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
@@ -201,9 +196,9 @@ class TestStreamResponseRetryLoop:
                 yield
             return _gen()
 
-        provider.generate_content_stream = stream_then_fail
+        provider.generate_content_stream_primary = stream_then_fail
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -216,6 +211,7 @@ class TestStreamResponseRetryLoop:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
@@ -243,9 +239,9 @@ class TestStreamResponseRetryLoop:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = failing_stream
+        provider.generate_content_stream_primary = failing_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -264,6 +260,7 @@ class TestStreamResponseRetryLoop:
                 model_name="test-model",
                 context=context,
                 g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
             ):
                 chunks.append(chunk)
 
@@ -284,9 +281,9 @@ class TestStreamResponseRetryLoop:
                 yield
             return _gen()
 
-        provider.generate_content_stream = always_failing_stream
+        provider.generate_content_stream_primary = always_failing_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -299,6 +296,7 @@ class TestStreamResponseRetryLoop:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
@@ -327,9 +325,9 @@ class TestStreamResponseErrorHandling:
                 yield
             return _gen()
 
-        provider.generate_content_stream = auth_error_stream
+        provider.generate_content_stream_primary = auth_error_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -342,6 +340,7 @@ class TestStreamResponseErrorHandling:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
@@ -362,9 +361,9 @@ class TestStreamResponseErrorHandling:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = success_stream
+        provider.generate_content_stream_primary = success_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -377,6 +376,7 @@ class TestStreamResponseErrorHandling:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
@@ -402,9 +402,9 @@ class TestRunWithSSEContextVarLifecycle:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = empty_stream
+        provider.generate_content_stream_primary = empty_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -436,9 +436,9 @@ class TestRunWithSSEContextVarLifecycle:
                 yield
             return _gen()
 
-        provider.generate_content_stream = error_stream
+        provider.generate_content_stream_primary = error_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -470,12 +470,9 @@ class TestRunWithSSEContextVarLifecycle:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = success_stream
+        provider.generate_content_stream_primary = success_stream
 
-        agent = make_g8e_agent(
-            provider=provider,
-            fn_handler=tool_executor,
-        )
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -503,7 +500,7 @@ class TestRunWithSSEValidation:
     async def test_raises_validation_error_when_g8e_context_missing(self):
         tool_executor = MagicMock()
         provider = MagicMock()
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
 
         context = make_agent_streaming_context()
         context.g8e_context = None
@@ -542,9 +539,9 @@ class TestStreamWithToolLoop:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = no_tool_stream
+        provider.generate_content_stream_primary = no_tool_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -587,9 +584,9 @@ class TestStreamWithToolLoop:
                     yield make_provider_chunk(finish_reason="STOP")
                 return _gen()
 
-        provider.generate_content_stream = tool_stream
+        provider.generate_content_stream_primary = tool_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -607,13 +604,9 @@ class TestStreamWithToolLoop:
 
         assert call_count == 2
 
-    async def test_uses_override_llm_provider_when_provided(self):
+    async def test_uses_provided_llm_provider(self):
         tool_executor = MagicMock()
-        default_provider = MagicMock()
-        override_provider = MagicMock()
-
-        default_provider.generate_content_stream = MagicMock()
-        override_provider.generate_content_stream = MagicMock()
+        provider = MagicMock()
 
         def stream(**kwargs):
             async def _gen():
@@ -621,9 +614,9 @@ class TestStreamWithToolLoop:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        override_provider.generate_content_stream.return_value = stream()
+        provider.generate_content_stream_primary = MagicMock(side_effect=stream)
 
-        agent = make_g8e_agent(provider=default_provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -635,12 +628,11 @@ class TestStreamWithToolLoop:
             model_name="test-model",
             context=context,
             g8ed_event_service=g8ed_event_service,
-            llm_provider=override_provider,
+            llm_provider=provider,
         ):
             chunks.append(chunk)
 
-        override_provider.generate_content_stream.assert_called_once()
-        default_provider.generate_content_stream.assert_not_called()
+        provider.generate_content_stream_primary.assert_called_once()
 
 
 # =============================================================================
@@ -667,9 +659,9 @@ class TestTokenAccumulation:
                 yield chunk
             return _gen()
 
-        provider.generate_content_stream = multi_turn_stream
+        provider.generate_content_stream_primary = multi_turn_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -702,9 +694,9 @@ class TestTokenAccumulation:
                 yield chunk
             return _gen()
 
-        provider.generate_content_stream = no_metadata_stream
+        provider.generate_content_stream_primary = no_metadata_stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -755,9 +747,9 @@ class TestGroundingMetadata:
                     yield make_provider_chunk(finish_reason="STOP")
                 return _gen()
 
-        provider.generate_content_stream = stream
+        provider.generate_content_stream_primary = stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -805,9 +797,9 @@ class TestGroundingMetadata:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = stream
+        provider.generate_content_stream_primary = stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -843,9 +835,9 @@ class TestCompleteEmission:
                 yield make_provider_chunk(finish_reason="STOP")
             return _gen()
 
-        provider.generate_content_stream = stream
+        provider.generate_content_stream_primary = stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
@@ -875,9 +867,9 @@ class TestCompleteEmission:
                 yield chunk
             return _gen()
 
-        provider.generate_content_stream = stream
+        provider.generate_content_stream_primary = stream
 
-        agent = make_g8e_agent(provider=provider, fn_handler=tool_executor)
+        agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_streaming_context()
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()

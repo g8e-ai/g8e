@@ -54,10 +54,12 @@ from tenacity import (
 
 from app.constants import GeminiRole
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Candidate,
     Content,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
     ToolCall,
-    GenerateContentConfig,
     GenerateContentResponse,
     Part,
     Role,
@@ -347,33 +349,25 @@ class GeminiProvider(LLMProvider):
         )
 
     def __init__(self, api_key: str):
-        self._api_key = api_key
-        self._client = None
-        logger.info("Gemini provider initialized")
-
-    def _get_client(self):
-        """Return the genai Client, building it lazily on first use.
-
-        httpx.AsyncClient binds to the running event loop at construction time.
-        Building it here (called from within an async context) ensures it is
-        always created on the active loop rather than on the loop that existed
-        when __init__ ran (which may already be closed).
-        """
-        import asyncio
-        current_loop = asyncio.get_running_loop()
-
-        if self._client is not None and getattr(self, "_loop", None) is not current_loop:
-            logger.info("Event loop changed, recreating Gemini client")
-            self._client = None
-
-        if self._client is not None:
-            return self._client
-
         from google import genai
 
-        self._client = genai.Client(api_key=self._api_key)
-        self._loop = current_loop
-        return self._client
+        self._client = genai.Client(api_key=api_key)
+        logger.info("Gemini provider initialized")
+
+    async def close(self):
+        """Clean up the genai SDK's internal aiohttp session to prevent resource leaks."""
+        try:
+            api_client = getattr(self._client, '_api_client', None)
+            if api_client:
+                session = getattr(api_client, '_aiohttp_session', None)
+                if session and not getattr(session, 'closed', True):
+                    connector = getattr(session, 'connector', None)
+                    await session.close()
+                    if connector and not getattr(connector, 'closed', True):
+                        await connector.close()
+        except Exception as e:
+            logger.warning("Error closing Gemini provider: %s", e)
+        logger.info("Gemini provider closed")
 
     @staticmethod
     def _build_thinking_config_gemini3(tc, genai_types):
@@ -396,31 +390,25 @@ class GeminiProvider(LLMProvider):
         return genai_types.ThinkingConfig(**kwargs)
 
     @staticmethod
-    def _build_genai_config(
-        config: GenerateContentConfig,
+    def _build_genai_config_primary(
+        primary_llm_settings: PrimaryLLMSettings,
         genai_tools: list | None,
         model: str,
-        system_instruction: str,
     ):
-        """Build a genai_types.GenerateContentConfig from canonical config.
-
-        system_instruction parameter takes precedence over config.system_instruction
-        when both are provided.
-        """
+        """Build a genai_types.GenerateContentConfig from PrimaryLLMSettings."""
         from google.genai import types as genai_types
 
-        sys_instr = system_instruction or (config.system_instruction if config else None)
         gen_config_kwargs: dict[str, object] = {
-            "temperature": config.temperature if config else None,
-            "top_p": config.top_p_nucleus_sampling if config else None,
-            "top_k": config.top_k_filtering if config else None,
-            "system_instruction": sys_instr,
+            "temperature": primary_llm_settings.temperature,
+            "top_p": primary_llm_settings.top_p_nucleus_sampling,
+            "top_k": primary_llm_settings.top_k_filtering,
+            "system_instruction": primary_llm_settings.system_instruction,
         }
 
-        if config and config.max_output_tokens is not None:
-            gen_config_kwargs["max_output_tokens"] = config.max_output_tokens
+        if primary_llm_settings.max_output_tokens is not None:
+            gen_config_kwargs["max_output_tokens"] = primary_llm_settings.max_output_tokens
 
-        thinking_config = GeminiProvider._build_thinking_config_gemini3(config.thinking_config if config else None, genai_types)
+        thinking_config = GeminiProvider._build_thinking_config_gemini3(primary_llm_settings.thinking_config, genai_types)
         
         if thinking_config is not None:
             gen_config_kwargs["thinking_config"] = thinking_config
@@ -428,8 +416,8 @@ class GeminiProvider(LLMProvider):
         if genai_tools:
             gen_config_kwargs["tools"] = genai_tools
 
-        if config and config.tool_config and config.tool_config.tool_calling_config:
-            fc_cfg = config.tool_config.tool_calling_config
+        if primary_llm_settings.tool_config and primary_llm_settings.tool_config.tool_calling_config:
+            fc_cfg = primary_llm_settings.tool_config.tool_calling_config
             fc_kwargs: dict[str, object] = {}
             if fc_cfg.mode is not None:
                 fc_kwargs["mode"] = fc_cfg.mode
@@ -439,9 +427,53 @@ class GeminiProvider(LLMProvider):
                 function_calling_config=genai_types.FunctionCallingConfig(**fc_kwargs)
             )
 
-        if config and config.response_format is not None:
+        return genai_types.GenerateContentConfig(**gen_config_kwargs)
+
+    @staticmethod
+    def _build_genai_config_assistant(
+        assistant_llm_settings: AssistantLLMSettings,
+        model: str,
+    ):
+        """Build a genai_types.GenerateContentConfig from AssistantLLMSettings."""
+        from google.genai import types as genai_types
+
+        gen_config_kwargs: dict[str, object] = {
+            "temperature": assistant_llm_settings.temperature,
+            "top_p": assistant_llm_settings.top_p_nucleus_sampling,
+            "top_k": assistant_llm_settings.top_k_filtering,
+            "system_instruction": assistant_llm_settings.system_instruction,
+        }
+
+        if assistant_llm_settings.max_output_tokens is not None:
+            gen_config_kwargs["max_output_tokens"] = assistant_llm_settings.max_output_tokens
+
+        if assistant_llm_settings.response_format is not None:
             gen_config_kwargs["response_mime_type"] = "application/json"
-            gen_config_kwargs["response_json_schema"] = config.response_format.json_schema.schema
+            gen_config_kwargs["response_json_schema"] = assistant_llm_settings.response_format.json_schema.schema
+
+        return genai_types.GenerateContentConfig(**gen_config_kwargs)
+
+    @staticmethod
+    def _build_genai_config_lite(
+        lite_llm_settings: LiteLLMSettings,
+        model: str,
+    ):
+        """Build a genai_types.GenerateContentConfig from LiteLLMSettings."""
+        from google.genai import types as genai_types
+
+        gen_config_kwargs: dict[str, object] = {
+            "temperature": lite_llm_settings.temperature,
+            "top_p": lite_llm_settings.top_p_nucleus_sampling,
+            "top_k": lite_llm_settings.top_k_filtering,
+            "system_instruction": lite_llm_settings.system_instruction,
+        }
+
+        if lite_llm_settings.max_output_tokens is not None:
+            gen_config_kwargs["max_output_tokens"] = lite_llm_settings.max_output_tokens
+
+        if lite_llm_settings.response_format is not None:
+            gen_config_kwargs["response_mime_type"] = "application/json"
+            gen_config_kwargs["response_json_schema"] = lite_llm_settings.response_format.json_schema.schema
 
         return genai_types.GenerateContentConfig(**gen_config_kwargs)
 
@@ -501,19 +533,38 @@ class GeminiProvider(LLMProvider):
 
         return result
 
-    def _build_request_kwargs(
+    def _build_request_kwargs_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> GenaiRequestKwargs:
-        """Build the typed kwargs model passed to the SDK generate_content* calls."""
+        """Build the typed kwargs model passed to the SDK for primary LLM calls."""
         genai_contents = [_content_to_genai(c).flatten_for_llm() for c in contents]
-        effective_tools = tools or (config.tools if config else None)
-        genai_tools = _tools_to_genai(effective_tools)
-        gen_config = self._build_genai_config(config, genai_tools, model, system_instruction)
+        genai_tools = _tools_to_genai(primary_llm_settings.tools)
+        gen_config = self._build_genai_config_primary(primary_llm_settings, genai_tools, model)
+        return GenaiRequestKwargs(model=model, contents=genai_contents, config=gen_config)
+
+    def _build_request_kwargs_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenaiRequestKwargs:
+        """Build the typed kwargs model passed to the SDK for assistant LLM calls."""
+        genai_contents = [_content_to_genai(c).flatten_for_llm() for c in contents]
+        gen_config = self._build_genai_config_assistant(assistant_llm_settings, model)
+        return GenaiRequestKwargs(model=model, contents=genai_contents, config=gen_config)
+
+    def _build_request_kwargs_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenaiRequestKwargs:
+        """Build the typed kwargs model passed to the SDK for lite LLM calls."""
+        genai_contents = [_content_to_genai(c).flatten_for_llm() for c in contents]
+        gen_config = self._build_genai_config_lite(lite_llm_settings, model)
         return GenaiRequestKwargs(model=model, contents=genai_contents, config=gen_config)
 
     async def _open_stream_attempt(self, kwargs: GenaiRequestKwargs):
@@ -522,17 +573,15 @@ class GeminiProvider(LLMProvider):
         Returns the live async iterator. Only the connection-open step is retried;
         once the stream is open, chunks are yielded immediately by the caller.
         """
-        return await self._get_client().aio.models.generate_content_stream(**kwargs.flatten_for_llm())
+        return await self._client.aio.models.generate_content_stream(**kwargs.flatten_for_llm())
 
-    async def generate_content_stream(
+    async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
-        kwargs = self._build_request_kwargs(model, contents, config, tools, system_instruction)
+        kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
 
         stream = None
         async for attempt in AsyncRetrying(
@@ -549,15 +598,13 @@ class GeminiProvider(LLMProvider):
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
 
-    async def generate_content(
+    async def generate_content_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        kwargs = self._build_request_kwargs(model, contents, config, tools, system_instruction)
+        kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
 
         response = None
         async for attempt in AsyncRetrying(
@@ -567,7 +614,141 @@ class GeminiProvider(LLMProvider):
             reraise=True,
         ):
             with attempt:
-                response = await self._get_client().aio.models.generate_content(**kwargs.flatten_for_llm())
+                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
+
+        assert response is not None
+
+        parts: list[Part] = []
+        finish_reason: str
+        if response.candidates:
+            candidate = response.candidates[0]
+            parts = _parts_from_sdk_candidate(candidate)
+            finish_reason = _finish_reason_from_candidate(candidate)
+
+        usage: UsageMetadata
+        if response.usage_metadata:
+            usage = _usage_from_sdk(response.usage_metadata)
+
+        grounding_raw: SdkGroundingRawData
+        if response.candidates:
+            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=finish_reason,
+            )],
+            usage_metadata=usage,
+            grounding_raw=grounding_raw,
+        )
+
+    async def generate_content_stream_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
+
+        stream = None
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(self._is_retryable),
+            stop=stop_after_attempt(4),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        ):
+            with attempt:
+                stream = await self._open_stream_attempt(kwargs)
+
+        assert stream is not None
+        async for sdk_chunk in stream:
+            for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
+                yield chunk
+
+    async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
+
+        response = None
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(self._is_retryable),
+            stop=stop_after_attempt(4),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        ):
+            with attempt:
+                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
+
+        assert response is not None
+
+        parts: list[Part] = []
+        finish_reason: str
+        if response.candidates:
+            candidate = response.candidates[0]
+            parts = _parts_from_sdk_candidate(candidate)
+            finish_reason = _finish_reason_from_candidate(candidate)
+
+        usage: UsageMetadata
+        if response.usage_metadata:
+            usage = _usage_from_sdk(response.usage_metadata)
+
+        grounding_raw: SdkGroundingRawData
+        if response.candidates:
+            grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=finish_reason,
+            )],
+            usage_metadata=usage,
+            grounding_raw=grounding_raw,
+        )
+
+    async def generate_content_stream_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
+
+        stream = None
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(self._is_retryable),
+            stop=stop_after_attempt(4),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        ):
+            with attempt:
+                stream = await self._open_stream_attempt(kwargs)
+
+        assert stream is not None
+        async for sdk_chunk in stream:
+            for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
+                yield chunk
+
+    async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
+
+        response = None
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(self._is_retryable),
+            stop=stop_after_attempt(4),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        ):
+            with attempt:
+                response = await self._client.aio.models.generate_content(**kwargs.flatten_for_llm())
 
         assert response is not None
 

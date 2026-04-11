@@ -334,7 +334,6 @@ class G8eePlatformSettings(G8eBaseModel):
 
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
-    llm: LLMSettings = Field(default_factory=lambda: LLMSettings(provider=LLMProvider.OLLAMA))
 
     @property
     def ca_cert_path(self) -> str | None:

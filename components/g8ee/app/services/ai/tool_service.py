@@ -585,7 +585,7 @@ class AIToolService:
         args: OperatorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        request_settings: G8eeUserSettings | None = None,
+        request_settings: G8eeUserSettings,
     ) -> CommandExecutionResult:
         """Delegate command execution to the OperatorCommandService."""
         return await self.operator_command_service.execute_command(

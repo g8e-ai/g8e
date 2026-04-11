@@ -26,6 +26,11 @@ import logging
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 import app.llm.llm_types as types
+from app.llm.llm_types import (
+    AssistantLLMSettings,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
+)
 from app.models.model_configs import get_model_config, thinking_level_for_config
 
 logger = logging.getLogger(__name__)
@@ -60,6 +65,91 @@ class AIGenerationConfigBuilder:
             thinking_level=None,
             include_thoughts=False,
         )
+
+    @staticmethod
+    def build_primary_settings(
+        model: str,
+        temperature: float | None,
+        max_tokens: int | None,
+        system_instruction: str,
+        tools: list[types.ToolGroup],
+    ) -> PrimaryLLMSettings:
+        """Build PrimaryLLMSettings for main-model calls."""
+        thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
+
+        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+
+        settings = PrimaryLLMSettings(
+            temperature=effective_temperature,
+            max_output_tokens=effective_max_tokens,
+            thinking_config=thinking_config,
+            tools=tools,
+            system_instruction=system_instruction,
+        )
+
+        thinking_level = getattr(thinking_config, "thinking_level", None)
+        tool_names = []
+        for t in (tools or []):
+            for fd in (t.tools or []):
+                tool_names.append(getattr(fd, 'name', '?'))  # type: ignore[attr-defined]
+        logger.info(
+            f" [BUILD_CONFIG] primary model={model}, max_tokens={effective_max_tokens}, "
+            f"thinking_level={thinking_level}, tools_count={len(tools) if tools else 0}, "
+            f"tool_names={tool_names}"
+        )
+        return settings
+
+    @staticmethod
+    def build_assistant_settings(
+        model: str,
+        temperature: float | None,
+        max_tokens: int | None,
+        system_instruction: str,
+        response_format: types.ResponseFormat = None,
+    ) -> AssistantLLMSettings:
+        """Build AssistantLLMSettings for analysis calls."""
+        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+
+        settings = AssistantLLMSettings(
+            temperature=effective_temperature,
+            max_output_tokens=effective_max_tokens,
+            system_instruction=system_instruction,
+            response_format=response_format,
+        )
+
+        logger.info(
+            f" [BUILD_CONFIG] assistant model={model}, max_tokens={effective_max_tokens}"
+        )
+        return settings
+
+    @staticmethod
+    def build_lite_settings(
+        model: str,
+        temperature: float | None,
+        max_tokens: int | None,
+        system_instruction: str,
+        response_format: types.ResponseFormat = None,
+    ) -> LiteLLMSettings:
+        """Build LiteLLMSettings for stateless analysis calls.
+
+        Used by triage, memory updates, risk analysis, and error analysis.
+        """
+        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+
+        settings = LiteLLMSettings(
+            temperature=effective_temperature,
+            max_output_tokens=effective_max_tokens,
+            system_instruction=system_instruction,
+            response_format=response_format,
+        )
+
+        logger.info(
+            f" [BUILD_CONFIG] lite model={model}, max_tokens={effective_max_tokens}"
+        )
+        return settings
 
     @staticmethod
     def build_config(

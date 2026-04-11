@@ -19,10 +19,12 @@ import httpx
 from openai import AsyncOpenAI
 
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Candidate,
     Content,
+    LiteLLMSettings,
+    PrimaryLLMSettings,
     ToolCall,
-    GenerateContentConfig,
     GenerateContentResponse,
     Part,
     StreamChunkFromModel,
@@ -232,20 +234,24 @@ class OpenAICompatibleProvider(LLMProvider):
             max_retries=0,
         )
         logger.info(f"OpenAI-compatible provider initialized: {endpoint} (Ollama: {self._is_ollama})")
+
+    async def close(self):
+        """Clean up the httpx clients to prevent resource leaks."""
+        if self._http_client:
+            await self._http_client.aclose()
+        if hasattr(self._client, 'close'):
+            await self._client.close()
+        logger.info("OpenAI-compatible provider closed")
     
 
-    async def generate_content_stream(
+    async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        sys_instr = system_instruction or (config.system_instruction if config else None)
-        effective_tools = tools or (config.tools if config else None)
-        messages = _contents_to_messages(contents, sys_instr)
-        openai_tools = _tools_to_openai(effective_tools)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
         # For Ollama with thinking, use direct HTTP calls
         if self._is_ollama:
@@ -254,10 +260,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 model=model,
                 messages=messages,
                 tools=openai_tools,
-                temperature=config.temperature,
-                max_tokens=config.max_output_tokens,
-                top_p=config.top_p_nucleus_sampling,
-                stop=config.stop_sequences,
+                temperature=primary_llm_settings.temperature,
+                max_tokens=primary_llm_settings.max_output_tokens,
+                top_p=primary_llm_settings.top_p_nucleus_sampling,
+                stop=primary_llm_settings.stop_sequences,
                 think=True,  # Always enable thinking for Ollama
                 stream=True,
                 http_client=self._http_client,
@@ -269,26 +275,16 @@ class OpenAICompatibleProvider(LLMProvider):
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": config.temperature,
+            "temperature": primary_llm_settings.temperature,
         }
-        if config.max_output_tokens is not None:
-            kwargs["max_tokens"] = config.max_output_tokens
-        if config.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = config.top_p_nucleus_sampling
-        if config.stop_sequences:
-            kwargs["stop"] = config.stop_sequences
+        if primary_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = primary_llm_settings.max_output_tokens
+        if primary_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
+        if primary_llm_settings.stop_sequences:
+            kwargs["stop"] = primary_llm_settings.stop_sequences
         if openai_tools:
             kwargs["tools"] = openai_tools
-        if config.response_format is not None:
-            rjs = config.response_format.json_schema
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
 
         if openai_tools:
             # Ollama (and some other endpoints) hang on streaming when tools are present.
@@ -349,18 +345,14 @@ class OpenAICompatibleProvider(LLMProvider):
                 if finish_reason and finish_reason != "tool_calls":
                     yield StreamChunkFromModel(finish_reason=finish_reason)
 
-    async def generate_content(
+    async def generate_content_primary(
         self,
         model: str,
         contents: list[Content],
-        config: GenerateContentConfig,
-        tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        sys_instr = system_instruction or (config.system_instruction if config else None)
-        effective_tools = tools or (config.tools if config else None)
-        messages = _contents_to_messages(contents, sys_instr)
-        openai_tools = _tools_to_openai(effective_tools)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
         # For Ollama with thinking, use direct HTTP calls and convert to GenerateContentResponse
         if self._is_ollama:
@@ -372,10 +364,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 model=model,
                 messages=messages,
                 tools=openai_tools,
-                temperature=config.temperature,
-                max_tokens=config.max_output_tokens,
-                top_p=config.top_p_nucleus_sampling,
-                stop=config.stop_sequences,
+                temperature=primary_llm_settings.temperature,
+                max_tokens=primary_llm_settings.max_output_tokens,
+                top_p=primary_llm_settings.top_p_nucleus_sampling,
+                stop=primary_llm_settings.stop_sequences,
                 think=True,  # Always enable thinking for Ollama
                 stream=False,
                 http_client=self._http_client,
@@ -399,26 +391,16 @@ class OpenAICompatibleProvider(LLMProvider):
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": config.temperature,
+            "temperature": primary_llm_settings.temperature,
         }
-        if config.max_output_tokens is not None:
-            kwargs["max_tokens"] = config.max_output_tokens
-        if config.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = config.top_p_nucleus_sampling
-        if config.stop_sequences:
-            kwargs["stop"] = config.stop_sequences
+        if primary_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = primary_llm_settings.max_output_tokens
+        if primary_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
+        if primary_llm_settings.stop_sequences:
+            kwargs["stop"] = primary_llm_settings.stop_sequences
         if openai_tools:
             kwargs["tools"] = openai_tools
-        if config.response_format is not None:
-            rjs = config.response_format.json_schema
-            kwargs["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
 
         response = await self._client.chat.completions.create(**kwargs)
 
@@ -444,6 +426,302 @@ class OpenAICompatibleProvider(LLMProvider):
                     parts.append(Part(tool_call=ToolCall(
                         name=tc.function.name, args=args, id=getattr(tc, "id", None)
                     )))
+
+        usage = None
+        if response.usage:
+            usage = UsageMetadata(
+                prompt_token_count=response.usage.prompt_tokens or 0,
+                candidates_token_count=response.usage.completion_tokens or 0,
+                total_token_count=response.usage.total_tokens or 0,
+            )
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=choice.finish_reason if choice else None,
+            )],
+            usage_metadata=usage,
+        )
+
+    async def generate_content_stream_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+
+        # For Ollama, use direct HTTP calls
+        if self._is_ollama:
+            async for chunk in _ollama_direct_call(
+                endpoint=self._client.base_url,
+                model=model,
+                messages=messages,
+                tools=None,
+                temperature=assistant_llm_settings.temperature,
+                max_tokens=assistant_llm_settings.max_output_tokens,
+                top_p=assistant_llm_settings.top_p_nucleus_sampling,
+                stop=assistant_llm_settings.stop_sequences,
+                think=False,  # No thinking for assistant
+                stream=True,
+                http_client=self._http_client,
+            ):
+                yield chunk
+            return
+
+        # For non-Ollama endpoints, use the OpenAI client
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": assistant_llm_settings.temperature,
+        }
+        if assistant_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = assistant_llm_settings.max_output_tokens
+        if assistant_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
+        if assistant_llm_settings.stop_sequences:
+            kwargs["stop"] = assistant_llm_settings.stop_sequences
+        if assistant_llm_settings.response_format is not None:
+            rjs = assistant_llm_settings.response_format.json_schema
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": rjs.name,
+                    "schema": rjs.schema,
+                    "strict": rjs.strict,
+                },
+            }
+
+        stream = await self._client.chat.completions.create(**kwargs, stream=True)
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+
+            if delta and delta.content:
+                yield StreamChunkFromModel(text=delta.content)
+
+            if finish_reason:
+                yield StreamChunkFromModel(finish_reason=finish_reason)
+
+    async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+
+        # For Ollama, use direct HTTP calls
+        if self._is_ollama:
+            parts = []
+            usage = None
+            
+            async for chunk in _ollama_direct_call(
+                endpoint=self._client.base_url,
+                model=model,
+                messages=messages,
+                tools=None,
+                temperature=assistant_llm_settings.temperature,
+                max_tokens=assistant_llm_settings.max_output_tokens,
+                top_p=assistant_llm_settings.top_p_nucleus_sampling,
+                stop=assistant_llm_settings.stop_sequences,
+                think=False,  # No thinking for assistant
+                stream=False,
+                http_client=self._http_client,
+            ):
+                if chunk.text:
+                    parts.append(Part(text=chunk.text))
+                if chunk.usage_metadata:
+                    usage = chunk.usage_metadata
+            
+            return GenerateContentResponse(
+                candidates=[Candidate(
+                    content=Content(role="model", parts=parts),
+                    finish_reason="stop",
+                )],
+                usage_metadata=usage,
+            )
+
+        # For non-Ollama endpoints, use the OpenAI client
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": assistant_llm_settings.temperature,
+        }
+        if assistant_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = assistant_llm_settings.max_output_tokens
+        if assistant_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
+        if assistant_llm_settings.stop_sequences:
+            kwargs["stop"] = assistant_llm_settings.stop_sequences
+        if assistant_llm_settings.response_format is not None:
+            rjs = assistant_llm_settings.response_format.json_schema
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": rjs.name,
+                    "schema": rjs.schema,
+                    "strict": rjs.strict,
+                },
+            }
+
+        response = await self._client.chat.completions.create(**kwargs)
+
+        parts = []
+        choice = response.choices[0] if response.choices else None
+
+        if choice and choice.message:
+            if choice.message.content:
+                parts.append(Part(text=choice.message.content))
+
+        usage = None
+        if response.usage:
+            usage = UsageMetadata(
+                prompt_token_count=response.usage.prompt_tokens or 0,
+                candidates_token_count=response.usage.completion_tokens or 0,
+                total_token_count=response.usage.total_tokens or 0,
+            )
+
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=parts),
+                finish_reason=choice.finish_reason if choice else None,
+            )],
+            usage_metadata=usage,
+        )
+
+    async def generate_content_stream_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+
+        # For Ollama, use direct HTTP calls
+        if self._is_ollama:
+            async for chunk in _ollama_direct_call(
+                endpoint=self._client.base_url,
+                model=model,
+                messages=messages,
+                tools=None,
+                temperature=lite_llm_settings.temperature,
+                max_tokens=lite_llm_settings.max_output_tokens,
+                top_p=lite_llm_settings.top_p_nucleus_sampling,
+                stop=lite_llm_settings.stop_sequences,
+                think=False,  # No thinking for lite
+                stream=True,
+                http_client=self._http_client,
+            ):
+                yield chunk
+            return
+
+        # For non-Ollama endpoints, use the OpenAI client
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": lite_llm_settings.temperature,
+        }
+        if lite_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = lite_llm_settings.max_output_tokens
+        if lite_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
+        if lite_llm_settings.stop_sequences:
+            kwargs["stop"] = lite_llm_settings.stop_sequences
+        if lite_llm_settings.response_format is not None:
+            rjs = lite_llm_settings.response_format.json_schema
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": rjs.name,
+                    "schema": rjs.schema,
+                    "strict": rjs.strict,
+                },
+            }
+
+        stream = await self._client.chat.completions.create(**kwargs, stream=True)
+
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            finish_reason = chunk.choices[0].finish_reason if chunk.choices else None
+
+            if delta and delta.content:
+                yield StreamChunkFromModel(text=delta.content)
+
+            if finish_reason:
+                yield StreamChunkFromModel(finish_reason=finish_reason)
+
+    async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+
+        # For Ollama, use direct HTTP calls
+        if self._is_ollama:
+            parts = []
+            usage = None
+            
+            async for chunk in _ollama_direct_call(
+                endpoint=self._client.base_url,
+                model=model,
+                messages=messages,
+                tools=None,
+                temperature=lite_llm_settings.temperature,
+                max_tokens=lite_llm_settings.max_output_tokens,
+                top_p=lite_llm_settings.top_p_nucleus_sampling,
+                stop=lite_llm_settings.stop_sequences,
+                think=False,  # No thinking for lite
+                stream=False,
+                http_client=self._http_client,
+            ):
+                if chunk.text:
+                    parts.append(Part(text=chunk.text))
+                if chunk.usage_metadata:
+                    usage = chunk.usage_metadata
+            
+            return GenerateContentResponse(
+                candidates=[Candidate(
+                    content=Content(role="model", parts=parts),
+                    finish_reason="stop",
+                )],
+                usage_metadata=usage,
+            )
+
+        # For non-Ollama endpoints, use the OpenAI client
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": lite_llm_settings.temperature,
+        }
+        if lite_llm_settings.max_output_tokens is not None:
+            kwargs["max_tokens"] = lite_llm_settings.max_output_tokens
+        if lite_llm_settings.top_p_nucleus_sampling is not None:
+            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
+        if lite_llm_settings.stop_sequences:
+            kwargs["stop"] = lite_llm_settings.stop_sequences
+        if lite_llm_settings.response_format is not None:
+            rjs = lite_llm_settings.response_format.json_schema
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": rjs.name,
+                    "schema": rjs.schema,
+                    "strict": rjs.strict,
+                },
+            }
+
+        response = await self._client.chat.completions.create(**kwargs)
+
+        parts = []
+        choice = response.choices[0] if response.choices else None
+
+        if choice and choice.message:
+            if choice.message.content:
+                parts.append(Part(text=choice.message.content))
 
         usage = None
         if response.usage:

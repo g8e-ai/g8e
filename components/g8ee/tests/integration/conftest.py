@@ -35,13 +35,19 @@ from app.services.service_factory import ServiceFactory
 from tests.integration.cleanup import IntegrationCleanupTracker
 
 
-@pytest.fixture(scope="function")
-def all_services(cache_aside_service, test_settings):
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
     """Fixture that returns all g8ee services properly configured.
 
     This is the recommended way to get services for integration tests.
     """
-    return ServiceFactory.create_all_services(test_settings, cache_aside_service)
+    services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+    yield services
+    agent = services.get('g8e_agent')
+    if agent:
+        provider = getattr(agent, '_llm_provider', None)
+        if provider:
+            await provider.close()
 
 
 @pytest.fixture(scope="function")

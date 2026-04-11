@@ -275,6 +275,7 @@ ANTHROPIC_CLAUDE_4_6_SONNET     = "claude-4-6-sonnet"
 CLAUDE_3_5_SONNET               = "claude-3-5-sonnet-20241022"
 
 GEMINI_3_1_PRO_PREVIEW          = "gemini-3.1-pro-preview"
+GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS = "gemini-3.1-pro-preview-customtools"
 GEMINI_3_1_FLASH_LITE_PREVIEW     = "gemini-3.1-flash-lite-preview"
 GEMINI_3_FLASH_PREVIEW          = "gemini-3-flash-preview"
 
@@ -307,7 +308,7 @@ OLLAMA_MISTRAL_7B              = "mistral:7b"
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_4O_MINI
 OLLAMA_DEFAULT_MODEL            = GEMMA3_1B
 ANTHROPIC_DEFAULT_MODEL        = CLAUDE_3_5_SONNET
-GEMINI_DEFAULT_MODEL            = GEMINI_3_1_PRO_PREVIEW
+GEMINI_DEFAULT_MODEL            = GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT         = "https://api.openai.com/v1"

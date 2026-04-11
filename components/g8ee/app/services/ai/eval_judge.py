@@ -32,7 +32,7 @@ import re
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.llm.llm_types import Content, GenerateContentConfig, Part, ResponseFormat, Role
+from app.llm.llm_types import Content, GenerateContentConfig, Part, ResponseFormat, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.constants import LLMProvider
 
@@ -184,9 +184,10 @@ class EvalJudge:
             student_interaction=interaction_trace,
         )
 
-        config = GenerateContentConfig(
+        settings = LiteLLMSettings(
             temperature=None,
             max_output_tokens=None,
+            system_instruction="",
             response_format=ResponseFormat.from_pydantic_schema(
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",
@@ -199,7 +200,7 @@ class EvalJudge:
 
         for attempt in range(_MAX_RETRIES):
             try:
-                return await self._call_and_parse(contents, config)
+                return await self._call_and_parse(contents, settings)
             except EvalJudgeError:
                 raise
             except Exception as exc:
@@ -227,13 +228,13 @@ class EvalJudge:
     async def _call_and_parse(
         self,
         contents: list[Content],
-        config: GenerateContentConfig,
+        settings: LiteLLMSettings,
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
-        response = await self._provider.generate_content(
+        response = await self._provider.generate_content_lite(
             model=self._model,
             contents=contents,
-            config=config,
+            lite_llm_settings=settings,
         )
 
         if not response or not response.text:
