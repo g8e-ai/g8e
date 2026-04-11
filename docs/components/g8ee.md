@@ -82,12 +82,18 @@ All clients share a common TLS configuration using the platform CA certificate.
 
 ### LLM Provider Abstraction
 
-All LLM communication passes through the `LLMProvider` abstract base class (`app/llm/provider.py`). Two methods must be implemented:
+All LLM communication passes through the `LLMProvider` abstract base class (`app/llm/provider.py`). Six role-specific methods must be implemented:
 
 | Method | Returns | Used For |
 |--------|---------|----------|
-| `generate_content_stream` | `AsyncGenerator[StreamChunkFromModel]` | All chat paths — yields chunks as they arrive |
-| `generate_content` | `GenerateContentResponse` | Non-streaming calls (triage, Tribunal, title generation, memory) |
+| `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Agent main loop — yields chunks as they arrive |
+| `generate_content_primary` | `GenerateContentResponse` | Non-streaming primary model calls |
+| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls |
+| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation |
+| `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
+| `generate_content_lite` | `GenerateContentResponse` | Triage, eval |
+
+Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` (`LLMSettings`) — there is no platform-level LLM default. The `get_llm_provider(settings.llm)` factory constructs a provider from user settings on each request.
 
 `StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types.
 

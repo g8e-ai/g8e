@@ -79,7 +79,7 @@ async def _probe_llm_capabilities(settings):
                 thinking_level=ThinkingLevel.MINIMAL,
                 include_thoughts=True
             )
-            settings = types.PrimaryLLMSettings(
+            thinking_llm_settings = types.PrimaryLLMSettings(
                 max_output_tokens=1024,
                 thinking_config=thinking_config,
                 system_instruction="",
@@ -87,7 +87,7 @@ async def _probe_llm_capabilities(settings):
             await provider.generate_content_primary(
                 model=primary_model,
                 contents=[types.Content(role="user", parts=[types.Part.from_text("Say 'ok'")])],
-                primary_llm_settings=settings,
+                primary_llm_settings=thinking_llm_settings,
             )
             logger.info(f"[PROBE] Thinking support confirmed for {primary_model}")
         except Exception as e:
@@ -115,7 +115,7 @@ async def _probe_llm_capabilities(settings):
                 },
             )
             tool_group = types.ToolGroup(tools=[dummy_tool])
-            settings = types.PrimaryLLMSettings(
+            tools_llm_settings = types.PrimaryLLMSettings(
                 max_output_tokens=1024,
                 tools=[tool_group],
                 system_instruction="",
@@ -123,7 +123,7 @@ async def _probe_llm_capabilities(settings):
             await provider.generate_content_primary(
                 model=primary_model,
                 contents=[types.Content(role="user", parts=[types.Part.from_text("What is the weather in London?")])],
-                primary_llm_settings=settings,
+                primary_llm_settings=tools_llm_settings,
             )
             logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
         except Exception as e:
