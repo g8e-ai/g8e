@@ -165,34 +165,20 @@ async def internal_chat(
         })
 
         if request.message.strip():
-            async def _generate_and_push_title(
-                _case_id: str, _investigation_id: str, _message: str,
-                _web_session_id: str, _settings: G8eeUserSettings
-            ):
-                try:
-                    case_result = await generate_case_title(_message, settings=_settings)
-                    ai_title = case_result.generated_title
-                    updated_case = await case_service.update_case(_case_id, CaseUpdateRequest(title=ai_title))
-                    await investigation_service.update_investigation(
-                        _investigation_id,
-                        InvestigationUpdateRequest(case_title=ai_title)
-                    )
-                    await case_service.publish_case_update_sse(
-                        case_id=_case_id,
-                        web_session_id=_web_session_id,
-                        payload=CaseEventPayload(
-                            updated_at=updated_case.updated_at,
-                            title=ai_title,
-                        ),
-                    )
-                except Exception as title_err:
-                    logger.warning(f"[CHAT] Background title generation failed: {title_err}")
-
-            asyncio.create_task(
-                _generate_and_push_title(
-                    g8e_context.case_id, g8e_context.investigation_id,
-                    request.message, g8e_context.web_session_id, user_settings,
-                )
+            case_result = await generate_case_title(request.message, settings=user_settings)
+            ai_title = case_result.generated_title
+            updated_case = await case_service.update_case(g8e_context.case_id, CaseUpdateRequest(title=ai_title))
+            await investigation_service.update_investigation(
+                g8e_context.investigation_id,
+                InvestigationUpdateRequest(case_title=ai_title)
+            )
+            await case_service.publish_case_update_sse(
+                case_id=g8e_context.case_id,
+                web_session_id=g8e_context.web_session_id,
+                payload=CaseEventPayload(
+                    updated_at=updated_case.updated_at,
+                    title=ai_title,
+                ),
             )
 
         try:

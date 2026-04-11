@@ -16,20 +16,19 @@ from typing import Any
 from pydantic import Field
 
 from app.models.base import G8eBaseModel
-from .types import CallToolResult, Content
+from .types import CallToolResult, Content, JSONRPCRequest, CallToolParams
 
 
-def build_tool_call_request(tool_name: str, arguments: dict[str, Any], request_id: str) -> dict[str, Any]:
+def build_tool_call_request(tool_name: str, arguments: dict[str, Any], request_id: str) -> JSONRPCRequest:
     """Constructs an MCP CallToolRequest JSON-RPC payload."""
-    return {
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "method": "tools/call",
-        "params": {
+    return JSONRPCRequest(
+        id=request_id,
+        method="tools/call",
+        params={
             "name": tool_name,
             "arguments": arguments
         }
-    }
+    )
 
 
 def parse_tool_call_result(payload: dict[str, Any]) -> CallToolResult:

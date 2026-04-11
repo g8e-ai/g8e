@@ -61,9 +61,12 @@ async def test_internal_chat_new_case(g8e_context, task_tracker):
     
     mock_case = build_case_model(case_id="case-123", user_id="user-123")
     mock_case_service.create_case = AsyncMock(return_value=mock_case)
+    mock_case_service.update_case = AsyncMock(return_value=mock_case)
+    mock_case_service.publish_case_update_sse = AsyncMock()
     
     mock_inv = create_investigation_data(investigation_id="inv-123", case_id="case-123")
     mock_investigation_service.create_investigation = AsyncMock(return_value=mock_inv)
+    mock_investigation_service.update_investigation = AsyncMock()
 
     with task_tracker.patch_create_task("app.routers.internal_router"):
         response = await internal_chat(
