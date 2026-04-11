@@ -149,7 +149,22 @@
 }
 
 .confirmation-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.confirmation-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
 }
 
 .confirmation-modal {

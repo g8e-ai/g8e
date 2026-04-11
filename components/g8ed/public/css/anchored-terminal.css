@@ -705,6 +705,33 @@
     cursor: not-allowed;
 }
 
+/* Execution AI bubble - wraps preparing/approval/results as a cohesive chat message */
+.anchored-terminal__ai-response--execution {
+    max-width: 65%;
+}
+
+.anchored-terminal__ai-response--execution .anchored-terminal__approval {
+    margin: 0;
+    max-width: 100%;
+    align-self: stretch;
+    animation: none;
+    box-shadow: none;
+    border-width: 1px;
+}
+
+.anchored-terminal__ai-response--execution .anchored-terminal__results-group {
+    margin: 0;
+    max-width: 100%;
+    align-self: stretch;
+    border: none;
+    border-top: 1px solid rgba(var(--accent-green-rgb), 0.15);
+    border-radius: 0;
+}
+
+.anchored-terminal__ai-response--execution .anchored-terminal__executing {
+    margin: 0;
+}
+
 /* Executing indicator */
 .anchored-terminal__executing {
     display: flex;
@@ -1186,6 +1213,14 @@
     background: rgba(36, 41, 47, 0.06);
     border-color: rgba(36, 41, 47, 0.15);
     color: var(--text-primary);
+}
+
+[data-theme="light"] .anchored-terminal__ai-response--execution .anchored-terminal__approval {
+    box-shadow: none;
+}
+
+[data-theme="light"] .anchored-terminal__ai-response--execution .anchored-terminal__results-group {
+    border-top-color: rgba(var(--accent-green-rgb), 0.2);
 }
 
 [data-theme="light"] .anchored-terminal__executing-spinner {

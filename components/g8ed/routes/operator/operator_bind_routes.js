@@ -15,6 +15,7 @@ import express from 'express';
 import {
     BindOperatorsResponse,
     UnbindOperatorsResponse,
+    ErrorResponse,
 } from '../../models/response_models.js';
 import { BindOperatorsRequest, UnbindOperatorsRequest } from '../../models/request_models.js';
 import { logger } from '../../utils/logger.js';
