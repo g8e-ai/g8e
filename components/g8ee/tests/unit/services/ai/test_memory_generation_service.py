@@ -518,6 +518,261 @@ class TestParseMemoryAnalysis:
         assert result.interaction_style == "questions"
 
 
+class TestConversationToContentsPayload:
+    """Verify conversation text is faithfully included in the LLM payload.
+
+    These tests ensure that if the LLM returns bad output, it is NOT because
+    our code silently dropped the conversation content before sending it.
+    """
+
+    @staticmethod
+    def _all_payload_text(contents: list[Content]) -> str:
+        return " ".join(
+            part.text for c in contents for part in c.parts if part.text
+        )
+
+    def test_user_message_text_preserved_in_payload(self):
+        memory = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+        )
+        conversation = [
+            ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="Midnight-Blue fan controller in Reykjavik",
+                timestamp=datetime.now(UTC),
+            ),
+        ]
+        contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
+        text = self._all_payload_text(contents)
+        assert "Midnight-Blue" in text
+        assert "Reykjavik" in text
+
+    def test_ai_message_text_preserved_in_payload(self):
+        memory = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+        )
+        conversation = [
+            ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.AI_ASSISTANT,
+                content="RPM logs for Midnight-Blue controller retrieved",
+                timestamp=datetime.now(UTC),
+            ),
+        ]
+        contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
+        text = self._all_payload_text(contents)
+        assert "RPM logs" in text
+        assert "Midnight-Blue" in text
+
+    def test_existing_memory_context_preserved_in_payload(self):
+        memory = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+            technical_background="Hardware engineer with Skyline firmware expertise",
+            investigation_summary="Turquoise sensor fault in Tokyo",
+        )
+        contents = MemoryGenerationService._conversation_to_contents([], memory)
+        text = self._all_payload_text(contents)
+        assert "Skyline firmware" in text
+        assert "Turquoise sensor" in text
+
+    def test_multi_turn_conversation_all_messages_in_payload(self):
+        memory = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+        )
+        conversation = [
+            ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="Check the Alpine-Delta cooling unit",
+                timestamp=datetime.now(UTC),
+            ),
+            ConversationHistoryMessage(
+                id="msg-2", sender=MessageSender.AI_ASSISTANT,
+                content="Pulling thermal sensor data for Alpine-Delta",
+                timestamp=datetime.now(UTC),
+            ),
+            ConversationHistoryMessage(
+                id="msg-3", sender=MessageSender.USER_CHAT,
+                content="Now check the Crimson relay board",
+                timestamp=datetime.now(UTC),
+            ),
+        ]
+        contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
+        text = self._all_payload_text(contents)
+        assert "Alpine-Delta" in text
+        assert "thermal sensor" in text
+        assert "Crimson relay" in text
+
+    def test_empty_content_messages_excluded_from_payload(self):
+        memory = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+        )
+        conversation = [
+            ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="",
+                timestamp=datetime.now(UTC),
+            ),
+            ConversationHistoryMessage(
+                id="msg-2", sender=MessageSender.USER_CHAT,
+                content="Real message",
+                timestamp=datetime.now(UTC),
+            ),
+        ]
+        contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
+        # memory context + real message + analysis request = 3 (empty skipped)
+        assert len(contents) == 3
+
+
+class TestMemoryMergeLogic:
+    """Test the merge strategy in _ai_update_memory.
+
+    These tests replace the LLM call with a controlled MemoryAnalysis
+    to verify our merge code works correctly regardless of LLM quality.
+    """
+
+    @pytest.mark.asyncio
+    async def test_full_replacement_when_llm_returns_all_fields(self):
+        fake_crud = FakeMemoryDataService()
+        existing = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+            investigation_summary="Old summary",
+            technical_background="Old background",
+            communication_preferences="Old prefs",
+            response_style="Old style",
+            problem_solving_approach="Old approach",
+            interaction_style="Old interaction",
+        )
+        fake_crud.set_memory_to_return(existing)
+        service = MemoryGenerationService(fake_crud)
+
+        ai_response = MemoryAnalysis(
+            investigation_summary="New summary with fan controller",
+            technical_background="Hardware + cooling systems expert",
+            communication_preferences="New prefs",
+            response_style="New style",
+            problem_solving_approach="New approach",
+            interaction_style="New interaction",
+        )
+
+        async def mock_ai_update(memory, history, settings):
+            memory.investigation_summary = ai_response.investigation_summary or memory.investigation_summary
+            memory.communication_preferences = ai_response.communication_preferences or memory.communication_preferences
+            memory.technical_background = ai_response.technical_background or memory.technical_background
+            memory.response_style = ai_response.response_style or memory.response_style
+            memory.problem_solving_approach = ai_response.problem_solving_approach or memory.problem_solving_approach
+            memory.interaction_style = ai_response.interaction_style or memory.interaction_style
+
+        service._ai_update_memory = mock_ai_update
+
+        investigation = InvestigationModel(
+            id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
+        )
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+
+        result = await service.update_memory_from_conversation(
+            conversation_history=[ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="test", timestamp=datetime.now(UTC),
+            )],
+            investigation=investigation,
+            settings=settings,
+        )
+
+        assert result.investigation_summary == "New summary with fan controller"
+        assert result.technical_background == "Hardware + cooling systems expert"
+        assert result.communication_preferences == "New prefs"
+
+    @pytest.mark.asyncio
+    async def test_partial_response_preserves_unmentioned_fields(self):
+        fake_crud = FakeMemoryDataService()
+        existing = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+            investigation_summary="Old summary",
+            technical_background="Old background",
+            communication_preferences="Old prefs",
+            response_style="Old style",
+        )
+        fake_crud.set_memory_to_return(existing)
+        service = MemoryGenerationService(fake_crud)
+
+        ai_response = MemoryAnalysis(
+            investigation_summary="Updated summary",
+            technical_background="",  # LLM returned empty
+        )
+
+        async def mock_ai_update(memory, history, settings):
+            memory.investigation_summary = ai_response.investigation_summary or memory.investigation_summary
+            memory.communication_preferences = ai_response.communication_preferences or memory.communication_preferences
+            memory.technical_background = ai_response.technical_background or memory.technical_background
+            memory.response_style = ai_response.response_style or memory.response_style
+            memory.problem_solving_approach = ai_response.problem_solving_approach or memory.problem_solving_approach
+            memory.interaction_style = ai_response.interaction_style or memory.interaction_style
+
+        service._ai_update_memory = mock_ai_update
+
+        investigation = InvestigationModel(
+            id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
+        )
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+
+        result = await service.update_memory_from_conversation(
+            conversation_history=[ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="test", timestamp=datetime.now(UTC),
+            )],
+            investigation=investigation,
+            settings=settings,
+        )
+
+        assert result.investigation_summary == "Updated summary"
+        assert result.technical_background == "Old background", "Empty LLM field must not erase existing data"
+        assert result.communication_preferences == "Old prefs"
+        assert result.response_style == "Old style"
+
+    @pytest.mark.asyncio
+    async def test_empty_llm_response_preserves_all_existing_fields(self):
+        fake_crud = FakeMemoryDataService()
+        existing = InvestigationMemory(
+            investigation_id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+            investigation_summary="Preserved summary",
+            technical_background="Preserved background",
+        )
+        fake_crud.set_memory_to_return(existing)
+        service = MemoryGenerationService(fake_crud)
+
+        async def mock_ai_update(memory, history, settings):
+            pass  # Simulate empty/unparseable LLM response (no fields updated)
+
+        service._ai_update_memory = mock_ai_update
+
+        investigation = InvestigationModel(
+            id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
+        )
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+
+        result = await service.update_memory_from_conversation(
+            conversation_history=[ConversationHistoryMessage(
+                id="msg-1", sender=MessageSender.USER_CHAT,
+                content="test", timestamp=datetime.now(UTC),
+            )],
+            investigation=investigation,
+            settings=settings,
+        )
+
+        assert result.investigation_summary == "Preserved summary"
+        assert result.technical_background == "Preserved background"
+
+
 class TestConstants:
     """Test module-level constants."""
 

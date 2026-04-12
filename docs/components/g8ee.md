@@ -105,19 +105,18 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 |----------|--------|-----------------|
 | `GeminiProvider` | `app/llm/providers/gemini.py` | Opens the SDK stream with tenacity retry on the connection step only, then yields `StreamChunkFromModel` objects immediately as each SDK chunk arrives — no buffering |
 | `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop` |
-| `OpenAICompatibleProvider` | `app/llm/providers/openai_compatible.py` | Streams via `AsyncOpenAI` for non-Ollama endpoints; for Ollama endpoints uses direct HTTP calls to `/api/chat` with `think=true` parameter; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
+| `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; enables `think=true` for primary model calls to support Ollama's thinking feature; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
+| `OpenAICompatibleProvider` | `app/llm/providers/openai_compatible.py` | Streams via `AsyncOpenAI` for OpenAI-compatible endpoints; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 
 **Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagates to the agent's retry guard, which prevents re-attempting a partially-delivered response.
 
 **Thought signatures (Gemini 3):** Every tool call Part requires a thought signature or the API returns 400. `GeminiProvider` normalises inbound SDK `thought_signature` bytes to a base64 string (`ThoughtSignature.from_sdk`) and passes it through as-is on outbound requests. Thought and text parts carry signatures when available; signature-only parts are emitted as empty-text parts per the Gemini 3 streaming spec.
 
-**Ollama Thinking Support:** The `OpenAICompatibleProvider` includes special handling for Ollama endpoints:
-- **Endpoint Detection:** Automatically detects Ollama endpoints by checking for 'ollama' or '11434' in the URL
-- **Direct HTTP Calls:** Bypasses the OpenAI client and makes direct HTTP calls to Ollama's `/api/chat` endpoint when thinking is needed
-- **Parameter Handling:** Sends `think: true` parameter to enable Ollama's thinking feature
-- **Response Processing:** Extracts `thinking` field from Ollama responses and streams it as `thought=True` chunks
-- **URL Conversion:** Automatically converts OpenAI-style `/v1` endpoints to Ollama's `/api` endpoints
-- **Dual Client Architecture:** Maintains separate HTTP clients for Ollama direct calls and OpenAI client usage
+**Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
+- **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
+- **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
+- **SSL Verification:** Follows the standard SSL strategy — uses platform CA cert for internal endpoints, certifi bundle for external endpoints, disables verification for HTTP
+- **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
 ### Agent Streaming Loop
 

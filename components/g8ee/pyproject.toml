@@ -56,6 +56,8 @@ filterwarnings = [
     "ignore:Inheritance class .* from ClientSession is discouraged:DeprecationWarning:aiohttp.client",
     "ignore:Unclosed client session:ResourceWarning",
     "ignore:Unclosed connector:ResourceWarning",
+    "ignore:unclosed transport:ResourceWarning",
+    "ignore:unclosed <socket.socket:ResourceWarning",
 ]
 
 # Timeout for tests (prevents hanging)

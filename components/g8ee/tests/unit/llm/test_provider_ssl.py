@@ -197,9 +197,9 @@ class TestFactorySSL:
         set_settings(mock_settings)
 
         try:
-            with patch("app.llm.factory.OpenAICompatibleProvider") as mock_oai:
+            with patch("app.llm.providers.ollama.OllamaProvider") as mock_ollama:
                 get_llm_provider(llm_settings)
-                assert mock_oai.call_args.kwargs["ca_cert_path"] == INTERNAL_CA
+                assert mock_ollama.call_args.kwargs["ca_cert_path"] == INTERNAL_CA
         finally:
             reset_settings()
 

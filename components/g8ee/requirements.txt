@@ -15,6 +15,9 @@ aiohttp>=3.13.5
 # LLM Provider - OpenAI-compatible API (covers Ollama, vLLM, LM Studio, OpenAI, etc.)
 openai>=2.31.0
 
+# LLM Provider - Ollama Python
+ollama>=0.6.1
+
 # LLM Provider - Google Gemini
 google-genai>=1.7.2
 

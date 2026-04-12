@@ -105,7 +105,8 @@ def get_llm_provider(settings: LLMSettings) -> LLMProviderBase:
     ca_cert_path = platform_settings.ca_cert_path if platform_settings else None
 
     if provider_type == LLMProvider.OLLAMA:
-        return OpenAICompatibleProvider(
+        from .providers.ollama import OllamaProvider
+        return OllamaProvider(
             endpoint=settings.ollama_endpoint,
             api_key=settings.ollama_api_key,
             ca_cert_path=ca_cert_path,

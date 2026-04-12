@@ -224,6 +224,17 @@ class TestMemoryGenerationServiceIntegration:
             ),
         ]
 
+        # Verify conversation content reaches the LLM payload
+        contents = MemoryGenerationService._conversation_to_contents(
+            conversation_history, existing_memory,
+        )
+        all_text = " ".join(
+            part.text for c in contents for part in c.parts if part.text
+        )
+        assert "Midnight-Blue" in all_text, "Conversation content missing from LLM payload"
+        assert "Reykjavik" in all_text, "Conversation content missing from LLM payload"
+        assert "RPM" in all_text, "Conversation content missing from LLM payload"
+
         # Test memory update
         from app.llm.factory import get_llm_settings
         llm = get_llm_settings()

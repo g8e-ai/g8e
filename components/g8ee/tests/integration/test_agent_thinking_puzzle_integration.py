@@ -60,7 +60,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     if not llm or not llm.primary_model:
         pytest.skip("LLM provider is not configured")
 
-    model_name = llm.assistant_model  # Use assistant model like title_generator
+    model_name = llm.primary_model  # Use primary model with thinking support
     config = get_model_config(model_name)
     # Note: Let the test fail naturally if model doesn't support thinking chunks
     # This will provide better error information than skipping
