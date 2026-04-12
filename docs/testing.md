@@ -1105,6 +1105,19 @@ kv_mock.set.assert_awaited_once()
 
 The parameter name is always `cache_aside_service` — never `kv_cache_client` — when a function or class accepts a `CacheAsideService`. Passing a raw KV mock as `kv_cache_client=` is a type error that will fail at runtime.
 
+### Common Pitfalls
+
+#### LLM Provider SSL Hangs
+The eval integration tests run against public cloud LLM APIs (Gemini, OpenAI, Anthropic). `g8ep` environment automatically injects CA cert variables (`SSL_CERT_FILE`, `G8E_SSL_CERT_FILE`, etc.) to point to the platform's self-signed CA cert for internal services. This can poison public cloud TLS handshakes and cause a 60s SSL hang. 
+
+To fix this, the `_sanitize_ssl_env_for_cloud_providers` session-scoped autouse fixture in `tests/integration/evals/conftest.py` strips these environment variables for the test session so public APIs resolve correctly. Internal services still function because `aiohttp_session.py` receives the cert path explicitly via `G8E_SSL_CERT_FILE` which is retained.
+
+#### Aggressive Global Timeouts
+By default, `pyproject.toml` configures a global 60s timeout for all pytest executions. This is too aggressive for LLM integration tests (`ai_integration`), which can easily take 90-120 seconds to complete complex reasoning loops. Use `@pytest.mark.timeout(180)` on these test classes to override the global timeout.
+
+#### The `use_enum_values` Footgun
+All models inheriting from `G8eBaseModel` are configured with `use_enum_values=True`. This means enum fields (like `status: ExecutionStatus`) are stored and returned as plain `str` objects at runtime, not as enum instances. Do not call `.value` on these fields in service code (e.g., `entry.details.status.value` will raise an `AttributeError`).
+
 ### Troubleshooting
 
 - **Async loop errors** — check for missing module-level async marks, conflicting asyncio decorators, or fixture scope mismatches

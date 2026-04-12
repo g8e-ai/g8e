@@ -25,41 +25,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_CLOUD_POISONING_ENV_VARS = (
-    "REQUESTS_CA_BUNDLE",
-    "CURL_CA_BUNDLE",
-    "SSL_CERT_FILE",
-    "G8E_SSL_CERT_FILE",
-)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _sanitize_ssl_env_for_cloud_providers():
-    """Strip process-wide CA-bundle overrides that poison cloud LLM connections.
-
-    The g8ep entrypoint and test runner set REQUESTS_CA_BUNDLE /
-    G8E_SSL_CERT_FILE to the platform self-signed CA cert. This is correct
-    for internal service calls (g8es, g8ed) but breaks TLS handshakes to
-    public cloud APIs (Gemini, Anthropic, OpenAI) because the platform CA
-    cannot verify their certificates.
-
-    Internal service clients are unaffected: the factory passes ca_cert_path
-    explicitly to each provider that needs it.
-    """
-    saved: dict[str, str] = {}
-    for var in _CLOUD_POISONING_ENV_VARS:
-        val = os.environ.pop(var, None)
-        if val is not None:
-            saved[var] = val
-            logger.info("[EVAL_SSL] Stripped %s=%s from env", var, val)
-
-    yield
-
-    for var, val in saved.items():
-        os.environ[var] = val
-        logger.info("[EVAL_SSL] Restored %s=%s", var, val)
-
-
 @pytest.fixture(scope="session")
 def eval_results_collector(request):
     """Collects and displays all eval results in a summary at the end.

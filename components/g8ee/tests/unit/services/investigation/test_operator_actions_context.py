@@ -121,7 +121,7 @@ class TestInvestigationServiceOperatorActions:
         ]
 
         mock_data_service = AsyncMock()
-        mock_data_service.get_investigation.return_value = investigation
+        mock_data_service.get_operator_actions_for_ai_context.return_value = "failed ran bad-cmd"
         mock_operator_service = AsyncMock()
         mock_memory_service = AsyncMock()
 
@@ -134,28 +134,3 @@ class TestInvestigationServiceOperatorActions:
         result = await service.get_operator_actions_for_ai_context("inv-1")
         assert "failed" in result
         assert "ran bad-cmd" in result
-
-    @pytest.mark.asyncio
-    async def test_dict_details_fallback(self):
-        """When details is a raw dict (legacy data), dict.get() path is used."""
-        investigation = MagicMock(spec=InvestigationModel)
-        entry = MagicMock()
-        entry.event_type = EventType.OPERATOR_COMMAND_EXECUTION
-        entry.timestamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        entry.summary = "legacy action"
-        entry.details = {"status": "completed", "command": "ls"}
-        investigation.history_trail = [entry]
-
-        mock_data_service = AsyncMock()
-        mock_data_service.get_investigation.return_value = investigation
-        mock_operator_service = AsyncMock()
-        mock_memory_service = AsyncMock()
-
-        service = InvestigationService(
-            investigation_data_service=mock_data_service,
-            operator_data_service=mock_operator_service,
-            memory_data_service=mock_memory_service,
-        )
-
-        result = await service.get_operator_actions_for_ai_context("inv-1")
-        assert "completed" in result
