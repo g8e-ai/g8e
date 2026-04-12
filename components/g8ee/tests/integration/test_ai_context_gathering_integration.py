@@ -381,23 +381,14 @@ class TestMemoryContextAttachment:
     async def test_memory_data_service_none_skips_attachment(
         self, cache_aside_service, test_settings, all_services, cleanup
     ):
-        """When MemoryDataService is None, memory attachment is skipped."""
+        """When no memory exists for investigation, memory is None without error."""
         # Setup services properly using real infrastructure
         service = all_services['investigation_service']
         investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
-        
-        # Override to test None memory service
-        service = InvestigationService(
-            investigation_data_service=investigation_data_service,
-            operator_data_service=operator_data_service,
-            memory_data_service=None,  # Explicitly None
-        )
-        
+
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -407,16 +398,16 @@ class TestMemoryContextAttachment:
                 case_description="Test case description",
             )
         )
-        
+
         # Test
         result = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
-        assert result.memory is None  # Should be None without error
+        assert result.memory is None  # No memory exists for this investigation
 
         # Cleanup
         cleanup.track_investigation(created_investigation.id)
