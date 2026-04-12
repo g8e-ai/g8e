@@ -103,6 +103,14 @@ _help() {
     echo "    setup                         Configure Vertex AI Search for the search_web tool"
     echo "    disable                       Remove web search configuration"
     echo ""
+    echo "  mcp                           MCP client integration (Claude Code, Windsurf, Cursor, etc.)"
+    echo "    config                        Generate MCP config for a specific AI tool"
+    echo "      --client <name>               claude-code | windsurf | cursor | generic"
+    echo "      --email <email>               User email (to resolve G8eKey)"
+    echo "    test                          Test MCP endpoint connectivity"
+    echo "      --email <email>               User email (to resolve G8eKey)"
+    echo "    status                        Show MCP endpoint info and supported clients"
+    echo ""
     echo "  llm                           Manage LLM tooling"
     echo "    setup                         Install and configure LLM provider (interactive or --flags)"
     echo "    restart                       Restart the LLM container"
@@ -599,6 +607,29 @@ case "$TOP" in
             *)
                 echo "[g8e] unknown search subcommand: '$SUB'" >&2
                 echo "  Valid: setup, disable" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # mcp — MCP client integration; runs inside g8ep
+    # ------------------------------------------------------------------
+    mcp)
+        case "$SUB" in
+            config|test|status)
+                _banner "mcp $SUB"
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py mcp "$SUB" "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'mcp'" >&2
+                echo "  Valid: config, test, status" >&2
+                echo "" >&2
+                echo "  Examples:" >&2
+                echo "    ./g8e mcp config --client claude-code --email user@example.com" >&2
+                echo "    ./g8e mcp test --email user@example.com" >&2
+                echo "    ./g8e mcp status" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown mcp subcommand: '$SUB'" >&2
+                echo "  Valid: config, test, status" >&2
                 exit 1 ;;
         esac ;;
 

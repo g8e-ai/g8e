@@ -2,7 +2,7 @@
 # Allows execution of network troubleshooting and system monitoring tools
 
 # Default environment preservation
-Defaults:g8e !env_reset, env_keep += "G8E_* G8E_SSL_CERT_FILE REQUESTS_CA_BUNDLE"
+Defaults:g8e !env_reset, env_keep += "G8E_* G8E_SSL_CERT_FILE"
 
 # Network troubleshooting tools requiring root
 g8e ALL=(root) NOPASSWD: /usr/bin/tcpdump

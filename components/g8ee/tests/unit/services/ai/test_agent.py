@@ -300,9 +300,16 @@ class TestStreamResponseRetryLoop:
         ):
             chunks.append(chunk)
 
-        assert len(chunks) == 1
-        assert chunks[0].type == StreamChunkFromModelType.ERROR
-        assert "Always fails" in chunks[0].data.error
+        # Expect RETRY chunks for attempts 2, 3, 4, then ERROR
+        assert len(chunks) == 4
+        assert chunks[0].type == StreamChunkFromModelType.RETRY
+        assert chunks[0].data.attempt == 2
+        assert chunks[1].type == StreamChunkFromModelType.RETRY
+        assert chunks[1].data.attempt == 3
+        assert chunks[2].type == StreamChunkFromModelType.RETRY
+        assert chunks[2].data.attempt == 4
+        assert chunks[3].type == StreamChunkFromModelType.ERROR
+        assert "Always fails" in chunks[3].data.error
 
 
 # =============================================================================

@@ -91,6 +91,8 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 
 
 class OllamaProvider(LLMProvider):
+    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
+
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
         # Strip /v1 suffix if present - ollama SDK handles API paths internally
         cleaned_endpoint = endpoint.rstrip('/')
@@ -115,6 +117,7 @@ class OllamaProvider(LLMProvider):
             verify = True
 
         self._httpx_client = httpx.AsyncClient(
+            timeout=self._TIMEOUT,
             verify=verify,
         )
         self._client = _InjectedAsyncClient(

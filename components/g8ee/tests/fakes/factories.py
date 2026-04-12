@@ -246,7 +246,12 @@ def build_operator_document(
     hostname: str = "test-host",
     operator_type: OperatorType = OperatorType.SYSTEM,
 ) -> OperatorDocument:
-    """Build an OperatorDocument with fixed deterministic defaults for unit tests."""
+    """Build an OperatorDocument with minimal defaults for unit/safety tests.
+
+    Uses a non-root user (``test-user``) with no init_system or user_details.
+    For evaluation and benchmark accuracy tests that need a realistic
+    production Operator context, use ``build_mock_operator_document`` instead.
+    """
     # Generate unique IDs if not provided
     if operator_id is None or user_id is None:
         unique_suffix = str(uuid.uuid4())[:8]
@@ -276,7 +281,13 @@ def build_mock_operator_document(
     hostname: str = "eval-node-01",
     operator_type: OperatorType = OperatorType.SYSTEM,
 ) -> OperatorDocument:
-    """Build a mock OperatorDocument specifically for evaluation tests."""
+    """Build a mock OperatorDocument for evaluation and benchmark tests.
+
+    Reflects a realistic production Operator environment where the binary
+    was started with ``sudo ./g8eo`` — root user, systemd init, bare-metal
+    Linux host.  This ensures accuracy tests exercise the agent's reasoning
+    without colliding with the security layer that blocks ``sudo``.
+    """
     return OperatorDocument(
         operator_id=operator_id,
         operator_session_id="sess-eval-001",
@@ -288,8 +299,19 @@ def build_mock_operator_document(
             hostname=hostname,
             os="linux",
             architecture="amd64",
-            current_user="eval-user",
-            environment=SystemInfoEnvironment(pwd="/home/eval-user"),
+            current_user="root",
+            user_details=SystemInfoUserDetails(
+                username="root",
+                uid="0",
+                gid="0",
+                home="/root",
+                shell="/bin/bash",
+            ),
+            environment=SystemInfoEnvironment(
+                pwd="/root",
+                is_container=False,
+                init_system="systemd",
+            ),
             interfaces=[],
         ),
     )

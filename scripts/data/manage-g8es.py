@@ -54,6 +54,7 @@ RESOURCES = {
     'settings':     'manage-settings',
     'device-links': 'manage-device-links',
     'audit':        'manage-lfaa',
+    'mcp':          'manage-mcp',
 }
 
 HELP_TEXT = """
@@ -68,6 +69,7 @@ Resources:
   settings       Platform settings (read/write)
   device-links   Device link token management
   audit          LFAA audit vault queries (SQLite)
+  mcp            MCP client integration (config, test, status)
 
 Examples:
   manage-g8es.py store stats
@@ -81,6 +83,8 @@ Examples:
   manage-g8es.py settings set llm_model=gemma3:4b
   manage-g8es.py device-links list --email user@example.com
   manage-g8es.py audit --db-path /path/to/g8e.db sessions
+  manage-g8es.py mcp config --client claude-code --email user@example.com
+  manage-g8es.py mcp test --email user@example.com
 
 Run 'manage-g8es.py <resource> --help' for resource-specific help.
 """.strip()

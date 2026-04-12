@@ -53,7 +53,7 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
 from tests.fakes.factories import (
     build_bound_operator,
-    build_operator_document,
+    build_mock_operator_document,
 )
 from tests.integration.evals.shared import BenchmarkTestResult, load_and_validate_benchmark_set
 
@@ -151,9 +151,8 @@ async def test_agent_benchmark(
             )]
 
             operator_data_service = all_services['operator_data_service']
-            operator_doc = build_operator_document(
+            operator_doc = build_mock_operator_document(
                 operator_id=operator_id,
-                status=OperatorStatus.BOUND,
             )
             await operator_data_service.create_operator(operator_doc)
             logger.info("[BENCH] Seeded operator document: %s", operator_doc.operator_id)

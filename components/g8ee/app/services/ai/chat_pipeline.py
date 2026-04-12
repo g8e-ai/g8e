@@ -55,7 +55,6 @@ from ..investigation.investigation_service import extract_all_operators_context,
 from ..investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
 from .chat_task_manager import ChatTaskManager
-from .generation_config_builder import AIGenerationConfigBuilder
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.models.agents.triage import TriageRequest
@@ -181,7 +180,6 @@ class ChatPipelineService:
             model_to_use = request_settings.llm.assistant_model or "gemma3:1b"
             
         max_tokens = request_settings.llm.llm_max_tokens
-        temperature = request_settings.llm.llm_temperature
 
         logger.info(
             "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) model=%s",
@@ -232,22 +230,13 @@ class ChatPipelineService:
             g8e_web_search_available=self.g8e_agent.g8e_web_search_available,
         )
 
-        if needs_main_model:
-            generation_config = self.request_builder.get_generation_config(
-                system_instructions=system_instructions,
-                settings=request_settings,
-                agent_mode=agent_mode,
-                max_tokens=max_tokens,
-                model_override=model_to_use,
-            )
-        else:
-            generation_config = AIGenerationConfigBuilder.build_lite_settings(
-                model=model_to_use,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                system_instruction=system_instructions,
-                response_format=None,
-            )
+        generation_config = self.request_builder.get_generation_config(
+            system_instructions=system_instructions,
+            settings=request_settings,
+            agent_mode=agent_mode,
+            max_tokens=max_tokens,
+            model_override=model_to_use,
+        )
 
         attachment_parts: list[types.Part] = []
         if attachments:

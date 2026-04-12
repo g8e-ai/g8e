@@ -1108,7 +1108,7 @@ The parameter name is always `cache_aside_service` â€” never `kv_cache_client` â
 ### Common Pitfalls
 
 #### LLM Provider SSL Hangs
-The eval integration tests run against public cloud LLM APIs (Gemini, OpenAI, Anthropic). `g8ep` environment automatically injects CA cert variables (`SSL_CERT_FILE`, `G8E_SSL_CERT_FILE`, etc.) to point to the platform's self-signed CA cert for internal services. This can poison public cloud TLS handshakes and cause a 60s SSL hang. 
+The eval integration tests run against public cloud LLM APIs (Gemini, OpenAI, Anthropic). `g8ep` environment automatically injects CA cert variables (`G8E_SSL_CERT_FILE`, `G8E_SSL_CERT_FILE`, etc.) to point to the platform's self-signed CA cert for internal services. This can poison public cloud TLS handshakes and cause a 60s SSL hang. 
 
 To fix this, the `_sanitize_ssl_env_for_cloud_providers` session-scoped autouse fixture in `tests/integration/evals/conftest.py` strips these environment variables for the test session so public APIs resolve correctly. Internal services still function because `aiohttp_session.py` receives the cert path explicitly via `G8E_SSL_CERT_FILE` which is retained.
 
