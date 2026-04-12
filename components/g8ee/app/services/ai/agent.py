@@ -151,6 +151,7 @@ class g8eEngine:
 
         while attempt <= max_attempts:
             try:
+                # Emit RETRY chunk before retrying (not on first attempt)
                 if attempt > 1:
                     logger.info("Retry attempt %d/%d", attempt, max_attempts)
                     yield StreamChunkFromModel(

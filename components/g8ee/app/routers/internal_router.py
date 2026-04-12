@@ -179,6 +179,7 @@ async def internal_chat(
                     updated_at=updated_case.updated_at,
                     title=ai_title,
                 ),
+                user_id=g8e_context.user_id,
             )
 
         try:
@@ -435,6 +436,7 @@ async def update_case(
                 priority=case.priority,
                 severity=case.severity,
             ),
+            user_id=g8e_context.user_id,
         )
     return CaseResponse(success=True, case=case)
 

@@ -277,13 +277,6 @@ class TestResolvePubsubSslContext:
             result = resolve_pubsub_ssl_context(pubsub_ca_cert=None, ssl_cert_file=str(cert))
             assert isinstance(result, ssl.SSLContext)
 
-    def test_requests_ca_bundle_fallback(self, tmp_path):
-        cert = tmp_path / "bundle.pem"
-        cert.write_bytes(b"")
-        with patch("ssl.SSLContext.load_verify_locations"):
-            result = resolve_pubsub_ssl_context(pubsub_ca_cert=None, requests_ca_bundle=str(cert))
-            assert isinstance(result, ssl.SSLContext)
-
     def test_nonexistent_path_returns_none(self):
         assert resolve_pubsub_ssl_context(pubsub_ca_cert="/nonexistent.pem") is False
 

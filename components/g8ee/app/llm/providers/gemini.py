@@ -46,6 +46,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import httpx
 from tenacity import (
     AsyncRetrying,
     retry_if_exception,
@@ -335,11 +336,15 @@ def _parts_from_sdk_candidate(candidate) -> list[Part]:
 class GeminiProvider(LLMProvider):
     """Provider wrapping Google's genai SDK for Gemini models."""
 
+    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
     _RETRY_STATUS_CODES = frozenset({429, 503})
+    _RETRY_ATTEMPTS = 4
 
     @classmethod
     def _is_retryable(cls, exc: BaseException) -> bool:
         """Return True for transient API errors that warrant a retry."""
+        if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+            return True
         code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
         if code in cls._RETRY_STATUS_CODES:
             return True
@@ -349,13 +354,35 @@ class GeminiProvider(LLMProvider):
             or "429" in msg
             or "service unavailable" in msg
             or "too many requests" in msg
+            or "deadline exceeded" in msg
+            or "timed out" in msg
         )
 
     def __init__(self, api_key: str):
         from google import genai
+        from google.genai import types as genai_types
 
-        self._client = genai.Client(api_key=api_key)
+        http_options = genai_types.HttpOptions(
+            timeout=300_000,
+        )
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=http_options,
+        )
         logger.info("Gemini provider initialized")
+
+    async def close(self):
+        """Clean up SDK-internal httpx clients."""
+        try:
+            if hasattr(self._client, '_api_client'):
+                api = self._client._api_client
+                if hasattr(api, '_httpx_client') and api._httpx_client:
+                    api._httpx_client.close()
+                if hasattr(api, '_async_httpx_client') and api._async_httpx_client:
+                    await api._async_httpx_client.aclose()
+        except Exception as exc:
+            logger.debug("Gemini cleanup error (non-fatal): %s", exc)
+        logger.info("Gemini provider closed")
 
     @staticmethod
     def _build_thinking_config_gemini3(tc, genai_types):
@@ -589,24 +616,33 @@ class GeminiProvider(LLMProvider):
         """Blocking generate_content_stream via the sync SDK (uses httpx, not aiohttp)."""
         return self._client.models.generate_content_stream(**kwargs.flatten_for_llm())
 
-    async def generate_content_stream_primary(
-        self,
-        model: str,
-        contents: list[Content],
-        primary_llm_settings: PrimaryLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
-        kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
+    async def _generate_with_retry(self, kwargs: GenaiRequestKwargs) -> GenerateContentResponse:
+        """Run a non-streaming generate call with tenacity retry."""
+        response = None
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception(self._is_retryable),
+            stop=stop_after_attempt(self._RETRY_ATTEMPTS),
+            wait=wait_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        ):
+            with attempt:
+                response = await asyncio.to_thread(self._sync_generate, kwargs)
+        assert response is not None
+        return self._parse_response(response)
 
+    async def _stream_with_retry(
+        self, kwargs: GenaiRequestKwargs,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        """Run a streaming generate call with tenacity retry on initial connection."""
         stream_iter = None
         async for attempt in AsyncRetrying(
             retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
+            stop=stop_after_attempt(self._RETRY_ATTEMPTS),
             wait=wait_exponential(multiplier=1, min=2, max=30),
             reraise=True,
         ):
             with attempt:
                 stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
-
         assert stream_iter is not None
         while True:
             sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
@@ -614,6 +650,16 @@ class GeminiProvider(LLMProvider):
                 break
             for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
                 yield chunk
+
+    async def generate_content_stream_primary(
+        self,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
+        async for chunk in self._stream_with_retry(kwargs):
+            yield chunk
 
     async def generate_content_primary(
         self,
@@ -622,19 +668,7 @@ class GeminiProvider(LLMProvider):
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
         kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
-
-        response = None
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        ):
-            with attempt:
-                response = await asyncio.to_thread(self._sync_generate, kwargs)
-
-        assert response is not None
-        return self._parse_response(response)
+        return await self._generate_with_retry(kwargs)
 
     async def generate_content_stream_assistant(
         self,
@@ -643,24 +677,8 @@ class GeminiProvider(LLMProvider):
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
-
-        stream_iter = None
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        ):
-            with attempt:
-                stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
-
-        assert stream_iter is not None
-        while True:
-            sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
-            if sdk_chunk is _STREAM_END:
-                break
-            for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
-                yield chunk
+        async for chunk in self._stream_with_retry(kwargs):
+            yield chunk
 
     async def generate_content_assistant(
         self,
@@ -669,19 +687,7 @@ class GeminiProvider(LLMProvider):
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
         kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
-
-        response = None
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        ):
-            with attempt:
-                response = await asyncio.to_thread(self._sync_generate, kwargs)
-
-        assert response is not None
-        return self._parse_response(response)
+        return await self._generate_with_retry(kwargs)
 
     async def generate_content_stream_lite(
         self,
@@ -690,24 +696,8 @@ class GeminiProvider(LLMProvider):
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
-
-        stream_iter = None
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        ):
-            with attempt:
-                stream_iter = await asyncio.to_thread(self._sync_stream, kwargs)
-
-        assert stream_iter is not None
-        while True:
-            sdk_chunk = await asyncio.to_thread(next, stream_iter, _STREAM_END)
-            if sdk_chunk is _STREAM_END:
-                break
-            for chunk in self._sdk_chunk_to_stream_from_model_chunks(sdk_chunk):
-                yield chunk
+        async for chunk in self._stream_with_retry(kwargs):
+            yield chunk
 
     async def generate_content_lite(
         self,
@@ -716,16 +706,4 @@ class GeminiProvider(LLMProvider):
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
         kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
-
-        response = None
-        async for attempt in AsyncRetrying(
-            retry=retry_if_exception(self._is_retryable),
-            stop=stop_after_attempt(4),
-            wait=wait_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        ):
-            with attempt:
-                response = await asyncio.to_thread(self._sync_generate, kwargs)
-
-        assert response is not None
-        return self._parse_response(response)
+        return await self._generate_with_retry(kwargs)

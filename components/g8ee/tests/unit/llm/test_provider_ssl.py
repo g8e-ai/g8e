@@ -152,13 +152,15 @@ class TestGeminiProviderSSL:
 
     def test_constructor_creates_genai_client(self):
         from app.llm.providers.gemini import GeminiProvider
+        from google.genai import types as genai_types
 
         mock_client = MagicMock()
 
         with patch("google.genai.Client", return_value=mock_client) as mock_ctor:
             provider = GeminiProvider(api_key="test-key")
 
-            mock_ctor.assert_called_once_with(api_key="test-key")
+            http_options = genai_types.HttpOptions(timeout=300_000)
+            mock_ctor.assert_called_once_with(api_key="test-key", http_options=http_options)
             assert provider._client is mock_client
 
 

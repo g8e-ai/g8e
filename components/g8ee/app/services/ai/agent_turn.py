@@ -312,7 +312,24 @@ def normalize_finish_reason(reason: str | None) -> str | None:
 
 
 def should_retry_error(error: Exception) -> bool:
-    """Return True if the error is transient and the request should be retried."""
+    """Return True if the error is transient and the request should be retried.
+
+    Covers transient HTTP errors, rate-limits, timeouts from any provider SDK
+    (httpx.TimeoutException, stdlib TimeoutError / asyncio.TimeoutError), and
+    known retryable error message patterns.
+    """
+    # Non-retryable errors - these should fail immediately
+    if isinstance(error, (PermissionError, ValueError)):
+        return False
+    
+    try:
+        from httpx import TimeoutException as HttpxTimeout
+        if isinstance(error, HttpxTimeout):
+            return True
+    except ImportError:
+        pass
+    if isinstance(error, (TimeoutError, OSError)):
+        return True
     status_code = extract_status_code(error)
     if status_code and status_code in AGENT_RETRYABLE_STATUS_CODES:
         return True

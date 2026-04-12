@@ -235,6 +235,121 @@ class TestBenchmarkJudgeGradeToolCall:
         assert grade.matchers_passed == 1
 
 
+class TestBenchmarkJudgeMultiStepGrading:
+
+    def setup_method(self):
+        self.judge = BenchmarkJudge()
+
+    def test_multi_step_separate_calls_all_match(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"lsof\s+-[it].*:80"},
+                {"field": "command", "pattern": r"kill\s+"},
+                {"field": "command", "pattern": r"systemctl\s+restart\s+nginx"},
+            ],
+            category="multi_step_execution",
+        )
+        tool_calls = [
+            _tool_call(command="lsof -i :80"),
+            _tool_call(command="kill -9 1234"),
+            _tool_call(command="systemctl restart nginx"),
+        ]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is True
+        assert grade.matchers_passed == 3
+        assert grade.failures == []
+
+    def test_multi_step_compound_command_still_works(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"lsof\s+-[it].*:80"},
+                {"field": "command", "pattern": r"kill"},
+                {"field": "command", "pattern": r"systemctl\s+restart\s+nginx"},
+            ],
+            category="multi_step_execution",
+        )
+        tool_calls = [_tool_call(
+            command="lsof -i :80 | awk 'NR>1{print $2}' | xargs kill -9 && systemctl restart nginx"
+        )]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is True
+        assert grade.matchers_passed == 3
+
+    def test_multi_step_partial_match_fails(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"lsof\s+-[it].*:80"},
+                {"field": "command", "pattern": r"kill\s+"},
+                {"field": "command", "pattern": r"systemctl\s+restart\s+nginx"},
+            ],
+            category="multi_step_execution",
+        )
+        tool_calls = [
+            _tool_call(command="lsof -i :80"),
+            _tool_call(command="kill -9 1234"),
+        ]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is False
+        assert grade.matchers_passed == 2
+        assert len(grade.failures) == 1
+
+    def test_multi_step_no_calls_fails(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"lsof"},
+            ],
+            category="multi_step_execution",
+        )
+        grade = self.judge.grade_tool_call(scenario, [])
+        assert grade.passed is False
+        assert grade.tool_called is False
+
+    def test_multi_step_unrelated_calls_ignored(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"lsof\s+-[it].*:80"},
+                {"field": "command", "pattern": r"kill\s+"},
+            ],
+            category="multi_step_execution",
+        )
+        tool_calls = [
+            _tool_call(name="file_read_on_operator", path="/etc/hosts"),
+            _tool_call(command="lsof -i :80"),
+            _tool_call(command="kill -9 1234"),
+        ]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is True
+        assert grade.matchers_passed == 2
+
+    def test_multi_step_field_not_present_in_any_call(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "nonexistent_field", "pattern": r".*", "description": "missing field"},
+            ],
+            category="multi_step_execution",
+        )
+        tool_calls = [_tool_call(command="ls")]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is False
+        assert "not present in any tool call" in grade.failures[0]
+
+    def test_non_multi_step_uses_single_call_logic(self):
+        scenario = _scenario(
+            matchers=[
+                {"field": "command", "pattern": r"ls"},
+                {"field": "command", "pattern": r"kill"},
+            ],
+            category="flag_precision",
+        )
+        tool_calls = [
+            _tool_call(command="ls -la"),
+            _tool_call(command="kill -9 1234"),
+        ]
+        grade = self.judge.grade_tool_call(scenario, tool_calls)
+        assert grade.passed is False
+        assert grade.matchers_passed == 1
+
+
 class TestBenchmarkJudgeTribunalDelta:
 
     def setup_method(self):

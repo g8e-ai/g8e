@@ -511,6 +511,24 @@ MCP tool calls timeout after 30 seconds to prevent indefinite blocking when awai
 
 ---
 
+## CLI Integration (`./g8e mcp`)
+
+The `./g8e mcp` CLI commands simplify MCP client setup by auto-detecting the platform URL and resolving the user's G8eKey.
+
+| Command | Description |
+|---------|-------------|
+| `./g8e mcp config --client <name> --email <email>` | Generate ready-to-paste MCP config for a specific client |
+| `./g8e mcp test --email <email>` | Test MCP endpoint connectivity (initialize + tools/list + ping) |
+| `./g8e mcp status` | Show endpoint URL, transport, protocol, and supported clients |
+
+Supported `--client` values: `claude-code`, `windsurf`, `cursor`, `generic`.
+
+**Implementation:** `scripts/data/manage-mcp.py`, dispatched via `manage-g8es.py mcp`.
+
+> For a step-by-step setup guide, see [mcp-quickstart.md](mcp-quickstart.md).
+
+---
+
 ## Usage Examples
 
 ### Claude Code Integration with OAuth Client ID
@@ -518,7 +536,7 @@ MCP tool calls timeout after 30 seconds to prevent indefinite blocking when awai
 To configure Claude Code to connect to g8e via the MCP endpoint:
 
 1. **Generate a G8eKey (API Key)**
-   - Use the g8e UI to create an API key for your user
+   - Use the g8e UI to create an API key for your user, or run `./g8e mcp config --client claude-code --email you@example.com` to generate the config automatically
    - The API key will be used as the OAuth Client ID in Claude Code
 
 2. **Configure Claude Code MCP Server**

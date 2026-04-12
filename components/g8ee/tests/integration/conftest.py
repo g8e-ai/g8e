@@ -29,9 +29,13 @@ All integration tests should use these fixtures to ensure consistency
 and avoid code duplication.
 """
 
+import asyncio
+
 import pytest
 import pytest_asyncio
+from app.models.operators import PendingApproval
 from app.services.service_factory import ServiceFactory
+from app.utils.timestamp import now
 from tests.integration.cleanup import IntegrationCleanupTracker
 
 
@@ -42,12 +46,20 @@ async def all_services(cache_aside_service, test_settings):
     This is the recommended way to get services for integration tests.
     """
     services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+
+    def _auto_approve_callback(approval_id: str, pending: PendingApproval):
+        loop = asyncio.get_event_loop()
+        loop.call_later(0.01, lambda: pending.resolve(
+            approved=True,
+            reason="Auto-approved by integration test runner",
+            responded_at=now(),
+        ))
+
+    approval_service = services['approval_service']
+    approval_service.set_on_approval_requested(_auto_approve_callback)
+
     yield services
-    agent = services.get('g8e_agent')
-    if agent:
-        provider = getattr(agent, '_llm_provider', None)
-        if provider:
-            await provider.close()
+    await ServiceFactory.stop_services(services)
 
 
 @pytest.fixture(scope="function")

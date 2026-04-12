@@ -58,7 +58,7 @@ E2E_ORG_ID = "e2e-test-org"
 
 
 def _build_ssl_context() -> ssl.SSLContext:
-    ca_path = os.environ.get("SSL_CERT_FILE", "/g8es/ca.crt")
+    ca_path = os.environ.get("G8E_SSL_CERT_FILE", "/g8es/ca.crt")
     return ssl.create_default_context(cafile=ca_path)
 
 

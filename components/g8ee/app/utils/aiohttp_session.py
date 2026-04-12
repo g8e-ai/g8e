@@ -121,7 +121,6 @@ def resolve_pubsub_ssl_context(
         ca_cert_path
         or kwargs.get("pubsub_ca_cert")
         or kwargs.get("ssl_cert_file")
-        or kwargs.get("requests_ca_bundle")
     )
     return _resolve_ssl_context((actual_path,), use_tls=use_tls)
 

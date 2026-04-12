@@ -160,7 +160,9 @@ async def test_update_case_with_sse(g8e_context):
     
     assert response.success is True
     assert response.case.title == "New Title"
-    mock_case_service.publish_case_update_sse.assert_called_once()
+    call_kwargs = mock_case_service.publish_case_update_sse.call_args.kwargs
+    assert call_kwargs["user_id"] == "user-123"
+    assert call_kwargs["case_id"] == case_id
 
 @pytest.mark.asyncio
 async def test_delete_case_success(g8e_context):

@@ -133,7 +133,6 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 | `G8E_SSL_DIR` | `/g8es` | Path to the SSL directory |
 | `G8E_PUBSUB_CA_CERT` | `/g8es/ca.crt` | CA cert for pub/sub TLS |
 | `G8E_SSL_CERT_FILE` | `/g8es/ca.crt` | System trust store injection |
-| `REQUESTS_CA_BUNDLE` | `/g8es/ca.crt` | Python requests CA trust |
 | `RUNNING_IN_DOCKER` | `1` | Signals container context to scripts |
 | `G8E_INTERNAL_AUTH_TOKEN` | — | Shared secret for inter-service authentication. Loaded from `/g8es/internal_auth_token` by entrypoint. |
 | `G8E_SESSION_ENCRYPTION_KEY` | — | Session encryption key. Loaded from `/g8es/session_encryption_key` by entrypoint. |

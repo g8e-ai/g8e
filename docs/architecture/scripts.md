@@ -145,6 +145,18 @@ Local LLM container management. Runs on the host.
 ./g8e llm set <key=value> [...]              # Write one or more LLM settings
 ```
 
+#### mcp
+MCP client integration for external AI tools. Runs inside g8ep.
+
+```bash
+./g8e mcp config --client claude-code --email user@example.com  # Generate Claude Code config
+./g8e mcp config --client windsurf --email user@example.com     # Generate Windsurf config
+./g8e mcp config --client cursor --email user@example.com       # Generate Cursor config
+./g8e mcp config --client generic --email user@example.com      # Generic MCP client config
+./g8e mcp test --email user@example.com                         # Test MCP endpoint connectivity
+./g8e mcp status                                                # Show endpoint info
+```
+
 #### search
 Vertex AI Search configuration for the search_web AI tool. Runs on the host.
 
@@ -186,6 +198,7 @@ scripts/
     manage-operators.py # Operator management
     manage-device-links.py  # Device link tokens
     manage-lfaa.py   #   LFAA audit vault (SQLite)
+    manage-mcp.py    #   MCP client integration (config, test, status)
   security/       # TLS certificates and security validation
     manage-ssl.sh      #   Certificate lifecycle
     mtls-test.sh      #   mTLS connectivity verification
@@ -315,6 +328,7 @@ scripts/data/
   manage-operators.py    # Operator management via g8ed internal API
   manage-device-links.py # Device link token management via g8ed internal API
   manage-lfaa.py         # LFAA audit vault queries (local SQLite)
+  manage-mcp.py          # MCP client integration (config generation, endpoint testing)
 ```
 
 ### Platform Settings (`settings`)

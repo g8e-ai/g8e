@@ -153,6 +153,12 @@ class BenchmarkJudge:
         1. The expected tool was called.
         2. ALL payload matchers match against the tool call arguments.
         3. No forbidden tools were called.
+
+        For ``multi_step_execution`` scenarios, matchers are evaluated across
+        the **union** of all captured tool calls for the expected tool.  Each
+        matcher passes if it matches on **at least one** call.  This correctly
+        models multi-step resolution where the agent issues separate commands
+        (e.g. identify process, kill it, restart service).
         """
         forbidden_called = [
             tc.tool_name for tc in tool_calls
@@ -177,20 +183,10 @@ class BenchmarkJudge:
                 failures=[f"Expected tool '{scenario.expected_tool}' was not called"],
             )
 
-        best_grade: BenchmarkGrade | None = None
-        for tc in matching_calls:
-            matchers_passed, failures = _match_payload(tc.args, scenario.expected_payload)
-            grade = BenchmarkGrade(
-                passed=(matchers_passed == len(scenario.expected_payload) and len(failures) == 0),
-                tool_called=True,
-                matchers_total=len(scenario.expected_payload),
-                matchers_passed=matchers_passed,
-                failures=failures,
-            )
-            if best_grade is None or grade.matchers_passed > best_grade.matchers_passed:
-                best_grade = grade
-
-        assert best_grade is not None
+        if scenario.category == "multi_step_execution":
+            best_grade = self._grade_multi_step(scenario, matching_calls)
+        else:
+            best_grade = self._grade_single_call(scenario, matching_calls)
 
         if tribunal:
             best_grade.tribunal_original_command = tribunal.original_command
@@ -204,6 +200,77 @@ class BenchmarkJudge:
             best_grade.tribunal_pre_score = (pre_passed == len(scenario.expected_payload))
 
         return best_grade
+
+    @staticmethod
+    def _grade_single_call(
+        scenario: BenchmarkScenario,
+        matching_calls: list[ToolCallCapture],
+    ) -> BenchmarkGrade:
+        """Grade by finding the single best-matching tool call."""
+        best_grade: BenchmarkGrade | None = None
+        for tc in matching_calls:
+            matchers_passed, failures = _match_payload(tc.args, scenario.expected_payload)
+            grade = BenchmarkGrade(
+                passed=(matchers_passed == len(scenario.expected_payload) and len(failures) == 0),
+                tool_called=True,
+                matchers_total=len(scenario.expected_payload),
+                matchers_passed=matchers_passed,
+                failures=failures,
+            )
+            if best_grade is None or grade.matchers_passed > best_grade.matchers_passed:
+                best_grade = grade
+        assert best_grade is not None
+        return best_grade
+
+    @staticmethod
+    def _grade_multi_step(
+        scenario: BenchmarkScenario,
+        matching_calls: list[ToolCallCapture],
+    ) -> BenchmarkGrade:
+        """Grade by evaluating each matcher across *all* captured calls (union).
+
+        A matcher passes if it matches on at least one tool call.  This handles
+        scenarios where the agent issues separate commands for each step.
+        A single compound command that satisfies all matchers also passes.
+        """
+        matchers_passed = 0
+        failures: list[str] = []
+
+        for matcher in scenario.expected_payload:
+            matched = False
+            for tc in matching_calls:
+                value = tc.args.get(matcher.field)
+                if value is not None and re.search(matcher.pattern, str(value)):
+                    matched = True
+                    break
+            if matched:
+                matchers_passed += 1
+            else:
+                best_value = None
+                for tc in matching_calls:
+                    v = tc.args.get(matcher.field)
+                    if v is not None:
+                        best_value = str(v)
+                        break
+                if best_value is None:
+                    failures.append(
+                        f"Field '{matcher.field}' not present in any tool call"
+                        + (f" [{matcher.description}]" if matcher.description else "")
+                    )
+                else:
+                    failures.append(
+                        f"Field '{matcher.field}' did not match pattern '{matcher.pattern}' "
+                        f"across {len(matching_calls)} tool call(s)"
+                        + (f" [{matcher.description}]" if matcher.description else "")
+                    )
+
+        return BenchmarkGrade(
+            passed=(matchers_passed == len(scenario.expected_payload) and len(failures) == 0),
+            tool_called=True,
+            matchers_total=len(scenario.expected_payload),
+            matchers_passed=matchers_passed,
+            failures=failures,
+        )
 
     def grade_refusal(
         self,
