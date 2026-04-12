@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { LLMProvider } from '../constants/ai-constants.js';
+import { LLMProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
@@ -74,6 +74,7 @@ export class SetupPage {
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
+        this._populateModelDropdowns();
         const checkedProvider = document.querySelector('input[name="ai_provider"]:checked');
         if (checkedProvider) this._selectProvider(checkedProvider.value);
         this._updateNav();
@@ -209,6 +210,40 @@ export class SetupPage {
                     this._goToStep(this._step + 1);
                 }
             }
+        });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Model dropdowns
+    // ---------------------------------------------------------------------------
+
+    _populateModelDropdowns() {
+        const geminiPrimary = document.getElementById('gemini_primary_model');
+        const geminiAssistant = document.getElementById('gemini_assistant_model');
+        const openaiPrimary = document.getElementById('openai_primary_model');
+        const openaiAssistant = document.getElementById('openai_assistant_model');
+        const anthropicPrimary = document.getElementById('anthropic_primary_model');
+        const anthropicAssistant = document.getElementById('anthropic_assistant_model');
+
+        if (geminiPrimary) this._populateSelect(geminiPrimary, Object.values(GeminiModel), GeminiModel.PRO_PREVIEW_CUSTOMTOOLS);
+        if (geminiAssistant) this._populateSelect(geminiAssistant, Object.values(GeminiModel), GeminiModel.FLASH_LITE_PREVIEW);
+
+        if (openaiPrimary) this._populateSelect(openaiPrimary, Object.values(OpenAIModel), OpenAIModel.GPT_5_4);
+        if (openaiAssistant) this._populateSelect(openaiAssistant, [OpenAIModel.GPT_5_4_MINI, OpenAIModel.GPT_5_4_NANO, OpenAIModel.GPT_4O_MINI], OpenAIModel.GPT_5_4_MINI);
+
+        if (anthropicPrimary) this._populateSelect(anthropicPrimary, Object.values(AnthropicModel), AnthropicModel.CLAUDE_4_6_OPUS);
+        if (anthropicAssistant) this._populateSelect(anthropicAssistant, Object.values(AnthropicModel), AnthropicModel.CLAUDE_4_6_SONNET);
+    }
+
+    _populateSelect(selectEl, models, selectedValue) {
+        if (!selectEl) return;
+        selectEl.innerHTML = '';
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            if (model === selectedValue) option.selected = true;
+            selectEl.appendChild(option);
         });
     }
 

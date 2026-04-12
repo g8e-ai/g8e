@@ -2,20 +2,45 @@
 
 **A self-hosted governance layer for AI agents.**
 
-> Your AI is *gated.*
-> **8 principles. 3 letters. 1 gate between AI and execution.**
-
 ## About g8e
+
+g8e is a self-hosted governance layer for AI to interact with reality while humans always maintain full control.
+
+The g8e Operator is a featherweight 4MB, platform agnostic, programming language agnostic ghost binary.
+
+g8e uses dynamic system prompts and tools in a react loop:
+
+1. 'Bind' any number of remote Operators to your chat 
+2. Tell the AI want you want
+3. AI identifies the system specs of the remote Opertor hosts
+4. AI proposes an action
+5. You approve
+6. Instant execution across all systems
+7. AI only ever sees scrubbed data, never storing context in the cloud
+8. AI works in a react loop with all Operators that you put in scope by 'binding', until your intent is satisfied
+
+ ephemerally delivering safe, AI-powered, human-driven DevOps to any system with port 443 outbound open.
+
+MCP supported - all incoming MCP traffic is translated to the g8e protocol, which the platform uses to securely communicate with remote Operators over TLS.
+
+
+
+
 
 **Premise:** Never trust AI. AI can be wrong. AI can be adversarial. Every architectural decision in this platform starts from that assumption.
 
-g8e is a self-hosted governance layer for AI agents. Nothing executes on your infrastructure without your explicit approval. Source available, model agnostic, one binary.
+## The GATE-8
 
-**Key highlights from the [About Page](docs/architecture/about.md):**
-- **4MB Ghost Binary:** A dependency-free, ephemeral execution agent.
-- **Backend Backbone:** The Operator itself runs the entire platform data plane (SQLite, KV cache, pub/sub).
-- **Zero-Trust Stealth:** Outbound-only connectivity with zero listening ports.
-- **Human-in-the-Loop:** Securely executes human intent with mandatory approval for every action.
+**G**overnanc**e** Architecture for Trustless **E**nvironments
+
+1. **Human authority** — AI proposes, you decide, nothing executes without your explicit approval. Human judgment is the security model.
+2. **Earned authority** — Standing trust is a liability. Trust is scoped to sessions, earned per-action, and never self-granted. No component can escalate its own privileges — execution and authorization are separated by design.
+3. **Layered enforcement** — No single control is relied upon. Governance is enforced at every boundary — Sentinel, Tribunal, approval, audit — so a failure at one layer doesn't compromise the others.
+4. **Source available** — Security through obscurity is false security. The enforcement logic, threat detection, approval mechanisms, and encryption are readable, auditable, and criticizable by anyone. You don't take our word for it — you read the code.
+5. **Local-first audit** — An append-only, encrypted audit trail is maintained at the site of execution. Accountability lives where the action happened, not in the cloud.
+6. **Data sovereignty** — Sensitive data is scrubbed before AI sees it. Raw output never leaves the operator. Only sanitized context crosses component boundaries.
+7. **Minimal footprint** — Outbound-only. No root required. No dependencies. No install. A single process — kill it and it's gone. What stays behind is the audit trail, by design.
+8. **Universal runtime** — Any model, any provider, any OS. The platform has no opinion about your AI, your infrastructure, or your architecture. Governance is the constant; everything else is your choice.
 
 Read more about the [Origins, Governance, and Philosophy](docs/architecture/about.md).
 
@@ -200,41 +225,6 @@ graph TD
     class OPA operator;
     class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
 ```
-
----
-
-## The GATE-8
-
-**G**overnanc**e** Architecture for Trustless **E**nvironments
-
-1. **Human authority** — AI proposes, you decide, nothing executes without your explicit approval. Human judgment is the security model.
-2. **Earned authority** — Standing trust is a liability. Trust is scoped to sessions, earned per-action, and never self-granted. No component can escalate its own privileges — execution and authorization are separated by design.
-3. **Layered enforcement** — No single control is relied upon. Governance is enforced at every boundary — Sentinel, Tribunal, approval, audit — so a failure at one layer doesn't compromise the others.
-4. **Source available** — Security through obscurity is false security. The enforcement logic, threat detection, approval mechanisms, and encryption are readable, auditable, and criticizable by anyone. You don't take our word for it — you read the code.
-5. **Local-first audit** — An append-only, encrypted audit trail is maintained at the site of execution. Accountability lives where the action happened, not in the cloud.
-6. **Data sovereignty** — Sensitive data is scrubbed before AI sees it. Raw output never leaves the operator. Only sanitized context crosses component boundaries.
-7. **Minimal footprint** — Outbound-only. No root required. No dependencies. No install. A single process — kill it and it's gone. What stays behind is the audit trail, by design.
-8. **Universal runtime** — Any model, any provider, any OS. The platform has no opinion about your AI, your infrastructure, or your architecture. Governance is the constant; everything else is your choice.
-
----
-
-## Won't / Will
-
-**Won't:**
-- Prioritize shipping capability over maintaining human control
-- Ship autonomous execution without robust approval mechanisms
-- Build for workforce elimination
-- Compromise on governance to move faster
-- Store raw operational data in the cloud
-- Allow the AI to chain tool calls through auto-approve
-
-**Will:**
-- Run on your hardware, with your LLM, under your control
-- Surface every action for informed human decision-making
-- Keep the source available and auditable by anyone
-- Scrub sensitive data before it ever reaches an LLM
-- Trace every execution back to a deliberate human act
-- Kill with a single keystroke — it's a process, not a dependency
 
 ---
 

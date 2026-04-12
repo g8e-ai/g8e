@@ -1,6 +1,6 @@
 # g8e Documentation Index
 
-Documentation for the g8e platform, organized by category.
+Documentation for the g8e AI governance platform, organized by category.
 
 ---
 
@@ -8,7 +8,7 @@ Documentation for the g8e platform, organized by category.
 
 | Document | Description |
 |----------|-------------|
-| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, code quality rules (g8eo/g8ee/g8ed), shared constants and models, project structure |
+| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, governance-first code quality rules (g8eo/g8ee/g8ed), shared constants and models, project structure |
 | [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8ep environment, CI workflows, and component-specific guidelines (g8eo, g8ed, g8ee) |
 | [glossary.md](glossary.md) | Essential terminology for understanding the g8e platform, organized alphabetically |
 | [docs-guidelines.md](docs-guidelines.md) | Documentation authoring standards — structure, style, formatting, file locations, ownership rules, and sync rules |
