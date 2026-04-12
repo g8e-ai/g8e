@@ -47,6 +47,7 @@ trap _footer EXIT
 COMPONENT="all"
 COVERAGE=false
 PYRIGHT=false
+E2E=false
 TEST_LLM_PROVIDER="${TEST_LLM_PROVIDER:-}"
 TEST_LLM_PRIMARY_MODEL="${TEST_LLM_PRIMARY_MODEL:-}"
 TEST_LLM_ASSISTANT_MODEL="${TEST_LLM_ASSISTANT_MODEL:-}"
@@ -68,6 +69,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
+            echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo ""
             echo "LLM Options (enables ai_integration tests):"
             echo "  -p, --llm-provider        LLM provider (gemini, openai, anthropic, ollama)"
@@ -90,6 +92,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --pyright)
             PYRIGHT=true
+            shift
+            ;;
+        --e2e)
+            E2E=true
             shift
             ;;
         --llm-provider|-p)
@@ -214,6 +220,12 @@ run_g8ee() {
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
+run_e2e() {
+    log_header "Running E2E operator lifecycle tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8ee"
+    pytest -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
+}
+
 run_g8ed() {
     log_header "Running g8ed tests on g8ep"
     cd "$PROJECT_ROOT/components/g8ed"
@@ -311,6 +323,7 @@ run_in_container() {
     local exec_args=("$COMPONENT")
     [[ "$COVERAGE" == "true" ]] && exec_args+=("--coverage")
     [[ "$PYRIGHT" == "true" ]] && exec_args+=("--pyright")
+    [[ "$E2E" == "true" ]] && exec_args+=("--e2e")
     [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && exec_args+=("--" "${EXTRA_ARGS[@]}")
 
     local env_args=(-e RUNNING_IN_CONTAINER=true)
@@ -351,7 +364,11 @@ if in_container; then
     
     _show_llm_config
     _show_web_search_config
-    run_component
+    if [[ "$E2E" == "true" ]]; then
+        run_e2e
+    else
+        run_component
+    fi
 else
     # Host-side: ALWAYS launch in g8ep. 
     # Direct execution on host is strictly forbidden for tests.
