@@ -74,7 +74,27 @@ class WebSearchProvider:
     The search_web LLM tool delegates here; no LLM-provider-specific logic is present.
     """
 
-    def __init__(self, project_id: str, engine_id: str, api_key: str, location: str = "global") -> None:
+    def __init__(
+        self,
+        project_id: str | None,
+        engine_id: str | None,
+        api_key: str | None,
+        location: str = "global",
+    ) -> None:
+        if not project_id or not engine_id or not api_key:
+            logger.warning(
+                "WebSearchProvider initialized with missing credentials "
+                "(project=%s, engine=%s, api_key_set=%s). Search will fail.",
+                project_id,
+                engine_id,
+                bool(api_key),
+            )
+            self._project_id = project_id or ""
+            self._engine_id = engine_id or ""
+            self._location = location
+            self._client = None  # type: ignore
+            return
+
         self._project_id = project_id
         self._engine_id = engine_id
         self._location = location
@@ -425,6 +445,12 @@ class WebSearchProvider:
 
     async def _execute_search_lite(self, request: discoveryengine.SearchRequest) -> Any:
         """Helper to run the synchronous search_lite call in a thread with a timeout."""
+        if not self._client:
+            raise NetworkError(
+                message="WebSearchProvider client not initialized due to missing credentials",
+                details={"project_id": self._project_id, "engine_id": self._engine_id},
+            )
+
         return await asyncio.wait_for(
             asyncio.to_thread(self._client.search_lite, request),
             timeout=WEB_SEARCH_CLIENT_TIMEOUT,

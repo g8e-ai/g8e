@@ -60,12 +60,12 @@ class MCPGatewayService:
         self._operator_data_service = operator_data_service
         logger.info("MCPGatewayService initialized")
 
-    def list_tools(self, agent_mode: AgentMode) -> list[dict[str, Any]]:
+    def list_tools(self, agent_mode: AgentMode, model_to_use: str | None = None) -> list[dict[str, Any]]:
         """Return tool declarations formatted as MCP tools/list response items.
 
         Each item has: { name, description, inputSchema }.
         """
-        tool_groups = self._tool_service.get_tools(agent_mode)
+        tool_groups = self._tool_service.get_tools(agent_mode, model_to_use)
         mcp_tools: list[dict[str, Any]] = []
         for group in tool_groups:
             for decl in group.tools:
@@ -94,13 +94,19 @@ class MCPGatewayService:
             g8e_context=g8e_context,
         )
         try:
+            # MCP callers may not provide user settings; use defaults if missing
+            # G8eeUserSettings requires llm field
+            from app.constants import LLMProvider
+            from app.models.settings import LLMSettings
+            default_settings = G8eeUserSettings(llm=LLMSettings(provider=LLMProvider.OLLAMA))
+            
             result = await asyncio.wait_for(
-                self._tool_service.execute_tool(
+                self._tool_service.execute_tool_call(
                     tool_name=tool_name,
-                    tool_args=arguments,
+                    args=arguments,
                     g8e_context=g8e_context,
                     investigation=investigation,
-                    request_settings=user_settings,
+                    request_settings=user_settings or default_settings,
                 ),
                 timeout=MCP_TOOL_CALL_TIMEOUT_SECONDS,
             )

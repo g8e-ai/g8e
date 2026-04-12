@@ -13,7 +13,7 @@
 
 """Service factory for consistent service construction across application and tests."""
 
-from typing import TYPE_CHECKING, cast, Any
+from typing import TYPE_CHECKING, cast, Any, TypedDict, Optional
 
 from app.services.ai.agent import g8eEngine
 from app.services.ai.chat_pipeline import ChatPipelineService
@@ -40,6 +40,7 @@ from app.models.settings import G8eePlatformSettings
 if TYPE_CHECKING:
     from app.clients.pubsub_client import PubSubClient
     from app.services.infra.g8ed_event_service import EventService
+    from app.services.infra.internal_http_client import InternalHttpClient
     from app.services.protocols import (
         InvestigationServiceProtocol,
         InvestigationDataServiceProtocol,
@@ -50,7 +51,52 @@ if TYPE_CHECKING:
         ExecutionRegistryProtocol,
         EventServiceProtocol,
         PubSubServiceProtocol,
+        AIResponseAnalyzerProtocol,
+        ToolExecutorProtocol,
+        ApprovalServiceProtocol,
     )
+
+
+class CoreServices(TypedDict):
+    http_service: "HTTPServiceProtocol"
+    internal_http_client: "InternalHttpClient"
+    g8ed_event_service: "EventServiceProtocol"
+
+
+class DataServices(TypedDict):
+    investigation_data_service: "InvestigationDataServiceProtocol"
+    operator_data_service: "OperatorDataServiceProtocol"
+    memory_data_service: "MemoryDataServiceProtocol"
+    case_data_service: CaseDataService
+
+
+class DomainServices(TypedDict):
+    investigation_service: "InvestigationServiceProtocol"
+    memory_generation_service: MemoryGenerationService
+
+
+class OperatorServices(TypedDict):
+    heartbeat_service: "OperatorHeartbeatServiceProtocol"
+    execution_registry: "ExecutionRegistryProtocol"
+
+
+class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
+    cache_aside_service: CacheAsideService
+    operator_cache_aside_service: CacheAsideService
+    attachment_service: AttachmentService
+    response_analyzer: "AIResponseAnalyzerProtocol"
+    grounding_service: GroundingService
+    web_search_provider: Optional[WebSearchProvider]
+    approval_service: "ApprovalServiceProtocol"
+    operator_command_service: OperatorCommandService
+    tool_service: "ToolExecutorProtocol"
+    tool_executor: "ToolExecutorProtocol"
+    mcp_gateway_service: MCPGatewayService
+    request_builder: AIRequestBuilder
+    g8e_agent: g8eEngine
+    chat_task_manager: ChatTaskManager
+    chat_pipeline: ChatPipelineService
+    memory_service: "MemoryDataServiceProtocol"
 
 
 class ServiceFactory:
@@ -59,7 +105,7 @@ class ServiceFactory:
     @staticmethod
     def create_core_services(
         settings: G8eePlatformSettings, cache_aside_service: CacheAsideService
-    ) -> dict[str, object]:
+    ) -> CoreServices:
         """Create core services that other services depend on."""
         from app.services.infra.internal_http_client import InternalHttpClient
         from app.services.infra.http_service import HTTPService
@@ -77,18 +123,18 @@ class ServiceFactory:
             internal_http_client=internal_http_client
         )
 
-        return {
-            'http_service': http_service,
-            'internal_http_client': internal_http_client,
-            'g8ed_event_service': g8ed_event_service,
-        }
+        return CoreServices(
+            http_service=http_service,
+            internal_http_client=internal_http_client,
+            g8ed_event_service=g8ed_event_service,
+        )
     
     @staticmethod
     def create_data_services(
         settings: G8eePlatformSettings,
         cache_aside_service: CacheAsideService,
-        core_services: dict[str, object],
-    ) -> dict[str, object]:
+        core_services: CoreServices,
+    ) -> DataServices:
         """Create data services for CRUD operations."""
         investigation_data_service = InvestigationDataService(
             cache=cache_aside_service
@@ -106,51 +152,51 @@ class ServiceFactory:
         case_data_service = CaseDataService(
             settings=settings,
             cache=cache_aside_service,
-            event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
+            event_service=core_services['g8ed_event_service'],
         )
 
-        return {
-            'investigation_data_service': investigation_data_service,
-            'operator_data_service': operator_data_service,
-            'memory_data_service': memory_data_service,
-            'case_data_service': case_data_service,
-        }
+        return DataServices(
+            investigation_data_service=investigation_data_service,
+            operator_data_service=operator_data_service,
+            memory_data_service=memory_data_service,
+            case_data_service=case_data_service,
+        )
     
     @staticmethod
-    def create_domain_services(data_services: dict[str, object]) -> dict[str, object]:
+    def create_domain_services(data_services: DataServices) -> DomainServices:
         """Create domain services that orchestrate business logic."""
         investigation_service = InvestigationService(
-            investigation_data_service=cast("InvestigationDataServiceProtocol", data_services['investigation_data_service']),
-            operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
-            memory_data_service=cast("MemoryDataServiceProtocol", data_services['memory_data_service']),
+            investigation_data_service=data_services['investigation_data_service'],
+            operator_data_service=data_services['operator_data_service'],
+            memory_data_service=data_services['memory_data_service'],
         )
 
         memory_generation_service = MemoryGenerationService(
-            memory_crud=cast("MemoryDataServiceProtocol", data_services['memory_data_service']),
+            memory_crud=data_services['memory_data_service'],
         )
 
-        return {
-            'investigation_service': investigation_service,
-            'memory_generation_service': memory_generation_service,
-        }
+        return DomainServices(
+            investigation_service=investigation_service,
+            memory_generation_service=memory_generation_service,
+        )
     
     @staticmethod
     def create_operator_services(
-        core_services: dict[str, object],
-        data_services: dict[str, object],
-    ) -> dict[str, object]:
+        core_services: CoreServices,
+        data_services: DataServices,
+    ) -> OperatorServices:
         """Create operator-specific services."""
         heartbeat_service = OperatorHeartbeatService(
-            operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
-            event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
+            operator_data_service=data_services['operator_data_service'],
+            event_service=core_services['g8ed_event_service'],
         )
 
         execution_registry = ExecutionRegistryService()
 
-        return {
-            'heartbeat_service': heartbeat_service,
-            'execution_registry': execution_registry,
-        }
+        return OperatorServices(
+            heartbeat_service=heartbeat_service,
+            execution_registry=execution_registry,
+        )
     
     @staticmethod
     def create_all_services(
@@ -158,7 +204,7 @@ class ServiceFactory:
         cache_aside_service: CacheAsideService,
         pubsub_client: object | None = None,
         blob_service: object | None = None,
-    ) -> dict[str, object]:
+    ) -> AllServices:
         """Create all g8ee services in proper dependency order.
 
         When *pubsub_client* is supplied (production path), both the
@@ -186,20 +232,18 @@ class ServiceFactory:
                 location=settings.search.location,
             )
 
-        from app.services.protocols import EventServiceProtocol
-
         approval_service = OperatorApprovalService(
-            g8ed_event_service=cast(EventServiceProtocol, core_services['g8ed_event_service']),
-            operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
-            investigation_data_service=cast("InvestigationDataServiceProtocol", data_services['investigation_data_service']),
+            g8ed_event_service=core_services['g8ed_event_service'],
+            operator_data_service=data_services['operator_data_service'],
+            investigation_data_service=data_services['investigation_data_service'],
         )
 
         operator_command_service = OperatorCommandService.build(
             cache_aside_service=cache_aside_service,
-            operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
-            investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
-            g8ed_event_service=cast(EventServiceProtocol, core_services['g8ed_event_service']),
-            execution_registry=cast("ExecutionRegistryProtocol", operator_services['execution_registry']),
+            operator_data_service=data_services['operator_data_service'],
+            investigation_service=domain_services['investigation_service'],
+            g8ed_event_service=core_services['g8ed_event_service'],
+            execution_registry=operator_services['execution_registry'],
             settings=settings,
             ai_response_analyzer=response_analyzer,
             internal_http_client=core_services['internal_http_client'],
@@ -208,18 +252,18 @@ class ServiceFactory:
 
         if pubsub_client is not None:
             operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
-            cast("PubSubServiceProtocol", operator_services['heartbeat_service']).set_pubsub_client(cast("PubSubClient", pubsub_client))
+            operator_services['heartbeat_service'].set_pubsub_client(cast("PubSubClient", pubsub_client))
 
         tool_executor = AIToolService(
             operator_command_service=operator_command_service,
-            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
+            investigation_service=domain_services['investigation_service'],
             web_search_provider=web_search_provider,
         )
 
         mcp_gateway_service = MCPGatewayService(
             tool_service=tool_executor,
-            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
-            operator_data_service=cast("OperatorDataService", data_services['operator_data_service']),
+            investigation_service=domain_services['investigation_service'],
+            operator_data_service=data_services['operator_data_service'],
         )
 
         request_builder = AIRequestBuilder(
@@ -234,40 +278,41 @@ class ServiceFactory:
         chat_task_manager = ChatTaskManager()
 
         chat_pipeline = ChatPipelineService(
-            g8ed_event_service=cast("EventService", core_services['g8ed_event_service']),
-            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
+            g8ed_event_service=core_services['g8ed_event_service'],
+            investigation_service=domain_services['investigation_service'],
             request_builder=request_builder,
             g8e_agent=g8e_agent,
-            memory_service=cast("MemoryDataService", data_services['memory_data_service']),
-            memory_generation_service=cast("MemoryGenerationService", domain_services['memory_generation_service']),
+            memory_service=data_services['memory_data_service'],
+            memory_generation_service=domain_services['memory_generation_service'],
         )
 
-        all_services = {
-            'cache_aside_service': cache_aside_service,
-            'operator_cache_aside_service': cache_aside_service,
-            'attachment_service': attachment_service,
-            'response_analyzer': response_analyzer,
-            'grounding_service': grounding_service,
-            'web_search_provider': web_search_provider,
-            'approval_service': approval_service,
-            'operator_command_service': operator_command_service,
-            'tool_service': tool_executor,
-            'tool_executor': tool_executor,
-            'mcp_gateway_service': mcp_gateway_service,
-            'request_builder': request_builder,
-            'g8e_agent': g8e_agent,
-            'chat_task_manager': chat_task_manager,
-            'chat_pipeline': chat_pipeline,
+        all_services = AllServices(
+            cache_aside_service=cache_aside_service,
+            operator_cache_aside_service=cache_aside_service,
+            attachment_service=attachment_service,
+            response_analyzer=response_analyzer,
+            grounding_service=grounding_service,
+            web_search_provider=web_search_provider,
+            approval_service=approval_service,
+            operator_command_service=operator_command_service,
+            tool_service=tool_executor,
+            tool_executor=tool_executor,
+            mcp_gateway_service=mcp_gateway_service,
+            request_builder=request_builder,
+            g8e_agent=g8e_agent,
+            chat_task_manager=chat_task_manager,
+            chat_pipeline=chat_pipeline,
+            memory_service=data_services['memory_data_service'],
             **core_services,
             **data_services,
             **domain_services,
             **operator_services,
-        }
+        )
 
         return all_services
 
     @staticmethod
-    def bind_to_app_state(app: Any, services: dict[str, object]) -> None:
+    def bind_to_app_state(app: Any, services: AllServices) -> None:
         """Assign every service in *services* to ``app.state``.
 
         Also creates the legacy alias ``memory_service`` that some dependency
@@ -280,22 +325,22 @@ class ServiceFactory:
             app.state.memory_service = services['memory_data_service']
 
     @staticmethod
-    async def start_services(services: dict[str, object]) -> None:
+    async def start_services(services: AllServices) -> None:
         """Run lifecycle start hooks for services that require them."""
         operator_command_service = services.get('operator_command_service')
         if operator_command_service is not None:
-            await cast("OperatorCommandService", operator_command_service).start_pubsub_listeners()
+            await operator_command_service.start_pubsub_listeners()
 
         http_service = services.get('http_service')
         if http_service is not None:
-            await cast("HTTPServiceProtocol", http_service).start()
+            await http_service.start()
 
         heartbeat_service = services.get('heartbeat_service')
         if heartbeat_service is not None:
-            await cast("OperatorHeartbeatServiceProtocol", heartbeat_service).start()
+            await heartbeat_service.start()
 
     @staticmethod
-    async def stop_services(services: dict[str, object]) -> None:
+    async def stop_services(services: AllServices) -> None:
         """Run lifecycle stop hooks (reverse order of start)."""
         import logging as _logging
         _logger = _logging.getLogger(__name__)
@@ -303,21 +348,21 @@ class ServiceFactory:
         heartbeat_service = services.get('heartbeat_service')
         if heartbeat_service is not None:
             try:
-                await cast("OperatorHeartbeatServiceProtocol", heartbeat_service).stop()
+                await heartbeat_service.stop()
             except Exception as exc:
                 _logger.error("Error stopping heartbeat service: %s", exc)
 
         http_service = services.get('http_service')
         if http_service is not None:
             try:
-                await cast("HTTPServiceProtocol", http_service).stop()
+                await http_service.stop()
             except Exception as exc:
                 _logger.error("Error stopping HTTP service: %s", exc)
 
         operator_command_service = services.get('operator_command_service')
         if operator_command_service is not None:
             try:
-                await cast("OperatorCommandService", operator_command_service).stop_pubsub_listeners()
+                await operator_command_service.stop_pubsub_listeners()
             except Exception as exc:
                 _logger.error("Error stopping pubsub listeners: %s", exc)
 

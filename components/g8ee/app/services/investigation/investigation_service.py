@@ -351,7 +351,9 @@ class InvestigationService:
             event_type=EventType.INVESTIGATION_UPDATED,
             actor=actor,
             summary="Investigation updated",
-            details={"changes": {k: v for k, v in changes.items() if v is not True}},
+            details=ConversationMessageMetadata(
+                changes={k: v for k, v in changes.items() if v is not True}
+            ),
         )
 
         patch: dict[str, object] = {}
