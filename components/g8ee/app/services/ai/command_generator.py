@@ -346,7 +346,7 @@ async def _run_generation_pass(
     )
     settings = LiteLLMSettings(
         temperature=temperature,
-        max_output_tokens=None,
+        max_output_tokens=_MAX_TOKENS_GENERATION,
         system_instruction="",
     )
     try:
@@ -404,8 +404,8 @@ async def _run_verifier(
         candidate_command=candidate_command,
     )
     settings = LiteLLMSettings(
-        temperature=None,
-        max_output_tokens=None,
+        temperature=0.0,
+        max_output_tokens=_MAX_TOKENS_VERIFIER,
         system_instruction="",
     )
     try:
@@ -469,6 +469,165 @@ async def _run_verifier(
         )
 
 
+async def _run_generation_stage(
+    provider: LLMProvider,
+    model: str,
+    intent: str,
+    original_command: str,
+    os_name: str,
+    shell: str,
+    working_directory: str,
+    num_passes: int,
+    emitter: TribunalEmitter,
+) -> list[CandidateCommand]:
+    """Stage 1: run N parallel generation passes and return successful candidates.
+
+    Raises TribunalSystemError when all passes fail due to system errors, or
+    TribunalGenerationFailedError when all passes fail for non-system reasons.
+    """
+    pass_errors: list[str] = []
+    pass_tasks = [
+        _run_generation_pass(
+            provider=provider, model=model, intent=intent, original_command=original_command,
+            os_name=os_name, shell=shell, working_directory=working_directory,
+            pass_index=i, emitter=emitter, pass_errors=pass_errors,
+        )
+        for i in range(num_passes)
+    ]
+    raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
+    candidates = [
+        CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
+        for i, res in enumerate(raw_results) if res
+    ]
+
+    if not candidates:
+        all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
+        if all_system:
+            logger.error(
+                "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
+                num_passes, pass_errors,
+            )
+            await emitter.emit(
+                EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
+                TribunalFallbackPayload(
+                    reason=TribunalFallbackReason.SYSTEM_ERROR,
+                    original_command=original_command,
+                    final_command=original_command,
+                    pass_errors=pass_errors,
+                ),
+            )
+            raise TribunalSystemError(
+                pass_errors=pass_errors,
+                original_command=original_command,
+            )
+
+        logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
+            TribunalFallbackPayload(
+                reason=TribunalFallbackReason.ALL_PASSES_FAILED,
+                original_command=original_command,
+                final_command=original_command,
+                pass_errors=pass_errors if pass_errors else None,
+            ),
+        )
+        raise TribunalGenerationFailedError(
+            pass_errors=pass_errors if pass_errors else ["No candidates produced"],
+            original_command=original_command,
+        )
+
+    return candidates
+
+
+async def _run_voting_stage(
+    candidates: list[CandidateCommand],
+    original_command: str,
+    emitter: TribunalEmitter,
+) -> tuple[str, float]:
+    """Stage 2: compute weighted majority vote and emit consensus event.
+
+    Returns (vote_winner, vote_score). The caller must guarantee candidates is
+    non-empty; an assertion guards against programming errors.
+    """
+    vote_winner, vote_score = _weighted_vote(candidates)
+    assert vote_winner is not None, "vote_winner should not be None after empty candidates check"
+
+    await emitter.emit(
+        EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
+        TribunalVotingCompletedPayload(
+            vote_winner=vote_winner,
+            vote_score=vote_score,
+            num_candidates=len(candidates),
+            original_command=original_command,
+        ),
+    )
+    return vote_winner, vote_score
+
+
+async def _run_verification_stage(
+    provider: LLMProvider,
+    model: str,
+    intent: str,
+    vote_winner: str,
+    os_name: str,
+    verifier_enabled: bool,
+    emitter: TribunalEmitter,
+) -> tuple[str, CommandGenerationOutcome, bool, str | None]:
+    """Stage 3: optionally verify the vote winner and determine outcome.
+
+    Returns (final_command, outcome, verifier_passed, verifier_revision).
+    """
+    if not verifier_enabled:
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None
+
+    verifier_passed, verifier_revision = await _run_verifier(
+        provider=provider, model=model, intent=intent,
+        candidate_command=vote_winner, os_name=os_name, emitter=emitter,
+    )
+    if verifier_passed:
+        logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
+        return vote_winner, CommandGenerationOutcome.VERIFIED, True, None
+
+    logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
+    return verifier_revision, CommandGenerationOutcome.VERIFICATION_FAILED, False, verifier_revision
+
+
+async def _build_and_emit_result(
+    original_command: str,
+    final_command: str,
+    outcome: CommandGenerationOutcome,
+    candidates: list[CandidateCommand],
+    vote_winner: str,
+    vote_score: float,
+    verifier_passed: bool,
+    verifier_revision: str | None,
+    emitter: TribunalEmitter,
+) -> CommandGenerationResult:
+    """Stage 4: assemble the result model and emit the session-completed event."""
+    result = CommandGenerationResult(
+        original_command=original_command,
+        final_command=final_command,
+        outcome=outcome,
+        candidates=candidates,
+        vote_winner=vote_winner,
+        vote_score=vote_score,
+        verifier_passed=verifier_passed,
+        verifier_revision=verifier_revision,
+    )
+
+    await emitter.emit(
+        EventType.TRIBUNAL_SESSION_COMPLETED,
+        TribunalSessionCompletedPayload(
+            original_command=original_command,
+            final_command=final_command,
+            outcome=outcome,
+            vote_score=vote_score,
+            refined=final_command != original_command,
+        ),
+    )
+    return result
+
+
 async def generate_command(
     original_command: str,
     intent: str,
@@ -491,9 +650,8 @@ async def generate_command(
         source_component=ComponentName.G8EE,
     )
     emitter = TribunalEmitter(g8ed_event_service, g8e_context)
-    resolved_settings = settings
 
-    if not resolved_settings.llm.llm_command_gen_enabled:
+    if not settings.llm.llm_command_gen_enabled:
         logger.info("[TRIBUNAL] Disabled via LLM_COMMAND_GEN_ENABLED; using original command")
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
@@ -505,13 +663,13 @@ async def generate_command(
             outcome=CommandGenerationOutcome.DISABLED,
         )
 
-    model = _resolve_model(resolved_settings.llm)
-    num_passes = max(1, resolved_settings.llm.llm_command_gen_passes)
+    model = _resolve_model(settings.llm)
+    num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
 
     logger.info(
         "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d",
-        resolved_settings.llm.provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
+        settings.llm.provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
     )
 
     await emitter.emit(
@@ -526,110 +684,39 @@ async def generate_command(
         ),
     )
 
-    async with get_llm_provider(resolved_settings.llm) as provider:
-        # Stage 1: Generation
-        pass_errors: list[str] = []
-        pass_tasks = [
-            _run_generation_pass(
-                provider=provider, model=model, intent=intent, original_command=original_command,
-                os_name=os_name, shell=shell, working_directory=working_directory,
-                pass_index=i, emitter=emitter, pass_errors=pass_errors,
-            )
-            for i in range(num_passes)
-        ]
-        raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
-        candidates = [
-            CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
-            for i, res in enumerate(raw_results) if res
-        ]
-
-        if not candidates:
-            all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
-            if all_system:
-                logger.error(
-                    "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
-                    num_passes, pass_errors,
-                )
-                await emitter.emit(
-                    EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-                    TribunalFallbackPayload(
-                        reason=TribunalFallbackReason.SYSTEM_ERROR,
-                        original_command=original_command,
-                        final_command=original_command,
-                        pass_errors=pass_errors,
-                    ),
-                )
-                raise TribunalSystemError(
-                    pass_errors=pass_errors,
-                    original_command=original_command,
-                )
-
-            logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
-            await emitter.emit(
-                EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-                TribunalFallbackPayload(
-                    reason=TribunalFallbackReason.ALL_PASSES_FAILED,
-                    original_command=original_command,
-                    final_command=original_command,
-                    pass_errors=pass_errors if pass_errors else None,
-                ),
-            )
-            raise TribunalGenerationFailedError(
-                pass_errors=pass_errors if pass_errors else ["No candidates produced"],
-                original_command=original_command,
-            )
-
-        # Stage 2: Voting
-        vote_winner, vote_score = _weighted_vote(candidates)
-        assert vote_winner is not None, "vote_winner should not be None after empty candidates check"
-
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
-            TribunalVotingCompletedPayload(vote_winner=vote_winner, vote_score=vote_score, num_candidates=len(candidates), original_command=original_command),
-        )
-
-        # Stage 3: Verification
-        final_command = vote_winner
-        outcome = CommandGenerationOutcome.CONSENSUS
-        verifier_passed = True
-        verifier_revision = None
-
-        if resolved_settings.llm.llm_command_gen_verifier:
-            verifier_passed, verifier_revision = await _run_verifier(
-                provider=provider, model=model, intent=intent,
-                candidate_command=vote_winner, os_name=os_name, emitter=emitter,
-            )
-            if verifier_passed:
-                logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
-                outcome = CommandGenerationOutcome.VERIFIED
-            elif verifier_revision:
-                logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
-                final_command = verifier_revision
-                outcome = CommandGenerationOutcome.VERIFICATION_FAILED
-            else:
-                outcome = CommandGenerationOutcome.VERIFIED
-                verifier_passed = True
-
-        # Stage 4: Result & Final Event
-        result = CommandGenerationResult(
+    try:
+        provider_ctx = get_llm_provider(settings.llm)
+    except Exception as exc:
+        logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
+        raise TribunalProviderUnavailableError(
+            provider=settings.llm.provider,
+            error=str(exc),
             original_command=original_command,
-            final_command=final_command,
-            outcome=outcome,
-            candidates=candidates,
-            vote_winner=vote_winner,
-            vote_score=vote_score,
-            verifier_passed=verifier_passed,
-            verifier_revision=verifier_revision,
+        ) from exc
+
+    async with provider_ctx as provider:
+        candidates = await _run_generation_stage(
+            provider=provider, model=model, intent=intent,
+            original_command=original_command, os_name=os_name, shell=shell,
+            working_directory=working_directory, num_passes=num_passes,
+            emitter=emitter,
         )
 
-        await emitter.emit(
-            EventType.TRIBUNAL_SESSION_COMPLETED,
-            TribunalSessionCompletedPayload(
-                original_command=original_command,
-                final_command=final_command,
-                outcome=outcome,
-                vote_score=vote_score,
-                refined=final_command != original_command,
-            ),
+        vote_winner, vote_score = await _run_voting_stage(
+            candidates=candidates, original_command=original_command,
+            emitter=emitter,
         )
-        return result
+
+        final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
+            provider=provider, model=model, intent=intent,
+            vote_winner=vote_winner, os_name=os_name,
+            verifier_enabled=settings.llm.llm_command_gen_verifier,
+            emitter=emitter,
+        )
+
+        return await _build_and_emit_result(
+            original_command=original_command, final_command=final_command,
+            outcome=outcome, candidates=candidates, vote_winner=vote_winner,
+            vote_score=vote_score, verifier_passed=verifier_passed,
+            verifier_revision=verifier_revision, emitter=emitter,
+        )

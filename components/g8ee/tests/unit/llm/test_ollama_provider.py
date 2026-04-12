@@ -21,7 +21,10 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
+from app.llm.providers.ollama import OllamaProvider
 
+
+PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
 INTERNAL_CA = "/g8es/ca.crt"
 
 pytestmark = [pytest.mark.unit]
@@ -31,8 +34,7 @@ class TestOllamaProviderSSL:
     """SSL verification strategy for Ollama provider."""
 
     def test_external_endpoint_uses_default_verification(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://api.ollama.ai",
                 api_key="test-key",
@@ -42,8 +44,7 @@ class TestOllamaProviderSSL:
             assert mock_client.call_args.kwargs["verify"] is True
 
     def test_internal_localhost_uses_platform_ca(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
@@ -53,8 +54,7 @@ class TestOllamaProviderSSL:
             assert mock_client.call_args.kwargs["verify"] == INTERNAL_CA
 
     def test_internal_ip_uses_platform_ca(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://192.168.1.50:11434",
                 api_key="test-key",
@@ -64,8 +64,7 @@ class TestOllamaProviderSSL:
             assert mock_client.call_args.kwargs["verify"] == INTERNAL_CA
 
     def test_internal_http_disables_ssl(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="http://10.0.0.1:11434",
                 api_key="test-key",
@@ -75,8 +74,7 @@ class TestOllamaProviderSSL:
             assert mock_client.call_args.kwargs["verify"] is False
 
     def test_internal_without_ca_falls_back_to_true(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
@@ -86,8 +84,7 @@ class TestOllamaProviderSSL:
             assert mock_client.call_args.kwargs["verify"] is True
 
     def test_endpoint_with_v1_suffix_strips_v1(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://localhost:11434/v1",
                 api_key="test-key",
@@ -101,20 +98,21 @@ class TestOllamaProviderSSL:
 class TestOllamaProviderClose:
     """Test that OllamaProvider properly closes its httpx client."""
 
+    @pytest.mark.asyncio
     async def test_close_calls_aclose_on_client(self):
+        mock_inner_client = MagicMock()
+        mock_inner_client.aclose = AsyncMock()
         mock_client = MagicMock()
-        mock_client._client = MagicMock()
-        mock_client._client.aclose = AsyncMock()
+        mock_client._client = mock_inner_client
 
-        with patch("ollama.AsyncClient", return_value=mock_client):
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET, return_value=mock_client):
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
                 ca_cert_path=None,
             )
             await provider.close()
-            mock_client._client.aclose.assert_called_once()
+            mock_inner_client.aclose.assert_called_once()
 
 
 class TestOllamaProviderConstruction:
@@ -123,8 +121,7 @@ class TestOllamaProviderConstruction:
     def test_constructor_creates_async_client(self):
         mock_client = MagicMock()
 
-        with patch("ollama.AsyncClient", return_value=mock_client) as mock_ctor:
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
@@ -135,8 +132,7 @@ class TestOllamaProviderConstruction:
             assert provider._client is mock_client
 
     def test_constructor_strips_trailing_slash(self):
-        with patch("ollama.AsyncClient"):
-            from app.llm.providers.ollama import OllamaProvider
+        with patch(PATCH_TARGET):
             provider = OllamaProvider(
                 endpoint="https://localhost:11434/",
                 api_key="test-key",
@@ -145,9 +141,8 @@ class TestOllamaProviderConstruction:
             assert provider._original_endpoint == "https://localhost:11434"
 
     def test_constructor_strips_v1_suffix(self):
-        with patch("ollama.AsyncClient") as mock_client:
-            from app.llm.providers.ollama import OllamaProvider
-            provider = OllamaProvider(
+        with patch(PATCH_TARGET) as mock_client:
+            OllamaProvider(
                 endpoint="https://localhost:11434/v1",
                 api_key="test-key",
                 ca_cert_path=None,
@@ -155,24 +150,20 @@ class TestOllamaProviderConstruction:
             # /v1 should be stripped when creating the AsyncClient host
             assert mock_client.call_args.kwargs["host"] == "https://localhost:11434"
 
-    def test_context_manager_support(self):
+    @pytest.mark.asyncio
+    async def test_context_manager_support(self):
         """Test that OllamaProvider supports async context manager."""
-        import asyncio
+        mock_inner_client = MagicMock()
+        mock_inner_client.aclose = AsyncMock()
+        mock_client = MagicMock()
+        mock_client._client = mock_inner_client
 
-        async def test():
-            mock_client = MagicMock()
-            mock_client._client = MagicMock()
-            mock_client._client.aclose = AsyncMock()
-
-            with patch("ollama.AsyncClient", return_value=mock_client):
-                from app.llm.providers.ollama import OllamaProvider
-                provider = OllamaProvider(
-                    endpoint="https://localhost:11434",
-                    api_key="test-key",
-                    ca_cert_path=None,
-                )
-                async with provider:
-                    assert provider is not None
-                mock_client._client.aclose.assert_called_once()
-
-        asyncio.run(test())
+        with patch(PATCH_TARGET, return_value=mock_client):
+            provider = OllamaProvider(
+                endpoint="https://localhost:11434",
+                api_key="test-key",
+                ca_cert_path=None,
+            )
+            async with provider:
+                assert provider is not None
+            mock_inner_client.aclose.assert_called_once()

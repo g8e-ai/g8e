@@ -123,16 +123,14 @@ class OpenAICompatibleProvider(LLMProvider):
         if not base_url.endswith('/v1'):
             base_url = base_url + '/v1'
 
-        # Create HTTP client for direct Ollama calls
+        # Shared HTTP client for direct API calls
         self._http_client = httpx.AsyncClient(
             timeout=self._TIMEOUT,
             limits=self._LIMITS,
             verify=verify,
         )
 
-        # Create OpenAI client for non-Ollama endpoints
-        # Use original endpoint without /v1 for base_url, library will add /chat/completions
-        # Then manually add /v1 to the path by using a custom base_url
+        # OpenAI-compatible client for chat completions
         openai_base_url = self._original_endpoint
         self._client = AsyncOpenAI(
             base_url=openai_base_url,

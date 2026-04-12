@@ -234,16 +234,12 @@ class ServiceFactory:
         chat_task_manager = ChatTaskManager()
 
         chat_pipeline = ChatPipelineService(
-            investigation_data_service=cast("InvestigationDataServiceProtocol", data_services['investigation_data_service']),
             g8ed_event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
             investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
-            operator_command_service=operator_command_service,
             request_builder=request_builder,
-            response_analyzer=response_analyzer,
             g8e_agent=g8e_agent,
             memory_service=cast("MemoryDataServiceProtocol", data_services['memory_data_service']),
             memory_generation_service=domain_services['memory_generation_service'],
-            settings=settings,
         )
 
         all_services = {

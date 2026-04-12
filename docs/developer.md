@@ -169,11 +169,9 @@ AI Pipeline
 ├── AIRequestBuilder ───────────> AIToolService
 ├── AIResponseAnalyzer
 ├── g8eEngine (Agent) ──────────> AIToolService, GroundingService
-├── ChatPipelineService ────────> InvestigationDataService, EventService,
-│                                 InvestigationService, OperatorCommandService,
-│                                 AIRequestBuilder, AIResponseAnalyzer,
-│                                 g8eEngine, MemoryDataService,
-│                                 MemoryGenerationService
+├── ChatPipelineService ────────> EventService, InvestigationService,
+│                                 AIRequestBuilder, g8eEngine,
+│                                 MemoryDataService, MemoryGenerationService
 ├── ChatTaskManager
 ├── TitleGenerator
 ├── CommandGenerator

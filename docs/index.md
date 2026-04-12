@@ -63,5 +63,6 @@ External resources and reference materials (do not modify).
 
 | Document | Description |
 |----------|-------------|
+| [reference/events.md](reference/events.md) | g8e event type specification -- complete wire-protocol event registry (238 events across 5 domains) |
 | [reference/core_principles.md](reference/core_principles.md) | Core platform principles and design philosophy |
 | [reference/mcp.yaml](reference/mcp.yaml) | MCP (Model Context Protocol) schema and tool definitions |
