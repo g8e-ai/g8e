@@ -17,14 +17,15 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 - Device Link — secure pre-authorized Operator deployment
 - Audit log, admin console, and platform settings
 - SSE fan-out to connected browser clients
+- MCP Gateway (Model Context Protocol) — bridging external AI tools to internal platform capabilities
 
 ---
 
 ## Architecture
 
 ```
-          Browser / Operator
-               │  HTTPS (cookies + SSE + auth)
+          Browser / Operator / MCP Client
+               │  HTTPS (cookies + SSE + auth + JSON-RPC)
                │  WSS /ws/pubsub (proxied to g8es)
                ▼
 ┌─────────────────────────────────────────────────────────┐
@@ -41,9 +42,14 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 │  fan-out events     g8ee ↔ g8ed         console          │
 │  session-scoped     cluster-only       settings         │
 │                                                         │
+│  MCP Gateway                                            │
+│  ─────────────                                          │
+│  tools/list → g8ee                                     │
+│  tools/call → g8ee                                     │
+│                                                         │
 │  WS Proxy                                               │
 │  ──────────                                             │
-│  /ws/pubsub → g8es:443                                │
+│  /ws/pubsub → g8es:9001                                 │
 └─────────────────────────────────────────────────────────┘
           │  HTTP KV / Doc / WSS            │  HTTP
           ▼                                 ▼
@@ -54,30 +60,30 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 ```
 
 **Key design principles:**
-- g8ed is the single external entry point — browsers and Operators both connect to g8ed on port 443
+- g8ed is the single external entry point — browsers, Operators, and MCP clients all connect to g8ed on port 443
 - g8ed also owns the HTTP trust bootstrap on port 80 — plain HTTP delivers the workstation CA trust portal, the operator g8e script (`/g8e`), and then hands users off to HTTPS
 - g8ed is stateless between requests — all state lives in g8es
 - g8ee is the source of truth for heartbeat data; g8ed only relays SSE
 - Frontend never computes operator status — it consumes backend-provided values
-- Runtime configuration flows from g8es via `SettingsService.getConfig()` after Phase 2b of `initialization.js` — zero `process.env` reads in g8ed production code (only `process.env.VITEST` / `process.env.VITEST_DEBUG` test guards remain, which are vitest framework concerns)
-- WebSocket pub/sub (`/ws/pubsub`) is proxied by g8ed to g8es — g8es has no external port bindings
+- Runtime configuration flows from g8es via `SettingsService.initialize()` after Phase 2 of `initialization.js` — zero `process.env` reads in g8ed production code
+- WebSocket pub/sub (`/ws/pubsub`) is proxied by g8ed to g8es on port 9001 — g8es has no external port bindings
 - Route handlers are thin: parse → validate → call service → respond. No business logic, no direct infrastructure access, no orchestration sequences in handlers.
 
 ---
 
 ## Environment & Configuration
 
-g8ed reads **zero** environment variables via `process.env` at runtime. Bootstrap transport URLs are defined as constants in `constants/http_client.js`. Bootstrap secrets (auth token, CA cert, session encryption key) are read from the **Shared SSL Volume** by `BootstrapService`. All other configuration flows through `SettingsService` from the g8es `platform_settings` collection.
+g8ed reads **zero** environment variables via `process.env` at runtime. Bootstrap transport URLs are defined as constants in `constants/http_client.js`. Bootstrap secrets (auth token, CA cert, session encryption key) are read from the **Shared SSL Volume** by `BootstrapService`. All other configuration flows through `SettingsService` from the g8es `settings` collection.
 
 The following `G8E_*` variables are consumed by `docker-compose.yml` to configure the container environment. They are **not** read by g8ed application code:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `G8E_INTERNAL_HTTP_URL` | `https://g8es` | g8ed HTTP URL — read once at startup before g8es is reachable |
-| `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es` | g8es pub/sub WebSocket URL — read once at startup before g8es is reachable |
+| `G8E_INTERNAL_HTTP_URL` | `https://g8es:9000` | g8es internal HTTP URL |
+| `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es:9001` | g8es internal pub/sub WebSocket URL |
 | `G8E_INTERNAL_AUTH_TOKEN` | - | Shared secret for g8es authentication (bootstrap secret) |
 | `G8E_SESSION_ENCRYPTION_KEY` | - | Key for encrypting session fields (bootstrap secret) |
-| `G8E_SSL_DIR` | `/g8es/ssl` | Directory containing platform certificates and secrets |
+| `G8E_SSL_DIR` | `/g8es` | Directory containing platform certificates and secrets |
 | `G8EE_URL` | `https://g8ee` | g8ee internal URL |
 | `G8E_PORT` | `443` | Local port for the Express server |
 | `G8E_HTTPS_PORT` | `443` | Public HTTPS port |
@@ -86,32 +92,32 @@ The following `G8E_*` variables are consumed by `docker-compose.yml` to configur
 
 ### Settings Pipeline
 
-All configuration — LLM provider, API keys, passkey config, cert paths, session tuning, app URL, CORS — flows through `SettingsService.getConfig()`. The resolved config object (`G8edConfig`) is passed to every service that needs it at construction time.
+All configuration — LLM provider, API keys, passkey config, cert paths, session tuning, app URL, CORS — flows through `SettingsService`. The service is initialized in `initialization.js` and provides access to both platform-wide and user-specific settings.
 
 #### Precedence Chain
 
-g8ed enforces a strict precedence chain when resolving configuration values. This allows for sensible defaults, deployment-time overrides via environment variables, and runtime persistence in g8es.
+g8ed enforces a strict precedence chain when resolving configuration values. This allows for sensible defaults and runtime persistence in g8es.
 
-Precedence: **User DB > Platform DB > Schema Default**
+Precedence: **User Settings > Platform Settings > Schema Default**
 
 For **User-configurable settings** (`USER_SETTINGS`):
-1.  **User Settings (DB)**: Individual user overrides stored in the `user_settings` collection, document ID is the `userId`.
-2.  **Platform Settings (DB)**: Values stored in g8es `platform_settings` collection, `platform_settings` document.
-3.  **Defaults**: Defined in the schema (`components/g8ed/services/platform/settings_service.js`).
+1.  **User Settings (DB)**: Individual user overrides stored in the `settings` collection, document ID is `user_settings:{userId}`.
+2.  **Platform Settings (DB)**: Values stored in g8es `settings` collection, `platform_settings` document.
+3.  **Defaults**: Defined in the schema (`components/g8ed/models/settings_model.js`).
 
 For **Platform settings** (`PLATFORM_SETTINGS`):
-1.  **Platform Settings (DB)**: Values stored in g8es `platform_settings` collection, `platform_settings` document.
+1.  **Platform Settings (DB)**: Values stored in g8es `settings` collection, `platform_settings` document.
 2.  **Defaults**: Defined in the schema.
 
 **Exception: Bootstrap Secrets**
-Critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`) use the **Shared SSL Volume** as the absolute source of truth. They are read directly from `/g8es/ssl/` at startup and are **never stored in the database**. This decouples platform identity from the database lifecycle.
+Critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `ca.crt`) use the **Shared SSL Volume** as the absolute source of truth. They are read directly from `/g8es/` at startup and are **never stored in the database**. This decouples platform identity from the database lifecycle.
 
 #### Seeding and Protection
 
-On the first boot of a new deployment, g8ed automatically **seeds** the `platform_settings` collection in g8es with configuration values from the environment (e.g. LLM keys, URLs).
+On the first boot of a new deployment, g8ed automatically **seeds** the `settings` collection in g8es with configuration values from the environment (e.g. LLM keys, URLs).
 
 **Core Secrets Protection:**
-Unlike other settings, `internal_auth_token` and `session_encryption_key` are no longer generated or submitted by the Setup Wizard, and they are not present in the Settings UI. They are managed exclusively by g8es on the SSL volume. This ensures the integrity of the platform's authoritative credentials even across full database wipes or resets.
+Unlike other settings, `internal_auth_token` and `session_encryption_key` are managed exclusively by g8es on the SSL volume. They are not present in the Settings UI and cannot be overridden via the database. This ensures the integrity of the platform's authoritative credentials even across full database wipes or resets.
 
 ---
 
@@ -123,17 +129,19 @@ g8ed connects to g8es using two separate transports — one per concern.
 |---------|-----------|-----------|
 | Document store / KV | HTTP | Request/response semantics; stateless; standard error codes |
 | Pub/Sub | WebSocket | Server-push required; long-lived connection; no polling |
+| User/Operator Event | HTTP (Incoming) | Incoming events from g8ee delivered directly to browser via SSE |
 
 ### Client Classes
 
 | Class | File | Purpose |
 |-------|------|---------|
 | `G8esDocumentClient` | `services/clients/g8es_document_client.js` | HTTP document store (collections API). All requests authenticated via `X-Internal-Auth`. |
-| `KVClient` | `services/clients/g8es_kv_cache_client.js` | HTTP KV store. All requests authenticated via `X-Internal-Auth`. |
+| `KVCacheClient` | `services/clients/g8es_kv_cache_client.js` | HTTP KV store. All requests authenticated via `X-Internal-Auth`. |
 | `G8esPubSubClient` | `services/clients/g8es_pubsub_client.js` | WebSocket pub/sub. Connection authenticated via `X-Internal-Auth` (header or query param). |
-| `G8esBlobClient` | `services/platform/g8es_blob_client.js` | HTTP blob store for large binary data (e.g. attachments). |
+| `g8esBlobClient` | `services/platform/g8es_blob_client.js` | HTTP blob store for large binary data (e.g. attachments). |
+| `InternalHttpClient` | `services/clients/internal_http_client.js` | Outbound HTTP client for g8ee communication. |
 
-`services/clients/db_client.js` is a re-export barrel for the three core clients. All four instances are initialized separately in `initialization.js`.
+`services/initialization.js` handles the composition and injection of these clients into higher-level services.
 
 ### KV Key Schema
 
@@ -153,11 +161,11 @@ g8ed uses the cache-aside pattern for consistency between g8es KV and the docume
 | `OperatorSessionService` | Operator session persistence and caching |
 | `BoundSessionsService` | Session binding persistence and caching |
 | `UserService` | User profile caching |
-| `ApiKeyService` | API key caching |
-| `AuthService` | Auth audit log writes via `createDocument` |
+| `ApiKeyDataService` | API key caching |
 | `LoginSecurityService` | Audit log writes; KV fast-path via injected `kvClient` |
 | `DeviceLinkService` | Device link token operations via injected `kvClient` |
 | `OrganizationModel` | Organization document caching |
+| `OperatorDataService` | Operator document caching |
 
 All services follow the same contract: document store written first, KV invalidated on writes, KV populated on reads. KV-only fast-path services (`LoginSecurityService`, `DeviceLinkService`) receive `kvClient` as a direct constructor argument — they do not go through `CacheAsideService` internals.
 
@@ -165,23 +173,23 @@ All services follow the same contract: document store written first, KV invalida
 
 All channel prefix constants are defined in `constants/channels.js` (`PubSubChannel`). The canonical channel listing is in [components/g8es.md — Channel Naming Convention](g8es.md#channel-naming-convention).
 
-g8ed subscribes to the `auth.publish:*` channels to handle g8eo API key and WebSession authentication requests, and publishes responses on the corresponding `auth.response:*` channels. Command, results, and heartbeat channels are brokered transparently by g8es between g8ee and g8eo.
+g8ed subscribes to `auth.publish:*` channels via `SessionAuthListener` to handle g8eo API key and WebSession authentication requests. Command, results, and heartbeat channels are brokered transparently by g8es between g8ee and g8eo.
 
 ### Internal HTTP Communication (g8ed → g8ee)
 
 g8ed communicates with g8ee via direct HTTP using `X-Internal-Auth` for authentication and `G8eHttpContext` headers for routing. Communication is split by concern:
 
 1.  **Generic / Case Management (`InternalHttpClient`):** Chat messages, investigation queries, and case deletions.
-2.  **Operator Orchestration (`OperatorService.relay`):** Operator lifecycle (stop, deregister), approvals, and direct command relays.
+2.  **Operator Orchestration (`OperatorRelayService`):** Operator lifecycle (stop, deregister), approvals, and direct command relays.
 
 The internal HTTP layer enforces:
 
 - `X-Internal-Auth` is **required** for all calls (shared secret strictly enforced)
 - `web_session_id` is **required** for all g8ee calls (via `X-G8E-WebSession-ID`)
 - `user_id` is **required** for all g8ee calls (via `X-G8E-User-ID`)
-- Bound operators are resolved via `resolveBoundOperators()` and carried in `G8eHttpContext.bound_operators` for internal relay orchestration
-- `X-G8E-Case-ID` and `X-G8E-Investigation-ID` are always present — real IDs for existing cases, `UNKNOWN_ID` sentinels for new cases
-- Bound operators are sent as a JSON array via `X-G8E-Bound-Operators` (operator_id, operator_session_id (optional), status, hostname, operator_type per entry)
+- Bound operators are resolved via `requireOperatorBinding` middleware and carried in `req.boundOperators` for internal relay orchestration
+- `X-G8E-Case-ID` and `X-G8E-Investigation-ID` are always present — real IDs for existing cases, `__NEW_CASE__` sentinels for new cases
+- Bound operators are sent as a JSON array via `X-G8E-Bound-Operators` (operator_id, operator_session_id, status)
 
 #### New Case Protocol (`X-G8E-New-Case`)
 
@@ -232,7 +240,7 @@ g8ed exposes a single Streamable HTTP MCP endpoint at `POST /mcp` for external M
    - Does not require a web session
    - Bound operators are resolved by user ID instead of web session ID
 
-**Context:** `buildG8eContext` resolves bound operators before every request:
+**Context:** `requireOperatorBinding` middleware resolves bound operators before every request:
 - For session authentication: resolves by web session ID via `resolveBoundOperators(webSessionId)`
 - For OAuth Client ID authentication: resolves by user ID via `resolveBoundOperatorsForUser(userId)`
 
@@ -240,17 +248,18 @@ If no operators are bound, `tools/list` returns only non-operator tools (e.g. we
 
 **Files:** `routes/platform/mcp_routes.js`, `services/clients/internal_http_client.js` (`mcpToolsList`, `mcpToolsCall`).
 
-### Bound Operator Resolution (`buildG8eContext`)
+### Bound Operator Resolution (`requireOperatorBinding`)
 
-`buildG8eContext` in `routes/platform/chat_routes.js` is the single point where g8ed resolves bound operators before every chat request. It executes at request time — **no cached result** — and its output is the only source g8ee uses to identify which operators are available to the AI.
+`requireOperatorBinding` in `middleware/authentication.js` is the single point where g8ed resolves bound operators before every chat and MCP request. It executes at request time — **no cached result** — and its output is the only source g8ee uses to identify which operators are available to the AI.
 
-**Resolution steps (per chat request):**
+**Resolution steps (per request):**
 
-1. Call `getBindingService().getBoundOperatorSessionIds(webSessionId)` — reads `sessionWebBind` KV key to get all bound operator session IDs for this web session.
-2. For each operator session ID: call `getOperatorSessionService().validateSession(operatorSessionId)` — confirms the session is still live and retrieves `operator_id`.
-3. Verify the reverse binding: call `getBindingService().getWebSessionForOperator(operatorSessionId)` — confirms `sessionBindOperators` KV key resolves back to this web session. Any mismatch is skipped with a warning log.
-4. Fetch the operator document from g8es via `OperatorDataService.getOperator(operator_id)` — provides current `status`, `system_info`, `operator_type`.
-5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-G8E-Bound-Operators`.
+1. Call `getBindingService().resolveBoundOperators(webSessionId)` (or `resolveBoundOperatorsForUser(userId)`).
+2. Service reads the `bound_sessions` collection document for durability.
+3. For each bound operator ID, it fetches the operator document via `operatorService.getOperator(id)`.
+4. It returns an array of `BoundOperatorContext` objects containing `operator_id`, `operator_session_id`, and `status`.
+5. Middleware attaches this array to `req.boundOperators`.
+6. `InternalHttpClient` serializes this into the `X-G8E-Bound-Operators` header for g8ee.
 
 **Accessor:** `getBindingService().resolveBoundOperators(webSessionId)` from `services/auth/bound_sessions_service.js`.
 
@@ -265,15 +274,15 @@ If no operators are bound, `tools/list` returns only non-operator tools (e.g. we
 
 ### WebSession Structure
 
-Sessions are stored in both the g8es document store (`web_sessions` / `operator_sessions` collections) and the g8es KV store (fast path). The `api_key` field is encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY`. `operator_id` is only present on `OperatorSessionDocument` and is also encrypted.
+Sessions are stored in both the g8es document store (`web_sessions` / `operator_sessions` collections) and the g8es KV store (fast path). The `api_key` field is encrypted with AES-256-GCM using `session_encryption_key` (bootstrap secret).
 
 **KV key types:**
 - Web session: `g8e:session:web:{id}` — `KVKey.webSessionKey(id)` — 8h idle / 24h absolute TTL
 - Operator session: `g8e:session:operator:{id}` — `KVKey.operatorSessionKey(id)` — 8h idle / 24h absolute TTL
 
 **Binding keys:**
-- `KVKey.sessionBindOperators(operatorSessionId)` → operator session → bound web session ID
-- `KVKey.sessionWebBind(webSessionId)` → web session → bound operator session IDs (newline-delimited set)
+- `KVKey.sessionBindOperators(operatorSessionId)` → operator session → bound web session ID (STRING)
+- `KVKey.sessionWebBind(webSessionId)` → web session → bound operator session IDs (SET)
 
 For the complete session document field schema (all fields, types, encryption details, and TTL values), see [architecture/storage.md — Session Documents](../architecture/storage.md#session-documents).
 
@@ -288,26 +297,26 @@ For the complete session document field schema (all fields, types, encryption de
 `services/auth/bound_sessions_service.js` owns the full binding lifecycle between an Operator session and a Web session. It is the single source of truth for all binding state — no other service reads or writes the bind KV keys directly.
 
 **Backing stores:**
-- **g8es KV** (fast path) — two bidirectional keys per binding, read on every routed request
+- **g8es KV** (fast path) — two bidirectional keys per binding (STRING and SET), read on every routed request
 - **g8es Document Store via `CacheAside`** — `bound_sessions` collection, one document per web session (`id = webSessionId`), for durability and audit
 
 **Public API:**
 
 | Method | Description |
 |--------|-------------|
-| `bind(operatorSessionId, webSessionId, userId)` | Create a bidirectional binding. Writes both KV keys and persists a `BoundSessionsDocument`. Idempotent — re-binding the same pair is a no-op. |
-| `unbind(operatorSessionId, webSessionId)` | Remove a single binding. Deletes both KV keys and removes the operator from the stored document. |
-| `unbindAll(webSessionId)` | Remove all bindings for a web session. Deletes all `sessionBindOperators` KV keys for every bound operator, deletes `sessionWebBind`, and removes the document. |
-| `getBoundOperatorSessionIds(webSessionId)` | Returns the list of operator session IDs currently bound to a web session. Reads from `sessionWebBind` KV key. |
-| `getWebSessionForOperator(operatorSessionId)` | Returns the web session ID bound to a given operator session, or `null` if none. Reads from `sessionBindOperators` KV key. Used by SSE routing to deliver events to the correct browser tab. |
+| `bind(operatorSessionId, webSessionId, userId, operatorId)` | Create a bidirectional binding. Writes both KV keys and persists a `BoundSessionsDocument`. |
+| `unbind(operatorSessionId, webSessionId, operatorId)` | Remove a single binding. Deletes both KV keys and removes the operator from the stored document. |
+| `getBoundOperatorSessionIds(webSessionId)` | Returns the list of operator session IDs currently bound to a web session. Reads from `sessionWebBind` KV key (SET). |
+| `getWebSessionForOperator(operatorSessionId)` | Returns the web session ID bound to a given operator session, or `null` if none. Reads from `sessionBindOperators` KV key (STRING). |
+| `resolveBoundOperators(webSessionId)` | Resolves all live bound operators for a web session by reading the binding document and fetching operator docs. |
+| `resolveBoundOperatorsForUser(userId)` | Resolves all live bound operators for a user by scanning all bound sessions. |
 
 **Binding contract:**
 - One operator session can be bound to at most one web session at a time
 - One web session can be bound to multiple operator sessions simultaneously
 - All binding mutations go through `BoundSessionsService` — routes call `getBindingService()` from `initialization.js`
 - The `sessionBindOperators` key is the authoritative fast-path lookup for SSE routing: `internal_sse_routes.js` and `internal_operator_routes.js` call `getWebSessionForOperator(operatorSessionId)` to resolve where to deliver events
-- The `sessionWebBind` key is the authoritative lookup for approval routing: `operator_approval_routes.js` calls `resolveBoundOperators(webSessionId)` to resolve live bound operators
-- The heartbeat route uses `operator.operator_session_id` from the DB document (not the request body) as the source of truth when looking up the bound web session
+- `requireOperatorBinding` middleware calls `resolveBoundOperators(webSessionId)` or `resolveBoundOperatorsForUser(userId)` to resolve live bound operators for chat and MCP requests
 
 **Accessor:** `getBindingService()` from `services/initialization.js` — throws if called before `initializeServices()`.
 
@@ -368,14 +377,15 @@ Route handlers behind `requireAuth` must use these properties exclusively — ne
 | `g8e_key` | string \| null | User's download API key |
 | `g8e_key_created_at` | string \| null | ISO timestamp of download API key creation |
 | `g8e_key_updated_at` | string \| null | ISO timestamp of last download API key refresh |
-| `operator_id` | string \| null | Associated operator ID |
-| `operator_status` | string \| null | Cached operator status |
-| `sessions` | array | Session tracking (stripped by `forClient()`) |
-| `profile_picture` | string \| null | Profile picture URL |
-| `dev_logs_enabled` | boolean | Per-user dev logging (admin/superadmin only) |
 | `organization_id` | string | User's own org (equals `id`) |
 | `roles` | string[] | `user`, `admin`, `superadmin` |
+| `operator_id` | string \| null | Associated operator ID |
+| `operator_status` | string \| null | Cached operator status |
 | `last_login` | string | ISO timestamp |
+| `provider` | string | Auth provider (`passkey`) |
+| `sessions` | array | Session tracking (stripped by `forClient()`) |
+| `profile_picture` | string \| null | Profile picture URL |
+| `dev_logs_enabled` | boolean | Per-user dev logging (default true) |
 
 `forClient()` strips `passkey_credentials`, `passkey_challenge`, `passkey_challenge_expires_at`, `g8e_key`, and `sessions`. `dev_logs_enabled` is user-visible and is not stripped.
 
@@ -458,7 +468,7 @@ GET /  →  hasAnyUsers() returns false  →  redirect to /setup
 - `POST /api/setup/config` is blocked with 403 once any user exists — prevents post-setup tampering via the unauthenticated endpoint
 - `GET /api/setup/config` is also blocked with 403 once any user exists
 - `POST /api/auth/register` is blocked with 403 during first run — user creation happens atomically inside `POST /api/auth/passkey/register-verify` only after successful WebAuthn verification
-- Settings saved via the wizard are stored in g8es (`platform_settings` collection). `INTERNAL_AUTH_TOKEN` and `SESSION_ENCRYPTION_KEY` are generated and stored in g8es on first start — they are not injected via environment variables and do not need to be set anywhere
+- Settings saved via the wizard are stored in g8es (`settings` collection, `platform_settings` doc). `internal_auth_token` and `session_encryption_key` are read from the SSL volume at startup — they are not injected via environment variables and do not need to be set anywhere
 - No default credentials are ever created
 - `hasAnyUsers()` throws on DB error — never silently returns false
 - First-run user is created with `UserRole.SUPERADMIN`
@@ -539,24 +549,25 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 | Subservice | Responsibility |
 |------------|----------------|
-| `lifecycle` | CRUD operations, activation, stopping, and history trail management. |
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. The first created slot is assigned the `g8ep` subtype if no existing live operator already has it, ensuring exactly one g8ep operator per user regardless of slot ordering. |
+| `lifecycle` | Coordinator for operator operations. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. |
 | `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration). |
 | `notifications` | SSE event broadcasting and user-level operator list updates. |
 
-Route handlers and other services interact with these via the main `OperatorDataService` coordinator.
+Route handlers and other services interact with these via the main `OperatorService` coordinator.
 
 ### SSE Connection Initialization
 
-When the browser establishes a new SSE connection, `SSEService.onConnectionEstablished(userId, webSessionId, organizationId)` fires three parallel side effects:
+When the browser establishes a new SSE connection, `SSEService.pushInitialState(userId, webSessionId, organizationId)` fires two parallel side effects:
 
-1. **Operator list broadcast** — reads all user operators, repairs any stale `BOUND` web session links, then pushes the full operator list to the new session via `OperatorDataService.broadcastOperatorListToSession()`.
-2. **LLM config push** — reads user/platform settings to determine the active provider, then assembles provider-specific `primary_models` and `assistant_models` lists from `USER_SETTINGS` and publishes a `LLMConfigEvent` so both UI model dropdowns populate without a separate HTTP call.
-3. **Investigation list push** — queries g8ee via `InternalHttpClient` and publishes an `InvestigationListEvent` for case navigation.
+1. **LLM config push** — reads user/platform settings to determine the active provider, then assembles provider-specific models lists and publishes an `LLMConfigEvent`.
+2. **Investigation list push** — queries g8ee via `InternalHttpClient` and publishes an `InvestigationListEvent` for case navigation.
 
-Each branch is independently error-isolated — a failure in one does not affect the others. The route handler calls this method with a fire-and-forget `.catch()` — the SSE connection is not blocked on initialization completion.
+Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handles:
+1. **Operator list repair** — repairs any stale `BOUND` web session links (tab swap detection).
+2. **Operator list broadcast** — pushes the full operator list to the new session.
 
-`SSEService` receives its dependencies (`OperatorDataService`, `g8edSettings`, `internalHttpClient`, `boundSessionsService`) at construction time via `initialization.js` — not as call-time arguments.
+`SSEService` receives its dependencies at construction time (or via `setDependencies` in `initialization.js`) to avoid circularity.
 
 **Implementation Note:** The SSE route handler uses `getOperatorService()` from `initialization.js` at request time to resolve the `OperatorService` instance. This factory pattern prevents circular dependencies during the multi-phase boot process.
 

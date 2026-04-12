@@ -26,7 +26,9 @@ ChatPipelineService
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
   ├── ChatTaskManager         — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates
-  └── MemoryGenerationService — Background memory updates from conversation
+  ├── MemoryGenerationService — Background memory updates from conversation
+  ├── AttachmentService       — Attachment storage and retrieval
+  └── EventService           — Internal SSE event delivery to g8ed
 ```
 
 ### Component Relationships
@@ -62,7 +64,7 @@ g8ee maintains 5 core data clients, each with exactly one handler service:
 | `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via g8es) |
 | `PubSubClient` | `PubSubService` | Event-driven messaging and operator command dispatch |
 | `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via g8es) |
-| `HTTPClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
+| `InternalHttpClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
 
 ### Initialization & Lifespan
 
@@ -135,7 +137,7 @@ Retry behaviour in `stream_response`: if the provider raises a retryable error a
 
 **Invocation context lifecycle:** `stream_response` is an `async generator`. Python dispatches async-generator cleanup (`async_generator_athrow`) in a new `asyncio` task that runs in a different `Context` than the request that created the generator. Because `ContextVar.reset(token)` requires the token to be reset in the exact same `Context` it was set in, the invocation context lifecycle **must not** be owned by `stream_response`. It is owned by `run_with_sse` (a normal `async def` coroutine with a stable `Context`) via `start_invocation_context` before iteration and `reset_invocation_context` in `finally`. `stream_response` reads the already-set context value; it never holds a token.
 
-`_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks accumulate internally and are not emitted to SSE; `THINKING`, `THINKING_UPDATE`, and `THINKING_END` markers are emitted to `AgentStreamingContext` for state tracking only. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
+`_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to g8ed for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
 
 ### SSE Delivery Pipeline
 
@@ -165,7 +167,7 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 | `THINKING_UPDATE` | none | — |
 | `THINKING_END` | none | `AgentStreamingContext.set_thinking_ended()` |
 | `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
-| `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
+| `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
 | `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamingContext` |
 | `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamingContext` |
 | `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
@@ -173,7 +175,7 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 
 `deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks never produce an SSE push. They update `AgentStreamingContext` state only — the browser is not notified of thinking activity via the SSE event stream.
+`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamingContext` state.
 
 `AgentStreamingContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
 
@@ -183,12 +185,13 @@ g8ee uses a unified error model derived from `G8eError`. Custom error signatures
 
 | Error Class | Purpose | Key Parameters |
 |-------------|---------|----------------|
-| `ResourceNotFoundError` | Resource not found in DB | `message`, `resource_type`, `resource_id`, `component="g8ee"` |
-| `AuthorizationError` | Permission denied | `message="Insufficient permissions"`, `component="g8ee"` |
-| `ValidationError` | Request/model validation failure | `message`, `field`, `constraint`, `component="g8ee"` |
+| `ResourceNotFoundError` | Resource not found in DB | `message`, `resource_type`, `resource_id` |
+| `AuthorizationError` | Permission denied | `message="Insufficient permissions"` |
+| `ValidationError` | Request/model validation failure | `message`, `field`, `constraint` |
 | `BusinessLogicError` | Invariant violation | `message`, `code` |
 | `ExternalServiceError` | External service failure | `message`, `service_name`, `cause` |
 | `NetworkError` | Network connectivity failure | `message`, `retry_suggested`, `cause` |
+| `ConfigurationError` | Configuration missing or invalid | `message`, `key` |
 
 ---
 
@@ -208,6 +211,7 @@ g8ee uses `CacheAsideService` to manage synchronization between the authoritativ
 - **`create_document`**: Checks for document existence in the DB first. If it exists, the call fails with a `DatabaseError`. If not, it writes to the DB and invalidates the cache key.
 - **`get_document`**: Implements lazy-loading. It checks the KV cache first; if missing, it fetches from the DB and "warms" the cache.
 - **`query_documents`**: Uses MD5 hashing of query parameters to cache result sets.
+- **`append_to_array`**: Atomic `arrayUnion` on DB followed by cache invalidation.
 
 For the full list of call behaviors and TTL strategies, see [architecture/storage.md](../architecture/storage.md#cache-aside-service).
 
@@ -259,12 +263,11 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 **Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the agent proceeds without it.
 
-**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_availability` and `operator_documents`. 
+**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
 
 **Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, disk, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields.
 
 The resulting `EnrichedInvestigationContext` carries:
-- `operator_availability` — online/offline, count, can-execute flag
 - `operator_documents` — list of live `OperatorDocument` records
 - `memory` — the attached `InvestigationMemory` (or `None`)
 
