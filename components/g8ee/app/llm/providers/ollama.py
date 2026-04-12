@@ -81,7 +81,11 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        self._original_endpoint = endpoint.rstrip('/')
+        # Strip /v1 suffix if present - ollama SDK handles API paths internally
+        cleaned_endpoint = endpoint.rstrip('/')
+        if cleaned_endpoint.endswith('/v1'):
+            cleaned_endpoint = cleaned_endpoint[:-3]
+        self._original_endpoint = cleaned_endpoint
 
         verify: str | bool
         if is_internal_endpoint(endpoint):
