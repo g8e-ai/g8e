@@ -1,31 +1,18 @@
 # g8e
 
-**A self-hosted governance layer for AI agents.**
+**The governance layer that binds AI to reality.**
 
 ## About g8e
 
-g8e is a self-hosted governance layer for AI to interact with reality while humans always maintain full control.
+g8e is a self-hosted command-and-control platform for safe, AI-powered, human-driven remote system operations. It was designed for a future where AI is deeply embedded in infrastructure — and where the humans running that infrastructure refuse to hand over the keys.
 
-The g8e Operator is a featherweight 4MB, platform agnostic, programming language agnostic ghost binary.
+The premise is simple and non-negotiable: **AI is the advisor. You are the authority.** AI gathers deep context across your entire infrastructure, reasons about it, and proposes intelligent actions — but it never acts alone. Every operation, on every system, requires multiple layers of expressed human intent and approval before anything executes. There is no backdoor. There is no override. The AI has no mechanism to circumvent human control — not by design flaw, not by prompt injection, not by emergent behavior. The architecture makes it structurally impossible.
 
-g8e uses dynamic system prompts and tools in a react loop:
+Bind any number of remote systems to your web session. Tell the AI what you want. It fans out across every Operator in scope — investigating, correlating, proposing — then waits for you. You approve. Execution is instant, simultaneous, and audited. The AI never sees raw sensitive data, never stores your context in someone else's cloud, and never stops working the problem until your intent is fully satisfied.
 
-1. 'Bind' any number of remote Operators to your chat 
-2. Tell the AI want you want
-3. AI identifies the system specs of the remote Opertor hosts
-4. AI proposes an action
-5. You approve
-6. Instant execution across all systems
-7. AI only ever sees scrubbed data, never storing context in the cloud
-8. AI works in a react loop with all Operators that you put in scope by 'binding', until your intent is satisfied
+The g8e Operator is a featherweight ~4MB static binary — platform agnostic, language agnostic, dependency-free — deployable ephemerally to your entire fleet in seconds. Kill the process and it's gone. What remains is the audit trail, by design.
 
- ephemerally delivering safe, AI-powered, human-driven DevOps to any system with port 443 outbound open.
-
-MCP supported - all incoming MCP traffic is translated to the g8e protocol, which the platform uses to securely communicate with remote Operators over TLS.
-
-
-
-
+MCP supported — all incoming MCP traffic is translated to the g8e protocol for secure communication with remote Operators over mTLS.
 
 **Premise:** Never trust AI. AI can be wrong. AI can be adversarial. Every architectural decision in this platform starts from that assumption.
 
@@ -43,6 +30,14 @@ MCP supported - all incoming MCP traffic is translated to the g8e protocol, whic
 8. **Universal runtime** — Any model, any provider, any OS. The platform has no opinion about your AI, your infrastructure, or your architecture. Governance is the constant; everything else is your choice.
 
 Read more about the [Origins, Governance, and Philosophy](docs/architecture/about.md).
+
+---
+
+## Origins
+
+g8e was built from scratch by a single developer with the help of AI coding agents — the very kind of agents this platform is designed to govern. The entire stack — Go, Python, Node.js, mTLS infrastructure, multi-agent orchestration, the security model — was written, tested, and shipped by one person leveraging AI as a force multiplier while never letting it drive unsupervised. It's a living proof of concept for the philosophy at the core of the platform: AI is extraordinarily capable when a human is in the loop and in command.
+
+Read the full story in [Origins, Governance, and Philosophy](docs/architecture/about.md).
 
 ---
 
@@ -65,13 +60,9 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e && ./g8e platform setup
 
 ## Core Components
 
-g8e is a security-first, self-hosted platform for AI-augmented infrastructure operations.
-
 1.  **The Operator (g8eo):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
 2.  **The Engine (g8ee):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
 3.  **The Dashboard (g8ed):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
-
-See [docs/architecture/about.md](docs/architecture/about.md) for philosophy, governance, and origins.
 
 ---
 

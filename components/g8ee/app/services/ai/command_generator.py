@@ -526,21 +526,7 @@ async def generate_command(
         ),
     )
 
-    try:
-        provider = get_llm_provider(resolved_settings.llm)
-    except Exception as exc:
-        logger.error("[TRIBUNAL] Provider unavailable (%s): %s", resolved_settings.llm.provider, exc)
-        await emitter.emit(
-            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(reason=TribunalFallbackReason.PROVIDER_UNAVAILABLE, original_command=original_command, final_command=original_command, error=str(exc)),
-        )
-        raise TribunalProviderUnavailableError(
-            provider=str(resolved_settings.llm.provider),
-            error=str(exc),
-            original_command=original_command,
-        )
-
-    async with provider:
+    async with get_llm_provider(resolved_settings.llm) as provider:
         # Stage 1: Generation
         pass_errors: list[str] = []
         pass_tasks = [
