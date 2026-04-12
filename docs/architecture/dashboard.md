@@ -337,9 +337,9 @@ ArrowUp/ArrowDown traverse `commandHistory` in reverse; at the end of the list t
 Prerequisites: Operator must be bound (`isOperatorBound === true`); active web session required.
 
 Flow:
-1. `showExecutingIndicator(command)` — renders spinning indicator; returns indicator ID
+1. `showExecutingIndicator(command)` — creates an AI response bubble (`.anchored-terminal__ai-response--execution`) with header showing sender "g8e" and timestamp, renders spinning indicator inside the bubble content; returns indicator ID
 2. `POST /api/operator/approval/direct-command` with `{ command, operator_id, web_session_id, hostname }`
-3. `hideExecutingIndicator(executingId)` unconditionally on response
+3. `hideExecutingIndicator(executingId)` removes the indicator and cleans up empty parent bubbles
 4. Success with `execution_id`: tracked in `activeExecutions`; output arrives via command execution events
 5. Failure: results container created immediately with the error rendered as a failed result
 
@@ -424,7 +424,7 @@ For shell commands, a risk badge shows `risk_level` from `data.risk_analysis`:
 
 The badge tooltip includes `risk_score/10`, destructive flag, and blast radius when present.
 
-`handleApprovalRequest` stores the approval in `pendingApprovals` (keyed by `approval_id` or `execution_id`), renders the `approval-card` template, and attaches Approve/Deny click handlers.
+`handleApprovalRequest` stores the approval in `pendingApprovals` (keyed by `approval_id` or `execution_id`), creates or reuses an AI response bubble (`.anchored-terminal__ai-response--execution`) with header, renders the `approval-card` template inside the bubble content, and attaches Approve/Deny click handlers.
 
 `handleApprovalResponse(approvalId, approved)`:
 1. Disables both buttons immediately
@@ -441,7 +441,7 @@ The badge tooltip includes `risk_score/10`, destructive flag, and blast radius w
 After an approval or `/run` command, the Operator reports progress via pub/sub → SSE → event-bus. `handleCommandExecutionEvent` drives a state machine on `data.eventType`:
 
 - **`OPERATOR_COMMAND_STARTED`**: looks up or creates a results container; registers in `activeExecutions`
-- **Final events** (completed/failed/cancelled/approval granted/rejected for commands and file edits): retrieves output/error/exit code, hides executing indicator, appends result entry to the results container, removes from `activeExecutions`
+- **Final events** (completed/failed/cancelled/approval granted/rejected for commands and file edits): retrieves output/error/exit code, hides executing indicator, appends result entry to the results container (which is nested inside the AI bubble content when a parent bubble exists), removes from `activeExecutions`
 
 Each result entry shows: status icon, hostname badge (if present), command string, timestamp, combined stdout+stderr (HTML-escaped; `(No output)` if both empty), exit code badge (green for 0, red otherwise). Results containers are collapsible; toggle label reads `Result` or `Results`.
 
@@ -449,7 +449,7 @@ Each result entry shows: status icon, hostname badge (if present), command strin
 
 ### Session Restore
 
-When a case is loaded, `ChatComponent.restoreConversationHistory()` calls `restoreApprovalRequest`, `restoreCommandExecution`, and `restoreCommandResult` on the Terminal to replay prior history. These methods use the same DOM structure as live events so restored history is visually identical.
+When a case is loaded, `ChatComponent.restoreConversationHistory()` calls `restoreApprovalRequest`, `restoreCommandExecution`, and `restoreCommandResult` on the Terminal to replay prior history. These methods use the same DOM structure as live events (including AI bubble wrappers for approvals and results) so restored history is visually identical.
 
 ### Scroll Behaviour
 

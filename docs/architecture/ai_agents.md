@@ -442,6 +442,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | Service | File | Responsibility |
 |---|---|---|
 | `ChatPipelineService` | `components/g8ee/app/services/ai/chat_pipeline.py` | Top-level orchestrator — assembles context, calls agent, persists results |
+| `ChatTaskManager` | `components/g8ee/app/services/ai/chat_task_manager.py` | Owns asyncio task tracking and cancellation for in-flight AI chat processing |
 | `g8e agent` | `components/g8ee/app/services/ai/agent.py` | ReAct streaming loop — retry logic, function loop, SSE delivery |
 | `InvestigationService` | `components/g8ee/app/services/investigation/investigation_service.py` | (Domain Layer) Investigation fetch, operator enrichment, memory attachment, history orchestration |
 | `InvestigationDataService` | `components/g8ee/app/services/investigation/investigation_data_service.py` | (Data Layer) Pure CRUD for investigations and chat message persistence |
@@ -458,6 +459,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts |
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction |
 | `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
+| `EvalJudge` | `components/g8ee/app/services/ai/eval_judge.py` | AI Agent Accuracy Evaluation Judge — grades agent performance against gold standard |
 ---
 
 ## Prompts

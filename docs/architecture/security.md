@@ -146,7 +146,7 @@ g8e operates its own private CA. There is no dependency on any public CA.
 - **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es/ssl` on g8ed, g8ee, and g8ep. Both services read CA and server certificates from `/g8es/ssl/`. g8ed's `CertificateService` reads the CA cert and key from `/g8es/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
 - **Volume isolation:** SSL certs live in a dedicated volume (`g8es-ssl`) separate from the SQLite DB volume (`g8es-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
 - **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
-- **Per-operator client certificates:** Issued dynamically at claim time during Operator bootstrap, transmitted to the Operator exactly once. Not stored in recoverable form by g8ed.
+- **Per-operator client certificates:** Issued dynamically during Operator slot creation and stored in the operator document. The certificate is not transmitted in the authentication response; the Operator retrieves it from the operator document after slot creation.
 - **Validity:** CA — 10 years (3650 days); server certificate — 90 days. Both renewed automatically on restart if expired.
 - **CA private key:** Accessible only to the core authentication service; never exposed via any API.
 
@@ -300,8 +300,8 @@ Operators (g8eo) authenticate via one of three methods. All result in the same b
 
 1. Operator POSTs to `/api/auth/operator` with API key or device token.
 2. g8ed verifies credentials and validates the system fingerprint binding (permanent after first use).
-3. g8ed issues a per-operator mTLS client certificate and returns it with the operator session ID exactly once. The certificate is not stored in recoverable form by g8ed.
-4. The Operator connects to g8es pub/sub over WSS using that mTLS client certificate.
+3. g8ed returns the operator session ID, operator ID, user ID, API key, and configuration. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
+4. The Operator connects to g8es pub/sub over WSS using the mTLS client certificate that was provisioned during slot creation.
 
 ### System Fingerprint Binding
 
@@ -342,9 +342,9 @@ The API key path is the standard long-running operator authentication method, ha
 8. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
 9. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
 10. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
-11. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot` and receives the per-operator mTLS client certificate. Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
+11. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation (not in the auth response). Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
 12. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
-13. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), `config`, and `operator_cert`/`operator_cert_key` (first-claim only; `null` on reconnect).
+13. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), and `config`. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
 
 | Check | Failure code | HTTP |
 |---|---|---|
@@ -395,7 +395,7 @@ Called by g8eo on the subsequent `POST /api/auth/operator` with `auth_mode=opera
 2. **Identity extraction** — `user_id` and `operator_id` resolved from the pre-provisioned session. Missing fields → 401.
 3. **User existence check** — `UserService.getUser(user_id)` → 404 if not found.
 4. **API key retrieval** — `operator_api_key` fetched from the operator document for inclusion in the bootstrap response (used by g8eo for in-memory LFAA vault key derivation; never stored on disk).
-5. **Bootstrap response** — Returns `operator_session_id` (the pre-provisioned session ID), `operator_id`, `user_id`, `api_key`, and `config`. `operator_cert` and `operator_cert_key` are `null` — the mTLS certificate was issued at Phase 1 slot-claim time.
+5. **Bootstrap response** — Returns `operator_session_id` (the pre-provisioned session ID), `operator_id`, `user_id`, `api_key`, and `config`. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
 
 **Why the two-phase design:** The device link token is consumed at registration time (Phase 1), which provisions the operator session and issues the mTLS cert. The subsequent auth request (Phase 2) uses the already-provisioned session ID — the token is gone by this point. This means the token never travels over the wire a second time and has zero value after first use.
 
@@ -472,10 +472,10 @@ g8eo Operators open no inbound ports. All communication is Operator-initiated �
 1. Load settings from environment + CLI flags.
 2. Load the platform CA certificate using local-first discovery (scan `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`), falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` if no local file is found. If all paths fail, the operator exits immediately.
 3. Authenticate (API key, device token, or pre-authorized session).
-4. POST to `/api/auth/operator` — receive bootstrap config and per-operator mTLS certificate.
+4. POST to `/api/auth/operator` — receive bootstrap config (session ID, operator ID, user ID, API key, config). Retrieve the per-operator mTLS client certificate from the operator document.
 5. Initialize local storage: scrubbed vault, raw vault, audit vault.
 6. Initialize LFAA audit vault and git ledger.
-7. Connect to g8es pub/sub over WSS using the issued mTLS client certificate.
+7. Connect to g8es pub/sub over WSS using the retrieved mTLS client certificate.
 8. Subscribe to `cmd:{operator_id}:{operator_session_id}` channel.
 9. Begin heartbeat telemetry. Enter idle — await binding.
 
@@ -667,7 +667,7 @@ After any command executes, before its output reaches g8ee (and therefore any AI
 
 **Implementation split:** The g8eo Go sentinel handles command output scrubbing. The g8ee Python scrubber handles user message scrubbing. Threat detection is Go-only (g8eo).
 
-### 27 Scrubbing Patterns (applied sequentially)
+### Scrubbing Patterns (applied sequentially)
 
 | Category | What is scrubbed | Placeholder |
 |---|---|---|

@@ -524,16 +524,16 @@ describe('ChatHistoryMixin', () => {
             );
         });
 
-        it('restores operator activity for approval request', () => {
+        it('filters out approval requested events during restoration', () => {
             const component = createTestComponent();
             const approvalRequest = makeApprovalRequestMessage();
             
             component.restoreConversationHistory([approvalRequest], INVESTIGATION_ID);
             
-            expect(component.anchoredTerminal.restoreApprovalRequest).toHaveBeenCalled();
+            expect(component.anchoredTerminal.restoreApprovalRequest).not.toHaveBeenCalled();
         });
 
-        it('restores operator activity with approval granted', async () => {
+        it('filters out approval granted events during restoration', async () => {
             const component = createTestComponent();
             const messages = [
                 makeApprovalRequestMessage(),
@@ -543,11 +543,11 @@ describe('ChatHistoryMixin', () => {
             
             await component.restoreConversationHistory(messages, INVESTIGATION_ID);
             
-            expect(component.anchoredTerminal.restoreApprovalRequest).toHaveBeenCalled();
-            expect(component.anchoredTerminal.restoreCommandResult).toHaveBeenCalled();
+            expect(component.anchoredTerminal.restoreApprovalRequest).not.toHaveBeenCalled();
+            expect(component.anchoredTerminal.restoreCommandResult).not.toHaveBeenCalled();
         });
 
-        it('restores operator activity with approval rejected', () => {
+        it('filters out approval rejected events during restoration', () => {
             const component = createTestComponent();
             const messages = [
                 makeApprovalRequestMessage(),
@@ -556,7 +556,7 @@ describe('ChatHistoryMixin', () => {
             
             component.restoreConversationHistory(messages, INVESTIGATION_ID);
             
-            expect(component.anchoredTerminal.restoreApprovalRequest).toHaveBeenCalled();
+            expect(component.anchoredTerminal.restoreApprovalRequest).not.toHaveBeenCalled();
             expect(component.anchoredTerminal.restoreCommandResult).not.toHaveBeenCalled();
         });
 
@@ -600,6 +600,20 @@ describe('ChatHistoryMixin', () => {
             component.restoreConversationHistory(messages, INVESTIGATION_ID);
             
             expect(component.anchoredTerminal.restoreCommandExecution).toHaveBeenCalledTimes(1);
+        });
+
+        it('filters out approval preparing events during restoration', () => {
+            const component = createTestComponent();
+            const approvalPreparing = makeOperatorMessage({
+                metadata: {
+                    ...makeOperatorMessage().metadata,
+                    event_type: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                },
+            });
+            
+            component.restoreConversationHistory([approvalPreparing], INVESTIGATION_ID);
+            
+            expect(component.anchoredTerminal.restoreApprovalRequest).not.toHaveBeenCalled();
         });
     });
 
