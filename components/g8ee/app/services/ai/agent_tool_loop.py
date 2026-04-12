@@ -51,6 +51,7 @@ from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWe
 from app.models.settings import G8eeUserSettings
 
 from app.models.agents.tribunal import (
+    CommandGenerationResult,
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
@@ -70,6 +71,7 @@ class ToolCallResult:
     result_info: StreamChunkData
     result: ToolResult
     grounding: GroundingMetadata | None = field(default=None)
+    tribunal_result: CommandGenerationResult | None = field(default=None)
 
 
 logger = logging.getLogger(__name__)
@@ -162,6 +164,7 @@ async def orchestrate_tool_execution(
     operator_tools = {member for member in OperatorToolName}
     is_operator_tool = tool_name in operator_tools
     typed_args: OperatorCommandArgs | None = None
+    gen_result: CommandGenerationResult | None = None
 
     if tool_name == OperatorToolName.RUN_COMMANDS:
         typed_args = OperatorCommandArgs.model_validate(raw_args)
@@ -370,6 +373,7 @@ async def orchestrate_tool_execution(
             error_type=result.error_type if not result.success and hasattr(result, "error_type") else None,
         ),
         result=result,
+        tribunal_result=gen_result,
     )
 
 

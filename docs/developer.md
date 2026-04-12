@@ -242,6 +242,7 @@ Passing raw dicts between services, storing unvalidated JSON in the database, or
 - **Explicit Ownership:** Every document has a single authoritative writer component.
 - **Boundary Validation:** Every value crossing a wire boundary must be parsed and validated through a model factory (`.parse()`).
 - **No Type Coercion Fallbacks:** Fix the model or the caller; never use `JSON.stringify` or `String()` to hide contract bugs.
+- **No Deduplicators, Arbitrary Guards, or Unions:** Never add defensive code to handle unexpected values at the call site. Hunt down the root cause of why the unexpected value is being received and fix it at the source.
 
 ### Data Access
 All document operations must use the `CacheAsideService`.

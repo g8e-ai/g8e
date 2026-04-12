@@ -158,7 +158,6 @@ _install_ca_cert() {
         return
     fi
     export G8E_SSL_CERT_FILE="$ca_cert"
-    export REQUESTS_CA_BUNDLE="$ca_cert"
     export NODE_EXTRA_CA_CERTS="$ca_cert"
     log_ok "Platform CA cert set (G8E_SSL_CERT_FILE=$ca_cert)"
 }

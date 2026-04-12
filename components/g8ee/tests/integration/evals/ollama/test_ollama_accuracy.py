@@ -54,7 +54,7 @@ def load_gold_set() -> list[dict[str, Any]]:
 
 # Use ai_integration marker to ensure this only runs when LLM is configured
 # Use agent_eval marker for dedicated evaluation runs
-pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.agent_eval, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.agent_eval, pytest.mark.slow, pytest.mark.timeout(180)]
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -63,6 +63,7 @@ async def test_ollama_accuracy(
     scenario: dict[str, Any],
     llm_provider,
     test_settings,
+    eval_results_collector,
 ):
     """
     Evaluate raw Ollama model accuracy for a specific scenario using a Judge model.
@@ -166,6 +167,9 @@ async def test_ollama_accuracy(
         # Calculate execution time
         end_time = datetime.now(timezone.utc)
         result_data.execution_time_ms = (end_time - start_time).total_seconds() * 1000
+
+        # Add result to collector for end-of-test summary
+        eval_results_collector.add_result(result_data.to_dict())
 
         # Output structured result
         logger.info("=" * 60)

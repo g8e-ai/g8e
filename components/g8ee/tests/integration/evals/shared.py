@@ -26,6 +26,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 REQUIRED_SCENARIO_FIELDS = {"id", "user_query", "agent_mode", "expected_behavior", "required_concepts"}
+REQUIRED_BENCHMARK_FIELDS = {"id", "user_query", "agent_mode", "expected_tool", "expected_payload"}
 
 
 @dataclass
@@ -49,6 +50,45 @@ class AccuracyTestResult:
             "execution_time_ms": self.execution_time_ms,
             "error": self.error,
         }
+
+
+@dataclass
+class BenchmarkTestResult:
+    """Structured result for a single benchmark scenario (binary pass/fail)."""
+    scenario_id: str
+    category: str = ""
+    passed: bool = False
+    tool_called: bool = False
+    matchers_total: int = 0
+    matchers_passed: int = 0
+    failures: list[str] | None = None
+    execution_time_ms: float = 0.0
+    error: str | None = None
+    tribunal_original_command: str | None = None
+    tribunal_final_command: str | None = None
+    tribunal_outcome: str | None = None
+    tribunal_improved: bool | None = None
+    tribunal_pre_score: bool | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "scenario_id": self.scenario_id,
+            "category": self.category,
+            "passed": self.passed,
+            "tool_called": self.tool_called,
+            "matchers_total": self.matchers_total,
+            "matchers_passed": self.matchers_passed,
+            "failures": self.failures or [],
+            "execution_time_ms": self.execution_time_ms,
+            "error": self.error,
+        }
+        if self.tribunal_outcome is not None:
+            result["tribunal_original_command"] = self.tribunal_original_command
+            result["tribunal_final_command"] = self.tribunal_final_command
+            result["tribunal_outcome"] = self.tribunal_outcome
+            result["tribunal_improved"] = self.tribunal_improved
+            result["tribunal_pre_score"] = self.tribunal_pre_score
+        return result
 
 
 def load_and_validate_gold_set(
@@ -98,4 +138,48 @@ def load_and_validate_gold_set(
         valid.append(scenario)
 
     logger.info("Loaded %d valid scenarios from gold set (%s)", len(valid), gold_set_path)
+    return valid
+
+
+def load_and_validate_benchmark_set(benchmark_path: str) -> list[dict[str, Any]]:
+    """Load and validate a benchmark gold set for parameterization.
+
+    Unlike the accuracy gold set, benchmark scenarios require:
+      - ``expected_tool``: the tool name the agent must call
+      - ``expected_payload``: list of {field, pattern} matchers
+
+    No filtering is applied -- all valid scenarios are returned.
+    """
+    if not os.path.exists(benchmark_path):
+        logger.error("Benchmark file not found: %s", benchmark_path)
+        return []
+
+    try:
+        with open(benchmark_path, "r", encoding="utf-8") as f:
+            scenarios = json.load(f)
+    except json.JSONDecodeError as exc:
+        logger.error("Failed to parse benchmark JSON: %s", exc)
+        return []
+
+    valid: list[dict[str, Any]] = []
+    for scenario in scenarios:
+        missing = REQUIRED_BENCHMARK_FIELDS - set(scenario.keys())
+        if missing:
+            logger.warning(
+                "Benchmark scenario %s missing fields: %s",
+                scenario.get("id", "unknown"),
+                missing,
+            )
+            continue
+
+        if not isinstance(scenario.get("expected_payload"), list):
+            logger.warning(
+                "Benchmark scenario %s: expected_payload must be a list",
+                scenario["id"],
+            )
+            continue
+
+        valid.append(scenario)
+
+    logger.info("Loaded %d valid benchmark scenarios (%s)", len(valid), benchmark_path)
     return valid

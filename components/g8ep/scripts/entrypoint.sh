@@ -29,7 +29,6 @@ fi
 if [ -f "${SSL_DIR}/ca.crt" ]; then
     export G8E_PUBSUB_CA_CERT="${SSL_DIR}/ca.crt"
     export G8E_SSL_CERT_FILE="${SSL_DIR}/ca.crt"
-    export REQUESTS_CA_BUNDLE="${SSL_DIR}/ca.crt"
     echo "[g8ep] Configured CA certificate paths from ${SSL_DIR}/ca.crt"
 fi
 
