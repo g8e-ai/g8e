@@ -72,7 +72,6 @@ from app.constants import (
     LLMProvider as LLMProviderEnum,
     TribunalFallbackReason,
     TribunalMember,
-    ThinkingLevel,
     TRIBUNAL_MEMBER_TEMPERATURES,
     EventType,
     VerifierReason,
@@ -82,12 +81,11 @@ from app.constants import (
     GEMINI_DEFAULT_MODEL,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, GenerateContentConfig, Part, Role, ThinkingConfig, LiteLLMSettings
+from app.llm.llm_types import Content, Part, Role, ThinkingConfig, LiteLLMSettings
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
-    TribunalMemberResult,
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,

@@ -13,10 +13,7 @@
 
 from typing import Any
 
-from pydantic import Field
-
-from app.models.base import G8eBaseModel
-from .types import CallToolResult, Content, JSONRPCRequest, CallToolParams
+from .types import CallToolResult, Content, JSONRPCRequest
 
 
 def build_tool_call_request(tool_name: str, arguments: dict[str, Any], request_id: str) -> JSONRPCRequest:

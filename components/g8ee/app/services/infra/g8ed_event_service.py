@@ -97,7 +97,7 @@ class EventService:
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, Any] | G8eBaseModel,
+        payload: dict[str, object] | G8eBaseModel,
         web_session_id: str,
         case_id: str,
         user_id: str | None = None,

@@ -14,11 +14,9 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from app.constants import (
-    ErrorCategory,
     ErrorCode,
 )
 from app.constants.collections import (
@@ -87,7 +85,7 @@ class SettingsService:
         This replaces legacy configuration with platform defaults and
         secure bootstrap service for secrets from g8es volume.
         """
-        settings = G8eePlatformSettings(port=443) # Default port
+        settings = G8eePlatformSettings(port=443)  # type: ignore[arg-type]
         
         # Load secrets from bootstrap service
         internal_token = self._bootstrap.load_internal_auth_token()
@@ -109,9 +107,9 @@ class SettingsService:
         
         # Command Validation
         if data.enable_command_whitelisting is not None:
-            settings.command_validation.enable_whitelisting = data.enable_command_whitelisting
+            settings.command_validation.enable_whitelisting = bool(data.enable_command_whitelisting)
         if data.enable_command_blacklisting is not None:
-            settings.command_validation.enable_blacklisting = data.enable_command_blacklisting
+            settings.command_validation.enable_blacklisting = bool(data.enable_command_blacklisting)
 
         # Search (Merged Vertex/Google)
         settings.search = self._build_search_settings(data)
@@ -171,9 +169,9 @@ class SettingsService:
             llm.llm_max_tokens = data.llm_max_tokens
         
         if data.llm_command_gen_enabled is not None:
-            llm.llm_command_gen_enabled = data.llm_command_gen_enabled
+            llm.llm_command_gen_enabled = bool(data.llm_command_gen_enabled)
         if data.llm_command_gen_verifier is not None:
-            llm.llm_command_gen_verifier = data.llm_command_gen_verifier
+            llm.llm_command_gen_verifier = bool(data.llm_command_gen_verifier)
         if data.llm_command_gen_passes is not None:
             llm.llm_command_gen_passes = data.llm_command_gen_passes
         if data.llm_command_gen_temp is not None:

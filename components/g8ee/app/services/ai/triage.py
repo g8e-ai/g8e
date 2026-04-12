@@ -19,7 +19,6 @@ assistant model before committing to the full main LLM.
 """
 
 import logging
-import json
 import re
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
@@ -27,18 +26,13 @@ from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
     TRIAGE_EMPTY_CONVERSATION,
     TRIAGE_LOG_TRUNCATION_LENGTH,
-    EventType,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
-    LLMProvider,
-    AgentMode,
 )
 from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
-from app.models.attachments import AttachmentMetadata
-from app.models.settings import G8eeUserSettings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 
 logger = logging.getLogger(__name__)
@@ -138,6 +132,10 @@ class TriageAgent:
         try:
             async with get_llm_provider(request.settings.llm) as provider:
                 model = request.model_override or request.settings.llm.primary_model
+
+                if not model:
+                    logger.warning("[TRIAGE] No model available, defaulting to complex")
+                    return self._fallback_result("No model configured for triage.")
 
                 conversation_tail = self._build_conversation_tail(request.conversation_history)
 

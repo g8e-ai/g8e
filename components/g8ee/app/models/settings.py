@@ -78,6 +78,10 @@ class PlatformSettingsData(G8eBaseModel):
     llm_command_gen_verifier: bool = True
     llm_command_gen_passes: int | None = None
     llm_command_gen_temp: float | None = None
+
+    eval_judge_model: str | None = None
+    eval_judge_temperature: float | None = None
+    eval_judge_max_tokens: int | None = None
     
     google_search_enabled: bool | str = False
     google_search_api_key: str | None = None
@@ -147,11 +151,15 @@ class UserSettingsData(G8eBaseModel):
 
     llm_temperature: float | None = None
     llm_max_tokens: int | None = None
-    
+
     llm_command_gen_enabled: bool | str | None = None
     llm_command_gen_verifier: bool | str | None = None
     llm_command_gen_passes: int | None = None
     llm_command_gen_temp: float | None = None
+
+    eval_judge_model: str | None = None
+    eval_judge_temperature: float | None = None
+    eval_judge_max_tokens: int | None = None
     
     google_search_enabled: bool | str | None = None
     google_search_api_key: str | None = None
@@ -264,6 +272,19 @@ class ListenSettings(G8eBaseModel):
         settings = settings_service.get_local_settings()
         return settings.listen
 
+class EvalJudgeSettings(G8eBaseModel):
+    """Evaluation judge configuration for grading agent performance."""
+    model_config = ConfigDict(
+        populate_by_name=True,
+        use_enum_values=True,
+        extra="ignore",
+        coerce_numbers_from_str=True,
+    )
+
+    model: str | None = Field(None, alias="eval_judge_model")
+    temperature: float = Field(0.0, alias="eval_judge_temperature")
+    max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
+
 class LLMSettings(G8eBaseModel):
     """LLM provider configuration."""
     model_config = ConfigDict(
@@ -274,10 +295,10 @@ class LLMSettings(G8eBaseModel):
     )
 
     provider: LLMProvider = Field(default=LLMProvider.OLLAMA)
-    
+
     primary_model: str | None = Field(None, alias="llm_model")
     assistant_model: str | None = Field(None, alias="llm_assistant_model")
-    
+
     openai_endpoint: str | None = Field(None)
     openai_api_key: str | None = Field(None)
 
@@ -334,6 +355,7 @@ class G8eePlatformSettings(G8eBaseModel):
 
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
+    eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
 
     @property
     def ca_cert_path(self) -> str | None:
@@ -355,6 +377,7 @@ class G8eeUserSettings(G8eBaseModel):
     """Per-user settings, overlaid on platform settings."""
     llm: LLMSettings
     search: SearchSettings = Field(default_factory=SearchSettings)
+    eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
 
     @classmethod
     async def from_db(cls, settings_service: Any, user_id: str) -> "G8eeUserSettings":

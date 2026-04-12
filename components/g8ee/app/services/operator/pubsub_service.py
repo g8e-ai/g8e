@@ -22,7 +22,6 @@ Exposes wait_for_result(execution_id, timeout) to replace every hand-rolled
 polling loop that previously lived across every mixin.
 """
 
-import asyncio
 import json
 import logging
 from collections.abc import Callable, Coroutine

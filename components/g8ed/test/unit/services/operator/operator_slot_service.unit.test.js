@@ -26,6 +26,7 @@ describe('OperatorSlotService', () => {
         mocks = {
             operatorDataService: {
                 queryOperators: vi.fn(),
+                queryOperatorsFresh: vi.fn(),
                 updateOperator: vi.fn(),
                 createOperator: vi.fn(),
                 getOperator: vi.fn(),
@@ -52,7 +53,7 @@ describe('OperatorSlotService', () => {
             const organizationId = 'org-123';
             const newOpId = `${userId}_operator_1_12345_abc123`;
 
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
 
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
@@ -70,7 +71,7 @@ describe('OperatorSlotService', () => {
             const userId = 'u-123';
             const organizationId = 'org-123';
 
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
                 operator_id: 'new-op'
@@ -78,7 +79,7 @@ describe('OperatorSlotService', () => {
 
             await service.initializeOperatorSlots(userId, organizationId);
 
-            expect(mocks.operatorDataService.queryOperators).toHaveBeenCalledTimes(1);
+            expect(mocks.operatorDataService.queryOperatorsFresh).toHaveBeenCalledTimes(1);
         });
 
         it('should not re-issue API keys for any operators (no reindex)', async () => {
@@ -91,7 +92,7 @@ describe('OperatorSlotService', () => {
                 api_key: 'key-existing'
             };
 
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([existingOp]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOp]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
                 operator_id: 'new-op'
@@ -113,7 +114,7 @@ describe('OperatorSlotService', () => {
             };
             const newOpId = 'new-op-2';
 
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([existingOp]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOp]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
                 operator_id: newOpId
@@ -137,7 +138,7 @@ describe('OperatorSlotService', () => {
                 status: OperatorStatus.TERMINATED
             };
 
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([...liveOps, terminatedOp]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([...liveOps, terminatedOp]);
 
             const result = await service.initializeOperatorSlots(userId, organizationId);
 
@@ -150,7 +151,7 @@ describe('OperatorSlotService', () => {
                 operator_id: `op-${i}`,
                 status: OperatorStatus.AVAILABLE
             }));
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce(existing);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce(existing);
 
             await service.initializeOperatorSlots('u-1', 'org-1');
 
@@ -158,7 +159,7 @@ describe('OperatorSlotService', () => {
         });
 
         it('should assign G8E_POD subtype to the first created slot when no g8ep exists', async () => {
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
 
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
@@ -180,7 +181,7 @@ describe('OperatorSlotService', () => {
                 status: OperatorStatus.AVAILABLE,
                 is_g8ep: true,
             };
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([existingG8eNode]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingG8eNode]);
 
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
@@ -195,7 +196,7 @@ describe('OperatorSlotService', () => {
         });
 
         it('should assign G8E_POD to exactly one slot per user', async () => {
-            mocks.operatorDataService.queryOperators.mockResolvedValueOnce([]);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
 
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {

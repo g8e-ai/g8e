@@ -29,12 +29,13 @@ import asyncio
 import json
 import logging
 import re
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.llm.llm_types import Content, GenerateContentConfig, Part, ResponseFormat, Role, LiteLLMSettings
+from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider as LLMProviderBase
-from app.constants import LLMProvider
+from app.models.settings import EvalJudgeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ Output ONLY the JSON object."""
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
-def _extract_json(text: str) -> dict:
+def _extract_json(text: str) -> dict[str, Any]:
     """Extract a JSON object from LLM text, handling markdown fences."""
     stripped = text.strip()
     fence_match = _JSON_FENCE_RE.search(stripped)
@@ -145,18 +146,31 @@ def _extract_json(text: str) -> dict:
 class EvalJudge:
     """Judge that uses an LLM to evaluate agent accuracy.
 
-    Construction requires a concrete LLM provider instance and the model name
-    to use for grading. The provider is the abstract LLMProvider from
-    ``app.llm.provider``, not the LLMProvider enum from ``app.constants``.
+    Construction requires a concrete LLM provider instance and either
+    an explicit model name or EvalJudgeSettings. The provider is the
+    abstract LLMProvider from ``app.llm.provider``, not the LLMProvider
+    enum from ``app.constants``.
     """
 
-    def __init__(self, provider: LLMProviderBase, model: str):
+    def __init__(
+        self,
+        provider: LLMProviderBase,
+        model: str | None = None,
+        settings: EvalJudgeSettings | None = None,
+    ):
         if provider is None:
             raise EvalJudgeError("EvalJudge requires a configured LLM provider instance")
-        if not model:
-            raise EvalJudgeError("EvalJudge requires an explicit model name")
+
         self._provider = provider
-        self._model = model
+        self._settings = settings or EvalJudgeSettings(
+            eval_judge_model=None,
+            eval_judge_temperature=0.0,
+            eval_judge_max_tokens=4096,
+        )
+        self._model = model or self._settings.model
+
+        if not self._model:
+            raise EvalJudgeError("EvalJudge requires an explicit model name (via model parameter or settings.model)")
 
     async def grade_turn(
         self,
@@ -185,10 +199,10 @@ class EvalJudge:
         )
 
         settings = LiteLLMSettings(
-            temperature=None,
-            max_output_tokens=None,
+            temperature=self._settings.temperature,
+            max_output_tokens=self._settings.max_output_tokens,
             system_instruction="",
-            response_format=ResponseFormat.from_pydantic_schema(
+            response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",
             ),
@@ -231,6 +245,8 @@ class EvalJudge:
         settings: LiteLLMSettings,
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
+        if not self._model:
+            raise EvalJudgeError("Model is not set")
         response = await self._provider.generate_content_lite(
             model=self._model,
             contents=contents,

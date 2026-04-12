@@ -200,6 +200,40 @@ describe('OperatorService', () => {
         });
     });
 
+    describe('terminateOperator', () => {
+        it('should delete operator document without recreating', async () => {
+            const existing = {
+                operator_id: 'op-1',
+                user_id: 'u-1',
+                organization_id: 'org-1',
+                name: 'op-1',
+                slot_number: 1,
+                api_key: 'key-1'
+            };
+            mocks.operatorDataService.getOperator.mockResolvedValue(existing);
+            vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
+            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
+
+            const result = await service.terminateOperator('op-1');
+
+            expect(result.success).toBe(true);
+            expect(result.operator_id).toBe('op-1');
+            expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
+            expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
+            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
+        });
+
+        it('should return error if operator not found', async () => {
+            mocks.operatorDataService.getOperator.mockResolvedValue(null);
+
+            const result = await service.terminateOperator('op-1');
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Operator not found');
+            expect(mocks.operatorDataService.deleteOperator).not.toHaveBeenCalled();
+        });
+    });
+
     describe('getOperatorFresh', () => {
         it('should return fresh OperatorDocument via Data service', async () => {
             const opDoc = new OperatorDocument({ 

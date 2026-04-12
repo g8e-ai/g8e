@@ -22,10 +22,8 @@ import logging
 
 from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
-from app.models.agents.title_generator import CaseTitleRequest, CaseTitleResult
-from app.llm.llm_types import Content, Part
-from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.llm.llm_types import AssistantLLMSettings
+from app.models.agents.title_generator import CaseTitleResult
+from app.llm.llm_types import Content, Part, AssistantLLMSettings
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ async def generate_case_title(
 
     try:
         async with get_llm_provider(settings.llm) as provider:
-            model = settings.llm.assistant_model
+            model = settings.llm.assistant_model or "gpt-4o-mini"
 
             prompt = f"""<task>
 Generate a concise, specific title for this conversation.
@@ -79,7 +77,7 @@ Title:"""
 
             logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
-            settings = AssistantLLMSettings(
+            assistant_settings = AssistantLLMSettings(
                 temperature=0.7,
                 max_output_tokens=100,
                 stop_sequences=["\n"],
@@ -88,7 +86,7 @@ Title:"""
             response = await provider.generate_content_assistant(
                 model=model,
                 contents=[Content(role=Role.USER, parts=[Part(text=prompt)])],
-                assistant_llm_settings=settings,
+                assistant_llm_settings=assistant_settings,
             )
 
             if not response or not response.text:

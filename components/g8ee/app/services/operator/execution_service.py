@@ -230,9 +230,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
         return resolved
 
-    def build_target_systems_list(self, operators: list[OperatorDocument]) -> list[TargetSystem]:
+    def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         systems: list[TargetSystem] = []
-        for op in operators:
+        for op in operator_documents:
             hostname: str = op.current_hostname or (op.system_info.hostname if op.system_info else None) or "None"
             systems.append(TargetSystem(
                 operator_id=op.operator_id or "None",

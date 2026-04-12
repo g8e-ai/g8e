@@ -18,7 +18,6 @@ This service is ONLY responsible for loading values from the g8es data volume.
 It does not perform any settings management or configuration logic.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 import logging

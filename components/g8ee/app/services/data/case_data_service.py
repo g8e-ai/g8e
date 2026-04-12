@@ -270,6 +270,7 @@ class CaseDataService:
         case_id: str,
         web_session_id: str,
         payload: CaseEventPayload,
+        user_id: str,
         event_type: EventType = EventType.CASE_UPDATED
     ) -> None:
         """

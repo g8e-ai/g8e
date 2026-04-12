@@ -40,8 +40,8 @@ class CommandWhitelistValidator:
 
     def __init__(self, whitelist_path: str):
         """Initialize validator with whitelist configuration."""
-        self.whitelist_data: dict[str, object] = {}
-        self.commands_by_category: dict[str, dict[str, object]] = {}
+        self.whitelist_data: dict[str, Any] = {}
+        self.commands_by_category: dict[str, dict[str, Any]] = {}
         self.all_commands: set[str] = set()
         self.forbidden_patterns: list[str] = []
         self.forbidden_directories: list[str] = []
@@ -184,7 +184,7 @@ class CommandWhitelistValidator:
             safe_options_used=validation_result.safe_options_used
         )
 
-    def _find_command_config(self, command: str) -> tuple[str, dict[str, object]] | None:
+    def _find_command_config(self, command: str) -> tuple[str, dict[str, Any]] | None:
         """Find command configuration in whitelist."""
         for category_name, commands in self.commands_by_category.items():
             for exec_name, config in commands.items():
@@ -196,7 +196,7 @@ class CommandWhitelistValidator:
         self,
         command: str,
         args: list[str],
-        config: dict[str, object],
+        config: dict[str, Any],
         platform: Platform
     ) -> CommandValidationResult:
         """Validate command arguments against safe options and validation patterns."""
@@ -344,7 +344,7 @@ def get_whitelist_validator(whitelist_path: str | None = None) -> CommandWhiteli
     """Get global whitelist validator instance."""
     global _validator_instance
     if _validator_instance is None:
-        _validator_instance = CommandWhitelistValidator(whitelist_path=whitelist_path)
+        _validator_instance = CommandWhitelistValidator(whitelist_path=whitelist_path or "")
     return _validator_instance
 
 

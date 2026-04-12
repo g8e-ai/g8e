@@ -135,6 +135,54 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     });
 
     /**
+     * POST /api/internal/operators/:operatorId/terminate
+     *
+     * Dedicated E2E cleanup endpoint. Deletes the operator document via CacheAside
+     * without recreating it. Does not change API keys or platform_settings.
+     */
+    router.post('/:operatorId/terminate', requireInternalOrigin, async (req, res, next) => {
+        try {
+            const { operatorId: operator_id } = req.params;
+
+            logger.info('[INTERNAL-HTTP] Operator terminate request', {
+                operator_id
+            });
+
+            const result = await operatorService.terminateOperator(operator_id);
+
+            if (!result.success) {
+                logger.warn('[INTERNAL-HTTP] Operator terminate failed', {
+                    operator_id,
+                    error: result.error
+                });
+
+                return res.status(404).json(new ErrorResponse({
+                    error: result.error
+                }).forWire());
+            }
+
+            logger.info('[INTERNAL-HTTP] Operator terminate completed', {
+                operator_id
+            });
+
+            return res.json({
+                success: true,
+                operator_id
+            });
+
+        } catch (error) {
+            logger.error('[INTERNAL-HTTP] Failed to terminate operator', {
+                error: error.message,
+                stack: error.stack
+            });
+
+            return res.status(500).json(new ErrorResponse({
+                error: error.message || 'Failed to terminate operator'
+            }).forWire());
+        }
+    });
+
+    /**
      * POST /api/internal/operators/user/:userId/reauth
      */
     router.post('/user/:userId/reauth', requireInternalOrigin, async (req, res, next) => {
@@ -177,7 +225,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
 
             logger.info('[INTERNAL-HTTP] Listing operators for user', { userId });
 
-            const { operators, totalCount, activeCount } = await operatorService.getUserOperators(userId);
+            const { operators, total_count, active_count } = await operatorService.getUserOperators(userId);
 
             const clientOperators = operators.map((op) => {
                 const s = op.status ?? OperatorStatus.OFFLINE;
@@ -187,15 +235,15 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
 
             logger.info('[INTERNAL-HTTP] Operators listed for user', {
                 userId,
-                totalCount,
-                activeCount
+                total_count,
+                active_count
             });
 
             return res.json(new OperatorListResponse({
                 success: true,
                 data: clientOperators,
-                total_count: totalCount,
-                active_count: activeCount
+                total_count: total_count,
+                active_count: active_count
             }).forWire());
         } catch (error) {
             logger.error('[INTERNAL-HTTP] Failed to list operators for user', {

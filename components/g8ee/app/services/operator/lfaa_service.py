@@ -18,7 +18,6 @@ over pub/sub. Pure fire-and-forget publish — no approval, no pending store.
 """
 
 import logging
-import uuid
 
 from app.models.pubsub_messages import G8eMessage
 from app.services.protocols import PubSubServiceProtocol

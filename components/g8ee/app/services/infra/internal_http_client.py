@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import logging
-from typing import Optional
 
 from app.clients.http_client import CircuitBreakerConfig, RetryConfig, HTTPClient
 from app.models.settings import G8eePlatformSettings
@@ -62,7 +61,7 @@ class InternalHttpClient:
             auth_token=settings.auth.internal_auth_token or "",
             api_key=settings.auth.g8e_api_key or "",
             headers={G8eHeaders.SOURCE_COMPONENT: ComponentName.G8EE},
-            ca_cert_path=settings.ca_cert_path,
+            ca_cert_path=settings.ca_cert_path or "",
         )
 
         logger.info("InternalHttpClient initialized with URL: %s", self.g8ed_url)

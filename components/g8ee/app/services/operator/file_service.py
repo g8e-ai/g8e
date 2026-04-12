@@ -46,7 +46,7 @@ from app.models.command_payloads import FileEditPayload, FetchFileHistoryArgs, F
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
-from app.models.operators import FileEditApprovalRequest, OperatorDocument, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
+from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import G8eMessage
 from app.utils.ids import generate_command_execution_id
 from app.utils.timestamp import now

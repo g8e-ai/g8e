@@ -37,7 +37,7 @@ from app.constants.events import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.command_payloads import FsListArgs, FsReadArgs
-from app.models.operators import OperatorDocument, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
+from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
 from app.models.pubsub_messages import G8eMessage

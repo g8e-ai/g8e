@@ -38,6 +38,7 @@ from app.services.ai.eval_judge import (
     _MAX_RETRIES,
 )
 from app.llm.llm_types import GenerateContentResponse, Candidate, Content, Part
+from app.models.settings import EvalJudgeSettings
 
 
 def _build_response(text: str) -> GenerateContentResponse:
@@ -181,6 +182,35 @@ class TestEvalJudgeConstruction:
         judge = EvalJudge(provider=provider, model="some-model")
         assert judge._model == "some-model"
 
+    def test_construction_with_settings(self):
+        provider = MagicMock()
+        settings = EvalJudgeSettings(
+            model="settings-model",
+            temperature=0.5,
+            max_output_tokens=8192,
+        )
+        judge = EvalJudge(provider=provider, settings=settings)
+        assert judge._model == "settings-model"
+        assert judge._settings.temperature == 0.5
+        assert judge._settings.max_output_tokens == 8192
+
+    def test_construction_with_model_overrides_settings(self):
+        provider = MagicMock()
+        settings = EvalJudgeSettings(
+            model="settings-model",
+            temperature=0.5,
+            max_output_tokens=8192,
+        )
+        judge = EvalJudge(provider=provider, model="override-model", settings=settings)
+        assert judge._model == "override-model"
+        assert judge._settings.temperature == 0.5
+
+    def test_construction_with_default_settings(self):
+        provider = MagicMock()
+        judge = EvalJudge(provider=provider, model="some-model")
+        assert judge._settings.temperature == 0.0
+        assert judge._settings.max_output_tokens == 4096
+
 
 class TestGradeTurnHappyPath:
     """Successful grading scenarios."""
@@ -233,6 +263,22 @@ class TestGradeTurnHappyPath:
         call_args = mock_provider.generate_content_lite.call_args
         settings = call_args.kwargs["lite_llm_settings"]
         assert settings.response_format is not None
+
+    async def test_settings_used_in_grade_turn(self, mock_provider):
+        custom_settings = EvalJudgeSettings(
+            model="custom-model",
+            temperature=0.7,
+            max_output_tokens=2048,
+        )
+        judge = EvalJudge(provider=mock_provider, model="custom-model", settings=custom_settings)
+        mock_provider.generate_content_lite.return_value = _build_response(
+            _build_grade_json(4, "Good")
+        )
+        await judge.grade_turn(**GRADE_KWARGS)
+        call_args = mock_provider.generate_content_lite.call_args
+        settings = call_args.kwargs["lite_llm_settings"]
+        assert settings.temperature == 0.7
+        assert settings.max_output_tokens == 2048
 
     async def test_model_passed_to_provider(self, mock_provider):
         judge = EvalJudge(provider=mock_provider, model="custom-eval-model")

@@ -319,6 +319,9 @@ export class OperatorDocument extends G8eIdentifiableModel {
         operator_session_id:          { type: F.string,  default: null },
         web_session_id:               { type: F.string,  default: null },
         api_key:                      { type: F.string,  default: null },
+        operator_api_key:             { type: F.string,  default: null },
+        operator_api_key_created_at:  { type: F.date,    default: null },
+        operator_api_key_updated_at:  { type: F.date,    default: null },
         operator_cert:                { type: F.string,  default: null },
         operator_cert_serial:         { type: F.string,  default: null },
         operator_cert_not_before:     { type: F.date,    default: null },
@@ -367,6 +370,9 @@ export class OperatorDocument extends G8eIdentifiableModel {
         const obj = this.forDB();
         delete obj.operator_cert;
         delete obj.api_key;
+        delete obj.operator_api_key;
+        delete obj.operator_api_key_created_at;
+        delete obj.operator_api_key_updated_at;
         return obj;
     }
 
@@ -379,8 +385,15 @@ export class OperatorDocument extends G8eIdentifiableModel {
         delete obj.operator_cert_not_before;
         delete obj.operator_cert_not_after;
         delete obj.api_key;
+        delete obj.operator_api_key;
+        delete obj.operator_api_key_created_at;
+        delete obj.operator_api_key_updated_at;
         obj.has_api_key = hasApiKey;
         return obj;
+    }
+
+    forInternal() {
+        return this.forDB();
     }
 
     static fromDB(raw) {

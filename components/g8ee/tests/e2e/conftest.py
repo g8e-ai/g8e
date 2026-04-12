@@ -147,6 +147,11 @@ class _G8eHttpHelper:
             f"{G8ED_BASE_URL}/api/internal/operators/{operator_id}/reset-cache"
         )
 
+    async def terminate_operator(self, operator_id: str) -> dict[str, Any]:
+        return await self.post(
+            f"{G8ED_BASE_URL}/api/internal/operators/{operator_id}/terminate"
+        )
+
     async def delete_operator_doc(self, operator_id: str) -> None:
         await self.delete(f"{G8ES_BASE_URL}/db/operators/{operator_id}")
 
@@ -457,11 +462,11 @@ async def operator_sandbox(
     # 9. Unsubscribe heartbeat pattern
     await e2e_pubsub_client.punsubscribe(heartbeat_pattern)
 
-    # 10. Clean up operator slots and user in g8es
-    #    Direct g8es deletes bypass CacheAside, but cache is invalidated in setup
+    # 10. Clean up operator slots and user in g8es via internal API
+    #    Uses CacheAside to maintain cache consistency
     try:
         for oid in operator_ids:
-            await e2e_http.delete_operator_doc(oid)
+            await e2e_http.terminate_operator(oid)
         await e2e_http.delete_user_doc(created_user_id)
     except Exception as exc:
         logger.warning("[E2E] Cleanup failed for user %s: %s", user_id, exc)

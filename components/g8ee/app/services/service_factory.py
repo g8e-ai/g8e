@@ -31,16 +31,15 @@ from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.infra.g8ed_event_service import EventService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.services.operator.execution_registry import ExecutionRegistryService
-from app.services.infra.http_service import HTTPService
-from app.services.infra.settings_service import SettingsService
 from app.services.mcp.gateway_service import MCPGatewayService
 from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
+    from app.clients.pubsub_client import PubSubClient
+    from app.services.infra.g8ed_event_service import EventService
     from app.services.protocols import (
         InvestigationServiceProtocol,
         InvestigationDataServiceProtocol,
@@ -50,6 +49,7 @@ if TYPE_CHECKING:
         OperatorHeartbeatServiceProtocol,
         ExecutionRegistryProtocol,
         EventServiceProtocol,
+        PubSubServiceProtocol,
     )
 
 
@@ -207,19 +207,19 @@ class ServiceFactory:
         )
 
         if pubsub_client is not None:
-            operator_command_service.set_pubsub_client(pubsub_client)
-            operator_services['heartbeat_service'].set_pubsub_client(pubsub_client)
+            operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
+            cast("PubSubServiceProtocol", operator_services['heartbeat_service']).set_pubsub_client(cast("PubSubClient", pubsub_client))
 
         tool_executor = AIToolService(
             operator_command_service=operator_command_service,
-            investigation_service=domain_services['investigation_service'],
+            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
             web_search_provider=web_search_provider,
         )
 
         mcp_gateway_service = MCPGatewayService(
             tool_service=tool_executor,
-            investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
-            operator_data_service=cast("OperatorDataServiceProtocol", data_services['operator_data_service']),
+            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
+            operator_data_service=cast("OperatorDataService", data_services['operator_data_service']),
         )
 
         request_builder = AIRequestBuilder(
@@ -234,12 +234,12 @@ class ServiceFactory:
         chat_task_manager = ChatTaskManager()
 
         chat_pipeline = ChatPipelineService(
-            g8ed_event_service=cast("EventServiceProtocol", core_services['g8ed_event_service']),
-            investigation_service=cast("InvestigationServiceProtocol", domain_services['investigation_service']),
+            g8ed_event_service=cast("EventService", core_services['g8ed_event_service']),
+            investigation_service=cast("InvestigationService", domain_services['investigation_service']),
             request_builder=request_builder,
             g8e_agent=g8e_agent,
-            memory_service=cast("MemoryDataServiceProtocol", data_services['memory_data_service']),
-            memory_generation_service=domain_services['memory_generation_service'],
+            memory_service=cast("MemoryDataService", data_services['memory_data_service']),
+            memory_generation_service=cast("MemoryGenerationService", domain_services['memory_generation_service']),
         )
 
         all_services = {

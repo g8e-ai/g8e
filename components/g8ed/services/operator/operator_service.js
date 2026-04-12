@@ -222,8 +222,7 @@ class OperatorService {
             return { ...op, status_display: s, status_class: s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase() };
         });
         const { usedSlots } = this.calculateSlotUsage(enhancedOperators);
-        
-        // Broadcast happens via notifications service if needed, but here we just return the event-ready object
+
         return {
             type: EventType.OPERATOR_PANEL_LIST_UPDATED,
             operators: enhancedOperators,
@@ -306,6 +305,23 @@ class OperatorService {
         }
 
         return { success: true, operator: freshOperator.forDB(), error: null };
+    }
+
+    async terminateOperator(operatorId) {
+        const existing = await this.getOperator(operatorId);
+        if (!existing) return { success: false, operator: null, error: 'Operator not found' };
+
+        const userId = existing.user_id;
+
+        await this.operatorDataService.deleteOperator(operatorId);
+        await this._broadcastOperatorListToUser(userId);
+
+        const g8eContext = await this.getOperatorWithSessionContext(operatorId);
+        if (g8eContext) {
+            await this.relay.deregisterOperatorSessionInG8ee(g8eContext).catch(() => {});
+        }
+
+        return { success: true, operator_id: operatorId, error: null };
     }
 
     async getGrantedIntentsWithDetails(operatorId) {

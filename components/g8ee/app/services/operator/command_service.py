@@ -32,7 +32,6 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
     CommandApprovalRequest,
-    CommandExecutingBroadcastEvent,
     TargetSystem,
 )
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope

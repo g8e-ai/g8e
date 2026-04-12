@@ -15,7 +15,6 @@ import logging
 import re
 
 import app.llm.llm_types as types
-from app.constants import EventType
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider, Role
 from app.llm.prompts import build_memory_analysis_request, build_memory_analysis_system_instruction
@@ -124,7 +123,7 @@ class MemoryGenerationService:
         system_instruction = build_memory_analysis_system_instruction(memory.case_title)
 
         async with get_llm_provider(settings.llm) as provider:
-            assistant_model = settings.llm.assistant_model
+            assistant_model = settings.llm.assistant_model or "gpt-4o-mini"
             config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
                 temperature=None,
