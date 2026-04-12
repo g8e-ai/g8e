@@ -96,6 +96,11 @@ class OllamaProvider(LLMProvider):
         cleaned_endpoint = endpoint.rstrip('/')
         if cleaned_endpoint.endswith('/v1'):
             cleaned_endpoint = cleaned_endpoint[:-3]
+        
+        # Ensure protocol prefix exists - Ollama SDK requires http:// or https://
+        if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
+            cleaned_endpoint = 'http://' + cleaned_endpoint
+        
         self._original_endpoint = cleaned_endpoint
 
         verify: str | bool
