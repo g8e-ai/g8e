@@ -27,6 +27,11 @@ class EventType(str, Enum):
     CASE_CREATION_REQUESTED = "g8e.v1.app.case.creation.requested"
     CASE_UPDATE_REQUESTED = "g8e.v1.app.case.update.requested"
 
+    # ai.llm.config
+    LLM_CONFIG_REQUESTED = "g8e.v1.ai.llm.config.requested"
+    LLM_CONFIG_RECEIVED = "g8e.v1.ai.llm.config.received"
+    LLM_CONFIG_FAILED = "g8e.v1.ai.llm.config.failed"
+
     # ai.llm.chat
     LLM_CHAT_SUBMITTED = "g8e.v1.ai.llm.chat.submitted"
     LLM_CHAT_STOP_SHOW = "g8e.v1.ai.llm.chat.stop.show"
@@ -61,6 +66,7 @@ class EventType(str, Enum):
     LLM_LIFECYCLE_COMPLETED = "g8e.v1.ai.llm.lifecycle.completed"
     LLM_LIFECYCLE_FAILED = "g8e.v1.ai.llm.lifecycle.failed"
     LLM_LIFECYCLE_STOPPED = "g8e.v1.ai.llm.lifecycle.stopped"
+    LLM_LIFECYCLE_ERROR_OCCURRED = "g8e.v1.ai.llm.lifecycle.error.occurred"
 
     # app.task
     TASK_CREATED = "g8e.v1.app.task.created"
@@ -322,5 +328,6 @@ class EventType(str, Enum):
     EVENT_SOURCE_SYSTEM = "g8e.v1.source.system"
 
     LLM_TOOL_G8E_WEB_SEARCH_REQUESTED = "g8e.v1.ai.llm.tool.g8e.web.search.requested"
+    LLM_TOOL_G8E_WEB_SEARCH_RECEIVED = "g8e.v1.ai.llm.tool.g8e.web.search.received"
     LLM_TOOL_G8E_WEB_SEARCH_COMPLETED = "g8e.v1.ai.llm.tool.g8e.web.search.completed"
     LLM_TOOL_G8E_WEB_SEARCH_FAILED = "g8e.v1.ai.llm.tool.g8e.web.search.failed"

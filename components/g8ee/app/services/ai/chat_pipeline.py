@@ -29,7 +29,7 @@ import asyncio
 import logging
 
 import app.llm.llm_types as types
-from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings
 from app.errors import BusinessLogicError
 from app.constants import (
     NEW_CASE_ID,
@@ -53,9 +53,7 @@ from app.models.investigations import (
 )
 from app.llm.prompts import build_modular_system_prompt
 
-from ..investigation.investigation_data_service import InvestigationDataService
 from ..infra.g8ed_event_service import EventService
-from ..operator.command_service import OperatorCommandService
 from .agent import g8eEngine
 from ..investigation.investigation_service import extract_all_operators_context, InvestigationService
 from ..investigation.memory_data_service import MemoryDataService
@@ -63,7 +61,6 @@ from .memory_generation_service import MemoryGenerationService
 from .chat_task_manager import ChatTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
 from .request_builder import AIRequestBuilder
-from .response_analyzer import AIResponseAnalyzer
 from .triage import TriageAgent
 from app.models.agents.triage import TriageRequest
 
@@ -78,27 +75,19 @@ class ChatPipelineService:
 
     def __init__(
         self,
-        investigation_data_service: InvestigationDataService,
         g8ed_event_service: EventService,
         investigation_service: InvestigationService,
-        operator_command_service: OperatorCommandService,
         request_builder: AIRequestBuilder,
-        response_analyzer: AIResponseAnalyzer,
         g8e_agent: g8eEngine,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
-        settings: G8eePlatformSettings,
     ) -> None:
-        self.investigation_data_service = investigation_data_service
         self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
-        self.operator_command_service = operator_command_service
         self.request_builder = request_builder
-        self.response_analyzer = response_analyzer
         self.g8e_agent = g8e_agent
         self.memory_service = memory_service
         self.memory_generation_service = memory_generation_service
-        self.settings = settings
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")

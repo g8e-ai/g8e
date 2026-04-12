@@ -401,24 +401,6 @@ export class SetupPage {
     // User settings collection (no platform settings -- derived server-side)
     // ---------------------------------------------------------------------------
 
-    _normalizeOllamaUrl(url) {
-        if (!url) return url;
-        let normalized = url.trim();
-
-        try {
-            const urlObj = new URL(normalized);
-            if (!urlObj.port) {
-                urlObj.port = '11434';
-            }
-            if (!urlObj.pathname.endsWith('/v1')) {
-                urlObj.pathname = urlObj.pathname.replace(/\/$/, '') + '/v1';
-            }
-            return urlObj.toString();
-        } catch (e) {
-            return normalized;
-        }
-    }
-
     _collectUserSettings() {
         const userSettings = {};
 
@@ -446,8 +428,7 @@ export class SetupPage {
 
         } else if (this._provider === LLMProvider.OLLAMA) {
             userSettings.llm_provider = LLMProvider.OLLAMA;
-            const rawUrl = document.getElementById('ollama_url').value.trim();
-            userSettings.ollama_endpoint = this._normalizeOllamaUrl(rawUrl);
+            userSettings.ollama_endpoint = document.getElementById('ollama_url').value.trim();
             userSettings.llm_model = this._getSelectedModel();
             userSettings.llm_assistant_model = this._getSelectedAssistantModel();
         }

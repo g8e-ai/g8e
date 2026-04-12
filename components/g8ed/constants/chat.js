@@ -69,7 +69,7 @@ export const EventType = Object.freeze({
     FILE_EDIT_APPROVAL_REQUEST:    'g8e.v1.operator.file.edit.approval.requested',
     FILE_EDIT_APPROVAL_GRANTED:    'g8e.v1.operator.file.edit.approval.granted',
     FILE_EDIT_APPROVAL_REJECTED:   'g8e.v1.operator.file.edit.approval.rejected',
-    FILE_EDIT_APPROVAL_FEEDBACK:   'g8e.v1.operator.file.edit.approval.granted',
+    FILE_EDIT_APPROVAL_FEEDBACK:   'g8e.v1.operator.file.edit.approval.feedback',
 
     // Intent
     INTENT_APPROVAL_REQUEST:       'g8e.v1.operator.intent.approval.requested',

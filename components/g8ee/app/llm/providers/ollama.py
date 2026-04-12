@@ -82,11 +82,6 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
         self._original_endpoint = endpoint.rstrip('/')
-        
-        # Remove /v1 if present for standard ollama client
-        host = self._original_endpoint
-        if host.endswith("/v1"):
-            host = host[:-3]
 
         verify: str | bool
         if is_internal_endpoint(endpoint):
@@ -100,14 +95,27 @@ class OllamaProvider(LLMProvider):
             verify = True
 
         self._client = AsyncClient(
-            host=host,
+            host=self._original_endpoint,
             verify=verify,
         )
-        logger.info(f"Ollama provider initialized: {endpoint} -> {host}")
+        logger.info(f"Ollama provider initialized: {self._original_endpoint}")
 
     async def close(self):
-        """Clean up the underlying httpx client."""
-        await self._client._client.aclose()
+        """Clean up the underlying httpx client.
+
+        The ollama SDK (0.6.1) does not expose a public close() or
+        context-manager on AsyncClient. The internal _client attribute
+        holds the httpx.AsyncClient. Guard against SDK changes so a
+        restructured internal doesn't crash the provider teardown.
+        """
+        inner = getattr(self._client, "_client", None)
+        if inner is not None and hasattr(inner, "aclose"):
+            await inner.aclose()
+        else:
+            logger.warning(
+                "[OLLAMA] Unable to close underlying HTTP client "
+                "-- ollama SDK internals may have changed"
+            )
         
     async def generate_content_stream_primary(
         self,

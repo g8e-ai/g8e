@@ -110,6 +110,7 @@ export const EventType = Object.freeze({
     OPERATOR_FILE_EDIT_APPROVAL_REQUESTED: _EVENTS['operator']['file']['edit']['approval']['requested'],
     OPERATOR_FILE_EDIT_APPROVAL_GRANTED:   _EVENTS['operator']['file']['edit']['approval']['granted'],
     OPERATOR_FILE_EDIT_APPROVAL_REJECTED:  _EVENTS['operator']['file']['edit']['approval']['rejected'],
+    OPERATOR_FILE_EDIT_APPROVAL_FEEDBACK:   _EVENTS['operator']['file']['edit']['approval']['feedback'],
 
     OPERATOR_FILE_HISTORY_FETCH_STARTED:   _EVENTS['operator']['file']['history']['fetch']['started'],
     OPERATOR_FILE_HISTORY_FETCH_REQUESTED: _EVENTS['operator']['file']['history']['fetch']['requested'],
@@ -260,7 +261,8 @@ export const EventType = Object.freeze({
     AUTH_SESSION_VALIDATION_SUCCEEDED: _EVENTS['platform']['auth']['session']['validation']['succeeded'],
     AUTH_SESSION_VALIDATION_FAILED:    _EVENTS['platform']['auth']['session']['validation']['failed'],
 
-    PLATFORM_USAGE_UPDATED: _EVENTS['platform']['usage']['updated'],
+    PLATFORM_USAGE_UPDATED:    _EVENTS['platform']['usage']['updated'],
+    PLATFORM_NOTIFICATION:     _EVENTS['platform']['notification'],
 
     PLATFORM_SSE_KEEPALIVE_SENT:         _EVENTS['platform']['sse']['keepalive']['sent'],
     PLATFORM_SSE_CONNECTION_ESTABLISHED: _EVENTS['platform']['sse']['connection']['established'],

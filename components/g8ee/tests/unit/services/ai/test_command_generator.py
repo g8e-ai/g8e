@@ -38,11 +38,17 @@ from app.models.agents.tribunal import (
     TribunalVerifierFailedError,
 )
 from app.services.ai.command_generator import (
+    _build_and_emit_result,
     _is_system_error,
+    _MAX_TOKENS_GENERATION,
+    _MAX_TOKENS_VERIFIER,
     _member_for_pass,
     _resolve_model,
     _run_generation_pass,
+    _run_generation_stage,
+    _run_verification_stage,
     _run_verifier,
+    _run_voting_stage,
     _temperature_for_pass,
     generate_command,
     TribunalEmitter,
@@ -663,6 +669,249 @@ class TestTribunalVerifierFailedError:
         assert exc_info.value.reason == "exception"
         assert "timeout" in exc_info.value.error
         assert exc_info.value.original_command == "ls -la"
+
+
+class TestRunGenerationStage:
+    """_run_generation_stage returns candidates or raises on total failure."""
+
+    @pytest.mark.asyncio
+    async def test_returns_candidates_on_success(self):
+        mock_response = MagicMock()
+        mock_response.text = "ls -la"
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, None)
+
+        candidates = await _run_generation_stage(
+            provider=mock_provider, model="test-model", intent="list files",
+            original_command="ls", os_name="linux", shell="bash",
+            working_directory="/tmp", num_passes=3, emitter=emitter,
+        )
+
+        assert len(candidates) == 3
+        assert all(c.command == "ls -la" for c in candidates)
+
+    @pytest.mark.asyncio
+    async def test_raises_system_error_on_all_system_failures(self):
+        mock_provider = _make_mock_provider(
+            generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
+        )
+        emitter = TribunalEmitter(None, None)
+
+        with pytest.raises(TribunalSystemError):
+            await _run_generation_stage(
+                provider=mock_provider, model="test-model", intent="list files",
+                original_command="ls", os_name="linux", shell="bash",
+                working_directory="/tmp", num_passes=3, emitter=emitter,
+            )
+
+    @pytest.mark.asyncio
+    async def test_raises_generation_failed_on_non_system_failures(self):
+        mock_provider = _make_mock_provider(
+            generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
+        )
+        emitter = TribunalEmitter(None, None)
+
+        with pytest.raises(TribunalGenerationFailedError):
+            await _run_generation_stage(
+                provider=mock_provider, model="test-model", intent="list files",
+                original_command="ls", os_name="linux", shell="bash",
+                working_directory="/tmp", num_passes=2, emitter=emitter,
+            )
+
+    @pytest.mark.asyncio
+    async def test_partial_failures_return_successful_candidates(self):
+        call_count = 0
+
+        async def partial_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("Model failed")
+            mock_resp = MagicMock()
+            mock_resp.text = "ls -la"
+            return mock_resp
+
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=partial_side_effect)
+        emitter = TribunalEmitter(None, None)
+
+        candidates = await _run_generation_stage(
+            provider=mock_provider, model="test-model", intent="list files",
+            original_command="ls", os_name="linux", shell="bash",
+            working_directory="/tmp", num_passes=3, emitter=emitter,
+        )
+
+        assert len(candidates) == 2
+
+
+class TestRunVotingStage:
+    """_run_voting_stage computes weighted vote and emits consensus event."""
+
+    @pytest.mark.asyncio
+    async def test_returns_winner_and_score(self):
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score = await _run_voting_stage(
+            candidates=candidates, original_command="ls", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score > 0.5
+
+    @pytest.mark.asyncio
+    async def test_single_candidate_wins(self):
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score = await _run_voting_stage(
+            candidates=candidates, original_command="ls", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score == 1.0
+
+
+class TestRunVerificationStage:
+    """_run_verification_stage determines final command and outcome."""
+
+    @pytest.mark.asyncio
+    async def test_verifier_disabled_returns_consensus(self):
+        final_cmd, outcome, passed, revision = await _run_verification_stage(
+            provider=MagicMock(), model="test-model", intent="list files",
+            vote_winner="ls -la", os_name="linux", verifier_enabled=False,
+            emitter=TribunalEmitter(None, None),
+        )
+
+        assert final_cmd == "ls -la"
+        assert outcome == CommandGenerationOutcome.CONSENSUS
+        assert passed is True
+        assert revision is None
+
+    @pytest.mark.asyncio
+    async def test_verifier_approves_returns_verified(self):
+        mock_response = MagicMock()
+        mock_response.text = "ok"
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+
+        final_cmd, outcome, passed, revision = await _run_verification_stage(
+            provider=mock_provider, model="test-model", intent="list files",
+            vote_winner="ls -la", os_name="linux", verifier_enabled=True,
+            emitter=TribunalEmitter(None, None),
+        )
+
+        assert final_cmd == "ls -la"
+        assert outcome == CommandGenerationOutcome.VERIFIED
+        assert passed is True
+        assert revision is None
+
+    @pytest.mark.asyncio
+    async def test_verifier_revision_returns_verification_failed(self):
+        mock_response = MagicMock()
+        mock_response.text = "ls -la --color=auto"
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+
+        final_cmd, outcome, passed, revision = await _run_verification_stage(
+            provider=mock_provider, model="test-model", intent="list files",
+            vote_winner="ls -la", os_name="linux", verifier_enabled=True,
+            emitter=TribunalEmitter(None, None),
+        )
+
+        assert final_cmd == "ls -la --color=auto"
+        assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
+        assert passed is False
+        assert revision == "ls -la --color=auto"
+
+    @pytest.mark.asyncio
+    async def test_verifier_exception_raises_verifier_failed_error(self):
+        mock_provider = _make_mock_provider(
+            generate_content_lite_side_effect=RuntimeError("timeout")
+        )
+
+        with pytest.raises(TribunalVerifierFailedError):
+            await _run_verification_stage(
+                provider=mock_provider, model="test-model", intent="list files",
+                vote_winner="ls -la", os_name="linux", verifier_enabled=True,
+                emitter=TribunalEmitter(None, None),
+            )
+
+
+class TestBuildAndEmitResult:
+    """_build_and_emit_result assembles the result model correctly."""
+
+    @pytest.mark.asyncio
+    async def test_builds_complete_result(self):
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        result = await _build_and_emit_result(
+            original_command="ls", final_command="ls -la",
+            outcome=CommandGenerationOutcome.VERIFIED, candidates=candidates,
+            vote_winner="ls -la", vote_score=1.0, verifier_passed=True,
+            verifier_revision=None, emitter=emitter,
+        )
+
+        assert result.original_command == "ls"
+        assert result.final_command == "ls -la"
+        assert result.outcome == CommandGenerationOutcome.VERIFIED
+        assert result.vote_winner == "ls -la"
+        assert result.vote_score == 1.0
+        assert result.verifier_passed is True
+        assert result.verifier_revision is None
+
+
+class TestMaxTokensConstants:
+    """_MAX_TOKENS constants are used by generation passes and verifier."""
+
+    @pytest.mark.asyncio
+    async def test_generation_pass_uses_max_tokens(self):
+        mock_response = MagicMock()
+        mock_response.text = "ls -la"
+        mock_provider = MagicMock()
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
+        emitter = TribunalEmitter(None, None)
+
+        await _run_generation_pass(
+            provider=mock_provider, model="test-model", intent="list files",
+            original_command="ls", os_name="linux", shell="bash",
+            working_directory="/tmp", pass_index=0, emitter=emitter,
+            pass_errors=[],
+        )
+
+        call_kwargs = mock_provider.generate_content_lite.call_args
+        settings = call_kwargs.kwargs.get("lite_llm_settings")
+        assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
+
+    @pytest.mark.asyncio
+    async def test_verifier_uses_max_tokens_and_zero_temperature(self):
+        mock_response = MagicMock()
+        mock_response.text = "ok"
+        mock_provider = MagicMock()
+        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
+        emitter = TribunalEmitter(None, None)
+
+        await _run_verifier(
+            provider=mock_provider, model="test-model", intent="list files",
+            candidate_command="ls -la", os_name="linux", emitter=emitter,
+        )
+
+        call_kwargs = mock_provider.generate_content_lite.call_args
+        settings = call_kwargs.kwargs.get("lite_llm_settings")
+        assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
+        assert settings.temperature == 0.0
 
 
 class TestTribunalMemberCycling:

@@ -643,7 +643,7 @@ flowchart TD
 
 #### Pipeline Stages
 
-**Stage 1 — Generation (`_run_generation_pass`)**
+**Stage 1 — Generation (`_run_generation_stage` / `_run_generation_pass`)**
 
 `LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member (Axiom, Concord, or Variance) with its specific temperature. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
 
@@ -651,7 +651,7 @@ Raw output is normalised by `_normalise_command`: strips surrounding whitespace,
 
 Thinking is enabled for models that support it but forced to the lowest available level (`get_lowest_thinking_level`) with `include_thoughts=False` — minimises latency on this fast-path.
 
-**Stage 2 — Weighted Majority Vote (`_weighted_vote`)**
+**Stage 2 — Weighted Majority Vote (`_run_voting_stage` / `_weighted_vote`)**
 
 ```
 weight[candidate] += 1 / (pass_index + 1)
@@ -668,7 +668,7 @@ If all passes produce unique strings, every candidate has equal weight and the e
 
 A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying `vote_winner`, `vote_score`, `num_candidates`, and `original_command`.
 
-**Stage 3 — Verification (`_run_verifier`)**
+**Stage 3 — Verification (`_run_verification_stage` / `_run_verifier`)**
 
 Skipped when `LLM_COMMAND_GEN_VERIFIER=false`. Otherwise, a single SLM call at temperature `0.0` evaluates the vote winner against `_VERIFIER_PROMPT_TEMPLATE`. The verifier receives the intent, OS, and the candidate command, and must respond with exactly one of:
 
@@ -681,11 +681,11 @@ The verifier emits `TRIBUNAL_VOTING_REVIEW_STARTED` before the call and `TRIBUNA
 |---|---|
 | `ok` | Verifier returned `"ok"` — command approved as-is |
 | `revised` | Verifier returned a different command — revision adopted |
-| `empty_response` | Verifier returned nothing — treated as passed |
-| `no_valid_revision` | Verifier returned non-ok but revision equals original or is empty — treated as passed |
-| `verifier_error` | Verifier call threw an exception — treated as passed |
+| `empty_response` | Verifier returned nothing — raises `TribunalVerifierFailedError` |
+| `no_valid_revision` | Verifier returned non-ok but revision equals original or is empty — raises `TribunalVerifierFailedError` |
+| `verifier_error` | Verifier call threw an exception — raises `TribunalVerifierFailedError` |
 
-Any failure mode of the verifier is treated as a pass — it never blocks the pipeline.
+Verifier failures raise `TribunalVerifierFailedError` and halt command execution.
 
 **Stage 4 — Outcome**
 
@@ -693,7 +693,7 @@ The `CommandGenerationResult` carries `original_command`, `final_command`, `outc
 
 | `CommandGenerationOutcome` | Condition |
 |---|---|
-| `VERIFIED` | Verifier enabled and approved (or found issues but produced no valid revision) |
+| `VERIFIED` | Verifier enabled and approved the vote winner |
 | `VERIFICATION_FAILED` | Verifier enabled and produced a revision — `final_command` is the verifier's output |
 | `CONSENSUS` | Verifier disabled — `final_command` is the vote winner |
 | `FALLBACK` | Provider unavailable, all passes failed (non-system), or no vote winner — `final_command` is `original_command` unchanged |

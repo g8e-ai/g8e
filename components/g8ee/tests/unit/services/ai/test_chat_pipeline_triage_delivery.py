@@ -70,8 +70,6 @@ def _make_pipeline() -> ChatPipelineService:
     svc.investigation_service.add_chat_message = AsyncMock()
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
-    svc.operator_command_service = MagicMock()
-    svc.settings = MagicMock()
     return svc
 
 def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
@@ -144,7 +142,7 @@ async def test_run_chat_impl_short_circuits_correctly():
             sentinel_mode=True,
             llm_primary_model="main-model",
             llm_assistant_model="assistant-model",
-            user_settings=svc.settings,
+            user_settings=MagicMock(),
         )
     
     # 1. Verify event publishing
