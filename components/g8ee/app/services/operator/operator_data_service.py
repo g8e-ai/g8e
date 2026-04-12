@@ -12,7 +12,11 @@
 # limitations under the License.
 
 import logging
-from typing import cast 
+from typing import cast, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.clients.http_client import HTTPClient
+    from app.services.cache.cache_aside import CacheAsideService
 from app.constants.collections import (
     DB_COLLECTION_OPERATORS,
 )
@@ -52,7 +56,7 @@ logger = logging.getLogger(__name__)
 class OperatorDataService(OperatorDataServiceProtocol):
     """Domain service for Operator data management using CacheAsideService."""
 
-    def __init__(self, cache: CacheAsideService, internal_http_client: HTTPClient ):
+    def __init__(self, cache: "CacheAsideService", internal_http_client: "HTTPClient"):
         self.cache = cache
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS

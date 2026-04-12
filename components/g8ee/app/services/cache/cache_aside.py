@@ -312,7 +312,7 @@ class CacheAsideService(CacheAsideProtocol):
         key = KVKey.query(collection, filter_hash)
 
         cached_data = await self.kv.get_json(key)
-        if cached_data is not None:
+        if cached_data is not None and isinstance(cached_data, list):
             logger.info(
                 f"[{self.component_name.upper()}-CACHE] Query cache HIT",
                 extra={"collection": collection, "result_count": len(cached_data)}

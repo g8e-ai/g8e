@@ -85,7 +85,7 @@ _PAYLOAD_MODELS = {
 }
 
 
-def _parse_g8eo_payload(event_type_raw: object, payload_raw: dict[str, object]) -> G8eoResultPayload:
+def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, object]) -> G8eoResultPayload:
     event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw
 
     if event_type == EventType.OPERATOR_SHUTDOWN_ACKNOWLEDGED:
@@ -121,7 +121,8 @@ def _parse_g8eo_payload(event_type_raw: object, payload_raw: dict[str, object]) 
         stderr = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and mcp_result.isError)
         
         # execution_id: try MCP metadata first, then the JSON-RPC envelope ID, finally a fresh UUID
-        execution_id = mcp_result.execution_id or payload_raw.get("id") or str(uuid4())
+        _id_raw = payload_raw.get("id")
+        execution_id = mcp_result.execution_id or (str(_id_raw) if _id_raw else str(uuid4()))
 
         return ExecutionResultsPayload(
             execution_id=execution_id,

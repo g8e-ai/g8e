@@ -24,6 +24,11 @@ as PubSubService for consistency across the g8ee service layer.
 """
 
 import logging
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import aiohttp
+
 from app.clients.http_client import HTTPClient
 from app.models.infra import HTTPClientStatus
 from app.errors import ValidationError
@@ -45,7 +50,7 @@ class HTTPService:
     def __init__(self) -> None:
         self._http_ready: bool = False
         self._active_clients: dict[str, HTTPClient] = {}
-        self._session: object | None = None
+        self._session: "aiohttp.ClientSession" | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -162,9 +167,9 @@ class HTTPService:
     @property
     def is_session_closed(self) -> bool:
         """Check if the internal session is closed."""
-        if not hasattr(self, "_session"):
+        if not hasattr(self, "_session") or self._session is None:
             return True
-        return self._session is None or self._session.closed
+        return cast(Any, self._session).closed
 
     def get_client_status(self) -> dict[str, HTTPClientStatus]:
         """Get status information for all registered clients.

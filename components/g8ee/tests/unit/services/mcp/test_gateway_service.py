@@ -126,7 +126,7 @@ class TestCallTool:
 
         tool_service.start_invocation_context.return_value = "token"
         tool_service.reset_invocation_context = MagicMock()
-        tool_service.execute_tool = AsyncMock(return_value=CommandExecutionResult(
+        tool_service.execute_tool_call = AsyncMock(return_value=CommandExecutionResult(
             success=True,
             output="hello world",
         ))
@@ -144,7 +144,7 @@ class TestCallTool:
         assert result["isError"] is False
         assert result["content"][0]["type"] == "text"
         assert "hello world" in result["content"][0]["text"]
-        tool_service.execute_tool.assert_awaited_once()
+        tool_service.execute_tool_call.assert_awaited_once()
 
     async def test_error_result_sets_is_error(self):
         gateway, tool_service, _, operator_data_service = _make_gateway()
@@ -152,7 +152,7 @@ class TestCallTool:
         operator_data_service.get_operator = AsyncMock(return_value=None)
         tool_service.start_invocation_context.return_value = "token"
         tool_service.reset_invocation_context = MagicMock()
-        tool_service.execute_tool = AsyncMock(return_value=CommandExecutionResult(
+        tool_service.execute_tool_call = AsyncMock(return_value=CommandExecutionResult(
             success=False,
             error="No operators available",
         ))
@@ -178,7 +178,7 @@ class TestCallTool:
         async def _hang_forever(**kwargs):
             await asyncio.sleep(999)
 
-        tool_service.execute_tool = AsyncMock(side_effect=_hang_forever)
+        tool_service.execute_tool_call = AsyncMock(side_effect=_hang_forever)
 
         ctx = build_g8e_http_context()
 
@@ -204,7 +204,7 @@ class TestCallTool:
         async def _hang_forever(**kwargs):
             await asyncio.sleep(999)
 
-        tool_service.execute_tool = AsyncMock(side_effect=_hang_forever)
+        tool_service.execute_tool_call = AsyncMock(side_effect=_hang_forever)
 
         ctx = build_g8e_http_context()
 
@@ -223,7 +223,7 @@ class TestCallTool:
         operator_data_service.get_operator = AsyncMock(return_value=None)
         tool_service.start_invocation_context.return_value = "token"
         tool_service.reset_invocation_context = MagicMock()
-        tool_service.execute_tool = AsyncMock(side_effect=RuntimeError("boom"))
+        tool_service.execute_tool_call = AsyncMock(side_effect=RuntimeError("boom"))
 
         ctx = build_g8e_http_context()
 

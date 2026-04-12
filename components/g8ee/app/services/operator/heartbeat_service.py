@@ -29,8 +29,10 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
-from .operator_data_service import OperatorDataService
-from ..infra.g8ed_event_service import EventService
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +48,8 @@ class OperatorHeartbeatService:
 
     def __init__(
         self,
-        operator_data_service: OperatorDataService,
-        event_service: EventService,
+        operator_data_service: "OperatorDataServiceProtocol",
+        event_service: "EventServiceProtocol",
     ):
         self.operator_data_service = operator_data_service
         self.event_service = event_service
