@@ -14,17 +14,26 @@
 """
 Unit tests for OllamaProvider.
 
-Tests SSL verification strategy, close behavior, and construction.
+Tests SSL verification strategy, close behavior, construction, and content generation.
 """
 
 from unittest.mock import patch, MagicMock, AsyncMock
+import json
 
+import httpx
 import pytest
 
 from app.llm.providers.ollama import OllamaProvider
+from app.llm.llm_types import (
+    Content,
+    Part,
+    PrimaryLLMSettings,
+    AssistantLLMSettings,
+    LiteLLMSettings,
+)
 
 
-PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
+PATCH_TARGET = "app.llm.providers.ollama.httpx.AsyncClient"
 INTERNAL_CA = "/g8es/ca.crt"
 
 pytestmark = [pytest.mark.unit]
@@ -41,7 +50,7 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs["verify"] is True
+            assert mock_client.call_args.kwargs.get("verify") is True
 
     def test_internal_localhost_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -51,7 +60,7 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs["verify"] == INTERNAL_CA
+            assert mock_client.call_args.kwargs.get("verify") == INTERNAL_CA
 
     def test_internal_ip_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -61,7 +70,7 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs["verify"] == INTERNAL_CA
+            assert mock_client.call_args.kwargs.get("verify") == INTERNAL_CA
 
     def test_internal_http_disables_ssl(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -71,7 +80,7 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs["verify"] is False
+            assert mock_client.call_args.kwargs.get("verify") is False
 
     def test_internal_without_ca_falls_back_to_true(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -81,18 +90,7 @@ class TestOllamaProviderSSL:
                 ca_cert_path=None,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs["verify"] is True
-
-    def test_endpoint_with_v1_suffix_strips_v1(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="https://localhost:11434/v1",
-                api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
-            )
-            mock_client.assert_called_once()
-            # /v1 should be stripped from the host passed to AsyncClient
-            assert mock_client.call_args.kwargs["host"] == "https://localhost:11434"
+            assert mock_client.call_args.kwargs.get("verify") is True
 
 
 class TestOllamaProviderClose:
@@ -100,19 +98,15 @@ class TestOllamaProviderClose:
 
     @pytest.mark.asyncio
     async def test_close_calls_aclose_on_client(self):
-        mock_inner_client = MagicMock()
-        mock_inner_client.aclose = AsyncMock()
-        mock_client = MagicMock()
-        mock_client._client = mock_inner_client
-
-        with patch(PATCH_TARGET, return_value=mock_client):
+        mock_httpx_client = AsyncMock()
+        with patch(PATCH_TARGET, return_value=mock_httpx_client):
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
                 ca_cert_path=None,
             )
             await provider.close()
-            mock_inner_client.aclose.assert_called_once()
+            mock_httpx_client.aclose.assert_called_once()
 
 
 class TestOllamaProviderConstruction:
@@ -120,16 +114,15 @@ class TestOllamaProviderConstruction:
 
     def test_constructor_creates_async_client(self):
         mock_client = MagicMock()
-
         with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
                 ca_cert_path=INTERNAL_CA,
             )
-
             mock_ctor.assert_called_once()
-            assert provider._client is mock_client
+            assert provider._httpx_client is mock_client
+            assert provider._client is not None
 
     def test_constructor_strips_trailing_slash(self):
         with patch(PATCH_TARGET):
@@ -141,24 +134,19 @@ class TestOllamaProviderConstruction:
             assert provider._original_endpoint == "https://localhost:11434"
 
     def test_constructor_strips_v1_suffix(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
+        with patch(PATCH_TARGET):
+            provider = OllamaProvider(
                 endpoint="https://localhost:11434/v1",
                 api_key="test-key",
                 ca_cert_path=None,
             )
-            # /v1 should be stripped when creating the AsyncClient host
-            assert mock_client.call_args.kwargs["host"] == "https://localhost:11434"
+            assert provider._original_endpoint == "https://localhost:11434"
 
     @pytest.mark.asyncio
     async def test_context_manager_support(self):
         """Test that OllamaProvider supports async context manager."""
-        mock_inner_client = MagicMock()
-        mock_inner_client.aclose = AsyncMock()
-        mock_client = MagicMock()
-        mock_client._client = mock_inner_client
-
-        with patch(PATCH_TARGET, return_value=mock_client):
+        mock_httpx_client = AsyncMock()
+        with patch(PATCH_TARGET, return_value=mock_httpx_client):
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
@@ -166,4 +154,144 @@ class TestOllamaProviderConstruction:
             )
             async with provider:
                 assert provider is not None
-            mock_inner_client.aclose.assert_called_once()
+            mock_httpx_client.aclose.assert_called_once()
+
+
+class TestOllamaProviderGeneration:
+    """Test OllamaProvider generation methods with mocked httpx transport."""
+
+    @pytest.fixture
+    def provider(self):
+        with patch("app.llm.providers.ollama._InjectedAsyncClient") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client_cls.return_value = mock_client
+            
+            provider = OllamaProvider(
+                endpoint="http://localhost:11434",
+                api_key="test-key",
+            )
+            yield provider, mock_client
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary(self, provider):
+        provider, mock_client = provider
+        
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.message.thinking = "Thinking..."
+        mock_response.message.tool_calls = None
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        mock_client.chat = AsyncMock(return_value=mock_response)
+        
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instruction="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+        )
+        
+        response = await provider.generate_content_primary("llama3", contents, settings)
+        
+        mock_client.chat.assert_called_once()
+        assert len(response.candidates) == 1
+        assert response.candidates[0].content.parts[0].text == "Thinking..."
+        assert response.candidates[0].content.parts[1].text == "Hello World"
+        assert response.usage_metadata is not None
+        assert response.usage_metadata.prompt_token_count == 10
+        assert response.usage_metadata.candidates_token_count == 5
+
+    @pytest.mark.asyncio
+    async def test_generate_content_stream_primary(self, provider):
+        provider, mock_client = provider
+        
+        mock_chunk1 = MagicMock()
+        mock_chunk1.message.content = "Hello"
+        mock_chunk1.message.thinking = None
+        mock_chunk1.message.tool_calls = None
+        mock_chunk1.done = False
+        
+        mock_chunk2 = MagicMock()
+        mock_chunk2.message.content = " World"
+        mock_chunk2.message.thinking = None
+        mock_chunk2.message.tool_calls = None
+        mock_chunk2.done = True
+        mock_chunk2.done_reason = "stop"
+        mock_chunk2.prompt_eval_count = 10
+        mock_chunk2.eval_count = 5
+        
+        async def mock_stream():
+            yield mock_chunk1
+            yield mock_chunk2
+            
+        mock_client.chat = AsyncMock(return_value=mock_stream())
+        
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instruction="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+        )
+        
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary("llama3", contents, settings):
+            chunks.append(chunk)
+            
+        mock_client.chat.assert_called_once()
+        assert len(chunks) == 3
+        assert chunks[0].text == "Hello"
+        assert chunks[1].text == " World"
+        assert chunks[2].finish_reason == "stop"
+        assert chunks[2].usage_metadata is not None
+        assert chunks[2].usage_metadata.total_token_count == 15
+
+    @pytest.mark.asyncio
+    async def test_generate_content_assistant(self, provider):
+        provider, mock_client = provider
+        
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        mock_client.chat = AsyncMock(return_value=mock_response)
+        
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instruction="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+        )
+        
+        response = await provider.generate_content_assistant("llama3", contents, settings)
+        
+        mock_client.chat.assert_called_once()
+        assert len(response.candidates) == 1
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+        assert response.usage_metadata is not None
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite(self, provider):
+        provider, mock_client = provider
+        
+        mock_response = MagicMock()
+        mock_response.message.content = "Hello World"
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 10
+        mock_response.eval_count = 5
+        mock_client.chat = AsyncMock(return_value=mock_response)
+        
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = LiteLLMSettings(
+            system_instruction="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+        )
+        
+        response = await provider.generate_content_lite("llama3", contents, settings)
+        
+        mock_client.chat.assert_called_once()
+        assert len(response.candidates) == 1
+        assert response.candidates[0].content.parts[0].text == "Hello World"
+        assert response.usage_metadata is not None
