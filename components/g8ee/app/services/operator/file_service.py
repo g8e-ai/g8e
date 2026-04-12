@@ -49,7 +49,6 @@ from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, F
 from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import G8eMessage
 from app.utils.ids import generate_command_execution_id
-from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +115,8 @@ class OperatorFileService:
                     return FileEditResult(success=False, error="At least one of start_line or end_line must be provided for delete operation", error_type=CommandErrorType.VALIDATION_ERROR)
 
             # 2. Resolve operator
+            operator_documents = investigation.operator_documents if investigation else []
             try:
-                operator_documents = investigation.operator_documents if investigation else []
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
                     target_operator=args.target_operator,
@@ -156,6 +155,7 @@ class OperatorFileService:
                     logger.error("[FILE-RISK] Failed to analyze risk: %s", e)
 
             # 4. Approval gate (only for write/update)
+            approval_result = None
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 approval_result = await self.approval_service.request_file_edit_approval(
                     FileEditApprovalRequest(

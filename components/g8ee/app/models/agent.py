@@ -121,7 +121,7 @@ class AgentStreamContext(G8eBaseModel):
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list)
     system_instructions: str = ""
     contents: list[types.Content] = Field(default_factory=list)
-    generation_config: types.PrimaryLLMSettings | None = None
+    generation_config: types.PrimaryLLMSettings | types.LiteLLMSettings | None = None
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None

@@ -522,8 +522,6 @@ class AIToolService:
                 return result
 
             if tool_name == OperatorToolName.CHECK_PORT:
-                if g8e_context is None:
-                    raise ValidationError("g8e_context is required for CHECK_PORT", field="g8e_context", constraint="required")
                 args = CheckPortArgs.model_validate(tool_args)
                 logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
                     args.host, args.port, args.protocol)
@@ -656,8 +654,6 @@ class AIToolService:
         g8e_context: G8eHttpContext,
     ) -> IntentPermissionResult:
         """Delegate intent permission request to the G8eoOperatorService."""
-        if g8e_context is None:
-            raise ValidationError("g8e_context is required for execute_intent_permission_request", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_permission_request(
             args=args,
             g8e_context=g8e_context,
@@ -672,8 +668,6 @@ class AIToolService:
         g8e_context: G8eHttpContext,
     ) -> IntentPermissionResult:
         """Delegate intent permission revocation to the G8eoOperatorService."""
-        if g8e_context is None:
-            raise ValidationError("g8e_context is required for execute_intent_revocation", component=ComponentName.G8EE)
         return await self.operator_command_service.execute_intent_revocation(
             args=args,
             g8e_context=g8e_context,

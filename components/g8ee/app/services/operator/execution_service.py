@@ -125,6 +125,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                     approval_id=approval_id,
                 ),
                 g8e_context,
+                task_id=AITaskId.COMMAND,
             )
         except Exception as e:
             logger.warning("Failed to broadcast command event %s to g8ed: %s", EventType.OPERATOR_COMMAND_FAILED, e)

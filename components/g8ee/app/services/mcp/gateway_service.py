@@ -65,7 +65,7 @@ class MCPGatewayService:
 
         Each item has: { name, description, inputSchema }.
         """
-        tool_groups = self._tool_service.get_tools(agent_mode, model_name="")
+        tool_groups = self._tool_service.get_tools(agent_mode)
         mcp_tools: list[dict[str, Any]] = []
         for group in tool_groups:
             for decl in group.tools:

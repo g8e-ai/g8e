@@ -286,13 +286,12 @@ class OperatorApprovalService:
         execution_id: str,
         operator_session_id: str,
         operator_id: str,
-        risk_analysis: CommandRiskAnalysis,
+        risk_analysis: CommandRiskAnalysis | None,
         target_systems: list[TargetSystem],
-        task_id: str,
+        task_id: str | None,
     ) -> ApprovalResult:
-        approval_id: str
+        approval_id = generate_approval_id()
         try:
-            approval_id = generate_approval_id()
 
             logger.info("[APPROVAL] Requesting approval: %s", command)
             logger.info("[APPROVAL] approval_id=%s execution_id=%s", approval_id, execution_id)
@@ -473,9 +472,8 @@ class OperatorApprovalService:
         operator_id: str,
         risk_analysis: FileOperationRiskAnalysis | None,
     ) -> ApprovalResult:
-        approval_id: str
+        approval_id = generate_approval_id()
         try:
-            approval_id = generate_approval_id()
 
             logger.info("[FILE_EDIT_APPROVAL] Requesting approval: %s", file_path)
             logger.info("[FILE_EDIT_APPROVAL] approval_id=%s execution_id=%s", approval_id, execution_id)
@@ -626,23 +624,22 @@ class OperatorApprovalService:
         all_intents: list[str | CloudIntent],
         operation_context: str,
     ) -> ApprovalResult:
-        approval_id: str
+        normalized_str = intent_name.replace("-", "_").lower()
+
         try:
-            normalized_str = intent_name.replace("-", "_").lower() if isinstance(intent_name, str) else intent_name.value
+            intent: CloudIntent = CloudIntent(normalized_str)
+        except ValueError:
+            error_msg = f"Invalid intent '{intent_name}'. Valid intents: {', '.join(sorted(CloudIntent))}"
+            logger.error("[INTENT_APPROVAL] %s", error_msg)
+            return ApprovalResult(
+                approved=False,
+                reason=error_msg,
+                error=True,
+                error_type=ApprovalErrorType.INVALID_INTENT,
+            )
 
-            try:
-                intent: CloudIntent = CloudIntent(normalized_str)
-            except ValueError:
-                error_msg = f"Invalid intent '{intent_name}'. Valid intents: {', '.join(sorted(CloudIntent))}"
-                logger.error("[INTENT_APPROVAL] %s", error_msg)
-                return ApprovalResult(
-                    approved=False,
-                    reason=error_msg,
-                    error=True,
-                    error_type=ApprovalErrorType.INVALID_INTENT,
-                )
-
-            approval_id = generate_intent_approval_id()
+        approval_id = generate_intent_approval_id()
+        try:
 
             logger.info("[INTENT_APPROVAL] Requesting approval: %s", intent)
             logger.info("[INTENT_APPROVAL] approval_id=%s execution_id=%s operator_id=%s", approval_id, execution_id, operator_id)
@@ -652,7 +649,7 @@ class OperatorApprovalService:
             parsed_all_intents: list[CloudIntent] = []
             if all_intents:
                 for raw in all_intents:
-                    raw_str = raw.replace("-", "_").lower() if isinstance(raw, str) else raw.value
+                    raw_str = raw.replace("-", "_").lower()
                     try:
                         parsed_all_intents.append(CloudIntent(raw_str))
                     except ValueError:

@@ -240,9 +240,6 @@ class InvestigationService:
         if not investigation_id:
             return context
 
-        if self.memory_data_service is None:
-            return context
-
         memory = await self.memory_data_service.get_memory(investigation_id)
         if not memory:
             logger.info(

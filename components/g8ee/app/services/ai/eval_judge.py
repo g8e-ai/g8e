@@ -154,7 +154,7 @@ class EvalJudge:
 
     def __init__(
         self,
-        provider: LLMProviderBase,
+        provider: LLMProviderBase | None = None,
         model: str | None = None,
         settings: EvalJudgeSettings | None = None,
     ):

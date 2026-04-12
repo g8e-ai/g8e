@@ -15,7 +15,7 @@ import logging
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
-from app.constants import ErrorAnalysisCategory, RiskLevel
+from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
 from app.models.tool_results import (
     CommandRiskAnalysis,
@@ -110,7 +110,7 @@ Classify the command risk level."""
     async def analyze_error_and_suggest_fix(
         self,
         command: str,
-        exit_code: int,
+        exit_code: int | None,
         stdout: str,
         stderr: str,
         context: ErrorAnalysisContext,
@@ -181,7 +181,7 @@ Based on the information above, analyze the failure and fill in ALL response fie
 
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
+                assistant_model = resolved_settings.llm.assistant_model
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
@@ -230,9 +230,9 @@ Based on the information above, analyze the failure and fill in ALL response fie
 
     async def analyze_file_operation_risk(
         self,
-        operation: str,
+        operation: FileOperation,
         file_path: str,
-        content: str,
+        content: str | None,
         context: FileOperationRiskContext,
         settings: G8eeUserSettings,
     ) -> FileOperationRiskAnalysis:

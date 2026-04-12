@@ -13,6 +13,8 @@
 
 """Service protocols for the operator services layer."""
 
+from __future__ import annotations
+
 from typing import Protocol, runtime_checkable, TYPE_CHECKING, Callable, Coroutine, Any
 
 from app.constants import (
@@ -132,10 +134,10 @@ class EventServiceProtocol(Protocol):
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | G8eBaseModel,
+        payload: G8eBaseModel,
         web_session_id: str,
         case_id: str,
-        user_id: str | None = None,
+        user_id: str,
     ) -> None:
         """Publish an investigation-related event."""
         ...
@@ -521,10 +523,10 @@ class ExecutionRegistryProtocol(Protocol):
 
 @runtime_checkable
 class PubSubServiceProtocol(Protocol):
-    pubsub_client: "PubSubClient"
+    pubsub_client: PubSubClient | None
     @property
     def is_ready(self) -> bool: ...
-    def set_pubsub_client(self, client: "PubSubClient") -> None: ...
+    def set_pubsub_client(self, client: PubSubClient) -> None: ...
     def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None: ...
     async def start(self) -> None: ...
     async def stop(self) -> None: ...
@@ -628,9 +630,9 @@ class HTTPServiceProtocol(Protocol):
     @property
     def is_ready(self) -> bool: ...
     
-    def set_http_client(self, client: "HTTPClient", service_name: str) -> None: ...
+    def set_http_client(self, client: HTTPClient, service_name: str) -> None: ...
     
-    def get_client(self, service_name: str) -> "HTTPClient | None": ...
+    def get_client(self, service_name: str) -> HTTPClient | None: ...
     
     async def start(self) -> None: ...
     
@@ -639,7 +641,7 @@ class HTTPServiceProtocol(Protocol):
     async def register_service_client(
         self, 
         service_name: str, 
-        client: "HTTPClient"
+        client: HTTPClient
     ) -> None: ...
     
     async def deregister_service_client(self, service_name: str) -> None: ...

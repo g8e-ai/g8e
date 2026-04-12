@@ -266,7 +266,7 @@ class SdkGroundingWebSource:
 
 @dataclass
 class SdkGroundingChunk:
-    web: SdkGroundingWebSource
+    web: SdkGroundingWebSource | None
 
 
 @dataclass
@@ -397,7 +397,7 @@ class AssistantLLMSettings:
     top_k_filtering: int = 40
     stop_sequences: list[str] = field(default_factory=list)
     system_instruction: str = ""
-    response_format: ResponseFormat = None
+    response_format: ResponseFormat | None = None
 
 
 @dataclass
@@ -408,7 +408,7 @@ class LiteLLMSettings:
     top_k_filtering: int = 40
     stop_sequences: list[str] = field(default_factory=list)
     system_instruction: str = ""
-    response_format: ResponseFormat = None
+    response_format: ResponseFormat | None = None
 
 
 @dataclass

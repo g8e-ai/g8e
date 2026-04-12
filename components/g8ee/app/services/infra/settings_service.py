@@ -106,10 +106,8 @@ class SettingsService:
         """Overlay PlatformSettingsData onto a G8eePlatformSettings instance."""
         
         # Command Validation
-        if data.enable_command_whitelisting is not None:
-            settings.command_validation.enable_whitelisting = bool(data.enable_command_whitelisting)
-        if data.enable_command_blacklisting is not None:
-            settings.command_validation.enable_blacklisting = bool(data.enable_command_blacklisting)
+        settings.command_validation.enable_whitelisting = bool(data.enable_command_whitelisting)
+        settings.command_validation.enable_blacklisting = bool(data.enable_command_blacklisting)
 
         # Search (Merged Vertex/Google)
         settings.search = self._build_search_settings(data)

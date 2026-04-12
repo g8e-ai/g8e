@@ -33,7 +33,7 @@ class FakePubSubService:
         self.registered_sessions: list[tuple[str, str]] = []
         self.deregistered_sessions: list[tuple[str, str]] = []
         self.published_commands: list[G8eMessage] = []
-        self._pubsub_client: object
+        self.pubsub_client: object | None = None
         self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
 
     def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:

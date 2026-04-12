@@ -81,7 +81,7 @@ from app.constants import (
     GEMINI_DEFAULT_MODEL,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, Part, Role, ThinkingConfig, LiteLLMSettings
+from app.llm.llm_types import Content, Part, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -98,7 +98,6 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     TribunalSessionCompletedPayload,
 )
-from app.models.model_configs import get_lowest_thinking_level
 from app.models.events import SessionEvent
 from app.services.infra.g8ed_event_service import EventService
 
@@ -235,20 +234,6 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
 def _temperature_for_pass(pass_index: int) -> float:
     """Return the canonical temperature for the member assigned to a given pass."""
     return TRIBUNAL_MEMBER_TEMPERATURES[_member_for_pass(pass_index)]
-
-
-def _build_thinking_config(model_name: str) -> ThinkingConfig:
-    """Build a ThinkingConfig appropriate for the given model.
-
-    Models that support thinking use their lowest supported level to minimise
-    latency for this fast-path pipeline. Models without thinking support get a
-    disabled config that providers are expected to ignore.
-    """
-    level = get_lowest_thinking_level(model_name)
-    return ThinkingConfig(
-        thinking_level=level,
-        include_thoughts=False,
-    )
 
 
 def _normalise_command(raw: str) -> str:
@@ -570,7 +555,7 @@ async def _run_verification_stage(
     os_name: str,
     verifier_enabled: bool,
     emitter: TribunalEmitter,
-) -> tuple[str, CommandGenerationOutcome, bool, str | None]:
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None]:
     """Stage 3: optionally verify the vote winner and determine outcome.
 
     Returns (final_command, outcome, verifier_passed, verifier_revision).
@@ -587,7 +572,7 @@ async def _run_verification_stage(
         return vote_winner, CommandGenerationOutcome.VERIFIED, True, None
 
     logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
-    return verifier_revision, CommandGenerationOutcome.VERIFICATION_FAILED, False, verifier_revision
+    return verifier_revision or vote_winner, CommandGenerationOutcome.VERIFICATION_FAILED, False, verifier_revision
 
 
 async def _build_and_emit_result(
