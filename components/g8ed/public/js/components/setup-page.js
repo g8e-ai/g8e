@@ -428,7 +428,8 @@ export class SetupPage {
 
         } else if (this._provider === LLMProvider.OLLAMA) {
             userSettings.llm_provider = LLMProvider.OLLAMA;
-            userSettings.ollama_endpoint = document.getElementById('ollama_url').value.trim();
+            const ollamaUrl = document.getElementById('ollama_url').value.trim();
+            userSettings.ollama_endpoint = ollamaUrl.endsWith('/') ? ollamaUrl + 'v1' : ollamaUrl + '/v1';
             userSettings.llm_model = this._getSelectedModel();
             userSettings.llm_assistant_model = this._getSelectedAssistantModel();
         }
