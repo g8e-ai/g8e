@@ -525,6 +525,122 @@ class TestToolCallResultStructure:
 
 
 # =============================================================================
+# TEST: tribunal_result on ToolCallResult
+# =============================================================================
+
+class TestTribunalResultSurfaced:
+
+    async def test_tribunal_result_present_on_noop(self):
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                tool_executor=executor,
+                investigation=INVESTIGATION,
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
+                request_settings=REQUEST_SETTINGS,
+            )
+
+        assert result.tribunal_result is not None
+        assert result.tribunal_result.original_command == "ls"
+        assert result.tribunal_result.final_command == "ls"
+
+    async def test_tribunal_result_carries_refined_command(self):
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        async def refining_generate(original_command, **kwargs):
+            return _refining_generate_command(original_command, refined="ls -lhR")
+
+        with patch.object(agent_tool_loop_module, "generate_command", new=refining_generate):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                tool_executor=executor,
+                investigation=INVESTIGATION,
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
+                request_settings=REQUEST_SETTINGS,
+            )
+
+        assert result.tribunal_result is not None
+        assert result.tribunal_result.original_command == "ls"
+        assert result.tribunal_result.final_command == "ls -lhR"
+        from app.constants import CommandGenerationOutcome
+        assert result.tribunal_result.outcome == CommandGenerationOutcome.CONSENSUS
+
+    async def test_tribunal_result_none_for_non_command_tool(self):
+        executor = _make_tool_executor()
+        result_raw = CommandExecutionResult(success=True, output="ok")
+        executor.execute_tool_call = AsyncMock(return_value=result_raw)
+
+        result = await orchestrate_tool_execution(
+            ToolCall(name=OperatorToolName.FILE_READ, args={"file_path": "/etc/hosts"}),
+            tool_executor=executor,
+            investigation=INVESTIGATION,
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
+            request_settings=REQUEST_SETTINGS,
+        )
+
+        assert result.tribunal_result is None
+
+    async def test_tribunal_result_none_for_non_operator_tool(self):
+        executor = _make_tool_executor()
+        result_raw = CommandExecutionResult(success=True, output="ok")
+        executor.execute_tool_call = AsyncMock(return_value=result_raw)
+
+        result = await orchestrate_tool_execution(
+            ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
+            tool_executor=executor,
+            investigation=INVESTIGATION,
+            g8e_context=G8E_CONTEXT,
+            g8ed_event_service=AsyncMock(),
+            request_settings=REQUEST_SETTINGS,
+        )
+
+        assert result.tribunal_result is None
+
+    async def test_tribunal_result_none_on_system_error(self):
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        exc = TribunalSystemError(
+            pass_errors=["401 Unauthorized"],
+            original_command="ls",
+        )
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                tool_executor=executor,
+                investigation=INVESTIGATION,
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
+                request_settings=REQUEST_SETTINGS,
+            )
+
+        assert result.tribunal_result is None
+
+    async def test_tribunal_result_none_when_command_arg_missing(self):
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={}),
+                tool_executor=executor,
+                investigation=INVESTIGATION,
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=AsyncMock(),
+                request_settings=REQUEST_SETTINGS,
+            )
+
+        assert result.tribunal_result is None
+
+
+# =============================================================================
 # TEST: tool_name extraction
 # =============================================================================
 

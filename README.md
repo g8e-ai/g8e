@@ -16,10 +16,6 @@ MCP supported — all incoming MCP traffic is translated to the g8e protocol for
 
 **Premise:** Never trust AI. AI can be wrong. AI can be adversarial. Every architectural decision in this platform starts from that assumption.
 
-## The GATE-8
-
-**G**overnanc**e** Architecture for Trustless **E**nvironments
-
 1. **Human authority** — AI proposes, you decide, nothing executes without your explicit approval. Human judgment is the security model.
 2. **Earned authority** — Standing trust is a liability. Trust is scoped to sessions, earned per-action, and never self-granted. No component can escalate its own privileges — execution and authorization are separated by design.
 3. **Layered enforcement** — No single control is relied upon. Governance is enforced at every boundary — Sentinel, Tribunal, approval, audit — so a failure at one layer doesn't compromise the others.
@@ -35,7 +31,7 @@ Read more about the [Origins, Governance, and Philosophy](docs/architecture/abou
 
 ## Origins
 
-g8e was built from scratch by a single developer with the help of AI coding agents — the very kind of agents this platform is designed to govern. The entire stack — Go, Python, Node.js, mTLS infrastructure, multi-agent orchestration, the security model — was written, tested, and shipped by one person leveraging AI as a force multiplier while never letting it drive unsupervised. It's a living proof of concept for the philosophy at the core of the platform: AI is extraordinarily capable when a human is in the loop and in command.
+g8e was built from scratch with the help of AI coding agents — the very kind of agents this platform is designed to govern. The entire stack was written, tested, and shipped by leveraging AI as a force multiplier while never letting it drive unsupervised.
 
 Read the full story in [Origins, Governance, and Philosophy](docs/architecture/about.md).
 

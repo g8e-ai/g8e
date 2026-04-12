@@ -224,7 +224,6 @@ services:
       - G8E_PUBSUB_CA_CERT=/g8es/ca.crt
       - G8E_OPERATOR_PUBSUB_URL=wss://g8es:9001
       - G8E_SSL_CERT_FILE=/g8es/ca.crt
-      - REQUESTS_CA_BUNDLE=/g8es/ca.crt
       - RUNNING_IN_DOCKER=1
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY

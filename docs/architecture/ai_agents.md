@@ -452,7 +452,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `triage_message` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model |
 | `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch + grounding merge |
-| `execute_tool_call` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Single function dispatch — Tribunal gate for `run_commands` |
+| `execute_tool_call` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Single function dispatch — Tribunal gate for `run_commands`; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation |
 | `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push |
@@ -460,6 +460,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction |
 | `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
 | `EvalJudge` | `components/g8ee/app/services/ai/eval_judge.py` | AI Agent Accuracy Evaluation Judge — grades agent performance against gold standard |
+| `BenchmarkJudge` | `components/g8ee/app/services/ai/benchmark_judge.py` | Deterministic Agent Benchmark Judge — regex-matches tool call payloads for binary pass/fail grading with Tribunal delta tracking |
 ---
 
 ## Prompts

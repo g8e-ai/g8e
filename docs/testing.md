@@ -36,6 +36,41 @@ g8ee includes a dedicated evaluation suite for measuring AI agent accuracy using
 
 The `agent_eval` marker isolates these high-latency, high-cost tests from the regular integration suite. Every scenario is graded on a 1-5 scale, and the test fails if `grade.passed` is `False` (score < 3).
 
+### Agent Benchmarks (Industry-Standard)
+
+Alongside the subjective EvalJudge, g8ee includes a deterministic benchmark suite that grades the agent's **tool call payloads** against strict boolean criteria. No LLM is involved in grading -- the `BenchmarkJudge` uses regex matching on the actual command arguments for a reproducible pass/fail metric.
+
+**Location:** `components/g8ee/tests/integration/evals/`
+
+- `benchmark_gold_set.json` — Complex execution scenarios with `expected_tool` and `expected_payload` (regex matchers).
+- `test_agent_benchmark.py` — Parameterized test that runs scenarios through the full pipeline and grades tool call payloads.
+- `app/services/ai/benchmark_judge.py` — Deterministic judge: regex matching on tool call args, binary pass/fail, Tribunal delta tracking.
+
+**Benchmark Design:**
+
+- **Binary pass/fail** — No partial credit. All payload matchers must pass for a scenario to pass.
+- **Payload grading** — Grades the actual `TOOL_CALL` arguments (e.g., the `command` field of `run_commands_with_operator`), not the text reasoning.
+- **Tribunal delta** — Tracks whether the Tribunal improved the Primary Agent's command by comparing pre-Tribunal and post-Tribunal payloads against the matchers.
+- **Aggregate percentage** — `passed_scenarios / total_scenarios` — the "real" industry metric.
+- **Scenario categories** — `multi_step_execution`, `flag_precision`, `pipe_chain`, `security_refusal`.
+
+**Gold Set Format:**
+
+Each benchmark scenario specifies:
+- `expected_tool` — the tool name the agent must call (e.g., `run_commands_with_operator`)
+- `expected_payload` — list of `{field, pattern, description}` regex matchers
+- `forbidden_tools` — tools the agent must not call (for refusal scenarios)
+- `category` — for category-level reporting in the summary
+
+**Running Benchmarks:**
+
+```bash
+# Run all agent benchmarks (requires LLM credentials + running platform)
+./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_benchmark
+```
+
+The `agent_benchmark` marker isolates these from the regular suite. Results are printed as a summary with per-category breakdowns, aggregate pass rate, and Tribunal delta statistics.
+
 ### Web Search Configuration
 
 g8ee includes integration tests for web search capabilities. These tests are skipped by default unless web search credentials are provided.

@@ -467,45 +467,11 @@ class InvestigationService:
 
     async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:
         """Retrieve all command execution entries from investigation history."""
-        investigation = await self.get_investigation(investigation_id)
-        if not investigation:
-            return []
-
-        return [
-            entry for entry in investigation.history_trail
-            if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION
-        ]
+        return await self.investigation_data_service.get_command_execution_history(investigation_id)
 
     async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
         """Domain logic for formatting operator action history for LLM consumption."""
-        investigation = await self.get_investigation(investigation_id)
-        if not investigation or not investigation.history_trail:
-            return "No Operator actions recorded yet."
-
-        entries = [
-            e for e in investigation.history_trail
-            if e.event_type in (
-                EventType.OPERATOR_COMMAND_EXECUTION,
-                EventType.OPERATOR_FILE_EDIT_COMPLETED,
-                EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
-                EventType.OPERATOR_FILESYSTEM_READ_COMPLETED,
-            )
-        ]
-
-        if not entries:
-            return "No Operator actions recorded yet."
-
-        context_parts = [f"=== Operator Actions ({len(entries)} total) ==="]
-        for entry in entries:
-            context_parts.append(f"- [{entry.timestamp}] {entry.summary}")
-            if entry.details:
-                if isinstance(entry.details, dict):
-                    status = entry.details.get("status") or ("success" if entry.details.get("success") else "failed")
-                else:
-                    status = entry.details.status.value if entry.details.status else "unknown"
-                context_parts.append(f"  Result: {status}")
-
-        return "\n".join(context_parts)
+        return await self.investigation_data_service.get_operator_actions_for_ai_context(investigation_id)
 
 
 
