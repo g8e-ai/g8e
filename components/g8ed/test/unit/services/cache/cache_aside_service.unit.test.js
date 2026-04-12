@@ -199,5 +199,29 @@ describe('CacheAsideService', () => {
             expect(result).toEqual(dbResults);
             expect(mockListenClient.set_json).not.toHaveBeenCalled();
         });
+
+        it('should bypass cache when bypassCache is true', async () => {
+            const dbResults = [{ id: '1' }];
+            const cachedResults = [{ id: '2' }];
+            mockListenClient.get_json.mockResolvedValue(cachedResults);
+            mockDbClient.queryDocuments.mockResolvedValue({ success: true, data: dbResults });
+
+            const result = await service.queryDocuments(Collections.USERS, [], null, true);
+
+            expect(result).toEqual(dbResults);
+            expect(mockDbClient.queryDocuments).toHaveBeenCalled();
+            expect(mockListenClient.set_json).not.toHaveBeenCalled();
+        });
+
+        it('should not populate cache when bypassCache is true', async () => {
+            const dbResults = [{ id: '1' }];
+            mockListenClient.get_json.mockResolvedValue(null);
+            mockDbClient.queryDocuments.mockResolvedValue({ success: true, data: dbResults });
+
+            const result = await service.queryDocuments(Collections.USERS, [], null, true);
+
+            expect(result).toEqual(dbResults);
+            expect(mockListenClient.set_json).not.toHaveBeenCalled();
+        });
     });
 });

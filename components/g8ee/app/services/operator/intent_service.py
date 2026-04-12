@@ -112,8 +112,6 @@ class OperatorIntentService:
         intent_names_raw = args.intent_name.strip()
         operation_context = (args.operation_context or "").strip()
         justification = args.justification.strip()
-        pending_command = (args.pending_command or "").strip()
-        pending_command_justification = (args.pending_command_justification or "").strip()
 
         requested_intents = [i.strip().replace("-", "_").lower()
                              for i in intent_names_raw.split(",") if i.strip()]
@@ -142,9 +140,9 @@ class OperatorIntentService:
 
         if op_doc.cloud_subtype == CloudSubtype.G8E_POD:
             return IntentPermissionResult(
-                success=False, 
-                error="g8ep operators have direct system access and do not support IAM intent grants. Use run_commands_with_operator directly.", 
-                error_type=CommandErrorType.BUSINESS_LOGIC_ERROR
+                success=False,
+                error="g8ep operators have direct system access and do not support IAM intent grants. Use run_commands_with_operator directly.",
+                error_type=CommandErrorType.VALIDATION_ERROR
             )
 
         operator_id = op_doc.operator_id
@@ -327,7 +325,7 @@ class OperatorIntentService:
 
         # Notify start
         await self.g8ed_event_service.publish_command_event(
-            EventType.OPERATOR_INTENT_REVOCATION_STARTED,
+            EventType.OPERATOR_COMMAND_STARTED,
             CommandExecutingBroadcastEvent(
                 command=f"intent_revoke {', '.join(requested_intents)}",
                 execution_id=execution_id,

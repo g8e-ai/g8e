@@ -31,7 +31,7 @@ from app.models.cache import (
 )
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.http_context import G8eHttpContext
-from app.models.infra import HTTPClientStatus, HTTPServiceStatus
+from app.models.infra import HTTPClientStatus
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -65,6 +65,7 @@ from app.models.tool_results import (
     FetchFileDiffToolResult,
     FetchFileHistoryToolResult,
     FileOperationRiskAnalysis,
+    FileOperationRiskContext,
     FileEditResult,
     FsListToolResult,
     FsReadToolResult,
@@ -505,9 +506,9 @@ class G8edClientProtocol(Protocol):
 
 @runtime_checkable
 class AIResponseAnalyzerProtocol(Protocol):
-    async def analyze_command_risk(self, command: str, justification: str, context: CommandRiskContext) -> CommandRiskAnalysis: ...
-    async def analyze_error_and_suggest_fix(self, command: str, exit_code: int | None, stdout: str, stderr: str, context: ErrorAnalysisContext) -> ErrorAnalysisResult: ...
-    async def analyze_file_operation_risk(self, operation: FileOperation, file_path: str, content: str | None) -> FileOperationRiskAnalysis: ...
+    async def analyze_command_risk(self, command: str, justification: str, context: CommandRiskContext, settings: G8eeUserSettings) -> CommandRiskAnalysis: ...
+    async def analyze_error_and_suggest_fix(self, command: str, exit_code: int | None, stdout: str, stderr: str, context: ErrorAnalysisContext, settings: G8eeUserSettings) -> ErrorAnalysisResult: ...
+    async def analyze_file_operation_risk(self, operation: FileOperation, file_path: str, content: str | None, context: FileOperationRiskContext, settings: G8eeUserSettings) -> FileOperationRiskAnalysis: ...
 
 @runtime_checkable
 class ExecutionRegistryProtocol(Protocol):

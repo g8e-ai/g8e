@@ -29,7 +29,7 @@ export class OperatorSlotService {
     }
 
     async initializeOperatorSlots(userId, organizationId) {
-        const existingOperators = await this.operatorDataService.queryOperators([
+        const existingOperators = await this.operatorDataService.queryOperatorsFresh([
             { field: 'user_id', operator: '==', value: userId }
         ]);
 

@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import logging
+from collections.abc import Coroutine
 from fastapi import Request
 
 from app.constants import ComponentName, HealthStatus
@@ -44,7 +45,7 @@ class HealthService:
 
         dependencies: dict[str, DependencyStatus] = {}
 
-        async def _check(name: str, coro):
+        async def _check(name: str, coro: Coroutine) -> None:
             try:
                 await coro
                 dependencies[name] = DependencyStatus(status=HealthStatus.HEALTHY)

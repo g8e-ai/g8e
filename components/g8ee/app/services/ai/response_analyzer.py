@@ -79,7 +79,7 @@ Classify the command risk level."""
 
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model
+                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
@@ -181,7 +181,7 @@ Based on the information above, analyze the failure and fill in ALL response fie
 
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model
+                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
@@ -284,7 +284,7 @@ Based on the information above, assess the risk and fill in ALL response fields.
 
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model
+                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,

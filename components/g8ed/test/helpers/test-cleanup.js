@@ -453,16 +453,18 @@ export class TestCleanupHelper {
                     } catch (e) { /* ignore */ }
 
                     try {
+                        const { OperatorDocument } = await import('../../models/operator_model.js');
                         const ops = await this._cache_aside.queryDocuments(this.operatorsCollection, [
                             { field: 'user_id', operator: '==', value: userId }
                         ]);
                         for (const op of ops) {
+                            const opDoc = OperatorDocument.fromDB(op);
                             deletePromises.push(
                                 this._cache_aside.deleteDocument(this.operatorsCollection, op.operator_id)
                             );
-                            if (op.operator_api_key) {
+                            if (opDoc && opDoc.operator_api_key) {
                                 deletePromises.push(
-                                    this._safeKVDel(KVKey.doc('api_keys', op.operator_api_key))
+                                    this._safeKVDel(KVKey.doc('api_keys', opDoc.operator_api_key))
                                 );
                             }
                             deletePromises.push(

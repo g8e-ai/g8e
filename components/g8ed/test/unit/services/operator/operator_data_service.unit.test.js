@@ -98,6 +98,27 @@ describe('OperatorDataService', () => {
         });
     });
 
+    describe('queryOperatorsFresh', () => {
+        it('should call queryDocuments with bypassCache=true', async () => {
+            const mockResults = [{ operator_id: 'op-1' }, { operator_id: 'op-2' }];
+            mockCacheAside.queryDocuments.mockResolvedValue(mockResults);
+
+            const filters = [{ field: 'user_id', operator: '==', value: 'user-1' }];
+            const result = await operatorDataService.queryOperatorsFresh(filters);
+
+            expect(mockCacheAside.queryDocuments).toHaveBeenCalledWith(Collections.OPERATORS, filters, null, true);
+            expect(result).toEqual(mockResults);
+        });
+
+        it('should return empty array when no results', async () => {
+            mockCacheAside.queryDocuments.mockResolvedValue(null);
+
+            const result = await operatorDataService.queryOperatorsFresh([]);
+
+            expect(result).toEqual([]);
+        });
+    });
+
     describe('createOperator', () => {
         it('should call cacheAside.createDocument', async () => {
             const mockDoc = { operator_id: 'op-123' };

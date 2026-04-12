@@ -27,7 +27,6 @@ from app.constants.settings import (
 from app.constants.events import (
     EventType,
 )
-from app.constants.message_sender import MessageSender
 from app.constants.status import (
     OperatorStatus,
 )

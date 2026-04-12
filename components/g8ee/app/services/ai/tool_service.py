@@ -229,7 +229,7 @@ class AIToolService:
 
         return declaration, run_commands_with_operator
 
-    def _build_file_create_tool(self) -> tuple[types.ToolDeclarations, Callable[..., ToolResult]]:
+    def _build_file_create_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
         """Register tool metadata and executor for file creation operations."""
 
         def file_create_on_operator(args: FileEditPayload) -> ToolResult:

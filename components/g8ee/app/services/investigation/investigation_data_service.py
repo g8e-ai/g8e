@@ -33,7 +33,6 @@ from app.models.investigations import (
     InvestigationHistoryEntry,
     InvestigationModel,
     InvestigationQueryRequest,
-    InvestigationUpdateRequest,
 )
 
 from app.models.operators import CommandInternalResult, FileEditResult

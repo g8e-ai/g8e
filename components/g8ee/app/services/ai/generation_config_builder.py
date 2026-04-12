@@ -106,7 +106,7 @@ class AIGenerationConfigBuilder:
         temperature: float | None,
         max_tokens: int | None,
         system_instruction: str,
-        response_format: types.ResponseFormat = None,
+        response_format: types.ResponseFormat | None = None,
     ) -> AssistantLLMSettings:
         """Build AssistantLLMSettings for analysis calls."""
         effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
@@ -130,7 +130,7 @@ class AIGenerationConfigBuilder:
         temperature: float | None,
         max_tokens: int | None,
         system_instruction: str,
-        response_format: types.ResponseFormat = None,
+        response_format: types.ResponseFormat | None = None,
     ) -> LiteLLMSettings:
         """Build LiteLLMSettings for stateless analysis calls.
 

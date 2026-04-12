@@ -19,7 +19,7 @@ from typing import Any
 
 from app.constants.prompts import AgentMode
 from app.constants.settings import MCP_TOOL_CALL_TIMEOUT_SECONDS
-from app.constants.status import OperatorStatus, OperatorToolName
+from app.constants.status import OperatorStatus
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings

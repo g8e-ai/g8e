@@ -36,15 +36,11 @@ from app.constants import (
     EventType,
     TriageComplexityClassification,
     TriageConfidence,
-    TriageIntentClassification,
     AgentMode,
     OperatorStatus,
-    LLM_DEFAULT_TEMPERATURE,
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
 )
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
-from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.agent import AgentStreamContext
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext

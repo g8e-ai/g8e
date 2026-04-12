@@ -423,17 +423,23 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.fingerprint_details).toEqual({ cpu: 'x86_64' });
     });
 
-    it('forWire() removes operator_cert and api_key', () => {
+    it('forWire() removes operator_cert, api_key, and operator_api_key fields', () => {
         const doc = new OperatorDocument({
             operator_id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             operator_cert: 'cert-data',
             api_key: 'secret-key',
+            operator_api_key: 'operator-secret-key',
+            operator_api_key_created_at: new Date('2026-01-01'),
+            operator_api_key_updated_at: new Date('2026-01-15'),
         });
         const wire = doc.forWire();
         expect(wire.operator_cert).toBeUndefined();
         expect(wire.api_key).toBeUndefined();
+        expect(wire.operator_api_key).toBeUndefined();
+        expect(wire.operator_api_key_created_at).toBeUndefined();
+        expect(wire.operator_api_key_updated_at).toBeUndefined();
         expect(wire.operator_id).toBe('op-123');
     });
 
@@ -448,6 +454,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             operator_cert_not_before: new Date(),
             operator_cert_not_after: new Date(),
             api_key: 'secret-key',
+            operator_api_key: 'operator-secret-key',
         });
         const client = doc.forClient();
         expect(client.operator_cert).toBeUndefined();
@@ -456,7 +463,28 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(client.operator_cert_not_before).toBeUndefined();
         expect(client.operator_cert_not_after).toBeUndefined();
         expect(client.api_key).toBeUndefined();
+        expect(client.operator_api_key).toBeUndefined();
         expect(client.has_api_key).toBe(true);
+    });
+
+    it('forInternal() preserves all sensitive fields including api_key and operator_api_key', () => {
+        const doc = new OperatorDocument({
+            operator_id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.AVAILABLE,
+            operator_cert: 'cert-data',
+            api_key: 'secret-key',
+            operator_api_key: 'operator-secret-key',
+            operator_api_key_created_at: new Date('2026-01-01'),
+            operator_api_key_updated_at: new Date('2026-01-15'),
+        });
+        const internal = doc.forInternal();
+        expect(internal.operator_cert).toBe('cert-data');
+        expect(internal.api_key).toBe('secret-key');
+        expect(internal.operator_api_key).toBe('operator-secret-key');
+        expect(internal.operator_api_key_created_at).toBe('2026-01-01T00:00:00.000Z');
+        expect(internal.operator_api_key_updated_at).toBe('2026-01-15T00:00:00.000Z');
+        expect(internal.operator_id).toBe('op-123');
     });
 
     it('forClient() sets has_api_key to false when api_key is null', () => {

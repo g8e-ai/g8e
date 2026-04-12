@@ -42,6 +42,11 @@ export class OperatorDataService {
         return data || [];
     }
 
+    async queryOperatorsFresh(filters) {
+        const data = await this._cache_aside.queryDocuments(this.collectionName, filters, null, true);
+        return data || [];
+    }
+
     async createOperator(operatorId, operatorDoc) {
         return await this._cache_aside.createDocument(this.collectionName, operatorId, operatorDoc);
     }

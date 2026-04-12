@@ -45,6 +45,7 @@ class HTTPService:
     def __init__(self) -> None:
         self._http_ready: bool = False
         self._active_clients: dict[str, HTTPClient] = {}
+        self._session: object | None = None
 
     @property
     def is_ready(self) -> bool:

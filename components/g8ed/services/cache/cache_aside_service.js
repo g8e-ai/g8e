@@ -384,28 +384,34 @@ class CacheAsideService {
      * Query documents using cache-aside pattern.
      *
      * Flow:
-     * 1. Check query cache (KV)
-     * 2. On miss, query DB directly
-     * 3. Populate query cache with result
+     * 1. Check query cache (KV) unless bypassCache is true
+     * 2. On miss or bypass, query DB directly
+     * 3. Populate query cache with result (unless bypassCache is true)
      * 4. Return results
      *
      * @param {string} collection - Collection name
      * @param {Array} filters - Query filter array
      * @param {number|null} limit - Optional result limit
+     * @param {boolean} bypassCache - Skip query cache and read directly from DB (default false)
      * @returns {Promise<Array>} Array of plain objects
      */
-    async queryDocuments(collection, filters = [], limit = null) {
+    async queryDocuments(collection, filters = [], limit = null, bypassCache = false) {
         const queryParams = { filters, limit };
         try {
-            const cached = await this.getQueryResult(collection, queryParams);
-            if (cached !== null) {
-                return cached;
+            if (!bypassCache) {
+                const cached = await this.getQueryResult(collection, queryParams);
+                if (cached !== null) {
+                    return cached;
+                }
             }
 
             const result = await this.db.queryDocuments(collection, filters, limit);
             const data = result.success ? result.data : [];
 
-            await this.setQueryResult(collection, queryParams, data);
+            if (!bypassCache) {
+                await this.setQueryResult(collection, queryParams, data);
+            }
+
             return data;
         } catch (error) {
             logger.error(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] queryDocuments failed`, {

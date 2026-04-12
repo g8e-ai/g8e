@@ -105,7 +105,7 @@ class CommandBlacklistValidator:
             if value and base_command == value:
                 return CommandBlacklistResult(
                     is_allowed=False,
-                    reason=entry.get("reason"),
+                    reason=entry.get("reason") or "",
                     rule=f"command:{value}",
                 )
 
@@ -114,7 +114,7 @@ class CommandBlacklistValidator:
             if value and value in {base_command, command_string}:
                 return CommandBlacklistResult(
                     is_allowed=False,
-                    reason=entry.get("reason"),
+                    reason=entry.get("reason") or "",
                     rule=f"binary:{value}",
                 )
 
@@ -123,7 +123,7 @@ class CommandBlacklistValidator:
             if value and value in command_string:
                 return CommandBlacklistResult(
                     is_allowed=False,
-                    reason=entry.get("reason"),
+                    reason=entry.get("reason") or "",
                     rule=f"substring:{value}",
                 )
 
@@ -133,7 +133,7 @@ class CommandBlacklistValidator:
             entry = next(item for item in self._config["forbidden_arguments"] if item.get("value") == hit)
             return CommandBlacklistResult(
                 is_allowed=False,
-                reason=entry.get("reason"),
+                reason=entry.get("reason") or "",
                 rule=f"argument:{hit}",
             )
 
@@ -141,7 +141,7 @@ class CommandBlacklistValidator:
             if regex.search(command_string):
                 return CommandBlacklistResult(
                     is_allowed=False,
-                    reason=entry.get("reason"),
+                    reason=entry.get("reason") or "",
                     rule=f"pattern:{entry.get('value')}",
                 )
 
@@ -154,7 +154,7 @@ _validator: CommandBlacklistValidator | None = None
 def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlacklistValidator:
     global _validator
     if _validator is None:
-        _validator = CommandBlacklistValidator(blacklist_path=blacklist_path)
+        _validator = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
     return _validator
 
 
