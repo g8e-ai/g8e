@@ -873,6 +873,430 @@ class TestBuildAndEmitResult:
         assert result.verifier_revision is None
 
 
+class TestGenerateCommandHappyPath:
+    """Full happy-path integration tests for generate_command.
+
+    Each test exercises the complete pipeline (generation -> voting ->
+    verification -> result) with a mocked LLM provider, validating the
+    returned CommandGenerationResult and SSE event emissions.
+    """
+
+    @staticmethod
+    def _settings(
+        provider=LLMProvider.OLLAMA,
+        assistant_model="gemma3:1b",
+        passes=3,
+        verifier=True,
+    ):
+        llm = LLMSettings(
+            provider=provider,
+            assistant_model=assistant_model,
+            llm_command_gen_passes=passes,
+            llm_command_gen_verifier=verifier,
+        )
+        return G8eeUserSettings(llm=llm)
+
+    @staticmethod
+    def _provider_returning(generation_text, verifier_text=None, *, passes=3):
+        """Build a mock provider for a full pipeline run.
+
+        The first ``passes`` calls return ``generation_text`` (concurrent
+        generation stage). Subsequent calls return ``verifier_text`` (or
+        repeat ``generation_text`` when ``verifier_text`` is ``None``).
+        """
+        call_count = 0
+
+        async def _side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            resp = MagicMock()
+            if call_count <= passes:
+                resp.text = generation_text
+            else:
+                resp.text = verifier_text if verifier_text is not None else generation_text
+            return resp
+
+        return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+
+    @pytest.mark.asyncio
+    async def test_consensus_path_verifier_disabled(self):
+        """All passes agree, verifier disabled -> CONSENSUS outcome."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("ls -la")
+        settings = self._settings(verifier=False)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="ls",
+                intent="list files with details",
+                os_name="linux",
+                shell="bash",
+                working_directory="/tmp",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-1",
+                user_id="user-happy-1",
+                case_id="case-happy-1",
+                investigation_id="inv-happy-1",
+                settings=settings,
+            )
+
+        assert result.outcome == CommandGenerationOutcome.CONSENSUS
+        assert result.final_command == "ls -la"
+        assert result.original_command == "ls"
+        assert len(result.candidates) == 3
+        assert result.vote_winner == "ls -la"
+        assert result.vote_score == 1.0
+        assert result.verifier_passed is True
+        assert result.verifier_revision is None
+
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        from app.constants import EventType
+        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED not in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_verified_path_verifier_approves(self):
+        """All passes agree, verifier says 'ok' -> VERIFIED outcome."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("find /var/log -name '*.log'", "ok")
+        settings = self._settings(verifier=True)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="find logs",
+                intent="find all log files under /var/log",
+                os_name="linux",
+                shell="bash",
+                working_directory="/home/user",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-2",
+                user_id="user-happy-2",
+                case_id="case-happy-2",
+                investigation_id="inv-happy-2",
+                settings=settings,
+            )
+
+        assert result.outcome == CommandGenerationOutcome.VERIFIED
+        assert result.final_command == "find /var/log -name '*.log'"
+        assert result.vote_winner == "find /var/log -name '*.log'"
+        assert result.verifier_passed is True
+        assert result.verifier_revision is None
+        assert len(result.candidates) == 3
+
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        from app.constants import EventType
+        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_verification_failed_path_verifier_revises(self):
+        """All passes agree, verifier revises -> VERIFICATION_FAILED outcome with revised command."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("grep -r TODO .", "grep -rn TODO .")
+        settings = self._settings(verifier=True)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="grep TODO",
+                intent="find all TODO comments recursively with line numbers",
+                os_name="linux",
+                shell="bash",
+                working_directory="/project",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-3",
+                user_id="user-happy-3",
+                case_id="case-happy-3",
+                investigation_id="inv-happy-3",
+                settings=settings,
+            )
+
+        assert result.outcome == CommandGenerationOutcome.VERIFICATION_FAILED
+        assert result.final_command == "grep -rn TODO ."
+        assert result.vote_winner == "grep -r TODO ."
+        assert result.verifier_passed is False
+        assert result.verifier_revision == "grep -rn TODO ."
+
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        from app.constants import EventType
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_surviving_candidates_reach_consensus(self):
+        """1 of 3 passes fails, surviving 2 agree -> VERIFIED outcome."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        call_count = 0
+
+        async def _side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise RuntimeError("Model overloaded")
+            resp = MagicMock()
+            if call_count <= 3:
+                resp.text = "df -h"
+            else:
+                resp.text = "ok"
+            return resp
+
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+        settings = self._settings(verifier=True, passes=3)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="df",
+                intent="show disk usage in human-readable format",
+                os_name="linux",
+                shell="bash",
+                working_directory="/",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-4",
+                user_id="user-happy-4",
+                case_id="case-happy-4",
+                investigation_id="inv-happy-4",
+                settings=settings,
+            )
+
+        assert result.outcome == CommandGenerationOutcome.VERIFIED
+        assert result.final_command == "df -h"
+        assert len(result.candidates) == 2
+        assert result.vote_winner == "df -h"
+        assert result.verifier_passed is True
+
+    @pytest.mark.asyncio
+    async def test_single_pass_verifier_approved(self):
+        """Single-pass configuration (passes=1) still exercises all four stages."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("whoami", "ok", passes=1)
+        settings = self._settings(verifier=True, passes=1)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="who",
+                intent="show current user name",
+                os_name="linux",
+                shell="bash",
+                working_directory="/home",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-5",
+                user_id="user-happy-5",
+                case_id="case-happy-5",
+                investigation_id="inv-happy-5",
+                settings=settings,
+            )
+
+        assert result.outcome == CommandGenerationOutcome.VERIFIED
+        assert result.final_command == "whoami"
+        assert len(result.candidates) == 1
+        assert result.vote_score == 1.0
+        assert result.verifier_passed is True
+
+    @pytest.mark.asyncio
+    async def test_event_emission_order(self):
+        """Events are emitted in pipeline stage order."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("uptime", "ok", passes=2)
+        settings = self._settings(verifier=True, passes=2)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            await generate_command(
+                original_command="up",
+                intent="show system uptime",
+                os_name="linux",
+                shell="bash",
+                working_directory="/",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-6",
+                user_id="user-happy-6",
+                case_id="case-happy-6",
+                investigation_id="inv-happy-6",
+                settings=settings,
+            )
+
+        from app.constants import EventType
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+
+        started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
+        pass_indices = [i for i, t in enumerate(emitted_types) if t == EventType.TRIBUNAL_VOTING_PASS_COMPLETED]
+        consensus_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED)
+        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_STARTED)
+        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED)
+        completed_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_COMPLETED)
+
+        assert started_idx < min(pass_indices)
+        assert max(pass_indices) < consensus_idx
+        assert consensus_idx < review_started_idx
+        assert review_started_idx < review_completed_idx
+        assert review_completed_idx < completed_idx
+
+    @pytest.mark.asyncio
+    async def test_result_model_fields_fully_populated(self):
+        """All CommandGenerationResult fields are populated after a full pipeline run."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("ls -la /tmp", "ok")
+        settings = self._settings(verifier=True, passes=3)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="ls /tmp",
+                intent="list files in /tmp with details",
+                os_name="linux",
+                shell="bash",
+                working_directory="/tmp",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-7",
+                user_id="user-happy-7",
+                case_id="case-happy-7",
+                investigation_id="inv-happy-7",
+                settings=settings,
+            )
+
+        assert result.original_command == "ls /tmp"
+        assert result.final_command == "ls -la /tmp"
+        assert result.outcome == CommandGenerationOutcome.VERIFIED
+        assert len(result.candidates) == 3
+        for i, c in enumerate(result.candidates):
+            assert c.command == "ls -la /tmp"
+            assert c.pass_index == i
+            assert c.member == _member_for_pass(i)
+        assert result.vote_winner == "ls -la /tmp"
+        assert result.vote_score is not None
+        assert 0.0 <= result.vote_score <= 1.0
+        assert result.verifier_passed is True
+        assert result.verifier_revision is None
+
+    @pytest.mark.asyncio
+    async def test_refined_command_differs_from_original(self):
+        """When the pipeline refines a command, final_command differs from original_command."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("cat /etc/hostname", "ok")
+        settings = self._settings(verifier=True, passes=3)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="hostname",
+                intent="show the system hostname from /etc/hostname",
+                os_name="linux",
+                shell="bash",
+                working_directory="/",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-8",
+                user_id="user-happy-8",
+                case_id="case-happy-8",
+                investigation_id="inv-happy-8",
+                settings=settings,
+            )
+
+        assert result.final_command != result.original_command
+        assert result.final_command == "cat /etc/hostname"
+
+        from app.constants import EventType
+        completed_calls = [
+            call for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_COMPLETED
+        ]
+        assert len(completed_calls) == 1
+        payload = completed_calls[0].args[0].payload
+        assert payload.refined is True
+
+    @pytest.mark.asyncio
+    async def test_unchanged_command_marks_refined_false(self):
+        """When final_command equals original_command, the completed event has refined=False."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_returning("ls", "ok")
+        settings = self._settings(verifier=True, passes=3)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            result = await generate_command(
+                original_command="ls",
+                intent="list files",
+                os_name="linux",
+                shell="bash",
+                working_directory="/",
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-happy-9",
+                user_id="user-happy-9",
+                case_id="case-happy-9",
+                investigation_id="inv-happy-9",
+                settings=settings,
+            )
+
+        assert result.final_command == result.original_command
+
+        from app.constants import EventType
+        completed_calls = [
+            call for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_COMPLETED
+        ]
+        assert len(completed_calls) == 1
+        payload = completed_calls[0].args[0].payload
+        assert payload.refined is False
+
+
 class TestMaxTokensConstants:
     """_MAX_TOKENS constants are used by generation passes and verifier."""
 
