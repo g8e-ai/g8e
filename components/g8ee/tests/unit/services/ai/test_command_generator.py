@@ -1297,6 +1297,283 @@ class TestGenerateCommandHappyPath:
         assert payload.refined is False
 
 
+class TestGenerateCommandVerifierFailure:
+    """TribunalVerifierFailedError propagates through generate_command end-to-end.
+
+    These tests exercise the full pipeline (generation -> voting -> verification)
+    where the verifier stage fails, verifying the error surfaces correctly to callers
+    with the right attributes and that SSE events are emitted in the correct order
+    before the exception propagates.
+    """
+
+    @staticmethod
+    def _settings(
+        provider=LLMProvider.OLLAMA,
+        assistant_model="gemma3:1b",
+        passes=3,
+    ):
+        llm = LLMSettings(
+            provider=provider,
+            assistant_model=assistant_model,
+            llm_command_gen_passes=passes,
+            llm_command_gen_verifier=True,
+        )
+        return G8eeUserSettings(llm=llm)
+
+    @staticmethod
+    def _provider_with_verifier_behavior(
+        generation_text: str,
+        verifier_side_effect=None,
+        verifier_return=None,
+        *,
+        passes: int = 3,
+    ):
+        """Build a mock provider where generation succeeds and verifier behaves as specified.
+
+        The first ``passes`` calls return ``generation_text`` (generation stage).
+        Subsequent calls use ``verifier_side_effect`` or ``verifier_return``.
+        """
+        call_count = 0
+
+        async def _side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= passes:
+                resp = MagicMock()
+                resp.text = generation_text
+                return resp
+            if verifier_side_effect is not None:
+                raise verifier_side_effect
+            return verifier_return
+
+        return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+
+    @pytest.mark.asyncio
+    async def test_empty_verifier_response_raises_through_generate_command(self):
+        """Empty verifier response propagates TribunalVerifierFailedError from generate_command."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        empty_response = MagicMock()
+        empty_response.text = None
+
+        mock_provider = self._provider_with_verifier_behavior(
+            "ls -la", verifier_return=empty_response,
+        )
+        settings = self._settings()
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+                await generate_command(
+                    original_command="ls",
+                    intent="list files with details",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/tmp",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-vf-1",
+                    user_id="user-vf-1",
+                    case_id="case-vf-1",
+                    investigation_id="inv-vf-1",
+                    settings=settings,
+                )
+
+            assert exc_info.value.reason == "empty_response"
+            assert exc_info.value.original_command == "ls -la"
+            assert exc_info.value.error == "Verifier returned empty response"
+
+        from app.constants import EventType
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
+        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+
+        started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
+        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_STARTED)
+        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED)
+        assert started_idx < review_started_idx < review_completed_idx
+
+    @pytest.mark.asyncio
+    async def test_no_valid_revision_raises_through_generate_command(self):
+        """Non-ok verifier answer without valid revision propagates TribunalVerifierFailedError."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        same_command_response = MagicMock()
+        same_command_response.text = "ls -la"
+
+        mock_provider = self._provider_with_verifier_behavior(
+            "ls -la", verifier_return=same_command_response,
+        )
+        settings = self._settings()
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+                await generate_command(
+                    original_command="ls",
+                    intent="list files with details",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/tmp",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-vf-2",
+                    user_id="user-vf-2",
+                    case_id="case-vf-2",
+                    investigation_id="inv-vf-2",
+                    settings=settings,
+                )
+
+            assert exc_info.value.reason == "no_valid_revision"
+            assert exc_info.value.original_command == "ls -la"
+            assert "non-ok answer without valid revision" in exc_info.value.error
+
+        from app.constants import EventType
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_verifier_exception_raises_through_generate_command(self):
+        """Verifier exception propagates TribunalVerifierFailedError from generate_command."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_with_verifier_behavior(
+            "ls -la", verifier_side_effect=RuntimeError("Verifier API timeout"),
+        )
+        settings = self._settings()
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+                await generate_command(
+                    original_command="ls",
+                    intent="list files with details",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/tmp",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-vf-3",
+                    user_id="user-vf-3",
+                    case_id="case-vf-3",
+                    investigation_id="inv-vf-3",
+                    settings=settings,
+                )
+
+            assert exc_info.value.reason == "exception"
+            assert "timeout" in exc_info.value.error.lower()
+            assert exc_info.value.original_command == "ls -la"
+
+        from app.constants import EventType
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
+
+    @pytest.mark.asyncio
+    async def test_verifier_failure_preserves_original_command_from_vote_winner(self):
+        """TribunalVerifierFailedError.original_command is the vote winner, not the caller's original command."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        empty_response = MagicMock()
+        empty_response.text = ""
+
+        mock_provider = self._provider_with_verifier_behavior(
+            "cat /etc/hostname", verifier_return=empty_response,
+        )
+        settings = self._settings()
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+                await generate_command(
+                    original_command="hostname",
+                    intent="show system hostname",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-vf-4",
+                    user_id="user-vf-4",
+                    case_id="case-vf-4",
+                    investigation_id="inv-vf-4",
+                    settings=settings,
+                )
+
+            assert exc_info.value.original_command == "cat /etc/hostname"
+            assert exc_info.value.reason == "empty_response"
+
+    @pytest.mark.asyncio
+    async def test_single_pass_verifier_failure_raises(self):
+        """Single-pass configuration (passes=1) still raises TribunalVerifierFailedError on verifier failure."""
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        mock_provider = self._provider_with_verifier_behavior(
+            "whoami",
+            verifier_side_effect=RuntimeError("Connection refused"),
+            passes=1,
+        )
+        settings = self._settings(passes=1)
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+            return_value=mock_provider,
+        ):
+            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+                await generate_command(
+                    original_command="who",
+                    intent="show current user",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/home",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-vf-5",
+                    user_id="user-vf-5",
+                    case_id="case-vf-5",
+                    investigation_id="inv-vf-5",
+                    settings=settings,
+                )
+
+            assert exc_info.value.reason == "exception"
+            assert exc_info.value.original_command == "whoami"
+
+        from app.constants import EventType
+        emitted_types = [
+            call.args[0].event_type
+            for call in mock_event_service.publish.call_args_list
+        ]
+        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 1
+
+
 class TestMaxTokensConstants:
     """_MAX_TOKENS constants are used by generation passes and verifier."""
 
