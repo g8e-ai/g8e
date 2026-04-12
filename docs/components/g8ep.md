@@ -85,11 +85,13 @@ components/g8ep/
 | ssh-client | system | SSH remote access client |
 | strace | system | System call tracer |
 | unzip/zip | system | Archive utilities |
+| **Development** |||
+| npm | 11.12.1 | Package manager (official install script) |
+| gotestsum | v1.12.1 | Structured Go test output (pinned) |
 | **Docker** |||
 | docker-ce-cli | latest | Docker client (daemon via host socket) |
 | docker-compose-plugin | latest | Docker Compose plugin |
 | **Go Tools** |||
-| gotestsum | v1.12.1 | Structured Go test output (pinned) |
 
 **Application dependencies pre-installed at build time** (layer-cached):
 - Python: `components/g8ee/requirements.txt` → `pip install` into a venv at `/opt/venv` (required by PEP 668 on Ubuntu 24.04 — system-wide pip installs are blocked)
@@ -106,16 +108,13 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 
 **Healthcheck:** `pgrep -x supervisord` — passes once supervisord is running.
 
-**Process model:** `supervisord` runs as PID 1 and manages the `operator` program. The operator service is configured with `autostart=false` — it starts only when g8ed persists the operator API key to the `platform_settings` document in g8es and then signals supervisor via XML-RPC. The supervisor `command=` delegates to `fetch-key-and-run.sh`, which fetches the API key from g8es (with retry and exponential backoff for transient unavailability), validates it, and execs the operator binary. Operator stdout/stderr routes to Docker log output (visible via `./g8e platform logs g8ep` or `docker logs g8ep`).
+**Process model:** `supervisord` runs as PID 1 and manages the `operator` program. The operator service is configured with `autostart=true` and `autorestart=true`. It runs `fetch-key-and-run.sh`, which waits for g8es (with retry and exponential backoff), validates the API key stored in `platform_settings` in g8es, and execs the operator binary. g8ed can force a restart of the supervised process via XML-RPC to apply new API keys during login or reauth. Operator stdout/stderr routes to Docker log output (visible via `./g8e platform logs g8ep` or `docker logs g8ep`).
 
 **Volume mounts (runtime):**
 
 | Host path | Container path | Notes |
 |-----------|---------------|-------|
-| `./components/g8ee/app` | `/app/components/g8ee/app` | g8ee application source |
-| `./components/g8ee/config` | `/app/components/g8ee/config` | g8ee configuration |
-| `./components/g8ee/tests` | `/app/components/g8ee/tests` | g8ee tests |
-| `./components/g8ee/pyproject.toml` | `/app/components/g8ee/pyproject.toml` | g8ee dependencies |
+| `./components/g8ee` | `/app/components/g8ee` | g8ee application source |
 | `./components/g8ed` | `/app/components/g8ed` | g8ed source |
 | (named volume) `g8ed-node-modules` | `/app/components/g8ed/node_modules` | Node modules isolated in a named volume |
 | `./components/g8eo` | `/app/components/g8eo` | g8eo source (operator) |
@@ -147,7 +146,7 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 | `CI` | `false` | CI flag |
 | `G8E_INTERNAL_HTTP_URL` | `https://g8es` | g8ed HTTP endpoint |
 | `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es` | g8es pub/sub endpoint for internal services (g8ee) |
-| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8e.local:443` | g8es pub/sub endpoint for g8eo operator tests — uses the external address via `extra_hosts: g8e.local→host-gateway` to simulate a real remote operator |
+| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8es:9001` | g8es pub/sub endpoint |
 | `LLM_ENDPOINT` | — | LLM inference endpoint |
 | `APP_URL` | — | Application URL (required — set in `docker-compose.yml` or shell) |
 
@@ -192,7 +191,7 @@ POST /api/auth/login (or /register)
                           curl g8es /db/settings/platform_settings (with retry)
                           → if binary absent: downloads from blob store (/blob/operator-binary/linux-{arch})
                           → extracts g8ep_operator_api_key
-                          → exec g8e.operator --endpoint g8e.local --working-dir /home/g8e
+                          → exec g8e.operator --endpoint g8e.local --working-dir /home/g8e --no-git --log info --cloud --provider g8ep
                           → operator discovers CA cert locally at /g8es/ca.crt (no network fetch)
                     → binary authenticates with API key, slot is claimed, operator goes ACTIVE
                     → SSE delivers OPERATOR_STATUS_UPDATED to the browser
@@ -200,16 +199,11 @@ POST /api/auth/login (or /register)
 
 Failures at any step are caught and logged as warnings — they never propagate to the login response.
 
-### Standalone Reauth (`operator reauth`)
+### Restart g8ep (`/api/operators/g8ep/reauth`)
 
-To force a reauth outside of the login flow — for example when the g8ep operator is stuck or unresponsive — use:
+To force a reauth outside of the login flow — for example when the g8ep operator is stuck or unresponsive — the UI or CLI can trigger a restart.
 
-```bash
-./g8e operator reauth --email user@example.com
-./g8e operator reauth --user-id <user-id>
-```
-
-This calls `POST /api/internal/operators/user/:userId/reauth` on g8ed, which:
+**Flow:**
 
 1. Stops the supervised operator service via XML-RPC `supervisor.stopProcess` (no-op if already stopped)
 2. Resets the operator slot to `AVAILABLE` (full delete + recreate via `resetOperator`)

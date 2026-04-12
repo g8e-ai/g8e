@@ -20,7 +20,8 @@ g8eo is the Go-based agent component of the g8e platform. It provides secure, re
 
 ### Command Execution
 - Executes shell commands on the target system with user-controlled cancellation
-- Real-time prompt detection — terminates commands that request user input
+- **Non-interactive enforcement** — terminates commands that request user input by closing `stdin`
+- **Cloud CLI Protection** — blocks cloud tools (`aws`, `terraform`, `kubectl`, etc.) unless `--cloud` is enabled
 - No automatic timeouts; users cancel via UI when needed
 
 ### File Operations
@@ -179,7 +180,7 @@ g8eo maintains four independent local stores on the Operator machine. All are SQ
 |---|---|---|
 | Scrubbed Vault | `{workdir}/.g8e/local_state.db` | Sentinel-scrubbed command output and file diffs; AI reads from here |
 | Raw Vault | `{workdir}/.g8e/raw_vault.db` | Unscrubbed full output; never transmitted to the platform |
-| Audit Vault | `{workdir}/.g8e/data/g8e.db` | LFAA structured event timeline (sessions, commands, file mutations); fields encrypted at rest |
+| Audit Vault | `{workdir}/.g8e/data/g8e.db` | LFAA structured event timeline; sensitive fields encrypted at rest; **Head/Tail truncation** for outputs >100KB |
 | Ledger | `{workdir}/.g8e/data/ledger` | Git-backed cryptographic version history for all Operator-modified files |
 
 Local storage is enabled by default (`-s`). Disabled with `-s=false` (full output sent to cloud instead). The Ledger requires a functional `git` binary; disabled via `--no-git`.
@@ -221,7 +222,13 @@ In this mode, the Operator acts as **g8es** (`g8es`), the platform's central bac
 - **Connectivity**: **Inbound-only**. It listens for connections from other platform components (g8ee, g8ed, and Outbound Operators).
 - **Role**: Backend store (SQLite) and Pub/Sub broker. It does **not** execute commands or initiate outbound connections.
 - **Ports**:
-  - `443` (WSS/HTTPS): Unified port for all incoming traffic (WebSocket, document store, KV, etc.).
+  - `443` (WSS/HTTPS): Unified port for all incoming traffic.
+- **Endpoints**:
+  - `/db/` — Document Store (SQLite)
+  - `/kv/` — Key-Value Store with TTL support
+  - `/blob/` — High-performance binary blob storage
+  - `/ws/pubsub` — WebSocket broker
+  - `/binary/` — Operator binary distribution point
 - **Authentication**: Serves as the authenticator for all internal platform traffic using a shared secret (`X-Internal-Auth`).
 - **Usage**:
   ```bash
