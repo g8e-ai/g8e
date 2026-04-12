@@ -18,7 +18,6 @@ Handles non-mutating filesystem operations (list, read) on Operators.
 
 import logging
 
-from app.errors import ValidationError
 from app.services.protocols import (
     ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
@@ -67,8 +66,6 @@ class OperatorFilesystemService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsListToolResult:
-        if g8e_context is None:
-             raise ValidationError("g8e_context is required", field="g8e_context", constraint="required")
 
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
@@ -164,8 +161,6 @@ class OperatorFilesystemService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
-        if g8e_context is None:
-             raise ValidationError("g8e_context is required", field="g8e_context", constraint="required")
 
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(

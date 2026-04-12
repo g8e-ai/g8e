@@ -116,7 +116,7 @@ class AIGenerationConfigBuilder:
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             system_instruction=system_instruction,
-            response_format=response_format,
+            response_format=response_format if response_format else None,
         )
 
         logger.info(
@@ -143,7 +143,7 @@ class AIGenerationConfigBuilder:
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             system_instruction=system_instruction,
-            response_format=response_format,
+            response_format=response_format if response_format else None,
         )
 
         logger.info(

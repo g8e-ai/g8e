@@ -82,8 +82,7 @@ class TestOperatorCommandServiceInit:
     def test_pubsub_client_starts_as_none(self):
         """pubsub_client is None until set_pubsub_client is called."""
         service = build_command_service(skip_pubsub_client=True)
-        with pytest.raises(AttributeError):
-            _ = service._pubsub_service.pubsub_client
+        assert service._pubsub_service.pubsub_client is None
 
     def test_pubsub_ready_starts_false(self):
         """_pubsub_ready starts False."""
@@ -135,7 +134,7 @@ class TestOperatorServiceAvailable:
 
     def test_returns_false_when_operator_service_is_none(self):
         service = _make_service()
-        service.cache_aside_service = None
+        service.operator_data_service = None
         assert service.operator_service_available() is False
 
 # ---------------------------------------------------------------------------

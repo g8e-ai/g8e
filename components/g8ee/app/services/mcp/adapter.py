@@ -39,10 +39,11 @@ def parse_tool_call_result(payload: dict[str, Any]) -> CallToolResult:
         message = error_raw.get("message", "Unknown MCP Error")
         return CallToolResult(
             content=[Content(type="text", text=f"MCP Error ({code}): {message}")],
-            isError=True
+            isError=True,
+            _metadata=None,
         )
 
     if result_raw is None:
-        return CallToolResult(content=[], isError=True)
+        return CallToolResult(content=[], isError=True, _metadata=None)
 
     return CallToolResult.model_validate(result_raw)

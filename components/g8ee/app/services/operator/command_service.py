@@ -226,7 +226,7 @@ class OperatorCommandService:
         await self._pubsub_service.stop()
 
     def operator_service_available(self) -> bool:
-        return self.cache_aside_service is not None
+        return self.operator_data_service is not None
 
     async def execute_command(
         self,

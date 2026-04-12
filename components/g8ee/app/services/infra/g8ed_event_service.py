@@ -97,10 +97,10 @@ class EventService:
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | G8eBaseModel,
+        payload: G8eBaseModel,
         web_session_id: str,
         case_id: str,
-        user_id: str | None = None,
+        user_id: str,
     ) -> None:
         """Publish a session event specifically for an investigation."""
         logger.info(

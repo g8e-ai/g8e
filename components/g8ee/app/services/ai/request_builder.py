@@ -163,9 +163,6 @@ class AIRequestBuilder:
         Returns:
             PrimaryLLMSettings ready for generate_content_stream_primary()
         """
-        if agent_mode is None:
-            agent_mode = AgentMode.OPERATOR_NOT_BOUND
-
         model = model_override or settings.llm.primary_model or "gpt-4o-mini"
         tools = self.tool_executor.get_tools(agent_mode, model) if self.tool_executor else []
 

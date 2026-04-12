@@ -246,6 +246,7 @@ class ChatPipelineService:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 system_instruction=system_instructions,
+                response_format=None,
             )
 
         attachment_parts: list[types.Part] = []
@@ -360,7 +361,7 @@ class ChatPipelineService:
             getattr(g8e_context, 'web_session_id', 'unknown') if g8e_context else 'None',
         )
         
-        investigation_id = g8e_context.investigation_id if g8e_context else None
+        investigation_id = g8e_context.investigation_id if g8e_context else ""
         logger.info("[SSE-CHAT] Extracted investigation_id: %s", investigation_id)
         
         task = None
@@ -393,7 +394,7 @@ class ChatPipelineService:
             # Defensive logging to identify what is None
             logger.error(
                 "[SSE-CHAT] Debug info before error: g8e_context=%s, investigation_id=%s",
-                "None" if g8e_context is None else f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
+                f"case_id={g8e_context.case_id}",
                 investigation_id
             )
             logger.error(
@@ -417,7 +418,7 @@ class ChatPipelineService:
         """Run the chat implementation - main logic flow."""
         logger.info(
             "[SSE-CHAT] _run_chat_impl started: g8e_context=%s attachments_count=%d",
-            "None" if g8e_context is None else f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
+            f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
             len(attachments) if attachments else 0
         )
         

@@ -149,7 +149,7 @@ class OperatorPubSubService:
     """
 
     def __init__(self) -> None:
-        self.pubsub_client: PubSubClient
+        self.pubsub_client: PubSubClient | None = None
         self._pubsub_ready: bool = False
         self._active_operator_sessions_set: set[tuple[str, str]] = set()
         self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
@@ -170,7 +170,7 @@ class OperatorPubSubService:
         if not hasattr(self, "_captured_publish_commands"):
             self._captured_publish_commands: list[G8eMessage] = []
 
-        async def _capture_publish(operator_id, operator_session_id, command_data):
+        async def _capture_publish(operator_id: str, operator_session_id: str, command_data: G8eMessage):
             self._captured_publish_commands.append(command_data)
             if self.pubsub_client:
                 return await self.pubsub_client.publish_command(
