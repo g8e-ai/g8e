@@ -451,13 +451,13 @@ The `CacheAsideService` (Hierarchy Level 2) coordinates between the authoritativ
 | Call | Behavior |
 |---|---|
 | `get_document` | **Lazy Load:** Checks KV cache first (HIT); on MISS, reads from DB and warms the cache. |
-| `create_document` | **Fail-Fast + Invalidate:** Checks DB for existence (fails if present), writes to DB, then **invalidates** (deletes) the KV cache key. |
+| `create_document` | **Fail-Fast:** Checks DB for existence (fails if present), writes to DB. g8ee **invalidates** (deletes) the KV cache key; g8ed uses **update-in-place** (setex). |
 | `update_document` | **Write-then-Invalidate:** Writes update to DB, then **invalidates** (deletes) the KV cache key. |
 | `delete_document` | **Delete-then-Invalidate:** Deletes from DB, then **invalidates** (deletes) the KV cache key. |
 | `query_documents` | **Hashed Query Cache:** MD5 hashes query parameters (filters/sort) to cache result sets with shorter TTLs. |
 | `batch_create_documents` | **Batch Invalidate:** Performs a batch write to DB, then **invalidates** all corresponding keys in the KV cache. |
 
-**Key Invariant:** All write operations (`create`, `update`, `delete`, `batch`) **invalidate** the cache. Population only occurs during a `get_document` MISS. This ensures that stale data is never accidentally "warmed" into the cache during a write race.
+**Key Invariant:** All write operations (`create`, `update`, `delete`, `batch`) ensure cache consistency — either by invalidating the cache key (g8ee) or updating it in place (g8ed for create). Population on read occurs during a `get_document` MISS. This ensures that stale data is never accidentally "warmed" into the cache during a write race.
 
 ---
 
@@ -722,7 +722,7 @@ Invalidate-on-update (not update-in-place) is the correct pattern for this platf
 | Operation | g8ee (`cache_aside.py`) | g8ed (`cache_aside_service.js`) |
 |---|---|---|
 | `update_document` | DB write → **invalidate** (del key) | DB write → **invalidate** (del key) |
-| `create_document` | DB write → setex | DB write → setex |
+| `create_document` | DB write → **invalidate** (del key) | DB write → setex (update-in-place) |
 | `delete_document` | DB delete → del key | DB delete → del key |
 | Cache miss on read | DB read → setex(key, data, ttl) | DB read → setex(key, data, ttl) |
 

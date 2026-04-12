@@ -115,7 +115,7 @@
     flex-direction: column;
     margin: 4px 0;
     margin-left: auto;
-    max-width: 85%;
+    max-width: 65%;
     border-radius: 6px;
     overflow: hidden;
 }
@@ -163,9 +163,7 @@
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
-    max-width: 80vw;
     overflow-y: auto;
-    font-size: 12px;
     line-height: 1.5;
     transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
 }

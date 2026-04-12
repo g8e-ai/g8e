@@ -35,7 +35,7 @@ Web frontend and single external entry point. Node.js.
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** none (`cap_drop: ALL`)
 - **Writable volumes:** `g8ed-data:/data`
-- **Config/shared mounts:** `./shared:ro`, `g8es-ssl:/g8es:ro`, `./docs:ro`, `./README.md:ro`, `./components/g8ed/views:ro`
+- **Config/shared mounts:** `./shared:ro`, `g8es-ssl:/g8es:ro`, `./docs:ro`, `./README.md:ro`, `./components/g8ed/views:ro`, `./components/g8ed/public:ro`
 - **Internal Auth:** Discovers authoritative token from g8es/SSL volume (`g8es-ssl:/g8es:ro`) at runtime. No `G8E_INTERNAL_AUTH_TOKEN` environment variable.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls, read-only root filesystem
 
@@ -45,10 +45,10 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 
 - **User:** `g8e` (uid 1001, gid 1001)
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
-- **Capabilities:** none (no `cap_drop` or `cap_add` directives in compose)
+- **Capabilities:** `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Writable volumes:** `g8es-data:/data`, `g8es-ssl:/ssl`
 - **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
-- **Security:** read-only root filesystem (no `cap_drop`, `no-new-privileges`, or `sysctls` directives in compose)
+- **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL` (no `no-new-privileges` or `sysctls` directives in compose)
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
 
 ### g8e node
@@ -59,8 +59,8 @@ Unified test environment with Python, Node, and Go. Always running alongside cor
 - **Base image:** `ubuntu:24.04`
 - **Read-only filesystem:** no — test and build workflows write to `/app/components` and Go build cache
 - **Bind mounts:** `components/g8ee/`, `components/g8ed/`, `components/g8eo/`, `components/g8ep/scripts/`, `shared/`, `scripts/` — the full repo root is not mounted
-- **Capabilities:** `cap_drop: ALL` — no capabilities added back
-- **Security:** `cap_drop: ALL`, `no-new-privileges: true` (no `sysctls` directives in compose)
+- **Capabilities:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`
+- **Security:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`, `no-new-privileges: true` (no `sysctls` directives in compose)
 - **Docker socket:** see [Docker Socket Threat Model](#docker-socket-threat-model) below
 - **Go toolchain:** `GOPATH`, `GOBIN`, and `GOCACHE` are all set under `/home/g8e/` so the Go build cache and installed binaries are owned by `g8e` from the start. `gotestsum` is installed as `g8e` (after `USER g8e`) so no root-owned cache files are created.
 - **Notable env vars:** `RUNNING_IN_DOCKER=1`, `HOME=/home/g8e` signals to test and tool scripts that they are executing inside the container
@@ -142,16 +142,16 @@ Not applied to:
 
 ### Capability Dropping
 
-g8ee, g8ed, and g8e node g8e all capabilities:
+g8ee, g8ed, and g8e node drop all capabilities:
 
 ```yaml
 cap_drop:
   - ALL
 ```
 
-g8ep drops all capabilities with no additions.
+g8ep adds `NET_RAW`, `NET_ADMIN`, `SYS_PTRACE`, `SETUID`, `SETGID` capabilities and drops all others.
 
-g8es does not have a `cap_drop` directive in compose.
+g8es adds `NET_BIND_SERVICE` capability and drops all others.
 
 ### Read-Only Filesystems
 

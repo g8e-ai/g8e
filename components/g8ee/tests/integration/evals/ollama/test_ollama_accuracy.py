@@ -38,6 +38,7 @@ import httpx
 import app.llm.llm_types as types
 from app.constants import LLMProvider
 from app.llm.prompts import build_modular_system_prompt
+from app.llm.factory import get_llm_settings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.ai.eval_judge import EvalJudge, EvalGrade, EvalJudgeError
 from tests.integration.evals.shared import AccuracyTestResult, load_and_validate_gold_set
@@ -79,15 +80,15 @@ async def test_ollama_accuracy(
     result_data = AccuracyTestResult(scenario_id=scenario["id"])
 
     try:
-        settings = test_settings
-        if not hasattr(settings, 'llm') or not settings.llm.primary_model:
+        llm_settings = get_llm_settings()
+        if not llm_settings or not llm_settings.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        if settings.llm.provider != LLMProvider.OLLAMA:
-            pytest.skip(f"This test only runs with Ollama provider, current provider: {settings.llm.provider}")
+        if llm_settings.provider != LLMProvider.OLLAMA:
+            pytest.skip(f"This test only runs with Ollama provider, current provider: {llm_settings.provider}")
 
         # Use the primary model for this test (raw model quality)
-        model_name = settings.llm.primary_model
+        model_name = llm_settings.primary_model
 
         logger.info(f"[OLLAMA_EVAL] Running scenario {scenario['id']} with model {model_name}")
 
@@ -104,8 +105,8 @@ async def test_ollama_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=settings.llm.llm_temperature,
-            max_tokens=settings.llm.llm_max_tokens or 4096,
+            temperature=llm_settings.llm_temperature,
+            max_tokens=llm_settings.llm_max_tokens or 4096,
             system_instruction=system_prompt,
             tools=[],
         )
@@ -122,7 +123,7 @@ async def test_ollama_accuracy(
             )
         except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError) as e:
             pytest.skip(
-                f"Ollama endpoint at {settings.llm.ollama_endpoint} is not reachable. "
+                f"Ollama endpoint at {llm_settings.ollama_endpoint} is not reachable. "
                 f"Ensure Ollama is running and accessible. Error: {e}"
             )
 
@@ -136,7 +137,7 @@ async def test_ollama_accuracy(
         logger.info(f"[OLLAMA_EVAL] Response length: {len(response_text)} chars")
 
         # Step 5: Grade with EvalJudge
-        judge = EvalJudge(provider=llm_provider, model=settings.llm.primary_model)
+        judge = EvalJudge(provider=llm_provider, model=llm_settings.primary_model)
 
         # Build interaction trace for the judge
         trace_lines = [

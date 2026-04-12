@@ -32,6 +32,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 
 ```bash
 ./g8e platform build                    # Build all images and start the platform (alias: drop)
+./g8e platform setup                     # Full first-time setup: no-cache build of all images, start platform
 ./g8e platform settings                 # Show effective platform settings (requires platform running)
 ./g8e platform update                   # Pull latest changes (with confirmation) and rebuild
 ./g8e platform status                   # Show container status and versions
@@ -42,11 +43,12 @@ Manages the Docker Compose services. All subcommands run on the host.
 ./g8e platform rebuild g8ed             # Rebuild a single service: g8es | g8ee | g8ed | g8ep
 ./g8e platform wipe                     # Wipe all data volumes and restart fresh
 ./g8e platform clean                    # Full Docker cleanup: containers, images, volumes, networks (this project only)
-./g8e platform logs [service]           # Tail service logs
+./g8e platform logs [service]           # Tail service logs with filtering options
 ```
 
 | Subcommand | Delegates to | Notes |
 |------------|-------------|-------|
+| `setup` | `scripts/core/build.sh setup` | Full first-time setup: no-cache build of all images, start platform |
 | `settings` | `scripts/data/manage-g8es.py settings show` (inside g8ep) | Displays effective non-secret platform settings from the live internal API |
 | `update` | `scripts/core/build.sh rebuild` | Pulls latest from `origin/main` with confirmation, then rebuilds |
 | `status` | `scripts/core/build.sh status` | |
@@ -57,7 +59,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 | `reset` | `scripts/core/build.sh reset` | Wipe ALL data volumes and rebuild from scratch (destructive) |
 | `wipe` | `scripts/core/build.sh wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
 | `clean` | `scripts/core/build.sh clean` | Remove all managed resources scoped to this project |
-| `logs` | `scripts/core/logs.sh` | |
+| `logs` | `scripts/core/logs.sh` | Supports filtering by level, pattern, time; follows or tail |
 
 #### operator
 Manages the Operator binary build and deployment.
@@ -99,6 +101,7 @@ Runs tests for platform components. Runs inside g8ep.
 Security validation and certificate management. Runs inside g8ep.
 
 ```bash
+./g8e security validate              # Validate platform security (volumes, env vars, tokens)
 ./g8e security certs                # Show TLS certificate status (default)
 ./g8e security certs generate       # Generate CA + server certificates
 ./g8e security certs rotate         # Rotate/regenerate existing certificates
@@ -137,6 +140,31 @@ Local LLM container management. Runs on the host.
 ```bash
 ./g8e llm setup                              # Interactive LLM provider setup
 ./g8e llm restart                            # Force-recreate local LLM container
+./g8e llm show                               # Show current LLM settings
+./g8e llm get <key>                          # Read a single LLM setting
+./g8e llm set <key=value> [...]              # Write one or more LLM settings
+```
+
+#### search
+Vertex AI Search configuration for the search_web AI tool. Runs on the host.
+
+```bash
+./g8e search setup                           # Configure Vertex AI Search (interactive)
+./g8e search disable                         # Remove web search configuration
+```
+
+#### ssh
+SSH configuration for operator streaming. Runs on the host.
+
+```bash
+./g8e ssh setup                              # Mount SSH directory into g8ep
+```
+
+#### aws
+AWS credentials configuration for AI tools. Runs on the host.
+
+```bash
+./g8e aws setup                              # Mount AWS credentials directory into g8ep
 ```
 
 ---
@@ -145,7 +173,10 @@ Local LLM container management. Runs on the host.
 
 ```
 scripts/
-  core/           # Platform build scripts (build.sh, setup.sh)
+  core/           # Platform build scripts
+    build.sh      #   Docker Compose orchestration
+    logs.sh       #   Log aggregation and filtering
+    setup.sh      #   First-time setup
   data/           # Data management (unified via manage-g8es.py dispatcher)
     _lib.py       #   Shared auth, HTTP clients, display helpers
     manage-g8es.py  #   Entry point — routes to resource scripts
@@ -156,8 +187,56 @@ scripts/
     manage-device-links.py  # Device link tokens
     manage-lfaa.py   #   LFAA audit vault (SQLite)
   security/       # TLS certificates and security validation
+    manage-ssl.sh      #   Certificate lifecycle
+    mtls-test.sh      #   mTLS connectivity verification
+    validate-platform-security.sh  # Security validation
+    manage-passkeys.py #   Passkey credential management
+    trust-ca.ps1       #   Windows CA trust installation
   testing/        # Test runner and supporting tools
-  tools/          # Developer utilities (LLM setup)
+    run_tests.sh  #   Component test execution
+  tools/          # Developer utilities
+    setup-llm.sh      #   LLM provider configuration
+    setup-ssh.sh      #   SSH configuration for operator streaming
+    setup-aws.sh      #   AWS credentials mount
+    setup-search.sh   #   Vertex AI Search configuration
+```
+
+---
+
+## Log Aggregation (`logs.sh`)
+
+**Location:** `scripts/core/logs.sh`
+
+Aggregates and filters logs across all platform services in time order.
+
+### Usage
+
+```bash
+./g8e platform logs [options] [service...]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-g, --grep <pattern>` | Include lines matching pattern (case-insensitive regex) |
+| `-v, --invert <pattern>` | Exclude lines matching pattern |
+| `-l, --level <level>` | Filter by log level: error, warn, info, debug |
+| `-s, --since <duration>` | Show logs since duration (e.g. 5m, 1h, 30s) or timestamp |
+| `-n, --tail <N>` | Lines from end per service (default: 200; use 'all' for all) |
+| `-f, --follow` | Stream new log lines (default: off) |
+| `--all` | Include g8ep/operator (default: core only) |
+
+### Examples
+
+```bash
+./g8e platform logs                          # last 200 lines, all core services
+./g8e platform logs --level error            # errors only
+./g8e platform logs --level warn --follow    # stream warnings+
+./g8e platform logs --grep 'operator|investigation'
+./g8e platform logs --since 5m               # last 5 minutes
+./g8e platform logs g8ee g8ed --tail 50
+./g8e platform logs g8ep                     # operator process output
 ```
 
 ---
@@ -327,6 +406,18 @@ Query the operator's Local-First Audit Architecture (LFAA) vault (SQLite).
 
 ## Security
 
+### Platform Security Validation (`validate-platform-security.sh`)
+**Location:** `scripts/security/validate-platform-security.sh`
+
+Validates platform security configuration by checking:
+- TLS certificate files exist in g8es
+- Volume mounts are correct (g8ed, g8ee have access to g8es certs and tokens)
+- Environment variables match mounted files (INTERNAL_AUTH_TOKEN, SESSION_ENCRYPTION_KEY)
+
+```bash
+./g8e security validate
+```
+
 ### TLS Certificate Management (`manage-ssl.sh`)
 **Location:** `scripts/security/manage-ssl.sh`
 
@@ -341,8 +432,27 @@ Manages the platform TLS certificates owned by g8es. g8es generates the CA and s
 
 After `rotate`, run `./g8e platform rebuild` to re-embed the new CA into the operator binary.
 
-### Security Validation (`security-validate.sh`)
-**Location:** `scripts/security/security-validate.sh`
+### Passkey Management (`manage-passkeys.py`)
+**Location:** `scripts/security/manage-passkeys.py`
+
+Manage FIDO2/WebAuthn passkey credentials via the g8ed internal HTTP API.
+
+```bash
+./g8e security passkeys list --email user@example.com
+./g8e security passkeys list --id USER_ID
+./g8e security passkeys revoke --id USER_ID --credential CRED_ID
+./g8e security passkeys revoke --email user@example.com --credential CRED_ID --force
+./g8e security passkeys revoke-all --email user@example.com
+./g8e security passkeys revoke-all --id USER_ID --force
+./g8e security passkeys reset --email user@example.com
+./g8e security passkeys reset --id USER_ID --force
+```
+
+**`reset`** removes all passkey credentials for a user. The user will be prompted to register a new passkey on next login. Existing sessions expire naturally.
+
+**`revoke`** removes a specific credential by ID.
+
+**`revoke-all`** removes all credentials, locking the user out until a new passkey is registered.
 
 ### Internal Token Rotation
 
@@ -398,7 +508,68 @@ Interactive wizard to configure LLM providers (Ollama, OpenAI, Anthropic, Gemini
 
 ```bash
 ./g8e llm setup
+./g8e llm show
+./g8e llm get llm_model
+./g8e llm set llm_model=gemma3:4b
+./g8e llm restart
 ```
+
+---
+
+## SSH Configuration (`setup-ssh.sh`)
+
+**Location:** `scripts/tools/setup-ssh.sh`
+
+Configures SSH directory mounting for operator streaming. The ssh-config subcommand configures ~/.ssh/config for high-concurrency operator streaming with multiplexing.
+
+```bash
+./g8e ssh setup                              # Mount SSH directory into g8ep
+./g8e operator ssh-config                    # Configure ~/.ssh/config for streaming
+./g8e operator ssh-config --print           # Print the stanza without writing
+./g8e operator ssh-config --force            # Replace existing stanza
+```
+
+The ssh-config subcommand creates:
+- ~/.ssh/sockets/ directory for ControlMaster sockets
+- Multiplexing stanza in ~/.ssh/config for connection reuse
+- Keep-alive settings and compression for efficient streaming
+
+---
+
+## AWS Credentials Setup (`setup-aws.sh`)
+
+**Location:** `scripts/tools/setup-aws.sh`
+
+Mounts AWS credentials into g8ep so the operator can interact with AWS services.
+
+```bash
+./g8e aws setup                              # Interactive setup
+./g8e aws setup --aws-dir /custom/path        # Non-interactive
+```
+
+The mounted directory is configured in docker-compose.yml as ${HOME}/.aws by default. Update the volume mount in docker-compose.yml to use a custom path.
+
+---
+
+## Vertex AI Search Setup (`setup-search.sh`)
+
+**Location:** `scripts/tools/setup-search.sh`
+
+Interactive Vertex AI Search configuration for the search_web AI tool. Enables AI to search the web during investigations using a Vertex AI Search (Discovery Engine) app.
+
+```bash
+./g8e search setup                           # Interactive setup
+./g8e search setup --project-id PROJECT --engine-id ENGINE --api-key KEY
+./g8e search disable                         # Remove web search configuration
+```
+
+**Prerequisites (one-time GCP setup):**
+1. Enable the Discovery Engine API in your GCP project
+2. Create a Website data store and index your domains
+3. Create a Search App connected to that data store
+4. Create an API key restricted to the Discovery Engine API
+
+The script validates the API key against Vertex AI Search before writing configuration to the database.
 
 ---
 

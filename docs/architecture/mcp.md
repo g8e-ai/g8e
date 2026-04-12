@@ -283,6 +283,9 @@ g8eo (pubsub_commands.go)
     │ mcp.TranslateToolCallToCommand()
     ▼
 g8eo executes command (using translated event type)
+    │ (dispatches to: Command.Requested, FileEdit.Requested,
+    │  FsList.Requested, FsRead.Requested, PortCheck.Requested,
+    │  FetchFileHistory.Requested, FetchFileDiff.Requested)
     │
     ▼
 g8es pub/sub: g8e.v1.operator.mcp.tools.result

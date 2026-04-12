@@ -50,11 +50,11 @@ Configuration:
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
   LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
 
-Temperatures are fixed per Tribunal member and are not configurable:
+Temperatures are fixed per Tribunal member and are sourced from shared/constants/agents.json:
 
-  Axiom    (pass 0, cycles) — 0.5  (conservative anchor)
-  Concord  (pass 1, cycles) — 0.7  (consensus gold standard)
-  Variance (pass 2, cycles) — 1.2  (creative edge-case explorer)
+  Axiom    (pass 0, cycles) — 0.0  (fully deterministic, statistical probability and resource efficiency)
+  Concord  (pass 1, cycles) — 0.4  (moderate determinism with ethical flexibility)
+  Variance (pass 2, cycles) — 0.8  (high creativity and intentional unpredictability)
 
   Verifier (arbitrator)      — 0.0  (deterministic evaluation)
     """

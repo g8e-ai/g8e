@@ -80,6 +80,13 @@ export const ChatHistoryMixin = {
                 continue;
             }
 
+            if (metadata.event_type === EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED ||
+                metadata.event_type === EventType.OPERATOR_COMMAND_APPROVAL_GRANTED ||
+                metadata.event_type === EventType.OPERATOR_COMMAND_APPROVAL_REJECTED ||
+                metadata.event_type === EventType.OPERATOR_COMMAND_APPROVAL_PREPARING) {
+                continue;
+            }
+
             if (metadata.sender === EventType.EVENT_SOURCE_USER_TERMINAL) {
                 const executionId = metadata.execution_id;
                 const eventType = metadata.event_type;

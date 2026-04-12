@@ -126,10 +126,13 @@ class TestMemoryGenerationServiceIntegration:
         ]
 
         # Test memory generation
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify memory was created and populated
@@ -222,10 +225,13 @@ class TestMemoryGenerationServiceIntegration:
         ]
 
         # Test memory update
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         updated_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify memory was updated
@@ -313,10 +319,13 @@ class TestMemoryGenerationServiceIntegration:
         )
 
         # Test with empty conversation
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=[],
             investigation=created_investigation,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify memory was still created with basic information
@@ -349,10 +358,11 @@ class TestTitleGenerationIntegration:
         # Test with unique technical description
         description = "Our 'Crimson-Edge' router in Singapore is experiencing a 'Purple-Pulse' synchronization error. This usually happens during the monsoon season when humidity is over 85%. We need to verify the fiber optic signal strength on Port 7."
 
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify title quality
@@ -376,10 +386,11 @@ class TestTitleGenerationIntegration:
         # Test with very short description
         description = "Help with Kubernetes"
 
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify title is meaningful despite short input
@@ -413,11 +424,13 @@ class TestTitleGenerationIntegration:
         if not llm or not llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
+
         # Test with None description
         title = await generate_case_title(
             description=None,
             max_length=80,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         assert isinstance(title, CaseTitleResult)
@@ -428,7 +441,7 @@ class TestTitleGenerationIntegration:
         title = await generate_case_title(
             description="",
             max_length=80,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         assert isinstance(title, CaseTitleResult)
@@ -439,7 +452,7 @@ class TestTitleGenerationIntegration:
         title = await generate_case_title(
             description="   ",
             max_length=80,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         assert isinstance(title, CaseTitleResult)
@@ -637,11 +650,12 @@ class TestResponseAnalysisIntegration:
             username="dc-tech",
         )
 
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=low_risk_command,
             justification=justification,
             context=context,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify analysis result
@@ -671,11 +685,12 @@ class TestResponseAnalysisIntegration:
             username="root",
         )
 
+        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=high_risk_command,
             justification=justification,
             context=context,
-            settings=test_settings,
+            settings=user_settings,
         )
 
         # Verify analysis result

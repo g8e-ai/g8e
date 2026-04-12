@@ -112,7 +112,6 @@
 
 /* Messages container styling */
 .messages-container {
-    --thinking-card-max-width: clamp(320px, 60vw, 960px);
     --thinking-card-padding: clamp(1rem, 2.5vw, 1.5rem);
 }
 
@@ -819,7 +818,7 @@
 
     /* Thinking Messages */
     .message-item.thinking-message {
-        width: min(90%, var(--thinking-card-max-width, clamp(320px, 60vw, 960px)));
+        max-width: 95%;
     }
 
     .message-item.thinking-message .thinking-summary {
@@ -943,8 +942,9 @@
 .message-item.thinking-message {
     align-self: flex-end;
     margin: 0 0 0 auto;
-    width: min(80%, var(--thinking-card-max-width, clamp(320px, 60vw, 960px)));
-    max-width: None;
+    max-width: 85%;
+    width: fit-content;
+    min-width: 0;
     box-sizing: border-box;
     position: relative;
 }
@@ -963,7 +963,7 @@
     background: transparent;
     box-shadow: none;
     transition: border-color 0.25s ease, color 0.25s ease;
-    max-width: min(100%, var(--thinking-card-max-width, clamp(320px, 60vw, 960px)));
+    max-width: 100%;
 }
 
 .message-item.thinking-message:not([data-state="active"]) .message-header:hover,
@@ -1182,7 +1182,7 @@
 
     /* Thinking Messages */
     .message-item.thinking-message {
-        width: min(95%, var(--thinking-card-max-width, clamp(280px, 60vw, 960px)));
+        max-width: 98%;
     }
 
     .message-item.thinking-message .message-content {
