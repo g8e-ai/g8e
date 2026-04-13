@@ -104,7 +104,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 | Provider | Module | Streaming Model |
 |----------|--------|-----------------|
 | `GeminiProvider` | `app/llm/providers/gemini.py` | Opens the SDK stream with tenacity retry on the connection step only, then yields `StreamChunkFromModel` objects immediately as each SDK chunk arrives — no buffering |
-| `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop` |
+| `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. |
 | `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; enables `think=true` for primary model calls to support Ollama's thinking feature; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 | `OpenAICompatibleProvider` | `app/llm/providers/openai_compatible.py` | Streams via `AsyncOpenAI` for OpenAI-compatible endpoints; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 
@@ -922,16 +922,6 @@ Temperatures are fixed per Tribunal member and are not configurable. Values are 
 | `vertex_search_api_key` | — | GCP API key restricted to Discovery Engine API; can be shared with `gemini_api_key` |
 
 `VertexSearchSettings.is_configured` requires `enabled=True` and all three of `project_id`, `engine_id`, `api_key` non-empty. Only when configured is `WebSearchProvider` constructed and `search_web` registered.
-
-#### Google Programmable Search Engine (`GoogleSearchSettings`)
-
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `google_search_enabled` | `false` | Enable `search_web` tool via Google Programmable Search Engine |
-| `google_search_api_key` | — | Google Cloud API key with Custom Search JSON API enabled |
-| `google_search_engine_id` | — | Programmable Search Engine `cx` value |
-
-`GoogleSearchSettings.is_configured` requires `enabled=True` and both `api_key` and `engine_id` non-empty.
 
 ---
 

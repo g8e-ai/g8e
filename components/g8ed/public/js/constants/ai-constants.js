@@ -42,9 +42,9 @@ export const OpenAIModel = Object.freeze({
 });
 
 export const AnthropicModel = Object.freeze({
-    CLAUDE_4_6_OPUS:   'claude-4-6-opus',
-    CLAUDE_4_6_SONNET: 'claude-4-6-sonnet',
-    CLAUDE_3_5_SONNET: 'claude-3-5-sonnet-20241022',
+    ANTHROPIC_CLAUDE_OPUS_4_6:   'claude-opus-4-6',
+    ANTHROPIC_CLAUDE_SONNET_4_6: 'claude-sonnet-4-6',
+    ANTHROPIC_CLAUDE_HAIKU_4_5:  'claude-haiku-4-5',
 });
 
 export const OllamaModel = Object.freeze({
@@ -56,7 +56,6 @@ export const OllamaModel = Object.freeze({
     GEMMA4_E2B:         'gemma4:e2b',
     GEMMA4:             'gemma4',
     LLAMA3_8B:          'llama3:8b',
-    LLAMA3_70B:         'llama3:70b',
     CODELLAMA_7B:       'codellama:7b',
     MISTRAL_7B:         'mistral:7b',
 });

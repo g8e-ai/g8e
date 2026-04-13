@@ -295,6 +295,7 @@ describe('SSEService [UNIT]', () => {
         let mockSettingsService;
         let mockInternalHttpClient;
         let mockBoundSessionsService;
+        let mockInvestigationService;
 
         beforeEach(() => {
             mockSettingsService = {
@@ -307,10 +308,14 @@ describe('SSEService [UNIT]', () => {
             mockBoundSessionsService = {
                 resolveBoundOperators: vi.fn().mockResolvedValue([])
             };
+            mockInvestigationService = {
+                getInvestigationsByUserId: vi.fn().mockResolvedValue([{ id: 'inv_1', case_title: 'Test Case' }])
+            };
             service.setDependencies({
                 settingsService: mockSettingsService,
                 internalHttpClient: mockInternalHttpClient,
-                boundSessionsService: mockBoundSessionsService
+                boundSessionsService: mockBoundSessionsService,
+                investigationService: mockInvestigationService
             });
             vi.spyOn(service, 'publishEvent').mockResolvedValue(true);
         });
@@ -319,7 +324,7 @@ describe('SSEService [UNIT]', () => {
             await service.pushInitialState('user_123', 'session_123', 'org_123');
 
             expect(mockSettingsService.getPlatformSettings).toHaveBeenCalled();
-            expect(mockInternalHttpClient.queryInvestigations).toHaveBeenCalled();
+            expect(mockInvestigationService.getInvestigationsByUserId).toHaveBeenCalledWith('user_123');
             expect(service.publishEvent).toHaveBeenCalledTimes(2);
         });
 

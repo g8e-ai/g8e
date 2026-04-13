@@ -484,7 +484,7 @@
 }
 
 .operator-download-collapsible.expanded {
-  flex: 0 1 350px;
+  flex: 0 1 420px;
   display: flex;
   flex-direction: column;
   overflow: hidden;

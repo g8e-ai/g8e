@@ -454,7 +454,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
             component:                 SourceComponent.G8EO,
-            name:                      `${data.namePrefix}-${data.slotNumber}`,
+            name:                      data.isG8eNode ? 'g8ep' : `${data.namePrefix}-${data.slotNumber}`,
             api_key:                   data.operatorApiKey ?? null,
             status:                    OperatorStatus.AVAILABLE,
             created_at:                _now,

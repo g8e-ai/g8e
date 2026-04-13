@@ -27,6 +27,7 @@ from app.llm.llm_types import (
     Content,
     LiteLLMSettings,
     PrimaryLLMSettings,
+    ThinkingConfig,
     ToolCall,
     GenerateContentResponse,
     Part,
@@ -55,7 +56,7 @@ def _contents_to_anthropic(contents: list[Content]) -> list[dict]:
                 blocks.append({
                     "type": "thinking",
                     "thinking": part.text,
-                    "signature": part.thought_signature or "",
+                    "signature": str(part.thought_signature) if part.thought_signature else "",
                 })
             elif part.tool_call:
                 blocks.append({
@@ -119,6 +120,19 @@ def _parse_response_blocks(blocks: list) -> list[Part]:
     return parts
 
 
+def _build_usage(response_usage) -> UsageMetadata:
+    """Build UsageMetadata from an Anthropic response usage object."""
+    if not response_usage:
+        return UsageMetadata()
+    input_tokens = getattr(response_usage, "input_tokens", 0) or 0
+    output_tokens = getattr(response_usage, "output_tokens", 0) or 0
+    return UsageMetadata(
+        prompt_token_count=input_tokens,
+        candidates_token_count=output_tokens,
+        total_token_count=input_tokens + output_tokens,
+    )
+
+
 class AnthropicProvider(LLMProvider):
     _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
     _LIMITS = httpx.Limits(
@@ -163,42 +177,114 @@ class AnthropicProvider(LLMProvider):
             await self._http_client.aclose()
             logger.info("Anthropic provider closed")
 
+    def _build_kwargs(
+        self,
+        *,
+        model: str,
+        messages: list[dict],
+        temperature: float | None,
+        max_tokens: int | None,
+        top_k: int | None = None,
+        system_instruction: str = "",
+        anthropic_tools: list[dict] | None = None,
+        thinking_config: ThinkingConfig | None = None,
+    ) -> dict:
+        """Build Anthropic API kwargs with proper parameter constraints.
+
+        Anthropic constraints enforced here:
+        - temperature and top_p are mutually exclusive; we always use temperature
+        - Extended thinking requires temperature=1.0, no other sampling params
+        """
+        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+
+        kwargs: dict = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": effective_max_tokens,
+        }
+
+        thinking_enabled = (
+            thinking_config is not None
+            and thinking_config.thinking_level is not None
+        )
+
+        if thinking_enabled:
+            kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": effective_max_tokens // 2,
+            }
+            kwargs["temperature"] = 1.0
+        else:
+            kwargs["temperature"] = effective_temperature
+            if top_k is not None:
+                kwargs["top_k"] = top_k
+
+        if system_instruction:
+            kwargs["system"] = system_instruction
+        if anthropic_tools:
+            kwargs["tools"] = anthropic_tools
+
+        return kwargs
+
+    def _build_response(self, response) -> GenerateContentResponse:
+        """Parse a non-streaming Anthropic response into canonical form."""
+        return GenerateContentResponse(
+            candidates=[Candidate(
+                content=Content(role="model", parts=_parse_response_blocks(response.content)),
+                finish_reason=response.stop_reason,
+            )],
+            usage_metadata=_build_usage(response.usage),
+        )
+
+    async def _stream_text_only(self, kwargs: dict) -> AsyncGenerator[StreamChunkFromModel]:
+        """Shared streaming handler for assistant/lite calls (text output only)."""
+        async with self._client.messages.stream(**kwargs) as stream:
+            async for event in stream:
+                event_type = event.type
+
+                if event_type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta":
+                        yield StreamChunkFromModel(text=delta.text or "")
+
+                elif event_type == "message_delta":
+                    stop_reason = getattr(event.delta, "stop_reason", None)
+                    usage = getattr(event, "usage", None)
+                    um = None
+                    if usage:
+                        um = UsageMetadata(
+                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                        )
+                    if stop_reason:
+                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+
+                elif event_type == "message_start":
+                    msg = getattr(event, "message", None)
+                    if msg:
+                        usage = getattr(msg, "usage", None)
+                        if usage:
+                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
+                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                            ))
+
     async def generate_content_stream_primary(
         self,
         model: str,
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_anthropic(contents)
-        anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
-
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = primary_llm_settings.top_k_filtering
-        if primary_llm_settings.system_instruction:
-            kwargs["system"] = primary_llm_settings.system_instruction
-        if anthropic_tools:
-            kwargs["tools"] = anthropic_tools
-
-        thinking_enabled = (
-            primary_llm_settings.thinking_config is not None
-            and primary_llm_settings.thinking_config.thinking_level is not None
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=primary_llm_settings.temperature,
+            max_tokens=primary_llm_settings.max_output_tokens,
+            top_k=primary_llm_settings.top_k_filtering,
+            system_instruction=primary_llm_settings.system_instruction,
+            anthropic_tools=_tools_to_anthropic(primary_llm_settings.tools),
+            thinking_config=primary_llm_settings.thinking_config,
         )
-        if thinking_enabled:
-            kwargs["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": primary_llm_settings.max_output_tokens // 2,
-            }
-            kwargs["temperature"] = 1.0
+
         accumulated_tool_name: dict[int, str] = {}
         accumulated_tool_id: dict[int, str] = {}
         accumulated_tool_input: dict[int, str] = {}
@@ -284,59 +370,19 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_anthropic(contents)
-        anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
-
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = primary_llm_settings.top_k_filtering
-        if primary_llm_settings.system_instruction:
-            kwargs["system"] = primary_llm_settings.system_instruction
-        if anthropic_tools:
-            kwargs["tools"] = anthropic_tools
-
-        thinking_enabled = (
-            primary_llm_settings.thinking_config is not None
-            and primary_llm_settings.thinking_config.thinking_level is not None
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=primary_llm_settings.temperature,
+            max_tokens=primary_llm_settings.max_output_tokens,
+            top_k=primary_llm_settings.top_k_filtering,
+            system_instruction=primary_llm_settings.system_instruction,
+            anthropic_tools=_tools_to_anthropic(primary_llm_settings.tools),
+            thinking_config=primary_llm_settings.thinking_config,
         )
-        if thinking_enabled:
-            kwargs["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": primary_llm_settings.max_output_tokens // 2,
-            }
-            kwargs["temperature"] = 1.0
 
         response = await self._client.messages.create(**kwargs)
-
-        parts = _parse_response_blocks(response.content)
-
-        usage = UsageMetadata()
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=getattr(response.usage, "input_tokens", 0) or 0,
-                candidates_token_count=getattr(response.usage, "output_tokens", 0) or 0,
-                total_token_count=(
-                    (getattr(response.usage, "input_tokens", 0) or 0)
-                    + (getattr(response.usage, "output_tokens", 0) or 0)
-                ),
-            )
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=response.stop_reason,
-            )],
-            usage_metadata=usage,
-        )
+        return self._build_response(response)
 
     async def generate_content_stream_assistant(
         self,
@@ -344,53 +390,17 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_anthropic(contents)
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=assistant_llm_settings.temperature,
+            max_tokens=assistant_llm_settings.max_output_tokens,
+            top_k=assistant_llm_settings.top_k_filtering,
+            system_instruction=assistant_llm_settings.system_instruction,
+        )
 
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = assistant_llm_settings.top_k_filtering
-        if assistant_llm_settings.system_instruction:
-            kwargs["system"] = assistant_llm_settings.system_instruction
-
-        accumulated_text: list[str] = []
-
-        async with self._client.messages.stream(**kwargs) as stream:
-            async for event in stream:
-                event_type = event.type
-
-                if event_type == "content_block_delta":
-                    delta = event.delta
-                    if delta.type == "text_delta":
-                        yield StreamChunkFromModel(text=delta.text or "")
-
-                elif event_type == "message_delta":
-                    stop_reason = getattr(event.delta, "stop_reason", None)
-                    usage = getattr(event, "usage", None)
-                    um = None
-                    if usage:
-                        um = UsageMetadata(
-                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
-                        )
-                    if stop_reason:
-                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
-
-                elif event_type == "message_start":
-                    msg = getattr(event, "message", None)
-                    if msg:
-                        usage = getattr(msg, "usage", None)
-                        if usage:
-                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
-                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                            ))
+        async for chunk in self._stream_text_only(kwargs):
+            yield chunk
 
     async def generate_content_assistant(
         self,
@@ -398,45 +408,17 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_anthropic(contents)
-
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = assistant_llm_settings.top_k_filtering
-        if assistant_llm_settings.system_instruction:
-            kwargs["system"] = assistant_llm_settings.system_instruction
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=assistant_llm_settings.temperature,
+            max_tokens=assistant_llm_settings.max_output_tokens,
+            top_k=assistant_llm_settings.top_k_filtering,
+            system_instruction=assistant_llm_settings.system_instruction,
+        )
 
         response = await self._client.messages.create(**kwargs)
-
-        parts = _parse_response_blocks(response.content)
-
-        usage = UsageMetadata()
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=getattr(response.usage, "input_tokens", 0) or 0,
-                candidates_token_count=getattr(response.usage, "output_tokens", 0) or 0,
-                total_token_count=(
-                    (getattr(response.usage, "input_tokens", 0) or 0)
-                    + (getattr(response.usage, "output_tokens", 0) or 0)
-                ),
-            )
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=response.stop_reason,
-            )],
-            usage_metadata=usage,
-        )
+        return self._build_response(response)
 
     async def generate_content_stream_lite(
         self,
@@ -444,51 +426,17 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_anthropic(contents)
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=lite_llm_settings.temperature,
+            max_tokens=lite_llm_settings.max_output_tokens,
+            top_k=lite_llm_settings.top_k_filtering,
+            system_instruction=lite_llm_settings.system_instruction,
+        )
 
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = lite_llm_settings.top_k_filtering
-        if lite_llm_settings.system_instruction:
-            kwargs["system"] = lite_llm_settings.system_instruction
-
-        async with self._client.messages.stream(**kwargs) as stream:
-            async for event in stream:
-                event_type = event.type
-
-                if event_type == "content_block_delta":
-                    delta = event.delta
-                    if delta.type == "text_delta":
-                        yield StreamChunkFromModel(text=delta.text or "")
-
-                elif event_type == "message_delta":
-                    stop_reason = getattr(event.delta, "stop_reason", None)
-                    usage = getattr(event, "usage", None)
-                    um = None
-                    if usage:
-                        um = UsageMetadata(
-                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
-                        )
-                    if stop_reason:
-                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
-
-                elif event_type == "message_start":
-                    msg = getattr(event, "message", None)
-                    if msg:
-                        usage = getattr(msg, "usage", None)
-                        if usage:
-                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
-                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                            ))
+        async for chunk in self._stream_text_only(kwargs):
+            yield chunk
 
     async def generate_content_lite(
         self,
@@ -496,42 +444,14 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_anthropic(contents)
-
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-            "temperature": effective_temperature,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.top_k_filtering is not None:
-            kwargs["top_k"] = lite_llm_settings.top_k_filtering
-        if lite_llm_settings.system_instruction:
-            kwargs["system"] = lite_llm_settings.system_instruction
+        kwargs = self._build_kwargs(
+            model=model,
+            messages=_contents_to_anthropic(contents),
+            temperature=lite_llm_settings.temperature,
+            max_tokens=lite_llm_settings.max_output_tokens,
+            top_k=lite_llm_settings.top_k_filtering,
+            system_instruction=lite_llm_settings.system_instruction,
+        )
 
         response = await self._client.messages.create(**kwargs)
-
-        parts = _parse_response_blocks(response.content)
-
-        usage = UsageMetadata()
-        if response.usage:
-            usage = UsageMetadata(
-                prompt_token_count=getattr(response.usage, "input_tokens", 0) or 0,
-                candidates_token_count=getattr(response.usage, "output_tokens", 0) or 0,
-                total_token_count=(
-                    (getattr(response.usage, "input_tokens", 0) or 0)
-                    + (getattr(response.usage, "output_tokens", 0) or 0)
-                ),
-            )
-
-        return GenerateContentResponse(
-            candidates=[Candidate(
-                content=Content(role="model", parts=parts),
-                finish_reason=response.stop_reason,
-            )],
-            usage_metadata=usage,
-        )
+        return self._build_response(response)

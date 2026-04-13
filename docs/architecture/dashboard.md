@@ -48,7 +48,6 @@ Pressing Enter while focused on an input or select on steps 1–3 advances to th
 |---|---|
 | 1 | Email is required and must match `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` |
 | 2 | A provider must be selected; if the provider requires an API key that field must not be empty |
-| 3 | If Google is selected as search provider, Google Project ID, Vertex AI Search App ID, and API key must not be empty |
 
 ### AI Provider Selection
 
@@ -75,11 +74,6 @@ Settings collected by `_collectSettings()`:
 | `gemini_assistant_model` / `anthropic_assistant_model` / `openai_assistant_model` / `ollama_assistant_model` | Assistant model select |
 | `gemini_api_key` / `anthropic_api_key` / `openai_api_key` | Provider-specific key input |
 | `ollama_url` | User-supplied for Ollama |
-| `search_provider` | Search provider selection (Google/None) |
-| `google_project_id` | Google Project ID for Vertex AI Search |
-| `vertex_ai_search_app_id` | Vertex AI Search App ID |
-| `search_api_key` | API key for Google Search |
-| `vertex_search_enabled` | Set to `'true'` if Google Search selected |
 
 ---
 

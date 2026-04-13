@@ -131,11 +131,11 @@ export const BindOperatorsMixin = {
         const isStale = mode === 'unbind-stale';
         
         const title = isStale ? 'Unbind Stale Operator' : 
-                     (isUnbind ? 'Unbind Operator from WebSession' : 'Bind Operator to WebSession');
+                     (isUnbind ? 'Unbind Operator from WebSession' : 'Bind an Operator to your chat session');
         
         const message = isStale ? 'This Operator is stale (bound but offline). Unbinding will free it so it can be rebound when it comes back online.' :
                        (isUnbind ? 'This will disconnect the Operator from your current web session. You will no longer be able to interact with it through the chat interface.' :
-                        'This will connect the Operator to your current web session, allowing you to interact with it through the chat interface.');
+                        'Binding an Operator to your chat only authorizes the AI to know about that system. You must request and approve all actions via chat.');
 
         const confirmLabel = isUnbind || isStale ? 'Unbind Operator' : 'Bind Operator';
         const confirmIcon = isUnbind || isStale ? 'link_off' : 'link';
@@ -152,7 +152,7 @@ export const BindOperatorsMixin = {
                         system_info: { 
                             hostname: operator?.system_info?.hostname || 'Unknown', 
                             os: operator?.system_info?.os || '-', 
-                            private_ip: operator?.system_info?.private_ip || '-' 
+                            internal_ip: operator?.system_info?.internal_ip || '-' 
                         } 
                     })}
                 </div>
@@ -321,7 +321,7 @@ export const BindOperatorsMixin = {
     _createBindAllOperatorItem(op) {
         const hostname = op.system_info?.hostname || 'Unknown';
         const os = op.system_info?.os || 'Unknown';
-        const internalIp = op.system_info?.private_ip || '-';
+        const internalIp = op.system_info?.internal_ip || '-';
         const template = templateLoader.cache.get('bind-all-operator-item');
         return templateLoader.replace(template, {
             operatorId: op.operator_id,

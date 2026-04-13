@@ -117,6 +117,14 @@ export const LLMProvider = Object.freeze({
 });
 
 /**
+ * Search Provider identifiers
+ * Values written to the platform_settings DB document and read by G8EE.
+ */
+export const SearchProvider = Object.freeze({
+    GOOGLE_VERTEX: 'google_vertex',
+});
+
+/**
  * Gemini model identifiers.
  * Sourced from shared/constants/status.json llm.models.gemini.
  * Must match g8ee's constants/settings.py GEMINI_* constants exactly.
@@ -150,9 +158,9 @@ export const OpenAIModel = Object.freeze({
  * Must match g8ee's constants/settings.py ANTHROPIC_* and CLAUDE_* constants exactly.
  */
 export const AnthropicModel = Object.freeze({
-    CLAUDE_4_6_OPUS:   _STATUS['llm.models']['anthropic']['claude.4.6.opus'],
-    CLAUDE_4_6_SONNET: _STATUS['llm.models']['anthropic']['claude.4.6.sonnet'],
-    CLAUDE_3_5_SONNET: _STATUS['llm.models']['anthropic']['claude.3.5.sonnet'],
+    ANTHROPIC_CLAUDE_OPUS_4_6:   _STATUS['llm.models']['anthropic']['claude.4.6.opus'],
+    ANTHROPIC_CLAUDE_SONNET_4_6: _STATUS['llm.models']['anthropic']['claude.4.6.sonnet'],
+    ANTHROPIC_CLAUDE_HAIKU_4_5: _STATUS['llm.models']['anthropic']['claude.4.5.haiku'],
 });
 
 /**

@@ -63,7 +63,7 @@ function createMockOperator(overrides = {}) {
         system_info: {
             hostname: 'test-host',
             os: 'Ubuntu 22.04',
-            private_ip: '192.168.1.100',
+            internal_ip: '192.168.1.100',
             public_ip: '203.0.113.1',
         },
         web_session_id: TEST_WEB_SESSION_ID,
@@ -436,7 +436,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             expect(showConfirmationModal).toHaveBeenCalledTimes(1);
             const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Bind Operator to WebSession');
+            expect(callArgs.title).toBe('Bind an Operator to your chat session');
             expect(callArgs.confirmLabel).toBe('Bind Operator');
             expect(callArgs.confirmIcon).toBe('link');
             expect(callArgs.onConfirm).toBeTypeOf('function');
@@ -865,7 +865,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             expect(result).toContain(operator.operator_id);
             expect(result).toContain(operator.system_info.hostname);
             expect(result).toContain(operator.system_info.os);
-            expect(result).toContain(operator.system_info.private_ip);
+            expect(result).toContain(operator.system_info.internal_ip);
         });
 
         it('uses defaults for missing system_info', () => {

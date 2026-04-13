@@ -257,7 +257,7 @@ describe('SettingsPage [UNIT - jsdom]', () => {
             expect(saveBtn.disabled).toBe(false);
         });
 
-        it('toggles password visibility on reveal button click', () => {
+        it('obfuscates existing password values and toggles reveal', () => {
             const setting = {
                 key: 'reveal_key',
                 type: 'password',
@@ -272,17 +272,38 @@ describe('SettingsPage [UNIT - jsdom]', () => {
             const icon = revealBtn?.querySelector('.material-symbols-outlined');
             
             expect(input?.type).toBe('password');
+            expect(input?.value).toBe('******');
+            expect(input?.getAttribute('data-real-value')).toBe('secret');
             expect(icon?.textContent).toBe('visibility');
             
             revealBtn?.click();
             
             expect(input?.type).toBe('text');
+            expect(input?.value).toBe('secret');
             expect(icon?.textContent).toBe('visibility_off');
             
             revealBtn?.click();
             
             expect(input?.type).toBe('password');
+            expect(input?.value).toBe('******');
             expect(icon?.textContent).toBe('visibility');
+        });
+
+        it('shows empty field when password has no existing value', () => {
+            const setting = {
+                key: 'empty_password_key',
+                type: 'password',
+                label: 'Password',
+                description: 'Password field',
+                value: ''
+            };
+
+            const field = page._buildField(setting);
+            const input = field.querySelector('input');
+            
+            expect(input?.type).toBe('password');
+            expect(input?.value).toBe('');
+            expect(input?.getAttribute('data-real-value')).toBeNull();
         });
     });
 });

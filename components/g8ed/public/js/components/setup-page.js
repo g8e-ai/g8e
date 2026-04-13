@@ -231,8 +231,8 @@ export class SetupPage {
         if (openaiPrimary) this._populateSelect(openaiPrimary, Object.values(OpenAIModel), OpenAIModel.GPT_5_4);
         if (openaiAssistant) this._populateSelect(openaiAssistant, [OpenAIModel.GPT_5_4_MINI, OpenAIModel.GPT_5_4_NANO, OpenAIModel.GPT_4O_MINI], OpenAIModel.GPT_5_4_MINI);
 
-        if (anthropicPrimary) this._populateSelect(anthropicPrimary, Object.values(AnthropicModel), AnthropicModel.CLAUDE_4_6_OPUS);
-        if (anthropicAssistant) this._populateSelect(anthropicAssistant, Object.values(AnthropicModel), AnthropicModel.CLAUDE_4_6_SONNET);
+        if (anthropicPrimary) this._populateSelect(anthropicPrimary, Object.values(AnthropicModel), AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6);
+        if (anthropicAssistant) this._populateSelect(anthropicAssistant, Object.values(AnthropicModel), AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5);
     }
 
     _populateSelect(selectEl, models, selectedValue) {

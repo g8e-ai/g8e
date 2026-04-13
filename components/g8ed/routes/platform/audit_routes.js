@@ -47,8 +47,10 @@ export function createAuditRouter({
         });
 
         try {
-            const auditQueryParams = new URLSearchParams({ user_id: req.userId });
-            const investigations = await internalHttpClient.queryInvestigations(auditQueryParams, req.g8eContext);
+            const filters = [
+                { field: 'user_id', operator: '==', value: req.userId }
+            ];
+            const investigations = await services.investigationService.queryInvestigations(filters, 100);
 
             const investigationsArray = Array.isArray(investigations) ? investigations : [];
 
@@ -92,8 +94,10 @@ export function createAuditRouter({
         });
 
         try {
-            const auditQueryParams = new URLSearchParams({ user_id: req.userId });
-            const investigations = await internalHttpClient.queryInvestigations(auditQueryParams, req.g8eContext);
+            const filters = [
+                { field: 'user_id', operator: '==', value: req.userId }
+            ];
+            const investigations = await services.investigationService.queryInvestigations(filters, 100);
 
             const investigationsArray = Array.isArray(investigations) ? investigations : [];
 

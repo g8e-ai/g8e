@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
+import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
 
 // ---------------------------------------------------------------------------
 // USER_SETTINGS — user-configurable settings shown and saved via the UI
@@ -207,13 +207,13 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
         options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.CLAUDE_4_6_OPUS, label: 'Claude Opus 4.6' }),
-            Object.freeze({ value: AnthropicModel.CLAUDE_4_6_SONNET, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.CLAUDE_3_5_SONNET, label: 'Claude 3.5 Sonnet' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
         ]),
         secret: false,
         placeholder: '',
-        default: AnthropicModel.CLAUDE_4_6_OPUS,
+        default: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -223,12 +223,12 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
         options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.CLAUDE_4_6_SONNET, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.CLAUDE_3_5_SONNET, label: 'Claude 3.5 Sonnet' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
         ]),
         secret: false,
         placeholder: '',
-        default: AnthropicModel.CLAUDE_4_6_SONNET,
+        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
     }),
     Object.freeze({
         key: 'anthropic_endpoint',
@@ -338,57 +338,16 @@ export const USER_SETTINGS = Object.freeze([
     }),
 
     // -------------------------------------------------------------------------
-    // Google Programmable Search
-    // -------------------------------------------------------------------------
-    Object.freeze({
-        key: 'google_search_enabled',
-        section: 'search',
-        label: 'Google Search Enabled',
-        description: 'Enable the search_web AI tool via Google Programmable Search Engine.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
-        secret: false,
-        placeholder: '',
-        default: false,
-        validate: v => typeof v === 'boolean',
-    }),
-    Object.freeze({
-        key: 'google_search_api_key',
-        section: 'search',
-        label: 'Google Search API Key',
-        description: 'API key for Google Custom Search API.',
-        type: 'password',
-        secret: true,
-        placeholder: 'AIza...',
-        default: '',
-        validate: v => typeof v === 'string' && (v === '' || v.startsWith('AIza')),
-    }),
-    Object.freeze({
-        key: 'google_search_engine_id',
-        section: 'search',
-        label: 'Search Engine ID (CX)',
-        description: 'The Programmable Search Engine ID.',
-        type: 'text',
-        secret: false,
-        placeholder: 'your-engine-id',
-        default: '',
-        validate: v => typeof v === 'string' && (v === '' || /^[a-z0-9:]+$/i.test(v)),
-    }),
-
-    // -------------------------------------------------------------------------
     // Google Vertex AI Search
     // -------------------------------------------------------------------------
     Object.freeze({
         key: 'vertex_search_enabled',
         section: 'search',
-        label: 'Google Vertex Search Enabled',
+        label: 'Google Vertex AI (Discovery Engine)',
         description: 'Enable the search_web AI tool via Google Vertex AI Search (Discovery Engine).',
         type: 'select',
         options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
+            Object.freeze({ value: false, label: 'Disabled' }),
             Object.freeze({ value: true, label: 'Enabled' }),
         ]),
         secret: false,

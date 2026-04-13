@@ -32,6 +32,7 @@ import {
 describe('Chat Routes [UNIT]', () => {
     let router;
     let mockInternalHttpClient;
+    let mockInvestigationService;
     let mockBindingService;
     let mockAuthMiddleware;
     let mockAuthorizationMiddleware;
@@ -40,11 +41,13 @@ describe('Chat Routes [UNIT]', () => {
     beforeEach(() => {
         mockInternalHttpClient = {
             sendChatMessage: vi.fn(),
-            queryInvestigations: vi.fn(),
-            getInvestigation: vi.fn(),
             stopAIProcessing: vi.fn(),
             deleteCase: vi.fn(),
             healthCheck: vi.fn()
+        };
+        mockInvestigationService = {
+            queryInvestigations: vi.fn(),
+            getInvestigation: vi.fn()
         };
         mockBindingService = {
             resolveBoundOperators: vi.fn().mockResolvedValue([])
@@ -67,6 +70,7 @@ describe('Chat Routes [UNIT]', () => {
         router = createChatRouter({
             services: {
                 internalHttpClient: mockInternalHttpClient,
+                investigationService: mockInvestigationService,
                 bindingService: mockBindingService
             },
             authMiddleware: mockAuthMiddleware,
@@ -184,16 +188,16 @@ describe('Chat Routes [UNIT]', () => {
         it('should query investigations using typed context', async () => {
             const req = createMockReq({ query: { case_id: 'case_123' } });
             const res = createMockRes();
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue([{ id: 'inv_1' }]);
+            mockInvestigationService.queryInvestigations.mockResolvedValue([{ id: 'inv_1' }]);
 
             await getRoute()(req, res);
 
-            expect(mockInternalHttpClient.queryInvestigations).toHaveBeenCalledWith(
-                expect.any(URLSearchParams),
-                expect.objectContaining({
-                    web_session_id: 'ws_123',
-                    user_id: 'user_123'
-                })
+            expect(mockInvestigationService.queryInvestigations).toHaveBeenCalledWith(
+                expect.arrayContaining([
+                    { field: 'user_id', operator: '==', value: 'user_123' },
+                    { field: 'case_id', operator: '==', value: 'case_123' }
+                ]),
+                20
             );
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.investigations).toHaveLength(1);
@@ -202,39 +206,26 @@ describe('Chat Routes [UNIT]', () => {
         it('should handle query failures with typed error response', async () => {
             const req = createMockReq({ query: { case_id: 'case_123' } });
             const res = createMockRes();
-            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('g8ee query failed'));
+            mockInvestigationService.queryInvestigations.mockRejectedValue(new Error('Cache query failed'));
 
             await getRoute()(req, res);
 
             expect(res.status).toHaveBeenCalledWith(500);
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.success).toBe(false);
-            expect(responseData.error).toBe('g8ee query failed');
+            expect(responseData.error).toBe('Cache query failed');
         });
 
         it('should handle empty investigation array response', async () => {
             const req = createMockReq({ query: { case_id: 'case_123' } });
             const res = createMockRes();
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue(null);
+            mockInvestigationService.queryInvestigations.mockResolvedValue(null);
 
             await getRoute()(req, res);
 
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.investigations).toEqual([]);
             expect(responseData.count).toBe(0);
-        });
-
-        it('should filter null/undefined query parameters', async () => {
-            const req = createMockReq({ query: { case_id: 'case_123', investigation_id: null, foo: undefined } });
-            const res = createMockRes();
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue([]);
-
-            await getRoute()(req, res);
-
-            const queryParams = mockInternalHttpClient.queryInvestigations.mock.calls[0][0];
-            expect(queryParams.get('case_id')).toBe('case_123');
-            expect(queryParams.get('investigation_id')).toBeNull();
-            expect(queryParams.get('foo')).toBeNull();
         });
     });
 
@@ -340,26 +331,18 @@ describe('Chat Routes [UNIT]', () => {
             return layer.route.stack[layer.route.stack.length - 1].handle;
         };
 
-        it('should get single investigation using typed context', async () => {
+        it('should get single investigation using InvestigationService', async () => {
             const req = createMockReq({ 
                 params: { investigationId: 'inv_123' },
                 query: { case_id: 'case_123' }
             });
             const res = createMockRes();
             const mockInvestigation = { id: 'inv_123', title: 'Test Investigation' };
-            mockInternalHttpClient.getInvestigation.mockResolvedValue(mockInvestigation);
+            mockInvestigationService.getInvestigation.mockResolvedValue(mockInvestigation);
 
             await getRoute()(req, res);
 
-            expect(mockInternalHttpClient.getInvestigation).toHaveBeenCalledWith(
-                'inv_123',
-                expect.objectContaining({
-                    web_session_id: 'ws_123',
-                    user_id: 'user_123',
-                    investigation_id: 'inv_123',
-                    case_id: 'case_123'
-                })
-            );
+            expect(mockInvestigationService.getInvestigation).toHaveBeenCalledWith('inv_123');
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.success).toBe(true);
             expect(responseData.data).toEqual(mockInvestigation);
@@ -368,29 +351,13 @@ describe('Chat Routes [UNIT]', () => {
         it('should handle investigation get failures with typed error response', async () => {
             const req = createMockReq({ params: { investigationId: 'inv_123' } });
             const res = createMockRes();
-            mockInternalHttpClient.getInvestigation.mockRejectedValue(new Error('Investigation not found'));
+            mockInvestigationService.getInvestigation.mockResolvedValue(null);
 
             await getRoute()(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(500);
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.success).toBe(false);
             expect(responseData.error).toBe('Investigation not found');
-        });
-
-        it('should handle missing case_id query parameter', async () => {
-            const req = createMockReq({ params: { investigationId: 'inv_123' } });
-            const res = createMockRes();
-            mockInternalHttpClient.getInvestigation.mockResolvedValue({ id: 'inv_123' });
-
-            await getRoute()(req, res);
-
-            expect(mockInternalHttpClient.getInvestigation).toHaveBeenCalledWith(
-                'inv_123',
-                expect.objectContaining({
-                    case_id: null
-                })
-            );
         });
     });
 

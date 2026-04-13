@@ -620,6 +620,20 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.system_info.is_cloud_operator).toBe(false);
     });
 
+    it('forSlot() forces name to "g8ep" for g8ep operators', () => {
+        const doc = OperatorDocument.forSlot({
+            operator_id: 'op-123',
+            userId: 'user-456',
+            namePrefix: 'operator',
+            slotNumber: 1,
+            operatorType: OperatorType.CLOUD,
+            cloudSubtype: CloudOperatorSubtype.G8E_POD,
+            isG8eNode: true,
+        });
+        expect(doc.name).toBe('g8ep');
+        expect(doc.is_g8ep).toBe(true);
+    });
+
     it('forRefresh() creates operator from refresh data', () => {
         const certInfo = {
             cert: 'cert-data',

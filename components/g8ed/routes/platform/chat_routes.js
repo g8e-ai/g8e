@@ -77,19 +77,23 @@ export function createChatRouter({
         try {
             const queryRequest = InvestigationQueryRequest.parse(req.query);
 
-            logger.info('[HTTP] Querying investigations from g8ee', {
+            logger.info('[HTTP] Querying investigations via InvestigationService', {
                 userId: req.userId,
                 caseId: queryRequest.case_id,
                 webSessionId: redactWebSessionId(req.webSessionId)
             });
 
-            const queryParams = new URLSearchParams();
-            Object.entries(queryRequest.forClient()).forEach(([key, value]) => {
-                if (value !== null && value !== undefined) {
-                    queryParams.append(key, value);
-                }
-            });
-            const investigations = await internalHttpClient.queryInvestigations(queryParams, req.g8eContext);
+            const filters = [
+                { field: 'user_id', operator: '==', value: req.userId }
+            ];
+            if (queryRequest.case_id) {
+                filters.push({ field: 'case_id', operator: '==', value: queryRequest.case_id });
+            }
+            if (queryRequest.status) {
+                filters.push({ field: 'status', operator: '==', value: queryRequest.status });
+            }
+
+            const investigations = await services.investigationService.queryInvestigations(filters, queryRequest.limit);
 
             res.json(new InvestigationListResponse({
                 success: true,
@@ -108,12 +112,19 @@ export function createChatRouter({
 
     router.get(ChatPaths.INVESTIGATION, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
         try {
-            const investigation = await internalHttpClient.getInvestigation(req.params.investigationId, req.g8eContext);
+            const investigation = await services.investigationService.getInvestigation(req.params.investigationId);
 
-            logger.info('[HTTP] Getting investigation from g8ee', {
+            logger.info('[HTTP] Getting investigation via InvestigationService', {
                 investigationId: req.params.investigationId,
                 webSessionId: redactWebSessionId(req.webSessionId)
             });
+
+            if (!investigation) {
+                return res.status(404).json(new ChatMessageResponse({
+                    success: false,
+                    error: 'Investigation not found'
+                }).forClient());
+            }
 
             res.json(new ChatMessageResponse({
                 success: true,

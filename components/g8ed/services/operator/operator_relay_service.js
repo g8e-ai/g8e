@@ -130,11 +130,20 @@ export class OperatorRelayService {
             operator_session_id: boundOperator.operator_session_id,
         });
 
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
+        // Non-blocking fire-and-forget for operator session registration
+        // Errors are logged but do not block the main flow as registration is transient
+        httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
             method: 'POST',
             body: request.forWire(),
             g8eContext,
+        }).catch(err => {
+            logger.error('[OPERATOR-RELAY] Operator session registration failed (non-blocking)', {
+                operatorId: boundOperator.operator_id,
+                error: err.message
+            });
         });
+
+        return { success: true };
     }
 
     async relayApprovalResponseToG8ee(approvalData, g8eContext) {
