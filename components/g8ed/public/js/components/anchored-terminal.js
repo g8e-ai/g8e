@@ -380,14 +380,16 @@ export class AnchoredOperatorTerminal {
 
         const value = this.inputElement.value;
 
-        if (value.startsWith('/run ')) {
-            this.modeIndicator.textContent = 'CLI';
+        if (value.startsWith('/run')) {
+            this.modeIndicator.textContent = '/run';
             this.modeIndicator.classList.add('cli-mode');
             this.modeIndicator.classList.remove('chat-mode');
+            this.inputElement.classList.add('cli-mode');
         } else {
             this.modeIndicator.textContent = 'Chat';
             this.modeIndicator.classList.add('chat-mode');
             this.modeIndicator.classList.remove('cli-mode');
+            this.inputElement.classList.remove('cli-mode');
         }
     }
 
@@ -443,6 +445,7 @@ export class AnchoredOperatorTerminal {
         this.activeExecutions.clear();
         this.thinkingContentRaw.clear();
         this.executionResultsContainers.clear();
+        this.clearStreamingAccumulator();
 
         if (this.currentUser) {
             this.showWelcomeMessage();

@@ -302,6 +302,7 @@ class AnthropicProvider(LLMProvider):
         
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
         if not finish_reason_received:
+            logger.warning("[ANTHROPIC] Stream ended without message_delta with stop_reason, using fallback completion")
             yield StreamChunkFromModel(finish_reason="stop")
 
     async def generate_content_stream_primary(
@@ -404,6 +405,7 @@ class AnthropicProvider(LLMProvider):
         
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
         if not finish_reason_received:
+            logger.warning("[ANTHROPIC] Primary stream ended without message_delta with stop_reason, using fallback completion")
             yield StreamChunkFromModel(finish_reason="stop")
 
     async def generate_content_primary(

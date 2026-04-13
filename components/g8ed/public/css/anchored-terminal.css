@@ -114,8 +114,6 @@
     display: flex;
     flex-direction: column;
     margin: 4px 0;
-    margin-left: auto;
-    max-width: 65%;
     border-radius: 6px;
     overflow: hidden;
 }
@@ -196,14 +194,12 @@
     color: var(--text-secondary);
 }
 
-/* Activity indicator in terminal - right aligned with AI */
+/* Activity indicator in terminal */
 .anchored-terminal__activity {
     display: flex;
     align-items: center;
-    align-self: flex-end;
     padding: 6px 12px;
     margin: 4px 0;
-    max-width: 85%;
     font-family: var(--font-sans, system-ui, sans-serif);
     font-size: 12px;
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -278,12 +274,9 @@
 .tribunal {
     display: flex;
     flex-direction: column;
-    align-self: flex-end;
     gap: 6px;
     padding: 8px 12px;
     margin: 4px 0;
-    width: fit-content;
-    max-width: 85%;
     min-width: 220px;
     background: var(--surface-secondary, rgba(139, 148, 158, 0.06));
     border: 1px solid var(--border-color, rgba(139, 148, 158, 0.15));
@@ -391,14 +384,12 @@
     border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Error message in terminal - right aligned with AI */
+/* Error message in terminal */
 .anchored-terminal__error-message {
     display: flex;
     flex-direction: column;
     padding: 8px 12px;
     margin: 4px 0;
-    margin-left: auto;
-    max-width: 85%;
 }
 
 .anchored-terminal__error-header {
@@ -648,8 +639,6 @@
     border: 3px solid rgba(var(--accent-green-rgb), 0.7);
     border-radius: 0.25rem;
     margin: 12px 0;
-    max-width: 65%;
-    align-self: flex-end;
     box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.25),
                 inset 0 0 30px rgba(var(--accent-green-rgb), 0.05);
     animation: approvalPulse 2s ease-in-out infinite;
@@ -709,9 +698,43 @@
     max-width: 65%;
 }
 
+/* Elements inside AI response bubbles should be 100% width */
+.anchored-terminal__ai-response .tribunal,
+.anchored-terminal__ai-response--execution .tribunal {
+    width: 100%;
+    margin-left: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__activity,
+.anchored-terminal__ai-response--execution .anchored-terminal__activity {
+    width: 100%;
+    margin-left: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__error-message,
+.anchored-terminal__ai-response--execution .anchored-terminal__error-message {
+    width: 100%;
+    margin-left: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__thinking,
+.anchored-terminal__ai-response--execution .anchored-terminal__thinking {
+    width: 100%;
+    margin-left: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__approval {
+    margin: 0;
+    width: 100%;
+    align-self: stretch;
+    animation: none;
+    box-shadow: none;
+    border-width: 1px;
+}
+
 .anchored-terminal__ai-response--execution .anchored-terminal__approval {
     margin: 0;
-    max-width: 100%;
+    width: 100%;
     align-self: stretch;
     animation: none;
     box-shadow: none;
@@ -720,7 +743,7 @@
 
 .anchored-terminal__ai-response--execution .anchored-terminal__results-group {
     margin: 0;
-    max-width: 100%;
+    width: 100%;
     align-self: stretch;
     border: none;
     border-top: 1px solid rgba(var(--accent-green-rgb), 0.15);
@@ -729,6 +752,7 @@
 
 .anchored-terminal__ai-response--execution .anchored-terminal__executing {
     margin: 0;
+    width: 100%;
 }
 
 /* Executing indicator */
@@ -869,13 +893,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 32px;
+    min-width: 42px;
     height: 28px;
     padding: 0 6px;
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 700;
-    text-transform: uppercase;
     letter-spacing: 0.05em;
     border-radius: 0.25rem;
     flex-shrink: 0;
@@ -914,6 +937,10 @@
 
 .anchored-terminal__input:focus {
     border-color: rgba(48, 54, 61, 0.6);
+}
+
+.anchored-terminal__input.cli-mode {
+    color: var(--accent-blue);
 }
 
 .anchored-terminal__input::placeholder {

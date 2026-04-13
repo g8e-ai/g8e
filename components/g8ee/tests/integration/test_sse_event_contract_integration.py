@@ -168,18 +168,55 @@ class TestSSEEventContract:
 
         published = event_svc._published_events
         failed_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
-        
+
         assert len(failed_events) >= 1
         actual_event = failed_events[0]
 
         # Compare against shared fixture
         expected_fixture = SHARED_SSE_EVENTS["chat_iteration_failed"]
-        
+
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.error == "Contract test failure"
         assert actual_event.investigation_id == streaming_ctx.investigation_id
         assert actual_event.case_id == streaming_ctx.case_id
         assert actual_event.web_session_id == streaming_ctx.web_session_id
+
+    async def test_error_chunk_skips_completion_event(self):
+        """ERROR chunk prevents completion event from being published."""
+        streaming_ctx = make_streaming_context(
+            case_id="contract-test-case-006",
+            investigation_id="contract-test-inv-006",
+            web_session_id="contract-test-sess-006",
+            user_id="contract-test-user-006",
+        )
+        event_svc = make_g8ed_event_service()
+
+        async def _error_chunk_stream():
+            yield StreamChunkFromModel(
+                type=StreamChunkFromModelType.TEXT,
+                data=StreamChunkData(content="Before error"),
+            )
+            yield StreamChunkFromModel(
+                type=StreamChunkFromModelType.ERROR,
+                data=StreamChunkData(error="LLM provider error"),
+            )
+
+        await deliver_via_sse(
+            stream=_error_chunk_stream(),
+            agent_streaming_context=streaming_ctx,
+            g8ed_event_service=event_svc,
+        )
+
+        published = event_svc._published_events
+
+        # Verify ERROR event was published
+        error_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+        assert len(error_events) == 1
+        assert error_events[0].payload.error == "LLM provider error"
+
+        # Verify completion event was NOT published (should be skipped when error occurs)
+        completion_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
+        assert len(completion_events) == 0, "Completion event should not be published when ERROR chunk is received"
 
     async def test_search_web_events_match_shared_fixtures(self):
         """Search web tool events match shared structures."""

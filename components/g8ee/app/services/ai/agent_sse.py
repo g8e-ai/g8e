@@ -81,6 +81,7 @@ async def deliver_via_sse(
         "[SSE] Starting delivery: investigation_id=%s case_id=%s user_id=%s workflow=%s sentinel_mode=%s",
         investigation_id, case_id, user_id, agent_mode, agent_streaming_context.sentinel_mode,
     )
+    logger.info("[SSE] Async generator iteration starting")
 
     _pending_search_calls: dict[str, str | None] = {}
     _turn = 0
@@ -89,6 +90,7 @@ async def deliver_via_sse(
     # Initialize grounding and token_usage to avoid UnboundLocalError
     grounding_metadata = None
     token_usage = None
+    error_occurred = False
 
     try:
         async for chunk in stream:
@@ -221,7 +223,7 @@ async def deliver_via_sse(
                 token_usage = chunk.data.token_usage
                 agent_streaming_context.finish_reason = chunk.data.finish_reason
                 logger.info(
-                    "[SSE] COMPLETE: finish_reason=%s response_chars=%d",
+                    "[SSE] COMPLETE chunk received: finish_reason=%s response_chars=%d",
                     chunk.data.finish_reason, len(agent_streaming_context.response_text),
                 )
                 if chunk.data.token_usage:
@@ -249,28 +251,33 @@ async def deliver_via_sse(
                     case_id=case_id,
                     user_id=user_id,
                 )
-                return  # Exit gracefully instead of raising
+                error_occurred = True
+                break  # Break instead of return to ensure post-loop code executes
 
         # Ensure we use the latest values from agent_streaming_context
         grounding_metadata = agent_streaming_context.grounding_metadata
         token_usage = agent_streaming_context.token_usage
         has_citations = bool(grounding_metadata and grounding_metadata.grounding_used)
 
-        await g8ed_event_service.publish_investigation_event(
-            investigation_id=investigation_id,
-            event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-            payload=ChatResponseCompletePayload(
-                content=agent_streaming_context.response_text,
-                finish_reason=agent_streaming_context.finish_reason or DEFAULT_FINISH_REASON,
-                has_citations=has_citations,
-                grounding_metadata=grounding_metadata.flatten_for_wire() if grounding_metadata else {},
-                token_usage=token_usage.flatten_for_wire() if token_usage else {},
-                agent_mode=agent_mode,
-            ),
-            web_session_id=web_session_id,
-            case_id=case_id,
-            user_id=user_id,
-        )
+        # Skip completion event if error already occurred
+        if error_occurred:
+            logger.info("[SSE] Skipping completion event due to prior error")
+        else:
+            await g8ed_event_service.publish_investigation_event(
+                investigation_id=investigation_id,
+                event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+                payload=ChatResponseCompletePayload(
+                    content=agent_streaming_context.response_text,
+                    finish_reason=agent_streaming_context.finish_reason or DEFAULT_FINISH_REASON,
+                    has_citations=has_citations,
+                    grounding_metadata=grounding_metadata.flatten_for_wire() if grounding_metadata else {},
+                    token_usage=token_usage.flatten_for_wire() if token_usage else {},
+                    agent_mode=agent_mode,
+                ),
+                web_session_id=web_session_id,
+                case_id=case_id,
+                user_id=user_id,
+            )
 
         logger.info(
             "[SSE] Complete: investigation_id=%s has_citations=%s "
@@ -278,6 +285,7 @@ async def deliver_via_sse(
             investigation_id, has_citations,
             agent_streaming_context.finish_reason, len(agent_streaming_context.response_text),
         )
+        logger.info("[SSE] Async generator iteration completed")
 
     except asyncio.CancelledError:
         logger.info("[SSE] Cancelled for investigation %s", investigation_id)

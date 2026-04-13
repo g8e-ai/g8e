@@ -83,6 +83,7 @@ def handle_finish_reason_chunk(chunk: types.StreamChunkFromModel, state: TurnSta
     if chunk.finish_reason:
         normalized = normalize_finish_reason(chunk.finish_reason)
         if normalized:
+            logger.info("[TURN] Setting finish_reason: raw=%s normalized=%s previous=%s", chunk.finish_reason, normalized, state.finish_reason)
             state.finish_reason = normalized
             logger.info("[TURN] finish_reason received: raw=%s normalized=%s", chunk.finish_reason, normalized)
 
