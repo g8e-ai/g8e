@@ -164,6 +164,26 @@ async def internal_chat(
             "investigation_id": investigation.id,
         })
 
+        # Publish CASE_CREATED event immediately after inline creation.
+        # This MUST happen BEFORE title generation and its CASE_UPDATED event,
+        # so the frontend receives creation before update.
+        try:
+            await event_service.publish(
+                SessionEvent(
+                    event_type=EventType.CASE_CREATED,
+                    payload=CaseCreatedPayload(title=case.title),
+                    web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    case_id=g8e_context.case_id,
+                    investigation_id=g8e_context.investigation_id,
+                )
+            )
+        except Exception as sse_err:
+            logger.warning(
+                "[INTERNAL-HTTP] Failed to publish g8e.v1.app.case.created SSE — case created successfully, continuing",
+                extra={"case_id": g8e_context.case_id, "error": str(sse_err)},
+            )
+
         if request.message.strip():
             case_result = await generate_case_title(request.message, settings=user_settings)
             ai_title = case_result.generated_title
@@ -180,23 +200,6 @@ async def internal_chat(
                     title=ai_title,
                 ),
                 user_id=g8e_context.user_id,
-            )
-
-        try:
-            await event_service.publish(
-                SessionEvent(
-                    event_type=EventType.CASE_CREATED,
-                    payload=CaseCreatedPayload(title=case.title),
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    case_id=g8e_context.case_id,
-                    investigation_id=g8e_context.investigation_id,
-                )
-            )
-        except Exception as sse_err:
-            logger.warning(
-                "[INTERNAL-HTTP] Failed to publish g8e.v1.app.case.created SSE — case created successfully, continuing",
-                extra={"case_id": g8e_context.case_id, "error": str(sse_err)},
             )
 
         logger.info(

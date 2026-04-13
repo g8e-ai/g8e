@@ -48,7 +48,8 @@ from _lib import (
 
 SUPPORTED_CLIENTS = ['claude-code', 'windsurf', 'cursor', 'generic']
 
-CA_CERT_PATH = '/g8es/ssl/ca.crt'
+CA_CERT_PATH = '/g8es/ca.crt'
+ALT_CA_CERT_PATH = '/g8es/ssl/ca.crt'
 
 
 def _get_platform_url() -> str:
@@ -150,6 +151,8 @@ def _mcp_request(mcp_url: str, api_key: str, method: str, req_id: str = "1",
     ctx = ssl.create_default_context()
     if Path(CA_CERT_PATH).exists():
         ctx.load_verify_locations(CA_CERT_PATH)
+    elif Path(ALT_CA_CERT_PATH).exists():
+        ctx.load_verify_locations(ALT_CA_CERT_PATH)
 
     try:
         with urllib.request.urlopen(req, context=ctx) as resp:

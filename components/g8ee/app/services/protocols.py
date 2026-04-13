@@ -571,6 +571,13 @@ class LFAAServiceProtocol(Protocol):
         g8e_message: G8eMessage,
     ) -> bool: ...
 
+    async def send_direct_exec_audit_event(
+        self,
+        command: str,
+        execution_id: str,
+        g8e_context: G8eHttpContext,
+    ) -> bool: ...
+
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult: ...

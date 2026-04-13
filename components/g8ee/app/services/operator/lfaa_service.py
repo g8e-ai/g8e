@@ -19,7 +19,10 @@ over pub/sub. Pure fire-and-forget publish — no approval, no pending store.
 
 import logging
 
+from app.constants.events import EventType
+from app.constants.status import ComponentName, AITaskId
 from app.models.pubsub_messages import G8eMessage
+from app.models.http_context import G8eHttpContext
 from app.services.protocols import PubSubServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -81,4 +84,38 @@ class OperatorLFAAService:
         except Exception as e:
             logger.warning("[LFAA] Failed to send audit event: %s", e)
             return False
+
+    async def send_direct_exec_audit_event(
+        self,
+        command: str,
+        execution_id: str,
+        g8e_context: G8eHttpContext,
+    ) -> bool:
+        """
+        Publishes an LFAA audit event for a direct operator terminal command.
+        """
+        if not g8e_context.bound_operators:
+            return False
+        bound = g8e_context.bound_operators[0]
+        if not bound.operator_session_id:
+            return False
+
+        g8e_message = G8eMessage(
+            id=f"audit_{execution_id}",
+            source_component=ComponentName.G8EE,
+            event_type=EventType.OPERATOR_LFAA_AUDIT_EVENT,
+            case_id=g8e_context.case_id,
+            task_id=AITaskId.DIRECT_COMMAND,
+            investigation_id=g8e_context.investigation_id,
+            web_session_id=g8e_context.web_session_id,
+            operator_session_id=bound.operator_session_id,
+            operator_id=bound.operator_id,
+            payload={
+                "command": command,
+                "execution_id": execution_id,
+                "operator_session_id": bound.operator_session_id,
+                "type": "direct_terminal_exec",
+            },
+        )
+        return await self.send_audit_event(g8e_message)
 

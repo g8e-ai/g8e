@@ -33,7 +33,9 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
     CommandApprovalRequest,
     TargetSystem,
+    DirectCommandResult,
 )
+from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandExecutionResult,
@@ -423,5 +425,29 @@ class OperatorCommandService:
 
     async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
         return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation)
+
+    async def send_command_to_operator(
+        self,
+        command_payload: DirectCommandRequest,
+        g8e_context: G8eHttpContext,
+    ) -> DirectCommandResult:
+        """Delegate direct terminal command dispatch to the execution service."""
+        return await self._execution_service.send_command_to_operator(
+            command_payload=command_payload,
+            g8e_context=g8e_context,
+        )
+
+    async def send_direct_exec_audit_event(
+        self,
+        command: str,
+        execution_id: str,
+        g8e_context: G8eHttpContext,
+    ) -> bool:
+        """Delegate LFAA audit event dispatch to the LFAA service."""
+        return await self._lfaa_service.send_direct_exec_audit_event(
+            command=command,
+            execution_id=execution_id,
+            g8e_context=g8e_context,
+        )
 
 __all__ = ["OperatorCommandService"]

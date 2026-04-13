@@ -47,6 +47,7 @@ export class CasesManager {
         this._casesRefreshPromise = null;
         this._isHandlingAuth = false;
         this._restoringFromUrl = false;
+        this._pendingCaseUpdates = new Map();
 
         // Bound handlers for cleanup
         this.boundHandlers = {
@@ -385,21 +386,29 @@ export class CasesManager {
 
         const caseIndex = this.userCases.findIndex(inv => inv.case_id === data.case_id);
         if (caseIndex !== -1) {
-            if (data.title) {
-                this.userCases[caseIndex].case_title = data.title;
-            }
+            this._applyCaseUpdate(caseIndex, data);
+        } else {
+            // Case not found yet, store update for when it's created
+            console.info('[CasesManager] case.updated received for unknown case, caching:', data.case_id);
+            this._pendingCaseUpdates.set(data.case_id, data);
+        }
+    }
 
-            // Update the dropdown option for this case
-            const option = this.dropdownMenu?.querySelector(`[data-value="${data.case_id}"]`);
-            if (option) {
-                const displayTitle = data.title || 'Untitled Case';
-                const fullTitle = `${data.case_id.slice(0, 8)} - ${displayTitle}`;
-                option.textContent = this.getResponsiveTitle(fullTitle);
+    _applyCaseUpdate(caseIndex, data) {
+        if (data.title) {
+            this.userCases[caseIndex].case_title = data.title;
+        }
 
-                // Update selected text if this is the current case
-                if (this._dropdownValue === data.case_id && this.dropdownText) {
-                    this.dropdownText.textContent = this.getResponsiveTitle(fullTitle);
-                }
+        // Update the dropdown option for this case
+        const option = this.dropdownMenu?.querySelector(`[data-value="${data.case_id}"]`);
+        if (option) {
+            const displayTitle = data.title || 'Untitled Case';
+            const fullTitle = `${data.case_id.slice(0, 8)} - ${displayTitle}`;
+            option.textContent = this.getResponsiveTitle(fullTitle);
+
+            // Update selected text if this is the current case
+            if (this._dropdownValue === data.case_id && this.dropdownText) {
+                this.dropdownText.textContent = this.getResponsiveTitle(fullTitle);
             }
         }
     }
@@ -631,6 +640,21 @@ export class CasesManager {
             this.userCases.unshift(normalizedCase);
         } else {
             this.userCases[existingIndex] = { ...this.userCases[existingIndex], ...normalizedCase };
+        }
+
+        // Check for pending updates that arrived before the creation event
+        if (this._pendingCaseUpdates.has(resolvedId)) {
+            const pendingUpdate = this._pendingCaseUpdates.get(resolvedId);
+            const caseIndex = this.userCases.findIndex(inv => inv.case_id === resolvedId);
+            if (caseIndex !== -1) {
+                console.info('[CasesManager] Applying cached update for newly created case:', resolvedId);
+                // Update the normalizedCase object before rendering
+                if (pendingUpdate.title) {
+                    normalizedCase.case_title = pendingUpdate.title;
+                    this.userCases[caseIndex].case_title = pendingUpdate.title;
+                }
+                this._pendingCaseUpdates.delete(resolvedId);
+            }
         }
 
         if (this.dropdownMenu) {

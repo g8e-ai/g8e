@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { EventType } from '../constants/events.js';
-import { nowISOString } from '../utils/timestamp.js';
+import { nowISOString, formatForDisplay } from '../utils/timestamp.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { escapeHtml } from '../utils/html.js';
 import { webSessionService } from '../utils/web-session-service.js';
@@ -433,7 +433,7 @@ export class TerminalExecutionMixin {
         const statusIcon = isSuccess ? 'check_circle' : 'error';
 
         const displayTime = timestamp
-            ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            ? formatForDisplay(timestamp)
             : this.formatTimestamp();
 
         const entry = document.createElement('div');
@@ -676,7 +676,7 @@ export class TerminalExecutionMixin {
         }
 
         const displayTime = timestamp
-            ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            ? formatForDisplay(timestamp)
             : '';
 
         const statusClass = wasApproved ? 'approved' : 'denied';

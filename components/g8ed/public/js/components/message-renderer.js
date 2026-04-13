@@ -15,6 +15,7 @@ import { CitationsHandler } from './citations.js';
 import { decodeHtmlEntities } from '../utils/html.js';
 import { EventType } from '../constants/events.js';
 import { CopyText } from '../constants/ui-constants.js';
+import { formatForDisplay } from '../utils/timestamp.js';
 
 /**
  * Unified Message Renderer
@@ -173,18 +174,9 @@ class MessageRenderer {
 
     _formatTimestamp(timestamp) {
         if (timestamp) {
-            const msgDate = new Date(timestamp);
-            return msgDate.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+            return formatForDisplay(timestamp);
         }
-        return new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
+        return formatForDisplay(new Date());
     }
 
     _getSenderInfo(sender) {

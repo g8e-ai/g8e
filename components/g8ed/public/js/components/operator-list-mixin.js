@@ -14,7 +14,7 @@
 import { devLogger } from '../utils/dev-logger.js';
 import { OperatorStatus } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
-import { timeAgo, parseISOString } from '../utils/timestamp.js';
+import { timeAgo, parseISOString, formatForDisplay } from '../utils/timestamp.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { webSessionService } from '../utils/web-session-service.js';
 import { OperatorDialogs, OperatorAlerts } from '../constants/operator-messages.js';
@@ -109,7 +109,7 @@ export const OperatorListMixin = {
                 const date = parseISOString(timestamp);
                 const diffMs = Date.now() - date.getTime();
                 if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgo(date);
-                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                return formatForDisplay(date);
             };
 
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';

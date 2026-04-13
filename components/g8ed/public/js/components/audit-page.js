@@ -14,6 +14,7 @@
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 import { devLogger } from '../utils/dev-logger.js';
+import { formatForDisplay } from '../utils/timestamp.js';
 
 function escHtml(str) {
     if (str == null) return '';
@@ -72,10 +73,7 @@ export class AuditPage {
 
     formatTimestamp(timestamp) {
         if (!timestamp) return '--';
-        return new Date(timestamp).toLocaleString('en-US', {
-            month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-        });
+        return formatForDisplay(timestamp);
     }
 
     renderTable(events) {
