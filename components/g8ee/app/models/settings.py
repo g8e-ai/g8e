@@ -144,15 +144,15 @@ class LLMSettings(G8eBaseModel):
     primary_model: str | None = Field(None, alias="llm_model")
     assistant_model: str | None = Field(None, alias="llm_assistant_model")
 
-    openai_endpoint: str | None = Field(None)
+    openai_endpoint: str | None = Field(OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(None)
 
-    ollama_endpoint: str | None = Field(None)
+    ollama_endpoint: str | None = Field(OLLAMA_DEFAULT_ENDPOINT)
     ollama_api_key: str | None = Field(None)
 
     gemini_api_key: str | None = Field(None)
 
-    anthropic_endpoint: str | None = Field(None)
+    anthropic_endpoint: str | None = Field(ANTHROPIC_DEFAULT_ENDPOINT)
     anthropic_api_key: str | None = Field(None)
     ollama_assistant_model: str | None = Field(None)
 

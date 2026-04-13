@@ -35,7 +35,7 @@ from app.models.settings import LLMSettings, G8eePlatformSettings, SearchSetting
 from app.constants import LLMProvider
 
 from .provider import LLMProvider as LLMProviderBase
-from .providers.openai_compatible import OpenAICompatibleProvider
+from .providers.open_ai import OpenAIProvider
 from .providers.gemini import GeminiProvider
 from .providers.anthropic import AnthropicProvider
 
@@ -91,7 +91,7 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
     """Return a configured LLMProvider instance based on settings.
 
     SSL strategy:
-      - Ollama / OpenAI-compatible endpoints may be internal (LAN, Docker
+      - Ollama endpoints may be internal (LAN, Docker
         network) and need the platform CA cert for TLS verification.
       - Gemini is always a public Google API — never needs the platform CA.
       - Anthropic / OpenAI cloud APIs are public — the provider decides
@@ -113,7 +113,7 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
             ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.OPENAI:
-        return OpenAICompatibleProvider(
+        return OpenAIProvider(
             endpoint=settings.openai_endpoint,
             api_key=settings.openai_api_key,
             ca_cert_path=ca_cert_path,

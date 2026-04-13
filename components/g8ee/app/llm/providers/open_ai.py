@@ -97,7 +97,7 @@ def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
     return openai_tools if openai_tools else None
 
 
-class OpenAICompatibleProvider(LLMProvider):
+class OpenAIProvider(LLMProvider):
     _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
     _LIMITS = httpx.Limits(
         max_connections=10,
@@ -106,8 +106,6 @@ class OpenAICompatibleProvider(LLMProvider):
     )
 
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        self._original_endpoint = endpoint.rstrip('/')
-
         verify: str | bool
         if is_internal_endpoint(endpoint):
             if endpoint.startswith("http://"):
@@ -119,8 +117,8 @@ class OpenAICompatibleProvider(LLMProvider):
         else:
             verify = True
 
-        # Ensure endpoint has /v1 suffix for OpenAI-compatible API
-        base_url = self._original_endpoint
+        # Ensure endpoint has /v1 suffix for OpenAI API
+        base_url = endpoint
         if not base_url.endswith('/v1'):
             base_url = base_url + '/v1'
 
@@ -131,8 +129,8 @@ class OpenAICompatibleProvider(LLMProvider):
             verify=verify,
         )
 
-        # OpenAI-compatible client for chat completions
-        openai_base_url = self._original_endpoint
+        # OpenAI client for chat completions
+        openai_base_url = endpoint
         self._client = AsyncOpenAI(
             base_url=openai_base_url,
             api_key=api_key or "not-needed",
@@ -143,7 +141,7 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
             max_retries=0,
         )
-        logger.info(f"OpenAI-compatible provider initialized: {endpoint} -> {openai_base_url}")
+        logger.info(f"OpenAI provider initialized: {endpoint} -> {openai_base_url}")
 
     async def close(self):
         """Clean up the httpx clients to prevent resource leaks."""
@@ -151,7 +149,7 @@ class OpenAICompatibleProvider(LLMProvider):
             await self._http_client.aclose()
         if hasattr(self._client, 'close'):
             await self._client.close()
-        logger.info("OpenAI-compatible provider closed")
+        logger.info("OpenAI provider closed")
     
 
     async def generate_content_stream_primary(

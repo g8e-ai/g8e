@@ -264,6 +264,11 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    depends_on:
+      g8ee:
+        condition: service_healthy
+      g8ed:
+        condition: service_healthy
 
 networks:
   g8e-network:

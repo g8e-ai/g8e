@@ -34,48 +34,48 @@ INTERNAL_CA = "/g8es/ca.crt"
 pytestmark = [pytest.mark.unit]
 
 
-class TestOpenAICompatibleProviderSSL:
-    """SSL verification strategy for OpenAI-compatible provider."""
+class TestOpenAIProviderSSL:
+    """SSL verification strategy for OpenAI provider."""
 
     def _make_provider(self, endpoint, api_key="test-key", ca_cert_path=None):
-        with patch("app.llm.providers.openai_compatible.AsyncOpenAI"):
-            from app.llm.providers.openai_compatible import OpenAICompatibleProvider
-            return OpenAICompatibleProvider(
+        with patch("app.llm.providers.open_ai.AsyncOpenAI"):
+            from app.llm.providers.open_ai import OpenAIProvider
+            return OpenAIProvider(
                 endpoint=endpoint,
                 api_key=api_key,
                 ca_cert_path=ca_cert_path,
             )
 
     def test_external_endpoint_uses_default_verification(self):
-        with patch("app.llm.providers.openai_compatible.httpx.AsyncClient") as mock_client:
+        with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://api.openai.com/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
             for call in mock_client.call_args_list:
                 assert call.kwargs["verify"] is True
 
     def test_internal_localhost_uses_platform_ca(self):
-        with patch("app.llm.providers.openai_compatible.httpx.AsyncClient") as mock_client:
+        with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://localhost:11434/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
             for call in mock_client.call_args_list:
                 assert call.kwargs["verify"] == INTERNAL_CA
 
     def test_internal_ip_uses_platform_ca(self):
-        with patch("app.llm.providers.openai_compatible.httpx.AsyncClient") as mock_client:
+        with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://192.168.1.50:11434/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
             for call in mock_client.call_args_list:
                 assert call.kwargs["verify"] == INTERNAL_CA
 
     def test_internal_http_disables_ssl(self):
-        with patch("app.llm.providers.openai_compatible.httpx.AsyncClient") as mock_client:
+        with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("http://10.0.0.1:11434/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
             for call in mock_client.call_args_list:
                 assert call.kwargs["verify"] is False
 
     def test_internal_without_ca_falls_back_to_true(self):
-        with patch("app.llm.providers.openai_compatible.httpx.AsyncClient") as mock_client:
+        with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://localhost:11434/v1", ca_cert_path=None)
             assert mock_client.call_count == 2
             for call in mock_client.call_args_list:
@@ -237,7 +237,7 @@ class TestFactorySSL:
         set_settings(mock_settings)
 
         try:
-            with patch("app.llm.factory.OpenAICompatibleProvider") as mock_oai:
+            with patch("app.llm.factory.OpenAIProvider") as mock_oai:
                 get_llm_provider(llm_settings)
                 assert mock_oai.call_args.kwargs["ca_cert_path"] == INTERNAL_CA
         finally:
