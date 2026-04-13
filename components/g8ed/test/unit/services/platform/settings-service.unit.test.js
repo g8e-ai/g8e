@@ -67,13 +67,18 @@ describe('SettingsService [UNIT]', () => {
             expect(settings).toEqual({});
         });
 
-        it('returns user-specific settings', async () => {
+        it('returns user-specific settings flattened from nested structure', async () => {
             const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
             await cacheAside.updateDocument(Collections.SETTINGS, userDocId, {
-                settings: { llm_provider: LLMProvider.OPENAI }
+                user_id: 'user-1',
+                settings: {
+                    llm: { provider: LLMProvider.OPENAI, llm_model: 'gpt-4o' },
+                    search: {},
+                    eval_judge: {},
+                },
             });
             const settings = await service.getUserSettings('user-1');
-            expect(settings).toEqual({ llm_provider: LLMProvider.OPENAI });
+            expect(settings).toEqual({ llm_provider: LLMProvider.OPENAI, llm_model: 'gpt-4o' });
         });
     });
 
@@ -115,15 +120,23 @@ describe('SettingsService [UNIT]', () => {
             await expect(service.updateUserSettings(null, { llm_provider: LLMProvider.OPENAI })).rejects.toThrow('userId is required');
         });
 
-        it('merges with existing user settings', async () => {
+        it('merges with existing user settings in nested structure', async () => {
             const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
             await cacheAside.updateDocument(Collections.SETTINGS, userDocId, {
-                settings: { llm_provider: LLMProvider.OPENAI }
+                user_id: 'user-1',
+                settings: {
+                    llm: { provider: LLMProvider.OPENAI },
+                    search: {},
+                    eval_judge: {},
+                },
             });
             await service.updateUserSettings('user-1', { llm_model: 'gpt-4o' });
 
             const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
-            expect(doc.settings).toEqual({ llm_provider: LLMProvider.OPENAI, llm_model: 'gpt-4o' });
+            expect(doc.settings.llm).toEqual(
+                expect.objectContaining({ provider: LLMProvider.OPENAI, llm_model: 'gpt-4o' })
+            );
+            expect(doc.user_id).toBe('user-1');
         });
 
         it('validates settings against schema', async () => {
@@ -133,6 +146,13 @@ describe('SettingsService [UNIT]', () => {
             });
             expect(result.saved).toContain('llm_provider');
             expect(result.saved).not.toContain('llm_temperature');
+        });
+
+        it('writes user_id at document level', async () => {
+            await service.updateUserSettings('user-1', { llm_provider: LLMProvider.GEMINI });
+            const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
+            expect(doc.user_id).toBe('user-1');
         });
     });
 

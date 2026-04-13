@@ -32,8 +32,6 @@ from app.models.settings import (
     LLMSettings,
     G8eePlatformSettings,
     G8eeUserSettings,
-    PlatformSettingsData,
-    UserSettingsData,
     PlatformSettingsDocument,
     UserSettingsDocument,
     SearchSettings,
@@ -102,23 +100,23 @@ class SettingsService:
 
         return settings
 
-    def overlay_platform_data(self, settings: G8eePlatformSettings, data: PlatformSettingsData) -> G8eePlatformSettings:
-        """Overlay PlatformSettingsData onto a G8eePlatformSettings instance."""
+    def overlay_platform_data(self, settings: G8eePlatformSettings, platform_settings: G8eePlatformSettings) -> G8eePlatformSettings:
+        """Overlay platform DB settings onto local bootstrap settings."""
         
         # Command Validation
-        settings.command_validation.enable_whitelisting = bool(data.enable_command_whitelisting)
-        settings.command_validation.enable_blacklisting = bool(data.enable_command_blacklisting)
+        settings.command_validation.enable_whitelisting = platform_settings.command_validation.enable_whitelisting
+        settings.command_validation.enable_blacklisting = platform_settings.command_validation.enable_blacklisting
 
         # Search (Merged Vertex/Google)
-        settings.search = self._build_search_settings(data)
+        settings.search = platform_settings.search
 
         # Auth
-        if data.internal_auth_token and not settings.auth.internal_auth_token:
-            settings.auth.internal_auth_token = data.internal_auth_token
-        if data.session_encryption_key and not settings.auth.session_encryption_key:
-            settings.auth.session_encryption_key = data.session_encryption_key
-        if data.g8e_api_key:
-            settings.auth.g8e_api_key = data.g8e_api_key
+        if platform_settings.auth.internal_auth_token and not settings.auth.internal_auth_token:
+            settings.auth.internal_auth_token = platform_settings.auth.internal_auth_token
+        if platform_settings.auth.session_encryption_key and not settings.auth.session_encryption_key:
+            settings.auth.session_encryption_key = platform_settings.auth.session_encryption_key
+        if platform_settings.auth.g8e_api_key:
+            settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
             
         # Do NOT provide platform-level defaults for temperature/max_tokens if not explicitly set.
         # Our agents use unique temperatures and we should not override them with a platform default
@@ -126,54 +124,20 @@ class SettingsService:
         
         return settings
 
-    def _build_llm_settings(self, data: UserSettingsData | PlatformSettingsData) -> LLMSettings:
-        """Build LLMSettings from flat data without fallbacks.
+    def _build_llm_settings(self, user_settings: G8eeUserSettings) -> LLMSettings:
+        """Build LLMSettings from G8eeUserSettings.
         
-        Accepts both UserSettingsData and PlatformSettingsData:
-        - UserSettingsData: normal path for per-user settings
-        - PlatformSettingsData: fallback path in get_user_settings() when user doc is missing
-        The PlatformSettingsData branch handles endpoint fields which are platform-level only.
+        LLM provider configuration is user-specific only.
         """
-        kwargs = {}
-
-        if data.llm_provider:
+        llm = user_settings.llm
+        
+        # Validate provider
+        if llm.provider:
             try:
-                kwargs["provider"] = LLMProvider(data.llm_provider)
+                LLMProvider(llm.provider)
             except ValueError:
-                self._logger.warning(f"Invalid LLM provider in settings: {data.llm_provider}. Falling back to default.")
-
-        llm = LLMSettings(**kwargs)
-        
-        # Models
-        llm.primary_model = data.llm_model
-        llm.assistant_model = data.llm_assistant_model
-
-        # Keys
-        llm.openai_api_key = data.openai_api_key
-        llm.ollama_api_key = data.ollama_api_key
-        llm.gemini_api_key = data.gemini_api_key
-        llm.anthropic_api_key = data.anthropic_api_key
-
-        # Endpoints (Platform only)
-        if isinstance(data, PlatformSettingsData):
-            llm.openai_endpoint = data.openai_endpoint
-            llm.ollama_endpoint = data.ollama_endpoint
-            llm.anthropic_endpoint = data.anthropic_endpoint
-
-        # Shared - ONLY set if present in data, otherwise remain None to allow agent-specific defaults
-        if data.llm_temperature is not None:
-            llm.llm_temperature = data.llm_temperature
-        if data.llm_max_tokens is not None:
-            llm.llm_max_tokens = data.llm_max_tokens
-        
-        if data.llm_command_gen_enabled is not None:
-            llm.llm_command_gen_enabled = bool(data.llm_command_gen_enabled)
-        if data.llm_command_gen_verifier is not None:
-            llm.llm_command_gen_verifier = bool(data.llm_command_gen_verifier)
-        if data.llm_command_gen_passes is not None:
-            llm.llm_command_gen_passes = data.llm_command_gen_passes
-        if data.llm_command_gen_temp is not None:
-            llm.llm_command_gen_temp = data.llm_command_gen_temp
+                self._logger.warning(f"Invalid LLM provider in settings: {llm.provider}. Falling back to default.")
+                llm.provider = LLMProvider.OLLAMA
         
         return llm
 
@@ -210,33 +174,30 @@ class SettingsService:
         )
 
         if not user_doc_dict:
-            # Fallback to platform LLM settings if user settings missing? 
-            # User request said explicit G8eeUserSettings, so we must return one.
-            # We'll need platform data to populate the LLM settings if user hasn't set them.
+            # LLM settings are user-specific only. Return empty LLMSettings if user doc missing.
+            # Search settings can fall back to platform defaults.
             platform_doc_dict = await self._cache_aside.get_document(
                 collection=DB_COLLECTION_SETTINGS,
                 document_id=PLATFORM_SETTINGS_DOC,
             )
             platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
-            data = platform_doc.settings
-        else:
-            user_doc = UserSettingsDocument.model_validate(user_doc_dict)
-            data = user_doc.settings
+            
+            return G8eeUserSettings(
+                llm=LLMSettings(),
+                search=self._build_search_settings(platform_doc.settings)
+            )
+
+        user_doc = UserSettingsDocument.model_validate(user_doc_dict)
+        data = user_doc.settings
 
         return G8eeUserSettings(
             llm=self._build_llm_settings(data),
             search=self._build_search_settings(data)
         )
 
-    def _build_search_settings(self, data: UserSettingsData | PlatformSettingsData) -> SearchSettings:
-        """Build SearchSettings from flat data."""
-        return SearchSettings(
-            enabled=bool(data.vertex_search_enabled or data.google_search_enabled),
-            project_id=data.vertex_search_project_id,
-            engine_id=data.vertex_search_engine_id or data.google_search_engine_id,
-            location=data.vertex_search_location or "global",
-            api_key=data.vertex_search_api_key or data.google_search_api_key
-        )
+    def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:
+        """Build SearchSettings from platform or user settings."""
+        return settings.search
 
     def get_bootstrap_service(self) -> BootstrapServiceProtocol:
         """Get the bootstrap service dependency."""

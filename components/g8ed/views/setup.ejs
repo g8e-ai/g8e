@@ -36,7 +36,7 @@
                         <span class="wizard-step-num">2</span>
                         <span class="wizard-step-check material-symbols-outlined">check</span>
                     </div>
-                    <span class="wizard-step-label">AI Provider</span>
+                    <span class="wizard-step-label">AI Providers</span>
                 </div>
                 <div class="wizard-step-connector"></div>
                 <div class="wizard-step" data-step="3">
@@ -93,59 +93,29 @@
             </div>
 
             <!-- ================================================================
-                 Step 2: AI Provider
+                 Step 2: AI Providers
                  ================================================================ -->
             <div class="wizard-panel" data-panel="2">
                 <div class="wizard-panel-header">
                     <span class="material-symbols-outlined wizard-panel-icon">psychology</span>
                     <div>
                         <h2 class="wizard-panel-title">Connect Your AI</h2>
+                        <p class="wizard-panel-desc">Enter API keys for one or more providers. Models from configured providers will appear in the dropdowns below.</p>
                     </div>
                 </div>
                 <div class="setup-fields">
 
-                    <!-- Provider cards -->
-                    <div class="wizard-provider-cards" role="radiogroup" aria-label="AI provider">
-                        <label class="wizard-provider-card active" data-provider="gemini">
-                            <input type="radio" name="ai_provider" value="gemini" checked>
-                            <div class="wizard-provider-card-inner">
-                                <span class="material-symbols-outlined wizard-provider-icon">auto_awesome</span>
-                                <strong>Gemini</strong>
-                                <span class="wizard-provider-sub">Google</span>
-                                <span class="wizard-provider-rec-badge">Recommended</span>
-                            </div>
-                        </label>
-                        <label class="wizard-provider-card" data-provider="anthropic">
-                            <input type="radio" name="ai_provider" value="anthropic">
-                            <div class="wizard-provider-card-inner">
-                                <span class="material-symbols-outlined wizard-provider-icon">smart_toy</span>
-                                <strong>Claude</strong>
-                                <span class="wizard-provider-sub">Anthropic</span>
-                            </div>
-                        </label>
-                        <label class="wizard-provider-card" data-provider="openai">
-                            <input type="radio" name="ai_provider" value="openai">
-                            <div class="wizard-provider-card-inner">
-                                <span class="material-symbols-outlined wizard-provider-icon">hub</span>
-                                <strong>GPT</strong>
-                                <span class="wizard-provider-sub">OpenAI</span>
-                            </div>
-                        </label>
-                        <label class="wizard-provider-card" data-provider="ollama">
-                            <input type="radio" name="ai_provider" value="ollama">
-                            <div class="wizard-provider-card-inner">
-                                <span class="material-symbols-outlined wizard-provider-icon">lan</span>
-                                <strong>Ollama</strong>
-                                <span class="wizard-provider-sub">Remote</span>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Gemini config -->
-                    <div class="wizard-provider-config" id="config-gemini">
+                    <!-- Gemini API Key -->
+                    <div class="wizard-provider-key-row" data-provider="gemini">
+                        <div class="wizard-provider-key-header">
+                            <span class="material-symbols-outlined wizard-provider-key-icon">auto_awesome</span>
+                            <strong>Gemini</strong>
+                            <span class="wizard-provider-key-sub">Google</span>
+                            <span class="wizard-provider-key-status" id="status-gemini"></span>
+                        </div>
                         <div class="setup-field">
                             <label class="setup-label" for="gemini_api_key">
-                                Gemini API Key
+                                API Key
                                 <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
                                     <span class="material-symbols-outlined">open_in_new</span>Get key
                                 </a>
@@ -157,23 +127,19 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="wizard-model-fields">
-                            <div class="setup-field">
-                                <label class="setup-label" for="gemini_primary_model">Primary Model</label>
-                                <select id="gemini_primary_model" class="setup-select"></select>
-                            </div>
-                            <div class="setup-field">
-                                <label class="setup-label" for="gemini_assistant_model">Assistant Model</label>
-                                <select id="gemini_assistant_model" class="setup-select"></select>
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- Anthropic config -->
-                    <div class="wizard-provider-config" id="config-anthropic">
+                    <!-- Anthropic API Key -->
+                    <div class="wizard-provider-key-row" data-provider="anthropic">
+                        <div class="wizard-provider-key-header">
+                            <span class="material-symbols-outlined wizard-provider-key-icon">smart_toy</span>
+                            <strong>Claude</strong>
+                            <span class="wizard-provider-key-sub">Anthropic</span>
+                            <span class="wizard-provider-key-status" id="status-anthropic"></span>
+                        </div>
                         <div class="setup-field">
                             <label class="setup-label" for="anthropic_api_key">
-                                Anthropic API Key
+                                API Key
                                 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
                                     <span class="material-symbols-outlined">open_in_new</span>Get key
                                 </a>
@@ -185,23 +151,19 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="wizard-model-fields">
-                            <div class="setup-field">
-                                <label class="setup-label" for="anthropic_primary_model">Primary Model</label>
-                                <select id="anthropic_primary_model" class="setup-select"></select>
-                            </div>
-                            <div class="setup-field">
-                                <label class="setup-label" for="anthropic_assistant_model">Assistant Model</label>
-                                <select id="anthropic_assistant_model" class="setup-select"></select>
-                            </div>
-                        </div>
                     </div>
 
-                    <!-- OpenAI config -->
-                    <div class="wizard-provider-config" id="config-openai">
+                    <!-- OpenAI API Key -->
+                    <div class="wizard-provider-key-row" data-provider="openai">
+                        <div class="wizard-provider-key-header">
+                            <span class="material-symbols-outlined wizard-provider-key-icon">hub</span>
+                            <strong>GPT</strong>
+                            <span class="wizard-provider-key-sub">OpenAI</span>
+                            <span class="wizard-provider-key-status" id="status-openai"></span>
+                        </div>
                         <div class="setup-field">
                             <label class="setup-label" for="openai_api_key">
-                                OpenAI API Key
+                                API Key
                                 <a href="https://platform.openai.com/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link">
                                     <span class="material-symbols-outlined">open_in_new</span>Get key
                                 </a>
@@ -213,36 +175,44 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="wizard-model-fields">
-                            <div class="setup-field">
-                                <label class="setup-label" for="openai_primary_model">Primary Model</label>
-                                <select id="openai_primary_model" class="setup-select"></select>
-                            </div>
-                            <div class="setup-field">
-                                <label class="setup-label" for="openai_assistant_model">Assistant Model</label>
-                                <select id="openai_assistant_model" class="setup-select"></select>
+                    </div>
+
+                    <!-- Ollama Endpoint -->
+                    <div class="wizard-provider-key-row" data-provider="ollama">
+                        <div class="wizard-provider-key-header">
+                            <span class="material-symbols-outlined wizard-provider-key-icon">lan</span>
+                            <strong>Ollama</strong>
+                            <span class="wizard-provider-key-sub">Self-Hosted</span>
+                            <span class="wizard-provider-key-status" id="status-ollama"></span>
+                        </div>
+                        <div class="setup-field">
+                            <label class="setup-label" for="ollama_url">Endpoint URL</label>
+                            <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="http://192.168.1.100:11434" spellcheck="false" autocomplete="off">
+                            <div class="setup-field-desc">
+                                <span class="material-symbols-outlined setup-field-desc-icon">warning</span>
+                                Ollama only supports HTTP. Use https:// only if you have set up a custom reverse proxy with TLS.
                             </div>
                         </div>
                     </div>
 
-                    <!-- Ollama config -->
-                    <div class="wizard-provider-config" id="config-ollama">
-                        <div class="setup-field">
-                            <label class="setup-label" for="ollama_url">Ollama URL</label>
-                            <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="http://192.168.1.100:11434" spellcheck="false" autocomplete="off">
-                            <div class="setup-field-desc">
-                                <span class="material-symbols-outlined setup-field-desc-icon">warning</span>
-                                Ollama only supports HTTP. Use https:// only if you have set up a custom reverse proxy with TLS. HTTP is unencrypted and may expose prompts and responses on your network.
-                            </div>
+                    <!-- Unified model selection -->
+                    <div class="wizard-model-selection" id="wizard-model-selection">
+                        <div class="wizard-model-selection-header">
+                            <span class="material-symbols-outlined">model_training</span>
+                            <span>Select your models from all configured providers</span>
                         </div>
                         <div class="wizard-model-fields">
                             <div class="setup-field">
-                                <label class="setup-label" for="ollama_primary_model">Primary Model</label>
-                                <input type="text" id="ollama_primary_model" name="ollama_primary_model" class="setup-input" placeholder="gemma4:e4b" spellcheck="false" autocomplete="off" value="gemma4:e4b">
+                                <label class="setup-label" for="primary_model">Primary Model</label>
+                                <select id="primary_model" class="setup-select" disabled>
+                                    <option value="">Enter at least one API key above</option>
+                                </select>
                             </div>
                             <div class="setup-field">
-                                <label class="setup-label" for="ollama_assistant_model">Assistant Model</label>
-                                <input type="text" id="ollama_assistant_model" name="ollama_assistant_model" class="setup-input" placeholder="gemma4:e4b" spellcheck="false" autocomplete="off" value="gemma4:e4b">
+                                <label class="setup-label" for="assistant_model">Assistant Model</label>
+                                <select id="assistant_model" class="setup-select" disabled>
+                                    <option value="">Enter at least one API key above</option>
+                                </select>
                             </div>
                         </div>
                     </div>

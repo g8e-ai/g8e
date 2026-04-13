@@ -255,6 +255,22 @@ class AnthropicProvider(LLMProvider):
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
 
+        logger.info(
+            "[ANTHROPIC] Building API kwargs: model=%s temperature=%.2f max_tokens=%d "
+            "top_k=%s system_instruction_len=%d tools_count=%d thinking_enabled=%s "
+            "thinking_level=%s include_thoughts=%s messages_count=%d",
+            model,
+            kwargs["temperature"],
+            effective_max_tokens,
+            kwargs.get("top_k"),
+            len(system_instruction),
+            len(anthropic_tools) if anthropic_tools else 0,
+            thinking_enabled,
+            thinking_config.thinking_level if thinking_config else None,
+            thinking_config.include_thoughts if thinking_config else False,
+            len(messages),
+        )
+
         return kwargs
 
     def _build_response(self, response) -> GenerateContentResponse:
@@ -270,38 +286,45 @@ class AnthropicProvider(LLMProvider):
     async def _stream_text_only(self, kwargs: dict) -> AsyncGenerator[StreamChunkFromModel]:
         """Shared streaming handler for assistant/lite calls (text output only)."""
         finish_reason_received = False
+        stream_exhausted = False
         async with self._client.messages.stream(**kwargs) as stream:
-            async for event in stream:
-                event_type = event.type
+            try:
+                async for event in stream:
+                    event_type = event.type
 
-                if event_type == "content_block_delta":
-                    delta = event.delta
-                    if delta.type == "text_delta":
-                        yield StreamChunkFromModel(text=delta.text or "")
+                    if event_type == "content_block_delta":
+                        delta = event.delta
+                        if delta.type == "text_delta":
+                            yield StreamChunkFromModel(text=delta.text or "")
 
-                elif event_type == "message_delta":
-                    stop_reason = getattr(event.delta, "stop_reason", None)
-                    usage = getattr(event, "usage", None)
-                    um = None
-                    if usage:
-                        um = UsageMetadata(
-                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
-                        )
-                    if stop_reason:
-                        finish_reason_received = True
-                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
-
-                elif event_type == "message_start":
-                    msg = getattr(event, "message", None)
-                    if msg:
-                        usage = getattr(msg, "usage", None)
+                    elif event_type == "message_delta":
+                        stop_reason = getattr(event.delta, "stop_reason", None)
+                        usage = getattr(event, "usage", None)
+                        um = None
                         if usage:
-                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
-                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                            ))
-        
+                            um = UsageMetadata(
+                                candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                            )
+                        if stop_reason:
+                            finish_reason_received = True
+                            yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+
+                    elif event_type == "message_start":
+                        msg = getattr(event, "message", None)
+                        if msg:
+                            usage = getattr(msg, "usage", None)
+                            if usage:
+                                yield StreamChunkFromModel(usage_metadata=UsageMetadata(
+                                    prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                                ))
+                stream_exhausted = True
+            except Exception as e:
+                logger.error("[ANTHROPIC] Exception during streaming: %s", e, exc_info=True)
+                raise
+
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
-        if not finish_reason_received:
+        # Only trigger fallback if stream was fully exhausted (no early termination)
+        if stream_exhausted and not finish_reason_received:
             logger.warning("[ANTHROPIC] Stream ended without message_delta with stop_reason, using fallback completion")
             yield StreamChunkFromModel(finish_reason="stop")
 
@@ -311,6 +334,20 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        logger.info(
+            "[ANTHROPIC] generate_content_stream_primary: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d tools=%d",
+            model,
+            len(contents),
+            primary_llm_settings.temperature,
+            primary_llm_settings.max_output_tokens,
+            primary_llm_settings.top_k_filtering,
+            primary_llm_settings.top_p_nucleus_sampling,
+            len(primary_llm_settings.system_instruction),
+            len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
+        )
+
         kwargs = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
@@ -328,83 +365,90 @@ class AnthropicProvider(LLMProvider):
         block_types: dict[int, str] = {}
         accumulated_thinking_sig: dict[int, str] = {}
         finish_reason_received = False
+        stream_exhausted = False
 
         async with self._client.messages.stream(**kwargs) as stream:
-            async for event in stream:
-                event_type = event.type
+            try:
+                async for event in stream:
+                    event_type = event.type
 
-                if event_type == "content_block_start":
-                    idx = event.index
-                    block = event.content_block
-                    block_types[idx] = block.type
-                    if block.type == "tool_use":
-                        accumulated_tool_name[idx] = block.name
-                        accumulated_tool_id[idx] = block.id
-                        accumulated_tool_input[idx] = ""
-                    elif block.type == "thinking":
-                        sig = getattr(block, "signature", None)
-                        if sig:
-                            accumulated_thinking_sig[idx] = sig
+                    if event_type == "content_block_start":
+                        idx = event.index
+                        block = event.content_block
+                        block_types[idx] = block.type
+                        if block.type == "tool_use":
+                            accumulated_tool_name[idx] = block.name
+                            accumulated_tool_id[idx] = block.id
+                            accumulated_tool_input[idx] = ""
+                        elif block.type == "thinking":
+                            sig = getattr(block, "signature", None)
+                            if sig:
+                                accumulated_thinking_sig[idx] = sig
 
-                elif event_type == "content_block_delta":
-                    idx = event.index
-                    delta = event.delta
+                    elif event_type == "content_block_delta":
+                        idx = event.index
+                        delta = event.delta
 
-                    if delta.type == "text_delta":
-                        yield StreamChunkFromModel(text=delta.text or "")
+                        if delta.type == "text_delta":
+                            yield StreamChunkFromModel(text=delta.text or "")
 
-                    elif delta.type == "thinking_delta":
-                        yield StreamChunkFromModel(text=delta.thinking or "", thought=True)
+                        elif delta.type == "thinking_delta":
+                            yield StreamChunkFromModel(text=delta.thinking or "", thought=True)
 
-                    elif delta.type == "signature_delta":
-                        sig = getattr(delta, "signature", None)
-                        if sig:
-                            accumulated_thinking_sig[idx] = sig
+                        elif delta.type == "signature_delta":
+                            sig = getattr(delta, "signature", None)
+                            if sig:
+                                accumulated_thinking_sig[idx] = sig
 
-                    elif delta.type == "input_json_delta":
-                        accumulated_tool_input[idx] = accumulated_tool_input.get(idx, "") + (delta.partial_json or "")
+                        elif delta.type == "input_json_delta":
+                            accumulated_tool_input[idx] = accumulated_tool_input.get(idx, "") + (delta.partial_json or "")
 
-                elif event_type == "content_block_stop":
-                    idx = event.index
-                    if block_types.get(idx) == "thinking":
-                        sig = accumulated_thinking_sig.pop(idx, None)
-                        if sig:
-                            yield StreamChunkFromModel(thought=True, thought_signature=sig)
-                    elif block_types.get(idx) == "tool_use":
-                        raw_input = accumulated_tool_input.get(idx, "{}")
-                        try:
-                            args = json.loads(raw_input) if raw_input else {}
-                        except json.JSONDecodeError:
-                            args = {}
-                        yield StreamChunkFromModel(tool_calls=[ToolCall(
-                            name=accumulated_tool_name.get(idx, ""),
-                            args=args,
-                            id=accumulated_tool_id.get(idx),
-                        )])
+                    elif event_type == "content_block_stop":
+                        idx = event.index
+                        if block_types.get(idx) == "thinking":
+                            sig = accumulated_thinking_sig.pop(idx, None)
+                            if sig:
+                                yield StreamChunkFromModel(thought=True, thought_signature=sig)
+                        elif block_types.get(idx) == "tool_use":
+                            raw_input = accumulated_tool_input.get(idx, "{}")
+                            try:
+                                args = json.loads(raw_input) if raw_input else {}
+                            except json.JSONDecodeError:
+                                args = {}
+                            yield StreamChunkFromModel(tool_calls=[ToolCall(
+                                name=accumulated_tool_name.get(idx, ""),
+                                args=args,
+                                id=accumulated_tool_id.get(idx),
+                            )])
 
-                elif event_type == "message_delta":
-                    stop_reason = getattr(event.delta, "stop_reason", None)
-                    usage = getattr(event, "usage", None)
-                    um = None
-                    if usage:
-                        um = UsageMetadata(
-                            candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
-                        )
-                    if stop_reason:
-                        finish_reason_received = True
-                        yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
-
-                elif event_type == "message_start":
-                    msg = getattr(event, "message", None)
-                    if msg:
-                        usage = getattr(msg, "usage", None)
+                    elif event_type == "message_delta":
+                        stop_reason = getattr(event.delta, "stop_reason", None)
+                        usage = getattr(event, "usage", None)
+                        um = None
                         if usage:
-                            yield StreamChunkFromModel(usage_metadata=UsageMetadata(
-                                prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
-                            ))
-        
+                            um = UsageMetadata(
+                                candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
+                            )
+                        if stop_reason:
+                            finish_reason_received = True
+                            yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
+
+                    elif event_type == "message_start":
+                        msg = getattr(event, "message", None)
+                        if msg:
+                            usage = getattr(msg, "usage", None)
+                            if usage:
+                                yield StreamChunkFromModel(usage_metadata=UsageMetadata(
+                                    prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
+                                ))
+                stream_exhausted = True
+            except Exception as e:
+                logger.error("[ANTHROPIC] Exception during primary streaming: %s", e, exc_info=True)
+                raise
+
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
-        if not finish_reason_received:
+        # Only trigger fallback if stream was fully exhausted (no early termination)
+        if stream_exhausted and not finish_reason_received:
             logger.warning("[ANTHROPIC] Primary stream ended without message_delta with stop_reason, using fallback completion")
             yield StreamChunkFromModel(finish_reason="stop")
 
@@ -434,6 +478,20 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        logger.info(
+            "[ANTHROPIC] generate_content_stream_assistant: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            assistant_llm_settings.temperature,
+            assistant_llm_settings.max_output_tokens,
+            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
@@ -452,6 +510,20 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
+        logger.info(
+            "[ANTHROPIC] generate_content_assistant: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            assistant_llm_settings.temperature,
+            assistant_llm_settings.max_output_tokens,
+            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
@@ -470,6 +542,20 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        logger.info(
+            "[ANTHROPIC] generate_content_stream_lite: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            lite_llm_settings.temperature,
+            lite_llm_settings.max_output_tokens,
+            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.top_p_nucleus_sampling,
+            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
@@ -488,6 +574,20 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
+        logger.info(
+            "[ANTHROPIC] generate_content_lite: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            lite_llm_settings.temperature,
+            lite_llm_settings.max_output_tokens,
+            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.top_p_nucleus_sampling,
+            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),

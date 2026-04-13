@@ -46,7 +46,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             create: vi.fn()
         };
 
-        // Set up DOM structure for the setup wizard
+        // Set up DOM structure for the setup wizard (multi-provider layout)
         document.body.innerHTML = `
             <div id="setup-status" class="setup-status">
                 <span id="setup-status-icon" class="material-symbols-outlined"></span>
@@ -66,46 +66,38 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             <div data-step="4"></div>
             <input id="account_email" type="email" />
             <input id="account_name" type="text" />
-            <div class="wizard-provider-card" data-provider="gemini">
-                <input type="radio" name="ai_provider" value="gemini" />
-            </div>
-            <div class="wizard-provider-card" data-provider="anthropic">
-                <input type="radio" name="ai_provider" value="anthropic" />
-            </div>
-            <div class="wizard-provider-card" data-provider="openai">
-                <input type="radio" name="ai_provider" value="openai" />
-            </div>
-            <div class="wizard-provider-card" data-provider="ollama">
-                <input type="radio" name="ai_provider" value="ollama" />
-            </div>
-            <div id="config-gemini" class="wizard-provider-config" style="display:none">
+            <div class="wizard-provider-key-row" data-provider="gemini">
+                <span class="wizard-provider-key-status" id="status-gemini"></span>
                 <input id="gemini_api_key" type="password" />
-                <input id="gemini_primary_model" type="text" value="gemini-2.5-pro" />
-                <input id="gemini_assistant_model" type="text" value="gemini-2.5-flash" />
                 <button class="setup-reveal-btn" data-for="gemini_api_key">
                     <span class="material-symbols-outlined">visibility</span>
                 </button>
             </div>
-            <div id="config-anthropic" class="wizard-provider-config" style="display:none">
+            <div class="wizard-provider-key-row" data-provider="anthropic">
+                <span class="wizard-provider-key-status" id="status-anthropic"></span>
                 <input id="anthropic_api_key" type="password" />
-                <input id="anthropic_primary_model" type="text" value="claude-opus-4-5" />
-                <input id="anthropic_assistant_model" type="text" value="claude-haiku-4-5" />
                 <button class="setup-reveal-btn" data-for="anthropic_api_key">
                     <span class="material-symbols-outlined">visibility</span>
                 </button>
             </div>
-            <div id="config-openai" class="wizard-provider-config" style="display:none">
+            <div class="wizard-provider-key-row" data-provider="openai">
+                <span class="wizard-provider-key-status" id="status-openai"></span>
                 <input id="openai_api_key" type="password" />
-                <input id="openai_primary_model" type="text" value="gpt-4o" />
-                <input id="openai_assistant_model" type="text" value="gpt-4o-mini" />
                 <button class="setup-reveal-btn" data-for="openai_api_key">
                     <span class="material-symbols-outlined">visibility</span>
                 </button>
             </div>
-            <div id="config-ollama" class="wizard-provider-config" style="display:none">
+            <div class="wizard-provider-key-row" data-provider="ollama">
+                <span class="wizard-provider-key-status" id="status-ollama"></span>
                 <input id="ollama_url" type="text" />
-                <input id="ollama_primary_model" type="text" value="gemma4:e4b" />
-                <input id="ollama_assistant_model" type="text" value="gemma4:e4b" />
+            </div>
+            <div id="wizard-model-selection">
+                <select id="primary_model" disabled>
+                    <option value="">Enter at least one API key above</option>
+                </select>
+                <select id="assistant_model" disabled>
+                    <option value="">Enter at least one API key above</option>
+                </select>
             </div>
             <select id="search_provider">
                 <option value="">None</option>
@@ -138,11 +130,6 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(setupPage._step).toBe(1);
         });
 
-        it('initializes provider to null', () => {
-            setupPage = new SetupPage();
-            expect(setupPage._provider).toBeNull();
-        });
-
         it('initializes searchProvider to empty string', () => {
             setupPage = new SetupPage();
             expect(setupPage._searchProvider).toBe('');
@@ -163,16 +150,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             nextSpy.mockRestore();
         });
 
-        it('initializes provider card listeners', () => {
-            setupPage = new SetupPage();
-            const geminiRadio = document.querySelector('input[value="gemini"]');
-            const spy = vi.spyOn(geminiRadio, 'addEventListener');
-            setupPage.init();
-            expect(spy).toHaveBeenCalledWith('change', expect.any(Function));
-            spy.mockRestore();
-        });
-
-        it('initializes API key input listeners', () => {
+        it('initializes provider key input listeners', () => {
             setupPage = new SetupPage();
             const geminiKey = document.getElementById('gemini_api_key');
             const spy = vi.spyOn(geminiKey, 'addEventListener');
@@ -214,13 +192,6 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage.init();
             expect(spy).toHaveBeenCalledWith('keydown', expect.any(Function));
             spy.mockRestore();
-        });
-
-        it('selects provider if radio is pre-checked', () => {
-            document.querySelector('input[value="gemini"]').checked = true;
-            setupPage = new SetupPage();
-            setupPage.init();
-            expect(setupPage._provider).toBe(LLMProvider.GEMINI);
         });
 
         it('calls _updateNav on init', () => {
@@ -384,18 +355,17 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(backBtn.style.display).toBe('');
         });
 
-        it('hides next button on step 2 when provider not ready', () => {
+        it('hides next button on step 2 when no providers configured', () => {
             setupPage._step = 2;
-            setupPage._provider = null;
             setupPage._updateNav();
             const nextBtn = document.getElementById('wizard-next-btn');
             expect(nextBtn.style.display).toBe('none');
         });
 
-        it('shows next button on step 2 when provider ready', () => {
+        it('shows next button on step 2 when provider key entered and models selected', () => {
             setupPage._step = 2;
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             setupPage._updateNav();
             const nextBtn = document.getElementById('wizard-next-btn');
             expect(nextBtn.style.display).toBe('');
@@ -443,81 +413,37 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(setupPage._validateStep(1)).toBe(true);
         });
 
-        it('returns false for step 2 with no provider selected', () => {
-            setupPage._provider = null;
+        it('returns false for step 2 with no provider keys entered', () => {
             expect(setupPage._validateStep(2)).toBe(false);
         });
 
-        it('shows error for no provider selected', () => {
-            setupPage._provider = null;
+        it('shows error for no provider keys entered', () => {
             setupPage._validateStep(2);
             const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('Select an AI provider');
+            expect(text.textContent).toBe('Enter at least one provider API key');
         });
 
-        it('returns false for Gemini with empty API key', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_api_key').value = '';
-            expect(setupPage._validateStep(2)).toBe(false);
-        });
-
-        it('shows error for Gemini with empty API key', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_api_key').value = '';
-            setupPage._validateStep(2);
-            const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('Gemini API key is required');
-        });
-
-        it('returns true for Gemini with API key', () => {
-            setupPage._provider = LLMProvider.GEMINI;
+        it('returns true for step 2 with Gemini key and models selected', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
-        it('returns false for Anthropic with empty API key', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
-            document.getElementById('anthropic_api_key').value = '';
-            expect(setupPage._validateStep(2)).toBe(false);
-        });
-
-        it('shows error for Anthropic with empty API key', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
-            document.getElementById('anthropic_api_key').value = '';
-            setupPage._validateStep(2);
-            const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('Anthropic API key is required');
-        });
-
-        it('returns true for Anthropic with API key', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
-            document.getElementById('anthropic_api_key').value = 'test-key';
-            expect(setupPage._validateStep(2)).toBe(true);
-        });
-
-        it('returns false for OpenAI with empty API key', () => {
-            setupPage._provider = LLMProvider.OPENAI;
-            document.getElementById('openai_api_key').value = '';
-            expect(setupPage._validateStep(2)).toBe(false);
-        });
-
-        it('shows error for OpenAI with empty API key', () => {
-            setupPage._provider = LLMProvider.OPENAI;
-            document.getElementById('openai_api_key').value = '';
-            setupPage._validateStep(2);
-            const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('OpenAI API key is required');
-        });
-
-        it('returns true for OpenAI with API key', () => {
-            setupPage._provider = LLMProvider.OPENAI;
+        it('returns true for step 2 with OpenAI key and models selected', () => {
             document.getElementById('openai_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
-        it('returns true for Ollama with URL', () => {
-            setupPage._provider = LLMProvider.OLLAMA;
+        it('returns true for step 2 with Anthropic key and models selected', () => {
+            document.getElementById('anthropic_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(true);
+        });
+
+        it('returns true for step 2 with Ollama URL and models selected', () => {
             document.getElementById('ollama_url').value = 'http://localhost:11434';
+            setupPage._onProviderKeyChange();
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
@@ -530,56 +456,122 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
     });
 
-    describe('_selectProvider', () => {
+    describe('_getActiveProviders', () => {
         beforeEach(() => {
             setupPage = new SetupPage();
-            setupPage.init();
         });
 
-        it('sets provider', () => {
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            expect(setupPage._provider).toBe(LLMProvider.GEMINI);
+        it('returns empty array when no keys entered', () => {
+            expect(setupPage._getActiveProviders()).toEqual([]);
         });
 
-        it('adds active class to selected provider card', () => {
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            const geminiCard = document.querySelector('[data-provider="gemini"]');
-            expect(geminiCard.classList.contains('active')).toBe(true);
+        it('returns gemini when gemini key entered', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            expect(setupPage._getActiveProviders()).toContain(LLMProvider.GEMINI);
         });
 
-        it('removes active class from other provider cards', () => {
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            const anthropicCard = document.querySelector('[data-provider="anthropic"]');
-            expect(anthropicCard.classList.contains('active')).toBe(false);
+        it('returns anthropic when anthropic key entered', () => {
+            document.getElementById('anthropic_api_key').value = 'test-key';
+            expect(setupPage._getActiveProviders()).toContain(LLMProvider.ANTHROPIC);
         });
 
-        it('shows selected provider config', () => {
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            const geminiConfig = document.getElementById('config-gemini');
-            expect(geminiConfig.style.display).toBe('flex');
+        it('returns openai when openai key entered', () => {
+            document.getElementById('openai_api_key').value = 'test-key';
+            expect(setupPage._getActiveProviders()).toContain(LLMProvider.OPENAI);
         });
 
-        it('hides other provider configs', () => {
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            const anthropicConfig = document.getElementById('config-anthropic');
-            expect(anthropicConfig.style.display).toBe('none');
+        it('returns ollama when ollama url entered', () => {
+            document.getElementById('ollama_url').value = 'http://localhost:11434';
+            expect(setupPage._getActiveProviders()).toContain(LLMProvider.OLLAMA);
         });
 
-        it('calls _clearStatus', () => {
-            const clearStatusSpy = vi.spyOn(setupPage, '_clearStatus');
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            expect(clearStatusSpy).toHaveBeenCalled();
+        it('returns multiple providers when multiple keys entered', () => {
+            document.getElementById('gemini_api_key').value = 'key1';
+            document.getElementById('openai_api_key').value = 'key2';
+            const active = setupPage._getActiveProviders();
+            expect(active).toContain(LLMProvider.GEMINI);
+            expect(active).toContain(LLMProvider.OPENAI);
+            expect(active).toHaveLength(2);
+        });
+    });
+
+    describe('_updateProviderStates', () => {
+        beforeEach(() => {
+            setupPage = new SetupPage();
         });
 
-        it('calls _updateNav', () => {
-            const updateNavSpy = vi.spyOn(setupPage, '_updateNav');
-            setupPage._selectProvider(LLMProvider.GEMINI);
-            expect(updateNavSpy).toHaveBeenCalled();
+        it('adds has-value class when key entered', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateProviderStates();
+            const row = document.querySelector('[data-provider="gemini"]');
+            expect(row.classList.contains('has-value')).toBe(true);
         });
 
-        it('handles missing config element gracefully', () => {
-            document.getElementById('config-gemini').remove();
-            expect(() => setupPage._selectProvider(LLMProvider.GEMINI)).not.toThrow();
+        it('removes has-value class when key empty', () => {
+            document.getElementById('gemini_api_key').value = '';
+            setupPage._updateProviderStates();
+            const row = document.querySelector('[data-provider="gemini"]');
+            expect(row.classList.contains('has-value')).toBe(false);
+        });
+
+        it('sets status text to Configured when key entered', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateProviderStates();
+            const status = document.getElementById('status-gemini');
+            expect(status.textContent).toBe('Configured');
+        });
+
+        it('activates model selection when providers active', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateProviderStates();
+            const section = document.getElementById('wizard-model-selection');
+            expect(section.classList.contains('active')).toBe(true);
+        });
+    });
+
+    describe('_updateModelDropdowns', () => {
+        beforeEach(() => {
+            setupPage = new SetupPage();
+        });
+
+        it('disables selects when no providers active', () => {
+            setupPage._updateModelDropdowns();
+            expect(document.getElementById('primary_model').disabled).toBe(true);
+            expect(document.getElementById('assistant_model').disabled).toBe(true);
+        });
+
+        it('enables selects when a provider is active', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
+            expect(document.getElementById('primary_model').disabled).toBe(false);
+            expect(document.getElementById('assistant_model').disabled).toBe(false);
+        });
+
+        it('populates models for active provider', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
+            const primary = document.getElementById('primary_model');
+            expect(primary.options.length).toBeGreaterThan(0);
+            expect(primary.value).not.toBe('');
+        });
+
+        it('populates models from multiple active providers', () => {
+            document.getElementById('gemini_api_key').value = 'key1';
+            document.getElementById('openai_api_key').value = 'key2';
+            setupPage._updateModelDropdowns();
+            const primary = document.getElementById('primary_model');
+            const groups = primary.querySelectorAll('optgroup');
+            expect(groups.length).toBe(2);
+        });
+
+        it('preserves previous selection if still available', () => {
+            document.getElementById('gemini_api_key').value = 'key1';
+            setupPage._updateModelDropdowns();
+            const primary = document.getElementById('primary_model');
+            const firstValue = primary.value;
+            document.getElementById('openai_api_key').value = 'key2';
+            setupPage._updateModelDropdowns();
+            expect(primary.value).toBe(firstValue);
         });
     });
 
@@ -588,55 +580,13 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage = new SetupPage();
         });
 
-        it('returns false when no provider selected', () => {
+        it('returns false when no keys entered', () => {
             expect(setupPage._isProviderStepReady()).toBe(false);
         });
 
-        it('returns false for Ollama with empty URL', () => {
-            setupPage._provider = LLMProvider.OLLAMA;
-            document.getElementById('ollama_url').value = '';
-            expect(setupPage._isProviderStepReady()).toBe(false);
-        });
-
-        it('returns true for Ollama with URL', () => {
-            setupPage._provider = LLMProvider.OLLAMA;
-            document.getElementById('ollama_url').value = 'http://localhost:11434';
-            expect(setupPage._isProviderStepReady()).toBe(true);
-        });
-
-        it('returns false for Gemini with empty API key', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_api_key').value = '';
-            expect(setupPage._isProviderStepReady()).toBe(false);
-        });
-
-        it('returns true for Gemini with API key', () => {
-            setupPage._provider = LLMProvider.GEMINI;
+        it('returns true when key entered and models populated', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
-            expect(setupPage._isProviderStepReady()).toBe(true);
-        });
-
-        it('returns false for Anthropic with empty API key', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
-            document.getElementById('anthropic_api_key').value = '';
-            expect(setupPage._isProviderStepReady()).toBe(false);
-        });
-
-        it('returns true for Anthropic with API key', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
-            document.getElementById('anthropic_api_key').value = 'test-key';
-            expect(setupPage._isProviderStepReady()).toBe(true);
-        });
-
-        it('returns false for OpenAI with empty API key', () => {
-            setupPage._provider = LLMProvider.OPENAI;
-            document.getElementById('openai_api_key').value = '';
-            expect(setupPage._isProviderStepReady()).toBe(false);
-        });
-
-        it('returns true for OpenAI with API key', () => {
-            setupPage._provider = LLMProvider.OPENAI;
-            document.getElementById('openai_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             expect(setupPage._isProviderStepReady()).toBe(true);
         });
     });
@@ -674,7 +624,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
     });
 
-    describe('_initApiKeyListeners', () => {
+    describe('_initProviderKeyInputs', () => {
         beforeEach(() => {
             setupPage = new SetupPage();
         });
@@ -682,7 +632,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('adds input listener to gemini_api_key', () => {
             const geminiKey = document.getElementById('gemini_api_key');
             const spy = vi.spyOn(geminiKey, 'addEventListener');
-            setupPage._initApiKeyListeners();
+            setupPage._initProviderKeyInputs();
             expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
             spy.mockRestore();
         });
@@ -690,7 +640,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('adds input listener to anthropic_api_key', () => {
             const anthropicKey = document.getElementById('anthropic_api_key');
             const spy = vi.spyOn(anthropicKey, 'addEventListener');
-            setupPage._initApiKeyListeners();
+            setupPage._initProviderKeyInputs();
             expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
             spy.mockRestore();
         });
@@ -698,7 +648,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('adds input listener to openai_api_key', () => {
             const openaiKey = document.getElementById('openai_api_key');
             const spy = vi.spyOn(openaiKey, 'addEventListener');
-            setupPage._initApiKeyListeners();
+            setupPage._initProviderKeyInputs();
             expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
             spy.mockRestore();
         });
@@ -706,7 +656,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('adds input listener to ollama_url', () => {
             const ollamaUrl = document.getElementById('ollama_url');
             const spy = vi.spyOn(ollamaUrl, 'addEventListener');
-            setupPage._initApiKeyListeners();
+            setupPage._initProviderKeyInputs();
             expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
             spy.mockRestore();
         });
@@ -714,38 +664,22 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('adds input listener to search_api_key', () => {
             const searchKey = document.getElementById('search_api_key');
             const spy = vi.spyOn(searchKey, 'addEventListener');
-            setupPage._initApiKeyListeners();
+            setupPage._initProviderKeyInputs();
             expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
             spy.mockRestore();
         });
 
-        it('adds input listener to google_project_id', () => {
-            const projectId = document.getElementById('google_project_id');
-            const spy = vi.spyOn(projectId, 'addEventListener');
-            setupPage._initApiKeyListeners();
-            expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
-            spy.mockRestore();
-        });
-
-        it('adds input listener to vertex_ai_search_app_id', () => {
-            const appId = document.getElementById('vertex_ai_search_app_id');
-            const spy = vi.spyOn(appId, 'addEventListener');
-            setupPage._initApiKeyListeners();
-            expect(spy).toHaveBeenCalledWith('input', expect.any(Function));
-            spy.mockRestore();
-        });
-
-        it('calls _updateNav on input', () => {
-            setupPage._initApiKeyListeners();
-            const updateNavSpy = vi.spyOn(setupPage, '_updateNav');
+        it('calls _onProviderKeyChange on key input', () => {
+            setupPage._initProviderKeyInputs();
+            const onChangeSpy = vi.spyOn(setupPage, '_onProviderKeyChange');
             const geminiKey = document.getElementById('gemini_api_key');
             geminiKey.dispatchEvent(new Event('input'));
-            expect(updateNavSpy).toHaveBeenCalled();
+            expect(onChangeSpy).toHaveBeenCalled();
         });
 
         it('handles missing elements gracefully', () => {
             document.getElementById('gemini_api_key').remove();
-            expect(() => setupPage._initApiKeyListeners()).not.toThrow();
+            expect(() => setupPage._initProviderKeyInputs()).not.toThrow();
         });
     });
 
@@ -786,50 +720,6 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
     });
 
-    describe('_getSelectedModel', () => {
-        beforeEach(() => {
-            setupPage = new SetupPage();
-        });
-
-        it('returns empty string when no provider selected', () => {
-            expect(setupPage._getSelectedModel()).toBe('');
-        });
-
-        it('returns selected model for Gemini', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_primary_model').value = 'gemini-2.5-pro';
-            expect(setupPage._getSelectedModel()).toBe('gemini-2.5-pro');
-        });
-
-        it('returns empty string when model element missing', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_primary_model').remove();
-            expect(setupPage._getSelectedModel()).toBe('');
-        });
-    });
-
-    describe('_getSelectedAssistantModel', () => {
-        beforeEach(() => {
-            setupPage = new SetupPage();
-        });
-
-        it('returns empty string when no provider selected', () => {
-            expect(setupPage._getSelectedAssistantModel()).toBe('');
-        });
-
-        it('returns selected assistant model for Gemini', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_assistant_model').value = 'gemini-2.5-flash';
-            expect(setupPage._getSelectedAssistantModel()).toBe('gemini-2.5-flash');
-        });
-
-        it('returns empty string when model element missing', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_assistant_model').remove();
-            expect(setupPage._getSelectedAssistantModel()).toBe('');
-        });
-    });
-
     describe('_renderSummary', () => {
         beforeEach(() => {
             setupPage = new SetupPage();
@@ -853,62 +743,39 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(rows[0].querySelector('.wizard-summary-value').textContent).toBe('test@example.com');
         });
 
-        it('renders AI provider label for Gemini', () => {
-            setupPage._provider = LLMProvider.GEMINI;
+        it('renders configured providers', () => {
+            document.getElementById('gemini_api_key').value = 'key1';
+            document.getElementById('openai_api_key').value = 'key2';
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('Gemini');
+            expect(rows[1].querySelector('.wizard-summary-value').textContent).toContain('Gemini');
+            expect(rows[1].querySelector('.wizard-summary-value').textContent).toContain('OpenAI');
         });
 
-        it('renders AI provider label for Anthropic', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
+        it('renders None for providers when no keys entered', () => {
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('Anthropic');
+            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('None');
         });
 
-        it('renders AI provider label for OpenAI', () => {
-            setupPage._provider = LLMProvider.OPENAI;
+        it('renders primary model from unified dropdown', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('OpenAI');
+            expect(rows[2].querySelector('.wizard-summary-value').textContent).not.toBe('');
         });
 
-        it('renders AI provider label for Ollama', () => {
-            setupPage._provider = LLMProvider.OLLAMA;
+        it('renders assistant model from unified dropdown', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('Ollama');
-        });
-
-        it('renders not set when provider null', () => {
-            setupPage._provider = null;
-            setupPage._renderSummary();
-            const container = document.getElementById('wizard-summary');
-            const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[1].querySelector('.wizard-summary-value').textContent).toBe('not set');
-        });
-
-        it('renders primary model', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_primary_model').value = 'gemini-2.5-pro';
-            setupPage._renderSummary();
-            const container = document.getElementById('wizard-summary');
-            const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[2].querySelector('.wizard-summary-value').textContent).toBe('gemini-2.5-pro');
-        });
-
-        it('renders assistant model', () => {
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_assistant_model').value = 'gemini-2.5-flash';
-            setupPage._renderSummary();
-            const container = document.getElementById('wizard-summary');
-            const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[3].querySelector('.wizard-summary-value').textContent).toBe('gemini-2.5-flash');
+            expect(rows[3].querySelector('.wizard-summary-value').textContent).not.toBe('');
         });
 
         it('renders Google search provider', () => {
@@ -933,52 +800,31 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage = new SetupPage();
         });
 
-        it('collects Gemini settings', () => {
-            setupPage._provider = LLMProvider.GEMINI;
+        it('collects all entered API keys', () => {
             document.getElementById('gemini_api_key').value = 'test-gemini-key';
-            document.getElementById('gemini_primary_model').value = 'gemini-2.5-pro';
-            document.getElementById('gemini_assistant_model').value = 'gemini-2.5-flash';
-            const settings = setupPage._collectUserSettings();
-            expect(settings.llm_provider).toBe(LLMProvider.GEMINI);
-            expect(settings.llm_model).toBe('gemini-2.5-pro');
-            expect(settings.llm_assistant_model).toBe('gemini-2.5-flash');
-            expect(settings.gemini_api_key).toBe('test-gemini-key');
-        });
-
-        it('collects Anthropic settings', () => {
-            setupPage._provider = LLMProvider.ANTHROPIC;
             document.getElementById('anthropic_api_key').value = 'test-anthropic-key';
-            document.getElementById('anthropic_primary_model').value = 'claude-opus-4-5';
-            document.getElementById('anthropic_assistant_model').value = 'claude-haiku-4-5';
-            const settings = setupPage._collectUserSettings();
-            expect(settings.llm_provider).toBe(LLMProvider.ANTHROPIC);
-            expect(settings.llm_model).toBe('claude-opus-4-5');
-            expect(settings.llm_assistant_model).toBe('claude-haiku-4-5');
-            expect(settings.anthropic_api_key).toBe('test-anthropic-key');
-        });
-
-        it('collects OpenAI settings', () => {
-            setupPage._provider = LLMProvider.OPENAI;
             document.getElementById('openai_api_key').value = 'test-openai-key';
-            document.getElementById('openai_primary_model').value = 'gpt-4o';
-            document.getElementById('openai_assistant_model').value = 'gpt-4o-mini';
+            setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
-            expect(settings.llm_provider).toBe(LLMProvider.OPENAI);
-            expect(settings.llm_model).toBe('gpt-4o');
-            expect(settings.llm_assistant_model).toBe('gpt-4o-mini');
+            expect(settings.gemini_api_key).toBe('test-gemini-key');
+            expect(settings.anthropic_api_key).toBe('test-anthropic-key');
             expect(settings.openai_api_key).toBe('test-openai-key');
             expect(settings.openai_endpoint).toBe('https://api.openai.com/v1');
         });
 
-        it('collects Ollama settings', () => {
-            setupPage._provider = LLMProvider.OLLAMA;
-            document.getElementById('ollama_url').value = 'http://localhost:11434';
-            document.getElementById('ollama_primary_model').value = 'gemma4:e4b';
-            document.getElementById('ollama_assistant_model').value = 'gemma4:e4b';
+        it('derives llm_provider from selected primary model', () => {
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
-            expect(settings.llm_provider).toBe(LLMProvider.OLLAMA);
-            expect(settings.llm_model).toBe('gemma4:e4b');
-            expect(settings.llm_assistant_model).toBe('gemma4:e4b');
+            expect(settings.llm_provider).toBe(LLMProvider.GEMINI);
+            expect(settings.llm_model).toBeDefined();
+            expect(settings.llm_assistant_model).toBeDefined();
+        });
+
+        it('collects Ollama endpoint with /v1 suffix', () => {
+            document.getElementById('ollama_url').value = 'http://localhost:11434';
+            setupPage._updateModelDropdowns();
+            const settings = setupPage._collectUserSettings();
             expect(settings.ollama_endpoint).toBe('http://localhost:11434/v1');
         });
 
@@ -1000,8 +846,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.vertex_search_enabled).toBeUndefined();
         });
 
-        it('returns empty object when no provider selected', () => {
-            setupPage._provider = null;
+        it('returns empty object when no keys entered', () => {
             const settings = setupPage._collectUserSettings();
             expect(Object.keys(settings)).toHaveLength(0);
         });
@@ -1122,8 +967,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1161,8 +1006,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1206,8 +1051,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1248,8 +1093,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1288,8 +1133,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1308,8 +1153,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const finishBtn = document.getElementById('finish-btn');
             document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('account_name').value = 'Test User';
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._updateModelDropdowns();
             
             serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.register(), {
                 ok: true,
@@ -1353,8 +1198,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('advances step on Enter in input field', () => {
             setupPage._step = 2;
-            setupPage._provider = LLMProvider.GEMINI;
             document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             document.getElementById('gemini_api_key').focus();
             
             const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });

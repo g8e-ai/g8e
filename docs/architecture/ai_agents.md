@@ -785,6 +785,8 @@ The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is attached to the fu
 
 The provider abstraction lives in `components/g8ee/app/llm/provider.py` (`LLMProvider` ABC). The factory (`components/g8ee/app/llm/factory.py`) constructs a fresh provider per request from the resolved `LLMSettings`. All providers translate between g8ee's canonical `llm_types` and their SDK-native types.
 
+> **Model Configuration Registry:** All supported models, their capabilities (thinking levels, tool support, context windows), and constraints are defined in `components/g8ee/app/models/model_configs.py`. See the [g8ee component documentation](../components/g8ee.md#llm-configuration) for a complete list of supported models across all providers.
+
 ### Gemini (`components/g8ee/app/llm/providers/gemini.py`)
 
 - **SDK:** `google-genai`

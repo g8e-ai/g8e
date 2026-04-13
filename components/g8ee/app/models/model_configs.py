@@ -24,30 +24,37 @@ lives in the respective provider adapter under app/llm/providers/.
 from pydantic import Field
 
 from app.constants import (
+    ANTHROPIC_CLAUDE_HAIKU_4_5,
+    ANTHROPIC_CLAUDE_OPUS_4_6,
+    ANTHROPIC_CLAUDE_SONNET_4_6,
+    ANTHROPIC_DEFAULT_MODEL,
     GEMINI_3_1_PRO_PREVIEW,
     GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
     GEMINI_3_1_FLASH_LITE_PREVIEW,
     GEMINI_3_FLASH_PREVIEW,
+    GEMINI_DEFAULT_MODEL,
     GEMMA3_1B,
     GEMMA3_4B,
     GEMMA3_12B,
     GEMMA3_27B,
-    GEMMA4_E4B,
     GEMMA4_E2B,
+    GEMMA4_E4B,
     OPENAI_DEFAULT_MODEL,
-    OLLAMA_DEFAULT_MODEL,
-    ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
+    OPENAI_GPT_3_5_TURBO,
     OPENAI_GPT_4O,
     OPENAI_GPT_4O_MINI,
     OPENAI_GPT_4_TURBO,
-    OPENAI_GPT_3_5_TURBO,
-    OLLAMA_LLAMA3_8B,
-    OLLAMA_LLAMA3_70B,
+    OPENAI_GPT_5_3_INSTANT,
+    OPENAI_GPT_5_4,
+    OPENAI_GPT_5_4_MINI,
+    OPENAI_GPT_5_4_NANO,
     OLLAMA_CODELLAMA_7B,
+    OLLAMA_DEFAULT_MODEL,
+    OLLAMA_LLAMA3_70B,
+    OLLAMA_LLAMA3_8B,
     OLLAMA_MISTRAL_7B,
-    QWEN25_7B,
     QWEN25_14B,
+    QWEN25_7B,
     QWEN3_1B7,
     QWEN3_CODER_30B,
     ThinkingLevel,
@@ -72,6 +79,7 @@ GEMINI_3_PRO_PREVIEW = LLMModelConfig(
     name=GEMINI_3_1_PRO_PREVIEW,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
+    supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
 )
@@ -80,6 +88,7 @@ GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
     name=GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
+    supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
 )
@@ -88,6 +97,7 @@ GEMINI_3_FLASH_PREVIEW = LLMModelConfig(
     name=GEMINI_3_FLASH_PREVIEW,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
+    supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
 )
@@ -96,6 +106,7 @@ GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG = LLMModelConfig(
     name=GEMINI_3_1_FLASH_LITE_PREVIEW,
     supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
+    supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
 )
@@ -194,7 +205,116 @@ QWEN25_7B = LLMModelConfig(
     context_window_output=8_192,
 )
 
+# Anthropic models
+ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLMModelConfig(
+    name=ANTHROPIC_CLAUDE_OPUS_4_6,
+    supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLMModelConfig(
+    name=ANTHROPIC_CLAUDE_SONNET_4_6,
+    supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLMModelConfig(
+    name=ANTHROPIC_CLAUDE_HAIKU_4_5,
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MINIMAL],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
+    name=ANTHROPIC_DEFAULT_MODEL,
+    supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
 # OpenAI models
+OPENAI_GPT_5_4_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_4,
+    supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+OPENAI_GPT_5_3_INSTANT_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_3_INSTANT,
+    supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_4_MINI,
+    supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=200_000,
+    context_window_output=8_192,
+)
+
+OPENAI_GPT_5_4_NANO_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_4_NANO,
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MINIMAL],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=8_192,
+)
+
+OPENAI_GPT_4O_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_4O,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=4_096,
+)
+
+OPENAI_GPT_4O_MINI_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_4O_MINI,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=4_096,
+)
+
+OPENAI_GPT_4_TURBO_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_4_TURBO,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=4_096,
+)
+
+OPENAI_GPT_3_5_TURBO_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_3_5_TURBO,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=16_385,
+    context_window_output=4_096,
+)
+
 OPENAI_DEFAULT_CONFIG = LLMModelConfig(
     name=OPENAI_DEFAULT_MODEL,
     supported_thinking_levels=[],
@@ -205,6 +325,42 @@ OPENAI_DEFAULT_CONFIG = LLMModelConfig(
 )
 
 # Ollama models
+OLLAMA_LLAMA3_8B_CONFIG = LLMModelConfig(
+    name=OLLAMA_LLAMA3_8B,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=8_192,
+    context_window_output=4_096,
+)
+
+OLLAMA_LLAMA3_70B_CONFIG = LLMModelConfig(
+    name=OLLAMA_LLAMA3_70B,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=8_192,
+    context_window_output=4_096,
+)
+
+OLLAMA_CODELLAMA_7B_CONFIG = LLMModelConfig(
+    name=OLLAMA_CODELLAMA_7B,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=8_192,
+    context_window_output=4_096,
+)
+
+OLLAMA_MISTRAL_7B_CONFIG = LLMModelConfig(
+    name=OLLAMA_MISTRAL_7B,
+    supported_thinking_levels=[],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=8_192,
+    context_window_output=4_096,
+)
+
 OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
     name=OLLAMA_DEFAULT_MODEL,
     supported_thinking_levels=[],
@@ -284,7 +440,23 @@ class LLMModelRegistry(G8eBaseModel):
 
 
 MODEL_REGISTRY = LLMModelRegistry(configs=[
+    ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG,
+    ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG,
+    ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
+    ANTHROPIC_DEFAULT_CONFIG,
+    OPENAI_GPT_5_4_CONFIG,
+    OPENAI_GPT_5_3_INSTANT_CONFIG,
+    OPENAI_GPT_5_4_MINI_CONFIG,
+    OPENAI_GPT_5_4_NANO_CONFIG,
+    OPENAI_GPT_4O_CONFIG,
+    OPENAI_GPT_4O_MINI_CONFIG,
+    OPENAI_GPT_4_TURBO_CONFIG,
+    OPENAI_GPT_3_5_TURBO_CONFIG,
     OPENAI_DEFAULT_CONFIG,
+    OLLAMA_LLAMA3_8B_CONFIG,
+    OLLAMA_LLAMA3_70B_CONFIG,
+    OLLAMA_CODELLAMA_7B_CONFIG,
+    OLLAMA_MISTRAL_7B_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
     GEMINI_3_PRO_PREVIEW,
     GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG,

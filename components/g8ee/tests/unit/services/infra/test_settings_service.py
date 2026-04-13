@@ -23,8 +23,9 @@ from app.constants.settings import LLMProvider
 from app.models.settings import (
     PlatformSettingsDocument,
     UserSettingsDocument,
-    PlatformSettingsData,
-    UserSettingsData
+    G8eePlatformSettings,
+    G8eeUserSettings,
+    LLMSettings,
 )
 
 @pytest.mark.asyncio
@@ -38,15 +39,16 @@ class TestSettingsService:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
         
         # Mock user document
-        user_data = UserSettingsData(
-            llm_provider=LLMProvider.OPENAI,
-            llm_model="gpt-4",
-            openai_api_key="sk-user-key"
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OPENAI,
+                primary_model="gpt-4",
+                openai_api_key="sk-user-key"
+            )
         )
         user_doc = UserSettingsDocument(
-            settings=user_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z"
+            user_id=user_id,
+            settings=user_settings
         )
         cache_mock.get_document.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
@@ -65,24 +67,20 @@ class TestSettingsService:
             document_id=user_doc_id
         )
 
-    async def test_get_user_settings_fallback_to_platform(self):
-        """Test fallback to platform settings when user settings document is missing."""
+    async def test_get_user_settings_missing_returns_empty_llm(self):
+        """Test that missing user settings returns empty LLMSettings (no platform fallback for LLM keys)."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
         
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
         
-        # Mock platform document
-        platform_data = PlatformSettingsData(
-            llm_provider=LLMProvider.ANTHROPIC,
-            llm_model="claude-3",
-            anthropic_api_key="sk-platform-key"
+        # Mock platform document (without LLM keys since they are user-specific only)
+        platform_settings = G8eePlatformSettings(
+            port=8080
         )
         platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z"
+            settings=platform_settings
         )
         
         # Return None for user doc, valid for platform doc
@@ -98,9 +96,12 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
         
-        assert settings.llm.provider == LLMProvider.ANTHROPIC
-        assert settings.llm.primary_model == "claude-3"
-        assert settings.llm.anthropic_api_key == "sk-platform-key"
+        # LLM settings should be empty (no platform fallback)
+        assert settings.llm.provider == LLMProvider.OLLAMA
+        assert settings.llm.openai_api_key is None
+        assert settings.llm.anthropic_api_key is None
+        assert settings.llm.gemini_api_key is None
+        assert settings.llm.ollama_api_key is None
         
         # Verify both lookups happened
         cache_mock.get_document.assert_any_call(
@@ -113,34 +114,27 @@ class TestSettingsService:
         )
 
     async def test_llm_settings_no_overrides(self):
-        """Test that llm_temperature and llm_max_tokens are None if not provided.
-
-        LLM settings are now built via get_user_settings (platform fallback path).
-        """
+        """Test that llm_temperature and llm_max_tokens are None if not provided in user settings."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 
         user_id = "user_temp"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_data = PlatformSettingsData(
-            llm_provider=LLMProvider.OLLAMA,
-            llm_model="gemma3:27b",
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OLLAMA,
+                primary_model="gemma3:27b",
+            )
         )
-        platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z"
+        user_doc = UserSettingsDocument(
+            user_id=user_id,
+            settings=user_settings
         )
 
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document.side_effect = lambda collection, document_id: (
+            user_doc.model_dump() if document_id == user_doc_id else None
+        )
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
@@ -149,35 +143,28 @@ class TestSettingsService:
         assert settings.llm.llm_max_tokens is None
 
     async def test_llm_settings_with_overrides(self):
-        """Test that llm_max_tokens ARE set if provided.
-
-        LLM settings are now built via get_user_settings (platform fallback path).
-        """
+        """Test that llm_max_tokens ARE set if provided in user settings."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 
         user_id = "user_override"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_data = PlatformSettingsData(
-            llm_provider=LLMProvider.OLLAMA,
-            llm_model="gemma3:27b",
-            llm_max_tokens=2048
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OLLAMA,
+                primary_model="gemma3:27b",
+                llm_max_tokens=2048
+            )
         )
-        platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z"
+        user_doc = UserSettingsDocument(
+            user_id=user_id,
+            settings=user_settings
         )
 
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document.side_effect = lambda collection, document_id: (
+            user_doc.model_dump() if document_id == user_doc_id else None
+        )
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
@@ -188,7 +175,6 @@ class TestSettingsService:
         """Regression: llm_command_gen_passes=None caused TypeError in max(1, None).
 
         When the DB has no command_gen settings, LLMSettings defaults must survive.
-        LLM settings are now built via get_user_settings (platform fallback path).
         """
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
@@ -196,24 +182,20 @@ class TestSettingsService:
         user_id = "user_cmdgen"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_data = PlatformSettingsData(
-            llm_provider=LLMProvider.OLLAMA,
-            llm_model="gemma3:27b",
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OLLAMA,
+                primary_model="gemma3:27b",
+            )
         )
-        platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z",
+        user_doc = UserSettingsDocument(
+            user_id=user_id,
+            settings=user_settings
         )
 
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document.side_effect = lambda collection, document_id: (
+            user_doc.model_dump() if document_id == user_doc_id else None
+        )
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
@@ -223,37 +205,30 @@ class TestSettingsService:
         assert settings.llm.llm_command_gen_verifier is True
 
     async def test_command_gen_overrides_applied_when_db_has_values(self):
-        """Explicit DB values for command_gen fields override the defaults.
-
-        LLM settings are now built via get_user_settings (platform fallback path).
-        """
+        """Explicit DB values for command_gen fields override the defaults."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 
         user_id = "user_cmdgen_override"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_data = PlatformSettingsData(
-            llm_provider=LLMProvider.OLLAMA,
-            llm_model="gemma3:27b",
-            llm_command_gen_passes=5,
-            llm_command_gen_enabled=False,
-            llm_command_gen_verifier=False,
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OLLAMA,
+                primary_model="gemma3:27b",
+                llm_command_gen_passes=5,
+                llm_command_gen_enabled=False,
+                llm_command_gen_verifier=False,
+            )
         )
-        platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z",
+        user_doc = UserSettingsDocument(
+            user_id=user_id,
+            settings=user_settings
         )
 
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document.side_effect = lambda collection, document_id: (
+            user_doc.model_dump() if document_id == user_doc_id else None
+        )
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
@@ -270,15 +245,16 @@ class TestSettingsService:
         user_id = "user_789"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        user_data = UserSettingsData(
-            llm_provider=LLMProvider.GEMINI,
-            llm_model="gemini-2.5-pro",
-            gemini_api_key="test-key",
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.GEMINI,
+                primary_model="gemini-2.5-pro",
+                gemini_api_key="test-key",
+            )
         )
         user_doc = UserSettingsDocument(
-            settings=user_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z",
+            user_id=user_id,
+            settings=user_settings
         )
         cache_mock.get_document.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
@@ -291,35 +267,28 @@ class TestSettingsService:
         assert settings.llm.llm_command_gen_enabled is True
         assert settings.llm.llm_command_gen_verifier is True
 
-    async def test_llm_settings_undefined_provider_falls_back_to_default(self):
-        """Test that 'undefined' provider falls back to default OLLAMA.
-
-        LLM settings are now built via get_user_settings (platform fallback path).
-        """
+    async def test_llm_settings_provider_preserved(self):
+        """Test that valid provider is preserved in user settings."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 
-        user_id = "user_undefined"
+        user_id = "user_provider"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
 
-        platform_data = PlatformSettingsData(
-            llm_provider="undefined",
-            llm_model="gemma3:27b"
+        user_settings = G8eeUserSettings(
+            llm=LLMSettings(
+                provider=LLMProvider.OLLAMA,
+                primary_model="gemma3:27b"
+            )
         )
-        platform_doc = PlatformSettingsDocument(
-            settings=platform_data,
-            created_at="2026-04-04T00:00:00Z",
-            updated_at="2026-04-04T00:00:00Z"
+        user_doc = UserSettingsDocument(
+            user_id=user_id,
+            settings=user_settings
         )
 
-        def get_doc_mock(collection, document_id):
-            if document_id == user_doc_id:
-                return None
-            if document_id == PLATFORM_SETTINGS_DOC:
-                return platform_doc.model_dump()
-            return None
-
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document.side_effect = lambda collection, document_id: (
+            user_doc.model_dump() if document_id == user_doc_id else None
+        )
 
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
