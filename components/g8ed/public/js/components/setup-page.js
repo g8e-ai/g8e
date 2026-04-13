@@ -17,6 +17,97 @@ import { ComponentName } from '../constants/service-client-constants.js';
 
 const LAST_STEP = 4;
 
+const PROVIDER_MODELS = {
+    [LLMProvider.GEMINI]: {
+        primary: [
+            { value: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS, label: 'Gemini 3.1 Pro (Custom Tools)' },
+            { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
+            { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+            { value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' },
+        ],
+        assistant: [
+            { value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' },
+            { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+            { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
+        ],
+        defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
+        defaultAssistant: GeminiModel.FLASH_LITE_PREVIEW,
+    },
+    [LLMProvider.ANTHROPIC]: {
+        primary: [
+            { value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
+            { value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+            { value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+        ],
+        assistant: [
+            { value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+            { value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+        ],
+        defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
+        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+    },
+    [LLMProvider.OPENAI]: {
+        primary: [
+            { value: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
+            { value: OpenAIModel.GPT_5_3_INSTANT, label: 'GPT-5.3 Instant' },
+            { value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+            { value: OpenAIModel.GPT_4O, label: 'GPT-4o' },
+        ],
+        assistant: [
+            { value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+            { value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+            { value: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
+        ],
+        defaultPrimary: OpenAIModel.GPT_5_4,
+        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
+    },
+    [LLMProvider.OLLAMA]: {
+        primary: [
+            { value: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
+            { value: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
+            { value: OllamaModel.GEMMA4, label: 'Gemma 4' },
+            { value: OllamaModel.GEMMA3_27B, label: 'Gemma 3 27B' },
+            { value: OllamaModel.GEMMA3_12B, label: 'Gemma 3 12B' },
+            { value: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
+            { value: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
+            { value: OllamaModel.CODELLAMA_7B, label: 'CodeLlama 7B' },
+        ],
+        assistant: [
+            { value: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
+            { value: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
+            { value: OllamaModel.GEMMA4, label: 'Gemma 4' },
+            { value: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
+            { value: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
+            { value: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
+            { value: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
+        ],
+        defaultPrimary: OllamaModel.GEMMA4_E4B,
+        defaultAssistant: OllamaModel.GEMMA4_E4B,
+    },
+};
+
+const PROVIDER_KEY_FIELDS = {
+    [LLMProvider.GEMINI]:    'gemini_api_key',
+    [LLMProvider.ANTHROPIC]: 'anthropic_api_key',
+    [LLMProvider.OPENAI]:    'openai_api_key',
+    [LLMProvider.OLLAMA]:    'ollama_url',
+};
+
+const PROVIDER_LABELS = {
+    [LLMProvider.GEMINI]:    'Gemini',
+    [LLMProvider.ANTHROPIC]: 'Anthropic',
+    [LLMProvider.OPENAI]:    'OpenAI',
+    [LLMProvider.OLLAMA]:    'Ollama',
+};
+
+function _modelToProvider(modelValue) {
+    for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
+        const allModels = [...config.primary, ...config.assistant];
+        if (allModels.some(m => m.value === modelValue)) return provider;
+    }
+    return null;
+}
+
 function _base64urlToBuffer(b64url) {
     const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
     const bin = atob(b64);
@@ -63,20 +154,16 @@ function _serializeCredential(cred) {
 export class SetupPage {
     constructor() {
         this._step           = 1;
-        this._provider       = null;
         this._searchProvider = '';
     }
 
     init() {
         this._initNavButtons();
-        this._initProviderCards();
-        this._initApiKeyListeners();
+        this._initProviderKeyInputs();
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
-        this._populateModelDropdowns();
-        const checkedProvider = document.querySelector('input[name="ai_provider"]:checked');
-        if (checkedProvider) this._selectProvider(checkedProvider.value);
+        this._updateProviderStates();
         this._updateNav();
     }
 
@@ -159,31 +246,20 @@ export class SetupPage {
         }
 
         if (step === 2) {
-            if (!this._provider) {
-                this._showStatus('error', 'Select an AI provider');
+            const active = this._getActiveProviders();
+            if (active.length === 0) {
+                this._showStatus('error', 'Enter at least one provider API key');
                 return false;
             }
-            if (this._provider === LLMProvider.GEMINI) {
-                const key = document.getElementById('gemini_api_key').value.trim();
-                if (!key) {
-                    this._showStatus('error', 'Gemini API key is required');
-                    document.getElementById('gemini_api_key').focus();
-                    return false;
-                }
-            } else if (this._provider === LLMProvider.ANTHROPIC) {
-                const key = document.getElementById('anthropic_api_key').value.trim();
-                if (!key) {
-                    this._showStatus('error', 'Anthropic API key is required');
-                    document.getElementById('anthropic_api_key').focus();
-                    return false;
-                }
-            } else if (this._provider === LLMProvider.OPENAI) {
-                const key = document.getElementById('openai_api_key').value.trim();
-                if (!key) {
-                    this._showStatus('error', 'OpenAI API key is required');
-                    document.getElementById('openai_api_key').focus();
-                    return false;
-                }
+            const primary = document.getElementById('primary_model')?.value;
+            if (!primary) {
+                this._showStatus('error', 'Select a primary model');
+                return false;
+            }
+            const assistant = document.getElementById('assistant_model')?.value;
+            if (!assistant) {
+                this._showStatus('error', 'Select an assistant model');
+                return false;
             }
         }
 
@@ -214,37 +290,136 @@ export class SetupPage {
     }
 
     // ---------------------------------------------------------------------------
-    // Model dropdowns
+    // Provider key inputs and model dropdowns
     // ---------------------------------------------------------------------------
 
-    _populateModelDropdowns() {
-        const geminiPrimary = document.getElementById('gemini_primary_model');
-        const geminiAssistant = document.getElementById('gemini_assistant_model');
-        const openaiPrimary = document.getElementById('openai_primary_model');
-        const openaiAssistant = document.getElementById('openai_assistant_model');
-        const anthropicPrimary = document.getElementById('anthropic_primary_model');
-        const anthropicAssistant = document.getElementById('anthropic_assistant_model');
+    _initProviderKeyInputs() {
+        Object.values(PROVIDER_KEY_FIELDS).forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => this._onProviderKeyChange());
+        });
 
-        if (geminiPrimary) this._populateSelect(geminiPrimary, Object.values(GeminiModel), GeminiModel.PRO_PREVIEW_CUSTOMTOOLS);
-        if (geminiAssistant) this._populateSelect(geminiAssistant, Object.values(GeminiModel), GeminiModel.FLASH_LITE_PREVIEW);
+        const searchKeyEl = document.getElementById('search_api_key');
+        if (searchKeyEl) searchKeyEl.addEventListener('input', () => this._updateNav());
 
-        if (openaiPrimary) this._populateSelect(openaiPrimary, Object.values(OpenAIModel), OpenAIModel.GPT_5_4);
-        if (openaiAssistant) this._populateSelect(openaiAssistant, [OpenAIModel.GPT_5_4_MINI, OpenAIModel.GPT_5_4_NANO, OpenAIModel.GPT_4O_MINI], OpenAIModel.GPT_5_4_MINI);
-
-        if (anthropicPrimary) this._populateSelect(anthropicPrimary, Object.values(AnthropicModel), AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6);
-        if (anthropicAssistant) this._populateSelect(anthropicAssistant, Object.values(AnthropicModel), AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5);
+        ['google_project_id', 'vertex_ai_search_app_id'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => this._updateNav());
+        });
     }
 
-    _populateSelect(selectEl, models, selectedValue) {
-        if (!selectEl) return;
-        selectEl.innerHTML = '';
-        models.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            if (model === selectedValue) option.selected = true;
-            selectEl.appendChild(option);
+    _onProviderKeyChange() {
+        this._updateProviderStates();
+        this._updateModelDropdowns();
+        this._updateNav();
+    }
+
+    _getActiveProviders() {
+        const active = [];
+        for (const [provider, fieldId] of Object.entries(PROVIDER_KEY_FIELDS)) {
+            const el = document.getElementById(fieldId);
+            if (el && el.value.trim()) active.push(provider);
+        }
+        return active;
+    }
+
+    _updateProviderStates() {
+        const active = this._getActiveProviders();
+
+        document.querySelectorAll('.wizard-provider-key-row').forEach(row => {
+            const provider = row.getAttribute('data-provider');
+            const hasValue = active.includes(provider);
+            row.classList.toggle('has-value', hasValue);
+            const statusEl = row.querySelector('.wizard-provider-key-status');
+            if (statusEl) statusEl.textContent = hasValue ? 'Configured' : '';
         });
+
+        const modelSection = document.getElementById('wizard-model-selection');
+        if (modelSection) modelSection.classList.toggle('active', active.length > 0);
+    }
+
+    _updateModelDropdowns() {
+        const active = this._getActiveProviders();
+        const primarySelect = document.getElementById('primary_model');
+        const assistantSelect = document.getElementById('assistant_model');
+        if (!primarySelect || !assistantSelect) return;
+
+        const prevPrimary = primarySelect.value;
+        const prevAssistant = assistantSelect.value;
+
+        primarySelect.innerHTML = '';
+        assistantSelect.innerHTML = '';
+
+        if (active.length === 0) {
+            primarySelect.disabled = true;
+            assistantSelect.disabled = true;
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Enter at least one API key above';
+            primarySelect.appendChild(placeholder);
+            assistantSelect.appendChild(placeholder.cloneNode(true));
+            return;
+        }
+
+        primarySelect.disabled = false;
+        assistantSelect.disabled = false;
+
+        let firstPrimaryDefault = null;
+        let firstAssistantDefault = null;
+
+        for (const provider of active) {
+            const config = PROVIDER_MODELS[provider];
+            if (!config) continue;
+
+            const providerLabel = PROVIDER_LABELS[provider] || provider;
+
+            const pGroup = document.createElement('optgroup');
+            pGroup.label = providerLabel;
+            for (const m of config.primary) {
+                const opt = document.createElement('option');
+                opt.value = m.value;
+                opt.textContent = m.label;
+                pGroup.appendChild(opt);
+            }
+            primarySelect.appendChild(pGroup);
+
+            const aGroup = document.createElement('optgroup');
+            aGroup.label = providerLabel;
+            for (const m of config.assistant) {
+                const opt = document.createElement('option');
+                opt.value = m.value;
+                opt.textContent = m.label;
+                aGroup.appendChild(opt);
+            }
+            assistantSelect.appendChild(aGroup);
+
+            if (!firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
+            if (!firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
+        }
+
+        if (prevPrimary && this._selectHasValue(primarySelect, prevPrimary)) {
+            primarySelect.value = prevPrimary;
+        } else if (firstPrimaryDefault) {
+            primarySelect.value = firstPrimaryDefault;
+        }
+
+        if (prevAssistant && this._selectHasValue(assistantSelect, prevAssistant)) {
+            assistantSelect.value = prevAssistant;
+        } else if (firstAssistantDefault) {
+            assistantSelect.value = firstAssistantDefault;
+        }
+    }
+
+    _selectHasValue(selectEl, value) {
+        return Array.from(selectEl.options).some(o => o.value === value);
+    }
+
+    _isProviderStepReady() {
+        const active = this._getActiveProviders();
+        if (active.length === 0) return false;
+        const primary = document.getElementById('primary_model')?.value;
+        const assistant = document.getElementById('assistant_model')?.value;
+        return !!(primary && assistant);
     }
 
     // ---------------------------------------------------------------------------
@@ -262,63 +437,8 @@ export class SetupPage {
     }
 
     // ---------------------------------------------------------------------------
-    // Provider cards
-    // ---------------------------------------------------------------------------
-
-    _initProviderCards() {
-        document.querySelectorAll('.wizard-provider-card input[type="radio"]').forEach(input => {
-            input.addEventListener('change', () => {
-                this._selectProvider(input.value);
-            });
-        });
-    }
-
-    _isProviderStepReady() {
-        if (!this._provider) return false;
-        if (this._provider === LLMProvider.OLLAMA) {
-            const urlEl = document.getElementById('ollama_url');
-            return !!(urlEl && urlEl.value.trim());
-        }
-        const keyId = { [LLMProvider.GEMINI]: 'gemini_api_key', [LLMProvider.ANTHROPIC]: 'anthropic_api_key', [LLMProvider.OPENAI]: 'openai_api_key' }[this._provider];
-        const el = keyId && document.getElementById(keyId);
-        return !!(el && el.value.trim());
-    }
-
-    _selectProvider(provider) {
-        this._provider = provider;
-
-        document.querySelectorAll('.wizard-provider-card').forEach(c => {
-            c.classList.toggle('active', c.getAttribute('data-provider') === provider);
-        });
-
-        document.querySelectorAll('.wizard-provider-config').forEach(cfg => {
-            cfg.style.display = 'none';
-        });
-        const configEl = document.getElementById(`config-${provider}`);
-        if (configEl) configEl.style.display = 'flex';
-
-        this._clearStatus();
-        this._updateNav();
-    }
-
-    // ---------------------------------------------------------------------------
     // Reveal buttons (password fields)
     // ---------------------------------------------------------------------------
-
-    _initApiKeyListeners() {
-        ['gemini_api_key', 'anthropic_api_key', 'openai_api_key', 'ollama_url'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', () => this._updateNav());
-        });
-
-        const searchKeyEl = document.getElementById('search_api_key');
-        if (searchKeyEl) searchKeyEl.addEventListener('input', () => this._updateNav());
-
-        ['google_project_id', 'vertex_ai_search_app_id'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', () => this._updateNav());
-        });
-    }
 
     _initRevealButtons() {
         document.querySelectorAll('.setup-reveal-btn').forEach(btn => {
@@ -337,19 +457,14 @@ export class SetupPage {
     // ---------------------------------------------------------------------------
 
     _renderSummary() {
-        const provider  = this._provider || 'not set';
-        const model     = this._getSelectedModel();
-        const email     = document.getElementById('account_email').value.trim();
-        const name      = document.getElementById('account_name').value.trim();
+        const primaryModel = document.getElementById('primary_model')?.value || '';
+        const assistantModel = document.getElementById('assistant_model')?.value || '';
+        const primaryProvider = _modelToProvider(primaryModel);
+        const email = document.getElementById('account_email').value.trim();
+        const name = document.getElementById('account_name').value.trim();
 
-        const providerLabel = {
-            [LLMProvider.GEMINI]:    'Gemini',
-            [LLMProvider.ANTHROPIC]: 'Anthropic',
-            [LLMProvider.OPENAI]:    'OpenAI',
-            [LLMProvider.OLLAMA]:    'Ollama',
-        }[provider] || provider;
-
-        const assistantModel = this._getSelectedAssistantModel();
+        const activeProviders = this._getActiveProviders();
+        const providerLabels = activeProviders.map(p => PROVIDER_LABELS[p] || p).join(', ') || 'None';
 
         const searchProviderLabel = {
             google: 'Google',
@@ -357,8 +472,8 @@ export class SetupPage {
 
         const rows = [
             { icon: 'person',         label: 'Account',         value: name ? `${name} (${email})` : email },
-            { icon: 'psychology',     label: 'AI Provider',     value: providerLabel },
-            { icon: 'model_training', label: 'Primary Model',   value: model },
+            { icon: 'psychology',     label: 'Providers',       value: providerLabels },
+            { icon: 'model_training', label: 'Primary Model',   value: primaryModel },
             { icon: 'assistant',      label: 'Assistant Model', value: assistantModel },
             { icon: 'travel_explore', label: 'Web Search',      value: searchProviderLabel },
         ];
@@ -385,18 +500,6 @@ export class SetupPage {
         }));
     }
 
-    _getSelectedModel() {
-        if (!this._provider) return '';
-        const el = document.getElementById(`${this._provider}_primary_model`);
-        return el ? el.value : '';
-    }
-
-    _getSelectedAssistantModel() {
-        if (!this._provider) return '';
-        const el = document.getElementById(`${this._provider}_assistant_model`);
-        return el ? el.value : '';
-    }
-
     // ---------------------------------------------------------------------------
     // User settings collection (no platform settings -- derived server-side)
     // ---------------------------------------------------------------------------
@@ -404,34 +507,31 @@ export class SetupPage {
     _collectUserSettings() {
         const userSettings = {};
 
-        if (this._provider === LLMProvider.GEMINI) {
-            userSettings.llm_provider = LLMProvider.GEMINI;
-            userSettings.llm_model = this._getSelectedModel();
-            userSettings.llm_assistant_model = this._getSelectedAssistantModel();
-            const key = document.getElementById('gemini_api_key').value.trim();
-            if (key) userSettings.gemini_api_key = key;
+        const primaryModel = document.getElementById('primary_model')?.value || '';
+        const assistantModel = document.getElementById('assistant_model')?.value || '';
+        const primaryProvider = _modelToProvider(primaryModel);
 
-        } else if (this._provider === LLMProvider.ANTHROPIC) {
-            userSettings.llm_provider = LLMProvider.ANTHROPIC;
-            userSettings.llm_model = this._getSelectedModel();
-            userSettings.llm_assistant_model = this._getSelectedAssistantModel();
-            const key = document.getElementById('anthropic_api_key').value.trim();
-            if (key) userSettings.anthropic_api_key = key;
+        if (primaryProvider) {
+            userSettings.llm_provider = primaryProvider;
+        }
+        if (primaryModel) userSettings.llm_model = primaryModel;
+        if (assistantModel) userSettings.llm_assistant_model = assistantModel;
 
-        } else if (this._provider === LLMProvider.OPENAI) {
-            userSettings.llm_provider = LLMProvider.OPENAI;
+        const geminiKey = document.getElementById('gemini_api_key')?.value.trim();
+        if (geminiKey) userSettings.gemini_api_key = geminiKey;
+
+        const anthropicKey = document.getElementById('anthropic_api_key')?.value.trim();
+        if (anthropicKey) userSettings.anthropic_api_key = anthropicKey;
+
+        const openaiKey = document.getElementById('openai_api_key')?.value.trim();
+        if (openaiKey) {
+            userSettings.openai_api_key = openaiKey;
             userSettings.openai_endpoint = 'https://api.openai.com/v1';
-            userSettings.llm_model = this._getSelectedModel();
-            userSettings.llm_assistant_model = this._getSelectedAssistantModel();
-            const key = document.getElementById('openai_api_key').value.trim();
-            if (key) userSettings.openai_api_key = key;
+        }
 
-        } else if (this._provider === LLMProvider.OLLAMA) {
-            userSettings.llm_provider = LLMProvider.OLLAMA;
-            const ollamaUrl = document.getElementById('ollama_url').value.trim();
+        const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
+        if (ollamaUrl) {
             userSettings.ollama_endpoint = ollamaUrl.endsWith('/') ? ollamaUrl + 'v1' : ollamaUrl + '/v1';
-            userSettings.llm_model = this._getSelectedModel();
-            userSettings.llm_assistant_model = this._getSelectedAssistantModel();
         }
 
         if (this._searchProvider === 'google') {

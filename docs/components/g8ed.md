@@ -450,11 +450,11 @@ GET /  →  hasAnyUsers() returns false  →  redirect to /setup
   Step 3 — Platform
     User selects hostname (localhost / g8e.local / custom)
 
-  Step 4 — AI Provider
-    User selects provider card (Gemini / Anthropic / OpenAI / Ollama (Remote))
-    User enters API key (not required for Ollama (Remote))
-    User enters Endpoint (required for Ollama (Remote))
-    Optional: expands "Customize models" to override primary/assistant model
+  Step 4 — AI Providers
+    User enters API keys for one or more providers (Gemini / Anthropic / OpenAI / Ollama)
+    Ollama uses an endpoint URL instead of an API key
+    Two unified dropdowns (Primary Model / Assistant Model) populate with models from all configured providers
+    The active llm_provider is derived from whichever provider the selected primary model belongs to
 
   Step 5 — Finish
     GET /api/setup/config   →  preflight check + env var pre-fill

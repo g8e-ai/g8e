@@ -504,3 +504,210 @@ class TestPublicMethodsDelegateCorrectly:
         assert "top_p" not in call_kwargs
         assert "top_k" not in call_kwargs
         assert call_kwargs["thinking"]["type"] == "enabled"
+
+
+class TestStreamCompletionVerification:
+    """Verify stream completion verification before fallback triggers."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_triggered_when_stream_exhausted_without_stop_reason(self):
+        """Fallback should trigger when stream completes normally but without message_delta stop_reason."""
+        provider = _make_provider()
+        
+        # Mock stream that completes normally but without message_delta with stop_reason
+        mock_stream = AsyncMock()
+        mock_event_start = MagicMock()
+        mock_event_start.type = "message_start"
+        mock_event_start.message = MagicMock()
+        mock_event_start.message.usage = MagicMock(input_tokens=10)
+        
+        mock_event_delta = MagicMock()
+        mock_event_delta.type = "content_block_delta"
+        mock_delta = MagicMock()
+        mock_delta.type = "text_delta"
+        mock_delta.text = "hello"
+        mock_event_delta.delta = mock_delta
+        
+        # Stream yields events but no message_delta with stop_reason
+        mock_stream.__aiter__.return_value = [mock_event_start, mock_event_delta]
+        
+        mock_stream_context = AsyncMock()
+        mock_stream_context.__aenter__.return_value = mock_stream
+        mock_stream_context.__aexit__.return_value = None
+        
+        provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
+        
+        settings = AssistantLLMSettings(
+            temperature=0.5,
+            max_output_tokens=2048,
+        )
+        
+        chunks = []
+        async for chunk in provider.generate_content_stream_assistant(
+            model="claude-sonnet-4-20250514",
+            contents=[Content(role="user", parts=[Part(text="hi")])],
+            assistant_llm_settings=settings,
+        ):
+            chunks.append(chunk)
+        
+        # Should have usage metadata, text chunk, and fallback completion
+        assert len(chunks) == 3
+        assert chunks[0].usage_metadata.prompt_token_count == 10
+        assert chunks[1].text == "hello"
+        assert chunks[2].finish_reason == "stop"
+
+    @pytest.mark.asyncio
+    async def test_fallback_not_triggered_when_stream_raises_exception(self):
+        """Fallback should NOT trigger when stream is interrupted by exception."""
+        provider = _make_provider()
+        
+        # Mock stream that raises exception
+        mock_stream = AsyncMock()
+        mock_stream.__aiter__.side_effect = Exception("Network error")
+        
+        mock_stream_context = AsyncMock()
+        mock_stream_context.__aenter__.return_value = mock_stream
+        mock_stream_context.__aexit__.return_value = None
+        
+        provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
+        
+        settings = AssistantLLMSettings(
+            temperature=0.5,
+            max_output_tokens=2048,
+        )
+        
+        with pytest.raises(Exception, match="Network error"):
+            async for _ in provider.generate_content_stream_assistant(
+                model="claude-sonnet-4-20250514",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                assistant_llm_settings=settings,
+            ):
+                pass
+
+    @pytest.mark.asyncio
+    async def test_fallback_not_triggered_when_stop_reason_received(self):
+        """Fallback should NOT trigger when stream completes normally with message_delta stop_reason."""
+        provider = _make_provider()
+        
+        # Mock stream that completes normally with message_delta stop_reason
+        mock_event_start = MagicMock()
+        mock_event_start.type = "message_start"
+        mock_event_start.message = MagicMock()
+        mock_event_start.message.usage = MagicMock(input_tokens=10)
+        
+        mock_event_delta = MagicMock()
+        mock_event_delta.type = "content_block_delta"
+        mock_delta = MagicMock()
+        mock_delta.type = "text_delta"
+        mock_delta.text = "hello"
+        mock_event_delta.delta = mock_delta
+        
+        mock_event_message_delta = MagicMock()
+        mock_event_message_delta.type = "message_delta"
+        mock_message_delta = MagicMock()
+        mock_message_delta.stop_reason = "end_turn"
+        mock_event_message_delta.delta = mock_message_delta
+        mock_event_message_delta.usage = MagicMock(output_tokens=5)
+        
+        mock_stream = AsyncMock()
+        mock_stream.__aiter__.return_value = [mock_event_start, mock_event_delta, mock_event_message_delta]
+        
+        mock_stream_context = AsyncMock()
+        mock_stream_context.__aenter__.return_value = mock_stream
+        mock_stream_context.__aexit__.return_value = None
+        
+        provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
+        
+        settings = AssistantLLMSettings(
+            temperature=0.5,
+            max_output_tokens=2048,
+        )
+        
+        chunks = []
+        async for chunk in provider.generate_content_stream_assistant(
+            model="claude-sonnet-4-20250514",
+            contents=[Content(role="user", parts=[Part(text="hi")])],
+            assistant_llm_settings=settings,
+        ):
+            chunks.append(chunk)
+        
+        # Should have text chunk, usage, and finish_reason - no fallback
+        assert len(chunks) == 3
+        assert chunks[0].usage_metadata.prompt_token_count == 10
+        assert chunks[1].text == "hello"
+        assert chunks[2].finish_reason == "end_turn"
+        assert chunks[2].usage_metadata.candidates_token_count == 5
+
+    @pytest.mark.asyncio
+    async def test_primary_stream_fallback_triggered_when_exhausted_without_stop_reason(self):
+        """Primary stream fallback should trigger when stream completes without message_delta stop_reason."""
+        provider = _make_provider()
+        
+        # Mock stream that completes normally but without message_delta with stop_reason
+        mock_event_start = MagicMock()
+        mock_event_start.type = "message_start"
+        mock_event_start.message = MagicMock()
+        mock_event_start.message.usage = MagicMock(input_tokens=10)
+        
+        mock_event_delta = MagicMock()
+        mock_event_delta.type = "content_block_delta"
+        mock_delta = MagicMock()
+        mock_delta.type = "text_delta"
+        mock_delta.text = "hello"
+        mock_event_delta.delta = mock_delta
+        
+        mock_stream = AsyncMock()
+        mock_stream.__aiter__.return_value = [mock_event_start, mock_event_delta]
+        
+        mock_stream_context = AsyncMock()
+        mock_stream_context.__aenter__.return_value = mock_stream
+        mock_stream_context.__aexit__.return_value = None
+        
+        provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
+        
+        settings = PrimaryLLMSettings(
+            temperature=0.5,
+            max_output_tokens=2048,
+        )
+        
+        chunks = []
+        async for chunk in provider.generate_content_stream_primary(
+            model="claude-sonnet-4-20250514",
+            contents=[Content(role="user", parts=[Part(text="hi")])],
+            primary_llm_settings=settings,
+        ):
+            chunks.append(chunk)
+        
+        # Should have usage metadata, text chunk, and fallback completion
+        assert len(chunks) == 3
+        assert chunks[0].usage_metadata.prompt_token_count == 10
+        assert chunks[1].text == "hello"
+        assert chunks[2].finish_reason == "stop"
+
+    @pytest.mark.asyncio
+    async def test_primary_stream_fallback_not_triggered_on_exception(self):
+        """Primary stream fallback should NOT trigger when stream is interrupted by exception."""
+        provider = _make_provider()
+        
+        # Mock stream that raises exception
+        mock_stream = AsyncMock()
+        mock_stream.__aiter__.side_effect = Exception("Network error")
+        
+        mock_stream_context = AsyncMock()
+        mock_stream_context.__aenter__.return_value = mock_stream
+        mock_stream_context.__aexit__.return_value = None
+        
+        provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
+        
+        settings = PrimaryLLMSettings(
+            temperature=0.5,
+            max_output_tokens=2048,
+        )
+        
+        with pytest.raises(Exception, match="Network error"):
+            async for _ in provider.generate_content_stream_primary(
+                model="claude-sonnet-4-20250514",
+                contents=[Content(role="user", parts=[Part(text="hi")])],
+                primary_llm_settings=settings,
+            ):
+                pass

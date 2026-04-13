@@ -43,66 +43,6 @@
         "required": false,
         "default": 0.0
       },
-      "llm_provider": {
-        "type": "string",
-        "required": false,
-        "description": "Default LLM provider for the platform."
-      },
-      "llm_model": {
-        "type": "string",
-        "required": false,
-        "description": "Default primary LLM model name."
-      },
-      "llm_assistant_model": {
-        "type": "string",
-        "required": false,
-        "description": "Default assistant LLM model name."
-      },
-      "openai_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "Default OpenAI-compatible API base URL."
-      },
-      "openai_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Default OpenAI API key. Can be overridden by user_settings."
-      },
-      "ollama_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "Default Ollama API base URL."
-      },
-      "ollama_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Default Ollama API key. Can be overridden by user_settings."
-      },
-      "gemini_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Default Gemini API key. Can be overridden by user_settings."
-      },
-      "anthropic_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "Default Anthropic API base URL."
-      },
-      "anthropic_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Default Anthropic API key. Can be overridden by user_settings."
-      },
-      "llm_temperature": {
-        "type": "number",
-        "required": false,
-        "description": "Default LLM sampling temperature."
-      },
-      "llm_max_tokens": {
-        "type": "integer",
-        "required": false,
-        "description": "Default maximum tokens per LLM response."
-      },
       "google_search_enabled": {
         "type": "boolean",
         "required": false,

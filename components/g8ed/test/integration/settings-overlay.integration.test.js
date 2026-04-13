@@ -51,16 +51,17 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
         expect(result.llm_model).toBe(GeminiModel.PRO_PREVIEW);
     });
 
-    it('returns user-specific settings when user_id is provided', async () => {
+    it('returns user-specific settings flattened from nested structure', async () => {
         const userId = 'user-abc';
-        const userSettings = {
-            llm_provider: LLMProvider.OPENAI,
-            llm_model: OpenAIModel.GPT_4O
+        const nestedSettings = {
+            llm: { provider: LLMProvider.OPENAI, llm_model: OpenAIModel.GPT_4O },
+            search: {},
+            eval_judge: {},
         };
 
         cacheAside.getDocument.mockImplementation((coll, id) => {
             if (coll === Collections.SETTINGS && id === `${USER_SETTINGS_DOC_PREFIX}${userId}`) {
-                return Promise.resolve({ settings: userSettings });
+                return Promise.resolve({ user_id: userId, settings: nestedSettings });
             }
             return Promise.resolve(null);
         });
@@ -70,13 +71,20 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
         expect(result.llm_model).toBe(OpenAIModel.GPT_4O);
     });
 
-    it('persists settings to the correct UserSettingsDocument', async () => {
+    it('persists settings in nested structure with user_id', async () => {
         const userId = 'user-abc';
         const updates = {
             llm_temperature: '0.5'
         };
 
-        cacheAside.getDocument.mockResolvedValue({ settings: { llm_provider: LLMProvider.GEMINI } });
+        cacheAside.getDocument.mockResolvedValue({
+            user_id: userId,
+            settings: {
+                llm: { provider: LLMProvider.GEMINI },
+                search: {},
+                eval_judge: {},
+            },
+        });
         cacheAside.updateDocument.mockResolvedValue({ success: true });
 
         await settingsService.updateUserSettings(userId, updates);
@@ -85,10 +93,13 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
             Collections.SETTINGS,
             `${USER_SETTINGS_DOC_PREFIX}${userId}`,
             expect.objectContaining({
+                user_id: userId,
                 settings: expect.objectContaining({
-                    llm_provider: LLMProvider.GEMINI,
-                    llm_temperature: '0.5'
-                })
+                    llm: expect.objectContaining({
+                        provider: LLMProvider.GEMINI,
+                        llm_temperature: '0.5',
+                    }),
+                }),
             })
         );
     });

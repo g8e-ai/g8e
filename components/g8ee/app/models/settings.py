@@ -38,178 +38,22 @@ from app.constants import (
     LogLevel,
 )
 from app.constants.paths import PATHS
-from pydantic import model_validator, field_validator
-from app.models.base import ConfigDict, Field, G8eBaseModel
+from pydantic import field_validator
+from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
 
-class PlatformSettingsData(G8eBaseModel):
-    """Internal flat map of platform settings as stored in g8es.
-    
-    Keys must match shared/models/platform_settings.json.
-    """
-    model_config = ConfigDict(extra="ignore")
-
-    internal_auth_token: str | None = None
-    session_encryption_key: str | None = None
-    
-    # Platform-wide defaults/overrides
-    llm_provider: str | None = None
-    llm_model: str | None = None
-    llm_assistant_model: str | None = None
-    
-    openai_endpoint: str | None = None
-    openai_api_key: str | None = None
-    
-    ollama_endpoint: str | None = None
-    ollama_api_key: str | None = None
-    
-    gemini_api_key: str | None = None
-    
-    anthropic_endpoint: str | None = None
-    anthropic_api_key: str | None = None
-    
-    llm_temperature: float | None = None
-    llm_max_tokens: int | None = None
-    llm_command_gen_enabled: bool = True
-    llm_command_gen_verifier: bool = True
-    llm_command_gen_passes: int | None = None
-    llm_command_gen_temp: float | None = None
-
-    eval_judge_model: str | None = None
-    eval_judge_temperature: float | None = None
-    eval_judge_max_tokens: int | None = None
-    
-    google_search_enabled: bool | str = False
-    google_search_api_key: str | None = None
-    google_search_engine_id: str | None = None
-    
-    vertex_search_enabled: bool | str = False
-    vertex_search_project_id: str | None = None
-    vertex_search_engine_id: str | None = None
-    vertex_search_location: str = "global"
-    vertex_search_api_key: str | None = None
-    
-    enable_command_whitelisting: bool | str = False
-    enable_command_blacklisting: bool | str = False
-    g8e_api_key: str | None = None
-    
-    passkey_rp_name: str = "g8e.local"
-    passkey_rp_id: str = "localhost"
-    passkey_origin: str = "https://localhost"
-    app_url: str = "https://localhost"
-    allowed_origins: str = ""
-
-    # Cluster Port Configuration
-    https_port: int = 443
-    http_port: int = 80
-    g8es_http_port: int = 9000
-    g8es_wss_port: int = 9001
-    supervisor_port: int = 443
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_booleans(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        
-        bool_fields = {
-            "llm_command_gen_enabled",
-            "llm_command_gen_verifier",
-            "vertex_search_enabled", 
-            "enable_command_whitelisting", 
-            "enable_command_blacklisting",
-            "google_search_enabled"
-        }
-        
-        for field in bool_fields:
-            if field in data:
-                val = data[field]
-                if isinstance(val, str):
-                    data[field] = val.lower() not in ("false", "0", "")
-        return data
-
-
-class UserSettingsData(G8eBaseModel):
-    """Internal flat map of user settings as stored in g8es.
-    
-    Keys must match shared/models/user_settings.json.
-    """
-    model_config = ConfigDict(extra="ignore")
-
-    llm_provider: str | None = None
-    llm_model: str | None = None
-    llm_assistant_model: str | None = None
-    
-    openai_api_key: str | None = None
-    ollama_api_key: str | None = None
-    gemini_api_key: str | None = None
-    anthropic_api_key: str | None = None
-
-    llm_temperature: float | None = None
-    llm_max_tokens: int | None = None
-
-    llm_command_gen_enabled: bool | str | None = None
-    llm_command_gen_verifier: bool | str | None = None
-    llm_command_gen_passes: int | None = None
-    llm_command_gen_temp: float | None = None
-
-    eval_judge_model: str | None = None
-    eval_judge_temperature: float | None = None
-    eval_judge_max_tokens: int | None = None
-    
-    google_search_enabled: bool | str | None = None
-    google_search_api_key: str | None = None
-    google_search_engine_id: str | None = None
-    
-    vertex_search_enabled: bool | str | None = None
-    vertex_search_project_id: str | None = None
-    vertex_search_engine_id: str | None = None
-    vertex_search_location: str | None = None
-    vertex_search_api_key: str | None = None
-
-    enable_command_whitelisting: bool | str | None = None
-    enable_command_blacklisting: bool | str | None = None
-    g8e_api_key: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _coerce_booleans(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        
-        bool_fields = {
-            "llm_command_gen_enabled", 
-            "llm_command_gen_verifier", 
-            "vertex_search_enabled",
-            "google_search_enabled",
-            "enable_command_whitelisting",
-            "enable_command_blacklisting"
-        }
-        
-        for field in bool_fields:
-            if field in data:
-                val = data[field]
-                if isinstance(val, str):
-                    data[field] = val.lower() not in ("false", "0", "")
-        return data
-
-
-class PlatformSettingsDocument(G8eBaseModel):
+class PlatformSettingsDocument(G8eIdentifiableModel):
     """Platform-wide configuration document from g8es 'platform_settings' collection."""
-    settings: PlatformSettingsData
-    created_at: str
-    updated_at: str
+    settings: G8eePlatformSettings
 
-
-class UserSettingsDocument(G8eBaseModel):
+class UserSettingsDocument(G8eIdentifiableModel):
     """Per-user settings document from g8es 'user_settings' collection."""
-    settings: UserSettingsData
-    created_at: str
-    updated_at: str
+    user_id: str = Field(..., description="User identifier for these settings")
+    settings: G8eeUserSettings
 
 class AuthSettings(G8eBaseModel):
     """Authentication and security token configuration."""
@@ -336,7 +180,7 @@ class LLMSettings(G8eBaseModel):
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
-    port: int
+    port: int = Field(443)
     host: str = Field("0.0.0.0")
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)

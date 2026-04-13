@@ -19,8 +19,8 @@ from app.constants.collections import (
     USER_SETTINGS_DOC_PREFIX,
     DB_COLLECTION_SETTINGS,
 )
-from app.models.settings import G8eePlatformSettings, PlatformSettingsData, PlatformSettingsDocument, UserSettingsData, UserSettingsDocument
-from app.constants.settings import GEMINI_3_1_PRO_PREVIEW
+from app.models.settings import G8eePlatformSettings, PlatformSettingsDocument, UserSettingsDocument
+from app.constants.settings import GEMINI_3_1_PRO_PREVIEW, LLMProvider
 
 @pytest.mark.asyncio
 class TestG8eeSettingsOverlayIntegration:
@@ -42,10 +42,70 @@ class TestG8eeSettingsOverlayIntegration:
         when no user document exists.
         """
         platform_data = {
+            "id": "platform-doc-id",
             "settings": {
-                "llm_provider": "gemini",
-                "llm_model": GEMINI_3_1_PRO_PREVIEW,
-                "gemini_api_key": "platform-key"
+                "port": 443,
+                "host": "0.0.0.0",
+                "log_level": "INFO",
+                "enable_logging": True,
+                "database": {
+                    "db_path": "/g8e/g8ee.db",
+                    "poll_interval_active_seconds": 0.5,
+                    "poll_interval_idle_seconds": 1.0,
+                    "tasks_collection": "tasks",
+                    "cases_collection": "cases",
+                    "users_collection": "users",
+                    "investigations_collection": "investigations",
+                    "platform_settings_collection": "settings",
+                    "user_settings_collection": "settings",
+                    "api_keys_collection": "api_keys",
+                    "memories_collection": "memories",
+                    "web_sessions_collection": "web_sessions",
+                    "operator_sessions_collection": "operator_sessions",
+                    "orgs_collection": "orgs",
+                    "operators_collection": "operators"
+                },
+                "listen": {
+                    "http_url": "https://g8es:9000",
+                    "pubsub_url": "wss://g8es:9001",
+                    "blob_url": "https://g8es:9000",
+                    "default_ttl": 3600
+                },
+                "auth": {
+                    "internal_auth_token": "test-token",
+                    "session_encryption_key": None,
+                    "g8e_api_key": None
+                },
+                "component_urls": {
+                    "g8ee_url": "https://g8ee",
+                    "g8ed_url": "https://g8ed"
+                },
+                "docker_gid": "988",
+                "session_ttl": 28800,
+                "absolute_session_timeout": 86400,
+                "docs_dir": "/g8e/docs",
+                "supervisor_port": 443,
+                "app_url": "https://localhost",
+                "allowed_origins": "",
+                "passkey_rp_name": "g8e.local",
+                "passkey_rp_id": "localhost",
+                "passkey_origin": "https://localhost",
+                "command_validation": {
+                    "enable_whitelisting": False,
+                    "enable_blacklisting": False
+                },
+                "search": {
+                    "enabled": False,
+                    "project_id": None,
+                    "engine_id": None,
+                    "location": "global",
+                    "api_key": None
+                },
+                "eval_judge": {
+                    "model": None,
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096
+                }
             },
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
@@ -66,19 +126,96 @@ class TestG8eeSettingsOverlayIntegration:
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
         
         platform_data = {
+            "id": "platform-doc-id",
             "settings": {
-                "llm_provider": "gemini",
-                "llm_model": GEMINI_3_1_PRO_PREVIEW
+                "port": 443,
+                "host": "0.0.0.0",
+                "log_level": "INFO",
+                "enable_logging": True,
+                "database": {
+                    "db_path": "/g8e/g8ee.db",
+                    "poll_interval_active_seconds": 0.5,
+                    "poll_interval_idle_seconds": 1.0,
+                    "tasks_collection": "tasks",
+                    "cases_collection": "cases",
+                    "users_collection": "users",
+                    "investigations_collection": "investigations",
+                    "platform_settings_collection": "settings",
+                    "user_settings_collection": "settings",
+                    "api_keys_collection": "api_keys",
+                    "memories_collection": "memories",
+                    "web_sessions_collection": "web_sessions",
+                    "operator_sessions_collection": "operator_sessions",
+                    "orgs_collection": "orgs",
+                    "operators_collection": "operators"
+                },
+                "listen": {
+                    "http_url": "https://g8es:9000",
+                    "pubsub_url": "wss://g8es:9001",
+                    "blob_url": "https://g8es:9000",
+                    "default_ttl": 3600
+                },
+                "auth": {
+                    "internal_auth_token": None,
+                    "session_encryption_key": None,
+                    "g8e_api_key": None
+                },
+                "component_urls": {
+                    "g8ee_url": "https://g8ee",
+                    "g8ed_url": "https://g8ed"
+                },
+                "docker_gid": "988",
+                "session_ttl": 28800,
+                "absolute_session_timeout": 86400,
+                "docs_dir": "/g8e/docs",
+                "supervisor_port": 443,
+                "app_url": "https://localhost",
+                "allowed_origins": "",
+                "passkey_rp_name": "g8e.local",
+                "passkey_rp_id": "localhost",
+                "passkey_origin": "https://localhost",
+                "command_validation": {
+                    "enable_whitelisting": False,
+                    "enable_blacklisting": False
+                },
+                "search": {
+                    "enabled": False,
+                    "project_id": None,
+                    "engine_id": None,
+                    "location": "global",
+                    "api_key": None
+                },
+                "eval_judge": {
+                    "model": None,
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096
+                }
             },
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
         }
         
         user_data = {
+            "id": "user-doc-id",
+            "user_id": user_id,
             "settings": {
-                "llm_provider": "openai",
-                "llm_model": "gpt-4o",
-                "openai_api_key": "user-key"
+                "llm": {
+                    "provider": "openai",
+                    "primary_model": "gpt-4o",
+                    "openai_api_key": "user-key"
+                },
+                "search": {
+                    "enabled": False,
+                    "project_id": None,
+                    "engine_id": None,
+                    "location": "global",
+                    "api_key": None
+                },
+                "eval_judge": {
+                    "model": None,
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096
+                }
             },
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
@@ -101,16 +238,76 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-    async def test_get_user_settings_falls_back_to_platform_when_missing(self, settings_service, cache_service):
-        """Verify user settings fall back to platform defaults when UserSettingsDocument is missing."""
+    async def test_get_user_settings_falls_back_to_empty_llm_when_missing(self, settings_service, cache_service):
+        """Verify user settings return empty LLMSettings with default OLLAMA provider when UserSettingsDocument is missing."""
         user_id = "new-user"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
         
         platform_data = {
+            "id": "platform-doc-id",
             "settings": {
-                "llm_provider": "gemini",
-                "llm_model": GEMINI_3_1_PRO_PREVIEW,
-                "gemini_api_key": "platform-key"
+                "port": 443,
+                "host": "0.0.0.0",
+                "log_level": "INFO",
+                "enable_logging": True,
+                "database": {
+                    "db_path": "/g8e/g8ee.db",
+                    "poll_interval_active_seconds": 0.5,
+                    "poll_interval_idle_seconds": 1.0,
+                    "tasks_collection": "tasks",
+                    "cases_collection": "cases",
+                    "users_collection": "users",
+                    "investigations_collection": "investigations",
+                    "platform_settings_collection": "settings",
+                    "user_settings_collection": "settings",
+                    "api_keys_collection": "api_keys",
+                    "memories_collection": "memories",
+                    "web_sessions_collection": "web_sessions",
+                    "operator_sessions_collection": "operator_sessions",
+                    "orgs_collection": "orgs",
+                    "operators_collection": "operators"
+                },
+                "listen": {
+                    "http_url": "https://g8es:9000",
+                    "pubsub_url": "wss://g8es:9001",
+                    "blob_url": "https://g8es:9000",
+                    "default_ttl": 3600
+                },
+                "auth": {
+                    "internal_auth_token": None,
+                    "session_encryption_key": None,
+                    "g8e_api_key": None
+                },
+                "component_urls": {
+                    "g8ee_url": "https://g8ee",
+                    "g8ed_url": "https://g8ed"
+                },
+                "docker_gid": "988",
+                "session_ttl": 28800,
+                "absolute_session_timeout": 86400,
+                "docs_dir": "/g8e/docs",
+                "supervisor_port": 443,
+                "app_url": "https://localhost",
+                "allowed_origins": "",
+                "passkey_rp_name": "g8e.local",
+                "passkey_rp_id": "localhost",
+                "passkey_origin": "https://localhost",
+                "command_validation": {
+                    "enable_whitelisting": False,
+                    "enable_blacklisting": False
+                },
+                "search": {
+                    "enabled": False,
+                    "project_id": None,
+                    "engine_id": None,
+                    "location": "global",
+                    "api_key": None
+                },
+                "eval_judge": {
+                    "model": None,
+                    "temperature": 0.0,
+                    "max_output_tokens": 4096
+                }
             },
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
@@ -127,6 +324,7 @@ class TestG8eeSettingsOverlayIntegration:
 
         user_settings = await settings_service.get_user_settings(user_id)
         
-        assert user_settings.llm.provider == "gemini"
-        assert user_settings.llm.primary_model == GEMINI_3_1_PRO_PREVIEW
-        assert user_settings.llm.gemini_api_key == "platform-key"
+        # LLM settings are user-specific only; missing user doc returns empty LLMSettings with default OLLAMA
+        assert user_settings.llm.provider == LLMProvider.OLLAMA
+        assert user_settings.llm.primary_model is None
+        assert user_settings.llm.gemini_api_key is None

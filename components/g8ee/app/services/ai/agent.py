@@ -283,6 +283,22 @@ class g8eEngine:
                 loop_turn, len(contents), case_id, investigation_id,
             )
 
+            logger.info(
+                "[AGENT] Loading model: model=%s temperature=%.2f max_output_tokens=%d "
+                "top_p=%.2f top_k=%d tools=%d system_instruction_len=%d "
+                "thinking_level=%s include_thoughts=%s tool_calling_mode=%s",
+                model_name,
+                generation_config.temperature,
+                generation_config.max_output_tokens,
+                generation_config.top_p_nucleus_sampling,
+                generation_config.top_k_filtering,
+                len(generation_config.tools) if generation_config.tools else 0,
+                len(generation_config.system_instruction),
+                generation_config.thinking_config.thinking_level if generation_config.thinking_config else None,
+                generation_config.thinking_config.include_thoughts if generation_config.thinking_config else False,
+                generation_config.tool_config.tool_calling_config.mode if generation_config.tool_config and generation_config.tool_config.tool_calling_config else None,
+            )
+
             stream_response = llm_provider.generate_content_stream_primary(
                 model=model_name,
                 contents=contents,

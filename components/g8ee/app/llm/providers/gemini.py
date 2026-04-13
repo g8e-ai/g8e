@@ -428,7 +428,7 @@ class GeminiProvider(LLMProvider):
         gen_config_kwargs["max_output_tokens"] = effective_max_tokens
 
         thinking_config = GeminiProvider._build_thinking_config_gemini3(primary_llm_settings.thinking_config, genai_types)
-        
+
         if thinking_config is not None:
             gen_config_kwargs["thinking_config"] = thinking_config
 
@@ -445,6 +445,23 @@ class GeminiProvider(LLMProvider):
             gen_config_kwargs["tool_config"] = genai_types.ToolConfig(
                 function_calling_config=genai_types.FunctionCallingConfig(**fc_kwargs)
             )
+
+        logger.info(
+            "[GEMINI] Building config: model=%s temperature=%.2f max_output_tokens=%d "
+            "top_p=%.2f top_k=%d system_instruction_len=%d tools_count=%d "
+            "thinking_level=%s include_thoughts=%s tool_calling_mode=%s allowed_tools=%d",
+            model,
+            temperature,
+            effective_max_tokens,
+            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_k_filtering,
+            len(primary_llm_settings.system_instruction),
+            len(genai_tools) if genai_tools else 0,
+            primary_llm_settings.thinking_config.thinking_level if primary_llm_settings.thinking_config else None,
+            primary_llm_settings.thinking_config.include_thoughts if primary_llm_settings.thinking_config else False,
+            fc_cfg.mode if primary_llm_settings.tool_config and primary_llm_settings.tool_config.tool_calling_config else None,
+            len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0,
+        )
 
         return genai_types.GenerateContentConfig(**gen_config_kwargs)
 
@@ -474,6 +491,18 @@ class GeminiProvider(LLMProvider):
             gen_config_kwargs["response_mime_type"] = "application/json"
             gen_config_kwargs["response_json_schema"] = assistant_llm_settings.response_format.json_schema.schema
 
+        logger.info(
+            "[GEMINI] Building assistant config: model=%s temperature=%.2f max_output_tokens=%d "
+            "top_p=%.2f top_k=%d system_instruction_len=%d response_format=%s",
+            model,
+            temperature,
+            effective_max_tokens,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_k_filtering,
+            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.response_format is not None,
+        )
+
         return genai_types.GenerateContentConfig(**gen_config_kwargs)
 
     @staticmethod
@@ -501,6 +530,18 @@ class GeminiProvider(LLMProvider):
         if lite_llm_settings.response_format is not None:
             gen_config_kwargs["response_mime_type"] = "application/json"
             gen_config_kwargs["response_json_schema"] = lite_llm_settings.response_format.json_schema.schema
+
+        logger.info(
+            "[GEMINI] Building lite config: model=%s temperature=%.2f max_output_tokens=%d "
+            "top_p=%.2f top_k=%d system_instruction_len=%d response_format=%s",
+            model,
+            temperature,
+            effective_max_tokens,
+            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_k_filtering,
+            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.response_format is not None,
+        )
 
         return genai_types.GenerateContentConfig(**gen_config_kwargs)
 
@@ -669,6 +710,20 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        logger.info(
+            "[GEMINI] generate_content_stream_primary: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d tools=%d",
+            model,
+            len(contents),
+            primary_llm_settings.temperature,
+            primary_llm_settings.max_output_tokens,
+            primary_llm_settings.top_k_filtering,
+            primary_llm_settings.top_p_nucleus_sampling,
+            len(primary_llm_settings.system_instruction),
+            len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
+        )
+
         kwargs = self._build_request_kwargs_primary(model, contents, primary_llm_settings)
         async for chunk in self._stream_with_retry(kwargs):
             yield chunk
@@ -688,6 +743,20 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        logger.info(
+            "[GEMINI] generate_content_stream_assistant: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            assistant_llm_settings.temperature,
+            assistant_llm_settings.max_output_tokens,
+            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.top_p_nucleus_sampling,
+            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_request_kwargs_assistant(model, contents, assistant_llm_settings)
         async for chunk in self._stream_with_retry(kwargs):
             yield chunk
@@ -707,6 +776,20 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        logger.info(
+            "[GEMINI] generate_content_stream_lite: model=%s contents=%d "
+            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
+            "system_instruction_len=%d response_format=%s",
+            model,
+            len(contents),
+            lite_llm_settings.temperature,
+            lite_llm_settings.max_output_tokens,
+            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.top_p_nucleus_sampling,
+            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.response_format is not None,
+        )
+
         kwargs = self._build_request_kwargs_lite(model, contents, lite_llm_settings)
         async for chunk in self._stream_with_retry(kwargs):
             yield chunk

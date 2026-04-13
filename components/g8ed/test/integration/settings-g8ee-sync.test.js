@@ -53,8 +53,11 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
             llm_temperature: '0.8'
         };
 
-        // Mock DB success
-        cacheAside.getDocument.mockResolvedValue({ settings: {} });
+        // Mock DB success (existing doc with nested structure)
+        cacheAside.getDocument.mockResolvedValue({
+            user_id: userId,
+            settings: { llm: {}, search: {}, eval_judge: {} },
+        });
         cacheAside.updateDocument.mockResolvedValue({ success: true });
 
         const result = await settingsService.updateUserSettings(userId, updates);
@@ -63,12 +66,18 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
         expect(result.saved).toContain('llm_model');
         expect(result.saved).toContain('llm_temperature');
 
-        // Verify DB write to SETTINGS
+        // Verify DB write uses nested structure with user_id
         expect(cacheAside.updateDocument).toHaveBeenCalledWith(
             Collections.SETTINGS,
             `user_settings_${userId}`,
             expect.objectContaining({
-                settings: expect.objectContaining(updates)
+                user_id: userId,
+                settings: expect.objectContaining({
+                    llm: expect.objectContaining({
+                        llm_model: 'claude-sonnet-4-6',
+                        llm_temperature: '0.8',
+                    }),
+                }),
             })
         );
 

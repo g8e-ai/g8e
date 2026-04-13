@@ -85,7 +85,6 @@ def handle_finish_reason_chunk(chunk: types.StreamChunkFromModel, state: TurnSta
         if normalized:
             logger.info("[TURN] Setting finish_reason: raw=%s normalized=%s previous=%s", chunk.finish_reason, normalized, state.finish_reason)
             state.finish_reason = normalized
-            logger.info("[TURN] finish_reason received: raw=%s normalized=%s", chunk.finish_reason, normalized)
 
 
 def handle_thought_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> Optional[StreamChunkFromModel]:

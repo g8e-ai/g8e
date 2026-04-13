@@ -562,6 +562,109 @@ export const SETTINGS_PAGE_SECTIONS = Object.freeze([
 ]);
 
 // ---------------------------------------------------------------------------
+// Flat-key to nested-group mapping
+// ---------------------------------------------------------------------------
+
+const LLM_KEY_MAP = Object.freeze({
+    llm_provider:           'provider',
+    llm_model:              'llm_model',
+    llm_assistant_model:    'llm_assistant_model',
+    openai_endpoint:        'openai_endpoint',
+    openai_api_key:         'openai_api_key',
+    ollama_endpoint:        'ollama_endpoint',
+    ollama_api_key:         'ollama_api_key',
+    gemini_api_key:         'gemini_api_key',
+    anthropic_endpoint:     'anthropic_endpoint',
+    anthropic_api_key:      'anthropic_api_key',
+    llm_temperature:        'llm_temperature',
+    llm_max_tokens:         'llm_max_tokens',
+    llm_command_gen_enabled:  'llm_command_gen_enabled',
+    llm_command_gen_verifier: 'llm_command_gen_verifier',
+    llm_command_gen_passes:   'llm_command_gen_passes',
+    llm_command_gen_temp:     'llm_command_gen_temp',
+});
+
+const SEARCH_KEY_MAP = Object.freeze({
+    vertex_search_enabled:    'enabled',
+    vertex_search_project_id: 'project_id',
+    vertex_search_engine_id:  'engine_id',
+    vertex_search_location:   'location',
+    vertex_search_api_key:    'api_key',
+});
+
+const EVAL_JUDGE_KEY_MAP = Object.freeze({
+    eval_judge_model:       'eval_judge_model',
+    eval_judge_temperature: 'eval_judge_temperature',
+    eval_judge_max_tokens:  'eval_judge_max_tokens',
+});
+
+/**
+ * Convert flat UI settings into the nested document shape
+ * expected by g8ee's UserSettingsDocument.
+ *
+ * Input:  { llm_provider: 'gemini', llm_model: '...', vertex_search_enabled: true, ... }
+ * Output: { llm: { provider: 'gemini', llm_model: '...' }, search: { enabled: true }, eval_judge: {} }
+ *
+ * @param {Object} flat - Flat key/value pairs from UI
+ * @returns {{ llm: Object, search: Object, eval_judge: Object }}
+ */
+export function structureUserSettings(flat) {
+    const llm = {};
+    const search = {};
+    const evalJudge = {};
+
+    for (const [key, value] of Object.entries(flat)) {
+        if (key in LLM_KEY_MAP) {
+            llm[LLM_KEY_MAP[key]] = value;
+        } else if (key in SEARCH_KEY_MAP) {
+            search[SEARCH_KEY_MAP[key]] = value;
+        } else if (key in EVAL_JUDGE_KEY_MAP) {
+            evalJudge[EVAL_JUDGE_KEY_MAP[key]] = value;
+        }
+    }
+
+    return { llm, search, eval_judge: evalJudge };
+}
+
+const REVERSE_LLM_MAP    = Object.freeze(Object.fromEntries(Object.entries(LLM_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));
+
+/**
+ * Flatten nested user settings back to flat UI keys.
+ *
+ * Input:  { llm: { provider: 'gemini', ... }, search: { enabled: true }, eval_judge: {} }
+ * Output: { llm_provider: 'gemini', ..., vertex_search_enabled: true, ... }
+ *
+ * @param {{ llm?: Object, search?: Object, eval_judge?: Object }} nested
+ * @returns {Object}
+ */
+export function flattenUserSettings(nested) {
+    const flat = {};
+
+    if (nested.llm) {
+        for (const [nestedKey, value] of Object.entries(nested.llm)) {
+            const flatKey = REVERSE_LLM_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.search) {
+        for (const [nestedKey, value] of Object.entries(nested.search)) {
+            const flatKey = REVERSE_SEARCH_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.eval_judge) {
+        for (const [nestedKey, value] of Object.entries(nested.eval_judge)) {
+            const flatKey = REVERSE_EVAL_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+
+    return flat;
+}
+
+// ---------------------------------------------------------------------------
 // Pre-built lookup maps for O(1) access
 // ---------------------------------------------------------------------------
 

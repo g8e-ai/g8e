@@ -42,7 +42,9 @@ import {
     PLATFORM_SETTINGS,
     SETTINGS_PAGE_SECTIONS,
     validateUserSettings,
-    validatePlatformSettings
+    validatePlatformSettings,
+    structureUserSettings,
+    flattenUserSettings,
 } from '../../models/settings_model.js';
 import { BootstrapService } from './bootstrap_service.js';
 import { G8ES_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
@@ -161,6 +163,7 @@ class SettingsService {
 
     /**
      * Get user-specific settings from the DB.
+     * Returns flat key/value pairs for g8ed internal use.
      * @param {string} userId
      * @returns {Promise<Object>}
      */
@@ -168,7 +171,8 @@ class SettingsService {
         if (!userId) return {};
         const userDocId = `${USER_SETTINGS_DOC_PREFIX}${userId}`;
         const doc = await this._cache_aside.getDocument(this.collectionName, userDocId);
-        return (doc && doc.settings) ? doc.settings : {};
+        if (!doc || !doc.settings) return {};
+        return flattenUserSettings(doc.settings);
     }
 
     /**
@@ -218,14 +222,15 @@ class SettingsService {
 
     /**
      * Update user-specific settings in the DB and sync to G8EE.
+     * Accepts flat UI key/value pairs, validates them, then structures
+     * into the nested document shape before persisting.
      * @param {string} userId
-     * @param {Object} updates
+     * @param {Object} updates - Flat key/value pairs from the UI
      * @returns {Promise<Object>}
      */
     async updateUserSettings(userId, updates) {
         if (!userId) throw new Error('userId is required to update user settings');
 
-        // Validate at model level
         const validation = validateUserSettings(updates);
         if (validation.invalid.length > 0) {
             logger.warn('[SETTINGS-SERVICE] Invalid user settings', { 
@@ -237,17 +242,25 @@ class SettingsService {
 
         const userDocId = `${USER_SETTINGS_DOC_PREFIX}${userId}`;
         const existingDoc = await this._cache_aside.getDocument(this.collectionName, userDocId);
-        const existingSettings = (existingDoc && existingDoc.settings) ? existingDoc.settings : {};
-        const newSettings = { ...existingSettings, ...validation.valid };
+        const existingNested = (existingDoc && existingDoc.settings) ? existingDoc.settings : { llm: {}, search: {}, eval_judge: {} };
+
+        const incomingNested = structureUserSettings(validation.valid);
+        const newSettings = {
+            llm:        { ...existingNested.llm,        ...incomingNested.llm },
+            search:     { ...existingNested.search,     ...incomingNested.search },
+            eval_judge: { ...existingNested.eval_judge, ...incomingNested.eval_judge },
+        };
 
         let result;
         if (existingDoc) {
             result = await this._cache_aside.updateDocument(this.collectionName, userDocId, {
+                user_id: userId,
                 settings: newSettings,
                 updated_at: now(),
             });
         } else {
             result = await this._cache_aside.createDocument(this.collectionName, userDocId, {
+                user_id: userId,
                 settings: newSettings,
                 created_at: now(),
                 updated_at: now(),

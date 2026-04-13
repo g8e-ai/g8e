@@ -281,6 +281,71 @@ For more details on how these documents are persisted, see [architecture/storage
 
 > **Recommended LLM: Google Gemini 3.1.** The platform was designed around Gemini best practices. The Gemini provider is the most robust and extensively tested integration. Other providers are supported but are not part of the standard test pipeline.
 
+### Model Configuration Registry
+
+All LLM model configurations are defined in `components/g8ee/app/models/model_configs.py`. This file contains the canonical source of truth for:
+
+- **Supported models** across all providers (Anthropic, Gemini, OpenAI, Ollama)
+- **Model capabilities and constraints** (context window, thinking support, tool support, output limits)
+- **Supported thinking levels** for each model (MINIMAL, LOW, MEDIUM, HIGH)
+
+The `LLMModelConfig` class defines the schema for each model:
+- `name`: Model identifier string
+- `supported_thinking_levels`: List of `ThinkingLevel` values the model supports
+- `supports_thinking`: Boolean indicating if the model supports thinking features
+- `supports_tools`: Boolean indicating if the model supports function calling
+- `context_window_input`: Maximum input tokens
+- `context_window_output`: Maximum output tokens (max_tokens)
+
+The `MODEL_REGISTRY` provides runtime access to model configurations via `get_model_config(model_name)`.
+
+### Supported Models
+
+#### Anthropic Models
+| Model | Thinking Levels | Tools | Context In | Context Out |
+|-------|-----------------|-------|------------|-------------|
+| `claude-opus-4-6` | HIGH, MEDIUM, LOW | Yes | 200,000 | 8,192 |
+| `claude-sonnet-4-6` | HIGH, MEDIUM, LOW | Yes | 200,000 | 8,192 |
+| `claude-haiku-4-5` | LOW, MINIMAL | Yes | 200,000 | 8,192 |
+
+#### Gemini Models
+| Model | Thinking Levels | Tools | Context In | Context Out |
+|-------|-----------------|-------|------------|-------------|
+| `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+
+#### OpenAI Models
+| Model | Thinking Levels | Tools | Context In | Context Out |
+|-------|-----------------|-------|------------|-------------|
+| `gpt-5.4` | HIGH, MEDIUM, LOW | Yes | 200,000 | 8,192 |
+| `gpt-5.3-instant` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
+| `gpt-5.4-mini` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
+| `gpt-5.4-nano` | LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `gpt-4o` | - | Yes | 128,000 | 4,096 |
+| `gpt-4o-mini` | - | Yes | 128,000 | 4,096 |
+| `gpt-4-turbo` | - | Yes | 128,000 | 4,096 |
+| `gpt-3.5-turbo` | - | Yes | 16,385 | 4,096 |
+
+#### Ollama Models
+| Model | Thinking Levels | Tools | Context In | Context Out |
+|-------|-----------------|-------|------------|-------------|
+| `gemma4-e4b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `gemma4-e2b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `gemma3-27b` | - | Yes | 128,000 | 8,192 |
+| `gemma3-12b` | - | Yes | 128,000 | 8,192 |
+| `gemma3-4b` | - | Yes | 128,000 | 8,192 |
+| `gemma3-1b` | - | Yes | 32,768 | 8,192 |
+| `qwen3-coder-30b` | - | Yes | 256,000 | 8,192 |
+| `qwen3-1b7` | - | Yes | 32,768 | 8,192 |
+| `qwen2.5-14b` | - | Yes | 32,768 | 8,192 |
+| `qwen2.5-7b` | - | Yes | 32,768 | 8,192 |
+| `llama3:8b` | - | Yes | 8,192 | 4,096 |
+| `llama3:70b` | - | Yes | 8,192 | 4,096 |
+| `codellama:7b` | - | Yes | 8,192 | 4,096 |
+| `mistral:7b` | - | Yes | 8,192 | 4,096 |
+
 ### Model Roles
 
 | Role | Env Variable | Used For |
