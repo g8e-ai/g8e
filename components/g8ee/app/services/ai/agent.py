@@ -229,7 +229,6 @@ class g8eEngine:
         try:
             await deliver_via_sse(
                 stream=self.stream_response(
-                    message="",
                     contents=contents,
                     generation_config=generation_config,
                     model_name=model_name,
