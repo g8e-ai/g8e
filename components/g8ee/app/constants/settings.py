@@ -271,9 +271,9 @@ OPENAI_GPT_4_TURBO              = "gpt-4-turbo"
 OPENAI_GPT_3_5_TURBO            = "gpt-3.5-turbo"
 
 # Anthropic models
-ANTHROPIC_CLAUDE_4_6_OPUS       = "claude-4-6-opus"
-ANTHROPIC_CLAUDE_4_6_SONNET     = "claude-4-6-sonnet"
-CLAUDE_3_5_SONNET               = "claude-3-5-sonnet-20241022"
+ANTHROPIC_CLAUDE_OPUS_4_6       = "claude-opus-4-6"
+ANTHROPIC_CLAUDE_SONNET_4_6     = "claude-sonnet-4-6"
+ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4-5"
 
 GEMINI_3_1_PRO_PREVIEW          = "gemini-3.1-pro-preview"
 GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS = "gemini-3.1-pro-preview-customtools"
@@ -308,7 +308,7 @@ OLLAMA_MISTRAL_7B              = "mistral:7b"
 # Provider default models
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_4O_MINI
 OLLAMA_DEFAULT_MODEL            = GEMMA4_E4B
-ANTHROPIC_DEFAULT_MODEL        = CLAUDE_3_5_SONNET
+ANTHROPIC_DEFAULT_MODEL        = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL            = GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
 
 # Provider default endpoints
@@ -378,7 +378,7 @@ FS_READ_MAX_SIZE_BYTES          = 102400
 # System-wide LLM generation defaults
 # These are used when user/platform settings do not specify values
 LLM_DEFAULT_TEMPERATURE          = 0.4
-LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 1000000
+LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
 
 CACHE_TTL_DEFAULT               = 3600
 CACHE_TTL_SHORT                 = 300

@@ -45,6 +45,7 @@ import { DownloadAuthService } from './auth/download_auth_service.js';
 import { DeviceRegistrationService } from './auth/device_registration_service.js';
 import { SessionAuthListener } from './auth/session_auth_listener.js';
 import { InternalHttpClient } from './clients/internal_http_client.js';
+import { InvestigationService } from './platform/investigation_service.js';
 import { logger } from '../utils/logger.js';
 import { PasskeyAuthService } from './auth/passkey_auth_service.js';
 import { AttachmentService } from './platform/attachment_service.js';
@@ -96,6 +97,7 @@ let bindOperatorsServiceInstance = null;
 let operatorAuthService = null;
 let apiKeyDataService = null;
 let operatorDataService = null;
+let investigationService = null;
 let healthCheckService = null;
 let _sigTermHandler = null;
 let _sigIntHandler = null;
@@ -259,6 +261,10 @@ async function _doInitialize() {
         certificateService = new CertificateService({ bootstrapService: bootstrapSvc });
         await certificateService.initialize();
 
+        investigationService = new InvestigationService({
+            cacheAsideService
+        });
+
         operatorDataService = new OperatorDataService({ 
             cacheAsideService 
         });
@@ -283,7 +289,8 @@ async function _doInitialize() {
         sseService.setDependencies({
             settingsService: getSettingsService(),
             internalHttpClient: getInternalHttpClient(),
-            boundSessionsService: getBindingService()
+            boundSessionsService: getBindingService(),
+            investigationService: getInvestigationService()
         });
 
         logger.info('[G8ED-INIT] Phase 5 complete: operator subsystem and SSE initialization');
@@ -467,6 +474,11 @@ export function getPasskeyAuthService() {
     return passkeyAuthService;
 }
 
+export function getInvestigationService() {
+    if (!investigationService) throw new Error('InvestigationService not initialized. Call initializeServices() first.');
+    return investigationService;
+}
+
 export function getAttachmentService() {
     if (!attachmentService) throw new Error('AttachmentService not initialized. Call initializeServices() first.');
     return attachmentService;
@@ -593,5 +605,6 @@ export function resetInitialization() {
     operatorDataService = null;
     blobStorage = null;
     cacheAsideService = null;
+    investigationService = null;
     healthCheckService = null;
 }

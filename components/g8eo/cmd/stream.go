@@ -21,7 +21,7 @@ const (
 	defaultConcurrency = 50
 	defaultTimeout     = 60 * time.Second
 	defaultArch        = "amd64"
-	defaultBinaryDir   = "/app/components/g8eo/build"
+	defaultBinaryDir   = "/home/g8e"
 )
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.
@@ -106,8 +106,13 @@ func RunStream(args []string) {
 	}
 
 	// Load the binary into memory once
-	binPath := fmt.Sprintf("%s/linux-%s/g8e.operator", binaryDir, arch)
+	// Try simple path first (g8ep build), then arch-specific path (local build)
+	binPath := fmt.Sprintf("%s/g8e.operator", binaryDir)
 	binaryData, err := os.ReadFile(binPath)
+	if err != nil {
+		binPath = fmt.Sprintf("%s/linux-%s/g8e.operator", binaryDir, arch)
+		binaryData, err = os.ReadFile(binPath)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[stream] binary not found at %s\n", binPath)
 		fmt.Fprintf(os.Stderr, "  Run: ./g8e operator build\n")
@@ -351,7 +356,7 @@ FLAGS
   --key <apikey>                API key auth
   --no-git                      Disable ledger on remote operator
   --ssh-config <path>           SSH config path (default: ~/.ssh/config)
-  --binary-dir <path>           Operator build dir (default: /app/components/g8eo/build)
+  --binary-dir <path>           Operator build dir (default: /home/g8e)
 
 OUTPUT
   Per-host status events are written as JSON lines to stdout.

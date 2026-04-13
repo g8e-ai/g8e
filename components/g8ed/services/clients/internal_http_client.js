@@ -145,121 +145,157 @@ class InternalHttpClient{
     }
 
     /**
-     * Make internal HTTP request with timeout and error handling.
+     * Make internal HTTP request with timeout, retry logic, and error handling.
      *
      * @param {string} component - Key in COMPONENTS map
      * @param {string} path - URL path
      * @param {Object} options - Fetch options plus:
      *   options.g8eContext  {Object}      - G8eHttpContext for X-G8E-* headers
      *   options.signal      {AbortSignal} - Caller-supplied signal (e.g. req.signal)
+     *   options.maxRetries  {number}      - Maximum retry attempts (default: 3)
      */
     async request(component, path, options = {}) {
         const url = `${this._resolveComponentUrl(component)}${path}`;
         const method = options.method || 'GET';
+        const maxRetries = options.maxRetries ?? 3;
 
         logger.info('[HTTP-INTERNAL] Request started', {
             component,
             path,
             method,
-            url
+            url,
+            maxRetries
         });
 
-        // Combine caller-supplied signal with our own timeout signal
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
+        let lastError = null;
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            let timeoutId = null;
+            try {
+                // Combine caller-supplied signal with our own timeout signal
+                const timeoutController = new AbortController();
+                timeoutId = setTimeout(() => timeoutController.abort(), this.timeout);
 
-        const signals = [timeoutController.signal];
-        if (options.signal) signals.push(options.signal);
-        const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
+                const signals = [timeoutController.signal];
+                if (options.signal) signals.push(options.signal);
+                const signal = signals.length === 1 ? signals[0] : AbortSignal.any(signals);
 
-        // Build headers with G8eHttpContext for g8ee calls
-        const baseHeaders = {
-            'Content-Type': 'application/json',
-            'User-Agent': INTERNAL_HTTP_CLIENT_USER_AGENT
-        };
+                // Build headers with G8eHttpContext for g8ee calls
+                const baseHeaders = {
+                    'Content-Type': 'application/json',
+                    'User-Agent': INTERNAL_HTTP_CLIENT_USER_AGENT
+                };
 
-        // Add internal auth token if available
-        const internalAuthToken = this._resolveInternalAuthToken();
-        if (internalAuthToken) {
-            baseHeaders[HTTP_INTERNAL_AUTH_HEADER] = internalAuthToken;
-        }
+                // Add internal auth token if available
+                const internalAuthToken = this._resolveInternalAuthToken();
+                if (internalAuthToken) {
+                    baseHeaders[HTTP_INTERNAL_AUTH_HEADER] = internalAuthToken;
+                }
 
-        // Add G8eHttpContext headers if context is provided
-        const contextHeaders = options.g8eContext ? this.buildG8eContextHeaders(options.g8eContext, component) : {};
+                // Add G8eHttpContext headers if context is provided
+                const contextHeaders = options.g8eContext ? this.buildG8eContextHeaders(options.g8eContext, component) : {};
 
-        const mergedHeaders = {
-            ...baseHeaders,
-            ...contextHeaders,
-            ...options.headers
-        };
+                const mergedHeaders = {
+                    ...baseHeaders,
+                    ...contextHeaders,
+                    ...options.headers
+                };
 
-        // Strip non-fetch keys before passing to fetch; serialize plain object body
-        const { g8eContext: _g8eContext, signal: _signal, headers: _headers, body: _body, ...fetchOptionsRaw } = options;
-        const serializedBody = _body !== undefined ? JSON.stringify(_body) : undefined;
+                // Strip non-fetch keys before passing to fetch; serialize plain object body
+                const { g8eContext: _g8eContext, signal: _signal, headers: _headers, body: _body, ...fetchOptionsRaw } = options;
+                const serializedBody = _body !== undefined ? JSON.stringify(_body) : undefined;
 
-        try {
-            const fetchOptions = {
-                ...fetchOptionsRaw,
-                ...(serializedBody !== undefined ? { body: serializedBody } : {}),
-                signal,
-                headers: mergedHeaders
-            };
+                const fetchOptions = {
+                    ...fetchOptionsRaw,
+                    ...(serializedBody !== undefined ? { body: serializedBody } : {}),
+                    signal,
+                    headers: mergedHeaders
+                };
 
-            const response = await fetch(url, fetchOptions);
+                const response = await fetch(url, fetchOptions);
 
-            clearTimeout(timeoutId);
+                if (timeoutId) clearTimeout(timeoutId);
 
-            // Handle 204 No Content responses (e.g., DELETE operations)
-            if (response.status === 204) {
-                logger.info('[HTTP-INTERNAL] Request completed (No Content)', {
+                // Handle 204 No Content responses (e.g., DELETE operations)
+                if (response.status === 204) {
+                    logger.info('[HTTP-INTERNAL] Request completed (No Content)', {
+                        component,
+                        path,
+                        method,
+                        status: response.status
+                    });
+                    return { success: true };
+                }
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+
+                logger.info('[HTTP-INTERNAL] Request completed', {
                     component,
                     path,
                     method,
-                    status: response.status
+                    status: response.status,
+                    success: data.success
                 });
-                return { success: true };
-            }
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
-            }
+                return data;
 
-            const data = await response.json();
+            } catch (error) {
+                if (timeoutId) clearTimeout(timeoutId);
 
-            logger.info('[HTTP-INTERNAL] Request completed', {
-                component,
-                path,
-                method,
-                status: response.status,
-                success: data.success
-            });
+                // Check if this is a transient error that should be retried
+                const isTransient = error.cause?.code === 'ECONNREFUSED' || 
+                                   error.cause?.code === 'ECONNRESET' ||
+                                   error.cause?.code === 'ETIMEDOUT' ||
+                                   error.name === 'AbortError';
 
-            return data;
-
-        } catch (error) {
-            clearTimeout(timeoutId);
-
-            if (error.name === 'AbortError') {
-                if (options.signal?.aborted) {
-                    logger.info('[HTTP-INTERNAL] Request cancelled by caller', { component, path });
-                    throw error;
+                if (isTransient && attempt < maxRetries) {
+                    const delayMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+                    logger.warn('[HTTP-INTERNAL] Transient error, retrying', {
+                        component,
+                        path,
+                        attempt: attempt + 1,
+                        maxRetries: maxRetries + 1,
+                        delayMs,
+                        errorCode: error.cause?.code,
+                        errorMessage: error.message
+                    });
+                    await new Promise(resolve => setTimeout(resolve, delayMs));
+                    lastError = error;
+                    continue;
                 }
-                logger.error('[HTTP-INTERNAL] Request timeout', {
+
+                // Non-retryable error or max retries exceeded
+                if (error.name === 'AbortError' && !options.signal?.aborted) {
+                    logger.error('[HTTP-INTERNAL] Request timeout', {
+                        component,
+                        path,
+                        timeout: this.timeout
+                    });
+                    throw new Error(`Request timeout after ${this.timeout}ms`);
+                }
+
+                logger.error('[HTTP-INTERNAL] Request failed', {
                     component,
                     path,
-                    timeout: this.timeout
+                    attempt: attempt + 1,
+                    maxRetries: maxRetries + 1,
+                    errorName: error.name,
+                    errorMessage: error.message,
+                    errorCause: error.cause,
+                    errorStack: error.stack,
+                    url
                 });
-                throw new Error(`Request timeout after ${this.timeout}ms`);
+                throw error;
             }
-
-            logger.error('[HTTP-INTERNAL] Request failed', {
-                component,
-                path,
-                error: error.message
-            });
-            throw error;
         }
+
+        // Should not reach here, but just in case
+        throw lastError || new Error('Request failed');
     }
 
     // =====================================================
@@ -291,64 +327,6 @@ class InternalHttpClient{
             method: 'POST',
             body: chatData,
             g8eContext,
-        });
-    }
-
-    /**
-     * Query investigations via g8ee API
-     * Replaces: PubSub publish to g8e-g8ee-investigation-queries-topic
-     * 
-     * ENFORCEMENT: g8eContext is REQUIRED and must contain web_session_id
-     * 
-     * @param {Object} query - Query parameters
-     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
-     * @throws {Error} If g8eContext is missing or invalid
-     */
-    async queryInvestigations(params, g8eContext) {
-        if (!g8eContext) {
-            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
-        }
-
-        logger.info('[HTTP-INTERNAL] Querying investigations', {
-            userId: g8eContext.user_id,
-            caseId: g8eContext.case_id,
-        });
-
-        let path = ApiPaths.g8ee.investigations();
-        if (params) {
-            const queryString = params.toString();
-            if (queryString) {
-                path += `?${queryString}`;
-            }
-        }
-
-        return this.request('g8ee', path, {
-            method: 'GET',
-            g8eContext
-        });
-    }
-
-    /**
-     * Get single investigation by ID via g8ee internal API
-     * 
-     * ENFORCEMENT: g8eContext is REQUIRED and must contain web_session_id
-     * 
-     * @param {string} investigationId - Investigation ID
-     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
-     * @throws {Error} If g8eContext is missing or invalid
-     */
-    async getInvestigation(investigationId, g8eContext) {
-        if (!g8eContext) {
-            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
-        }
-        logger.info('[HTTP-INTERNAL] Getting investigation', {
-            investigationId,
-            hasContext: !!g8eContext
-        });
-
-        return this.request('g8ee', ApiPaths.g8ee.investigation(investigationId), {
-            method: 'GET',
-            g8eContext
         });
     }
 

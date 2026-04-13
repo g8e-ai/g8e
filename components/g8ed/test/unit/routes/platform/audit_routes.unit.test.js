@@ -22,6 +22,7 @@ describe('Audit Routes [UNIT]', () => {
     let mockAuditService;
     let mockBindingService;
     let mockInternalHttpClient;
+    let mockInvestigationService;
     let mockAuthMiddleware;
     let mockRateLimiters;
 
@@ -34,6 +35,9 @@ describe('Audit Routes [UNIT]', () => {
             resolveBoundOperators: vi.fn().mockResolvedValue([])
         };
         mockInternalHttpClient = {
+            queryInvestigations: vi.fn()
+        };
+        mockInvestigationService = {
             queryInvestigations: vi.fn()
         };
         mockAuthMiddleware = {
@@ -51,6 +55,7 @@ describe('Audit Routes [UNIT]', () => {
             services: {
                 auditService: mockAuditService,
                 internalHttpClient: mockInternalHttpClient,
+                investigationService: mockInvestigationService,
                 bindingService: mockBindingService
             },
             authMiddleware: mockAuthMiddleware,
@@ -115,7 +120,7 @@ describe('Audit Routes [UNIT]', () => {
             const mockInvestigations = [{ id: 'inv_1' }];
             const mockEvents = [{ id: 'evt_1', timestamp: 123456789 }];
             
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue(mockInvestigations);
+            mockInvestigationService.queryInvestigations.mockResolvedValue(mockInvestigations);
             mockAuditService.flattenInvestigationEvents.mockReturnValue(mockEvents);
 
             const req = createMockReq();
@@ -123,12 +128,11 @@ describe('Audit Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockInternalHttpClient.queryInvestigations).toHaveBeenCalledWith(
-                expect.any(URLSearchParams),
-                expect.objectContaining({
-                    user_id: 'user_123',
-                    web_session_id: 'ws_123'
-                })
+            expect(mockInvestigationService.queryInvestigations).toHaveBeenCalledWith(
+                expect.arrayContaining([
+                    { field: 'user_id', operator: '==', value: 'user_123' }
+                ]),
+                100
             );
             expect(res.json).toHaveBeenCalledWith(expect.any(Object));
             const responseData = res.json.mock.calls[0][0];
@@ -138,7 +142,7 @@ describe('Audit Routes [UNIT]', () => {
         });
 
         it('should handle errors from internal services', async () => {
-            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('g8eo Down'));
+            mockInvestigationService.queryInvestigations.mockRejectedValue(new Error('Cache aside error'));
 
             const req = createMockReq();
             const res = createMockRes();
@@ -148,7 +152,7 @@ describe('Audit Routes [UNIT]', () => {
 
             expect(next).toHaveBeenCalledWith(expect.any(Error));
             const error = next.mock.calls[0][0];
-            expect(error.message).toBe('g8eo Down');
+            expect(error.message).toBe('Cache aside error');
         });
     });
 
@@ -160,7 +164,7 @@ describe('Audit Routes [UNIT]', () => {
 
         it('should return JSON download by default', async () => {
             const mockEvents = [{ id: 'evt_1' }];
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue([]);
+            mockInvestigationService.queryInvestigations.mockResolvedValue([]);
             mockAuditService.flattenInvestigationEvents.mockReturnValue(mockEvents);
 
             const req = createMockReq();
@@ -168,12 +172,11 @@ describe('Audit Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockInternalHttpClient.queryInvestigations).toHaveBeenCalledWith(
-                expect.any(URLSearchParams),
-                expect.objectContaining({
-                    user_id: 'user_123',
-                    web_session_id: 'ws_123'
-                })
+            expect(mockInvestigationService.queryInvestigations).toHaveBeenCalledWith(
+                expect.arrayContaining([
+                    { field: 'user_id', operator: '==', value: 'user_123' }
+                ]),
+                100
             );
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
             expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('.json"'));
@@ -187,7 +190,7 @@ describe('Audit Routes [UNIT]', () => {
             const mockEvents = [{ id: 'evt_1' }];
             const mockCsv = 'id,timestamp\nevt_1,123456789';
             
-            mockInternalHttpClient.queryInvestigations.mockResolvedValue([]);
+            mockInvestigationService.queryInvestigations.mockResolvedValue([]);
             mockAuditService.flattenInvestigationEvents.mockReturnValue(mockEvents);
             mockAuditService.buildCsvFromEvents.mockReturnValue(mockCsv);
 
@@ -196,13 +199,14 @@ describe('Audit Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
+            expect(mockInvestigationService.queryInvestigations).toHaveBeenCalled();
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
             expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('.csv"'));
             expect(res.send).toHaveBeenCalledWith(mockCsv);
         });
 
         it('should handle export errors', async () => {
-            mockInternalHttpClient.queryInvestigations.mockRejectedValue(new Error('Export failed'));
+            mockInvestigationService.queryInvestigations.mockRejectedValue(new Error('Export failed'));
 
             const req = createMockReq();
             const res = createMockRes();

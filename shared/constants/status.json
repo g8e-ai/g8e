@@ -530,9 +530,9 @@
       "gpt.3.5.turbo": "gpt-3.5-turbo"
     },
     "anthropic": {
-      "claude.4.6.opus": "claude-4-6-opus",
-      "claude.4.6.sonnet": "claude-4-6-sonnet",
-      "claude.3.5.sonnet": "claude-3-5-sonnet-20241022"
+      "claude.4.6.opus": "claude-opus-4-6",
+      "claude.4.6.sonnet": "claude-sonnet-4-6",
+      "claude.4.5.haiku": "claude-haiku-4-5"
     },
     "ollama": {
       "gemma3.27b": "gemma3:27b",

@@ -2,9 +2,16 @@
  * g8e Settings Page Styles
  */
 
+html, body {
+    min-height: 100vh;
+}
+
 .settings-body {
     background: var(--bg-primary);
     overflow: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Back link */
@@ -31,6 +38,7 @@ body[data-theme="light"] .settings-back-link:hover { color: var(--accent-blue-da
     max-width: 960px;
     margin: 0 auto;
     padding: 2rem 1.5rem 5rem;
+    flex: 1;
 }
 
 /* Header */

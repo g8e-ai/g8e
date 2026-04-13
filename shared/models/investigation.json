@@ -1,11 +1,11 @@
 {
   "_comment": "Canonical InvestigationModel document shape. g8ee is the authority — it creates and owns this document in its SQLite store. g8ed reads it via g8ee HTTP API to render the dashboard and forward context. A field mismatch breaks investigation creation, conversation history, and AI context building.",
 
-  "_authority": "g8ee (SQLite)",
-  "_consumers": ["g8ed (JS — renders dashboard, creates investigations via g8ee API)", "g8eo (receives investigation_id in command envelopes, does not read the document directly)"],
+  "_authority": "g8es (CacheAside)",
+  "_consumers": ["g8ed (JS — renders dashboard, queries investigations via CacheAside)", "g8ee (SQLite — creates and updates investigations, syncs to g8es)", "g8eo (receives investigation_id in command envelopes, does not read the document directly)"],
 
   "investigation": {
-    "_description": "Full investigation document as stored in g8ee SQLite and returned by g8ee investigation endpoints.",
+    "_description": "Full investigation document as stored in g8es and synchronized from g8ee SQLite. Accessed via CacheAside service.",
 
     "core_identity": {
       "id": {

@@ -233,8 +233,15 @@ export class SettingsPage {
             inputEl.className = 'settings-input has-toggle';
             inputEl.setAttribute('data-key', setting.key);
             inputEl.placeholder = setting.placeholder || '';
-            inputEl.value = setting.value || '';
             inputEl.autocomplete = 'new-password';
+            
+            if (setting.value) {
+                inputEl.setAttribute('data-real-value', setting.value);
+                inputEl.value = '*'.repeat(Math.min(setting.value.length, 32));
+            } else {
+                inputEl.value = '';
+            }
+            
             inputWrap.appendChild(inputEl);
 
             const revealBtn = document.createElement('button');
@@ -268,6 +275,9 @@ export class SettingsPage {
                         const match = setting.options.find(o => String(o.value) === raw);
                         return match ? match.value : raw;
                     }
+                    if (setting.type === 'password') {
+                        input.setAttribute('data-real-value', raw);
+                    }
                     return raw;
                 };
                 input.addEventListener('input',  () => this._markDirty(setting.key, resolveValue()));
@@ -281,6 +291,20 @@ export class SettingsPage {
                     if (!inp) return;
                     const isHidden = inp.type === 'password';
                     inp.type = isHidden ? 'text' : 'password';
+                    
+                    if (isHidden) {
+                        const realValue = inp.getAttribute('data-real-value');
+                        if (realValue) {
+                            inp.setAttribute('data-obfuscated-value', inp.value);
+                            inp.value = realValue;
+                        }
+                    } else {
+                        const obfuscatedValue = inp.getAttribute('data-obfuscated-value');
+                        if (obfuscatedValue) {
+                            inp.value = obfuscatedValue;
+                        }
+                    }
+                    
                     revealBtn.querySelector('.material-symbols-outlined').textContent =
                         isHidden ? 'visibility_off' : 'visibility';
                 });

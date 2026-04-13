@@ -29,7 +29,7 @@ import { LLMConfigEvent, LLMConfigData, InvestigationListEvent, InvestigationLis
 import { USER_SETTINGS } from '../../models/settings_model.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 import { EventType } from '../../constants/events.js';
-import { OperatorStatus } from '../../constants/operator.js';
+import { Collections } from '../../constants/collections.js';
 
 class SSEService {
     /**
@@ -37,23 +37,26 @@ class SSEService {
      * @param {Object} options.settingsService - SettingsService instance
      * @param {Object} options.internalHttpClient - InternalHttpClient instance
      * @param {Object} options.boundSessionsService - BoundSessionsService instance
+     * @param {Object} options.investigationService - InvestigationService instance
      */
-    constructor({ settingsService, internalHttpClient, boundSessionsService } = {}) {
+    constructor({ settingsService, internalHttpClient, boundSessionsService, investigationService } = {}) {
         this.localConnections = new Map();
         this.connectionsPerSession = new Map();
         this._settingsService = settingsService;
         this._internalHttpClient = internalHttpClient;
         this._boundSessionsService = boundSessionsService;
+        this._investigationService = investigationService;
         this.healthy = true;
     }
 
     /**
      * Sets dependencies after instantiation if not provided in constructor (for circular bypass in init)
      */
-    setDependencies({ settingsService, internalHttpClient, boundSessionsService }) {
+    setDependencies({ settingsService, internalHttpClient, boundSessionsService, investigationService }) {
         this._settingsService = settingsService;
         this._internalHttpClient = internalHttpClient;
         this._boundSessionsService = boundSessionsService;
+        this._investigationService = investigationService;
     }
 
     async waitForReady() {
@@ -289,7 +292,7 @@ class SSEService {
      * 2. Investigation List
      */
     async pushInitialState(userId, webSessionId, organizationId = null) {
-        if (!this._settingsService || !this._internalHttpClient || !this._boundSessionsService) {
+        if (!this._settingsService || !this._internalHttpClient || !this._boundSessionsService || !this._investigationService) {
             logger.warn('[SSE-SERVICE] Dependencies not set, skipping initial state push', {
                 webSessionId: redactWebSessionId(webSessionId)
             });
@@ -363,15 +366,7 @@ class SSEService {
      */
     async _pushInvestigationList(userId, webSessionId, organizationId) {
         try {
-            const g8eContext = G8eHttpContext.parse({
-                web_session_id: webSessionId,
-                user_id: userId,
-                organization_id: organizationId || null,
-                bound_operators: await this._boundSessionsService.resolveBoundOperators(webSessionId),
-                execution_id: `sse_init_investigations_${now().getTime()}`
-            });
-
-            const investigations = await this._internalHttpClient.queryInvestigations(new URLSearchParams(), g8eContext);
+            const investigations = await this._investigationService.getInvestigationsByUserId(userId);
 
             await this.publishEvent(webSessionId, InvestigationListEvent.parse({
                 type: EventType.INVESTIGATION_LIST_COMPLETED,

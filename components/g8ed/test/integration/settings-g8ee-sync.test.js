@@ -49,7 +49,7 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
     it('syncs user settings to g8ee when saved for a user', async () => {
         const userId = 'user-123';
         const updates = {
-            llm_model: 'claude-3-5-sonnet',
+            llm_model: 'claude-sonnet-4-6',
             llm_temperature: '0.8'
         };
 
