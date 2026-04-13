@@ -167,6 +167,8 @@ async def test_agent_accuracy(
             g8e_context=g8e_context,
             attachments=[],
             sentinel_mode=True,
+            llm_primary_provider=None,
+            llm_assistant_provider=None,
             llm_primary_model=llm_settings.primary_model,
             llm_assistant_model=llm_settings.assistant_model,
             _task_manager=task_manager,

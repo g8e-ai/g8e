@@ -95,7 +95,7 @@ class g8eApp {
 
         this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
             console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired, initializing SSE and operatorPanel');
-            const authState = window.authState.get();
+            const authState = window.authState.getState();
             if (authState.isAuthenticated && authState.webSessionId) {
                 this.sseConnectionManager.initializeConnection(authState.webSessionId);
             }

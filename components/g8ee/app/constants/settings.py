@@ -313,7 +313,7 @@ GEMINI_DEFAULT_MODEL            = GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT         = "https://api.openai.com/v1"
-OLLAMA_DEFAULT_ENDPOINT         = "https://g8e.local:11434"
+OLLAMA_DEFAULT_ENDPOINT         = "http://10.0.0.5:11434"
 ANTHROPIC_DEFAULT_ENDPOINT     = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT         = ""  # Gemini uses different discovery mechanism
 

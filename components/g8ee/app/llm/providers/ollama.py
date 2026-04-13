@@ -106,12 +106,14 @@ class OllamaProvider(LLMProvider):
         
         self._original_endpoint = cleaned_endpoint
 
-        verify: str | bool
+        import ssl
+
+        verify: ssl.SSLContext | bool
         if is_internal_endpoint(endpoint):
             if endpoint.startswith("http://"):
                 verify = False
             elif ca_cert_path:
-                verify = ca_cert_path
+                verify = ssl.create_default_context(cafile=ca_cert_path)
             else:
                 verify = True
         else:

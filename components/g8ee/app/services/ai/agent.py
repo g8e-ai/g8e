@@ -104,7 +104,6 @@ class g8eEngine:
 
     async def stream_response(
         self,
-        message: str,
         contents: list[types.Content],
         generation_config: types.PrimaryLLMSettings,
         model_name: str,

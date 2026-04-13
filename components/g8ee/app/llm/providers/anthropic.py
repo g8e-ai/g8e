@@ -176,12 +176,13 @@ class AnthropicProvider(LLMProvider):
         return is_internal_endpoint(endpoint)
 
     def __init__(self, endpoint: str | None, api_key: str, ca_cert_path: str | None = None):
-        verify: str | bool
+        import ssl
+        verify: ssl.SSLContext | bool
         if self._is_internal_endpoint(endpoint):
             if endpoint and endpoint.startswith("http://"):
                 verify = False
             elif ca_cert_path:
-                verify = ca_cert_path
+                verify = ssl.create_default_context(cafile=ca_cert_path)
             else:
                 verify = True
         else:
