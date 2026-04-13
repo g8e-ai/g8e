@@ -6,7 +6,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    overflow: auto;
+    overflow: hidden;
 }
 
 /* ============================================================================
@@ -15,6 +15,7 @@ body {
 
 .setup-page {
     flex: 1;
+    overflow-y: auto;
 }
 
 .setup-container {
