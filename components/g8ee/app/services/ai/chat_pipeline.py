@@ -48,6 +48,7 @@ from app.models.investigations import (
     AIResponseMetadata,
 )
 from app.llm.prompts import build_modular_system_prompt
+from app.llm.utils import resolve_model
 
 from ..infra.g8ed_event_service import EventService
 from .agent import g8eEngine
@@ -169,11 +170,14 @@ class ChatPipelineService:
         triage_result = await self.triage_agent.triage(triage_request)
 
         needs_main_model = triage_result.complexity == TriageComplexityClassification.COMPLEX
-        
-        if needs_main_model:
-            model_to_use = llm_primary_model if llm_primary_model else request_settings.llm.primary_model
-        else:
-            model_to_use = llm_assistant_model if llm_assistant_model else request_settings.llm.assistant_model
+
+        model_to_use = resolve_model(
+            tier="primary" if needs_main_model else "assistant",
+            primary_override=llm_primary_model,
+            assistant_override=llm_assistant_model,
+            settings_primary_model=request_settings.llm.primary_model,
+            settings_assistant_model=request_settings.llm.assistant_model,
+        )
         
         if not model_to_use:
             raise ConfigurationError(
