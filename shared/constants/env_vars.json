@@ -68,6 +68,6 @@
   "ssl": {
     "G8E_SSL_DIR": "ssl.ssl_dir",
     "G8E_PUBSUB_CA_CERT": "ssl.pubsub_ca_cert",
-    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file",
+    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file"
   }
 }

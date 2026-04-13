@@ -123,6 +123,7 @@
 .anchored-terminal__thinking-header {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 6px;
     padding: 5px 10px;
     cursor: pointer;

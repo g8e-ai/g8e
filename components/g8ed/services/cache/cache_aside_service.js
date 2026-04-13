@@ -607,6 +607,10 @@ class CacheAsideService {
         return this.kvClient.keys(pattern);
     }
 
+    async kvScan(cursor, ...args) {
+        return this.kvClient.scan(cursor, ...args);
+    }
+
 }
 
 export { CacheAsideService };

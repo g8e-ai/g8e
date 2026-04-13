@@ -28,7 +28,7 @@ let cachedVersionInfo = null;
 
 function getVersion() {
     try {
-        const versionPath = path.join(__dirname, '..', 'VERSION');
+        const versionPath = path.join(__dirname, '..', '..', '..', 'VERSION');
         return readFileSync(versionPath, 'utf8').trim();
     } catch {
         return VERSION_FALLBACK;
