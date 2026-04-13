@@ -18,6 +18,7 @@ from collections.abc import AsyncGenerator
 import httpx
 from openai import AsyncOpenAI
 
+from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -162,13 +163,14 @@ class OpenAICompatibleProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": primary_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if primary_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = primary_llm_settings.max_output_tokens
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.stop_sequences:
@@ -238,13 +240,14 @@ class OpenAICompatibleProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": primary_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if primary_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = primary_llm_settings.max_output_tokens
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.stop_sequences:
@@ -298,13 +301,14 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
 
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": assistant_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if assistant_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = assistant_llm_settings.max_output_tokens
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.stop_sequences:
@@ -340,13 +344,14 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
 
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": assistant_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if assistant_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = assistant_llm_settings.max_output_tokens
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.stop_sequences:
@@ -395,13 +400,14 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
 
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": lite_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if lite_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = lite_llm_settings.max_output_tokens
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.stop_sequences:
@@ -437,13 +443,14 @@ class OpenAICompatibleProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
 
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": lite_llm_settings.temperature,
+            "temperature": effective_temperature,
+            "max_tokens": effective_max_tokens,
         }
-        if lite_llm_settings.max_output_tokens is not None:
-            kwargs["max_tokens"] = lite_llm_settings.max_output_tokens
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.stop_sequences:

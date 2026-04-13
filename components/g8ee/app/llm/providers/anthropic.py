@@ -20,6 +20,7 @@ from collections.abc import AsyncGenerator
 import anthropic
 import httpx
 
+from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -171,13 +172,14 @@ class AnthropicProvider(LLMProvider):
         messages = _contents_to_anthropic(contents)
         anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
 
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": primary_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if primary_llm_settings.temperature is not None:
-            kwargs["temperature"] = primary_llm_settings.temperature
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.top_k_filtering is not None:
@@ -285,13 +287,14 @@ class AnthropicProvider(LLMProvider):
         messages = _contents_to_anthropic(contents)
         anthropic_tools = _tools_to_anthropic(primary_llm_settings.tools)
 
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": primary_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if primary_llm_settings.temperature is not None:
-            kwargs["temperature"] = primary_llm_settings.temperature
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.top_k_filtering is not None:
@@ -343,13 +346,14 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_anthropic(contents)
 
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": assistant_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if assistant_llm_settings.temperature is not None:
-            kwargs["temperature"] = assistant_llm_settings.temperature
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.top_k_filtering is not None:
@@ -396,13 +400,14 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_anthropic(contents)
 
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": assistant_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if assistant_llm_settings.temperature is not None:
-            kwargs["temperature"] = assistant_llm_settings.temperature
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.top_k_filtering is not None:
@@ -441,13 +446,14 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_anthropic(contents)
 
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": lite_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if lite_llm_settings.temperature is not None:
-            kwargs["temperature"] = lite_llm_settings.temperature
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.top_k_filtering is not None:
@@ -492,13 +498,14 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_anthropic(contents)
 
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         kwargs = {
             "model": model,
             "messages": messages,
-            "max_tokens": lite_llm_settings.max_output_tokens,
+            "max_tokens": effective_max_tokens,
+            "temperature": effective_temperature,
         }
-        if lite_llm_settings.temperature is not None:
-            kwargs["temperature"] = lite_llm_settings.temperature
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.top_k_filtering is not None:

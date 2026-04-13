@@ -391,8 +391,8 @@ class PrimaryLLMSettings:
 
 @dataclass
 class AssistantLLMSettings:
-    temperature: float
-    max_output_tokens: int
+    temperature: float | None = None
+    max_output_tokens: int | None = None
     top_p_nucleus_sampling: float = 1.0
     top_k_filtering: int = 40
     stop_sequences: list[str] = field(default_factory=list)
@@ -402,8 +402,8 @@ class AssistantLLMSettings:
 
 @dataclass
 class LiteLLMSettings:
-    temperature: float
-    max_output_tokens: int
+    temperature: float | None = None
+    max_output_tokens: int | None = None
     top_p_nucleus_sampling: float = 1.0
     top_k_filtering: int = 40
     stop_sequences: list[str] = field(default_factory=list)
