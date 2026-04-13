@@ -40,6 +40,53 @@ class AIResponseAnalyzer:
     def __init__(self):
         logger.info("AIResponseAnalyzer initialized")
 
+    async def _run_assistant_analysis(
+        self,
+        prompt: str,
+        response_model: type,
+        assistant_model: str | None,
+        settings: G8eeUserSettings,
+        fallback_no_model,
+        fallback_no_response,
+        fallback_exception,
+        log_context: str,
+        post_process=None,
+    ):
+        if not assistant_model:
+            logger.warning("%s: no assistant_model configured", log_context)
+            return fallback_no_model()
+
+        try:
+            async with get_llm_provider(settings.llm) as client:
+                config = AIGenerationConfigBuilder.build_assistant_settings(
+                    model=assistant_model,
+                    temperature=None,
+                    max_tokens=None,
+                    system_instruction="",
+                    response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
+                )
+                response = await client.generate_content_assistant(
+                    model=assistant_model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    assistant_llm_settings=config,
+                )
+
+                response_text = response.text
+                if response_text is None:
+                    logger.error("%s: LLM returned no text content", log_context)
+                    return fallback_no_response()
+                analysis = response_model.model_validate_json(response_text)
+
+                if post_process:
+                    post_process(analysis)
+
+                logger.info("%s completed", log_context)
+                return analysis
+
+        except Exception as e:
+            logger.error("%s failed: %s", log_context, e, exc_info=True)
+            return fallback_exception(e)
+
     async def analyze_command_risk(
         self,
         command: str,
@@ -78,38 +125,21 @@ HIGH: Destructive or irreversible operations.
 Classify the command risk level."""
 
         assistant_model = resolved_settings.llm.assistant_model
-        if not assistant_model:
-            logger.warning("Command risk analysis: no assistant_model configured, defaulting to HIGH risk")
-            return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
 
-        try:
-            async with get_llm_provider(resolved_settings.llm) as client:
-                config = AIGenerationConfigBuilder.build_assistant_settings(
-                    model=assistant_model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                    response_format=types.ResponseFormat.from_pydantic_schema(CommandRiskAnalysis.model_json_schema()),
-                )
-                response = await client.generate_content_assistant(
-                    model=assistant_model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    assistant_llm_settings=config,
-                )
+        def log_result(analysis):
+            logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
 
-                response_text = response.text
-                if response_text is None:
-                    logger.error("Command risk analysis: LLM returned no text content")
-                    return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
-                analysis = CommandRiskAnalysis.model_validate_json(response_text)
-
-                logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
-
-                return analysis
-
-        except Exception as e:
-            logger.error("Command risk analysis failed: %s", e, exc_info=True)
-            return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
+        return await self._run_assistant_analysis(
+            prompt=prompt,
+            response_model=CommandRiskAnalysis,
+            assistant_model=assistant_model,
+            settings=resolved_settings,
+            fallback_no_model=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            fallback_exception=lambda e: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
+            log_context="Command risk analysis",
+            post_process=log_result,
+        )
 
     async def analyze_error_and_suggest_fix(
         self,
@@ -184,64 +214,49 @@ Working Directory: {working_dir}
 Based on the information above, analyze the failure and fill in ALL response fields."""
 
         assistant_model = resolved_settings.llm.assistant_model
-        if not assistant_model:
-            logger.warning("Error analysis: no assistant_model configured, escalating to human")
-            return ErrorAnalysisResult(
+
+        def post_process(analysis):
+            if retry_count >= 2:
+                analysis.can_auto_fix = False
+                analysis.should_escalate = True
+                analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
+            logger.info(
+                "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
+                command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
+            )
+
+        return await self._run_assistant_analysis(
+            prompt=prompt,
+            response_model=ErrorAnalysisResult,
+            assistant_model=assistant_model,
+            settings=resolved_settings,
+            fallback_no_model=lambda: ErrorAnalysisResult(
                 error_category=ErrorAnalysisCategory.UNKNOWN,
                 root_cause="No assistant model configured for error analysis",
                 can_auto_fix=False,
                 should_escalate=True,
                 reasoning="No assistant_model configured in platform settings",
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
-            )
-
-        try:
-            async with get_llm_provider(resolved_settings.llm) as client:
-                config = AIGenerationConfigBuilder.build_assistant_settings(
-                    model=assistant_model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                    response_format=types.ResponseFormat.from_pydantic_schema(ErrorAnalysisResult.model_json_schema()),
-                )
-                response = await client.generate_content_assistant(
-                    model=assistant_model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    assistant_llm_settings=config,
-                )
-
-                response_text = response.text
-                if response_text is None:
-                    logger.error("Error analysis: LLM returned no text content")
-                    return ErrorAnalysisResult(
-                        error_category=ErrorAnalysisCategory.UNKNOWN,
-                        root_cause="LLM returned no text content",
-                        can_auto_fix=False,
-                        should_escalate=True,
-                        reasoning="LLM response contained no text parts",
-                        user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
-                    )
-                analysis = ErrorAnalysisResult.model_validate_json(response_text)
-                if retry_count >= 2:
-                    analysis.can_auto_fix = False
-                    analysis.should_escalate = True
-                    analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
-                logger.info(
-                    "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
-                    command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
-                )
-                return analysis
-
-        except Exception as e:
-            logger.error("Error analysis failed: %s", e, exc_info=True)
-            return ErrorAnalysisResult(
+            ),
+            fallback_no_response=lambda: ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="LLM returned no text content",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="LLM response contained no text parts",
+                user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+            ),
+            fallback_exception=lambda e: ErrorAnalysisResult(
                 error_category=ErrorAnalysisCategory.UNKNOWN,
                 root_cause="Error analysis failed",
                 can_auto_fix=False,
                 should_escalate=True,
                 reasoning=f"Analysis error: {e!s}",
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
-            )
+            ),
+            log_context="Error analysis",
+            post_process=post_process,
+        )
 
     async def analyze_file_operation_risk(
         self,
@@ -298,56 +313,39 @@ HIGH: System files, irreversible deletes, dirty git + destructive operation
 Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
 
         assistant_model = resolved_settings.llm.assistant_model
-        if not assistant_model:
-            logger.warning("File operation risk analysis: no assistant_model configured, blocking operation")
-            return FileOperationRiskAnalysis(risk_level=RiskLevel.HIGH, safe_to_proceed=False, is_system_file=True)
 
-        try:
-            async with get_llm_provider(resolved_settings.llm) as client:
-                config = AIGenerationConfigBuilder.build_assistant_settings(
-                    model=assistant_model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                    response_format=types.ResponseFormat.from_pydantic_schema(FileOperationRiskAnalysis.model_json_schema()),
-                )
-                response = await client.generate_content_assistant(
-                    model=assistant_model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    assistant_llm_settings=config,
-                )
+        def post_process(analysis):
+            system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
+            analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
 
-                response_text = response.text
-                if response_text is None:
-                    logger.error("File operation risk analysis: LLM returned no text content")
-                    return FileOperationRiskAnalysis(
-                        risk_level=RiskLevel.HIGH,
-                        is_system_file=False,
-                        safe_to_proceed=False,
-                        blocking_issues=["Risk analysis failed - LLM returned no content"],
-                        approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
-                    )
-                analysis = FileOperationRiskAnalysis.model_validate_json(response_text)
+            if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
+                analysis.safe_to_proceed = False
 
-                system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
-                analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
+            logger.info(
+                "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
+                operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
+            )
 
-                if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
-                    analysis.safe_to_proceed = False
-
-                logger.info(
-                    "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
-                    operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
-                )
-
-                return analysis
-
-        except Exception as e:
-            logger.error("File operation risk analysis failed: %s", e, exc_info=True)
-            return FileOperationRiskAnalysis(
+        return await self._run_assistant_analysis(
+            prompt=prompt,
+            response_model=FileOperationRiskAnalysis,
+            assistant_model=assistant_model,
+            settings=resolved_settings,
+            fallback_no_model=lambda: FileOperationRiskAnalysis(risk_level=RiskLevel.HIGH, safe_to_proceed=False, is_system_file=True),
+            fallback_no_response=lambda: FileOperationRiskAnalysis(
+                risk_level=RiskLevel.HIGH,
+                is_system_file=False,
+                safe_to_proceed=False,
+                blocking_issues=["Risk analysis failed - LLM returned no content"],
+                approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
+            ),
+            fallback_exception=lambda e: FileOperationRiskAnalysis(
                 risk_level=RiskLevel.HIGH,
                 is_system_file=False,
                 safe_to_proceed=False,
                 blocking_issues=["Risk analysis failed - manual review required"],
                 approval_prompt=f"Risk analysis failed. File operation: {operation} on {file_path}\nProceed with extreme caution?",
-            )
+            ),
+            log_context="File operation risk analysis",
+            post_process=post_process,
+        )
