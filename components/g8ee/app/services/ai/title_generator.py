@@ -55,7 +55,13 @@ async def generate_case_title(
 
     try:
         async with get_llm_provider(settings.llm) as provider:
-            model = settings.llm.assistant_model or "gpt-4o-mini"
+            model = settings.llm.assistant_model
+            if not model:
+                logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
+                return CaseTitleResult(
+                    generated_title=_create_fallback_title(description, max_length),
+                    fallback=True
+                )
 
             prompt = f"""<task>
 Generate a concise, specific title for this conversation.

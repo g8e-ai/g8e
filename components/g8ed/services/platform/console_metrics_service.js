@@ -293,7 +293,7 @@ class ConsoleMetricsService {
 
         try {
             const dbStart = Date.now();
-            await this._cache_aside.getDocument(Collections.PLATFORM_SETTINGS, 'platform_settings');
+            await this._cache_aside.getDocument(Collections.SETTINGS, 'platform_settings');
             health.db = {
                 status: SystemHealth.HEALTHY,
                 latencyMs: Date.now() - dbStart
@@ -420,7 +420,7 @@ class ConsoleMetricsService {
 
         try {
             const dbStart = Date.now();
-            await this._cache_aside.getDocument(Collections.PLATFORM_SETTINGS, 'platform_settings');
+            await this._cache_aside.getDocument(Collections.SETTINGS, 'platform_settings');
             components.g8es_db = { name: 'g8es DB', status: SystemHealth.HEALTHY, latencyMs: Date.now() - dbStart };
         } catch (error) {
             components.g8es_db = { name: 'g8es DB', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };

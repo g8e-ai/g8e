@@ -35,6 +35,7 @@ from app.models.settings import G8eeUserSettings
 import app.llm.llm_types as types
 from app.llm.llm_types import PrimaryLLMSettings
 from app.constants import ATTACHMENT_FILENAMES_PREFIX_TEMPLATE, AgentMode
+from app.errors import ConfigurationError
 from app.constants.message_sender import MessageSender
 from app.models.attachments import ProcessedAttachment
 from app.models.investigations import ConversationHistoryMessage, UserChatMetadata
@@ -163,7 +164,11 @@ class AIRequestBuilder:
         Returns:
             PrimaryLLMSettings ready for generate_content_stream_primary()
         """
-        model = model_override or settings.llm.primary_model or "gpt-4o-mini"
+        model = model_override or settings.llm.primary_model
+        if not model:
+            raise ConfigurationError(
+                "No LLM model configured. Set a primary_model in platform settings."
+            )
         tools = self.tool_executor.get_tools(agent_mode, model) if self.tool_executor else []
 
         return AIGenerationConfigBuilder.build_primary_settings(

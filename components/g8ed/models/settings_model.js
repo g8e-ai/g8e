@@ -113,8 +113,8 @@ export const USER_SETTINGS = Object.freeze([
         type: 'text',
         provider: LLMProvider.OLLAMA,
         secret: false,
-        placeholder: 'gemma3:1b',
-        default: OllamaModel.GEMMA3_1B,
+        placeholder: 'gemma4:e4b',
+        default: OllamaModel.GEMMA4_E4B,
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -124,8 +124,8 @@ export const USER_SETTINGS = Object.freeze([
         type: 'text',
         provider: LLMProvider.OLLAMA,
         secret: false,
-        placeholder: 'gemma3:1b',
-        default: OllamaModel.GEMMA3_1B,
+        placeholder: 'gemma4:e4b',
+        default: OllamaModel.GEMMA4_E4B,
     }),
     Object.freeze({
         key: 'ollama_endpoint',

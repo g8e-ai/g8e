@@ -158,13 +158,15 @@ export const AnthropicModel = Object.freeze({
 /**
  * Ollama model identifiers.
  * Sourced from shared/constants/status.json llm.models.ollama.
- * Must match g8ee's constants/settings.py GEMMA3_* and GEMMA4 constants exactly.
+ * Must match g8ee's constants/settings.py GEMMA3_*, GEMMA4_*, and GEMMA4 constants exactly.
  */
 export const OllamaModel = Object.freeze({
     GEMMA3_27B:         _STATUS['llm.models']['ollama']['gemma3.27b'],
     GEMMA3_12B:         _STATUS['llm.models']['ollama']['gemma3.12b'],
     GEMMA3_4B:          _STATUS['llm.models']['ollama']['gemma3.4b'],
     GEMMA3_1B:          _STATUS['llm.models']['ollama']['gemma3.1b'],
+    GEMMA4_E4B:         _STATUS['llm.models']['ollama']['gemma4.e4b'],
+    GEMMA4_E2B:         _STATUS['llm.models']['ollama']['gemma4.e2b'],
     GEMMA4:             _STATUS['llm.models']['ollama']['gemma4'],
     LLAMA3_8B:          _STATUS['llm.models']['ollama']['llama3.8b'],
     LLAMA3_70B:         _STATUS['llm.models']['ollama']['llama3.70b'],

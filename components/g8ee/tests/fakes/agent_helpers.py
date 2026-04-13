@@ -35,9 +35,13 @@ def make_gen_config(
     fn_handler = MagicMock()
     fn_handler._tool_declarations = {}
     builder = AIRequestBuilder(tool_executor=fn_handler)
+    if settings is None:
+        settings = G8eeUserSettings(
+            llm=LLMSettings(primary_model="test-model"),
+        )
     return builder.get_generation_config(
         system_instructions=system_instructions,
-        settings=settings or G8eeUserSettings(llm=LLMSettings()),
+        settings=settings,
         agent_mode=agent_mode,
     )
 

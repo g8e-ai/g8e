@@ -550,7 +550,7 @@ Large LLM proposes command via ReAct loop
   ▼
 Tribunal — N concurrent generation passes (default: 3)
   Each pass: same intent + operator OS/shell/working_directory context
-  Temperature: Member-specific  Model: LLM_ASSISTANT_MODEL (default: gemma3:1b)
+  Temperature: Member-specific  Model: LLM_ASSISTANT_MODEL (default: gemma4:e4b)
   │
   ▼
 Weighted majority vote — earlier passes weighted higher (weight 1/(i+1))

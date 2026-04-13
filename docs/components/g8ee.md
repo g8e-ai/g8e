@@ -868,8 +868,8 @@ The following keys are read from the `settings` map inside the `platform_setting
 | Key | Default | Description |
 |-----|---------|-------------|
 | `llm_provider` | `ollama` | The active LLM provider (`ollama`, `openai`, `anthropic`, `gemini`) |
-| `ollama_model` | `gemma3:1b` | The model name for Ollama |
-| `ollama_assistant_model` | `gemma3:1b` | The assistant model name for Ollama |
+| `ollama_model` | `gemma4:e4b` | The model name for Ollama |
+| `ollama_assistant_model` | `gemma4:e4b` | The assistant model name for Ollama |
 | `ollama_endpoint` | `http://host.docker.internal:11434` | The Ollama API endpoint |
 | `openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `openai_api_key` | - | OpenAI API key |

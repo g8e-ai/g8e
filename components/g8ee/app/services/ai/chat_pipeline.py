@@ -30,7 +30,7 @@ import logging
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
-from app.errors import BusinessLogicError
+from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
     NEW_CASE_ID,
     EventType,
@@ -175,9 +175,10 @@ class ChatPipelineService:
         else:
             model_to_use = llm_assistant_model if llm_assistant_model else request_settings.llm.assistant_model
         
-        # Ensure model_to_use is not None for downstream config builders
         if not model_to_use:
-            model_to_use = request_settings.llm.assistant_model or "gemma3:1b"
+            raise ConfigurationError(
+                "No LLM model configured. Set a primary_model and/or assistant_model in platform settings."
+            )
             
         max_tokens = request_settings.llm.llm_max_tokens
 
