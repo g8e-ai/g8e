@@ -56,7 +56,7 @@ class PubSubClient:
         internal_auth_token: str | None = None,
     ):
         _settings = ListenSettings()
-        self.pubsub_url = (pubsub_url or _settings.pubsub_url).rstrip("/")
+        self.pubsub_url = pubsub_url or _settings.pubsub_url
         self.component_name = component_name
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path

@@ -271,9 +271,9 @@ fi
 if [[ "$NON_INTERACTIVE" == true ]]; then
     LLM_PROVIDER="$ARG_PROVIDER"
     case "$LLM_PROVIDER" in
-        gemini|anthropic|openai|ollama|vllm) ;;
+        gemini|anthropic|openai|ollama) ;;
         *)
-            _err "Unknown provider: $LLM_PROVIDER. Supported: gemini, anthropic, openai, ollama, vllm"
+            _err "Unknown provider: $LLM_PROVIDER. Supported: gemini, anthropic, openai, ollama"
             exit 1 ;;
     esac
 else
@@ -282,20 +282,14 @@ else
     echo "  1) Gemini       (Google — recommended, most tested)"
     echo "  2) Anthropic    (Claude)"
     echo "  3) OpenAI       (GPT)"
-    echo "  4) Ollama       (remote Ollama server, OpenAI-compatible)"
-    echo "  5) vLLM         (self-hosted OpenAI-compatible)"
+    echo "  4) Ollama       (remote Ollama server)"
     echo
 
     _default_choice=""
     case "$_cur_provider" in
         gemini)           _default_choice="1" ;;
         anthropic)        _default_choice="2" ;;
-        openai)
-            if [[ "$_cur_endpoint" == *"11434"* ]]; then
-                _default_choice="5"
-            else
-                _default_choice="3"
-            fi ;;
+        openai)           _default_choice="3" ;;
         ollama)           _default_choice="4" ;;
     esac
 
@@ -308,7 +302,6 @@ else
         2) LLM_PROVIDER="anthropic" ;;
         3) LLM_PROVIDER="openai" ;;
         4) LLM_PROVIDER="ollama" ;;
-        5) LLM_PROVIDER="vllm" ;;
         *)
             _err "Invalid choice: $_choice"
             exit 1 ;;
@@ -452,7 +445,7 @@ case "$LLM_PROVIDER" in
     ollama)
         _header "Ollama Configuration"
         echo
-        _info "Connects to an existing remote Ollama server (OpenAI-compatible API)."
+        _info "Connects to an existing remote Ollama server."
         echo
 
         if [[ "$NON_INTERACTIVE" == true ]]; then
@@ -485,56 +478,6 @@ case "$LLM_PROVIDER" in
         LLM_PROVIDER_VAL="ollama"
         ;;
 
-    # ── vLLM (self-hosted) ────────────────────────────────────────────────────
-    vllm)
-        _header "vLLM Configuration"
-        echo
-        _info "Self-hosted OpenAI-compatible API server."
-        echo
-
-        if [[ "$NON_INTERACTIVE" == true ]]; then
-            LLM_ENDPOINT="${ARG_ENDPOINT:-}"
-            if [[ -z "$LLM_ENDPOINT" ]]; then
-                _err "--endpoint is required for vLLM"
-                exit 1
-            fi
-            LLM_MODEL="${ARG_MODEL:-}"
-            if [[ -z "$LLM_MODEL" ]]; then
-                _err "--model is required for vLLM"
-                exit 1
-            fi
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-$LLM_MODEL}"
-            LLM_API_KEY="${ARG_API_KEY:-}"
-        else
-            printf "  vLLM endpoint [%s]: " "${_cur_endpoint:-https://your-vllm-host:443/v1}" >&2
-            IFS= read -r _input
-            LLM_ENDPOINT="${_input:-$_cur_endpoint}"
-            if [[ -z "$LLM_ENDPOINT" ]]; then
-                _err "Endpoint is required."
-                exit 1
-            fi
-
-            printf "  Primary model [%s]: " "${_cur_model:-your-model-name}" >&2
-            IFS= read -r _input
-            LLM_MODEL="${_input:-$_cur_model}"
-            if [[ -z "$LLM_MODEL" ]]; then
-                _err "Model name is required."
-                exit 1
-            fi
-
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-$LLM_MODEL}" >&2
-            IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-$LLM_MODEL}}"
-
-            if [[ -n "$_cur_api_key" ]]; then
-                _info "An existing API key is set. Leave blank to keep it."
-            fi
-            LLM_API_KEY="$(_prompt_secret "API key (leave blank if not required)")"
-            [[ -z "$LLM_API_KEY" ]] && LLM_API_KEY="$_cur_api_key"
-        fi
-
-        LLM_PROVIDER_VAL="openai"
-        ;;
 esac
 
 # =============================================================================

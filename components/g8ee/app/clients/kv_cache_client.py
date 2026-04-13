@@ -64,7 +64,7 @@ class KVCacheClient:
             service = SettingsService()
             listen_settings = ListenSettings.from_bootstrap(service)
         
-        self.http_url = (http_url or listen_settings.http_url).rstrip("/")
+        self.http_url = http_url or listen_settings.http_url
         self.component_name = component_name
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path

@@ -479,7 +479,7 @@ The Go-based reference implementation of the Operator. A lightweight (~4MB) bina
 
 Also known as: **g8ee**
 
-The AI engine component with LLM provider abstraction supporting any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) or cloud LLM APIs. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
+The AI engine component with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
 
 ---
 
@@ -501,7 +501,7 @@ The Operator binary (`g8e.operator`) running in `--listen` mode. Serves as the p
 
 ## Ollama (Remote)
 
-The remote LLM inference component. g8e supports any remote Ollama server that provides an OpenAI-compatible API at `/v1`. Used as an LLM backend for G8EE. Configure the endpoint via the setup wizard or `./g8e llm setup`.
+The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for G8EE. Configure the endpoint via the setup wizard or `./g8e llm setup`.
 
 ---
 

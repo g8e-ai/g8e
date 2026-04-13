@@ -809,21 +809,15 @@ The provider abstraction lives in `components/g8ee/app/llm/provider.py` (`LLMPro
 - **Message translation:** `_contents_to_anthropic` maps `model` role → `assistant`, `user` role → `user`. Thinking parts emit `{"type": "thinking", "thinking": ..., "signature": ...}`. Tool calls emit `tool_use` blocks; tool responses emit `tool_result` blocks.
 - **System prompt:** Passed as a top-level `system` parameter, not embedded in the messages array.
 
-### OpenAI-Compatible (`components/g8ee/app/llm/providers/openai_compatible.py`)
+### OpenAI (`components/g8ee/app/llm/providers/open_ai.py`)
 
-- **SDK:** `openai` (AsyncOpenAI) for non-Ollama endpoints, direct HTTP calls for Ollama
-- **Provider values:** `openai` (OpenAI and vLLM) or `ollama` (remote Ollama server)
-- **Key:** `LLM_API_KEY`; Ollama uses `ollama` as a placeholder key
-- **Endpoint:** `LLM_ENDPOINT` - `https://api.openai.com/v1` for OpenAI, remote Ollama endpoint for Ollama, user-supplied for vLLM
-- **Recommended models (OpenAI):** `gpt-4o` (primary), `gpt-4o-mini` (assistant)
-- **Recommended models (Ollama):** `qwen3.5:4b` (primary), `qwen3.5:4b` (assistant) - thinking-enabled models
+- **SDK:** `openai` (AsyncOpenAI)
+- **Provider value:** `openai`
+- **Key:** `OPENAI_API_KEY`
+- **Endpoint:** `OPENAI_ENDPOINT` - `https://api.openai.com/v1` by default
+- **Recommended models:** `gpt-4o` (primary), `gpt-4o-mini` (assistant)
 - **Message translation:** `_contents_to_messages` injects system instructions as the first `{"role": "system"}` message. Tool calls become `tool_calls` arrays on `assistant` messages. Function responses become `{"role": "tool"}` messages.
-- **Ollama Thinking Support:** When an Ollama endpoint is detected (contains 'ollama' or '11434'), the provider automatically:
-  - Uses direct HTTP calls to Ollama's `/api/chat` endpoint instead of the OpenAI client
-  - Sends `think: true` parameter to enable Ollama's thinking feature
-  - Handles the `thinking` field in responses and streams it as `thought=True` chunks
-  - Converts OpenAI-style `/v1` endpoints to Ollama's `/api` endpoints
-- **SSL strategy:** Cloud providers (Gemini, Anthropic, OpenAI) use `certifi` (Mozilla's public CA bundle) to bypass the global `G8E_SSL_CERT_FILE` env var that points to the internal platform CA. Internal endpoints (Ollama, self-hosted vLLM) use the platform CA cert via `ca_cert_path`. The factory passes `ca_cert_path` only to providers that may use internal endpoints; each provider's `_is_internal_endpoint()` selects the correct verify source.
+- **SSL strategy:** Cloud providers (Gemini, Anthropic, OpenAI) use `certifi` (Mozilla's public CA bundle) to bypass the global `G8E_SSL_CERT_FILE` env var that points to the internal platform CA. Internal endpoints use the platform CA cert via `ca_cert_path`. The factory passes `ca_cert_path` only to providers that may use internal endpoints; each provider's `_is_internal_endpoint()` selects the correct verify source.
 
 ---
 
@@ -845,8 +839,7 @@ Running without arguments launches an interactive prompt. The script reads the c
 1) Gemini       (Google — recommended, most tested)
 2) Anthropic    (Claude)
 3) OpenAI       (GPT)
-4) Ollama       (remote, OpenAI-compatible endpoint)
-5) vLLM         (self-hosted OpenAI-compatible)
+4) Ollama       (remote Ollama server)
 ```
 
 Each provider prompts for its required credentials and model names.
