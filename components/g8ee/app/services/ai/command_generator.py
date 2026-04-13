@@ -212,7 +212,7 @@ def _resolve_model(llm: LLMSettings) -> str:
     if llm.primary_model:
         return llm.primary_model
     raise TribunalModelNotConfiguredError(
-        provider=llm.assistant_provider,
+        provider=llm.primary_provider,
         original_command="",
     )
 

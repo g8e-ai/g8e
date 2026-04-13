@@ -456,7 +456,8 @@ class TestGenerateCommandSystemError:
     @pytest.mark.asyncio
     async def test_provider_routing_uses_settings_provider(self):
         llm = LLMSettings(
-            provider=LLMProvider.GEMINI,
+            primary_provider=LLMProvider.GEMINI,
+            assistant_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
@@ -493,7 +494,7 @@ class TestGenerateCommandSystemError:
                 settings=settings,
             )
 
-            mock_factory.assert_called_once_with(llm)
+            mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
             assert result.final_command == "ls -la"
 
 

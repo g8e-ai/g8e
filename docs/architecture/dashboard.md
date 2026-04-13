@@ -517,8 +517,8 @@ When Sentinel is ON, the Operator's local vault stores only redacted data and th
 `LlmModelManager` (`llm-model-manager.js`) manages two model pickers: primary (complex tasks) and assistant (simple tasks).
 
 - **DOM**: `#llm-primary-model-container` + `#llm-primary-model-select`, `#llm-assistant-model-container` + `#llm-assistant-model-select`
-- Provider-specific model lists delivered via `LLM_CONFIG_RECEIVED` (`g8e.v1.ai.llm.config.received`) with `{ primary_models: [...], assistant_models: [...], default_primary_model, default_assistant_model }`; each model has `id` and `label`
-- `handleConfigReceived` populates both `<select>` elements and toggles `initially-hidden` on each container independently
+- Models from all configured providers are delivered via `LLM_CONFIG_RECEIVED` (`g8e.v1.ai.llm.config.received`) in a `provider_models` map grouped by provider: `{ provider_models: { gemini: { label, primary: [...], assistant: [...] }, anthropic: { ... } }, default_primary_model, default_assistant_model }`. Each model has `id` and `label`.
+- `handleConfigReceived` populates both `<select>` elements with `<optgroup>` elements per provider and toggles `initially-hidden` on each container independently
 - `CASE_SWITCHED` → restores `data.investigation.llm_primary_model` and `llm_assistant_model`; `CASE_CLEARED` → resets both to server defaults
 
 `LlmModelManager.getPrimaryModel()` and `.getAssistantModel()` are called by `ChatComponent` when building the `POST /api/chat/send` payload. Empty string tells the server to use its configured default.

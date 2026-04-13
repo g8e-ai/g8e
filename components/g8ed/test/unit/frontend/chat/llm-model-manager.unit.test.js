@@ -24,19 +24,43 @@ function buildSelectElement(id) {
     return el;
 }
 
-const PRIMARY_MODELS = [
-    { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
-    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
-];
+const PROVIDER_MODELS = {
+    gemini: {
+        label: 'Gemini',
+        primary: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
+        assistant: [
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
+    },
+};
 
-const ASSISTANT_MODELS = [
-    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
-];
+const MULTI_PROVIDER_MODELS = {
+    gemini: {
+        label: 'Gemini',
+        primary: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+        ],
+        assistant: [
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
+    },
+    anthropic: {
+        label: 'Anthropic',
+        primary: [
+            { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+        ],
+        assistant: [
+            { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+        ],
+    },
+};
 
 function emitConfig(eventBus, overrides = {}) {
     eventBus.emit(EventType.LLM_CONFIG_RECEIVED, {
-        primary_models: PRIMARY_MODELS,
-        assistant_models: ASSISTANT_MODELS,
+        provider_models: PROVIDER_MODELS,
         default_primary_model: 'gemini-3.1-pro-preview',
         default_assistant_model: 'gemini-3-flash-preview',
         ...overrides,
@@ -84,11 +108,18 @@ describe('LlmModelManager [UNIT]', () => {
             expect(reEmits.length).toBe(1);
         });
 
-        it('sets availablePrimaryModels and availableAssistantModels from event data', () => {
+        it('stores provider_models from event data', () => {
             emitConfig(eventBus);
 
-            expect(manager.availablePrimaryModels).toEqual(PRIMARY_MODELS);
-            expect(manager.availableAssistantModels).toEqual(ASSISTANT_MODELS);
+            expect(manager.providerModels).toEqual(PROVIDER_MODELS);
+        });
+
+        it('handles multi-provider config', () => {
+            emitConfig(eventBus, { provider_models: MULTI_PROVIDER_MODELS });
+
+            expect(Object.keys(manager.providerModels)).toEqual(['gemini', 'anthropic']);
+            expect(manager.providerModels.gemini.label).toBe('Gemini');
+            expect(manager.providerModels.anthropic.label).toBe('Anthropic');
         });
 
         it('sets default models from event data', () => {
