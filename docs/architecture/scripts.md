@@ -31,7 +31,7 @@ Running `./g8e` with no arguments or `--help` runs `g8e.operator do --help` insi
 Manages the Docker Compose services. All subcommands run on the host.
 
 ```bash
-./g8e platform build                    # Build all images and start the platform (alias: drop)
+./g8e platform build                    # Build all images and start the platform
 ./g8e platform setup                     # Full first-time setup: no-cache build of all images, start platform
 ./g8e platform settings                 # Show effective platform settings (requires platform running)
 ./g8e platform update                   # Pull latest changes (with confirmation) and rebuild
@@ -55,7 +55,7 @@ Manages the Docker Compose services. All subcommands run on the host.
 | `start` | `scripts/core/build.sh up` | |
 | `stop` | `scripts/core/build.sh down` | |
 | `restart` | `scripts/core/build.sh restart` | |
-| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`, `drop`. Accepts optional component names: `g8es g8ee g8ed g8ep` |
+| `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`. Accepts optional component names: `g8es g8ee g8ed g8ep` |
 | `reset` | `scripts/core/build.sh reset` | Wipe ALL data volumes and rebuild from scratch (destructive) |
 | `wipe` | `scripts/core/build.sh wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
 | `clean` | `scripts/core/build.sh clean` | Remove all managed resources scoped to this project |
@@ -67,7 +67,7 @@ Manages the Operator binary build and deployment.
 ```bash
 ./g8e operator init                          # Build the operator binary inside g8ep (first time)
 ./g8e operator build                         # Rebuild the operator binary inside g8ep
-./g8e operator deploy <user@host>            # Copy operator to remote host via scp (alias: drop)
+./g8e operator deploy <user@host>            # Copy operator to remote host via scp
 ./g8e operator stream <host...>              # Stream-inject operator to one or more remote hosts
 ./g8e operator ssh-config                    # Configure ~/.ssh/config for high-concurrency streaming
 ./g8e operator reauth --user-id <id>         # Kill and relaunch the g8ep operator for a user
@@ -77,7 +77,7 @@ Manages the Operator binary build and deployment.
 |------------|-------------|-------|
 | `init` | `docker exec g8ep go build ...` | Builds operator binary natively inside running g8ep |
 | `build` | `docker exec g8ep go build ...` | Explicit rebuild of operator binary inside g8ep |
-| `deploy` | `scp` + optional `ssh` | Alias: `drop`. Supports `--arch`, `--dest`, `--endpoint`, `--device-token`, `--key`, `--no-git` |
+| `deploy` | `scp` + optional `ssh` | Supports `--arch`, `--dest`, `--endpoint`, `--device-token`, `--key`, `--no-git` |
 | `stream` | `docker exec g8ep /home/g8e/g8e.operator stream` | Zero local disk footprint. Supports `--arch`, `--hosts`, `--concurrency`, `--timeout`, `--endpoint`, `--device-token`, `--key`, `--no-git`, `--ssh-config` |
 | `ssh-config` | `scripts/tools/setup-ssh.sh` | Configures multiplexing. Supports `--print`, `--force` |
 | `reauth` | Internal API | Requires `--user-id <id>` or `--email <email>` |

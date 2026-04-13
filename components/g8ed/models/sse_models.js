@@ -69,6 +69,7 @@ export class KeepaliveEvent extends G8eBaseModel {
 export class LLMConfigData extends G8eBaseModel {
     static fields = {
         provider:                { type: F.string, required: true },
+        assistant_provider:      { type: F.string, default: '' },
         default_primary_model:   { type: F.string, default: '' },
         default_assistant_model: { type: F.string, default: '' },
         primary_models:          { type: F.array,  default: () => [] },

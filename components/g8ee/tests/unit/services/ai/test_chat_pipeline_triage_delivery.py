@@ -140,6 +140,8 @@ async def test_run_chat_impl_short_circuits_correctly():
             g8e_context=g8e_ctx,
             attachments=[],
             sentinel_mode=True,
+            llm_primary_provider="openai",
+            llm_assistant_provider="openai",
             llm_primary_model="main-model",
             llm_assistant_model="assistant-model",
             user_settings=MagicMock(),

@@ -24,6 +24,8 @@
 
 import { EventType } from '../constants/events.js';
 import { CssClass } from '../constants/ui-constants.js';
+import { ApiPaths } from '../constants/api-paths.js';
+import { ComponentName } from '../constants/service-client-constants.js';
 
 export class LlmModelManager {
     constructor(eventBus) {
@@ -51,6 +53,19 @@ export class LlmModelManager {
 
         this.setupDOMElements();
         this.setupEventListeners();
+
+        // Request config in case we missed the initial SSE push
+        this.requestConfig();
+    }
+
+    requestConfig() {
+        this.eventBus.emit(EventType.LLM_CONFIG_REQUESTED);
+        
+        // Also call the API to explicitly request a re-push
+        if (typeof window !== 'undefined' && window.serviceClient) {
+            window.serviceClient.post(ComponentName.G8ED, ApiPaths.sse.config())
+                .catch(e => console.warn('[LlmModelManager] Failed to request config repush:', e));
+        }
     }
 
     setupDOMElements() {
@@ -109,24 +124,27 @@ export class LlmModelManager {
     }
 
     _populateSelects() {
-        const hasModels = Object.keys(this.providerModels).length > 0;
-
         this._populateGrouped(this.primarySelectElement, 'primary', this.selectedPrimaryModel);
         this._populateGrouped(this.assistantSelectElement, 'assistant', this.selectedAssistantModel);
-
-        if (this.primaryContainer) {
-            this.primaryContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, !hasModels);
-        }
-        if (this.assistantContainer) {
-            this.assistantContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, !hasModels);
-        }
     }
 
     _populateGrouped(selectElement, role, selectedValue) {
         if (!selectElement) return;
         selectElement.innerHTML = '';
 
-        for (const [, providerData] of Object.entries(this.providerModels)) {
+        const hasModels = Object.keys(this.providerModels).length > 0;
+
+        if (!hasModels) {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Loading models...';
+            placeholder.disabled = true;
+            placeholder.selected = true;
+            selectElement.appendChild(placeholder);
+            return;
+        }
+
+        for (const [provider, providerData] of Object.entries(this.providerModels)) {
             const models = providerData[role] || [];
             if (models.length === 0) continue;
 
@@ -137,12 +155,22 @@ export class LlmModelManager {
                 const option = document.createElement('option');
                 option.value = model.id;
                 option.textContent = model.label || model.id;
+                option.dataset.provider = provider;
                 if (model.id === selectedValue) {
                     option.selected = true;
                 }
                 group.appendChild(option);
             }
             selectElement.appendChild(group);
+        }
+
+        if (selectElement.options.length === 0) {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'No models available';
+            placeholder.disabled = true;
+            placeholder.selected = true;
+            selectElement.appendChild(placeholder);
         }
     }
 
@@ -176,6 +204,36 @@ export class LlmModelManager {
 
     getAssistantModel() {
         return this.selectedAssistantModel || '';
+    }
+
+    getPrimaryProvider() {
+        if (!this.selectedPrimaryModel || !this.primarySelectElement) return '';
+        const selectedOption = this.primarySelectElement.options[this.primarySelectElement.selectedIndex];
+        if (selectedOption && selectedOption.dataset.provider) {
+            return selectedOption.dataset.provider;
+        }
+        for (const [provider, providerData] of Object.entries(this.providerModels)) {
+            const models = providerData.primary || [];
+            if (models.some(m => m.id === this.selectedPrimaryModel)) {
+                return provider;
+            }
+        }
+        return '';
+    }
+
+    getAssistantProvider() {
+        if (!this.selectedAssistantModel || !this.assistantSelectElement) return '';
+        const selectedOption = this.assistantSelectElement.options[this.assistantSelectElement.selectedIndex];
+        if (selectedOption && selectedOption.dataset.provider) {
+            return selectedOption.dataset.provider;
+        }
+        for (const [provider, providerData] of Object.entries(this.providerModels)) {
+            const models = providerData.assistant || [];
+            if (models.some(m => m.id === this.selectedAssistantModel)) {
+                return provider;
+            }
+        }
+        return '';
     }
 
     destroy() {

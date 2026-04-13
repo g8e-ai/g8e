@@ -11,78 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { LLMProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai-constants.js';
+import { LLMProvider, PROVIDER_MODELS } from '../constants/ai-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
 const LAST_STEP = 4;
-
-const PROVIDER_MODELS = {
-    [LLMProvider.GEMINI]: {
-        primary: [
-            { value: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS, label: 'Gemini 3.1 Pro (Custom Tools)' },
-            { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
-            { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
-        ],
-        assistant: [
-            { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
-            { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
-        ],
-        defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
-        defaultAssistant: GeminiModel.FLASH_PREVIEW,
-    },
-    [LLMProvider.ANTHROPIC]: {
-        primary: [
-            { value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
-            { value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
-            { value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
-        ],
-        assistant: [
-            { value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
-            { value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
-        ],
-        defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
-        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
-    },
-    [LLMProvider.OPENAI]: {
-        primary: [
-            { value: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
-            { value: OpenAIModel.GPT_5_3_INSTANT, label: 'GPT-5.3 Instant' },
-            { value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-            { value: OpenAIModel.GPT_4O, label: 'GPT-4o' },
-        ],
-        assistant: [
-            { value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-            { value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
-            { value: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
-        ],
-        defaultPrimary: OpenAIModel.GPT_5_4,
-        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
-    },
-    [LLMProvider.OLLAMA]: {
-        primary: [
-            { value: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
-            { value: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
-            { value: OllamaModel.GEMMA4, label: 'Gemma 4' },
-            { value: OllamaModel.GEMMA3_27B, label: 'Gemma 3 27B' },
-            { value: OllamaModel.GEMMA3_12B, label: 'Gemma 3 12B' },
-            { value: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
-            { value: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
-            { value: OllamaModel.CODELLAMA_7B, label: 'CodeLlama 7B' },
-        ],
-        assistant: [
-            { value: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
-            { value: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
-            { value: OllamaModel.GEMMA4, label: 'Gemma 4' },
-            { value: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
-            { value: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
-            { value: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
-            { value: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
-        ],
-        defaultPrimary: OllamaModel.GEMMA4_E4B,
-        defaultAssistant: OllamaModel.GEMMA4_E4B,
-    },
-};
 
 const PROVIDER_KEY_FIELDS = {
     [LLMProvider.GEMINI]:    'gemini_api_key',
@@ -101,7 +34,7 @@ const PROVIDER_LABELS = {
 function _modelToProvider(modelValue) {
     for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
         const allModels = [...config.primary, ...config.assistant];
-        if (allModels.some(m => m.value === modelValue)) return provider;
+        if (allModels.some(m => m.id === modelValue)) return provider;
     }
     return null;
 }
@@ -375,7 +308,7 @@ export class SetupPage {
             pGroup.label = providerLabel;
             for (const m of config.primary) {
                 const opt = document.createElement('option');
-                opt.value = m.value;
+                opt.value = m.id;
                 opt.textContent = m.label;
                 pGroup.appendChild(opt);
             }
@@ -385,7 +318,7 @@ export class SetupPage {
             aGroup.label = providerLabel;
             for (const m of config.assistant) {
                 const opt = document.createElement('option');
-                opt.value = m.value;
+                opt.value = m.id;
                 opt.textContent = m.label;
                 aGroup.appendChild(opt);
             }
@@ -508,9 +441,13 @@ export class SetupPage {
         const primaryModel = document.getElementById('primary_model')?.value || '';
         const assistantModel = document.getElementById('assistant_model')?.value || '';
         const primaryProvider = _modelToProvider(primaryModel);
+        const assistantProvider = _modelToProvider(assistantModel);
 
         if (primaryProvider) {
             userSettings.llm_primary_provider = primaryProvider;
+        }
+        if (assistantProvider) {
+            userSettings.llm_assistant_provider = assistantProvider;
         }
         if (primaryModel) userSettings.llm_model = primaryModel;
         if (assistantModel) userSettings.llm_assistant_model = assistantModel;

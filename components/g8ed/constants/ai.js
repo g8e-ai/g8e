@@ -181,6 +181,73 @@ export const OllamaModel = Object.freeze({
     MISTRAL_7B:         _STATUS['llm.models']['ollama']['mistral.7b'],
 });
 
+export const PROVIDER_MODELS = Object.freeze({
+    [LLMProvider.GEMINI]: {
+        primary: [
+            { id: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS, label: 'Gemini 3.1 Pro (Custom Tools)' },
+            { id: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
+            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+        ],
+        assistant: [
+            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+            { id: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
+        ],
+        defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
+        defaultAssistant: GeminiModel.FLASH_PREVIEW,
+    },
+    [LLMProvider.ANTHROPIC]: {
+        primary: [
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+        ],
+        assistant: [
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+        ],
+        defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
+        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+    },
+    [LLMProvider.OPENAI]: {
+        primary: [
+            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
+            { id: OpenAIModel.GPT_5_3_INSTANT, label: 'GPT-5.3 Instant' },
+            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+            { id: OpenAIModel.GPT_4O, label: 'GPT-4o' },
+        ],
+        assistant: [
+            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+            { id: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
+        ],
+        defaultPrimary: OpenAIModel.GPT_5_4,
+        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
+    },
+    [LLMProvider.OLLAMA]: {
+        primary: [
+            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
+            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
+            { id: OllamaModel.GEMMA4, label: 'Gemma 4' },
+            { id: OllamaModel.GEMMA3_27B, label: 'Gemma 3 27B' },
+            { id: OllamaModel.GEMMA3_12B, label: 'Gemma 3 12B' },
+            { id: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
+            { id: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
+            { id: OllamaModel.CODELLAMA_7B, label: 'CodeLlama 7B' },
+        ],
+        assistant: [
+            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
+            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
+            { id: OllamaModel.GEMMA4, label: 'Gemma 4' },
+            { id: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
+            { id: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
+            { id: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
+            { id: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
+        ],
+        defaultPrimary: OllamaModel.GEMMA4_E4B,
+        defaultAssistant: OllamaModel.GEMMA4_E4B,
+    },
+});
+
 /**
  * Source Component identifiers
  * Identifies which component originated a message or record.

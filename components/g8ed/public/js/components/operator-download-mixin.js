@@ -242,9 +242,9 @@ export const OperatorDownloadMixin = {
         const platformIconMap = { mac: 'apple', linux: 'terminal' };
         const platformIcon = platformIconMap[os] || 'terminal';
 
-        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && chmod +x ${filename} && ./${filename}`;
-        const curlSudoCommand = `sudo curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && sudo chmod +x ${filename} && sudo ./${filename}`;
-        const secureDownloadCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename} && curl -fsSL ${checksumUrl} -H "Authorization: Bearer $G8E_DROP_KEY" -o ${filename}.sha256`;
+        const curlCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DOWNLOAD_KEY" -o ${filename} && chmod +x ${filename} && ./${filename}`;
+        const curlSudoCommand = `sudo curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DOWNLOAD_KEY" -o ${filename} && sudo chmod +x ${filename} && sudo ./${filename}`;
+        const secureDownloadCommand = `curl -fsSL ${downloadUrl} -H "Authorization: Bearer $G8E_DOWNLOAD_KEY" -o ${filename} && curl -fsSL ${checksumUrl} -H "Authorization: Bearer $G8E_DOWNLOAD_KEY" -o ${filename}.sha256`;
         const verifyChecksumCommand = `sha256sum -c ${filename}.sha256`;
         const runCommand = `chmod +x ${filename} && ./${filename}${cloudFlag}`;
 
@@ -319,7 +319,7 @@ export const OperatorDownloadMixin = {
             };
         }
         if (secureEnvCopy) {
-            secureEnvCopy.onclick = () => copyToClipboardWithFeedback('read -s G8E_DROP_KEY && export G8E_DROP_KEY', secureEnvCopy, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
+            secureEnvCopy.onclick = () => copyToClipboardWithFeedback('read -s G8E_DOWNLOAD_KEY && export G8E_DOWNLOAD_KEY', secureEnvCopy, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
         }
         if (secureDownloadCopy) {
             secureDownloadCopy.onclick = () => copyToClipboardWithFeedback(secureDownloadCommand, secureDownloadCopy, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
@@ -342,7 +342,7 @@ export const OperatorDownloadMixin = {
         const apiKeyToggle = overlay.querySelector('#api-key-toggle');
 
         if (curlEnvCopy) {
-            curlEnvCopy.onclick = () => copyToClipboardWithFeedback('read -s G8E_DROP_KEY && export G8E_DROP_KEY', curlEnvCopy, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
+            curlEnvCopy.onclick = () => copyToClipboardWithFeedback('read -s G8E_DOWNLOAD_KEY && export G8E_DOWNLOAD_KEY', curlEnvCopy, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
         }
         if (curlCopy) {
             curlCopy.onclick = () => {

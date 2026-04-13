@@ -336,6 +336,8 @@ class ChatPipelineService:
         g8e_context: G8eHttpContext,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
+        llm_primary_provider: str | None,
+        llm_assistant_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
         _task_manager: ChatTaskManager,
@@ -366,14 +368,16 @@ class ChatPipelineService:
 
         try:
             logger.info(
-                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary=%s assistant=%s",
-                len(message), sentinel_mode, llm_primary_model, llm_assistant_model
+                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s primary=%s assistant=%s",
+                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_primary_model, llm_assistant_model
             )
             await self._run_chat_impl(
                 message=message,
                 g8e_context=g8e_context,
                 attachments=attachments,
                 sentinel_mode=sentinel_mode,
+                llm_primary_provider=llm_primary_provider,
+                llm_assistant_provider=llm_assistant_provider,
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 user_settings=user_settings,
@@ -405,6 +409,8 @@ class ChatPipelineService:
         g8e_context: G8eHttpContext,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
+        llm_primary_provider: str | None,
+        llm_assistant_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
         user_settings: G8eeUserSettings,
@@ -415,8 +421,16 @@ class ChatPipelineService:
             f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
             len(attachments) if attachments else 0
         )
-        
+
+        # Apply provider overrides if provided
         resolved_settings = user_settings
+        if llm_primary_provider:
+            logger.info("[SSE-CHAT] Applying primary_provider override: %s", llm_primary_provider)
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": llm_primary_provider})})
+        if llm_assistant_provider:
+            logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": llm_assistant_provider})})
+
         async with get_llm_provider(resolved_settings.llm) as llm_provider:
             logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
 

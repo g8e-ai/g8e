@@ -61,7 +61,7 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 
 **Key design principles:**
 - g8ed is the single external entry point — browsers, Operators, and MCP clients all connect to g8ed on port 443
-- g8ed also owns the HTTP trust bootstrap on port 80 — plain HTTP delivers the workstation CA trust portal, the operator g8e script (`/g8e`), and then hands users off to HTTPS
+- g8ed also owns the HTTP trust bootstrap on port 80 — plain HTTP delivers the workstation CA trust portal, the operator deployment script (`/g8e`), and then hands users off to HTTPS
 - g8ed is stateless between requests — all state lives in g8es
 - g8ee is the source of truth for heartbeat data; g8ed only relays SSE
 - Frontend never computes operator status — it consumes backend-provided values
@@ -484,15 +484,15 @@ g8ed serves a public HTTP onboarding page specifically for workstation CA trust 
 - Exposes 1-Click Installers for macOS (`/trust-cert.sh`), Windows (`/trust-cert.bat`), and Linux (`/trust-cert-linux.sh`)
 - Exposes raw CA download at `/ca.crt` for manual trust flows and mobile devices
 - Presents a direct link to `https://<host>/setup` for users who already trust the CA
-- Serves the **operator g8e script** at `/g8e` — a POSIX shell script that automates operator deployment on any remote Linux system (see [Operator Drop Script](#operator-drop-script))
+- Serves the **operator deployment script** at `/g8e` — a POSIX shell script that automates operator deployment on any remote Linux system (see [Operator Deployment Script](#operator-deployment-script))
 
 **Responsibility split:**
 - g8es generates and stores the CA and server certificates
 - g8ed reads those certificates from the g8es SSL volume (`/g8es/`)
-- g8ed serves the browser trust portal, OS-specific installer scripts, and the operator g8e script
+- g8ed serves the browser trust portal, OS-specific installer scripts, and the operator deployment script
 - All scripts are generated per-request using the client's `Host` header, so they work from localhost, LAN IP, or hostname
 
-### Operator Drop Script
+### Operator Deployment Script
 
 g8ed serves a POSIX shell script at `GET /g8e` (HTTP port 80) that automates operator deployment on any remote Linux system. The script is generated per-request with the platform's host and port baked in.
 

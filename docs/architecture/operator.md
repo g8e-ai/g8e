@@ -1,6 +1,6 @@
 # g8e Operator Binary
 
-The Operator (`g8e.operator`) is the backbone of the entire g8e platform. It is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Drop it on a host, run it, and the platform has a fully capable agent.
+The Operator (`g8e.operator`) is the backbone of the entire g8e platform. It is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Deploy it on a host, run it, and the platform has a fully capable agent.
 
 What makes this remarkable is the scope of what that single binary does. Depending on how it is invoked:
 
@@ -463,7 +463,7 @@ The Operator's security model is built around two principles: defense in depth, 
 
 ---
 
-## Drop Script Deployment
+## Deployment Script
 
 The simplest way to deploy the operator on a remote Linux system. g8ed serves a POSIX shell script at `http://<host>/g8e` (port 80) that handles CA trust, binary download, and operator launch in a single command:
 
@@ -481,7 +481,7 @@ The device link token is generated in the g8ed UI and authenticates both the bin
 
 The script requires only `curl` or `wget` and a POSIX-compliant `/bin/sh`. No root access, no package installation, no persistent files beyond the operator binary itself.
 
-See [g8ed — Operator Drop Script](../components/g8ed.md#operator-drop-script) for implementation details.
+See [g8ed — Operator Deployment Script](../components/g8ed.md#operator-deployment-script) for implementation details.
 
 ---
 

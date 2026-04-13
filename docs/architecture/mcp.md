@@ -550,7 +550,7 @@ To configure Claude Code to connect to g8e via the MCP endpoint:
            "headers": [
              {
                "name": "x-oauth-client-id",
-               "value": "your-dropkey-api-key-here"
+               "value": "your-g8e-api-key-here"
              }
            ]
          }
@@ -566,7 +566,7 @@ To configure Claude Code to connect to g8e via the MCP endpoint:
        "g8e": {
          "transport": {
            "type": "streamable-http",
-           "url": "https://your-g8e-instance.com/mcp?oauth_client_id=your-dropkey-api-key-here"
+           "url": "https://your-g8e-instance.com/mcp?oauth_client_id=your-g8e-api-key-here"
          }
        }
      }
@@ -594,7 +594,7 @@ curl -X POST https://your-g8e-instance.com/mcp \
 ```bash
 # Using OAuth Client ID
 curl -X POST https://your-g8e-instance.com/mcp \
-  -H "x-oauth-client-id: your-dropkey-api-key-here" \
+  -H "x-oauth-client-id: your-g8e-api-key-here" \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
