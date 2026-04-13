@@ -317,6 +317,9 @@ class SSEService {
             const currentPrimary = userSettings.llm_model ?? platformSettings.llm_model ?? '';
             const currentAssistant = userSettings.llm_assistant_model ?? platformSettings.llm_assistant_model ?? '';
 
+            const configuredProviders = SSEService._getConfiguredProviders(userSettings, platformSettings);
+            const providerModels = SSEService._buildProviderModels(configuredProviders);
+
             const primaryModels = SSEService._getModelOptionsForProvider(provider, 'llm_model');
             const assistantModels = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
 
@@ -328,6 +331,7 @@ class SSEService {
                     default_assistant_model: currentAssistant,
                     primary_models: primaryModels,
                     assistant_models: assistantModels,
+                    provider_models: providerModels,
                     timestamp: now()
                 })
             }));
@@ -335,6 +339,7 @@ class SSEService {
             logger.info('[SSE-SERVICE] Pushed LLM config', {
                 webSessionId: redactWebSessionId(webSessionId),
                 provider,
+                configuredProviders,
                 primaryModelCount: primaryModels.length,
                 assistantModelCount: assistantModels.length
             });
@@ -359,6 +364,45 @@ class SSEService {
         }
 
         return [];
+    }
+
+    static _PROVIDER_CREDENTIAL_KEYS = Object.freeze({
+        gemini:    'gemini_api_key',
+        anthropic: 'anthropic_api_key',
+        openai:    'openai_api_key',
+        ollama:    'ollama_endpoint',
+    });
+
+    static _PROVIDER_LABELS = Object.freeze({
+        gemini:    'Gemini',
+        anthropic: 'Anthropic',
+        openai:    'OpenAI',
+        ollama:    'Ollama',
+    });
+
+    static _getConfiguredProviders(userSettings, platformSettings) {
+        const providers = [];
+        for (const [provider, credKey] of Object.entries(SSEService._PROVIDER_CREDENTIAL_KEYS)) {
+            const value = userSettings[credKey] ?? platformSettings[credKey] ?? '';
+            if (value && typeof value === 'string' && value.trim() !== '') {
+                providers.push(provider);
+            }
+        }
+        return providers;
+    }
+
+    static _buildProviderModels(configuredProviders) {
+        const result = {};
+        for (const provider of configuredProviders) {
+            const primaryOpts = SSEService._getModelOptionsForProvider(provider, 'llm_model');
+            const assistantOpts = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
+            result[provider] = {
+                label: SSEService._PROVIDER_LABELS[provider] || provider,
+                primary: primaryOpts,
+                assistant: assistantOpts,
+            };
+        }
+        return result;
     }
 
     /**

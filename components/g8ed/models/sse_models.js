@@ -73,6 +73,7 @@ export class LLMConfigData extends G8eBaseModel {
         default_assistant_model: { type: F.string, default: '' },
         primary_models:          { type: F.array,  default: () => [] },
         assistant_models:        { type: F.array,  default: () => [] },
+        provider_models:         { type: F.object, default: () => ({}) },
         timestamp:               { type: F.date,   default: () => now() },
     };
 }

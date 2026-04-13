@@ -118,6 +118,7 @@ class OllamaProvider(LLMProvider):
             verify = True
 
         self._httpx_client = httpx.AsyncClient(
+            base_url=self._original_endpoint,
             timeout=self._TIMEOUT,
             verify=verify,
         )

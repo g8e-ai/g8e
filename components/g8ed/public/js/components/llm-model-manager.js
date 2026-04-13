@@ -18,6 +18,7 @@
  * - Two dropdowns: primary (complex tasks) and assistant (simple tasks)
  * - Both values are included with every chat message (empty string = server default)
  * - Available models per provider are delivered via SSE llm.config event on connect
+ * - Models are grouped by provider using <optgroup> elements
  * - Provider cannot be changed here — only in the Settings page
  */
 
@@ -31,8 +32,7 @@ export class LlmModelManager {
         this.selectedPrimaryModel = '';
         this.selectedAssistantModel = '';
 
-        this.availablePrimaryModels = [];
-        this.availableAssistantModels = [];
+        this.providerModels = {};
 
         this.defaultPrimaryModel = '';
         this.defaultAssistantModel = '';
@@ -93,8 +93,7 @@ export class LlmModelManager {
     }
 
     handleConfigReceived(data) {
-        this.availablePrimaryModels = data.primary_models || [];
-        this.availableAssistantModels = data.assistant_models || [];
+        this.providerModels = data.provider_models || {};
 
         this.defaultPrimaryModel = data.default_primary_model || '';
         this.defaultAssistantModel = data.default_assistant_model || '';
@@ -110,29 +109,40 @@ export class LlmModelManager {
     }
 
     _populateSelects() {
-        this._populateOne(this.primarySelectElement, this.availablePrimaryModels, this.selectedPrimaryModel);
-        this._populateOne(this.assistantSelectElement, this.availableAssistantModels, this.selectedAssistantModel);
+        const hasModels = Object.keys(this.providerModels).length > 0;
+
+        this._populateGrouped(this.primarySelectElement, 'primary', this.selectedPrimaryModel);
+        this._populateGrouped(this.assistantSelectElement, 'assistant', this.selectedAssistantModel);
 
         if (this.primaryContainer) {
-            this.primaryContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, this.availablePrimaryModels.length === 0);
+            this.primaryContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, !hasModels);
         }
         if (this.assistantContainer) {
-            this.assistantContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, this.availableAssistantModels.length === 0);
+            this.assistantContainer.classList.toggle(CssClass.INITIALLY_HIDDEN, !hasModels);
         }
     }
 
-    _populateOne(selectElement, models, selectedValue) {
+    _populateGrouped(selectElement, role, selectedValue) {
         if (!selectElement) return;
         selectElement.innerHTML = '';
 
-        for (const model of models) {
-            const option = document.createElement('option');
-            option.value = model.id;
-            option.textContent = model.label || model.id;
-            if (model.id === selectedValue) {
-                option.selected = true;
+        for (const [, providerData] of Object.entries(this.providerModels)) {
+            const models = providerData[role] || [];
+            if (models.length === 0) continue;
+
+            const group = document.createElement('optgroup');
+            group.label = providerData.label || 'Unknown';
+
+            for (const model of models) {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.label || model.id;
+                if (model.id === selectedValue) {
+                    option.selected = true;
+                }
+                group.appendChild(option);
             }
-            selectElement.appendChild(option);
+            selectElement.appendChild(group);
         }
     }
 

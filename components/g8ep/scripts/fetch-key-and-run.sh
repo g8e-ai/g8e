@@ -53,30 +53,36 @@ _fetch_binary() {
 }
 
 for attempt in $(seq 1 "$MAX_RETRIES"); do
+    echo "[g8ep] Fetching platform settings from g8es (attempt ${attempt}/${MAX_RETRIES})..." >&2
     response=$(curl -sf \
         -H "X-Internal-Auth: ${AUTH_TOKEN}" \
         --cacert "${SSL_DIR}/ca.crt" \
-        "${G8ES_URL}" 2>/dev/null) && break
+        "${G8ES_URL}" 2>/dev/null) || {
+            echo "[g8ep] g8es not reachable, retrying in ${RETRY_DELAY}s..." >&2
+            sleep "$RETRY_DELAY"
+            RETRY_DELAY=$((RETRY_DELAY * 2))
+            continue
+        }
+
+    # Document fetched, now try to extract the key
+    G8E_OPERATOR_API_KEY=$(echo "$response" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data.get('settings', {}).get('g8ep_operator_api_key', ''))")
+
+    if [ -n "$G8E_OPERATOR_API_KEY" ]; then
+        break
+    fi
 
     if [ "$attempt" -eq "$MAX_RETRIES" ]; then
-        echo "[g8ep] Failed to reach g8es after ${MAX_RETRIES} attempts" >&2
+        echo "[g8ep] Failed to obtain Operator API key from platform_settings after ${MAX_RETRIES} attempts" >&2
         exit 1
     fi
 
-    echo "[g8ep] g8es not ready (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}s..." >&2
+    echo "[g8ep] Operator API key not yet available in platform_settings, retrying in ${RETRY_DELAY}s..." >&2
     sleep "$RETRY_DELAY"
     RETRY_DELAY=$((RETRY_DELAY * 2))
 done
 
 if [ ! -x "${OPERATOR_BINARY}" ]; then
     _fetch_binary
-fi
-
-G8E_OPERATOR_API_KEY=$(echo "$response" | python3 -c "import sys,json; print(json.load(sys.stdin)['settings']['g8ep_operator_api_key'])")
-
-if [ -z "$G8E_OPERATOR_API_KEY" ]; then
-    echo "[g8ep] Operator API key is empty in platform_settings" >&2
-    exit 1
 fi
 
 export G8E_OPERATOR_API_KEY
