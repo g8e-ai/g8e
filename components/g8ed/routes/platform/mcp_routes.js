@@ -15,12 +15,13 @@ import express from 'express';
 import { now } from '../../models/base.js';
 import { logger } from '../../utils/logger.js';
 import { MCPPaths } from '../../constants/api_paths.js';
+import { getVersionInfo } from '../../utils/version.js';
 
 const MCP_SERVER_INFO = {
     protocolVersion: '2025-03-26',
     serverInfo: {
         name: 'g8e',
-        version: '4.3.0',
+        version: getVersionInfo().version,
     },
     capabilities: {
         tools: {},

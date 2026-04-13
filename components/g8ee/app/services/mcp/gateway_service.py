@@ -26,6 +26,7 @@ from app.models.settings import G8eeUserSettings
 from app.services.ai.tool_service import AIToolService
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.utils.version import get_version
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ MCP_SERVER_INFO = {
     "protocolVersion": "2025-03-26",
     "serverInfo": {
         "name": "g8e",
-        "version": "4.3.0",
+        "version": get_version(),
     },
     "capabilities": {
         "tools": {},

@@ -26,12 +26,12 @@ __all__ = ["VersionInfo", "get_version", "get_version_info"]
 
 @lru_cache(maxsize=1)
 def get_version() -> str:
-    """Get the version from the component VERSION file.
+    """Get the version from the repo root VERSION file.
 
     Returns:
         Semver version string
     """
-    version_path = Path(__file__).parent.parent.parent / "VERSION"
+    version_path = Path(__file__).parent.parent.parent.parent / "VERSION"
     if version_path.exists():
         return version_path.read_text().strip()
     return "v0.0.0"

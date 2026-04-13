@@ -41,7 +41,6 @@ export const OperatorListMixin = {
         const loadingEl = document.getElementById('operator-drawer-loading');
         if (loadingEl) loadingEl.classList.add('initially-hidden');
 
-        this.operatorList.innerHTML = '';
         this.boundOperatorIds = [];
 
         const previousSelection = this.selectedMetricsOperatorId;
@@ -74,6 +73,8 @@ export const OperatorListMixin = {
         const startIndex = (this.currentPage - 1) * this.operatorsPerPage;
         const endIndex = startIndex + this.operatorsPerPage;
         const paginatedOperators = sortedOperators.slice(startIndex, endIndex);
+
+        const fragment = document.createDocumentFragment();
 
         paginatedOperators.forEach(operator => {
             const item = document.createElement('div');
@@ -255,8 +256,10 @@ export const OperatorListMixin = {
                 this._selectMetricsOperator(operator.operator_id);
             });
 
-            this.operatorList.appendChild(item);
+            fragment.appendChild(item);
         });
+
+        this.operatorList.replaceChildren(fragment);
 
         this._applyDefaultMetricsSelection(sortedOperators, previousSelection);
 
