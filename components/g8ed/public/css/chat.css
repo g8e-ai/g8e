@@ -437,7 +437,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.75rem;
+    font-size: calc(var(--font-size-base) * 0.833);
     font-weight: 500;
     font-family: var(--font-mono);
     letter-spacing: 0.02em;
@@ -484,7 +484,7 @@
 
 /* Message Timestamp */
 .message-timestamp {
-    font-size: 0.65rem;
+    font-size: calc(var(--font-size-base) * 0.722);
     color: var(--text-tertiary);
     margin-left: 0.4rem;
     opacity: 0.5;
@@ -518,7 +518,7 @@
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     transition: all 0.15s ease;
-    font-size: 0.9rem;
+    font-size: var(--font-size-base);
     letter-spacing: 0.01em;
 }
 
@@ -739,7 +739,7 @@
 
     .message-content {
         padding: 0.5rem 0.75rem;
-        font-size: 0.85rem;
+        font-size: calc(var(--font-size-base) * 0.944);
     }
 
     /* System Messages */
@@ -749,11 +749,11 @@
 
     /* Message Sender / Timestamp */
     .message-sender {
-        font-size: 0.7rem;
+        font-size: calc(var(--font-size-base) * 0.778);
     }
 
     .message-timestamp {
-        font-size: 0.6rem;
+        font-size: calc(var(--font-size-base) * 0.667);
     }
 
     /* Operator Heartbeat */
@@ -822,7 +822,7 @@
     }
 
     .message-item.thinking-message .thinking-summary {
-        font-size: 0.9rem;
+        font-size: var(--font-size-base);
     }
 
     /* Copy Response Button */
@@ -1010,7 +1010,7 @@
 
     .message-content {
         padding: 0.375rem 0.625rem;
-        font-size: 0.8rem;
+        font-size: calc(var(--font-size-base) * 0.889);
         line-height: 1.5;
         border-radius: 2px;
     }
@@ -1027,7 +1027,7 @@
 
     /* Message Sender / Timestamp */
     .message-sender {
-        font-size: 0.65rem;
+        font-size: calc(var(--font-size-base) * 0.722);
         gap: 0.3rem;
     }
 
@@ -1036,7 +1036,7 @@
     }
 
     .message-timestamp {
-        font-size: 0.55rem;
+        font-size: calc(var(--font-size-base) * 0.611);
         margin-left: 0.25rem;
     }
 
@@ -1197,7 +1197,7 @@
     }
 
     .message-item.thinking-message .thinking-summary {
-        font-size: 0.9rem;
+        font-size: var(--font-size-base);
     }
 
     /* Copy Response Button */

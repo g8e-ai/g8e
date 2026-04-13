@@ -16,6 +16,8 @@ import logging
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
+from app.constants.prompts import PromptFile
+from app.prompts_data.loader import load_prompt
 from app.llm import get_llm_provider, Role
 from app.models.tool_results import (
     CommandRiskAnalysis,
@@ -98,31 +100,12 @@ class AIResponseAnalyzer:
         working_dir = context.working_directory
         resolved_settings = settings
 
-        prompt = f"""\
-Classify the risk level of a shell command.
-
-<risk_levels>
-LOW: Read-only operations that cannot modify state.
-  Examples: cat, ls, grep, ps, df, top, echo, which, find (read-only), uptime, whoami, hostname, uname, free, vmstat, iostat, netstat, ss, ip, dig, nslookup, ping, traceroute, curl (GET), wget (GET)
-MEDIUM: State-changing operations that are reversible or scoped.
-  Examples: file writes, service restarts, package installs, chmod, mkdir
-HIGH: Destructive or irreversible operations.
-  Examples: rm -rf, mkfs, dd, truncate, kill -9, iptables -F, shutdown
-</risk_levels>
-
-<command>
-{command}
-</command>
-
-<justification>
-{justification}
-</justification>
-
-<working_directory>
-{working_dir}
-</working_directory>
-
-Classify the command risk level."""
+        prompt_template = load_prompt(PromptFile.ANALYSIS_COMMAND_RISK)
+        prompt = prompt_template.format(
+            command=command,
+            justification=justification,
+            working_dir=working_dir
+        )
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -169,49 +152,15 @@ Classify the command risk level."""
                 user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
             )
 
-        prompt = f"""\
-Analyze this command failure and determine if it can be auto-fixed or requires human intervention.
-
-<failed_command>
-{command}
-</failed_command>
-
-<exit_code>
-{exit_code}
-</exit_code>
-
-<stdout>
-{stdout[:1000]}
-</stdout>
-
-<stderr>
-{stderr[:1000]}
-</stderr>
-
-<context>
-Retry Count: {retry_count}
-Working Directory: {working_dir}
-</context>
-
-<auto_fixable_errors>
-- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
-- Permission denied on a LOCAL project file (chmod, chown — NOT SSH auth): chmod / chown scoped to project directory
-- Syntax errors in commands (wrong flags, typos): corrected command
-- Missing directories (No such file or directory for expected paths): mkdir -p
-- Port conflicts (Address already in use): kill process on port or use different port
-</auto_fixable_errors>
-
-<escalate_to_human>
-- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
-- Invalid API keys or credentials: MUST escalate
-- System-level failures: kernel errors, hardware issues
-- Data corruption: file system errors, database corruption
-- Ambiguous errors: multiple possible root causes
-- Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
-- Configuration issues requiring human access: environment setup, server-side config
-</escalate_to_human>
-
-Based on the information above, analyze the failure and fill in ALL response fields."""
+        prompt_template = load_prompt(PromptFile.ANALYSIS_ERROR_SUGGESTION)
+        prompt = prompt_template.format(
+            command=command,
+            exit_code=exit_code,
+            stdout=stdout[:1000],
+            stderr=stderr[:1000],
+            retry_count=retry_count,
+            working_dir=working_dir
+        )
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -273,44 +222,14 @@ Based on the information above, analyze the failure and fill in ALL response fie
 
         content_preview = content[:500] if content else "N/A"
 
-        prompt = f"""\
-Analyze this file operation for safety and risk level.
-
-<operation>
-{operation}
-</operation>
-
-<file_path>
-{file_path}
-</file_path>
-
-<content_preview>
-{content_preview}
-</content_preview>
-
-<context>
-Git Status: {git_status}
-Backup Available: {backup_available}
-</context>
-
-<system_file_patterns>
-HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
-HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries
-</system_file_patterns>
-
-<risk_levels>
-LOW: Build artifacts, temp files (/tmp), generated output
-MEDIUM: Project source files, config files (package.json, requirements.txt)
-HIGH: System files, irreversible deletes, dirty git + destructive operation
-</risk_levels>
-
-<blocking_conditions>
-- System file path without explicit override
-- Delete operation with no backup available
-- Dirty git state combined with a destructive operation
-</blocking_conditions>
-
-Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
+        prompt_template = load_prompt(PromptFile.ANALYSIS_FILE_RISK)
+        prompt = prompt_template.format(
+            operation=operation,
+            file_path=file_path,
+            content_preview=content_preview,
+            git_status=git_status,
+            backup_available=backup_available
+        )
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 

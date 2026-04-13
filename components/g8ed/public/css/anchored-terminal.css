@@ -37,7 +37,7 @@
     align-items: center;
     gap: 8px;
     margin-bottom: 4px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
 }
 
@@ -73,7 +73,7 @@
     justify-content: flex-end;
     gap: 8px;
     margin-bottom: 4px;
-    font-size: 12px;
+    font-size: 0.75rem;
     color: var(--text-secondary);
 }
 
@@ -89,7 +89,7 @@
 .anchored-terminal__ai-response-content {
     color: var(--text-primary);
     text-align: left;
-    font-size: 14px;
+    font-size: 0.875rem;
 }
 
 /* Streaming indicator for AI response */
@@ -1360,20 +1360,20 @@
     
     .anchored-terminal__header-center .case-dropdown {
         width: 200px;
-        font-size: 12px;
+        font-size: calc(var(--font-size-base) * 0.833);
     }
     
     .anchored-terminal__title {
-        font-size: 11px;
+        font-size: calc(var(--font-size-base) * 0.764);
     }
     
     .anchored-terminal__hostname {
-        font-size: 10px;
+        font-size: calc(var(--font-size-base) * 0.694);
         padding: 1px 6px;
     }
     
     .anchored-terminal__output {
-        font-size: 12px;
+        font-size: calc(var(--font-size-base) * 0.833);
         padding: 0.25rem;
     }
     
@@ -1382,14 +1382,14 @@
     }
     
     .anchored-terminal__input {
-        font-size: 13px;
+        font-size: calc(var(--font-size-base) * 0.903);
         min-height: 24px;
     }
     
     .anchored-terminal__mode-indicator {
         min-width: 28px;
         height: 24px;
-        font-size: 9px;
+        font-size: calc(var(--font-size-base) * 0.625);
     }
     
     .anchored-terminal__attach-btn,
@@ -1399,7 +1399,7 @@
     }
     
     .anchored-terminal__hint {
-        font-size: 10px;
+        font-size: calc(var(--font-size-base) * 0.694);
         flex-wrap: wrap;
     }
 }

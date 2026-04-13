@@ -187,6 +187,12 @@
     --font-secondary: 'Fira Code', 'Monaco', 'Consolas', monospace;
     --font-sans: var(--font-primary);
     --font-mono: var(--font-secondary);
+    /* Typography System Base Font Size
+       All message-related components should use relative units based on this variable
+       for consistent scaling across devices and breakpoints. Use calc(var(--font-size-base) * multiplier)
+       for smaller/larger sizes. Example: calc(var(--font-size-base) * 0.833) for 83.3% of base size.
+    */
+    --font-size-base: 0.9rem;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -1070,28 +1076,6 @@ body {
 
 .message-right-section .message-sender {
     order: 3;
-}
-
-.message-sender {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.sender-icon {
-    font-size: 1rem;
-}
-
-.sender-label {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: var(--text-dim);
-    letter-spacing: 0.05em;
-}
-
-.message-timestamp {
-    font-size: 0.7rem;
-    color: var(--text-muted);
 }
 
 /* Typing animation for streaming responses */

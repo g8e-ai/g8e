@@ -21,6 +21,7 @@ and terminal display helpers used across all resource scripts.
 import json
 import os
 import shutil
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,6 +38,22 @@ G8ES_BASE_URL = 'https://g8es'
 G8ED_BASE_URL = 'https://g8ed'
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
+
+
+CA_CERT_PATH = Path('/g8es/ca.crt')
+
+
+def _create_ssl_context() -> Optional[ssl.SSLContext]:
+    """Create SSL context that trusts the platform CA."""
+    ctx = ssl.create_default_context()
+    if CA_CERT_PATH.exists():
+        ctx.load_verify_locations(str(CA_CERT_PATH))
+    else:
+        # Fallback to internal volume path
+        alt_path = Path('/g8es/ssl/ca.crt')
+        if alt_path.exists():
+            ctx.load_verify_locations(str(alt_path))
+    return ctx
 
 
 # =============================================================================
@@ -79,8 +96,9 @@ def g8es_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
         headers['X-Internal-Auth'] = token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    ctx = _create_ssl_context()
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=ctx) as resp:
             text = resp.read().decode()
             return json.loads(text) if text else None
     except urllib.error.HTTPError as e:
@@ -144,8 +162,9 @@ def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         'Accept': 'application/json',
     }
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    ctx = _create_ssl_context()
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=ctx) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body_bytes = e.read()

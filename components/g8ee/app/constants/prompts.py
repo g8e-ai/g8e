@@ -75,6 +75,11 @@ class PromptFile(str, Enum):
     TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
     TOOL_READ_FILE_CONTENT = "tools/read_file_content.txt"
 
+    # Analysis
+    ANALYSIS_COMMAND_RISK = "analysis/command_risk.txt"
+    ANALYSIS_ERROR_SUGGESTION = "analysis/error_analysis.txt"
+    ANALYSIS_FILE_RISK = "analysis/file_risk.txt"
+
     @property
     def path(self) -> str:
         """Get the relative path for the prompt file."""

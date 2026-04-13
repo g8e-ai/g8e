@@ -1,0 +1,37 @@
+Analyze this file operation for safety and risk level.
+
+<operation>
+{operation}
+</operation>
+
+<file_path>
+{file_path}
+</file_path>
+
+<content_preview>
+{content_preview}
+</content_preview>
+
+<context>
+Git Status: {git_status}
+Backup Available: {backup_available}
+</context>
+
+<system_file_patterns>
+HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
+HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries
+</system_file_patterns>
+
+<risk_levels>
+LOW: Build artifacts, temp files (/tmp), generated output
+MEDIUM: Project source files, config files (package.json, requirements.txt)
+HIGH: System files, irreversible deletes, dirty git + destructive operation
+</risk_levels>
+
+<blocking_conditions>
+- System file path without explicit override
+- Delete operation with no backup available
+- Dirty git state combined with a destructive operation
+</blocking_conditions>
+
+Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.

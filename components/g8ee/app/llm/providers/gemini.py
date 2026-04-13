@@ -413,8 +413,12 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from PrimaryLLMSettings."""
         from google.genai import types as genai_types
 
+        temperature = primary_llm_settings.temperature
+        if model.startswith("gemini-3"):
+            temperature = 1.0
+
         gen_config_kwargs: dict[str, object] = {
-            "temperature": primary_llm_settings.temperature,
+            "temperature": temperature,
             "top_p": primary_llm_settings.top_p_nucleus_sampling,
             "top_k": primary_llm_settings.top_k_filtering,
             "system_instruction": primary_llm_settings.system_instruction,
@@ -452,8 +456,12 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from AssistantLLMSettings."""
         from google.genai import types as genai_types
 
+        temperature = assistant_llm_settings.temperature
+        if model.startswith("gemini-3"):
+            temperature = 1.0
+
         gen_config_kwargs: dict[str, object] = {
-            "temperature": assistant_llm_settings.temperature,
+            "temperature": temperature,
             "top_p": assistant_llm_settings.top_p_nucleus_sampling,
             "top_k": assistant_llm_settings.top_k_filtering,
             "system_instruction": assistant_llm_settings.system_instruction,
@@ -476,8 +484,12 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from LiteLLMSettings."""
         from google.genai import types as genai_types
 
+        temperature = lite_llm_settings.temperature
+        if model.startswith("gemini-3"):
+            temperature = 1.0
+
         gen_config_kwargs: dict[str, object] = {
-            "temperature": lite_llm_settings.temperature,
+            "temperature": temperature,
             "top_p": lite_llm_settings.top_p_nucleus_sampling,
             "top_k": lite_llm_settings.top_k_filtering,
             "system_instruction": lite_llm_settings.system_instruction,
