@@ -38,9 +38,10 @@ export class ConnectionEstablishedEvent extends G8eBaseModel {
 
 export class KeepaliveEvent extends G8eBaseModel {
     static fields = {
-        type:       { type: F.string, required: true },
-        timestamp:  { type: F.date,   default: () => now() },
-        serverTime: { type: F.number, default: null },
+        type:          { type: F.string, required: true },
+        timestamp:     { type: F.date,   default: () => now() },
+        serverTime:    { type: F.number, default: null },
+        operator_list: { type: F.any,    default: null },
     };
 }
 

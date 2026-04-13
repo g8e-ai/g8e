@@ -652,7 +652,7 @@
   padding: .45rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 0.25rem;
+  border-radius: 0.2rem;
   cursor: pointer;
   transition: all 0.2s ease;
   max-width: 100%;
@@ -673,7 +673,7 @@
     rgba(var(--accent-blue-dark-rgb), 0.03) 50%,
     rgba(var(--accent-blue-rgb), 0.02) 100%);
   border-color: rgba(var(--accent-blue-rgb), 0.4);
-  border-left: 3px solid var(--accent-green);
+  border-left: 6px solid var(--accent-green);
 }
 
 .operator-list-item.bound {
