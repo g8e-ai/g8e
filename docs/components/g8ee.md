@@ -290,6 +290,8 @@ For more details on how these documents are persisted, see [architecture/storage
 
 The assistant model always has thinking disabled regardless of capability.
 
+All services access the assistant model via `LLMSettings.resolved_assistant_model`, which returns the configured value or `None`. This centralizes the "no model configured" check so that every consumer handles missing models consistently.
+
 ### Per-Message Model Override
 
 The UI exposes two separate model dropdowns: **Primary** (complex tasks) and **Assistant** (simple tasks). Each dropdown is populated with provider-specific model options. Selecting a model overrides the corresponding server default for that request. An empty selection (`""`) defers to the configured server default.

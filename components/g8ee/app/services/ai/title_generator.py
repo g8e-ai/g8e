@@ -55,7 +55,7 @@ async def generate_case_title(
 
     try:
         async with get_llm_provider(settings.llm) as provider:
-            model = settings.llm.assistant_model
+            model = settings.llm.resolved_assistant_model
             if not model:
                 logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
                 return CaseTitleResult(

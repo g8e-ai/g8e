@@ -87,6 +87,23 @@ class TribunalVerifierFailedError(Exception):
         )
 
 
+class TribunalModelNotConfiguredError(Exception):
+    """Raised when no model is configured for the Tribunal pipeline.
+
+    This occurs when neither assistant_model nor primary_model is set
+    in the LLM settings. The Tribunal must refuse to run rather than
+    silently guessing a provider-specific default.
+    """
+
+    def __init__(self, provider: str, original_command: str) -> None:
+        self.provider = provider
+        self.original_command = original_command
+        super().__init__(
+            f"Tribunal model not configured for provider {provider}: "
+            "set assistant_model or primary_model in LLM settings"
+        )
+
+
 class TribunalMemberResult(G8eBaseModel):
     """The structured output of a single Tribunal member."""
     reasoning: str = Field(description="The logical basis for the member's verdict.")

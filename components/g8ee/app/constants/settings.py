@@ -133,6 +133,7 @@ class TribunalFallbackReason(str, Enum):
     ALL_PASSES_FAILED     = "all_passes_failed"
     NO_VOTE_WINNER        = "no_vote_winner"
     SYSTEM_ERROR          = "system_error"
+    NO_MODEL_CONFIGURED   = "no_model_configured"
 
 
 class VerifierReason(str, Enum):
