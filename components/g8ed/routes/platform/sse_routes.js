@@ -151,10 +151,18 @@ export function createSSERouter({
         keepaliveInterval = setInterval(async () => {
             if (sseService.hasLocalConnection(connectionId)) {
                 try {
+                    let operatorList = null;
+                    try {
+                        operatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                    } catch (e) {
+                        logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
+                    }
+
                     await sseService.publishEvent(connectionId, new KeepaliveEvent({
                         type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
                         timestamp: now(),
-                        serverTime: Date.now()
+                        serverTime: Date.now(),
+                        operator_list: operatorList
                     }));
 
                 } catch (error) {

@@ -83,7 +83,8 @@ export const OperatorListMixin = {
 
             const latestSnapshot = operator.latest_heartbeat_snapshot || {};
             const systemInfo = operator.system_info || {};
-            const hostnameFull = systemInfo.hostname || ' - ';
+            const operatorName = operator.name || 'Unknown';
+            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (systemInfo.hostname || ' - ');
 
             const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
@@ -101,7 +102,6 @@ export const OperatorListMixin = {
             const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
             const statusClass = operator.status_class || 'inactive';
             const isStoppable = [OperatorStatus.ACTIVE, OperatorStatus.BOUND, OperatorStatus.STALE].includes(operator.status);
-            const operatorName = operator.name || 'Unknown';
             const hasName = !!operator.name;
 
             const formatTimestamp = (timestamp) => {

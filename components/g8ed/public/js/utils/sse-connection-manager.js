@@ -249,6 +249,12 @@ class SSEConnectionManager {
             return { handled: false, eventType };
         }
 
+        if (eventType === EventType.PLATFORM_SSE_KEEPALIVE_SENT) {
+            if (data.operator_list) {
+                this.eventBus.emit(EventType.OPERATOR_PANEL_LIST_UPDATED, data.operator_list);
+            }
+        }
+
         if (_INFRASTRUCTURE_EVENTS.has(eventType)) {
             return { handled: true, infrastructure: true };
         }
