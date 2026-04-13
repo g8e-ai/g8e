@@ -43,15 +43,26 @@ logger = logging.getLogger(__name__)
 
 
 def _contents_to_anthropic(contents: list[Content]) -> list[dict]:
-    messages = []
+    """Convert canonical Content objects to Anthropic message format.
+
+    Anthropic API constraints enforced here:
+    - Messages must strictly alternate between 'user' and 'assistant' roles.
+      Consecutive same-role Content objects are merged into a single message.
+    - Every tool_result block must reference a tool_use_id from the immediately
+      preceding assistant message.
+    - Empty text blocks are dropped (Anthropic rejects zero-length text).
+    - tool_use blocks go in assistant messages; tool_result blocks go in user messages.
+    """
+    messages: list[dict] = []
 
     for content in contents:
         role = "assistant" if content.role == "model" else "user"
-        blocks = []
+        blocks: list[dict] = []
 
         for part in content.parts:
             if part.text is not None and not part.thought:
-                blocks.append({"type": "text", "text": part.text})
+                if part.text:
+                    blocks.append({"type": "text", "text": part.text})
             elif part.thought and part.text is not None:
                 blocks.append({
                     "type": "thinking",
@@ -59,20 +70,39 @@ def _contents_to_anthropic(contents: list[Content]) -> list[dict]:
                     "signature": str(part.thought_signature) if part.thought_signature else "",
                 })
             elif part.tool_call:
+                tool_use_id = part.tool_call.id
+                if not tool_use_id:
+                    logger.warning(
+                        "tool_use block missing ID for tool '%s', using fallback",
+                        part.tool_call.name,
+                    )
+                    tool_use_id = f"toolc_{part.tool_call.name}"
                 blocks.append({
                     "type": "tool_use",
-                    "id": part.tool_call.id or f"toolc_{part.tool_call.name}",
+                    "id": tool_use_id,
                     "name": part.tool_call.name,
                     "input": part.tool_call.args,
                 })
             elif part.tool_response:
+                tool_result_id = part.tool_response.id
+                if not tool_result_id:
+                    logger.warning(
+                        "tool_result block missing ID for tool '%s', using fallback",
+                        part.tool_response.name,
+                    )
+                    tool_result_id = f"toolc_{part.tool_response.name}"
                 blocks.append({
                     "type": "tool_result",
-                    "tool_use_id": part.tool_response.id or f"toolc_{part.tool_response.name}",
+                    "tool_use_id": tool_result_id,
                     "content": json.dumps(part.tool_response.response),
                 })
 
-        if blocks:
+        if not blocks:
+            continue
+
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"].extend(blocks)
+        else:
             messages.append({"role": role, "content": blocks})
 
     return messages

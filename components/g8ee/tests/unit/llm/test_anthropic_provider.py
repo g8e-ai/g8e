@@ -277,6 +277,88 @@ class TestContentsToAnthropic:
         assert result == []
 
 
+    def test_tool_use_id_propagated_to_tool_result(self):
+        """Regression: tool_result must carry the same ID as the preceding tool_use.
+
+        Anthropic requires every tool_result.tool_use_id to match a tool_use.id
+        in the immediately preceding assistant message. Without correct ID
+        propagation, the API returns 400.
+        """
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        tool_id = "toolu_01XFDUDYJgAACzvnptvVoYEL"
+        contents = [
+            Content(role="user", parts=[Part(text="run uptime")]),
+            Content(role="model", parts=[
+                Part(text="Running the command."),
+                Part(tool_call=ToolCall(name="run_commands_with_operator", args={"command": "uptime"}, id=tool_id)),
+            ]),
+            Content(role="user", parts=[
+                Part(tool_response=ToolResponse(
+                    name="run_commands_with_operator",
+                    response={"output": "up 1 day"},
+                    id=tool_id,
+                )),
+            ]),
+        ]
+        result = _contents_to_anthropic(contents)
+        tool_use_block = result[1]["content"][1]
+        tool_result_block = result[2]["content"][0]
+        assert tool_use_block["id"] == tool_id
+        assert tool_result_block["tool_use_id"] == tool_id
+        assert tool_use_block["id"] == tool_result_block["tool_use_id"]
+
+    def test_consecutive_same_role_messages_merged(self):
+        """Anthropic requires strict user/assistant alternation.
+
+        Consecutive Content objects with the same role must be merged into
+        a single message to avoid API rejection.
+        """
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        contents = [
+            Content(role="user", parts=[Part(text="first")]),
+            Content(role="user", parts=[Part(text="second")]),
+            Content(role="model", parts=[Part(text="reply")]),
+        ]
+        result = _contents_to_anthropic(contents)
+        assert len(result) == 2
+        assert result[0]["role"] == "user"
+        assert len(result[0]["content"]) == 2
+        assert result[0]["content"][0]["text"] == "first"
+        assert result[0]["content"][1]["text"] == "second"
+        assert result[1]["role"] == "assistant"
+
+    def test_empty_text_blocks_dropped(self):
+        """Anthropic rejects zero-length text blocks."""
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        contents = [Content(role="user", parts=[
+            Part(text=""),
+            Part(text="real text"),
+        ])]
+        result = _contents_to_anthropic(contents)
+        assert len(result[0]["content"]) == 1
+        assert result[0]["content"][0]["text"] == "real text"
+
+    def test_content_with_only_empty_text_produces_no_message(self):
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        contents = [Content(role="user", parts=[Part(text="")])]
+        result = _contents_to_anthropic(contents)
+        assert result == []
+
+    def test_tool_call_fallback_id_when_none(self):
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        tc = ToolCall(name="run_command", args={"cmd": "ls"}, id=None)
+        contents = [Content(role="model", parts=[Part(tool_call=tc)])]
+        result = _contents_to_anthropic(contents)
+        assert result[0]["content"][0]["id"] == "toolc_run_command"
+
+    def test_tool_response_fallback_id_when_none(self):
+        from app.llm.providers.anthropic import _contents_to_anthropic
+        tr = ToolResponse(name="run_command", response={"output": "ok"}, id=None)
+        contents = [Content(role="user", parts=[Part(tool_response=tr)])]
+        result = _contents_to_anthropic(contents)
+        assert result[0]["content"][0]["tool_use_id"] == "toolc_run_command"
+
+
 class TestToolsToAnthropic:
     def test_converts_tool_declarations(self):
         from app.llm.providers.anthropic import _tools_to_anthropic
