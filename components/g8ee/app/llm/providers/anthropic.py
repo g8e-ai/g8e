@@ -269,6 +269,7 @@ class AnthropicProvider(LLMProvider):
 
     async def _stream_text_only(self, kwargs: dict) -> AsyncGenerator[StreamChunkFromModel]:
         """Shared streaming handler for assistant/lite calls (text output only)."""
+        finish_reason_received = False
         async with self._client.messages.stream(**kwargs) as stream:
             async for event in stream:
                 event_type = event.type
@@ -287,6 +288,7 @@ class AnthropicProvider(LLMProvider):
                             candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
                         )
                     if stop_reason:
+                        finish_reason_received = True
                         yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
 
                 elif event_type == "message_start":
@@ -297,6 +299,10 @@ class AnthropicProvider(LLMProvider):
                             yield StreamChunkFromModel(usage_metadata=UsageMetadata(
                                 prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
                             ))
+        
+        # Fallback: if stream ended without message_delta with stop_reason, yield completion
+        if not finish_reason_received:
+            yield StreamChunkFromModel(finish_reason="stop")
 
     async def generate_content_stream_primary(
         self,
@@ -320,6 +326,7 @@ class AnthropicProvider(LLMProvider):
         accumulated_tool_input: dict[int, str] = {}
         block_types: dict[int, str] = {}
         accumulated_thinking_sig: dict[int, str] = {}
+        finish_reason_received = False
 
         async with self._client.messages.stream(**kwargs) as stream:
             async for event in stream:
@@ -383,6 +390,7 @@ class AnthropicProvider(LLMProvider):
                             candidates_token_count=getattr(usage, "output_tokens", 0) or 0,
                         )
                     if stop_reason:
+                        finish_reason_received = True
                         yield StreamChunkFromModel(finish_reason=stop_reason, usage_metadata=um)
 
                 elif event_type == "message_start":
@@ -393,6 +401,10 @@ class AnthropicProvider(LLMProvider):
                             yield StreamChunkFromModel(usage_metadata=UsageMetadata(
                                 prompt_token_count=getattr(usage, "input_tokens", 0) or 0,
                             ))
+        
+        # Fallback: if stream ended without message_delta with stop_reason, yield completion
+        if not finish_reason_received:
+            yield StreamChunkFromModel(finish_reason="stop")
 
     async def generate_content_primary(
         self,

@@ -78,7 +78,8 @@ import {
     getSetupService,
     getG8esBlobClient,
     getInternalHttpClient,
-    getHealthCheckService
+    getHealthCheckService,
+    getInvestigationService
 } from './services/initialization.js';
 import { logger } from './utils/logger.js';
 import { 
@@ -145,7 +146,8 @@ class G8edServer {
                 setupService: getSetupService(),
                 blobStorage: getG8esBlobClient(),
                 internalHttpClient: getInternalHttpClient(),
-                healthCheckService: getHealthCheckService()
+                healthCheckService: getHealthCheckService(),
+                investigationService: getInvestigationService()
             };
 
             // No config object - use services directly
