@@ -176,7 +176,7 @@ class ChatPipelineService:
             primary_override=llm_primary_model,
             assistant_override=llm_assistant_model,
             settings_primary_model=request_settings.llm.primary_model,
-            settings_assistant_model=request_settings.llm.assistant_model,
+            settings_assistant_model=request_settings.llm.resolved_assistant_model,
         )
         
         if not model_to_use:

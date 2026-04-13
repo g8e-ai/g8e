@@ -122,7 +122,7 @@ class MemoryGenerationService:
 
         system_instruction = build_memory_analysis_system_instruction(memory.case_title)
 
-        assistant_model = settings.llm.assistant_model
+        assistant_model = settings.llm.resolved_assistant_model
         if not assistant_model:
             logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
             return

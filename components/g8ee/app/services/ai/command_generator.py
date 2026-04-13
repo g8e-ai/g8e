@@ -90,6 +90,7 @@ from app.models.agents.tribunal import (
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
     TribunalVerifierFailedError,
+    TribunalModelNotConfiguredError,
     TribunalPassCompletedPayload,
     TribunalVerifierStartedPayload,
     TribunalVerifierCompletedPayload,
@@ -161,14 +162,6 @@ _MAX_TOKENS_GENERATION = 256
 _MAX_TOKENS_VERIFIER = 256
 
 
-_PROVIDER_DEFAULT_MODELS: dict[LLMProviderEnum, str] = {
-    LLMProviderEnum.OLLAMA: OLLAMA_DEFAULT_MODEL,
-    LLMProviderEnum.OPENAI: OPENAI_DEFAULT_MODEL,
-    LLMProviderEnum.ANTHROPIC: ANTHROPIC_DEFAULT_MODEL,
-    LLMProviderEnum.GEMINI: GEMINI_DEFAULT_MODEL,
-}
-
-
 _SYSTEM_ERROR_PATTERNS: tuple[str, ...] = (
     "401",
     "403",
@@ -210,13 +203,18 @@ def _is_system_error(error_message: str) -> bool:
 def _resolve_model(llm: LLMSettings) -> str:
     """Resolve a concrete model string for the Tribunal pipeline.
 
-    Fallback chain: assistant_model -> primary_model -> provider default.
+    Fallback chain: assistant_model -> primary_model.
+
+    Raises TribunalModelNotConfiguredError if neither is set.
     """
-    if llm.assistant_model:
-        return llm.assistant_model
+    if llm.resolved_assistant_model:
+        return llm.resolved_assistant_model
     if llm.primary_model:
         return llm.primary_model
-    return _PROVIDER_DEFAULT_MODELS.get(llm.provider, OLLAMA_DEFAULT_MODEL)
+    raise TribunalModelNotConfiguredError(
+        provider=llm.provider,
+        original_command="",
+    )
 
 
 _TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
@@ -646,7 +644,21 @@ async def generate_command(
             outcome=CommandGenerationOutcome.DISABLED,
         )
 
-    model = _resolve_model(settings.llm)
+    try:
+        model = _resolve_model(settings.llm)
+    except TribunalModelNotConfiguredError as exc:
+        logger.error("[TRIBUNAL] Model not configured: %s", exc)
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
+            TribunalFallbackPayload(
+                reason=TribunalFallbackReason.NO_MODEL_CONFIGURED,
+                original_command=original_command,
+                final_command=original_command,
+                error=str(exc),
+            ),
+        )
+        exc.original_command = original_command
+        raise
     num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
 

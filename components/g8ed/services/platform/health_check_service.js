@@ -201,7 +201,7 @@ export class HealthCheckService {
      */
     async _checkDatabase(healthStatus) {
         try {
-            const configDoc = await this._cacheAside.getDocument(Collections.PLATFORM_SETTINGS, 'platform_settings');
+            const configDoc = await this._cacheAside.getDocument(Collections.SETTINGS, 'platform_settings');
             if (configDoc !== null) {
                 healthStatus.checks.database = { status: SystemHealth.HEALTHY, message: 'g8es document store is OK.' };
             } else {

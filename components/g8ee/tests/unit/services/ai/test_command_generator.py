@@ -26,12 +26,14 @@ from app.constants import (
     OPENAI_DEFAULT_MODEL,
     ANTHROPIC_DEFAULT_MODEL,
     GEMINI_DEFAULT_MODEL,
+    EventType,
 )
 from app.llm.llm_types import Content, Role
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.agents.tribunal import (
     TribunalFallbackPayload,
     TribunalGenerationFailedError,
+    TribunalModelNotConfiguredError,
     TribunalProviderUnavailableError,
     TribunalSessionStartedPayload,
     TribunalSystemError,
@@ -79,34 +81,34 @@ class TestResolveModel:
         assert llm.assistant_model is None
         assert _resolve_model(llm) == "custom-primary"
 
-    def test_falls_back_to_provider_default_when_both_none(self):
+    def test_raises_when_both_models_none(self):
         llm = LLMSettings(provider=LLMProvider.OLLAMA)
         assert llm.assistant_model is None
         assert llm.primary_model is None
-        assert _resolve_model(llm) == OLLAMA_DEFAULT_MODEL
+        with pytest.raises(TribunalModelNotConfiguredError):
+            _resolve_model(llm)
 
-    def test_provider_default_openai(self):
+    def test_raises_for_openai_when_no_model_configured(self):
         llm = LLMSettings(provider=LLMProvider.OPENAI)
-        assert _resolve_model(llm) == OPENAI_DEFAULT_MODEL
+        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
+            _resolve_model(llm)
+        assert exc_info.value.provider == "openai"
 
-    def test_provider_default_anthropic(self):
+    def test_raises_for_anthropic_when_no_model_configured(self):
         llm = LLMSettings(provider=LLMProvider.ANTHROPIC)
-        assert _resolve_model(llm) == ANTHROPIC_DEFAULT_MODEL
+        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
+            _resolve_model(llm)
+        assert exc_info.value.provider == "anthropic"
 
-    def test_provider_default_gemini(self):
+    def test_raises_for_gemini_when_no_model_configured(self):
         llm = LLMSettings(provider=LLMProvider.GEMINI)
-        assert _resolve_model(llm) == GEMINI_DEFAULT_MODEL
+        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
+            _resolve_model(llm)
+        assert exc_info.value.provider == "gemini"
 
     def test_assistant_takes_priority_over_primary(self):
         llm = LLMSettings(primary_model="primary", assistant_model="assistant")
         assert _resolve_model(llm) == "assistant"
-
-    def test_result_is_always_str_never_none(self):
-        for provider in LLMProvider:
-            llm = LLMSettings(provider=provider)
-            result = _resolve_model(llm)
-            assert isinstance(result, str)
-            assert len(result) > 0
 
 
 class TestTribunalSessionStartedPayloadRegression:
@@ -124,7 +126,7 @@ class TestTribunalSessionStartedPayloadRegression:
             )
 
     def test_payload_accepts_resolved_model(self):
-        llm = LLMSettings(provider=LLMProvider.OLLAMA)
+        llm = LLMSettings(provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
         model = _resolve_model(llm)
         payload = TribunalSessionStartedPayload(
             original_command="ls",
@@ -134,7 +136,7 @@ class TestTribunalSessionStartedPayloadRegression:
             os_name="linux",
             shell="bash",
         )
-        assert payload.model == OLLAMA_DEFAULT_MODEL
+        assert payload.model == "gemma3:1b"
 
 
 class TestRoleImportRegression:
@@ -595,6 +597,49 @@ class TestTribunalProviderUnavailableError:
             assert exc_info.value.provider == "ollama"
             assert exc_info.value.original_command == "ls"
             assert "Unsupported LLM provider" in exc_info.value.error
+
+
+class TestTribunalModelNotConfiguredError:
+    """TribunalModelNotConfiguredError raised when no model is configured."""
+
+    @pytest.mark.asyncio
+    async def test_raises_on_no_model_configured(self):
+        """No model configured raises TribunalModelNotConfiguredError with fallback event."""
+        llm = LLMSettings(
+            provider=LLMProvider.OLLAMA,
+        )
+        settings = G8eeUserSettings(llm=llm)
+
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
+        with patch(
+            "app.services.ai.command_generator.get_llm_provider",
+        ):
+            with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
+                await generate_command(
+                    original_command="ls",
+                    intent="list files",
+                    os_name="linux",
+                    shell="bash",
+                    working_directory="/tmp",
+                    g8ed_event_service=mock_event_service,
+                    web_session_id="ws-1",
+                    user_id="user-1",
+                    case_id="case-1",
+                    investigation_id="inv-1",
+                    settings=settings,
+                )
+
+            assert exc_info.value.provider == "ollama"
+            assert exc_info.value.original_command == "ls"
+            assert "model not configured" in str(exc_info.value).lower()
+
+            mock_event_service.publish.assert_called()
+            call_args = mock_event_service.publish.call_args
+            event = call_args[0][0]
+            assert event.event_type == EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED
+            assert event.payload.reason == TribunalFallbackReason.NO_MODEL_CONFIGURED
 
 
 class TestTribunalVerifierFailedError:

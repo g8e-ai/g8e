@@ -319,6 +319,11 @@ class LLMSettings(G8eBaseModel):
     llm_command_gen_temp: float | None = Field(None)
 
     @property
+    def resolved_assistant_model(self) -> str | None:
+        """Return the configured assistant model, or None if not set."""
+        return self.assistant_model or None
+
+    @property
     def endpoint(self) -> str | None:
         """Return the active provider endpoint."""
         endpoints = {

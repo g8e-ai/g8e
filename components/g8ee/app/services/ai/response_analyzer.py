@@ -124,7 +124,7 @@ HIGH: Destructive or irreversible operations.
 
 Classify the command risk level."""
 
-        assistant_model = resolved_settings.llm.assistant_model
+        assistant_model = resolved_settings.llm.resolved_assistant_model
 
         def log_result(analysis):
             logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
@@ -213,7 +213,7 @@ Working Directory: {working_dir}
 
 Based on the information above, analyze the failure and fill in ALL response fields."""
 
-        assistant_model = resolved_settings.llm.assistant_model
+        assistant_model = resolved_settings.llm.resolved_assistant_model
 
         def post_process(analysis):
             if retry_count >= 2:
@@ -312,7 +312,7 @@ HIGH: System files, irreversible deletes, dirty git + destructive operation
 
 Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
 
-        assistant_model = resolved_settings.llm.assistant_model
+        assistant_model = resolved_settings.llm.resolved_assistant_model
 
         def post_process(analysis):
             system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")

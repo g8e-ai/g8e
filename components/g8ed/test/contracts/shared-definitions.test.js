@@ -130,7 +130,7 @@ describe('g8ed Shared Definitions Contract', () => {
         it('INVESTIGATIONS', () => expect(Collections.INVESTIGATIONS).toBe(COLLECTIONS['collections']['investigations']));
         it('TASKS', () => expect(Collections.TASKS).toBe(COLLECTIONS['collections']['tasks']));
         it('MEMORIES', () => expect(Collections.MEMORIES).toBe(COLLECTIONS['collections']['memories']));
-        it('PLATFORM_SETTINGS', () => expect(Collections.PLATFORM_SETTINGS).toBe(COLLECTIONS['collections']['platform_settings']));
+        it('SETTINGS', () => expect(Collections.SETTINGS).toBe(COLLECTIONS['collections']['settings']));
         it('CONSOLE_AUDIT', () => expect(Collections.CONSOLE_AUDIT).toBe(COLLECTIONS['collections']['console_audit']));
 
         it('covers all keys in shared JSON', () => {
