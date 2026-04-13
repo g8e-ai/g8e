@@ -26,10 +26,10 @@ import { G8eBaseModel, now } from '../../models/base.js';
 import { SSE_FRAME_TERMINATOR } from '../../constants/service_config.js';
 import { writeSSEFrame } from '../../utils/sse.js';
 import { LLMConfigEvent, LLMConfigData, InvestigationListEvent, InvestigationListData } from '../../models/sse_models.js';
-import { USER_SETTINGS } from '../../models/settings_model.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 import { EventType } from '../../constants/events.js';
 import { Collections } from '../../constants/collections.js';
+import { PROVIDER_MODELS } from '../../constants/ai.js';
 
 class SSEService {
     /**
@@ -314,6 +314,7 @@ class SSEService {
             const userSettings = await this._settingsService.getUserSettings(userId);
 
             const provider = userSettings.llm_primary_provider ?? platformSettings.llm_primary_provider ?? '';
+            const assistantProvider = userSettings.llm_assistant_provider ?? platformSettings.llm_assistant_provider ?? '';
             const currentPrimary = userSettings.llm_model ?? platformSettings.llm_model ?? '';
             const currentAssistant = userSettings.llm_assistant_model ?? platformSettings.llm_assistant_model ?? '';
 
@@ -321,12 +322,13 @@ class SSEService {
             const providerModels = SSEService._buildProviderModels(configuredProviders);
 
             const primaryModels = SSEService._getModelOptionsForProvider(provider, 'llm_model');
-            const assistantModels = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
+            const assistantModels = SSEService._getModelOptionsForProvider(assistantProvider, 'llm_assistant_model');
 
             await this.publishEvent(webSessionId, LLMConfigEvent.parse({
                 type: EventType.LLM_CONFIG_RECEIVED,
                 data: LLMConfigData.parse({
                     provider,
+                    assistant_provider: assistantProvider,
                     default_primary_model: currentPrimary,
                     default_assistant_model: currentAssistant,
                     primary_models: primaryModels,
@@ -352,17 +354,15 @@ class SSEService {
     }
 
     static _getModelOptionsForProvider(provider, settingKey) {
-        const entry = USER_SETTINGS.find(s => s.key === settingKey && s.provider === provider);
-        if (!entry) return [];
-
-        if (entry.options) {
-            return entry.options.map(opt => ({ id: opt.value, label: opt.label }));
+        const config = PROVIDER_MODELS[provider];
+        if (!config) return [];
+        
+        if (settingKey === 'llm_model') {
+            return config.primary || [];
+        } else if (settingKey === 'llm_assistant_model') {
+            return config.assistant || [];
         }
-
-        if (entry.type === 'text' && entry.default) {
-            return [{ id: entry.default, label: entry.default }];
-        }
-
+        
         return [];
     }
 

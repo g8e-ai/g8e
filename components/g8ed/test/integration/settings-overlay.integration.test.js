@@ -54,7 +54,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
     it('returns user-specific settings flattened from nested structure', async () => {
         const userId = 'user-abc';
         const nestedSettings = {
-            llm: { provider: LLMProvider.OPENAI, llm_model: OpenAIModel.GPT_4O },
+            llm: { primary_provider: LLMProvider.OPENAI, primary_model: OpenAIModel.GPT_4O },
             search: {},
             eval_judge: {},
         };

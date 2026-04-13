@@ -435,6 +435,7 @@ class GeminiProvider(LLMProvider):
         if genai_tools:
             gen_config_kwargs["tools"] = genai_tools
 
+        fc_cfg = None
         if primary_llm_settings.tool_config and primary_llm_settings.tool_config.tool_calling_config:
             fc_cfg = primary_llm_settings.tool_config.tool_calling_config
             fc_kwargs: dict[str, object] = {}

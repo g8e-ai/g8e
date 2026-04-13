@@ -155,7 +155,7 @@ g8e operates its own private CA. There is no dependency on any public CA.
 The g8eo binary (field operator mode) loads the platform CA at startup using a two-stage strategy:
 
 1. **Local discovery** (preferred): When `--ca-url` is not set, the binary scans `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, and `/data/ssl/ca.crt` in order. The first path that exists and contains valid PEM is accepted immediately via `certs.SetCA` — no network request is made. This is the normal path for containerized operators (e.g., g8ep), where the `g8es-ssl` Docker volume provides the CA locally.
-2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `https://<endpoint>/ssl/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [drop script](../components/g8ed.md#operator-drop-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
+2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `https://<endpoint>/ssl/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [deployment script](../components/g8ed.md#operator-deployment-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
 
 Once stored in the runtime CA store, all subsequent TLS connections are verified against it. Public CAs are not trusted.
 
@@ -334,7 +334,7 @@ The API key path is the standard long-running operator authentication method, ha
 
 1. **Header extraction** — API key extracted from `Authorization: Bearer <key>`. Missing or malformed header → 400.
 2. **Key validation** — `ApiKeyService.validateApiKey` performs a cache-aside lookup (g8es KV first, document store fallback). Checks: `g8e_` prefix format, `status === ACTIVE`, `expires_at` not in the past. Invalid → 401.
-3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DROP_KEY`) fetch the binary; they cannot authenticate an operator process.
+3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DOWNLOAD_KEY`) fetch the binary; they cannot authenticate an operator process.
 4. **`last_used_at` update** — `ApiKeyService.updateLastUsed` called after successful validation (non-blocking; errors are logged and do not fail auth).
 5. **User existence check** — `UserService.getUser(user_id)` from key data → 404 if not found.
 6. **System fingerprint requirement** — `system_info.system_fingerprint` must be present in the request body → 400 if missing.

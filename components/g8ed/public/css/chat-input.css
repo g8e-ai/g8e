@@ -327,13 +327,13 @@
     display: none;
 }
 
-.llm-model-label {
-    font-size: 0.625rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+.llm-model-icon {
+    font-size: 1.125rem;
     color: var(--text-tertiary);
-    white-space: nowrap;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .llm-model-select {

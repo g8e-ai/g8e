@@ -1,12 +1,12 @@
 # g8e
 
-**The governance layer that binds AI to reality.**
+**Governance Architecture for Trustless Environments.**
 
 ## About g8e
 
 g8e is a self-hosted command-and-control platform for safe, AI-powered, human-driven remote system operations. It was designed for a future where AI is deeply embedded in infrastructure — and where the humans running that infrastructure refuse to hand over the keys.
 
-The premise is simple and non-negotiable: **AI is the advisor. You are the authority.** AI gathers deep context across your entire infrastructure, reasons about it, and proposes intelligent actions — but it never acts alone. Every operation, on every system, requires multiple layers of expressed human intent and approval before anything executes. There is no backdoor. There is no override. The AI has no mechanism to circumvent human control — not by design flaw, not by prompt injection, not by emergent behavior. The architecture makes it structurally impossible.
+The premise is simple and non-negotiable: **AI is the advisor. You are the authority.** AI gathers deep context across your entire infrastructure, reasons about it, and proposes intelligent actions — but it never acts alone. Every operation, on every system, requires multiple layers of expressed human intent and approval before anything executes. There is no override. The AI has no mechanism to circumvent human control — the architecture makes it structurally impossible.
 
 Bind any number of remote systems to your web session. Tell the AI what you want. It fans out across every Operator in scope — investigating, correlating, proposing — then waits for you. You approve. Execution is instant, simultaneous, and audited. The AI never sees raw sensitive data, never stores your context in someone else's cloud, and never stops working the problem until your intent is fully satisfied.
 

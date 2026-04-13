@@ -15,7 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
-import { LLMProvider } from '@g8ed/public/js/constants/ai-constants.js';
+import { LLMProvider, AnthropicModel, OllamaModel } from '@g8ed/public/js/constants/ai-constants.js';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
 import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 
@@ -812,13 +812,32 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.openai_endpoint).toBe('https://api.openai.com/v1');
         });
 
-        it('derives llm_primary_provider from selected primary model', () => {
+        it('derives llm_primary_provider and llm_assistant_provider from selected models', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.GEMINI);
+            expect(settings.llm_assistant_provider).toBe(LLMProvider.GEMINI);
             expect(settings.llm_model).toBeDefined();
             expect(settings.llm_assistant_model).toBeDefined();
+        });
+
+        it('derives correct provider for Anthropic models', () => {
+            document.getElementById('anthropic_api_key').value = 'test';
+            setupPage._updateModelDropdowns();
+            document.getElementById('primary_model').value = AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6;
+            document.getElementById('assistant_model').value = AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5;
+            const settings = setupPage._collectUserSettings();
+            expect(settings.llm_primary_provider).toBe(LLMProvider.ANTHROPIC);
+            expect(settings.llm_assistant_provider).toBe(LLMProvider.ANTHROPIC);
+        });
+
+        it('derives correct provider for Ollama models', () => {
+            document.getElementById('ollama_url').value = 'test';
+            setupPage._updateModelDropdowns();
+            document.getElementById('primary_model').value = OllamaModel.GEMMA4_E4B;
+            const settings = setupPage._collectUserSettings();
+            expect(settings.llm_primary_provider).toBe(LLMProvider.OLLAMA);
         });
 
         it('collects Ollama endpoint with /v1 suffix', () => {

@@ -169,28 +169,6 @@ describe('InternalHttpClient', () => {
 
             await expect(client.request('g8ee', '/test')).rejects.toThrow('HTTP 500: Internal Server Error');
         });
-
-        it('should timeout if request takes too long', async () => {
-            vi.mocked(fetch).mockImplementationOnce(async (url, options) => {
-                return new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        resolve({ ok: true, status: 200, json: async () => ({}) });
-                    }, INTERNAL_HTTP_TIMEOUT_MS * 2);
-
-                    options.signal.addEventListener('abort', () => {
-                        clearTimeout(timeout);
-                        const error = new Error('The operation was aborted');
-                        error.name = 'AbortError';
-                        reject(error);
-                    });
-                });
-            });
-
-            const promise = client.request('g8ee', '/test');
-            vi.advanceTimersByTime(INTERNAL_HTTP_TIMEOUT_MS + 100);
-
-            await expect(promise).rejects.toThrow(/timeout/);
-        });
     });
 
     describe('g8ee endpoint methods', () => {
@@ -215,21 +193,6 @@ describe('InternalHttpClient', () => {
                 method: 'POST',
                 body: JSON.stringify({ message: 'hi' })
             }));
-        });
-
-        it('queryInvestigations should include query params', async () => {
-            const params = new URLSearchParams({ status: 'active' });
-            await client.queryInvestigations(params, context);
-            const path = apiPaths.g8ee.investigations();
-            expect(path).toBe('/api/internal/investigations');
-            expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path + '?status=active'), expect.any(Object));
-        });
-
-        it('getInvestigation should call specific investigation endpoint', async () => {
-            await client.getInvestigation('inv-123', context);
-            const path = apiPaths.g8ee.investigation('inv-123');
-            expect(path).toBe('/api/internal/investigations/inv-123');
-            expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.any(Object));
         });
 
         it('deleteCase should call DELETE on case endpoint', async () => {

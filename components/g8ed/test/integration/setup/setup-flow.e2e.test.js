@@ -308,7 +308,6 @@ describe('Setup Flow End-to-End Tests', () => {
 
             // Check for key elements
             expect(response.text).toContain('account_email');
-            expect(response.text).toContain('ai_provider');
             expect(response.text).toContain('finish-btn');
 
             // Platform hostname step should NOT exist
@@ -327,12 +326,6 @@ describe('Setup Flow End-to-End Tests', () => {
             expect(response.text).toContain('data-provider="anthropic"');
             expect(response.text).toContain('data-provider="openai"');
             expect(response.text).toContain('data-provider="ollama"');
-
-            // Check for provider configuration sections
-            expect(response.text).toContain('config-gemini');
-            expect(response.text).toContain('config-anthropic');
-            expect(response.text).toContain('config-openai');
-            expect(response.text).toContain('config-ollama');
         });
 
         it('should include web search configuration', async () => {

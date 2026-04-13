@@ -256,6 +256,8 @@ export const ChatSSEHandlersMixin = {
             investigation_id: this.casesManager.getCurrentInvestigationId(),
             attachments,
             sentinel_mode: this.sentinelModeManager.getSentinelMode(),
+            llm_primary_provider: this.llmModelManager.getPrimaryProvider(),
+            llm_assistant_provider: this.llmModelManager.getAssistantProvider(),
             llm_primary_model: this.llmModelManager.getPrimaryModel(),
             llm_assistant_model: this.llmModelManager.getAssistantModel(),
         };

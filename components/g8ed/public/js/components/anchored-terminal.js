@@ -189,6 +189,20 @@ export class AnchoredOperatorTerminal {
             return;
         }
 
+        const primaryModel = window.llmModelManager?.getPrimaryModel() || '';
+        const assistantModel = window.llmModelManager?.getAssistantModel() || '';
+
+        if (!primaryModel || !assistantModel) {
+            if (!primaryModel && !assistantModel) {
+                this.appendSystemMessage('Please select both a primary and assistant model before sending a message');
+            } else if (!primaryModel) {
+                this.appendSystemMessage('Please select a primary model before sending a message');
+            } else {
+                this.appendSystemMessage('Please select an assistant model before sending a message');
+            }
+            return;
+        }
+
         try {
             const attachments = this.attachmentsUI?.manager
                 ? this.attachmentsUI.manager.getFormattedForBackend()

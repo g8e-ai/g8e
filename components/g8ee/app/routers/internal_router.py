@@ -101,6 +101,41 @@ router = APIRouter(prefix=InternalApiPaths.PREFIX, tags=["internal"])
 
 
 
+async def _generate_and_update_title(
+    message: str,
+    case_id: str,
+    investigation_id: str,
+    web_session_id: str,
+    user_id: str,
+    user_settings: G8eeUserSettings,
+    case_service: CaseDataService,
+    investigation_service: InvestigationService
+):
+    try:
+        case_result = await generate_case_title(message, settings=user_settings)
+        ai_title = case_result.generated_title
+        updated_case = await case_service.update_case(case_id, CaseUpdateRequest(title=ai_title))
+        await investigation_service.update_investigation(
+            investigation_id,
+            InvestigationUpdateRequest(case_title=ai_title)
+        )
+        await case_service.publish_case_update_sse(
+            case_id=case_id,
+            web_session_id=web_session_id,
+            payload=CaseEventPayload(
+                updated_at=updated_case.updated_at,
+                title=ai_title,
+            ),
+            user_id=user_id,
+        )
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to generate case title in background task",
+            extra={"case_id": case_id, "error": str(e)},
+            exc_info=True
+        )
+
+
 @router.post(API_PATHS["g8ee"]["chat"], response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
@@ -185,21 +220,17 @@ async def internal_chat(
             )
 
         if request.message.strip():
-            case_result = await generate_case_title(request.message, settings=user_settings)
-            ai_title = case_result.generated_title
-            updated_case = await case_service.update_case(g8e_context.case_id, CaseUpdateRequest(title=ai_title))
-            await investigation_service.update_investigation(
-                g8e_context.investigation_id,
-                InvestigationUpdateRequest(case_title=ai_title)
-            )
-            await case_service.publish_case_update_sse(
-                case_id=g8e_context.case_id,
-                web_session_id=g8e_context.web_session_id,
-                payload=CaseEventPayload(
-                    updated_at=updated_case.updated_at,
-                    title=ai_title,
-                ),
-                user_id=g8e_context.user_id,
+            asyncio.create_task(
+                _generate_and_update_title(
+                    message=request.message,
+                    case_id=g8e_context.case_id,
+                    investigation_id=g8e_context.investigation_id,
+                    web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    user_settings=user_settings,
+                    case_service=case_service,
+                    investigation_service=investigation_service
+                )
             )
 
         logger.info(
@@ -225,8 +256,8 @@ async def internal_chat(
         )
         return ChatStartedResponse(
             success=False,
-            case_id=g8e_context.case_id,
-            investigation_id=g8e_context.investigation_id,
+            case_id=g8e_context.case_id or "",
+            investigation_id=g8e_context.investigation_id or "",
         )
 
     asyncio.create_task(
@@ -235,6 +266,8 @@ async def internal_chat(
             g8e_context=g8e_context,
             attachments=resolved_attachments,
             sentinel_mode=request.sentinel_mode,
+            llm_primary_provider=request.llm_primary_provider,
+            llm_assistant_provider=request.llm_assistant_provider,
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
             _task_manager=chat_task_manager,

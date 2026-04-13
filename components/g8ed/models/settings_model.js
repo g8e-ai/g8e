@@ -122,28 +122,6 @@ export const USER_SETTINGS = Object.freeze([
     // Ollama Specific
     // -------------------------------------------------------------------------
     Object.freeze({
-        key: 'llm_model',
-        section: 'llm',
-        label: 'Primary LLM Model',
-        description: 'Main model used for investigations and AI reasoning.',
-        type: 'text',
-        provider: LLMProvider.OLLAMA,
-        secret: false,
-        placeholder: 'gemma4:e4b',
-        default: OllamaModel.GEMMA4_E4B,
-    }),
-    Object.freeze({
-        key: 'llm_assistant_model',
-        section: 'llm',
-        label: 'Assistant LLM Model',
-        description: 'Lightweight model for assistant tasks and command generation.',
-        type: 'text',
-        provider: LLMProvider.OLLAMA,
-        secret: false,
-        placeholder: 'gemma4:e4b',
-        default: OllamaModel.GEMMA4_E4B,
-    }),
-    Object.freeze({
         key: 'ollama_endpoint',
         section: 'llm',
         label: 'Ollama Endpoint URL',
@@ -169,35 +147,6 @@ export const USER_SETTINGS = Object.freeze([
     // -------------------------------------------------------------------------
     // Gemini Specific
     // -------------------------------------------------------------------------
-    Object.freeze({
-        key: 'llm_model',
-        section: 'llm',
-        label: 'Primary LLM Model',
-        description: 'Main model used for investigations and AI reasoning.',
-        type: 'select',
-        provider: LLMProvider.GEMINI,
-        options: Object.freeze([
-            Object.freeze({ value: GeminiModel.PRO_PREVIEW,        label: 'Gemini 3.1 Pro' }),
-            Object.freeze({ value: GeminiModel.FLASH_PREVIEW,      label: 'Gemini 3 Flash Preview' }),
-        ]),
-        secret: false,
-        placeholder: '',
-        default: GeminiModel.FLASH_PREVIEW,
-    }),
-    Object.freeze({
-        key: 'llm_assistant_model',
-        section: 'llm',
-        label: 'Assistant LLM Model',
-        description: 'Lightweight model for assistant tasks and command generation.',
-        type: 'select',
-        provider: LLMProvider.GEMINI,
-        options: Object.freeze([
-            Object.freeze({ value: GeminiModel.FLASH_PREVIEW,      label: 'Gemini 3 Flash' }),
-        ]),
-        secret: false,
-        placeholder: '',
-        default: GeminiModel.FLASH_PREVIEW,
-    }),
     Object.freeze({
         key: 'gemini_api_key',
         section: 'llm',

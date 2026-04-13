@@ -91,13 +91,15 @@ class g8eApp {
     setupEventListeners() {
         this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_AUTHSTATE, (data) => {
             this.setupUI();
-            if (data.isAuthenticated && data.webSessionId) {
-                this.sseConnectionManager.initializeConnection(data.webSessionId);
-            }
         });
 
         this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
-            console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired, initializing operatorPanel');
+            console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired, initializing SSE and operatorPanel');
+            const authState = window.authState.get();
+            if (authState.isAuthenticated && authState.webSessionId) {
+                this.sseConnectionManager.initializeConnection(authState.webSessionId);
+            }
+            
             if (this.operatorPanel) {
                 this.operatorPanel.init().catch(error => {
                     console.error('[g8eApp] Failed to initialize OperatorPanel:', error);
