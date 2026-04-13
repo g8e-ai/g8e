@@ -197,4 +197,5 @@ class ToolCallResponse:
     tool_name: str
     flattened_response: dict[str, Any]
     grounding: GroundingMetadata | None
+    tool_call_id: str | None = None
 

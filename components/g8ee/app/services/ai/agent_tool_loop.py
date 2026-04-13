@@ -468,6 +468,7 @@ async def execute_turn_tool_calls(
             tool_name=tool_result.tool_name,
             flattened_response=flattened,
             grounding=tool_result.grounding,
+            tool_call_id=fc.id,
         ))
 
     logger.info("[SEQ_EXEC] Completed %d tool call(s)", num_calls)
