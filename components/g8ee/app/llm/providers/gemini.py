@@ -54,7 +54,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from app.constants import GeminiRole
+from app.constants import GeminiRole, LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -413,7 +413,7 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from PrimaryLLMSettings."""
         from google.genai import types as genai_types
 
-        temperature = primary_llm_settings.temperature
+        temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         if model.startswith("gemini-3"):
             temperature = 1.0
 
@@ -424,8 +424,8 @@ class GeminiProvider(LLMProvider):
             "system_instruction": primary_llm_settings.system_instruction,
         }
 
-        if primary_llm_settings.max_output_tokens is not None:
-            gen_config_kwargs["max_output_tokens"] = primary_llm_settings.max_output_tokens
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        gen_config_kwargs["max_output_tokens"] = effective_max_tokens
 
         thinking_config = GeminiProvider._build_thinking_config_gemini3(primary_llm_settings.thinking_config, genai_types)
         
@@ -456,7 +456,7 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from AssistantLLMSettings."""
         from google.genai import types as genai_types
 
-        temperature = assistant_llm_settings.temperature
+        temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         if model.startswith("gemini-3"):
             temperature = 1.0
 
@@ -467,8 +467,8 @@ class GeminiProvider(LLMProvider):
             "system_instruction": assistant_llm_settings.system_instruction,
         }
 
-        if assistant_llm_settings.max_output_tokens is not None:
-            gen_config_kwargs["max_output_tokens"] = assistant_llm_settings.max_output_tokens
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        gen_config_kwargs["max_output_tokens"] = effective_max_tokens
 
         if assistant_llm_settings.response_format is not None:
             gen_config_kwargs["response_mime_type"] = "application/json"
@@ -484,7 +484,7 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from LiteLLMSettings."""
         from google.genai import types as genai_types
 
-        temperature = lite_llm_settings.temperature
+        temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         if model.startswith("gemini-3"):
             temperature = 1.0
 
@@ -495,8 +495,8 @@ class GeminiProvider(LLMProvider):
             "system_instruction": lite_llm_settings.system_instruction,
         }
 
-        if lite_llm_settings.max_output_tokens is not None:
-            gen_config_kwargs["max_output_tokens"] = lite_llm_settings.max_output_tokens
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        gen_config_kwargs["max_output_tokens"] = effective_max_tokens
 
         if lite_llm_settings.response_format is not None:
             gen_config_kwargs["response_mime_type"] = "application/json"

@@ -84,8 +84,8 @@ Title:"""
             logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
             assistant_settings = AssistantLLMSettings(
-                temperature=0.7,
-                max_output_tokens=100,
+                temperature=None,
+                max_output_tokens=None,
                 stop_sequences=["\n"],
                 system_instruction="",
             )

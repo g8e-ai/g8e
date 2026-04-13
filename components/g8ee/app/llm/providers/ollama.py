@@ -6,6 +6,7 @@ import httpx
 from ollama import AsyncClient, Message as OllamaMessage
 from ollama._client import BaseClient
 
+from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -139,11 +140,12 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        options = {}
-        if primary_llm_settings.temperature is not None:
-            options["temperature"] = primary_llm_settings.temperature
-        if primary_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = primary_llm_settings.max_output_tokens
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.stop_sequences:
@@ -194,11 +196,12 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        options = {}
-        if primary_llm_settings.temperature is not None:
-            options["temperature"] = primary_llm_settings.temperature
-        if primary_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = primary_llm_settings.max_output_tokens
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if primary_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.stop_sequences:
@@ -251,11 +254,12 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
 
-        options = {}
-        if assistant_llm_settings.temperature is not None:
-            options["temperature"] = assistant_llm_settings.temperature
-        if assistant_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = assistant_llm_settings.max_output_tokens
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.stop_sequences:
@@ -298,11 +302,12 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
 
-        options = {}
-        if assistant_llm_settings.temperature is not None:
-            options["temperature"] = assistant_llm_settings.temperature
-        if assistant_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = assistant_llm_settings.max_output_tokens
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if assistant_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.stop_sequences:
@@ -350,11 +355,12 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
 
-        options = {}
-        if lite_llm_settings.temperature is not None:
-            options["temperature"] = lite_llm_settings.temperature
-        if lite_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = lite_llm_settings.max_output_tokens
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.stop_sequences:
@@ -397,11 +403,12 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
 
-        options = {}
-        if lite_llm_settings.temperature is not None:
-            options["temperature"] = lite_llm_settings.temperature
-        if lite_llm_settings.max_output_tokens is not None:
-            options["num_predict"] = lite_llm_settings.max_output_tokens
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        options = {
+            "temperature": effective_temperature,
+            "num_predict": effective_max_tokens,
+        }
         if lite_llm_settings.top_p_nucleus_sampling is not None:
             options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.stop_sequences:
