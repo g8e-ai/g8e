@@ -53,7 +53,6 @@ class HealthService:
                 dependencies[name] = DependencyStatus(status=HealthStatus.UNHEALTHY, error=str(e))
 
         await _check("settings", get_g8ee_platform_settings(request_context))
-        dependencies["llm_provider"] = DependencyStatus(status=HealthStatus.HEALTHY)
         await _check("cache_aside_service", get_g8ee_cache_aside_service(request_context))
         await _check("investigation_data_service", get_g8ee_investigation_data_service(request_context))
         await _check("investigation_service", get_g8ee_investigation_service(request_context))

@@ -95,7 +95,7 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 | `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
 | `generate_content_lite` | `GenerateContentResponse` | Triage, eval |
 
-Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` (`LLMSettings`) — there is no platform-level LLM default. The `get_llm_provider(settings.llm)` factory constructs a provider from user settings on each request.
+Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` (`LLMSettings`) — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_assistant=False)` factory constructs a provider from user settings on each request. The `is_assistant` flag determines whether to use the `primary_provider` or `assistant_provider` configuration.
 
 `StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types.
 
@@ -348,10 +348,10 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 
 ### Model Roles
 
-| Role | Env Variable | Used For |
-|------|-------------|----------|
-| **Primary** | `LLM_MODEL` | All chat, reasoning, and operator-bound workflows |
-| **Assistant** | `LLM_ASSISTANT_MODEL` | Triage, risk analysis, memory updates, Tribunal, title generation |
+| Role | Env Variable | Provider Setting | Used For |
+|------|-------------|------------------|----------|
+| **Primary** | `LLM_MODEL` | `primary_provider` | All chat, reasoning, and operator-bound workflows |
+| **Assistant** | `LLM_ASSISTANT_MODEL` | `assistant_provider` | Triage, risk analysis, memory updates, Tribunal, title generation |
 
 The assistant model always has thinking disabled regardless of capability.
 

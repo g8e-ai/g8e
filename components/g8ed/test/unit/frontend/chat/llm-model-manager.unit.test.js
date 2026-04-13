@@ -30,7 +30,6 @@ const PRIMARY_MODELS = [
 ];
 
 const ASSISTANT_MODELS = [
-    { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite' },
     { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
 ];
 
@@ -39,7 +38,7 @@ function emitConfig(eventBus, overrides = {}) {
         primary_models: PRIMARY_MODELS,
         assistant_models: ASSISTANT_MODELS,
         default_primary_model: 'gemini-3.1-pro-preview',
-        default_assistant_model: 'gemini-3.1-flash-lite-preview',
+        default_assistant_model: 'gemini-3-flash-preview',
         ...overrides,
     });
 }
@@ -96,7 +95,7 @@ describe('LlmModelManager [UNIT]', () => {
             emitConfig(eventBus);
 
             expect(manager.defaultPrimaryModel).toBe('gemini-3.1-pro-preview');
-            expect(manager.defaultAssistantModel).toBe('gemini-3.1-flash-lite-preview');
+            expect(manager.defaultAssistantModel).toBe('gemini-3-flash-preview');
         });
 
         it('defaults to empty string when defaults are missing', () => {
@@ -116,7 +115,7 @@ describe('LlmModelManager [UNIT]', () => {
             emitConfig(eventBus);
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
-            expect(manager.selectedAssistantModel).toBe('gemini-3.1-flash-lite-preview');
+            expect(manager.selectedAssistantModel).toBe('gemini-3-flash-preview');
         });
 
         it('preserves selected models when already set', () => {
@@ -143,7 +142,7 @@ describe('LlmModelManager [UNIT]', () => {
             emitConfig(eventBus);
 
             expect(manager.getPrimaryModel()).toBe('gemini-3.1-pro-preview');
-            expect(manager.getAssistantModel()).toBe('gemini-3.1-flash-lite-preview');
+            expect(manager.getAssistantModel()).toBe('gemini-3-flash-preview');
         });
 
         it('returns empty string before any config', () => {
@@ -173,7 +172,7 @@ describe('LlmModelManager [UNIT]', () => {
             eventBus.emit(EventType.CASE_SWITCHED, { investigation: {} });
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
-            expect(manager.selectedAssistantModel).toBe('gemini-3.1-flash-lite-preview');
+            expect(manager.selectedAssistantModel).toBe('gemini-3-flash-preview');
         });
     });
 
@@ -186,7 +185,7 @@ describe('LlmModelManager [UNIT]', () => {
             eventBus.emit(EventType.CASE_CLEARED);
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
-            expect(manager.selectedAssistantModel).toBe('gemini-3.1-flash-lite-preview');
+            expect(manager.selectedAssistantModel).toBe('gemini-3-flash-preview');
         });
     });
 });

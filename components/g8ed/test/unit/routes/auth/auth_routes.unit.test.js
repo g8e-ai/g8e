@@ -213,7 +213,7 @@ describe('AuthRoutes Unit Tests', () => {
                 mockSetupService.performFirstRunSetup.mockResolvedValue({ id: 'admin-id', email: 'admin@g8e.local' });
                 mockPasskeyAuthService.generateRegistrationChallenge.mockResolvedValue({ challenge: 'setup-challenge' });
 
-                const userSettings = { llm_provider: LLMProvider.GEMINI };
+                const userSettings = { llm_primary_provider: LLMProvider.GEMINI };
 
                 const res = await request(app)
                     .post('/api/auth/register')

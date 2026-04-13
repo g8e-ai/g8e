@@ -812,11 +812,11 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.openai_endpoint).toBe('https://api.openai.com/v1');
         });
 
-        it('derives llm_provider from selected primary model', () => {
+        it('derives llm_primary_provider from selected primary model', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
-            expect(settings.llm_provider).toBe(LLMProvider.GEMINI);
+            expect(settings.llm_primary_provider).toBe(LLMProvider.GEMINI);
             expect(settings.llm_model).toBeDefined();
             expect(settings.llm_assistant_model).toBeDefined();
         });

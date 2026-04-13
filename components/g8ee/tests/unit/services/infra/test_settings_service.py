@@ -41,7 +41,7 @@ class TestSettingsService:
         # Mock user document
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OPENAI,
+                primary_provider=LLMProvider.OPENAI,
                 primary_model="gpt-4",
                 openai_api_key="sk-user-key"
             )
@@ -57,7 +57,7 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
         
-        assert settings.llm.provider == LLMProvider.OPENAI
+        assert settings.llm.primary_provider == LLMProvider.OPENAI
         assert settings.llm.primary_model == "gpt-4"
         assert settings.llm.openai_api_key == "sk-user-key"
         
@@ -97,7 +97,7 @@ class TestSettingsService:
         settings = await service.get_user_settings(user_id)
         
         # LLM settings should be empty (no platform fallback)
-        assert settings.llm.provider == LLMProvider.OLLAMA
+        assert settings.llm.primary_provider == LLMProvider.OLLAMA
         assert settings.llm.openai_api_key is None
         assert settings.llm.anthropic_api_key is None
         assert settings.llm.gemini_api_key is None
@@ -123,7 +123,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OLLAMA,
+                primary_provider=LLMProvider.OLLAMA,
                 primary_model="gemma3:27b",
             )
         )
@@ -152,7 +152,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OLLAMA,
+                primary_provider=LLMProvider.OLLAMA,
                 primary_model="gemma3:27b",
                 llm_max_tokens=2048
             )
@@ -184,7 +184,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OLLAMA,
+                primary_provider=LLMProvider.OLLAMA,
                 primary_model="gemma3:27b",
             )
         )
@@ -214,7 +214,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OLLAMA,
+                primary_provider=LLMProvider.OLLAMA,
                 primary_model="gemma3:27b",
                 llm_command_gen_passes=5,
                 llm_command_gen_enabled=False,
@@ -277,7 +277,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.OLLAMA,
+                primary_provider=LLMProvider.OLLAMA,
                 primary_model="gemma3:27b"
             )
         )
@@ -293,4 +293,4 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
-        assert settings.llm.provider == LLMProvider.OLLAMA
+        assert settings.llm.primary_provider == LLMProvider.OLLAMA

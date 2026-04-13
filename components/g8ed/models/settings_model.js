@@ -29,10 +29,26 @@ export const USER_SETTINGS = Object.freeze([
     // LLM Provider
     // -------------------------------------------------------------------------
     Object.freeze({
-        key: 'llm_provider',
+        key: 'llm_primary_provider',
         section: 'llm',
-        label: 'LLM Provider',
-        description: 'AI provider type.',
+        label: 'Primary LLM Provider',
+        description: 'Main AI provider type.',
+        type: 'select',
+        options: Object.freeze([
+            Object.freeze({ value: LLMProvider.OPENAI,    label: 'OpenAI' }),
+            Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
+            Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
+            Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+        ]),
+        secret: false,
+        placeholder: '',
+        default: '',
+    }),
+    Object.freeze({
+        key: 'llm_assistant_provider',
+        section: 'llm',
+        label: 'Assistant LLM Provider',
+        description: 'Assistant AI provider type.',
         type: 'select',
         options: Object.freeze([
             Object.freeze({ value: LLMProvider.OPENAI,    label: 'OpenAI' }),
@@ -163,7 +179,6 @@ export const USER_SETTINGS = Object.freeze([
         options: Object.freeze([
             Object.freeze({ value: GeminiModel.PRO_PREVIEW,        label: 'Gemini 3.1 Pro' }),
             Object.freeze({ value: GeminiModel.FLASH_PREVIEW,      label: 'Gemini 3 Flash Preview' }),
-            Object.freeze({ value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' }),
         ]),
         secret: false,
         placeholder: '',
@@ -177,7 +192,6 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.GEMINI,
         options: Object.freeze([
-            Object.freeze({ value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' }),
             Object.freeze({ value: GeminiModel.FLASH_PREVIEW,      label: 'Gemini 3 Flash' }),
         ]),
         secret: false,
@@ -496,6 +510,61 @@ export const PLATFORM_SETTINGS = Object.freeze([
 // Validation Functions - Model Level Validation
 // ---------------------------------------------------------------------------
 
+const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
+    [LLMProvider.OPENAI]: ['openai_api_key'],
+    [LLMProvider.OLLAMA]: ['ollama_api_key'],
+    [LLMProvider.GEMINI]: ['gemini_api_key'],
+    [LLMProvider.ANTHROPIC]: ['anthropic_api_key'],
+});
+
+/**
+ * Validates cross-field dependencies for provider-specific credentials
+ * @param {Object} updates - Settings updates to validate
+ * @returns {Array} - Array of error messages for cross-field validation failures
+ */
+function validateCrossFieldDependencies(updates) {
+    const errors = [];
+
+    const primaryProvider = updates.llm_primary_provider;
+    const assistantProvider = updates.llm_assistant_provider;
+
+    if (primaryProvider && primaryProvider !== '') {
+        const required = PROVIDER_CREDENTIAL_REQUIREMENTS[primaryProvider];
+        if (required) {
+            for (const credField of required) {
+                if (!updates[credField] || updates[credField].trim() === '') {
+                    errors.push(`${credField} is required when ${primaryProvider} is set as primary provider`);
+                }
+            }
+        }
+    }
+
+    if (assistantProvider && assistantProvider !== '') {
+        const required = PROVIDER_CREDENTIAL_REQUIREMENTS[assistantProvider];
+        if (required) {
+            for (const credField of required) {
+                if (!updates[credField] || updates[credField].trim() === '') {
+                    errors.push(`${credField} is required when ${assistantProvider} is set as assistant provider`);
+                }
+            }
+        }
+    }
+
+    if (updates.vertex_search_enabled === true) {
+        if (!updates.vertex_search_project_id || updates.vertex_search_project_id.trim() === '') {
+            errors.push('vertex_search_project_id is required when vertex_search_enabled is true');
+        }
+        if (!updates.vertex_search_engine_id || updates.vertex_search_engine_id.trim() === '') {
+            errors.push('vertex_search_engine_id is required when vertex_search_enabled is true');
+        }
+        if (!updates.vertex_search_api_key || updates.vertex_search_api_key.trim() === '') {
+            errors.push('vertex_search_api_key is required when vertex_search_enabled is true');
+        }
+    }
+
+    return errors;
+}
+
 /**
  * Validates user settings updates against USER_SETTINGS schema
  * @param {Object} updates - Settings updates to validate
@@ -521,6 +590,11 @@ export function validateUserSettings(updates) {
         }
 
         valid[key] = value;
+    }
+
+    const crossFieldErrors = validateCrossFieldDependencies(updates);
+    for (const error of crossFieldErrors) {
+        errors.push(error);
     }
 
     return { valid, invalid, errors };
@@ -566,9 +640,10 @@ export const SETTINGS_PAGE_SECTIONS = Object.freeze([
 // ---------------------------------------------------------------------------
 
 const LLM_KEY_MAP = Object.freeze({
-    llm_provider:           'provider',
-    llm_model:              'llm_model',
-    llm_assistant_model:    'llm_assistant_model',
+    llm_primary_provider:   'primary_provider',
+    llm_assistant_provider: 'assistant_provider',
+    llm_model:              'primary_model',
+    llm_assistant_model:    'assistant_model',
     openai_endpoint:        'openai_endpoint',
     openai_api_key:         'openai_api_key',
     ollama_endpoint:        'ollama_endpoint',
@@ -602,8 +677,8 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
  * Convert flat UI settings into the nested document shape
  * expected by g8ee's UserSettingsDocument.
  *
- * Input:  { llm_provider: 'gemini', llm_model: '...', vertex_search_enabled: true, ... }
- * Output: { llm: { provider: 'gemini', llm_model: '...' }, search: { enabled: true }, eval_judge: {} }
+ * Input:  { llm_primary_provider: 'gemini', llm_model: '...', vertex_search_enabled: true, ... }
+ * Output: { llm: { primary_provider: 'gemini', primary_model: '...' }, search: { enabled: true }, eval_judge: {} }
  *
  * @param {Object} flat - Flat key/value pairs from UI
  * @returns {{ llm: Object, search: Object, eval_judge: Object }}
@@ -626,15 +701,33 @@ export function structureUserSettings(flat) {
     return { llm, search, eval_judge: evalJudge };
 }
 
-const REVERSE_LLM_MAP    = Object.freeze(Object.fromEntries(Object.entries(LLM_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_LLM_MAP    = Object.freeze({
+    primary_provider: 'llm_primary_provider',
+    assistant_provider: 'llm_assistant_provider',
+    primary_model: 'llm_model',
+    assistant_model: 'llm_assistant_model',
+    openai_endpoint: 'openai_endpoint',
+    openai_api_key: 'openai_api_key',
+    ollama_endpoint: 'ollama_endpoint',
+    ollama_api_key: 'ollama_api_key',
+    gemini_api_key: 'gemini_api_key',
+    anthropic_endpoint: 'anthropic_endpoint',
+    anthropic_api_key: 'anthropic_api_key',
+    llm_temperature: 'llm_temperature',
+    llm_max_tokens: 'llm_max_tokens',
+    llm_command_gen_enabled: 'llm_command_gen_enabled',
+    llm_command_gen_verifier: 'llm_command_gen_verifier',
+    llm_command_gen_passes: 'llm_command_gen_passes',
+    llm_command_gen_temp: 'llm_command_gen_temp',
+});
 const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
 const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));
 
 /**
  * Flatten nested user settings back to flat UI keys.
  *
- * Input:  { llm: { provider: 'gemini', ... }, search: { enabled: true }, eval_judge: {} }
- * Output: { llm_provider: 'gemini', ..., vertex_search_enabled: true, ... }
+ * Input:  { llm: { primary_provider: 'gemini', ... }, search: { enabled: true }, eval_judge: {} }
+ * Output: { llm_primary_provider: 'gemini', ..., vertex_search_enabled: true, ... }
  *
  * @param {{ llm?: Object, search?: Object, eval_judge?: Object }} nested
  * @returns {Object}

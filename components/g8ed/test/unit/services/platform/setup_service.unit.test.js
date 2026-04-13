@@ -104,14 +104,14 @@ describe('SetupService [UNIT]', () => {
             const result = await service.performFirstRunSetup({
                 email: 'admin@test.com',
                 name: 'Admin',
-                userSettings: { llm_provider: 'gemini' },
+                userSettings: { llm_primary_provider: 'gemini' },
                 req: mockReq
             });
 
             expect(result).toBe(mockUser);
             expect(userService.findUserByEmail).toHaveBeenCalledWith('admin@test.com');
             expect(userService.createUser).toHaveBeenCalled();
-            expect(settingsService.updateUserSettings).toHaveBeenCalledWith('u1', { llm_provider: 'gemini' });
+            expect(settingsService.updateUserSettings).toHaveBeenCalledWith('u1', { llm_primary_provider: 'gemini' });
         });
 
         it('reuses existing user on retry (idempotent)', async () => {
@@ -122,14 +122,14 @@ describe('SetupService [UNIT]', () => {
             const result = await service.performFirstRunSetup({
                 email: 'admin@test.com',
                 name: 'Admin',
-                userSettings: { llm_provider: 'anthropic' },
+                userSettings: { llm_primary_provider: 'anthropic' },
                 req: mockReq
             });
 
             expect(result).toBe(existingUser);
             expect(userService.findUserByEmail).toHaveBeenCalledWith('admin@test.com');
             expect(userService.createUser).not.toHaveBeenCalled();
-            expect(settingsService.updateUserSettings).toHaveBeenCalledWith('u1', { llm_provider: 'anthropic' });
+            expect(settingsService.updateUserSettings).toHaveBeenCalledWith('u1', { llm_primary_provider: 'anthropic' });
         });
 
         it('saves platform settings with setup_complete false and derived passkey fields only', async () => {

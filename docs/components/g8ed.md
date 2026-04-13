@@ -453,8 +453,9 @@ GET /  →  hasAnyUsers() returns false  →  redirect to /setup
   Step 4 — AI Providers
     User enters API keys for one or more providers (Gemini / Anthropic / OpenAI / Ollama)
     Ollama uses an endpoint URL instead of an API key
-    Two unified dropdowns (Primary Model / Assistant Model) populate with models from all configured providers
-    The active llm_provider is derived from whichever provider the selected primary model belongs to
+    The user selects separate providers for **Primary Model** (complex reasoning) and **Assistant Model** (triage, memory).
+    Two unified dropdowns (Primary Model / Assistant Model) populate with models from the selected providers.
+    The `primary_provider` and `assistant_provider` settings are derived from these selections.
 
   Step 5 — Finish
     GET /api/setup/config   →  preflight check + env var pre-fill

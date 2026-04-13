@@ -127,7 +127,7 @@ class MemoryGenerationService:
             logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
             return
 
-        async with get_llm_provider(settings.llm) as provider:
+        async with get_llm_provider(settings.llm, is_assistant=True) as provider:
             config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
                 temperature=None,

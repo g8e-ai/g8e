@@ -212,7 +212,7 @@ def _resolve_model(llm: LLMSettings) -> str:
     if llm.primary_model:
         return llm.primary_model
     raise TribunalModelNotConfiguredError(
-        provider=llm.provider,
+        provider=llm.assistant_provider,
         original_command="",
     )
 
@@ -664,7 +664,7 @@ async def generate_command(
 
     logger.info(
         "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d",
-        settings.llm.provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
+        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
     )
 
     await emitter.emit(
@@ -680,11 +680,11 @@ async def generate_command(
     )
 
     try:
-        provider_ctx = get_llm_provider(settings.llm)
+        provider_ctx = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
         logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
         raise TribunalProviderUnavailableError(
-            provider=settings.llm.provider,
+            provider=settings.llm.assistant_provider,
             error=str(exc),
             original_command=original_command,
         ) from exc

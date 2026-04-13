@@ -16,8 +16,9 @@ LLM Provider Factory
 
 One entry point:
 
-  get_llm_provider(settings) — constructs an LLMProvider from the given
-      LLMSettings. The provider type is always settings.provider; the model
+  get_llm_provider(settings, is_assistant=False) — constructs an LLMProvider from the given
+      LLMSettings. The provider type is settings.primary_provider by default, or
+      settings.assistant_provider when is_assistant=True. The model
       is passed per-call to generate_content_stream_primary /
       generate_content_assistant. Callers MUST use ``async with`` to
       ensure the provider is closed::
@@ -86,7 +87,7 @@ def reset_settings() -> None:
     _search_settings = None
 
 
-def get_llm_provider(settings: LLMSettings) -> LLMProviderBase:
+def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMProviderBase:
     """Return a configured LLMProvider instance based on settings.
 
     SSL strategy:
@@ -99,7 +100,7 @@ def get_llm_provider(settings: LLMSettings) -> LLMProviderBase:
     """
     from app.errors import ConfigurationError
 
-    provider_type = settings.provider
+    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
 
     platform_settings = get_settings()
     ca_cert_path = platform_settings.ca_cert_path if platform_settings else None

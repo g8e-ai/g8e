@@ -354,9 +354,9 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'newadmin@example.com',
                 name: 'New Admin',
                 settings: {
-                    llm_provider: LLMProvider.GEMINI,
+                    llm_primary_provider: LLMProvider.GEMINI,
                     llm_model: GeminiModel.PRO_PREVIEW,
-                    llm_assistant_model: GeminiModel.FLASH_LITE_PREVIEW,
+                    llm_assistant_model: GeminiModel.FLASH_PREVIEW,
                     gemini_api_key: 'test-api-key-12345'
                 }
             };
@@ -388,7 +388,7 @@ describe('Setup Flow End-to-End Tests', () => {
 
             // Verify user settings were saved
             const userSettings = await settingsService.getUserSettings(response.body.user_id);
-            expect(userSettings.llm_provider).toBe(userData.settings.llm_provider);
+            expect(userSettings.llm_primary_provider).toBe(userData.settings.llm_primary_provider);
             expect(userSettings.llm_model).toBe(userData.settings.llm_model);
         });
 
@@ -396,7 +396,7 @@ describe('Setup Flow End-to-End Tests', () => {
             const userData = {
                 email: 'duplicate@example.com',
                 name: 'First User',
-                settings: { llm_provider: 'gemini', gemini_api_key: 'test-key' }
+                settings: { llm_primary_provider: 'gemini', gemini_api_key: 'test-key' }
             };
 
             const first = await request(app)
@@ -421,7 +421,7 @@ describe('Setup Flow End-to-End Tests', () => {
             const userData = {
                 email: 'postsetup@example.com',
                 name: 'Post-Setup User',
-                settings: { llm_provider: 'gemini', gemini_api_key: 'test-key' }
+                settings: { llm_primary_provider: 'gemini', gemini_api_key: 'test-key' }
             };
 
             // Complete setup first
@@ -469,7 +469,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'passkey@example.com',
                 name: 'Passkey User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };
@@ -499,7 +499,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'complete@example.com',
                 name: 'Complete User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };
@@ -562,7 +562,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'chataccess@example.com',
                 name: 'Chat Access User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };
@@ -648,7 +648,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'invalidpasskey@example.com',
                 name: 'Invalid Passkey User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };
@@ -686,7 +686,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'concurrent@example.com',
                 name: 'Concurrent User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };
@@ -719,7 +719,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: '  sanitize@example.com  ',
                 name: '  <script>alert("xss")</script>  ',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: '  test-key-with-spaces  '
                 }
             };
@@ -744,7 +744,7 @@ describe('Setup Flow End-to-End Tests', () => {
                 email: 'ratelimit@example.com',
                 name: 'Rate Limit User',
                 settings: {
-                    llm_provider: 'gemini',
+                    llm_primary_provider: 'gemini',
                     gemini_api_key: 'test-key'
                 }
             };

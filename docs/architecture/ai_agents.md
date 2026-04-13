@@ -637,7 +637,7 @@ The resolved operator's OS context (OS name, shell, working directory) is passed
 
 #### Tribunal Model Resolution
 
-The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **inferred from the model name** so that the correct API endpoint and credentials are used. This decouples the Tribunal model from the primary chat provider: e.g. a user with `provider=gemini` and `assistant_model=gemma4:e4b` will route Tribunal calls to the Ollama endpoint, not Gemini.
+The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **sourced from the `assistant_provider` setting** (falling back to `primary_provider`) if the chosen model is the assistant model. This decouples the Tribunal model from the primary chat provider: e.g. a user with `primary_provider=gemini` and `assistant_provider=ollama` with `assistant_model=gemma4:e4b` will route Tribunal calls to the Ollama endpoint, not Gemini.
 
 The Tribunal implements a **Stochastic Multi-Agent Consensus** pattern using three distinct roles:
 

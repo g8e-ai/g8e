@@ -99,6 +99,19 @@ func (m *SecretManager) InitPlatformSettings() error {
 			return fmt.Errorf("failed to create platform_settings document: %w", err)
 		}
 		m.logger.Info("[SecretManager] platform_settings document created with security secrets")
+
+		cacheKey := "g8e:cache:doc:settings:platform_settings"
+		cacheTTL := 3600
+		_, err = m.db.Exec(
+			`INSERT INTO kv_store (key, value, created_at, expires_at)
+			 VALUES (?, ?, ?, ?)`,
+			cacheKey, string(dataJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
+		)
+		if err != nil {
+			m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
+		} else {
+			m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
+		}
 	} else {
 		var dataJSON string
 		err := m.db.QueryRow(
@@ -130,6 +143,20 @@ func (m *SecretManager) InitPlatformSettings() error {
 					nowStr := sqliteutil.FormatTimestamp(now)
 					m.db.Exec("UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
 						string(updatedJSON), nowStr, "settings", "platform_settings")
+
+					cacheKey := "g8e:cache:doc:settings:platform_settings"
+					cacheTTL := 3600
+					_, err = m.db.Exec(
+						`INSERT INTO kv_store (key, value, created_at, expires_at)
+						 VALUES (?, ?, ?, ?)
+						 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
+						cacheKey, string(updatedJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
+					)
+					if err != nil {
+						m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings after update", "error", err)
+					} else {
+						m.logger.Info("[SecretManager] platform_settings cache warmed after update", "key", cacheKey, "ttl", cacheTTL)
+					}
 				}
 
 				if internalAuthToken == "" {

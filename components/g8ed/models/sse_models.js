@@ -33,15 +33,32 @@ export class ConnectionEstablishedEvent extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// OperatorListData (operator list payload for keepalive events)
+// Schema matches OperatorService.getUserOperators() return shape
+// ---------------------------------------------------------------------------
+
+export class OperatorListData extends G8eBaseModel {
+    static fields = {
+        type:         { type: F.string, required: true },
+        operators:    { type: F.array,  default: () => [] },
+        total_count:  { type: F.number, default: 0 },
+        active_count: { type: F.number, default: 0 },
+        used_slots:   { type: F.number, default: 0 },
+        max_slots:    { type: F.number, default: 0 },
+        timestamp:    { type: F.date,   default: () => now() },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // KeepaliveEvent
 // ---------------------------------------------------------------------------
 
 export class KeepaliveEvent extends G8eBaseModel {
     static fields = {
-        type:          { type: F.string, required: true },
-        timestamp:     { type: F.date,   default: () => now() },
-        serverTime:    { type: F.number, default: null },
-        operator_list: { type: F.any,    default: null },
+        type:          { type: F.string,  required: true },
+        timestamp:     { type: F.date,    default: () => now() },
+        serverTime:    { type: F.number,  default: null },
+        operator_list: { type: F.object,  model: OperatorListData, default: null },
     };
 }
 

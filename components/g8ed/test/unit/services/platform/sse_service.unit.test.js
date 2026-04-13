@@ -299,7 +299,7 @@ describe('SSEService [UNIT]', () => {
 
         beforeEach(() => {
             mockSettingsService = {
-                getPlatformSettings: vi.fn().mockResolvedValue({ llm_provider: LLMProvider.OPENAI, llm_model: 'gpt-4' }),
+                getPlatformSettings: vi.fn().mockResolvedValue({ llm_primary_provider: LLMProvider.OPENAI, llm_model: 'gpt-4' }),
                 getUserSettings: vi.fn().mockResolvedValue({})
             };
             mockInternalHttpClient = {

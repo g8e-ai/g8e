@@ -130,8 +130,8 @@ class TriageAgent:
             )
 
         try:
-            async with get_llm_provider(request.settings.llm) as provider:
-                model = request.model_override or request.settings.llm.primary_model
+            async with get_llm_provider(request.settings.llm, is_assistant=True) as provider:
+                model = request.model_override or request.settings.llm.assistant_model
 
                 if not model:
                     logger.warning("[TRIAGE] No model available, defaulting to complex")

@@ -99,7 +99,7 @@ class MCPGatewayService:
             # G8eeUserSettings requires llm field
             from app.constants import LLMProvider
             from app.models.settings import LLMSettings
-            default_settings = G8eeUserSettings(llm=LLMSettings(provider=LLMProvider.OLLAMA))
+            default_settings = G8eeUserSettings(llm=LLMSettings(primary_provider=LLMProvider.OLLAMA))
             
             result = await asyncio.wait_for(
                 self._tool_service.execute_tool_call(

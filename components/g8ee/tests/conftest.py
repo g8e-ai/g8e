@@ -183,7 +183,7 @@ def _has_llm_credentials(llm: LLMSettings | None) -> bool:
     """Return True if the given LLMSettings has the credentials it needs."""
     if llm is None:
         return False
-    provider = llm.provider
+    provider = llm.primary_provider
     if provider == LLMProvider.GEMINI:
         return bool(llm.gemini_api_key)
     if provider == LLMProvider.ANTHROPIC:
@@ -329,7 +329,7 @@ def pytest_configure(config):
 
     env_llm = _llm_settings_from_env()
     if env_llm is not None:
-        logger.info(f"Overriding LLM settings from env: provider={env_llm.provider}")
+        logger.info(f"Overriding LLM settings from env: provider={env_llm.primary_provider}")
         set_llm_settings(env_llm)
 
     env_search = _web_search_settings_from_env()
@@ -365,7 +365,7 @@ def pytest_collection_modifyitems(config, items):
 
     logger.info(f"Collection: settings={settings is not None}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
     if llm:
-        logger.info(f"LLM Config: provider={llm.provider}, key_set={bool(llm.gemini_api_key)}")
+        logger.info(f"LLM Config: provider={llm.primary_provider}, key_set={bool(llm.gemini_api_key)}")
 
     skip_no_llm = pytest.mark.skip(reason=f"ai_integration tests require LLM flags. has_creds={has_llm_credentials}")
     skip_no_vertex = pytest.mark.skip(reason="requires_api tests require Vertex AI Search credentials (VERTEX_SEARCH_ENABLED, VERTEX_SEARCH_PROJECT_ID, VERTEX_SEARCH_ENGINE_ID, VERTEX_SEARCH_API_KEY)")

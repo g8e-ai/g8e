@@ -556,11 +556,6 @@ class TestHealthCheckDependencies:
         assert "cache_aside_service" in health.unhealthy_dependencies
         assert "investigation_service" in health.unhealthy_dependencies
 
-    async def test_llm_provider_always_healthy(self, healthy_request):
-        health = await health_check_dependencies(healthy_request)
-
-        assert health.dependencies["llm_provider"].status == HealthStatus.HEALTHY
-
     async def test_timestamp_is_present(self, healthy_request):
         health = await health_check_dependencies(healthy_request)
 

@@ -234,7 +234,7 @@ class TestG8eeSettingsOverlayIntegration:
         # overlaid on schema defaults, but we want to ensure it uses the user document if present.
         user_settings = await settings_service.get_user_settings(user_id)
         
-        assert user_settings.llm.provider == "openai"
+        assert user_settings.llm.primary_provider == "openai"
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
@@ -325,6 +325,6 @@ class TestG8eeSettingsOverlayIntegration:
         user_settings = await settings_service.get_user_settings(user_id)
         
         # LLM settings are user-specific only; missing user doc returns empty LLMSettings with default OLLAMA
-        assert user_settings.llm.provider == LLMProvider.OLLAMA
+        assert user_settings.llm.primary_provider == LLMProvider.OLLAMA
         assert user_settings.llm.primary_model is None
         assert user_settings.llm.gemini_api_key is None
