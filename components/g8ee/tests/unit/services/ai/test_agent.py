@@ -165,7 +165,6 @@ class TestStreamResponseRetryLoop:
 
         chunks = []
         async for chunk in agent.stream_response(
-            message="test",
             contents=[],
             generation_config=gen_config,
             model_name="test-model",
@@ -205,7 +204,6 @@ class TestStreamResponseRetryLoop:
 
         chunks = []
         async for chunk in agent.stream_response(
-            message="test",
             contents=[],
             generation_config=gen_config,
             model_name="test-model",
@@ -254,7 +252,6 @@ class TestStreamResponseRetryLoop:
 
             chunks = []
             async for chunk in agent.stream_response(
-                message="test",
                 contents=[],
                 generation_config=gen_config,
                 model_name="test-model",
@@ -290,7 +287,6 @@ class TestStreamResponseRetryLoop:
 
         chunks = []
         async for chunk in agent.stream_response(
-            message="test",
             contents=[],
             generation_config=gen_config,
             model_name="test-model",
@@ -341,7 +337,6 @@ class TestStreamResponseErrorHandling:
 
         chunks = []
         async for chunk in agent.stream_response(
-            message="test",
             contents=[],
             generation_config=gen_config,
             model_name="test-model",
@@ -377,7 +372,6 @@ class TestStreamResponseErrorHandling:
 
         chunks = []
         async for chunk in agent.stream_response(
-            message="test",
             contents=[],
             generation_config=gen_config,
             model_name="test-model",
