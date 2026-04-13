@@ -138,7 +138,8 @@ class LLMSettings(G8eBaseModel):
         coerce_numbers_from_str=True,
     )
 
-    provider: LLMProvider = Field(default=LLMProvider.OLLAMA)
+    primary_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_primary_provider", serialization_alias="llm_primary_provider", validation_alias="provider")
+    assistant_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_assistant_provider", serialization_alias="llm_assistant_provider")
 
     primary_model: str | None = Field(None, alias="llm_model")
     assistant_model: str | None = Field(None, alias="llm_assistant_model")
@@ -168,15 +169,26 @@ class LLMSettings(G8eBaseModel):
         return self.assistant_model or None
 
     @property
-    def endpoint(self) -> str | None:
-        """Return the active provider endpoint."""
+    def primary_endpoint(self) -> str | None:
+        """Return the active primary provider endpoint."""
         endpoints = {
             LLMProvider.OPENAI: self.openai_endpoint,
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
         }
-        return endpoints.get(self.provider)
+        return endpoints.get(self.primary_provider)
+
+    @property
+    def assistant_endpoint(self) -> str | None:
+        """Return the active assistant provider endpoint."""
+        endpoints = {
+            LLMProvider.OPENAI: self.openai_endpoint,
+            LLMProvider.ANTHROPIC: self.anthropic_endpoint,
+            LLMProvider.OLLAMA: self.ollama_endpoint,
+            LLMProvider.GEMINI: None,
+        }
+        return endpoints.get(self.assistant_provider)
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""

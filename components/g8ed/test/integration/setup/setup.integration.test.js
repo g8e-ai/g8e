@@ -153,9 +153,9 @@ describe('Setup Integration Tests', () => {
                 email: 'admin@example.com',
                 name: 'Platform Admin',
                 userSettings: {
-                    llm_provider: LLMProvider.GEMINI,
+                    llm_primary_provider: LLMProvider.GEMINI,
                     llm_model: GeminiModel.PRO_PREVIEW,
-                    llm_assistant_model: GeminiModel.FLASH_LITE_PREVIEW,
+                    llm_assistant_model: GeminiModel.FLASH_PREVIEW,
                     gemini_api_key: 'test-api-key-12345'
                 }
             };
@@ -200,7 +200,7 @@ describe('Setup Integration Tests', () => {
 
             // Verify user settings were saved
             const userSettings = await settingsService.getUserSettings(user.id);
-            expect(userSettings.llm_provider).toBe(setupData.userSettings.llm_provider);
+            expect(userSettings.llm_primary_provider).toBe(setupData.userSettings.llm_primary_provider);
             expect(userSettings.llm_model).toBe(setupData.userSettings.llm_model);
             expect(userSettings.llm_assistant_model).toBe(setupData.userSettings.llm_assistant_model);
             expect(userSettings.gemini_api_key).toBe(setupData.userSettings.gemini_api_key);
@@ -411,7 +411,7 @@ describe('Setup Integration Tests', () => {
             const user = await setupService.performFirstRunSetup({
                 email: 'session@example.com',
                 name: 'Session User',
-                userSettings: { llm_provider: 'gemini' },
+                userSettings: { llm_primary_provider: 'gemini' },
                 req: { get: vi.fn(), protocol: 'https', hostname: 'localhost' }
             });
             cleanup.trackUser(user.id);
@@ -523,7 +523,7 @@ describe('Setup Integration Tests', () => {
                 email: 'persist@example.com',
                 name: 'Persist User',
                 userSettings: {
-                    llm_provider: 'anthropic',
+                    llm_primary_provider: 'anthropic',
                     anthropic_api_key: 'sk-test-key-123'
                 },
                 req: { get: vi.fn(() => null), protocol: 'https', hostname: 'localhost' }
@@ -531,7 +531,7 @@ describe('Setup Integration Tests', () => {
             cleanup.trackUser(user.id);
 
             const savedSettings = await settingsService.getUserSettings(user.id);
-            expect(savedSettings.llm_provider).toBe('anthropic');
+            expect(savedSettings.llm_primary_provider).toBe('anthropic');
             expect(savedSettings.anthropic_api_key).toBe('sk-test-key-123');
         });
 

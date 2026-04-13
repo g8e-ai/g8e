@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { now } from '../../models/base.js';
-import { ConnectionEstablishedEvent, KeepaliveEvent } from '../../models/sse_models.js';
+import { ConnectionEstablishedEvent, KeepaliveEvent, OperatorListData } from '../../models/sse_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { EventType, SSE_KEEPALIVE_INTERVAL_MS } from '../../constants/events.js';
@@ -153,7 +153,8 @@ export function createSSERouter({
                 try {
                     let operatorList = null;
                     try {
-                        operatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                        const rawOperatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                        operatorList = rawOperatorList ? OperatorListData.parse(rawOperatorList) : null;
                     } catch (e) {
                         logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
                     }

@@ -25,7 +25,7 @@ Test flow:
 4. Extract response text from GenerateContentResponse
 5. Grade with EvalJudge
 
-Skips if settings.llm.provider != LLMProvider.OLLAMA.
+Skips if settings.llm.primary_provider != LLMProvider.OLLAMA.
 """
 
 import os

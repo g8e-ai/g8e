@@ -35,7 +35,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
 
     it('returns platform settings when no user_id is provided', async () => {
         const platformSettings = {
-            llm_provider: LLMProvider.GEMINI,
+            llm_primary_provider: LLMProvider.GEMINI,
             llm_model: GeminiModel.PRO_PREVIEW
         };
 
@@ -47,7 +47,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
         });
 
         const result = await settingsService.getPlatformSettings();
-        expect(result.llm_provider).toBe(LLMProvider.GEMINI);
+        expect(result.llm_primary_provider).toBe(LLMProvider.GEMINI);
         expect(result.llm_model).toBe(GeminiModel.PRO_PREVIEW);
     });
 
@@ -67,7 +67,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
         });
 
         const result = await settingsService.getUserSettings(userId);
-        expect(result.llm_provider).toBe(LLMProvider.OPENAI);
+        expect(result.llm_primary_provider).toBe(LLMProvider.OPENAI);
         expect(result.llm_model).toBe(OpenAIModel.GPT_4O);
     });
 

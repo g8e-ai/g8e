@@ -1,6 +1,6 @@
 {
   "llm": {
-    "G8E_LLM_PROVIDER": "llm.provider",
+    "G8E_LLM_PROVIDER": "llm.primary_provider",
     "G8E_LLM_PRIMARY_MODEL": "llm.primary_model",
     "G8E_LLM_ASSISTANT_MODEL": "llm.assistant_model",
     "G8E_LLM_OPENAI_ENDPOINT": "llm.openai_endpoint",

@@ -131,13 +131,20 @@ class SettingsService:
         """
         llm = user_settings.llm
         
-        # Validate provider
-        if llm.provider:
+        # Validate providers
+        if llm.primary_provider:
             try:
-                LLMProvider(llm.provider)
+                LLMProvider(llm.primary_provider)
             except ValueError:
-                self._logger.warning(f"Invalid LLM provider in settings: {llm.provider}. Falling back to default.")
-                llm.provider = LLMProvider.OLLAMA
+                self._logger.warning(f"Invalid primary LLM provider in settings: {llm.primary_provider}. Falling back to default.")
+                llm.primary_provider = LLMProvider.OLLAMA
+
+        if llm.assistant_provider:
+            try:
+                LLMProvider(llm.assistant_provider)
+            except ValueError:
+                self._logger.warning(f"Invalid assistant LLM provider in settings: {llm.assistant_provider}. Falling back to default.")
+                llm.assistant_provider = LLMProvider.OLLAMA
         
         return llm
 

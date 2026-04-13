@@ -27,7 +27,6 @@ export const GeminiModel = Object.freeze({
     PRO_PREVIEW:              'gemini-3.1-pro-preview',
     PRO_PREVIEW_CUSTOMTOOLS:  'gemini-3.1-pro-preview-customtools',
     FLASH_PREVIEW:            'gemini-3-flash-preview',
-    FLASH_LITE_PREVIEW:       'gemini-3.1-flash-lite-preview',
 });
 
 export const OpenAIModel = Object.freeze({

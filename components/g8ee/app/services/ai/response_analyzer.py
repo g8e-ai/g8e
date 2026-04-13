@@ -59,7 +59,7 @@ class AIResponseAnalyzer:
             return fallback_no_model()
 
         try:
-            async with get_llm_provider(settings.llm) as client:
+            async with get_llm_provider(settings.llm, is_assistant=True) as client:
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,

@@ -25,7 +25,7 @@ Test flow:
 4. Extract response text from GenerateContentResponse
 5. Grade with EvalJudge
 
-Skips if settings.llm.provider != LLMProvider.GEMINI.
+Skips if settings.llm.primary_provider != LLMProvider.GEMINI.
 """
 
 import os
@@ -84,8 +84,8 @@ async def test_gemini_accuracy(
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        if llm.provider != LLMProvider.GEMINI:
-            pytest.skip(f"This test only runs with Gemini provider, current provider: {llm.provider}")
+        if llm.primary_provider != LLMProvider.GEMINI:
+            pytest.skip(f"This test only runs with Gemini provider, current provider: {llm.primary_provider}")
 
         # Use the primary model for this test (raw model quality)
         model_name = llm.primary_model

@@ -74,7 +74,7 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
                 user_id: userId,
                 settings: expect.objectContaining({
                     llm: expect.objectContaining({
-                        llm_model: 'claude-sonnet-4-6',
+                        primary_model: 'claude-sonnet-4-6',
                         llm_temperature: '0.8',
                     }),
                 }),

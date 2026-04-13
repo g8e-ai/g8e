@@ -127,19 +127,34 @@ export class SettingsPage {
     }
 
     _buildLlmSection(panel, settings) {
-        const providerSetting = settings.find(s => s.key === 'llm_provider');
+        const primaryProviderSetting = settings.find(s => s.key === 'llm_primary_provider');
+        const assistantProviderSetting = settings.find(s => s.key === 'llm_assistant_provider');
         const universalSettings = settings.filter(s => s.group === 'universal');
         const providerSpecificSettings = settings.filter(s => s.provider);
 
-        if (providerSetting) {
-            const field = this._buildField(providerSetting);
+        const updateVisibility = () => {
+            const primary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
+            const assistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
+            this._updateLlmVisibility(panel, primary, assistant);
+        };
+
+        if (primaryProviderSetting) {
+            const field = this._buildField(primaryProviderSetting);
             panel.appendChild(field);
 
             const select = field.querySelector('select');
             if (select) {
-                select.addEventListener('change', () => {
-                    this._updateLlmVisibility(panel, select.value);
-                });
+                select.addEventListener('change', updateVisibility);
+            }
+        }
+
+        if (assistantProviderSetting) {
+            const field = this._buildField(assistantProviderSetting);
+            panel.appendChild(field);
+
+            const select = field.querySelector('select');
+            if (select) {
+                select.addEventListener('change', updateVisibility);
             }
         }
 
@@ -174,15 +189,17 @@ export class SettingsPage {
             panel.appendChild(this._buildField(s));
         });
 
-        const currentProvider = providerSetting ? (this.dirty.get('llm_provider') || providerSetting.value) : '';
-        this._updateLlmVisibility(panel, currentProvider);
+        const currentPrimary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
+        const currentAssistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
+        this._updateLlmVisibility(panel, currentPrimary, currentAssistant);
     }
 
-    _updateLlmVisibility(panel, provider) {
+    _updateLlmVisibility(panel, primaryProvider, assistantProvider) {
         const specificFields = panel.querySelectorAll('.settings-llm-specific .settings-field');
         specificFields.forEach(field => {
             const fieldProvider = field.getAttribute('data-provider');
-            field.style.display = (fieldProvider === provider) ? 'block' : 'none';
+            // If the field belongs to either the primary or assistant provider, show it.
+            field.style.display = (fieldProvider === primaryProvider || fieldProvider === assistantProvider) ? 'block' : 'none';
         });
     }
 

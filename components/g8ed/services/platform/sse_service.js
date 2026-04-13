@@ -313,7 +313,7 @@ class SSEService {
             const platformSettings = await this._settingsService.getPlatformSettings();
             const userSettings = await this._settingsService.getUserSettings(userId);
 
-            const provider = userSettings.llm_provider ?? platformSettings.llm_provider ?? '';
+            const provider = userSettings.llm_primary_provider ?? platformSettings.llm_primary_provider ?? '';
             const currentPrimary = userSettings.llm_model ?? platformSettings.llm_model ?? '';
             const currentAssistant = userSettings.llm_assistant_model ?? platformSettings.llm_assistant_model ?? '';
 

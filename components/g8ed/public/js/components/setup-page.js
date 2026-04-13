@@ -23,15 +23,13 @@ const PROVIDER_MODELS = {
             { value: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS, label: 'Gemini 3.1 Pro (Custom Tools)' },
             { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
             { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
-            { value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' },
         ],
         assistant: [
-            { value: GeminiModel.FLASH_LITE_PREVIEW, label: 'Gemini 3.1 Flash Lite' },
             { value: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
             { value: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
         ],
         defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
-        defaultAssistant: GeminiModel.FLASH_LITE_PREVIEW,
+        defaultAssistant: GeminiModel.FLASH_PREVIEW,
     },
     [LLMProvider.ANTHROPIC]: {
         primary: [
@@ -512,7 +510,7 @@ export class SetupPage {
         const primaryProvider = _modelToProvider(primaryModel);
 
         if (primaryProvider) {
-            userSettings.llm_provider = primaryProvider;
+            userSettings.llm_primary_provider = primaryProvider;
         }
         if (primaryModel) userSettings.llm_model = primaryModel;
         if (assistantModel) userSettings.llm_assistant_model = assistantModel;

@@ -133,7 +133,6 @@ export const GeminiModel = Object.freeze({
     PRO_PREVIEW:              _STATUS['llm.models']['gemini']['3.1.pro.preview'],
     PRO_PREVIEW_CUSTOMTOOLS:  _STATUS['llm.models']['gemini']['3.1.pro.preview.customtools'],
     FLASH_PREVIEW:            _STATUS['llm.models']['gemini']['3.flash.preview'],
-    FLASH_LITE_PREVIEW:       _STATUS['llm.models']['gemini']['3.1.flash.lite.preview'],
 });
 
 /**

@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import {
     ConnectionEstablishedEvent,
     KeepaliveEvent,
+    OperatorListData,
     LLMConfigData,
     LLMConfigEvent,
     InvestigationListData,
@@ -76,6 +77,51 @@ describe('ConnectionEstablishedEvent [UNIT - PURE LOGIC]', () => {
     });
 });
 
+describe('OperatorListData [UNIT - PURE LOGIC]', () => {
+    it('accepts valid required fields with defaults', () => {
+        const data = OperatorListData.parse({
+            type: 'g8e.v1.operator.panel.list.updated',
+        });
+        expect(data.type).toBe('g8e.v1.operator.panel.list.updated');
+        expect(data.operators).toEqual([]);
+        expect(data.total_count).toBe(0);
+        expect(data.active_count).toBe(0);
+        expect(data.used_slots).toBe(0);
+        expect(data.max_slots).toBe(0);
+        expect(data.timestamp).toBeInstanceOf(Date);
+    });
+
+    it('accepts all fields with values', () => {
+        const operators = [{ operator_id: 'op-1', status: 'ACTIVE' }];
+        const data = OperatorListData.parse({
+            type: 'g8e.v1.operator.panel.list.updated',
+            operators: operators,
+            total_count: 1,
+            active_count: 1,
+            used_slots: 1,
+            max_slots: 5,
+        });
+        expect(data.operators).toEqual(operators);
+        expect(data.total_count).toBe(1);
+        expect(data.active_count).toBe(1);
+        expect(data.used_slots).toBe(1);
+        expect(data.max_slots).toBe(5);
+    });
+
+    it('throws when type is missing', () => {
+        expect(() => OperatorListData.parse({}))
+            .toThrow('type is required');
+    });
+
+    it('forWire() serializes timestamp to ISO string', () => {
+        const data = OperatorListData.parse({
+            type: 'g8e.v1.operator.panel.list.updated',
+        });
+        const wire = data.forWire();
+        expect(typeof wire.timestamp).toBe('string');
+    });
+});
+
 describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields', () => {
         const event = KeepaliveEvent.parse({ type: 'keepalive' });
@@ -111,6 +157,56 @@ describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
         expect(wire.type).toBe('keepalive');
         expect(wire.serverTime).toBe(1234567890);
         expect(typeof wire.timestamp).toBe('string');
+    });
+
+    it('defaults operator_list to null when not provided', () => {
+        const event = KeepaliveEvent.parse({ type: 'keepalive' });
+        expect(event.operator_list).toBeNull();
+    });
+
+    it('accepts operator_list when provided', () => {
+        const operatorList = OperatorListData.parse({
+            type: 'g8e.v1.operator.panel.list.updated',
+            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
+            total_count: 1,
+            active_count: 1,
+            used_slots: 1,
+            max_slots: 1,
+        });
+        const event = KeepaliveEvent.parse({
+            type: 'keepalive',
+            operator_list: operatorList,
+        });
+        expect(event.operator_list).toBeInstanceOf(OperatorListData);
+        expect(event.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
+        expect(event.operator_list.total_count).toBe(1);
+    });
+
+    it('forWire() includes operator_list when provided', () => {
+        const testDate = new Date('2026-04-13T17:21:05.940Z');
+        const operatorList = OperatorListData.parse({
+            type: 'g8e.v1.operator.panel.list.updated',
+            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
+            total_count: 1,
+            active_count: 1,
+            used_slots: 1,
+            max_slots: 1,
+            timestamp: testDate,
+        });
+        const event = KeepaliveEvent.parse({
+            type: 'keepalive',
+            operator_list: operatorList,
+        });
+        const wire = event.forWire();
+        expect(wire.operator_list).toEqual({
+            type: 'g8e.v1.operator.panel.list.updated',
+            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
+            total_count: 1,
+            active_count: 1,
+            used_slots: 1,
+            max_slots: 1,
+            timestamp: testDate.toISOString(),
+        });
     });
 });
 
