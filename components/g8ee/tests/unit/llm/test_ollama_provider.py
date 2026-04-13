@@ -60,7 +60,8 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") == INTERNAL_CA
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
 
     def test_internal_ip_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -70,7 +71,8 @@ class TestOllamaProviderSSL:
                 ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") == INTERNAL_CA
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
 
     def test_internal_http_disables_ssl(self):
         with patch(PATCH_TARGET) as mock_client:

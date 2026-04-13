@@ -85,8 +85,8 @@ async def test_ollama_accuracy(
         if not llm_settings or not llm_settings.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        if llm_settings.provider != LLMProvider.OLLAMA:
-            pytest.skip(f"This test only runs with Ollama provider, current provider: {llm_settings.provider}")
+        if llm_settings.primary_provider != LLMProvider.OLLAMA:
+            pytest.skip(f"This test only runs with Ollama provider, current provider: {llm_settings.primary_provider}")
 
         # Use the primary model for this test (raw model quality)
         model_name = llm_settings.primary_model

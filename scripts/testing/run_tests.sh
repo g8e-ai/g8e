@@ -49,6 +49,7 @@ COVERAGE=false
 PYRIGHT=false
 E2E=false
 TEST_LLM_PROVIDER="${TEST_LLM_PROVIDER:-}"
+TEST_LLM_ASSISTANT_PROVIDER="${TEST_LLM_ASSISTANT_PROVIDER:-}"
 TEST_LLM_PRIMARY_MODEL="${TEST_LLM_PRIMARY_MODEL:-}"
 TEST_LLM_ASSISTANT_MODEL="${TEST_LLM_ASSISTANT_MODEL:-}"
 TEST_LLM_ENDPOINT_URL="${TEST_LLM_ENDPOINT_URL:-}"
@@ -72,7 +73,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo ""
             echo "LLM Options (enables ai_integration tests):"
-            echo "  -p, --llm-provider        LLM provider (gemini, openai, anthropic, ollama)"
+            echo "  -p, --llm-provider        Primary LLM provider (gemini, openai, anthropic, ollama)"
+            echo "  -ap, --assistant-provider Assistant LLM provider (gemini, openai, anthropic, ollama)"
             echo "  -m, --primary-model       Primary model name"
             echo "  -a, --assistant-model      Assistant model name"
             echo "  -e, --llm-endpoint-url    API endpoint URL"
@@ -102,6 +104,10 @@ while [[ $# -gt 0 ]]; do
             TEST_LLM_PROVIDER="$2"; shift 2 ;;
         --llm-provider=*)
             TEST_LLM_PROVIDER="${1#*=}"; shift ;;
+        --assistant-provider|-ap)
+            TEST_LLM_ASSISTANT_PROVIDER="$2"; shift 2 ;;
+        --assistant-provider=*)
+            TEST_LLM_ASSISTANT_PROVIDER="${1#*=}"; shift ;;
         --primary-model|-m)
             TEST_LLM_PRIMARY_MODEL="$2"; shift 2 ;;
         --primary-model=*)
@@ -280,7 +286,8 @@ _show_llm_config() {
     if [[ -n "${TEST_LLM_PROVIDER:-}" ]]; then
         echo ""
         echo -e "${CYAN}  LLM Configuration (from CLI flags)${NC}"
-        echo -e "  Provider:        ${TEST_LLM_PROVIDER}"
+        echo -e "  Primary Provider:   ${TEST_LLM_PROVIDER}"
+        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]   && echo -e "  Primary Model:   ${TEST_LLM_PRIMARY_MODEL}"
         [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]] && echo -e "  Assistant Model: ${TEST_LLM_ASSISTANT_MODEL}"
         [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]    && echo -e "  Endpoint:        ${TEST_LLM_ENDPOINT_URL}"
@@ -327,11 +334,12 @@ run_in_container() {
     [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && exec_args+=("--" "${EXTRA_ARGS[@]}")
 
     local env_args=(-e RUNNING_IN_CONTAINER=true)
-    [[ -n "$TEST_LLM_PROVIDER" ]]        && env_args+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]    && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]     && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
-    [[ -n "$TEST_LLM_API_KEY" ]]          && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
+    [[ -n "$TEST_LLM_PROVIDER" ]]           && env_args+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
+    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
+    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
+    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
+    [[ -n "$TEST_LLM_API_KEY" ]]            && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && env_args+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && env_args+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
@@ -349,11 +357,12 @@ if in_container; then
     setup_container_environment
     verify_container_infrastructure
 
-    [[ -n "$TEST_LLM_PROVIDER" ]]        && export TEST_LLM_PROVIDER
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]   && export TEST_LLM_PRIMARY_MODEL
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]] && export TEST_LLM_ASSISTANT_MODEL
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]    && export TEST_LLM_ENDPOINT_URL
-    [[ -n "$TEST_LLM_API_KEY" ]]         && export TEST_LLM_API_KEY
+    [[ -n "$TEST_LLM_PROVIDER" ]]           && export TEST_LLM_PROVIDER
+    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && export TEST_LLM_ASSISTANT_PROVIDER
+    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && export TEST_LLM_PRIMARY_MODEL
+    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && export TEST_LLM_ASSISTANT_MODEL
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && export TEST_LLM_ENDPOINT_URL
+    [[ -n "$TEST_LLM_API_KEY" ]]            && export TEST_LLM_API_KEY
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && export TEST_WEB_SEARCH_PROJECT_ID
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && export TEST_WEB_SEARCH_ENGINE_ID

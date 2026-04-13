@@ -106,12 +106,13 @@ class OpenAIProvider(LLMProvider):
     )
 
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        verify: str | bool
+        import ssl
+        verify: ssl.SSLContext | bool
         if is_internal_endpoint(endpoint):
             if endpoint.startswith("http://"):
                 verify = False
             elif ca_cert_path:
-                verify = ca_cert_path
+                verify = ssl.create_default_context(cafile=ca_cert_path)
             else:
                 verify = True
         else:

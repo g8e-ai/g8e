@@ -57,15 +57,17 @@ class TestOpenAIProviderSSL:
         with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://localhost:11434/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
+            import ssl
             for call in mock_client.call_args_list:
-                assert call.kwargs["verify"] == INTERNAL_CA
+                assert isinstance(call.kwargs["verify"], ssl.SSLContext)
 
     def test_internal_ip_uses_platform_ca(self):
         with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
             self._make_provider("https://192.168.1.50:11434/v1", ca_cert_path=INTERNAL_CA)
             assert mock_client.call_count == 2
+            import ssl
             for call in mock_client.call_args_list:
-                assert call.kwargs["verify"] == INTERNAL_CA
+                assert isinstance(call.kwargs["verify"], ssl.SSLContext)
 
     def test_internal_http_disables_ssl(self):
         with patch("app.llm.providers.open_ai.httpx.AsyncClient") as mock_client:
@@ -118,7 +120,8 @@ class TestAnthropicProviderSSL:
     def test_internal_endpoint_uses_platform_ca(self):
         with patch("app.llm.providers.anthropic.httpx.AsyncClient") as mock_client:
             self._make_provider(endpoint="https://10.0.0.5:8080/v1", ca_cert_path=INTERNAL_CA)
-            assert mock_client.call_args.kwargs["verify"] == INTERNAL_CA
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs["verify"], ssl.SSLContext)
 
     def test_internal_http_disables_ssl(self):
         with patch("app.llm.providers.anthropic.httpx.AsyncClient") as mock_client:
