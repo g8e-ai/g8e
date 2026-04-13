@@ -268,6 +268,10 @@ class SSEConnectionManager {
             return { handled: false, eventType };
         }
 
+        if (eventType.startsWith('g8e.v1.ai.tribunal')) {
+            console.log('[SSE] Tribunal event received:', eventType, payload);
+        }
+
         this.eventBus.emit(eventType, payload);
         return { handled: true, eventType };
     }
@@ -318,6 +322,13 @@ class SSEConnectionManager {
             [EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED]: ['web_session_id', 'execution_id', 'port'],
             [EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED]: ['execution_id'],
             [EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED]: ['execution_id'],
+            [EventType.TRIBUNAL_SESSION_STARTED]: ['web_session_id'],
+            [EventType.TRIBUNAL_VOTING_PASS_COMPLETED]: ['web_session_id', 'pass_index', 'success'],
+            [EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED]: ['web_session_id'],
+            [EventType.TRIBUNAL_VOTING_REVIEW_STARTED]: ['web_session_id'],
+            [EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_COMPLETED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED]: ['web_session_id'],
         };
 
         return fieldMap[eventType] || null;

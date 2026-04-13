@@ -11,8 +11,20 @@
                 <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="left">arrow_back</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Bind an Operator</div>
-                <div class="opdeploy__step-desc"><strong>Active</strong> operators are authenticated and sending heartbeats. The <strong>g8ep</strong> container includes a pre-authenticated operator ready to bind. Click the bind icon on any operator, or use <strong>Bind All</strong> at the bottom of the Operator Panel.</div>
+                <div class="opdeploy__step-title">Deploy an Operator</div>
+                <div class="opdeploy__step-desc">Download the binary, get an API key, or generate a link in <strong>Operator Deployment</strong>.</div>
+                <div class="opdeploy__step-note">g8ep is ready. Click the <span class="material-symbols-outlined opdeploy__step-inline-icon">link</span> icon to begin.</div>
+            </div>
+        </div>
+
+        <div class="opdeploy__step-auth">
+            <div class="opdeploy__auth-item">
+                <span class="material-symbols-outlined opdeploy__auth-icon">key</span>
+                <span class="opdeploy__auth-text"><strong>API Keys:</strong> Persistent keys.</span>
+            </div>
+            <div class="opdeploy__auth-item">
+                <span class="material-symbols-outlined opdeploy__auth-icon">link</span>
+                <span class="opdeploy__auth-text"><strong>Device Links:</strong> Temporary links.</span>
             </div>
         </div>
 
@@ -23,25 +35,9 @@
             </div>
             <div class="opdeploy__step-content">
                 <div class="opdeploy__step-title">Start a Conversation</div>
-                <div class="opdeploy__step-desc">Describe your task in the chat. The AI plans and executes commands through your bound operator.</div>
+                <div class="opdeploy__step-desc">Describe your task in the chat to begin execution.</div>
             </div>
-        </div>
-    </div>
-
-    <div class="opdeploy__footer">
-        <div class="opdeploy__footer-auth">
-            <div class="opdeploy__auth-item">
-                <span class="material-symbols-outlined opdeploy__auth-icon">key</span>
-                <span class="opdeploy__auth-text"><strong>API Keys:</strong> Persistent authentication, valid until manually refreshed.</span>
-            </div>
-            <div class="opdeploy__auth-item">
-                <span class="material-symbols-outlined opdeploy__auth-icon">link</span>
-                <span class="opdeploy__auth-text"><strong>Device Links:</strong> Temporary deployment links that expire after TTL.</span>
-            </div>
-        </div>
-        <div class="opdeploy__footer-note">
-            <span class="material-symbols-outlined opdeploy__footer-icon">info</span>
-            <span class="opdeploy__footer-text">Your g8ep operator is already authenticated. Click the bind icon in the Operator Panel to begin.</span>
         </div>
     </div>
 </div>
+

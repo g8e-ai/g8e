@@ -176,8 +176,19 @@ export class TerminalExecutionMixin {
         }
 
         if (!bubble) {
-            bubble = this._createAIBubbleWrapper(approvalId);
-            this.outputContainer.appendChild(bubble);
+            // Reuse existing AI response bubble if exists, otherwise create new execution bubble
+            const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
+            const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
+            
+            if (lastExecutionBubble) {
+                bubble = lastExecutionBubble;
+            } else if (lastAiResponse) {
+                bubble = lastAiResponse;
+                bubble.classList.add('anchored-terminal__ai-response--execution');
+            } else {
+                bubble = this._createAIBubbleWrapper(approvalId);
+                this.outputContainer.appendChild(bubble);
+            }
         }
         bubble.setAttribute('data-execution-bubble', approvalId);
 

@@ -431,14 +431,37 @@ export const ChatSSEHandlersMixin = {
             numPasses: data.num_passes,
             command: data.original_command,
         });
+
+        const webSessionId = data.web_session_id;
+        if (webSessionId && this.streamingActive) {
+            const entry = document.getElementById(`ai-response-${webSessionId}`);
+            if (entry) {
+                entry.classList.remove('streaming');
+                entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+            }
+            this.streamingActive = false;
+            this.anchoredTerminal?.clearActivityIndicators();
+            this._searchWebIndicators?.clear();
+            this._portCheckIndicators?.clear();
+            this._hasResetAutoScrollForSession?.delete(webSessionId);
+        }
     },
 
     handleTribunalPassCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        console.log('[TRIBUNAL] Pass completed event received:', data);
+        if (!this.anchoredTerminal || !this._tribunalWidgetIds) {
+            console.log('[TRIBUNAL] Missing anchoredTerminal or _tribunalWidgetIds');
+            return;
+        }
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
-        if (!widgetId) return;
+        if (!widgetId) {
+            console.log('[TRIBUNAL] No widget ID found for web_session_id:', data.web_session_id);
+            console.log('[TRIBUNAL] Available widget IDs:', Array.from(this._tribunalWidgetIds.entries()));
+            return;
+        }
 
+        console.log('[TRIBUNAL] Updating pass:', widgetId, data.pass_index, data.success);
         this.anchoredTerminal.updateTribunalPass(widgetId, {
             passIndex: data.pass_index,
             success: data.success,

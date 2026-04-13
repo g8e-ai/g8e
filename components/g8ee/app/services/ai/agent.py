@@ -306,7 +306,7 @@ class g8eEngine:
 
             if not turn_result.pending_tool_calls:
                 logger.info(
-                    "[AGENT] Tool loop complete: turn=%d finish_reason=%s "
+                    "[AGENT] Tool loop breaking: turn=%d finish_reason=%s "
                     "input_tokens=%d output_tokens=%d total_tokens=%d",
                     loop_turn, turn_result.finish_reason,
                     total_input_tokens, total_output_tokens, total_tokens,
@@ -363,6 +363,10 @@ class g8eEngine:
             total_tokens=total_tokens,
         ) if (total_input_tokens or total_output_tokens or total_tokens) else None
 
+        logger.info(
+            "[AGENT] Yielding COMPLETE chunk: finish_reason=%s input_tokens=%d output_tokens=%d total_tokens=%d",
+            final_finish_reason or DEFAULT_FINISH_REASON, total_input_tokens, total_output_tokens, total_tokens,
+        )
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.COMPLETE,
             data=StreamChunkData(

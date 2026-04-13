@@ -172,10 +172,22 @@ export class TerminalOutputMixin {
         const entry = this.getOrCreateAIResponse(webSessionId);
         if (!entry) return;
 
+        if (!this._streamingTextAccumulator) {
+            this._streamingTextAccumulator = new Map();
+        }
+
         const contentEl = entry.querySelector('.anchored-terminal__ai-response-content');
         if (contentEl) {
-            const textNode = document.createTextNode(text);
-            contentEl.appendChild(textNode);
+            const existing = this._streamingTextAccumulator.get(webSessionId) || '';
+            const newText = existing + text;
+            this._streamingTextAccumulator.set(webSessionId, newText);
+
+            const renderer = this.markdownRenderer;
+            if (renderer) {
+                contentEl.innerHTML = renderer.parseMarkdown(newText, true);
+            } else {
+                contentEl.textContent = newText;
+            }
         }
 
         this.scrollToBottom();
@@ -212,6 +224,10 @@ export class TerminalOutputMixin {
         entry.classList.remove('streaming');
         entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
         entry.id = `ai-response-${webSessionId}-${Date.now()}`;
+
+        if (this._streamingTextAccumulator) {
+            this._streamingTextAccumulator.delete(webSessionId);
+        }
 
         this.scrollToBottom();
     }
@@ -309,12 +325,48 @@ export class TerminalOutputMixin {
             return existing;
         }
 
+        // Get or create AI response bubble (prefer execution bubble if exists)
+        const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
+        const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
+        let content;
+        
+        if (lastExecutionBubble) {
+            content = lastExecutionBubble.querySelector('.anchored-terminal__ai-response-content');
+        } else if (lastAiResponse) {
+            content = lastAiResponse.querySelector('.anchored-terminal__ai-response-content');
+        } else {
+            // Create new AI response bubble if none exists
+            const bubble = document.createElement('div');
+            bubble.className = 'anchored-terminal__ai-response';
+
+            const header = document.createElement('div');
+            header.className = 'anchored-terminal__ai-response-header';
+
+            const sender = document.createElement('span');
+            sender.className = 'anchored-terminal__ai-response-sender';
+            sender.textContent = 'g8e';
+
+            const time = document.createElement('span');
+            time.className = 'anchored-terminal__ai-response-time';
+            time.textContent = this.formatTimestamp();
+
+            header.appendChild(time);
+            header.appendChild(sender);
+
+            content = document.createElement('div');
+            content.className = 'anchored-terminal__ai-response-content';
+
+            bubble.appendChild(header);
+            bubble.appendChild(content);
+            this.outputContainer.appendChild(bubble);
+        }
+
         const entry = document.createElement('div');
         entry.className = 'anchored-terminal__thinking active';
         entry.id = existingId;
 
-        const header = document.createElement('div');
-        header.className = 'anchored-terminal__thinking-header';
+        const thinkingHeader = document.createElement('div');
+        thinkingHeader.className = 'anchored-terminal__thinking-header';
 
         const toggle = document.createElement('span');
         toggle.className = 'anchored-terminal__thinking-toggle';
@@ -324,21 +376,20 @@ export class TerminalOutputMixin {
         title.className = 'anchored-terminal__thinking-title';
         title.textContent = 'Thinking...';
 
-        header.appendChild(toggle);
-        header.appendChild(title);
+        thinkingHeader.appendChild(toggle);
+        thinkingHeader.appendChild(title);
 
-        header.addEventListener('click', () => {
+        thinkingHeader.addEventListener('click', () => {
             const isCollapsed = entry.classList.toggle('collapsed');
             toggle.textContent = isCollapsed ? '+' : '–';
         });
 
-        const content = document.createElement('div');
-        content.className = 'anchored-terminal__thinking-content';
+        const thinkingContent = document.createElement('div');
+        thinkingContent.className = 'anchored-terminal__thinking-content';
 
-        entry.appendChild(header);
-        entry.appendChild(content);
-
-        this.outputContainer.appendChild(entry);
+        entry.appendChild(thinkingHeader);
+        entry.appendChild(thinkingContent);
+        content.appendChild(entry);
         this.scrollToBottom();
 
         return entry;
@@ -461,6 +512,12 @@ export class TerminalOutputMixin {
         return entry;
     }
 
+    clearStreamingAccumulator() {
+        if (this._streamingTextAccumulator) {
+            this._streamingTextAccumulator.clear();
+        }
+    }
+
     appendErrorMessage(text) {
         if (!this.outputContainer) return;
 
@@ -492,6 +549,42 @@ export class TerminalOutputMixin {
 
         this._removeWelcome();
 
+        // Get or create AI response bubble (prefer execution bubble if exists)
+        const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
+        const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
+        let content;
+        
+        if (lastExecutionBubble) {
+            content = lastExecutionBubble.querySelector('.anchored-terminal__ai-response-content');
+        } else if (lastAiResponse) {
+            content = lastAiResponse.querySelector('.anchored-terminal__ai-response-content');
+        } else {
+            // Create new AI response bubble if none exists
+            const bubble = document.createElement('div');
+            bubble.className = 'anchored-terminal__ai-response';
+
+            const header = document.createElement('div');
+            header.className = 'anchored-terminal__ai-response-header';
+
+            const sender = document.createElement('span');
+            sender.className = 'anchored-terminal__ai-response-sender';
+            sender.textContent = 'g8e';
+
+            const time = document.createElement('span');
+            time.className = 'anchored-terminal__ai-response-time';
+            time.textContent = this.formatTimestamp();
+
+            header.appendChild(time);
+            header.appendChild(sender);
+
+            content = document.createElement('div');
+            content.className = 'anchored-terminal__ai-response-content';
+
+            bubble.appendChild(header);
+            bubble.appendChild(content);
+            this.outputContainer.appendChild(bubble);
+        }
+
         const widget = document.createElement('div');
         widget.id = id;
         widget.className = 'tribunal';
@@ -505,7 +598,7 @@ export class TerminalOutputMixin {
         const commandEl = widget.querySelector('.tribunal__command');
         if (commandEl) commandEl.textContent = command;
 
-        this.outputContainer.appendChild(widget);
+        content.appendChild(widget);
         this.scrollToBottom();
         return id;
     }
