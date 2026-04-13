@@ -27,11 +27,11 @@ The g8ee agent is a high-reasoning ReAct streaming loop. Each user message goes 
 ```mermaid
 flowchart TD
     Start([User Message]) --> Context[Context Enrichment<br/>Investigation + Operator + Memory]
-    Context --> Triage{Triage Assistant}
+    Context --> Triage{Triage Agent}
     
-    Triage -- Simple/Low Confidence --> FollowUp[Follow-up Question]
+    Triage -- Low Confidence --> FollowUp[Follow-up Question]
     Triage -- Simple/High Confidence --> Asst[Assistant Model]
-    Triage -- Complex --> Primary[Primary Reasoning Agent]
+    Triage -- Complex/High Confidence --> Primary[Primary Reasoning Agent]
     
     FollowUp --> SSE
     Asst --> Loop
@@ -461,6 +461,65 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
 | `EvalJudge` | `components/g8ee/app/services/ai/eval_judge.py` | AI Agent Accuracy Evaluation Judge — grades agent performance against gold standard |
 | `BenchmarkJudge` | `components/g8ee/app/services/ai/benchmark_judge.py` | Deterministic Agent Benchmark Judge — regex-matches tool call payloads for binary pass/fail grading with Tribunal delta tracking |
+
+---
+
+## Agent Persona Registry
+
+Every agent in the platform has a first-class persona definition in `shared/constants/agents.json` under `agent.metadata`. The schema ensures every agent is fully self-describing for runtime introspection, UI rendering, and prompt engineering.
+
+### Persona Schema
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique agent identifier (kebab-case) |
+| `display_name` | `string` | Human-readable name for UI display |
+| `icon` | `string` | Lucide icon name for UI rendering |
+| `description` | `string` | One-line functional summary |
+| `role` | `string` | Functional role (`classifier`, `reasoner`, `responder`, `arbitrator`, `validator`, `summarizer`, `tribunal_member`) |
+| `model_tier` | `string` | LLM tier used at runtime (`primary` = high-reasoning model, `assistant` = fast/lightweight model) |
+| `temperature` | `number \| null` | Fixed temperature value, or `null` for user-configurable |
+| `tools` | `string[]` | List of tool names available to this agent (empty for non-tool-calling agents) |
+| `identity` | `string` | Deep persona description — who the agent is, how it thinks, its behavioral characteristics |
+| `purpose` | `string` | Specific mission statement — what the agent does and the standards it must meet |
+| `autonomy` | `string` | Autonomy level (`fully_autonomous` = no human approval needed, `human_approved` = requires explicit user consent for state-changing actions) |
+
+### Agent Registry
+
+| Agent | Role | Model Tier | Temp | Tools | Autonomy |
+|---|---|---|---|---|---|
+| **Triage** | classifier | primary | null (configurable) | none | fully_autonomous |
+| **Primary** | reasoner | primary | null (configurable) | full tool set | human_approved |
+| **Assistant** | responder | assistant | null (configurable) | full tool set | human_approved |
+| **Tribunal** | arbitrator | assistant | null (composite) | none | fully_autonomous |
+| **Verifier** | validator | assistant | 0.0 | none | fully_autonomous |
+| **Title Generator** | summarizer | assistant | 0.7 | none | fully_autonomous |
+| **Axiom** | tribunal_member | assistant | 0.0 | none | fully_autonomous |
+| **Concord** | tribunal_member | assistant | 0.4 | none | fully_autonomous |
+| **Variance** | tribunal_member | assistant | 0.8 | none | fully_autonomous |
+
+### Contract Tests
+
+Both g8ed and g8ee have contract tests that validate every agent metadata entry has all required persona fields with correct types:
+
+- **g8ed**: `components/g8ed/test/contracts/shared-agent-constants.test.js`
+- **g8ee**: `components/g8ee/tests/unit/utils/test_shared_agent_constants.py`
+
+### Model Definitions
+
+Each agent that has a distinct request/response contract also has a JSON schema in `shared/models/agents/`:
+
+| Agent | File |
+|---|---|
+| Triage | `shared/models/agents/triage.json` |
+| Primary | `shared/models/agents/primary.json` |
+| Assistant | `shared/models/agents/assistant.json` |
+| Tribunal | `shared/models/agents/tribunal.json` |
+| Verifier | `shared/models/agents/verifier.json` |
+| Title Generator | `shared/models/agents/title_generator.json` |
+
+Tribunal members (Axiom, Concord, Variance) share the Tribunal model definition — they are roles within the Tribunal, not independent agents.
+
 ---
 
 ## Prompts
@@ -578,7 +637,7 @@ The resolved operator's OS context (OS name, shell, working directory) is passed
 
 #### Tribunal Model Resolution
 
-The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **inferred from the model name** so that the correct API endpoint and credentials are used. This decouples the Tribunal model from the primary chat provider: e.g. a user with `provider=gemini` and `assistant_model=gemma3:1b` will route Tribunal calls to the Ollama endpoint, not Gemini.
+The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **inferred from the model name** so that the correct API endpoint and credentials are used. This decouples the Tribunal model from the primary chat provider: e.g. a user with `provider=gemini` and `assistant_model=gemma4:e4b` will route Tribunal calls to the Ollama endpoint, not Gemini.
 
 The Tribunal implements a **Stochastic Multi-Agent Consensus** pattern using three distinct roles:
 
@@ -594,9 +653,9 @@ flowchart TD
     
     subgraph Gen [Stochastic Voting Swarm]
         direction LR
-        P1[Axiom<br/>Pass 0 - Temp 0.5]
-        P2[Concord<br/>Pass 1 - Temp 0.7]
-        P3[Variance<br/>Pass 2 - Temp 1.2]
+        P1[Axiom<br/>Pass 0 - Temp 0.0]
+        P2[Concord<br/>Pass 1 - Temp 0.4]
+        P3[Variance<br/>Pass 2 - Temp 0.8]
     end
     
     Gen --> Vote[Weighted Majority Vote]
@@ -817,7 +876,7 @@ Examples:
 ./g8e llm setup --provider openai --api-key sk-... --model gpt-4o --asst-model gpt-4o-mini
 
 # Ollama (remote)
-./g8e llm setup --provider ollama --endpoint https://your-ollama-host:11434/v1 --model gemma3:1b --asst-model gemma3:1b
+./g8e llm setup --provider ollama --endpoint https://your-ollama-host:11434/v1 --model gemma4:e4b --asst-model gemma4:e4b
 
 # vLLM (self-hosted)
 ./g8e llm setup --provider vllm --endpoint https://your-host:443/v1 --model your-model

@@ -77,9 +77,13 @@ HIGH: Destructive or irreversible operations.
 
 Classify the command risk level."""
 
+        assistant_model = resolved_settings.llm.assistant_model
+        if not assistant_model:
+            logger.warning("Command risk analysis: no assistant_model configured, defaulting to HIGH risk")
+            return CommandRiskAnalysis(risk_level=RiskLevel.HIGH)
+
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
@@ -179,9 +183,20 @@ Working Directory: {working_dir}
 
 Based on the information above, analyze the failure and fill in ALL response fields."""
 
+        assistant_model = resolved_settings.llm.assistant_model
+        if not assistant_model:
+            logger.warning("Error analysis: no assistant_model configured, escalating to human")
+            return ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="No assistant model configured for error analysis",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="No assistant_model configured in platform settings",
+                user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
+            )
+
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,
@@ -282,9 +297,13 @@ HIGH: System files, irreversible deletes, dirty git + destructive operation
 
 Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation."""
 
+        assistant_model = resolved_settings.llm.assistant_model
+        if not assistant_model:
+            logger.warning("File operation risk analysis: no assistant_model configured, blocking operation")
+            return FileOperationRiskAnalysis(risk_level=RiskLevel.HIGH, safe_to_proceed=False, is_system_file=True)
+
         try:
             async with get_llm_provider(resolved_settings.llm) as client:
-                assistant_model = resolved_settings.llm.assistant_model or "gpt-4o-mini"
                 config = AIGenerationConfigBuilder.build_assistant_settings(
                     model=assistant_model,
                     temperature=None,

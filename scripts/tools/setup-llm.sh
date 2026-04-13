@@ -461,8 +461,8 @@ case "$LLM_PROVIDER" in
                 _err "--endpoint is required for Ollama"
                 exit 1
             fi
-            LLM_MODEL="${ARG_MODEL:-gemma3:1b}"
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma3:1b}"
+            LLM_MODEL="${ARG_MODEL:-gemma4:e4b}"
+            LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma4:e4b}"
         else
             printf "  Ollama endpoint [%s]: " "${_cur_endpoint:-https://your-ollama-host:11434/v1}" >&2
             IFS= read -r _input
@@ -472,13 +472,13 @@ case "$LLM_PROVIDER" in
                 exit 1
             fi
 
-            printf "  Primary model [%s]: " "${_cur_model:-gemma3:1b}" >&2
+            printf "  Primary model [%s]: " "${_cur_model:-gemma4:e4b}" >&2
             IFS= read -r _input
-            LLM_MODEL="${_input:-${_cur_model:-gemma3:1b}}"
+            LLM_MODEL="${_input:-${_cur_model:-gemma4:e4b}}"
 
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-gemma3:1b}" >&2
+            printf "  Assistant model [%s]: " "${_cur_asst_model:-gemma4:e4b}" >&2
             IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-gemma3:1b}}"
+            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-gemma4:e4b}}"
         fi
 
         LLM_API_KEY="ollama"

@@ -52,6 +52,8 @@ export const OllamaModel = Object.freeze({
     GEMMA3_12B:         'gemma3:12b',
     GEMMA3_4B:          'gemma3:4b',
     GEMMA3_1B:          'gemma3:1b',
+    GEMMA4_E4B:         'gemma4:e4b',
+    GEMMA4_E2B:         'gemma4:e2b',
     GEMMA4:             'gemma4',
     LLAMA3_8B:          'llama3:8b',
     LLAMA3_70B:         'llama3:70b',

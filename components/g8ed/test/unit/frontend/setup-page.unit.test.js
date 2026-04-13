@@ -104,8 +104,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             </div>
             <div id="config-ollama" class="wizard-provider-config" style="display:none">
                 <input id="ollama_url" type="text" />
-                <input id="ollama_primary_model" type="text" value="gemma3:1b" />
-                <input id="ollama_assistant_model" type="text" value="gemma3:270m" />
+                <input id="ollama_primary_model" type="text" value="gemma4:e4b" />
+                <input id="ollama_assistant_model" type="text" value="gemma4:e4b" />
             </div>
             <select id="search_provider">
                 <option value="">None</option>
@@ -973,12 +973,12 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('collects Ollama settings', () => {
             setupPage._provider = LLMProvider.OLLAMA;
             document.getElementById('ollama_url').value = 'http://localhost:11434';
-            document.getElementById('ollama_primary_model').value = 'gemma3:1b';
-            document.getElementById('ollama_assistant_model').value = 'gemma3:270m';
+            document.getElementById('ollama_primary_model').value = 'gemma4:e4b';
+            document.getElementById('ollama_assistant_model').value = 'gemma4:e4b';
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_provider).toBe(LLMProvider.OLLAMA);
-            expect(settings.llm_model).toBe('gemma3:1b');
-            expect(settings.llm_assistant_model).toBe('gemma3:270m');
+            expect(settings.llm_model).toBe('gemma4:e4b');
+            expect(settings.llm_assistant_model).toBe('gemma4:e4b');
             expect(settings.ollama_endpoint).toBe('http://localhost:11434/v1');
         });
 

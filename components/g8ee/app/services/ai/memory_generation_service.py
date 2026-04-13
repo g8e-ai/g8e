@@ -122,8 +122,12 @@ class MemoryGenerationService:
 
         system_instruction = build_memory_analysis_system_instruction(memory.case_title)
 
+        assistant_model = settings.llm.assistant_model
+        if not assistant_model:
+            logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
+            return
+
         async with get_llm_provider(settings.llm) as provider:
-            assistant_model = settings.llm.assistant_model or "gpt-4o-mini"
             config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
                 temperature=None,

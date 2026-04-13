@@ -95,6 +95,56 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
+    describe('AgentMetadata persona fields', () => {
+        const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'temperature', 'tools', 'identity', 'purpose', 'autonomy'];
+        const VALID_AUTONOMY_VALUES = ['fully_autonomous', 'human_approved'];
+        const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance'];
+
+        ALL_AGENT_KEYS.forEach(agentKey => {
+            describe(`${agentKey} agent`, () => {
+                const agent = _AGENTS['agent.metadata'][agentKey];
+
+                REQUIRED_PERSONA_FIELDS.forEach(field => {
+                    it(`has '${field}' field`, () => {
+                        expect(agent).toHaveProperty(field);
+                    });
+                });
+
+                it('role is a non-empty string', () => {
+                    expect(typeof agent.role).toBe('string');
+                    expect(agent.role.length).toBeGreaterThan(0);
+                });
+
+                it('model_tier is a non-empty string', () => {
+                    expect(typeof agent.model_tier).toBe('string');
+                    expect(agent.model_tier.length).toBeGreaterThan(0);
+                });
+
+                it('temperature is null or a number', () => {
+                    expect(agent.temperature === null || typeof agent.temperature === 'number').toBe(true);
+                });
+
+                it('tools is an array', () => {
+                    expect(Array.isArray(agent.tools)).toBe(true);
+                });
+
+                it('identity is a non-empty string', () => {
+                    expect(typeof agent.identity).toBe('string');
+                    expect(agent.identity.length).toBeGreaterThan(0);
+                });
+
+                it('purpose is a non-empty string', () => {
+                    expect(typeof agent.purpose).toBe('string');
+                    expect(agent.purpose.length).toBeGreaterThan(0);
+                });
+
+                it('autonomy is a valid value', () => {
+                    expect(VALID_AUTONOMY_VALUES).toContain(agent.autonomy);
+                });
+            });
+        });
+    });
+
     describe('Raw JSON values (legacy)', () => {
         it('triage.complexity values are correct', () => {
             expect(_AGENTS['triage.complexity'].simple).toBe('simple');

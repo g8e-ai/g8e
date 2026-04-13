@@ -78,6 +78,50 @@ class TestAgentConstantsMatchSharedJSON:
         assert all(isinstance(v, float) for v in TRIBUNAL_MEMBER_TEMPERATURES.values())
 
 
+class TestAgentMetadataPersonaFields:
+    """Verifies all agents have first-class persona fields."""
+
+    REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "temperature", "tools", "identity", "purpose", "autonomy"}
+    VALID_AUTONOMY_VALUES = {"fully_autonomous", "human_approved"}
+    ALL_AGENT_KEYS = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance"}
+
+    def test_all_agents_have_persona_fields(self):
+        metadata = _AGENTS["agent.metadata"]
+        for agent_key in self.ALL_AGENT_KEYS:
+            agent = metadata[agent_key]
+            missing = self.REQUIRED_PERSONA_FIELDS - set(agent.keys())
+            assert not missing, f"Agent '{agent_key}' missing persona fields: {missing}"
+
+    def test_role_is_nonempty_string(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert isinstance(agent["role"], str) and agent["role"], f"Agent '{key}' role must be a non-empty string"
+
+    def test_model_tier_is_nonempty_string(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert isinstance(agent["model_tier"], str) and agent["model_tier"], f"Agent '{key}' model_tier must be a non-empty string"
+
+    def test_temperature_is_null_or_number(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            temp = agent["temperature"]
+            assert temp is None or isinstance(temp, (int, float)), f"Agent '{key}' temperature must be null or numeric, got {type(temp)}"
+
+    def test_tools_is_list(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert isinstance(agent["tools"], list), f"Agent '{key}' tools must be a list"
+
+    def test_identity_is_nonempty_string(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert isinstance(agent["identity"], str) and agent["identity"], f"Agent '{key}' identity must be a non-empty string"
+
+    def test_purpose_is_nonempty_string(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert isinstance(agent["purpose"], str) and agent["purpose"], f"Agent '{key}' purpose must be a non-empty string"
+
+    def test_autonomy_is_valid_value(self):
+        for key, agent in _AGENTS["agent.metadata"].items():
+            assert agent["autonomy"] in self.VALID_AUTONOMY_VALUES, f"Agent '{key}' autonomy must be one of {self.VALID_AUTONOMY_VALUES}, got '{agent['autonomy']}'"
+
+
 class TestSharedModelJSONEnumsMatchG8ee:
     """Verifies that shared model JSON enum values match g8ee enum values."""
 

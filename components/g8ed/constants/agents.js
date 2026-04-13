@@ -73,8 +73,9 @@ export const TribunalTemperatures = Object.freeze({
 
 /**
  * Agent Metadata
- * Display metadata (id, display_name, icon, description) for all agents.
- * Use this for UI rendering (icons, labels) instead of hardcoded strings.
+ * First-class persona definitions for all agents.
+ * Each entry contains: id, display_name, icon, description, role, model_tier,
+ * temperature, tools, identity, purpose, autonomy.
  */
 export const AgentMetadata = Object.freeze({
     TRIAGE:           _AGENTS['agent.metadata'].triage,
