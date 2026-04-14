@@ -645,6 +645,56 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         });
     });
 
+    describe('sealStreamingResponse', () => {
+        it('renames the element ID so getOrCreateAIResponse creates a new bubble', () => {
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'first message');
+            terminal.sealStreamingResponse(WEB_SESSION_ID);
+
+            expect(document.getElementById(`ai-response-${WEB_SESSION_ID}`)).toBeNull();
+
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'second message');
+
+            const allBubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__ai-response');
+            expect(allBubbles.length).toBe(2);
+        });
+
+        it('removes the streaming class from the sealed bubble', () => {
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'text');
+            const entry = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
+            expect(entry.classList.contains('streaming')).toBe(true);
+
+            terminal.sealStreamingResponse(WEB_SESSION_ID);
+
+            expect(entry.classList.contains('streaming')).toBe(false);
+        });
+
+        it('clears the text accumulator for the session', () => {
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'accumulated');
+            terminal.sealStreamingResponse(WEB_SESSION_ID);
+
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'fresh start');
+            const newEntry = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
+            const content = newEntry.querySelector('.anchored-terminal__ai-response-content');
+            expect(content.textContent).toBe('fresh start');
+        });
+
+        it('does not throw when no streaming entry exists', () => {
+            expect(() => terminal.sealStreamingResponse('nonexistent-session')).not.toThrow();
+        });
+
+        it('removes streaming cursor elements', () => {
+            terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'text');
+            const entry = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
+            const cursor = document.createElement('span');
+            cursor.className = 'streaming-cursor';
+            entry.appendChild(cursor);
+
+            terminal.sealStreamingResponse(WEB_SESSION_ID);
+
+            expect(entry.querySelectorAll('.streaming-cursor').length).toBe(0);
+        });
+    });
+
     describe('applyCitations', () => {
         beforeEach(() => {
             terminal.getOrCreateAIResponse(WEB_SESSION_ID);
