@@ -52,20 +52,20 @@ export const EventType = Object.freeze({
     OPERATOR_COMMAND_COMPLETED:    'g8e.v1.operator.command.completed',
     OPERATOR_COMMAND_FAILED:       'g8e.v1.operator.command.failed',
     OPERATOR_COMMAND_CANCELLED:    'g8e.v1.operator.command.cancelled',
-    OPERATOR_COMMAND_EXECUTION:    'g8e.v1.operator.command.output.received',
-    OPERATOR_COMMAND_RESULT:       'g8e.v1.operator.command.completed',
+    OPERATOR_COMMAND_EXECUTION:    'g8e.v1.operator.command.execution',
+    OPERATOR_COMMAND_RESULT:       'g8e.v1.operator.command.result',
 
     // Approvals
     OPERATOR_APPROVAL_REQUEST:     'g8e.v1.operator.command.approval.requested',
     OPERATOR_APPROVAL_GRANTED:     'g8e.v1.operator.command.approval.granted',
     OPERATOR_APPROVAL_REJECTED:    'g8e.v1.operator.command.approval.rejected',
-    OPERATOR_APPROVAL_PREPARING:    'g8e.v1.operator.command.approval.requested',
+    OPERATOR_APPROVAL_PREPARING:    'g8e.v1.operator.command.approval.preparing',
 
     // File/Edit
     OPERATOR_FILE_EDIT_REQUESTED:  'g8e.v1.operator.file.edit.requested',
     OPERATOR_FILE_EDIT_COMPLETED:  'g8e.v1.operator.file.edit.completed',
     OPERATOR_FILE_EDIT_FAILED:     'g8e.v1.operator.file.edit.failed',
-    OPERATOR_FILE_EDIT_TIMEOUT:    'g8e.v1.operator.file.edit.failed',
+    OPERATOR_FILE_EDIT_TIMEOUT:    'g8e.v1.operator.file.edit.timeout',
     FILE_EDIT_APPROVAL_REQUEST:    'g8e.v1.operator.file.edit.approval.requested',
     FILE_EDIT_APPROVAL_GRANTED:    'g8e.v1.operator.file.edit.approval.granted',
     FILE_EDIT_APPROVAL_REJECTED:   'g8e.v1.operator.file.edit.approval.rejected',
