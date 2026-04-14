@@ -17,59 +17,44 @@ The g8e platform uses an **operator-first** storage philosophy. The Operator (g8
 The Operator is the central data plane for the entire platform. In `--listen` mode (g8es), it provides the persistence and messaging backbone for g8ee and g8ed. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
 
 ```mermaid
-graph TD
-    subgraph "Control & Persistence Plane (Self-Hosted Hub)"
-        direction TB
-        g8es[("<b>g8es</b><br/>Operator in --listen mode<br/>(Central Data Plane)")]
-        
-        subgraph "g8es Services"
-            direction LR
-            DS["Document Store<br/>(Platform Data)"]
-            KS["KV Store<br/>(Ephemeral State)"]
-            PS["PubSub Broker<br/>(Message Routing)"]
-            BS["Blob Store<br/>(Artifacts)"]
+flowchart TD
+    subgraph Hub ["Control & Persistence Plane (Self-Hosted Hub)"]
+        direction LR
+        subgraph App ["Application Layer"]
+            direction TB
+            g8ed["g8ed<br/>Dashboard & Gateway"]
+            g8ee["g8ee<br/>AI Engine"]
+            g8ee --> g8ed
         end
-        g8es --- DS
-        g8es --- KS
-        g8es --- PS
-        g8es --- BS
-        
-        g8ee["<b>g8ee</b><br/>AI Engine"]
-        g8ed["<b>g8ed</b><br/>Dashboard & Gateway"]
-        
-        g8ee -- "REST / PubSub" --> g8es
-        g8ed -- "REST" --> g8es
-    end
 
-    subgraph "Execution Plane (Managed Hosts)"
-        direction TB
-        subgraph "Standard Operator A"
-            OPA["<b>Operator</b><br/>(Standard Mode)"]
-            subgraph "Authoritative Local Data (A)"
-                AVA["Audit Vault"]
-                RVA["Raw Vault"]
-                SVA["Scrubbed Vault"]
-                LGA["Git Ledger"]
+        subgraph Data ["Data Layer"]
+            direction TB
+            g8es[("g8es<br/>SQLite/KV/PubSub")]
+            subgraph "g8es Services"
+                direction LR
+                DS["Document Store"]
+                KS["KV Store"]
+                PS["PubSub Broker"]
+                BS["Blob Store"]
             end
-            OPA --- AVA
-            OPA --- RVA
-            OPA --- SVA
-            OPA --- LGA
+            g8es --- DS
+            g8es --- KS
+            g8es --- PS
+            g8es --- BS
+        end
+
+        g8ed <--> g8es
+        g8ee <--> g8es
+    end
+
+    subgraph EP_A ["Execution Plane (Managed Hosts)"]
+        direction LR
+        subgraph OPA_Node ["Standard Operator A"]
+            OPA["Operator<br/>(Standard Mode)"] --- LGA["Encrypted Local Audit Ledger"]
         end
     end
 
-    %% Data Paths
-    OPA -- "mTLS WebSocket (Pub/Sub)" --> g8ed
-    g8ed -- "Internal Proxy" --> g8es
-    
-    %% Annotations
-    classDef hub fill:#f5f5f5,stroke:#333,stroke-width:2px;
-    classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
-    
-    class g8es,g8ee,g8ed hub;
-    class OPA operator;
-    class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
+    OPA -- "Outbound mTLS WebSocket" --> g8ed
 ```
 
 ---

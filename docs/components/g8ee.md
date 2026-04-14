@@ -34,12 +34,23 @@ ChatPipelineService
 ### Component Relationships
 
 ```mermaid
-graph LR
-    Browser -- "HTTPS / SSE" --> g8ed
-    g8ed -- "HTTP (Internal)" --> g8ee
-    g8ee -- "HTTP / WebSocket" --> g8es
-    g8ed -- "WebSocket (mTLS)" --> g8eo
-    g8eo -- "Pub/Sub" --> g8ee
+flowchart LR
+    subgraph Hub ["Control Plane"]
+        direction LR
+        subgraph App ["Application Layer"]
+            direction TB
+            g8ed["g8ed<br/>Dashboard & Gateway"]
+            g8ee["g8ee<br/>AI Engine"]
+            g8ee --> g8ed
+        end
+        subgraph Data ["Data Layer"]
+            g8es[("g8es<br/>SQLite/KV/PubSub")]
+        end
+        g8ed <--> g8es
+        g8ee <--> g8es
+    end
+
+    Browser((Browser)) -- "HTTPS / SSE" --> g8ed
 ```
 
 - **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
