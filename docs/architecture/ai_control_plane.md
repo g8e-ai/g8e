@@ -653,9 +653,9 @@ flowchart TD
     
     subgraph Gen [Stochastic Voting Swarm]
         direction LR
-        P1[Axiom<br/>Pass 0 - Temp 0.0]
-        P2[Concord<br/>Pass 1 - Temp 0.4]
-        P3[Variance<br/>Pass 2 - Temp 0.8]
+        P1[Axiom<br/>Pass 0 - Temp 0.5]
+        P2[Concord<br/>Pass 1 - Temp 0.7]
+        P3[Variance<br/>Pass 2 - Temp 1.2]
     end
     
     Gen --> Vote[Weighted Majority Vote]
@@ -684,9 +684,9 @@ flowchart TD
 - **Role**: Inducing sampling diversity to catch hallucinations and edge cases.
 - **Thinking Level**: Set to lowest supported (minimal/low) to save compute/latency while relying on aggregate accuracy.
 - **Temperature**: Spanned across the swarm to induce diversity, sourced from shared/constants/AIs.json:
-    - **Axiom** (Pass 0): 0.0 (Fully deterministic, statistical probability and resource efficiency)
-    - **Concord** (Pass 1): 0.4 (Moderate determinism with ethical flexibility)
-    - **Variance** (Pass 2): 0.8 (High creativity and intentional unpredictability)
+    - **Axiom** (Pass 0): 0.5 (Fully deterministic, statistical probability and resource efficiency)
+    - **Concord** (Pass 1): 0.7 (Moderate determinism with ethical flexibility)
+    - **Variance** (Pass 2): 1.2 (High creativity and intentional unpredictability)
 
 #### 3. The Final Verifier (Consensus Orchestrator)
 - **Role**: Deterministic arbitration and final verdict formatting.
