@@ -37,6 +37,7 @@ from app.models.g8ed_client import (
     AISearchWebPayload,
     ChatCitationsReadyPayload,
     ChatErrorPayload,
+    ChatProcessingStartedPayload,
     ChatResponseChunkPayload,
     ChatResponseCompletePayload,
     ChatThinkingPayload,
@@ -82,6 +83,16 @@ async def deliver_via_sse(
         investigation_id, case_id, user_id, agent_mode, agent_streaming_context.sentinel_mode,
     )
     logger.info("[SSE] Async generator iteration starting")
+
+    # Emit iteration started event to signal AI processing has begun
+    await g8ed_event_service.publish_investigation_event(
+        investigation_id=investigation_id,
+        event_type=EventType.LLM_CHAT_ITERATION_STARTED,
+        payload=ChatProcessingStartedPayload(agent_mode=agent_mode),
+        web_session_id=web_session_id,
+        case_id=case_id,
+        user_id=user_id,
+    )
 
     _pending_search_calls: dict[str, str | None] = {}
     _turn = 0

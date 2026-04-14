@@ -93,6 +93,16 @@ class OperatorNetworkPortCheckPayload(G8eBaseModel):
     status: ToolCallStatus = Field(default=ToolCallStatus.STARTED, description="Execution status")
 
 
+class ChatProcessingStartedPayload(G8eBaseModel):
+    """Payload for EventType.LLM_CHAT_ITERATION_STARTED.
+
+    Emitted at the start of SSE delivery to signal that AI processing has begun.
+    The frontend uses this to show a waiting indicator before the first text chunk arrives.
+    """
+
+    agent_mode: str | None = Field(default=None, description="Workflow type (e.g., 'default', 'sentinel')")
+
+
 class ChatTurnCompletePayload(G8eBaseModel):
     """Payload for EventType.LLM_CHAT_ITERATION_COMPLETED.
 

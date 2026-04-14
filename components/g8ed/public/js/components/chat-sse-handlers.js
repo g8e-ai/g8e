@@ -29,6 +29,10 @@ export const ChatSSEHandlersMixin = {
             return;
         }
 
+        this.eventBus.on(EventType.LLM_CHAT_ITERATION_STARTED, (data) => {
+            this.handleIterationStarted(data);
+        });
+
         this.eventBus.on(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED, (data) => {
             this.handleAITextChunk(data);
         });
@@ -243,7 +247,6 @@ export const ChatSSEHandlersMixin = {
 
         if (this.anchoredTerminal) {
             this.anchoredTerminal.appendUserMessage(trimmedMessage);
-            this.anchoredTerminal.showWaitingIndicator(webSessionId);
         }
 
         if (!Array.isArray(attachments)) {
@@ -296,6 +299,15 @@ export const ChatSSEHandlersMixin = {
 
     handleCaseCleared() {
         this.clearChat();
+    },
+
+    handleIterationStarted(data) {
+        if (!data.web_session_id) {
+            return;
+        }
+        if (this.anchoredTerminal) {
+            this.anchoredTerminal.showWaitingIndicator(data.web_session_id);
+        }
     },
 
     handleAITextChunk(data) {

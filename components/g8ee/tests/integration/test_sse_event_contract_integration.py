@@ -25,6 +25,7 @@ from pathlib import Path
 
 from app.constants import EventType
 from app.models.agent import StreamChunkData, StreamChunkFromModel, StreamChunkFromModelType
+from app.models.g8ed_client import ChatProcessingStartedPayload
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
     make_streaming_context,
@@ -50,6 +51,50 @@ SHARED_SSE_EVENTS = _load_shared_sse_fixtures()
 class TestSSEEventContract:
     """Verify g8ee SSE events match shared fixture contracts."""
 
+    async def test_processing_started_matches_shared_fixture(self):
+        """LLM_CHAT_ITERATION_STARTED event matches shared structure."""
+        streaming_ctx = make_streaming_context(
+            case_id="contract-test-case-007",
+            investigation_id="contract-test-inv-007",
+            web_session_id="contract-test-sess-007",
+            user_id="contract-test-user-007",
+            agent_mode="default",
+        )
+        event_svc = make_g8ed_event_service()
+
+        async def _simple_stream():
+            yield StreamChunkFromModel(
+                type=StreamChunkFromModelType.TEXT,
+                data=StreamChunkData(content="Test content"),
+            )
+            yield StreamChunkFromModel(
+                type=StreamChunkFromModelType.COMPLETE,
+                data=StreamChunkData(finish_reason="STOP"),
+            )
+
+        await deliver_via_sse(
+            stream=_simple_stream(),
+            agent_streaming_context=streaming_ctx,
+            g8ed_event_service=event_svc,
+        )
+
+        published = event_svc._published_events
+        started_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_STARTED]
+
+        assert len(started_events) == 1
+        actual_event = started_events[0]
+
+        # Compare against shared fixture
+        expected_fixture = SHARED_SSE_EVENTS["llm_chat_iteration_started"]
+
+        # Verify payload is typed ChatProcessingStartedPayload with agent_mode
+        assert isinstance(actual_event.payload, ChatProcessingStartedPayload)
+        assert actual_event.event_type == expected_fixture["type"]
+        assert actual_event.payload.agent_mode == expected_fixture["data"]["agent_mode"]
+        assert actual_event.investigation_id == streaming_ctx.investigation_id
+        assert actual_event.case_id == streaming_ctx.case_id
+        assert actual_event.web_session_id == streaming_ctx.web_session_id
+
     async def test_text_chunk_received_matches_shared_fixture(self):
         """LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED event matches shared structure."""
         # Use content from fixture to satisfy contract test
@@ -58,7 +103,7 @@ class TestSSEEventContract:
 
         streaming_ctx = make_streaming_context(
             case_id="contract-test-case-001",
-            investigation_id="contract-test-inv-001", 
+            investigation_id="contract-test-inv-001",
             web_session_id="contract-test-sess-001",
             user_id="contract-test-user-001",
         )
@@ -84,13 +129,13 @@ class TestSSEEventContract:
         # Get published events
         published = event_svc._published_events
         text_chunk_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
-        
+
         assert len(text_chunk_events) >= 1
         actual_event = text_chunk_events[0]
 
         # Compare against shared fixture
         expected_fixture = SHARED_SSE_EVENTS["text_chunk_received"]
-        
+
         # Verify structure matches (using actual EventType constants)
         assert actual_event.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED
         assert actual_event.payload.content == expected_fixture["data"]["content"]
