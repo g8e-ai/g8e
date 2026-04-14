@@ -219,15 +219,5 @@ export function createSSERouter({
         }).forClient());
     });
 
-    router.post(SSEPaths.CONFIG, requireAuth, async (req, res) => {
-        try {
-            await sseService._pushLLMConfig(req.userId, req.webSessionId);
-            res.status(200).json({ status: 'success' });
-        } catch (error) {
-            logger.error('[G8ED-SSE] Failed to manually push LLM config', { error: error.message });
-            res.status(500).json({ error: 'Failed to push config' });
-        }
-    });
-
     return router;
 }

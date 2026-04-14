@@ -114,6 +114,8 @@
     display: flex;
     flex-direction: column;
     margin: 4px 0;
+    margin-left: auto;
+    max-width: 65%;
     border-radius: 6px;
     overflow: hidden;
 }
@@ -126,7 +128,6 @@
     padding: 5px 10px;
     cursor: pointer;
     user-select: none;
-    font-size: 12px;
     transition: color 0.2s ease;
 }
 
@@ -145,7 +146,6 @@
 
 .anchored-terminal__thinking-title {
     color: var(--text-secondary);
-    font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -194,12 +194,14 @@
     color: var(--text-secondary);
 }
 
-/* Activity indicator in terminal */
+/* Activity indicator in terminal - right aligned with AI */
 .anchored-terminal__activity {
     display: flex;
     align-items: center;
+    align-self: flex-end;
     padding: 6px 12px;
     margin: 4px 0;
+    max-width: 65%;
     font-family: var(--font-sans, system-ui, sans-serif);
     font-size: 12px;
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -274,9 +276,12 @@
 .tribunal {
     display: flex;
     flex-direction: column;
+    align-self: flex-end;
     gap: 6px;
     padding: 8px 12px;
     margin: 4px 0;
+    width: fit-content;
+    max-width: 65%;
     min-width: 220px;
     background: var(--surface-secondary, rgba(139, 148, 158, 0.06));
     border: 1px solid var(--border-color, rgba(139, 148, 158, 0.15));
@@ -384,12 +389,14 @@
     border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Error message in terminal */
+/* Error message in terminal - right aligned with AI */
 .anchored-terminal__error-message {
     display: flex;
     flex-direction: column;
     padding: 8px 12px;
     margin: 4px 0;
+    margin-left: auto;
+    max-width: 65%;
 }
 
 .anchored-terminal__error-header {
@@ -639,6 +646,8 @@
     border: 3px solid rgba(var(--accent-green-rgb), 0.7);
     border-radius: 0.25rem;
     margin: 12px 0;
+    max-width: 65%;
+    align-self: flex-end;
     box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.25),
                 inset 0 0 30px rgba(var(--accent-green-rgb), 0.05);
     animation: approvalPulse 2s ease-in-out infinite;

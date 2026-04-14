@@ -555,7 +555,6 @@ export const apiPaths = {
     sse: {
         events: () => `${SSE.BASE}/${SSE.EVENTS}`,
         health: () => `${SSE.BASE}/${SSE.HEALTH}`,
-        config: () => `${SSE.BASE}/${SSE.CONFIG}`,
     },
     audit: {
         events:   () => `${Audit.BASE}/${Audit.EVENTS}`,

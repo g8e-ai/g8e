@@ -207,6 +207,21 @@ describe('LlmModelManager [UNIT]', () => {
         });
     });
 
+    describe('requestConfig', () => {
+        it('only emits LLM_CONFIG_REQUESTED, no HTTP calls (regression: /sse/config 404)', () => {
+            eventBus.clearLog();
+            global.window = { serviceClient: { post: vi.fn() } };
+
+            manager.requestConfig();
+
+            const requested = eventBus.getEventsOfType(EventType.LLM_CONFIG_REQUESTED);
+            expect(requested.length).toBe(1);
+            expect(global.window.serviceClient.post).not.toHaveBeenCalled();
+
+            delete global.window;
+        });
+    });
+
     describe('handleCaseCleared', () => {
         it('resets to defaults', () => {
             emitConfig(eventBus);

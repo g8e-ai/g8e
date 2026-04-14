@@ -91,7 +91,6 @@ const Seg = {
     sse: {
         EVENTS: 'events',
         HEALTH: 'health',
-        CONFIG: 'config',
     },
     audit: {
         EVENTS:   'events',
@@ -201,7 +200,6 @@ export const ApiPaths = {
     sse: {
         events: () => `${BASE.SSE}/${Seg.sse.EVENTS}`,
         health: () => `${BASE.SSE}/${Seg.sse.HEALTH}`,
-        config: () => `${BASE.SSE}/${Seg.sse.CONFIG}`,
     },
     audit: {
         events:   () => `${BASE.AUDIT}/${Seg.audit.EVENTS}`,

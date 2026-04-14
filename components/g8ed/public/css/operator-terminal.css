@@ -15,7 +15,7 @@
 .operator-terminal-message {
     margin: 16px 1px 16px auto;
     min-width: 300px;
-    max-width: 480px;
+    max-width: 65%;
     background: var(--terminal-bg-dark);
     border: 1px solid var(--border-secondary);
     border-radius: var(--radius-md);
