@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { G8eBaseModel, F, now } from './base.js';
+import { OperatorSlot } from './operator_model.js';
 
 // ---------------------------------------------------------------------------
 // SSE event models
@@ -40,7 +41,7 @@ export class ConnectionEstablishedEvent extends G8eBaseModel {
 export class OperatorListData extends G8eBaseModel {
     static fields = {
         type:         { type: F.string, required: true },
-        operators:    { type: F.array,  default: () => [] },
+        operators:    { type: F.array,  items: OperatorSlot, default: () => [] },
         total_count:  { type: F.number, default: 0 },
         active_count: { type: F.number, default: 0 },
         used_slots:   { type: F.number, default: 0 },
@@ -145,7 +146,6 @@ export class OperatorStatusUpdatedData extends G8eBaseModel {
         hostname:            { type: F.string, default: null },
         system_fingerprint:  { type: F.string, default: null },
         system_info:         { type: F.object, default: null },
-        operator_data:       { type: F.any,    default: null },
         reason:              { type: F.string, default: null },
         total_count:         { type: F.number, default: null },
         active_count:        { type: F.number, default: null },

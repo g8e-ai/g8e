@@ -33,6 +33,7 @@ import {
     LogStreamConnectedEvent,
     G8eePassthroughEvent,
 } from '@g8ed/models/sse_models.js';
+import { OperatorSlot } from '@g8ed/models/operator_model.js';
 
 describe('ConnectionEstablishedEvent [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields', () => {
@@ -92,7 +93,7 @@ describe('OperatorListData [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const operators = [{ operator_id: 'op-1', status: 'ACTIVE' }];
+        const operators = [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })];
         const data = OperatorListData.parse({
             type: 'g8e.v1.operator.panel.list.updated',
             operators: operators,
@@ -101,7 +102,8 @@ describe('OperatorListData [UNIT - PURE LOGIC]', () => {
             used_slots: 1,
             max_slots: 5,
         });
-        expect(data.operators).toEqual(operators);
+        expect(data.operators[0].operator_id).toBe('op-1');
+        expect(data.operators[0].status).toBe('ACTIVE');
         expect(data.total_count).toBe(1);
         expect(data.active_count).toBe(1);
         expect(data.used_slots).toBe(1);
@@ -186,7 +188,7 @@ describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
         const testDate = new Date('2026-04-13T17:21:05.940Z');
         const operatorList = OperatorListData.parse({
             type: 'g8e.v1.operator.panel.list.updated',
-            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
+            operators: [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })],
             total_count: 1,
             active_count: 1,
             used_slots: 1,
@@ -198,15 +200,13 @@ describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
             operator_list: operatorList,
         });
         const wire = event.forWire();
-        expect(wire.operator_list).toEqual({
-            type: 'g8e.v1.operator.panel.list.updated',
-            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
-            total_count: 1,
-            active_count: 1,
-            used_slots: 1,
-            max_slots: 1,
-            timestamp: testDate.toISOString(),
-        });
+        expect(wire.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
+        expect(wire.operator_list.operators[0].operator_id).toBe('op-1');
+        expect(wire.operator_list.operators[0].status).toBe('ACTIVE');
+        expect(wire.operator_list.total_count).toBe(1);
+        expect(wire.operator_list.active_count).toBe(1);
+        expect(wire.operator_list.used_slots).toBe(1);
+        expect(wire.operator_list.max_slots).toBe(1);
     });
 });
 
@@ -457,7 +457,6 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
         expect(data.hostname).toBeNull();
         expect(data.system_fingerprint).toBeNull();
         expect(data.system_info).toBeNull();
-        expect(data.operator_data).toBeNull();
         expect(data.reason).toBeNull();
         expect(data.total_count).toBeNull();
         expect(data.active_count).toBeNull();
@@ -472,7 +471,6 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
             hostname: 'host-1',
             system_fingerprint: 'fp-abc123',
             system_info: systemInfo,
-            operator_data: { uptime: 3600 },
             reason: 'User request',
             total_count: 10,
             active_count: 5,
@@ -481,7 +479,6 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
         expect(data.hostname).toBe('host-1');
         expect(data.system_fingerprint).toBe('fp-abc123');
         expect(data.system_info).toEqual(systemInfo);
-        expect(data.operator_data).toEqual({ uptime: 3600 });
         expect(data.reason).toBe('User request');
         expect(data.total_count).toBe(10);
         expect(data.active_count).toBe(5);

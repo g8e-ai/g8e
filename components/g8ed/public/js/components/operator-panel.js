@@ -133,30 +133,9 @@ export class OperatorPanel {
     }
 
     _onStatusUpdated(data) {
-        if (data.operator_data) {
-            const idx = this._operators.findIndex(op => op.operator_id === data.operator_id);
-            if (idx >= 0) {
-                this._operators[idx] = data.operator_data;
-            } else {
-                this._operators.push(data.operator_data);
-            }
-            this._totalOperatorCount = this._operators.length;
-            this._activeOperatorCount = this._operators.filter(op => _ACTIVE_STATUSES.has(op.status)).length;
-        }
-
         if (data.total_count !== undefined) {
             this._totalOperatorCount = data.total_count;
             this._activeOperatorCount = data.active_count || 0;
-        }
-
-        if (data.operator_data?.status && _OFFLINE_STATUSES.has(data.operator_data.status)) {
-            const isBound = this._operators.some(
-                op => op.operator_id === data.operator_id && op.status === OperatorStatus.BOUND
-            );
-            if (isBound) {
-                this._isConnected = false;
-                this._lastHeartbeat = null;
-            }
         }
 
         operatorSessionService.setBoundOperators(this._operators);
