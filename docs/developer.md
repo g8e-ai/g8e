@@ -1,15 +1,6 @@
 # g8e Developer Guide
 
-> **© 2026 Lateralus Labs, LLC.**  
-> g8e is licensed under the [Apache License, Version 2.0](LICENSE).
-
----
-
-## Origins and Architecture
-
-g8e is a fully self-hosted, air-gapped capable AI governance platform with zero cloud dependencies. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
-
-When something is wrong, the right move is to fix it correctly and leave no trace. There is no legacy cloud compatibility layer to maintain.
+g8e is an open-source, self-hosted, air-gapped capable AI governance platform with zero cloud dependencies. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
 
 ---
 
@@ -29,7 +20,7 @@ Security is the first constraint of governance. Functionality is built inside it
 ### No Tech Debt
 - **Rip and Replace:** When code is wrong, replace it correctly.
 - **Prohibited Patterns:** `ensure*()`, `getOrCreate*()`, `JSON.stringify` as type coercion, `Any` in signatures, and `map[string]interface{}` for known shapes are hard stops.
-- **Flag AI-Generated Smell:** Nearly all of this codebase was AI-authored. Some of it works but makes no structural sense — unnecessary wrappers, inverted abstractions, redundant indirection, over-engineered helpers. When you encounter code like this during an investigation or feature, fix it. Do not route around it with another wrapper. Cleaning up AI-written code is a permanent part of the SDLC, not a one-time event.
+- **Refactor AI-Generated Tech Debt:** We use AI extensively to build this codebase. If you encounter code that works but makes no structural sense—unnecessary wrappers, inverted abstractions, redundant indirection—fix it. Do not route around it with another wrapper. Refining abstractions is a permanent part of the SDLC.
 
 ### Data Sovereignty
 The platform is a stateless relay. Raw command output and file contents stay on the Operator host, encrypted, and never touch the platform side in persistent form.
@@ -40,8 +31,8 @@ The platform is a stateless relay. Raw command output and file contents stay on 
 
 1.  **Browser:** The user interface for interacting with the platform.
 2.  **g8ed (Node.js/Express):** Web frontend and Gateway Protocol. Handles user authentication, session management, and routes requests to g8ee.
-3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, agent logic, tool orchestration, and coordinates with g8es for persistence.
-4.  **g8eo (Go):** The Operator binary. Executes commands on target systems, enforces LFAA, and reports results via pub/sub.
+3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, AI reasoning, tool orchestration, and coordinates with g8es for persistence.
+4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. Any client following the g8e events protocol can act as an Operator.
 5.  **g8es (Go/SQLite):** The persistence and pub/sub broker. Provides the document store and real-time message bus for all components.
 
 ### Communication Flow
@@ -168,7 +159,7 @@ AI Pipeline
 │   └── WebSearchProvider
 ├── AIRequestBuilder ───────────> AIToolService
 ├── AIResponseAnalyzer
-├── g8eEngine (Agent) ──────────> AIToolService, GroundingService
+├── g8eEngine ──────────────────> AIToolService, GroundingService
 ├── ChatPipelineService ────────> EventService, InvestigationService,
 │                                 AIRequestBuilder, g8eEngine,
 │                                 MemoryDataService, MemoryGenerationService

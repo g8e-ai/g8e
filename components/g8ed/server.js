@@ -99,7 +99,7 @@ import { WEB_SESSION_ID_HEADER } from './constants/auth.js';
 import { HTTP_API_KEY_HEADER, HTTP_CONTENT_TYPE_HEADER, HTTP_REQUESTED_WITH_HEADER } from './constants/headers.js';
 import { CORS_INTERNAL_ORIGINS } from './constants/http_client.js';
 import { getVersionInfo } from './utils/version.js';
-import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy } from './utils/cert-installers.js';
+import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy, universalTrustScript, windowsPowerShellTrustScript } from './utils/cert-installers.js';
 import { BasePaths } from './constants/api_paths.js';
 import { G8ES_PUBSUB_PATH } from './constants/http_client.js';
 
@@ -457,7 +457,7 @@ class G8edServer {
                 }
                 
                 // Serve trust scripts
-                if (url === '/trust-cert.sh') {
+                if (url === '/trust.sh') {
                     const content = macosTrustScript(host, httpPort);
                     res.writeHead(200, {
                         ...securityHeaders,
@@ -469,7 +469,7 @@ class G8edServer {
                     return;
                 }
                 
-                if (url === '/trust-cert.bat') {
+                if (url === '/trust.bat') {
                     const content = windowsTrustScript(host, httpPort);
                     res.writeHead(200, {
                         ...securityHeaders,
@@ -492,7 +492,7 @@ class G8edServer {
                     return;
                 }
                 
-                if (url === '/trust-cert-linux.sh') {
+                if (url === '/trust-linux.sh') {
                     const content = linuxTrustScript(host, httpPort);
                     res.writeHead(200, {
                         ...securityHeaders,
@@ -501,6 +501,29 @@ class G8edServer {
                         'Content-Length': Buffer.byteLength(content),
                     });
                     res.end(content);
+                    return;
+                }
+                
+                if (url === '/trust') {
+                    const ua = (req.headers['user-agent'] || '').toLowerCase();
+                    const isWindows = ua.includes('windows') || ua.includes('win32') || ua.includes('win64') || ua.includes('powershell');
+                    if (isWindows) {
+                        const content = windowsPowerShellTrustScript(host, httpPort);
+                        res.writeHead(200, {
+                            ...securityHeaders,
+                            'Content-Type': 'text/plain; charset=utf-8',
+                            'Content-Length': Buffer.byteLength(content),
+                        });
+                        res.end(content);
+                    } else {
+                        const content = universalTrustScript(host, httpPort);
+                        res.writeHead(200, {
+                            ...securityHeaders,
+                            'Content-Type': 'text/plain; charset=utf-8',
+                            'Content-Length': Buffer.byteLength(content),
+                        });
+                        res.end(content);
+                    }
                     return;
                 }
                 

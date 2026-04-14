@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect } from 'vitest';
-import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy } from '../../../utils/cert-installers.js';
+import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy, universalTrustScript, windowsPowerShellTrustScript } from '../../../utils/cert-installers.js';
 
 describe('cert-installers', () => {
     const testHost = 'g8e.local';
@@ -128,6 +128,145 @@ describe('cert-installers', () => {
         it('should include port in URL when non-default', () => {
             const script = linuxTrustScript(testHost, 8080);
             expect(script).toContain('URL="http://${HOST}:8080/ca.crt"');
+        });
+    });
+
+    describe('universalTrustScript', () => {
+        it('should generate a POSIX shell script with correct shebang', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toMatch(/^#!\/bin\/sh\n/);
+        });
+
+        it('should require root and show usage on non-root', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('id -u');
+            expect(script).toContain('ERROR: This script must run as root.');
+            expect(script).toContain('curl -fsSL http://${HOST}/trust | sudo sh');
+        });
+
+        it('should detect OS via uname -s', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('uname -s');
+            expect(script).toContain('Darwin)');
+            expect(script).toContain('Linux)');
+        });
+
+        it('should include macOS trust logic', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('security add-trusted-cert');
+            expect(script).toContain('security delete-certificate');
+            expect(script).toContain('/Library/Keychains/System.keychain');
+        });
+
+        it('should include Linux trust logic', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('update-ca-certificates');
+            expect(script).toContain('/usr/local/share/ca-certificates/g8e-ca.crt');
+        });
+
+        it('should include Linux NSS database cleanup', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('certutil -D -d "sql:$db"');
+            expect(script).toContain('$HOME/.pki/nssdb');
+        });
+
+        it('should download CA cert from the correct URL', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain(`HOST="${testHost}"`);
+            expect(script).toContain('URL="http://${HOST}/ca.crt"');
+        });
+
+        it('should exit on curl failure', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('if ! curl -fsSL');
+            expect(script).toContain('ERROR: Failed to download CA certificate');
+        });
+
+        it('should include port in URL when non-default', () => {
+            const script = universalTrustScript(testHost, 8080);
+            expect(script).toContain('URL="http://${HOST}:8080/ca.crt"');
+            expect(script).toContain('curl -fsSL http://${HOST}:8080/trust | sudo sh');
+        });
+
+        it('should omit port from URL when port is 80', () => {
+            const script = universalTrustScript(testHost, 80);
+            expect(script).toContain('URL="http://${HOST}/ca.crt"');
+            expect(script).not.toContain(':80/ca.crt');
+        });
+
+        it('should exit with error for unsupported OS', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('Unsupported OS');
+        });
+
+        it('should clean up temp cert file', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('rm -f "$CERT_FILE"');
+        });
+
+        it('should show success message with setup URL', () => {
+            const script = universalTrustScript(testHost);
+            expect(script).toContain('g8e CA certificate trusted successfully.');
+            expect(script).toContain('https://$HOST/setup');
+        });
+    });
+
+    describe('windowsPowerShellTrustScript', () => {
+        it('should require admin privileges', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('#Requires -RunAsAdministrator');
+        });
+
+        it('should download CA cert from the correct URL', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain(`$url = "http://${testHost}/ca.crt"`);
+        });
+
+        it('should remove existing g8e certificates', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('Cert:\\LocalMachine\\Root');
+            expect(script).toContain('*g8e*');
+            expect(script).toContain('Remove-Item');
+        });
+
+        it('should trust via certutil', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('certutil -addstore -f "Root"');
+        });
+
+        it('should handle download failure', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('try {');
+            expect(script).toContain('Invoke-WebRequest');
+            expect(script).toContain('Failed to download CA certificate');
+        });
+
+        it('should handle certutil failure', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('$LASTEXITCODE -ne 0');
+            expect(script).toContain('Failed to trust the certificate');
+        });
+
+        it('should clean up temp cert file', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('Remove-Item $certFile');
+        });
+
+        it('should include port in URL when non-default', () => {
+            const script = windowsPowerShellTrustScript(testHost, 8080);
+            expect(script).toContain(`$url = "http://${testHost}:8080/ca.crt"`);
+        });
+
+        it('should omit port from URL when port is 80', () => {
+            const script = windowsPowerShellTrustScript(testHost, 80);
+            expect(script).toContain(`$url = "http://${testHost}/ca.crt"`);
+            expect(script).not.toContain(':80/ca.crt');
+        });
+
+        it('should show success message with setup URL', () => {
+            const script = windowsPowerShellTrustScript(testHost);
+            expect(script).toContain('g8e CA certificate trusted successfully.');
+            expect(script).toContain(`https://${testHost}/setup`);
         });
     });
 

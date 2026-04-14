@@ -1,4 +1,4 @@
-# g8ed — Virtual Service Organization Dashboard
+# g8ed — g8e Dashboard
 
 ## Overview
 
@@ -481,10 +481,35 @@ g8ed serves a public HTTP onboarding page specifically for workstation CA trust 
 
 **Behavior:**
 - Auto-detects OS and pre-selects the matching trust flow
-- Exposes 1-Click Installers for macOS (`/trust-cert.sh`), Windows (`/trust-cert.bat`), and Linux (`/trust-cert-linux.sh`)
+- Exposes 1-Click Installers for macOS (`/trust.sh`), Windows (`/trust.bat`), and Linux (`/trust-linux.sh`)
 - Exposes raw CA download at `/ca.crt` for manual trust flows and mobile devices
 - Presents a direct link to `https://<host>/setup` for users who already trust the CA
 - Serves the **operator deployment script** at `/g8e` — a POSIX shell script that automates operator deployment on any remote Linux system (see [Operator Deployment Script](#operator-deployment-script))
+
+### `/trust` Endpoint
+
+The `/trust` endpoint (HTTP port 80) provides a unified, OS-agnostic entry point for certificate trust installation. It automatically detects the client's operating system from the `User-Agent` header and returns the appropriate trust script.
+
+**Usage:**
+
+**macOS / Linux** (run in Terminal):
+```bash
+curl -fsSL http://<host>/trust | sudo sh
+```
+
+**Windows** (run in an elevated PowerShell terminal):
+```powershell
+irm http://<host>/trust | iex
+```
+
+**Behavior:**
+- Detects OS from `User-Agent` header (checks for `windows`, `win32`, `win64`, `powershell`)
+- For Windows: Returns a PowerShell script (`windowsPowerShellTrustScript`) that downloads and trusts the CA via `certutil`
+- For macOS/Linux: Returns a POSIX shell script (`universalTrustScript`) that detects the OS at runtime via `uname -s` and performs the appropriate trust operation
+- Scripts are generated per-request using the client's `Host` header, so they work from localhost, LAN IP, or hostname
+- Non-default HTTP ports are automatically included in the generated script URLs
+
+**Implementation:** `utils/cert-installers.js` → `windowsPowerShellTrustScript()` and `universalTrustScript()`, served by the HTTP server in `server.js` (lines 507-528).
 
 **Responsibility split:**
 - g8es generates and stores the CA and server certificates
@@ -1139,7 +1164,7 @@ The audit log page (`/audit`) fetches all investigation history events via a pla
 
 **Features:** complete history across all investigations, date filtering, JSON/CSV export, real-time stats.
 
-**Event structure:** `investigation_id`, `case_id`, `case_title`, `event_type`, `actor` (user / g8e_ai_agent / system), `summary`, `timestamp`, `details`, `source` (history_trail or conversation).
+**Event structure:** `investigation_id`, `case_id`, `case_title`, `event_type`, `actor` (user / g8e_ai / system), `summary`, `timestamp`, `details`, `source` (history_trail or conversation).
 
 **Access:** profile dropdown → "Audit Log", or navigate directly to `/audit`.
 

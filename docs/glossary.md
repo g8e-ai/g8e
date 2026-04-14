@@ -112,7 +112,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 ## g8e
 
-The platform name. g8e is a Zero-Trust AI for Real Production platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
+The platform name. g8e is an open-source, air-gapped capable AI governance platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
 
 ---
 
@@ -382,7 +382,7 @@ A globally-accessible knowledge base of adversary tactics and techniques based o
 
 ## Operator
 
-The core deployable agent that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution agent that operates with least-privilege principles. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal g8es pub/sub bus and the Operator's WebSocket connection. The reference implementation (g8eo) is a ~4MB Go binary for Linux and macOS.
+The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution environment that operates with least-privilege principles. Any client that follows the g8e events protocol can act as an Operator. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal g8es pub/sub bus and the Operator's WebSocket connection. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS.
 
 Three types exist, determined at startup:
 - **System Operator** (`--cloud=false`) — cloud CLI tools blocked
@@ -429,7 +429,7 @@ The minimal bootstrap permissions granted to Cloud Operators at launch, allowing
 
 ## Tribunal
 
-A heterogeneous multi-agent architecture in g8ee for refining command syntax. Implements a 4-stage pipeline that fires only for `run_commands_with_operator` workflows:
+A heterogeneous multi-model architecture in g8ee for refining command syntax. Implements a 4-stage pipeline that fires only for `run_commands_with_operator` workflows:
 
 1. **Generation** — N independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Each pass uses a member-specific temperature (AXIOM=0.5, CONCORD=0.7, VARIANCE=1.2) to encourage diverse candidates.
 
@@ -467,15 +467,15 @@ The batch execution approval dialog in g8ed that allows a single user approval t
 
 ---
 
-## g8eo (Virtual Service Agent)
+## g8eo (g8e Operator)
 
 Also known as: **g8e.operator**
 
-The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides command execution, file operations, local storage, and heartbeat monitoring. Connects to g8ed via the Gateway Protocol (WebSocket) for command dispatch, result delivery, and heartbeat telemetry.
+The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. It follows the g8e events protocol, connecting to g8ed via the Gateway Protocol (WebSocket) for command dispatch, result delivery, and heartbeat telemetry.
 
 ---
 
-## g8ee (g8e Engine)
+## g8ee
 
 Also known as: **g8ee**
 
@@ -483,15 +483,15 @@ The AI engine component with LLM provider abstraction supporting OpenAI, Anthrop
 
 ---
 
-## g8ed (Virtual Service Organization Dashboard)
+## g8ed (g8e Dashboard)
 
 Also known as: **g8ed**
 
-The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and G8EE.
+The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
 
 ---
 
-## g8es (Virtual Service Organization Data Bus)
+## g8es (g8e Data Bus)
 
 Also known as: **g8es**
 
@@ -501,7 +501,7 @@ The Operator binary (`g8e.operator`) running in `--listen` mode. Serves as the p
 
 ## Ollama (Remote)
 
-The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for G8EE. Configure the endpoint via the setup wizard or `./g8e llm setup`.
+The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for g8ee. Configure the endpoint via the setup wizard or `./g8e llm setup`.
 
 ---
 
@@ -517,7 +517,7 @@ A security model exclusive to the Cloud Operator for AWS where the Operator laun
 
 ---
 
-## Zero-Trust AI for Real Production
+## Zero-Trust AI Architecture
 
-The platform's core positioning. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel before platform transmission, and all execution happens with human oversight.
+The platform's core security model. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel before platform transmission, and all execution happens with human oversight.
 

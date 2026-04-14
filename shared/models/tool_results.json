@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical AI tool result shapes returned by g8ee tool executor functions. These are the typed result models that flow through the operator → tool_executor → agent stack. Authority: G8EE. Consumers: g8ee (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
+  "_comment": "Canonical AI tool result shapes returned by g8ee tool executor functions. These are the typed result models that flow through the operator → tool_executor → AI pipeline. Authority: G8EE. Consumers: g8ee (Python, app/models/tool_results.py). All error type values cross-reference shared/constants/status.json command.error.type. All status values cross-reference shared/constants/status.json execution.status.",
 
-  "_comment.scope": "These models are g8ee-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes g8eo publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the agent after translating the wire payload.",
+  "_comment.scope": "These models are g8ee-internal result shapes — they are NOT pub/sub wire payloads. The pub/sub wire payloads (the shapes g8eo publishes) are defined in wire/result_payloads.json. The models here are the enriched, post-processed results that tool_executor.py returns to the AI pipeline after translating the wire payload.",
 
   "operation_error_base": {
     "_description": "Common error fields inherited by all tool result models. Every tool result includes these fields.",

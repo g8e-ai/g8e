@@ -29,7 +29,7 @@ export class TriageResult extends FrontendBaseModel {
 }
 
 /**
- * PrimaryResult - The text output and tool calls from the Primary agent.
+ * PrimaryResult - The text output and tool calls from the Primary AI.
  * Matches @shared/models/agents/primary.json
  */
 export class PrimaryResult extends FrontendBaseModel {

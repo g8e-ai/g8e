@@ -1,6 +1,6 @@
 {
-  "_comment": "Canonical Case Title Generator agent model. Lightweight agent that generates concise, meaningful case titles from descriptions or messages.",
-  "name": "CaseTitleGeneratorAgent",
+  "_comment": "Canonical Case Title Generator model. Lightweight AI that generates concise, meaningful case titles from descriptions or messages.",
+  "name": "CaseTitleGenerator",
   "description": "Utility for generating short, meaningful titles for cases.",
   "request": {
     "description": { "type": "string", "description": "The case description or initial message." },

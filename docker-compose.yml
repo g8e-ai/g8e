@@ -110,6 +110,15 @@ services:
       - ./shared:/shared:ro
       - ./docs:/docs:ro
       - ./README.md:/readme/README.md:ro
+      - ./components/g8ed/server.js:/app/server.js:ro
+      - ./components/g8ed/app_factory.js:/app/app_factory.js:ro
+      - ./components/g8ed/vitest.config.js:/app/vitest.config.js:ro
+      - ./components/g8ed/constants:/app/constants:ro
+      - ./components/g8ed/middleware:/app/middleware:ro
+      - ./components/g8ed/models:/app/models:ro
+      - ./components/g8ed/routes:/app/routes:ro
+      - ./components/g8ed/services:/app/services:ro
+      - ./components/g8ed/utils:/app/utils:ro
       - ./components/g8ed/views:/app/views:ro
       - ./components/g8ed/public:/app/public:ro
     read_only: true

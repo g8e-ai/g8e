@@ -499,6 +499,11 @@ Run this in an **Administrator PowerShell** prompt after each platform rebuild o
 
 The `-Server` parameter accepts a `user@host`, bare hostname, or SSH config alias.
 
+**Alternative:** Use the platform's auto-detect trust endpoint instead of this script:
+```powershell
+irm http://<host>/trust | iex
+```
+
 ---
 
 ### mTLS Verification (`mtls-test.sh`)

@@ -448,7 +448,7 @@ The protocol defines five top-level domains. Total event count: **238**.
 | `g8e.v1.ai.llm.tool.g8e.web.search.completed` | Web search completed |
 | `g8e.v1.ai.llm.tool.g8e.web.search.failed` | Web search failed |
 
-### `ai.tribunal` -- Tribunal (Multi-Agent Verification)
+### `ai.tribunal` -- Tribunal (Multi-Model Verification)
 
 | Wire Value | Description |
 |------------|-------------|
@@ -591,8 +591,8 @@ Source tags identify the origin of a message in a conversation. These are not li
 |------------|-------------|
 | `g8e.v1.source.user.chat` | Message originated from user via chat |
 | `g8e.v1.source.user.terminal` | Message originated from user via terminal |
-| `g8e.v1.source.ai.primary` | Message originated from primary AI agent |
-| `g8e.v1.source.ai.assistant` | Message originated from assistant AI agent |
+| `g8e.v1.source.ai.primary` | Message originated from primary AI |
+| `g8e.v1.source.ai.assistant` | Message originated from assistant AI |
 | `g8e.v1.source.system` | Message originated from the system |
 
 ---
