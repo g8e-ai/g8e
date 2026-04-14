@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { ErrorResponse } from '../../models/response_models.js';
-import { OperatorDocument } from '../../models/operator_model.js';
+import { OperatorDocument, OperatorSlot } from '../../models/operator_model.js';
 import { logger } from '../../utils/logger.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
 import { OperatorStatus } from '../../constants/operator.js';
@@ -73,14 +73,9 @@ export function createOperatorStatusRouter({
     router.get(OperatorPaths.DETAILS, requireAuth, requireOperatorOwnership, async (req, res, next) => {
         try {
             const operator = req.operator;
-            const status = operator.status;
-            const enhancedOperator = {
-                ...operator.forClient(),
-                status_display: status,
-                status_class:   status,
-            };
+            const operatorSlot = OperatorSlot.fromOperator(operator);
 
-            return res.json(enhancedOperator);
+            return res.json(operatorSlot.forClient());
 
         } catch (error) {
             logger.error('[OPERATOR-STATUS] Failed to get Operator details', {
