@@ -512,6 +512,18 @@ export class TerminalOutputMixin {
         return entry;
     }
 
+    sealStreamingResponse(webSessionId) {
+        const entry = document.getElementById(`ai-response-${webSessionId}`);
+        if (entry) {
+            entry.classList.remove('streaming');
+            entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+            entry.id = `ai-response-${webSessionId}-${Date.now()}`;
+        }
+        if (this._streamingTextAccumulator) {
+            this._streamingTextAccumulator.delete(webSessionId);
+        }
+    }
+
     clearStreamingAccumulator() {
         if (this._streamingTextAccumulator) {
             this._streamingTextAccumulator.clear();

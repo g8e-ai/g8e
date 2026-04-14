@@ -436,11 +436,7 @@ export const ChatSSEHandlersMixin = {
 
         const webSessionId = data.web_session_id;
         if (webSessionId && this.streamingActive) {
-            const entry = document.getElementById(`ai-response-${webSessionId}`);
-            if (entry) {
-                entry.classList.remove('streaming');
-                entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
-            }
+            this.anchoredTerminal?.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
             this.anchoredTerminal?.clearActivityIndicators();
             this._searchWebIndicators?.clear();

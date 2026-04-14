@@ -63,6 +63,12 @@ function makeAnchoredTerminalSpy() {
         appendActivityIndicator: vi.fn(),
         applyCitations: vi.fn(),
         completeActivityIndicator: vi.fn(),
+        sealStreamingResponse: vi.fn(),
+        showTribunal: vi.fn(),
+        updateTribunalPass: vi.fn(),
+        updateTribunalStatus: vi.fn(),
+        completeTribunal: vi.fn(),
+        failTribunal: vi.fn(),
         resetAutoScroll: vi.fn(),
         showWaitingIndicator: vi.fn(),
         hideWaitingIndicator: vi.fn(),
@@ -877,6 +883,124 @@ describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted 
         });
 
         expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`search-web-${EXECUTION_ID}`);
+    });
+});
+
+describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
+    let ChatComponent;
+    let eventBus;
+    let chat;
+    let terminalSpy;
+    let authState;
+    let serviceClient;
+
+    beforeEach(async () => {
+        vi.useFakeTimers();
+
+        buildDOM();
+
+        authState = new MockAuthState();
+        authState.setAuthenticated({ id: WEB_SESSION_ID });
+        authState.loading = false;
+        authState.getWebSessionModel = () => ({ id: WEB_SESSION_ID });
+        authState.getWebSessionId = () => WEB_SESSION_ID;
+
+        serviceClient = new MockServiceClient();
+        installGlobals(authState, serviceClient);
+
+        eventBus = new MockEventBus();
+        ({ ChatComponent } = await import('@g8ed/public/js/components/chat.js'));
+
+        chat = new ChatComponent(eventBus);
+        terminalSpy = makeAnchoredTerminalSpy();
+        chat.anchoredTerminal = terminalSpy;
+        chat.casesManager = makeCasesManagerStub();
+        chat.currentUser = { id: WEB_SESSION_ID };
+        chat.currentWebSessionId = WEB_SESSION_ID;
+        chat.streamingActive = true;
+        chat.aiStopBtn = document.getElementById('ai-stop-btn');
+        chat.aiStopBtn.disabled = false;
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.clearAllMocks();
+        eventBus.removeAllListeners();
+        cleanupGlobals();
+        document.body.innerHTML = '';
+    });
+
+    it('calls sealStreamingResponse when streaming is active', () => {
+        chat.handleTribunalStarted({
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            primary_model: 'claude-4-sonnet',
+            num_passes: 3,
+            original_command: 'uptime',
+        });
+
+        expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();
+        expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledWith(WEB_SESSION_ID);
+    });
+
+    it('sets streamingActive to false', () => {
+        chat.handleTribunalStarted({
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            primary_model: 'claude-4-sonnet',
+            num_passes: 3,
+            original_command: 'uptime',
+        });
+
+        expect(chat.streamingActive).toBe(false);
+    });
+
+    it('does not call sealStreamingResponse when streaming is not active', () => {
+        chat.streamingActive = false;
+
+        chat.handleTribunalStarted({
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            primary_model: 'claude-4-sonnet',
+            num_passes: 3,
+            original_command: 'uptime',
+        });
+
+        expect(terminalSpy.sealStreamingResponse).not.toHaveBeenCalled();
+    });
+
+    it('clears activity indicators and tracking maps', () => {
+        chat._searchWebIndicators = new Map([['exec-1', 'search-web-exec-1']]);
+        chat._portCheckIndicators = new Map([['exec-2', 'port-check-exec-2']]);
+        chat._hasResetAutoScrollForSession = new Set([WEB_SESSION_ID]);
+
+        chat.handleTribunalStarted({
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            primary_model: 'claude-4-sonnet',
+            num_passes: 3,
+            original_command: 'uptime',
+        });
+
+        expect(terminalSpy.clearActivityIndicators).toHaveBeenCalledOnce();
+        expect(chat._searchWebIndicators.size).toBe(0);
+        expect(chat._portCheckIndicators.size).toBe(0);
+        expect(chat._hasResetAutoScrollForSession.has(WEB_SESSION_ID)).toBe(false);
+    });
+
+    it('event bus wiring: TRIBUNAL_SESSION_STARTED triggers sealStreamingResponse', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.TRIBUNAL_SESSION_STARTED, {
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            primary_model: 'claude-4-sonnet',
+            num_passes: 3,
+            original_command: 'uptime',
+        });
+
+        expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();
+        expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledWith(WEB_SESSION_ID);
     });
 });
 
