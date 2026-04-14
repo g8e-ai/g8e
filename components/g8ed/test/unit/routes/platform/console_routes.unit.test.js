@@ -422,4 +422,220 @@ describe('Console Routes [UNIT]', () => {
             }));
         });
     });
+
+    describe(`GET ${ConsolePaths.LOGS_STREAM} (SSE)`, () => {
+        const getRoute = () => {
+            const layer = router.stack.find(s => s.route?.path === ConsolePaths.LOGS_STREAM);
+            return layer.route.stack[layer.route.stack.length - 1].handle;
+        };
+
+        const createSSERes = () => {
+            const chunks = [];
+            const res = {
+                setHeader: vi.fn(),
+                status: vi.fn().mockReturnThis(),
+                flushHeaders: vi.fn(),
+                write: vi.fn((chunk) => chunks.push(chunk)),
+                flush: vi.fn(),
+                socket: { setNoDelay: vi.fn() },
+                _chunks: chunks,
+            };
+            return res;
+        };
+
+        const parseSSEChunks = (chunks) => {
+            return chunks.map(c => {
+                const dataLine = c.replace('data: ', '').replace(/\n\n$/, '');
+                return JSON.parse(dataLine);
+            });
+        };
+
+        it('should set correct SSE headers', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            const req = createMockReq({ query: { level: 'info' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
+            expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-cache, no-transform');
+            expect(res.setHeader).toHaveBeenCalledWith('Connection', 'keep-alive');
+            expect(res.setHeader).toHaveBeenCalledWith('X-Accel-Buffering', 'no');
+            expect(res.status).toHaveBeenCalledWith(200);
+            expect(res.flushHeaders).toHaveBeenCalled();
+        });
+
+        it('should send connected event with correct EventType constant value', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            const req = createMockReq({ query: { level: 'info' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            expect(frames.length).toBe(1);
+
+            const connected = frames[0];
+            expect(connected.type).toBe(EventType.PLATFORM_CONSOLE_LOG_CONNECTED_CONFIRMED);
+            expect(connected.type).toBe('g8e.v1.platform.console.log.connected.confirmed');
+            expect(connected.buffered).toBe(0);
+            expect(connected.timestamp).toBeDefined();
+        });
+
+        it('should stream buffered log entries from ring buffer before connected event', async () => {
+            const entries = [
+                { level: 'info', message: 'first', timestamp: new Date().toISOString() },
+                { level: 'info', message: 'second', timestamp: new Date().toISOString() },
+            ];
+            loggerUtils.getLogRingBuffer.mockReturnValue(entries);
+            const req = createMockReq({ query: { level: 'info', limit: '100' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            expect(frames.length).toBe(3);
+
+            expect(frames[0].type).toBe(EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(frames[0].type).toBe('g8e.v1.platform.console.log.entry.received');
+            expect(frames[0].entry).toEqual(entries[0]);
+
+            expect(frames[1].type).toBe(EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(frames[1].entry).toEqual(entries[1]);
+
+            expect(frames[2].type).toBe(EventType.PLATFORM_CONSOLE_LOG_CONNECTED_CONFIRMED);
+            expect(frames[2].buffered).toBe(2);
+        });
+
+        it('should filter ring buffer entries by level', async () => {
+            const entries = [
+                { level: 'debug', message: 'debug msg', timestamp: new Date().toISOString() },
+                { level: 'info', message: 'info msg', timestamp: new Date().toISOString() },
+                { level: 'warn', message: 'warn msg', timestamp: new Date().toISOString() },
+                { level: 'error', message: 'error msg', timestamp: new Date().toISOString() },
+            ];
+            loggerUtils.getLogRingBuffer.mockReturnValue(entries);
+            const req = createMockReq({ query: { level: 'warn', limit: '100' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            const logFrames = frames.filter(f => f.type === EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(logFrames.length).toBe(2);
+            expect(logFrames[0].entry.level).toBe('warn');
+            expect(logFrames[1].entry.level).toBe('error');
+        });
+
+        it('should limit buffered entries to the limit query parameter', async () => {
+            const entries = Array.from({ length: 10 }, (_, i) => ({
+                level: 'info', message: `msg ${i}`, timestamp: new Date().toISOString()
+            }));
+            loggerUtils.getLogRingBuffer.mockReturnValue(entries);
+            const req = createMockReq({ query: { level: 'info', limit: '3' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            const logFrames = frames.filter(f => f.type === EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(logFrames.length).toBe(3);
+            expect(logFrames[0].entry.message).toBe('msg 7');
+            expect(logFrames[2].entry.message).toBe('msg 9');
+        });
+
+        it('should cap limit at 500', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            const req = createMockReq({ query: { level: 'info', limit: '9999' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            const connected = frames.find(f => f.type === EventType.PLATFORM_CONSOLE_LOG_CONNECTED_CONFIRMED);
+            expect(connected).toBeDefined();
+        });
+
+        it('should register a log listener and remove it on connection close', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            let closeHandler;
+            const req = createMockReq({
+                query: { level: 'info' },
+                on: vi.fn((event, handler) => {
+                    if (event === 'close') closeHandler = handler;
+                })
+            });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            expect(loggerUtils.addLogListener).toHaveBeenCalledWith(expect.any(Function));
+
+            const listener = loggerUtils.addLogListener.mock.calls[0][0];
+            closeHandler();
+            expect(loggerUtils.removeLogListener).toHaveBeenCalledWith(listener);
+        });
+
+        it('should stream live entries through the registered listener with correct type', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            const req = createMockReq({ query: { level: 'info' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const listener = loggerUtils.addLogListener.mock.calls[0][0];
+            const liveEntry = { level: 'warn', message: 'live warning', timestamp: new Date().toISOString() };
+            listener(liveEntry);
+
+            const frames = parseSSEChunks(res._chunks);
+            const liveFrame = frames.find(f => f.entry?.message === 'live warning');
+            expect(liveFrame).toBeDefined();
+            expect(liveFrame.type).toBe(EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+        });
+
+        it('should not stream live entries that do not match the level filter', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue([]);
+            const req = createMockReq({ query: { level: 'error' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const listener = loggerUtils.addLogListener.mock.calls[0][0];
+            listener({ level: 'info', message: 'should be dropped' });
+
+            const frames = parseSSEChunks(res._chunks);
+            const entryFrames = frames.filter(f => f.type === EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(entryFrames.length).toBe(0);
+        });
+
+        it('should handle null ring buffer gracefully', async () => {
+            loggerUtils.getLogRingBuffer.mockReturnValue(null);
+            const req = createMockReq({ query: { level: 'info' } });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            expect(frames.length).toBe(1);
+            expect(frames[0].type).toBe(EventType.PLATFORM_CONSOLE_LOG_CONNECTED_CONFIRMED);
+            expect(frames[0].buffered).toBe(0);
+        });
+
+        it('should default level to info when not specified', async () => {
+            const entries = [
+                { level: 'debug', message: 'debug', timestamp: new Date().toISOString() },
+                { level: 'info', message: 'info', timestamp: new Date().toISOString() },
+            ];
+            loggerUtils.getLogRingBuffer.mockReturnValue(entries);
+            const req = createMockReq({ query: {} });
+            const res = createSSERes();
+
+            await getRoute()(req, res);
+
+            const frames = parseSSEChunks(res._chunks);
+            const logFrames = frames.filter(f => f.type === EventType.PLATFORM_CONSOLE_LOG_ENTRY_RECEIVED);
+            expect(logFrames.length).toBe(1);
+            expect(logFrames[0].entry.level).toBe('info');
+        });
+    });
 });

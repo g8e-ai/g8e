@@ -317,14 +317,20 @@
     display: flex;
     align-items: center;
     gap: 0.375rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem;
     border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 0.25rem;
     background: rgba(var(--accent-blue-rgb), 0.06);
 }
 
-.llm-model-dropdown.initially-hidden {
-    display: none;
+@media (max-width: 1080px) {
+    .llm-model-dropdown {
+        padding: 0.5rem 0.375rem;
+    }
+
+    .llm-model-select {
+        display: none;
+    }
 }
 
 .llm-model-icon {

@@ -816,6 +816,28 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             // Check innerHTML to ensure no double escaping of &
             expect(commandEl.innerHTML).not.toContain('&amp;amp;');
         });
+
+        it('renders voting dots as DOM elements inside tribunal__passes', async () => {
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls' });
+
+            const widget = document.getElementById(WIDGET_ID);
+            const passesEl = widget.querySelector('.tribunal__passes');
+            const dots = passesEl.querySelectorAll('.tribunal__dot');
+
+            expect(dots.length).toBe(3);
+            dots.forEach((dot, i) => {
+                expect(dot.getAttribute('data-pass')).toBe(String(i));
+            });
+        });
+
+        it('renders correct number of dots for custom numPasses', async () => {
+            const id = 'tribunal-dots-5';
+            await terminal.showTribunal({ id, model: 'test-model', numPasses: 5, command: 'ls' });
+
+            const widget = document.getElementById(id);
+            const dots = widget.querySelectorAll('.tribunal__dot');
+            expect(dots.length).toBe(5);
+        });
     });
 
     describe('hideWaitingIndicator', () => {

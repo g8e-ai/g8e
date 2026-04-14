@@ -13,9 +13,8 @@ The g8e platform must be running (`./g8e platform start` from the project root).
 ./g8e demo up
 
 # Deploy operators (pick one method)
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token     # Method 1: API download (device link)
-./g8e operator stream --hosts /home/g8e/demo-hosts \  # Method 2: SSH streaming
-  --endpoint g8e.local --device-token dlk_your_token
+./g8e demo deploy DEVICE_TOKEN=dlk_your_token      # Method 1: API download (device link)
+./g8e demo stream DEVICE_TOKEN=dlk_your_token      # Method 2: SSH streaming (recommended)
 
 # Open http://localhost:3000 for the fleet status dashboard
 # Use g8e to find and fix broken nodes
@@ -58,13 +57,16 @@ The operator is launched with the device link token (`-D`) and an explicit endpo
 The operator binary is streamed over SSH to all nodes concurrently from g8ep. No binary needs to exist on the target machines beforehand. This demonstrates the ephemeral agent deployment capability.
 
 ```bash
-./g8e operator stream --hosts /home/g8e/demo-hosts \
-  --endpoint g8e.local --device-token dlk_your_token
+./g8e demo stream DEVICE_TOKEN=dlk_your_token
 ```
 
-The SSH key and hosts file are automatically configured in g8ep when you run `./g8e demo up`. The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed).
+This command automatically:
+1. Extracts the SSH key from the fleet image
+2. Configures SSH credentials in g8ep
+3. Discovers running demo nodes via Docker labels
+4. Streams the operator binary to all discovered nodes
 
-The SSH key is baked into the fleet demo image at build time. All 10 nodes accept the same key for the `appuser` account.
+The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed). The SSH key is baked into the fleet demo image at build time. All nodes accept the same key for the `appuser` account.
 
 ### Method 3: Operator Deploy UI
 
@@ -96,7 +98,8 @@ Things to ask g8e once operators are deployed:
 | Command | Description |
 |---------|-------------|
 | `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download |
-| `./g8e operator stream --hosts /home/g8e/demo-hosts --endpoint g8e.local --device-token dlk_xxx` | Deploy operators via SSH streaming |
+| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
+| `./g8e demo discover-hosts` | List discovered demo fleet hosts |
 | `./g8e demo operators` | Show operator status |
 | `./g8e demo vanish` | Remove all operators (zero trace) |
 
