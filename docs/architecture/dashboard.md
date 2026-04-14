@@ -160,7 +160,9 @@ On `_applyOperatorState`, the cause determines the update path:
 
 ### Operator List
 
-`OperatorListMixin.displayOperators(operators)` renders paginated operator cards. Sort priority:
+`OperatorListMixin.displayOperators(operators)` renders paginated operator cards. The `operators` array contains `OperatorSlot` projections — lightweight objects with only the fields needed for the operator list UI (~10 fields instead of the full `OperatorDocument`). This reduces SSE payload size significantly.
+
+Sort priority:
 1. g8e node Operators (`is_g8ep`)
 2. Bound to current web session
 3. Bound to another session

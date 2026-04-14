@@ -318,7 +318,7 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
     docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    docker ps -aq --filter "name=^g8es$|^g8ee$|^g8ed$|^g8ep$" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
         [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true

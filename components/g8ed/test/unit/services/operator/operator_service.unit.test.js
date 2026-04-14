@@ -151,7 +151,7 @@ describe('OperatorService', () => {
             expect(slot.operator_id).toBe('op-1');
             expect(slot.name).toBe('node-01');
             expect(slot.status).toBe(OperatorStatus.ACTIVE);
-            expect(slot.status_display).toBe(OperatorStatus.ACTIVE);
+            expect(slot.status_display).toBe('ACTIVE');
             expect(slot.status_class).toBe('active');
             expect(slot.web_session_id).toBe('ws-1');
 
