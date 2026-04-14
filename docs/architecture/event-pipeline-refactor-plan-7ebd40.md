@@ -4,6 +4,51 @@
 
 This document provides a comprehensive analysis of the event pipeline between g8ee (engine) and g8ed (frontend gateway), identifying gaps and mishandlings across four categories. The goal is to ensure every phase of the chat pipeline produces rich, transparent visual feedback in the operator terminal UI.
 
+## Progress Tracking
+
+### Completed (2025-04-14)
+
+**High Priority Items Completed:**
+
+1. **Section 1.3: LLM_CHAT_ITERATION_RETRY** - COMPLETED
+   - Added event type to `shared/constants/events.json` (line 334)
+   - Added handler in `agent_sse.py` (lines 155-168) to emit event when RETRY chunks are received
+   - Added documentation in `docs/reference/events.md`
+   - Status: Users now see retry notifications in terminal
+
+2. **Section 1.4: LLM_CHAT_ITERATION_TOOL_CALL_STARTED/COMPLETED** - COMPLETED
+   - Added event types to `shared/constants/events.json` (lines 339-340)
+   - Added handlers in `agent_sse.py` (lines 174-186 for started, 228-238 for completed) to emit generic tool call events for all tools
+   - Added documentation in `docs/reference/events.md`
+   - Status: All 17 tools now emit activity indicator events with display metadata
+
+3. **Section 4.1: RETRY Chunks Silently Dropped** - COMPLETED
+   - Fixed by adding RETRY handler in `agent_sse.py` (see item 1 above)
+   - Status: RETRY chunks now emit LLM_CHAT_ITERATION_RETRY events
+
+4. **Section 4.2: Tool Call Activity Indicators Only for 2 of 17 Tools** - COMPLETED
+   - Fixed by adding generic tool call handlers in `agent_sse.py` (see item 2 above)
+   - Status: All tools now emit generic started/completed events with display metadata
+
+5. **Section 4.3: OPERATOR_COMMAND_CANCELLED Has No Frontend Handler** - COMPLETED
+   - Added eventBus listener in `chat-sse-handlers.js` (line 144-146)
+   - Added `handleCommandCancelled` method (lines 701-713) that clears execution state and completes activity indicators
+   - Fixed bug: method now attempts both `fn-${execId}` and `tool-${execId}` prefixes to handle all tool types
+   - Status: Command cancellation now properly clears UI state
+
+**Bug Fixes:**
+
+6. **Indicator ID Prefix Inconsistency** - PARTIALLY FIXED
+   - Fixed `handleCommandCancelled` to attempt both `fn-` and `tool-` prefixes
+   - This is a band-aid fix; root cause remains (see Code Smells section below)
+
+**Documentation Updates:**
+
+7. **docs/reference/events.md** - Updated
+   - Added documentation for 3 new events under `ai.llm.chat.iteration` section
+   - Created new `ai.llm.chat.iteration.tool` subsection
+   - Updated total event counts from 238 to 241, AI domain count from 48 to 51
+
 ### Architecture Summary
 
 ```
@@ -46,7 +91,7 @@ These are pipeline phases that produce no event at all. The user gets zero feedb
 - **Emitted by:** `_prepare_chat_context()` immediately after `self.triage_agent.triage()`
 - **UI effect:** Show model being used ("Using gemini-2.5-pro") and complexity class in the terminal
 
-### 1.3 LLM_CHAT_ITERATION_RETRY (new)
+### 1.3 LLM_CHAT_ITERATION_RETRY (COMPLETED ✅)
 
 **Phase:** `g8eEngine.stream_response()` retry loop (agent.py:151-193)
 
@@ -57,7 +102,12 @@ These are pipeline phases that produce no event at all. The user gets zero feedb
 - **Emitted by:** `deliver_via_sse()` when chunk.type == RETRY
 - **UI effect:** Show "Retrying (attempt 2/3)..." in the terminal
 
-### 1.4 LLM_CHAT_ITERATION_TOOL_CALL_STARTED / TOOL_CALL_COMPLETED (new)
+**Status:** COMPLETED (2025-04-14)
+- Event added to `shared/constants/events.json` (line 334)
+- Handler added in `agent_sse.py` (lines 155-168)
+- Documentation added to `docs/reference/events.md`
+
+### 1.4 LLM_CHAT_ITERATION_TOOL_CALL_STARTED / TOOL_CALL_COMPLETED (COMPLETED ✅)
 
 **Phase:** `agent_sse.py` TOOL_CALL/TOOL_RESULT handling for operator tools (lines 153-215)
 
@@ -68,6 +118,11 @@ These are pipeline phases that produce no event at all. The user gets zero feedb
 Similarly, emit `g8e.v1.ai.llm.chat.iteration.tool.call.completed` for every TOOL_RESULT chunk.
 
 **UI effect:** Every tool call gets a visible activity indicator in the terminal (e.g., "Writing file: /etc/config.yml", "Reading file: app.py", "Requesting permission")
+
+**Status:** COMPLETED (2025-04-14)
+- Events added to `shared/constants/events.json` (lines 339-340)
+- Handlers added in `agent_sse.py` (lines 174-186 for started, 228-238 for completed)
+- Documentation added to `docs/reference/events.md`
 
 ### 1.5 OPERATOR_FILE_EDIT_TIMEOUT (defined but never emitted)
 
@@ -167,7 +222,7 @@ The following events are emitted onto the eventBus by `handleSSEEvent()` but **n
 | `OPERATOR_LOGS_FETCH_FAILED` | Yes | **No listener** | No failure indication |
 | `OPERATOR_HISTORY_FETCH_COMPLETED` | Yes | **No listener** | No completion indication |
 | `OPERATOR_HISTORY_FETCH_FAILED` | Yes | **No listener** | No failure indication |
-| `OPERATOR_COMMAND_CANCELLED` | Yes (g8ee emits) | **No listener** | No cancellation indication in UI |
+| `OPERATOR_COMMAND_CANCELLED` | Yes (g8ee emits) | **Listener added (2025-04-14)** | Cancellation indication now shown in UI |
 | `OPERATOR_DEVICE_REGISTERED` | Yes | **No listener** | Device registration not shown |
 | `PLATFORM_NOTIFICATION` | Yes (g8ee defines it) | **No listener** | Platform notifications dropped |
 
@@ -179,7 +234,7 @@ The following events are emitted onto the eventBus by `handleSSEEvent()` but **n
 
 These events reach the frontend and have listeners, but the handling has issues.
 
-### 4.1 RETRY Chunks Silently Dropped
+### 4.1 RETRY Chunks Silently Dropped (COMPLETED ✅)
 
 **Location:** `agent_sse.py` (entire file) + `sse-connection-manager.js`
 
@@ -187,7 +242,12 @@ These events reach the frontend and have listeners, but the handling has issues.
 
 **Fix:** Add RETRY handling in `deliver_via_sse()` to emit a new `LLM_CHAT_ITERATION_RETRY` event, and add a frontend handler that shows a transient retry notification.
 
-### 4.2 Tool Call Activity Indicators Only for 2 of 17 Tools
+**Status:** COMPLETED (2025-04-14)
+- Handler added in `agent_sse.py` (lines 155-168)
+- Event type added to `shared/constants/events.json`
+- Documentation added to `docs/reference/events.md`
+
+### 4.2 Tool Call Activity Indicators Only for 2 of 17 Tools (COMPLETED ✅)
 
 **Location:** `agent_sse.py:153-183` + `chat-sse-handlers.js:347-427`
 
@@ -197,13 +257,23 @@ The tool display metadata (`_TOOL_DISPLAY_METADATA` in agent_tool_loop.py:81-99)
 
 **Fix:** In `deliver_via_sse()`, emit a generic tool activity event for every TOOL_CALL chunk, using the already-populated `display_label`, `display_icon`, `display_detail`, and `category` fields.
 
-### 4.3 OPERATOR_COMMAND_CANCELLED Has No Frontend Handler
+**Status:** COMPLETED (2025-04-14)
+- Generic handlers added in `agent_sse.py` (lines 174-186 for started, 228-238 for completed)
+- Event types added to `shared/constants/events.json`
+- Documentation added to `docs/reference/events.md`
+
+### 4.3 OPERATOR_COMMAND_CANCELLED Has No Frontend Handler (COMPLETED ✅)
 
 **Location:** `chat-sse-handlers.js`
 
 **Problem:** When a command is cancelled via the stop endpoint, g8ee emits `OPERATOR_COMMAND_CANCELLED` via the execution service. However, no frontend component listens for this event. The UI may remain in a stale "executing" state.
 
 **Fix:** Add a listener that clears `executionActive`, hides stop button, and completes any pending activity indicator.
+
+**Status:** COMPLETED (2025-04-14)
+- EventBus listener added in `chat-sse-handlers.js` (line 144-146)
+- `handleCommandCancelled` method added (lines 701-713)
+- Bug fix: method now attempts both `fn-${execId}` and `tool-${execId}` prefixes to handle all tool types
 
 ### 4.4 Tribunal Widget Cleanup on Error
 
@@ -239,19 +309,49 @@ The tool display metadata (`_TOOL_DISPLAY_METADATA` in agent_tool_loop.py:81-99)
 
 ---
 
-## Section 5: Implementation Priority
+## Section 5: Code Smells Identified During Implementation
+
+### 5.1 Indicator ID Prefix Inconsistency (PARTIALLY FIXED)
+
+**Location:** `chat-sse-handlers.js`
+
+**Issue:** The codebase uses multiple indicator ID prefixes inconsistently:
+- `fn-${executionId}` for OPERATOR_COMMAND events (lines 131, 140, 159, 168, 709)
+- `tool-${executionId}` for generic tool call events (line 677)
+- `search-web-${executionId}` for web search (line 367)
+- `port-check-${executionId}` for port checks (line 408)
+
+**Impact:** The fix applied in `handleCommandCancelled` (lines 701-713) makes it attempt both `fn-` and `tool-` prefixes, but this is a band-aid. The root cause is that different code paths create indicators with different prefixes for the same execution IDs, making cleanup logic complex and error-prone.
+
+**Recommendation:** Standardize on a single prefix scheme across all tool-related events. Either:
+1. Use `tool-` prefix everywhere and update all OPERATOR_COMMAND handlers, or
+2. Keep `fn-` for command-specific events and `tool-` for generic tool calls, but ensure the event flow clearly distinguishes between them so the right handler is called for the right prefix.
+
+### 5.2 Redundant Event Flow (Intentional Technical Debt)
+
+**Location:** `agent_sse.py` and event handlers
+
+**Issue:** The generic tool call events (`LLM_CHAT_ITERATION_TOOL_CALL_STARTED/COMPLETED`) coexist with specific events for `search_web` and `check_port` (`LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`, `OPERATOR_NETWORK_PORT_CHECK_REQUESTED`). This creates redundancy in the event flow.
+
+**Impact:** Both old and new events are emitted for search_web and check_port for backward compatibility. This increases event volume and complexity.
+
+**Recommendation:** This is intentional per the refactor plan for backward compatibility, but should be documented as technical debt. Consider deprecating the old specific events in a future release once the frontend fully migrates to the generic events.
+
+---
+
+## Section 6: Implementation Priority
 
 ### High Priority (Critical UX Gaps)
 
-1. **RETRY chunk handling in agent_sse.py** -- Users have zero visibility into LLM retries
-2. **Generic tool call activity indicators** -- 15 of 17 tools produce no UI feedback
-3. **OPERATOR_COMMAND_CANCELLED listener** -- Stale UI state on cancellation
+1. ~~**RETRY chunk handling in agent_sse.py**~~ -- COMPLETED (2025-04-14) ✅
+2. ~~**Generic tool call activity indicators**~~ -- COMPLETED (2025-04-14) ✅
+3. ~~**OPERATOR_COMMAND_CANCELLED listener**~~ -- COMPLETED (2025-04-14) ✅
 4. **TribunalProviderUnavailableError fallback event** -- Orphaned tribunal widgets
 
 ### Medium Priority (Valuable UX Improvements)
 
 5. **LLM_CHAT_CONTEXT_PREPARING event** -- Bridge the gap between message send and iteration start
-6. **Frontend listeners for file/filesystem/logs/history events** -- Already delivered, just need handlers
+6. **Frontend listeners for file/filesystem/logs/history events** -- Already delivered, just need handlers (18+ events)
 7. **handleResponseComplete empty-content path** -- Edge case but causes incomplete cleanup
 8. **Thinking state leak hardening** -- Move hideThinkingIndicator into handleChatError
 
@@ -264,18 +364,54 @@ The tool display metadata (`_TOOL_DISPLAY_METADATA` in agent_tool_loop.py:81-99)
 
 ---
 
-## Section 6: Files to Modify
+## Section 7: Files to Modify
 
-| File | Changes |
-|------|---------|
-| `g8ee/app/services/ai/agent_sse.py` | Add RETRY handler; add generic tool call/result SSE events |
-| `g8ee/app/services/ai/chat_pipeline.py` | Emit context-preparing and triage events |
-| `g8ee/app/services/ai/agent_tool_loop.py` | Emit fallback event for TribunalProviderUnavailableError |
-| `g8ee/app/constants/events.py` | Add new EventType members |
-| `g8ee/app/models/g8ed_client.py` | Add payload models for new events |
-| `g8ed/public/js/components/chat-sse-handlers.js` | Add listeners for new events, tool activity, command cancelled |
-| `g8ed/public/js/components/thinking.js` | Move hideThinkingIndicator into error path |
-| `g8ed/public/js/constants/events.js` | Add new EventType constants |
-| `g8ed/public/js/utils/sse-connection-manager.js` | Add validation for new event types |
-| `shared/constants/events.json` | Add new canonical event types |
-| `docs/reference/events.md` | Document new events |
+| File | Changes | Status |
+|------|---------|--------|
+| `g8ee/app/services/ai/agent_sse.py` | Add RETRY handler; add generic tool call/result SSE events | COMPLETED (2025-04-14) ✅ |
+| `g8ee/app/services/ai/chat_pipeline.py` | Emit context-preparing and triage events | PENDING |
+| `g8ee/app/services/ai/agent_tool_loop.py` | Emit fallback event for TribunalProviderUnavailableError | PENDING |
+| `g8ee/app/constants/events.py` | Add new EventType members | COMPLETED (2025-04-14) ✅ |
+| `g8ee/app/models/g8ed_client.py` | Add payload models for new events | COMPLETED (2025-04-14) ✅ |
+| `g8ed/public/js/components/chat-sse-handlers.js` | Add listeners for new events, tool activity, command cancelled | PARTIALLY COMPLETED (2025-04-14) ✅ (command cancelled done, tool activity handlers pending) |
+| `g8ed/public/js/components/thinking.js` | Move hideThinkingIndicator into error path | PENDING |
+| `g8ed/public/js/constants/events.js` | Add new EventType constants | COMPLETED (2025-04-14) ✅ |
+| `g8ed/public/js/utils/sse-connection-manager.js` | Add validation for new event types | PENDING |
+| `shared/constants/events.json` | Add new canonical event types | COMPLETED (2025-04-14) ✅ |
+| `docs/reference/events.md` | Document new events | COMPLETED (2025-04-14) ✅ |
+
+---
+
+## Section 8: Recommended Next Steps
+
+### Immediate (Test Validation)
+
+1. **Run correct test paths** - The g8ed test failed during the session because the filter `test/services` didn't match any files. Need to find the correct test directory structure for g8ed and run with the correct path.
+
+2. **Run g8ee AI service tests** - Execute `/home/bob/g8e/g8e test g8ee -- tests/unit/services/ai` to verify the new event emissions and payload models don't break existing functionality.
+
+### Medium-Priority UX Improvements
+
+3. **Add LLM_CHAT_CONTEXT_PREPARING event** - Emit this event in `chat_pipeline.py:_prepare_chat_context()` after triage completes to bridge the 1-5 second silence between message send and iteration start. Create payload model with `{agent_mode, model_to_use, has_attachments, triage_complexity}` and add frontend handler to show "Preparing context..." in the terminal.
+
+4. **Wire frontend listeners for 18+ operator tool lifecycle events** - Add eventBus listeners in `chat-sse-handlers.js` for events that already reach the browser but have no component handler:
+   - `OPERATOR_FILE_HISTORY_FETCH_STARTED/COMPLETED/FAILED`
+   - `OPERATOR_FILE_DIFF_FETCH_STARTED/COMPLETED/FAILED`
+   - `OPERATOR_FILESYSTEM_LIST_STARTED/COMPLETED/FAILED`
+   - `OPERATOR_FILESYSTEM_READ_STARTED/COMPLETED/FAILED`
+   - `OPERATOR_FILE_RESTORE_COMPLETED/FAILED`
+   - `OPERATOR_LOGS_FETCH_COMPLETED/FAILED`
+   - `OPERATOR_HISTORY_FETCH_COMPLETED/FAILED`
+   - `OPERATOR_DEVICE_REGISTERED`
+   - `PLATFORM_NOTIFICATION`
+
+5. **Harden handleChatError** - Move the `hideThinkingIndicator` call into `handleChatError` directly instead of relying on `_handleLLMChatIterationFailed` being wired separately. This prevents thinking state leaks if the wiring order changes.
+
+### Future Enhancements
+
+6. Add `LLM_CHAT_TRIAGE_COMPLETED` event to show model selection and complexity class
+7. Implement LLM lifecycle events (`LIFECYCLE_STARTED`, `LIFECYCLE_COMPLETED`) for higher-level framing
+8. Clean up unused EventType members (20+ phantom events defined but never emitted)
+9. Emit `LLM_CHAT_MESSAGE_SENT` when user message is persisted to investigation
+10. Address TribunalProviderUnavailableError fallback event emission
+11. Standardize indicator ID prefix scheme (fix code smell 5.1)

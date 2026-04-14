@@ -368,6 +368,26 @@ class SearchWebResult(G8eBaseModel):
     total_results: str | None = None
 
 
+class CommandConstraintsResult(G8eBaseModel):
+    """Result returned by the get_command_constraints tool.
+
+    Surfaces whitelist/blacklist policy to the AI so it can respect
+    allowed/forbidden commands before proposing them.
+    """
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    whitelisting_enabled: bool = False
+    blacklisting_enabled: bool = False
+    whitelisted_commands: list[str] = Field(default_factory=list)
+    blacklisted_commands: list[dict[str, str]] = Field(default_factory=list)
+    blacklisted_substrings: list[dict[str, str]] = Field(default_factory=list)
+    blacklisted_patterns: list[dict[str, str]] = Field(default_factory=list)
+    global_forbidden_patterns: list[str] = Field(default_factory=list)
+    global_forbidden_directories: list[str] = Field(default_factory=list)
+    message: str | None = None
+
+
 class InvestigationContextResult(G8eBaseModel):
     """Result returned by the query_investigation_context tool executor."""
     success: bool = True
@@ -431,6 +451,7 @@ class TokenUsage(G8eBaseModel):
 
 ToolResult = Union[
     CommandExecutionResult,
+    CommandConstraintsResult,
     FileEditResult,
     PortCheckToolResult,
     FsListToolResult,

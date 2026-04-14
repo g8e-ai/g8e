@@ -258,6 +258,7 @@ class ServiceFactory:
             operator_command_service=operator_command_service,
             investigation_service=domain_services['investigation_service'],
             web_search_provider=web_search_provider,
+            platform_settings=settings,
         )
 
         mcp_gateway_service = MCPGatewayService(

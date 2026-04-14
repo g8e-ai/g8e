@@ -81,8 +81,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self.investigation_service = investigation_service
 
         from app.security.operator_command_validator import OperatorCommandValidator
-        from app.utils.blacklist_validator import get_blacklist_validator
-        from app.utils.whitelist_validator import get_whitelist_validator
+        from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()

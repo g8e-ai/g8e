@@ -270,6 +270,32 @@ class OperatorCommandService:
             target_operator_docs = [resolved_operator]
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
 
+        # 2. Command validation (whitelist/blacklist enforcement)
+        cv = self._settings.command_validation
+        if cv.enable_whitelisting:
+            whitelist_result = self._execution_service.whitelist_validator.validate_command(command)
+            if not whitelist_result.is_valid:
+                logger.warning("[COMMAND] Whitelist validation failed: %s", whitelist_result.reason)
+                return CommandExecutionResult(
+                    success=False,
+                    error=whitelist_result.reason,
+                    error_type=CommandErrorType.WHITELIST_VIOLATION,
+                    blocked_command=command,
+                    validation_details={"reason": whitelist_result.reason, "violations": whitelist_result.violations or []},
+                )
+
+        if cv.enable_blacklisting:
+            blacklist_result = self._execution_service.blacklist_validator.validate_command(command)
+            if not blacklist_result.is_allowed:
+                logger.warning("[COMMAND] Blacklist validation failed: %s - %s", blacklist_result.rule, blacklist_result.reason)
+                return CommandExecutionResult(
+                    success=False,
+                    error=blacklist_result.reason or f"Command blocked by blacklist rule: {blacklist_result.rule}",
+                    error_type=CommandErrorType.BLACKLIST_VIOLATION,
+                    blocked_command=command,
+                    rule=blacklist_result.rule,
+                )
+
         execution_id = generate_command_execution_id()
 
         # Notify preparing (UI status update)

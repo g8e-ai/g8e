@@ -1066,6 +1066,7 @@ class TestToolIntegration:
             OperatorToolName.GRANT_INTENT,
             OperatorToolName.REVOKE_INTENT,
             OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
+            OperatorToolName.GET_COMMAND_CONSTRAINTS,
         }
         
         # Add G8E_SEARCH_WEB if available

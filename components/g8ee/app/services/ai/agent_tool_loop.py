@@ -34,6 +34,7 @@ from app.constants.settings import (
     DEFAULT_WORKING_DIRECTORY,
     EXECUTION_ID_PREFIX,
     ToolDisplayCategory,
+    TribunalFallbackReason,
     StreamChunkFromModelType,
 )
 from app.llm.llm_types import ToolCall
@@ -53,6 +54,7 @@ from app.models.settings import G8eeUserSettings
 
 from app.models.agents.tribunal import (
     CommandGenerationResult,
+    TribunalFallbackPayload,
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
@@ -96,6 +98,7 @@ _TOOL_DISPLAY_METADATA: dict[str, tuple[str, str, ToolDisplayCategory]] = {
     OperatorToolName.FETCH_EXECUTION_OUTPUT: ("Fetching output",       "terminal",   ToolDisplayCategory.GENERAL),
     OperatorToolName.FETCH_SESSION_HISTORY:  ("Fetching history",      "clock",      ToolDisplayCategory.GENERAL),
     OperatorToolName.QUERY_INVESTIGATION_CONTEXT: ("Querying investigation", "database", ToolDisplayCategory.GENERAL),
+    OperatorToolName.GET_COMMAND_CONSTRAINTS: ("Checking constraints", "shield-check", ToolDisplayCategory.GENERAL),
 }
 
 
@@ -239,6 +242,19 @@ async def orchestrate_tool_execution(
                 logger.error(
                     "[CMD_GEN] Tribunal provider unavailable — halting command execution: %s",
                     exc.error,
+                )
+                await g8ed_event_service.publish_investigation_event(
+                    investigation_id=investigation.id,
+                    event_type=EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
+                    payload=TribunalFallbackPayload(
+                        reason=TribunalFallbackReason.PROVIDER_UNAVAILABLE,
+                        original_command=original_command,
+                        final_command=original_command,
+                        error=f"Provider unavailable ({exc.provider}): {exc.error}",
+                    ),
+                    web_session_id=g8e_context.web_session_id,
+                    case_id=g8e_context.case_id,
+                    user_id=g8e_context.user_id,
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
