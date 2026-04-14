@@ -1,18 +1,18 @@
 {
-  "_comment": "Canonical CaseModel document shape. VSE is the authority — it creates and owns this document in its SQLite store. VSOD reads it via VSE HTTP API to render case lists and the dashboard. A field mismatch breaks case creation, status updates, and investigation linkage.",
+  "_comment": "Canonical CaseModel document shape. g8ee is the authority — it creates and owns this document in its SQLite store. g8ed reads it via g8ee HTTP API to render case lists and the dashboard. A field mismatch breaks case creation, status updates, and investigation linkage.",
 
-  "_authority": "VSE (SQLite)",
-  "_consumers": ["VSOD (JS — renders case list/detail, creates cases via VSE API)"],
+  "_authority": "g8ee (SQLite)",
+  "_consumers": ["g8ed (JS — renders case list/detail, creates cases via g8ee API)"],
 
   "case": {
-    "_description": "Full case document as stored in VSE SQLite and returned by VSE case endpoints.",
+    "_description": "Full case document as stored in g8ee SQLite and returned by g8ee case endpoints.",
 
     "core_identity": {
       "id": {
         "type": "string",
         "format": "uuid",
         "required": true,
-        "description": "Unique case identifier (UUID v4). Always generated server-side by VSE — never accepted from client."
+        "description": "Unique case identifier (UUID v4). Always generated server-side by g8ee — never accepted from client."
       },
       "title": {
         "type": "string",
@@ -27,12 +27,12 @@
       "user_id": {
         "type": "string",
         "required": false,
-        "description": "User who created the case. Injected server-side by VSOD from authenticated session."
+        "description": "User who created the case. Injected server-side by g8ed from authenticated session."
       },
       "user_email": {
         "type": "string",
         "required": false,
-        "description": "Email of the user who created the case. Injected by VSOD from session."
+        "description": "Email of the user who created the case. Injected by g8ed from session."
       }
     },
 
@@ -62,7 +62,7 @@
       "web_session_id": {
         "type": "string",
         "required": false,
-        "description": "Browser session ID at time of case creation. Injected by VSOD."
+        "description": "Browser session ID at time of case creation. Injected by g8ed."
       },
       "source": {
         "type": "string",
@@ -108,7 +108,7 @@
       "last_processed_by": {
         "type": "string",
         "required": false,
-        "description": "Name of the last component to process this case (e.g. vse, vsod)"
+        "description": "Name of the last component to process this case (e.g. g8ee, g8ed)"
       },
       "attachments": {
         "type": "array",
@@ -158,13 +158,13 @@
   },
 
   "case_create_request": {
-    "_description": "Request body for POST /api/cases (VSOD → VSE). Fields marked server-injected are populated by VSOD from the authenticated session before forwarding to VSE.",
+    "_description": "Request body for POST /api/cases (g8ed → g8ee). Fields marked server-injected are populated by g8ed from the authenticated session before forwarding to G8EE.",
 
     "client_provided": {
       "initial_message": {
         "type": "string",
         "required": true,
-        "description": "The user's initial message. VSE generates title and description from this."
+        "description": "The user's initial message. g8ee generates title and description from this."
       },
       "attachments": {
         "type": "array",
@@ -178,7 +178,7 @@
         "default": true
       }
     },
-    "server_injected_by_vsod": {
+    "server_injected_by_g8ed": {
       "user_id": { "type": "string", "required": true },
       "user_email": { "type": "string", "required": false },
       "web_session_id": { "type": "string", "required": true },

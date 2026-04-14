@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical request payload shapes for internal API communication between VSE and VSOD. These models ensure wire compatibility for internal management and event delivery operations.",
+  "_comment": "Canonical request payload shapes for internal API communication between g8ee and g8ed. These models ensure wire compatibility for internal management and event delivery operations.",
   
   "sse_push": {
-    "_description": "Payload for POST /api/internal/sse/push. VSE pushes an SSE event to VSOD for delivery to a web session.",
+    "_description": "Payload for POST /api/internal/sse/push. g8ee pushes an SSE event to g8ed for delivery to a web session.",
     "fields": {
       "web_session_id": {
         "type": "string",

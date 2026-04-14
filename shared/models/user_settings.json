@@ -1,165 +1,53 @@
 {
-  "_comment": "Canonical UserSettings document shape. VSOD is the authority — it creates and updates this document in the user_settings collection. VSE reads it at request time to resolve per-user LLM configuration. Document ID is the user_id.",
+  "_comment": "Canonical UserSettings document shape. g8ed is the authority — it creates and updates this document in the settings collection. g8ee reads it at request time via UserSettingsDocument.model_validate(). Settings are grouped into nested sub-objects (llm, search, eval_judge) that map directly to g8ee Pydantic models.",
 
-  "_authority": "VSOD",
-  "_consumers": ["VSE (Python — reads at request time to build per-user Settings)"],
+  "_authority": "g8ed",
+  "_consumers": ["g8ee (Python — reads at request time to build per-user G8eeUserSettings)"],
   "_collection": "settings",
   "_document_id": "user_settings_{user_id}",
 
   "user_settings": {
-    "_description": "Per-user settings document. Stored in the 'user_settings' collection with ID '{user_id}'.",
+    "_description": "Per-user settings document. Top-level fields include user_id and timestamps from G8eIdentifiableModel. The settings object contains nested groups consumed by g8ee typed models.",
+
+    "user_id": {
+      "type": "string",
+      "required": true,
+      "description": "User identifier. Must match the {user_id} portion of the document ID."
+    },
 
     "settings": {
-      "llm_provider": {
-        "type": "string",
-        "required": false,
-        "values": ["openai", "ollama", "gemini", "anthropic", "undefined"],
-        "description": "LLM provider for this user. Overrides platform_settings provider when set."
+      "llm": {
+        "_description": "Maps to g8ee LLMSettings model. Keys use model field names and aliases.",
+        "provider":              { "type": "string",  "required": false, "values": ["openai", "ollama", "gemini", "anthropic"] },
+        "llm_model":             { "type": "string",  "required": false, "description": "Primary LLM model name (alias for primary_model)." },
+        "llm_assistant_model":   { "type": "string",  "required": false, "description": "Assistant LLM model name (alias for assistant_model)." },
+        "openai_endpoint":       { "type": "string",  "required": false },
+        "openai_api_key":        { "type": "string",  "required": false },
+        "ollama_endpoint":       { "type": "string",  "required": false },
+        "ollama_api_key":        { "type": "string",  "required": false },
+        "gemini_api_key":        { "type": "string",  "required": false },
+        "anthropic_endpoint":    { "type": "string",  "required": false },
+        "anthropic_api_key":     { "type": "string",  "required": false },
+        "llm_temperature":       { "type": "number",  "required": false },
+        "llm_max_tokens":        { "type": "integer", "required": false },
+        "llm_command_gen_enabled":  { "type": "boolean", "required": false },
+        "llm_command_gen_verifier": { "type": "boolean", "required": false },
+        "llm_command_gen_passes":   { "type": "integer", "required": false },
+        "llm_command_gen_temp":     { "type": "number",  "required": false }
       },
-      "llm_model": {
-        "type": "string",
-        "required": false,
-        "description": "Primary LLM model name."
+      "search": {
+        "_description": "Maps to g8ee SearchSettings model.",
+        "enabled":    { "type": "boolean", "required": false },
+        "project_id": { "type": "string",  "required": false },
+        "engine_id":  { "type": "string",  "required": false },
+        "location":   { "type": "string",  "required": false, "default": "global" },
+        "api_key":    { "type": "string",  "required": false }
       },
-      "llm_assistant_model": {
-        "type": "string",
-        "required": false,
-        "description": "Assistant LLM model name."
-      },
-      "openai_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "OpenAI-compatible API base URL. Overrides platform_settings openai_endpoint when set."
-      },
-      "ollama_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "Ollama API base URL. Overrides platform_settings ollama_endpoint when set."
-      },
-      "anthropic_endpoint": {
-        "type": "string",
-        "required": false,
-        "description": "Anthropic API base URL. Overrides platform_settings anthropic_endpoint when set."
-      },
-      "openai_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "OpenAI API key. Overrides platform_settings openai_api_key when set."
-      },
-      "ollama_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Ollama API key. Overrides platform_settings ollama_api_key when set."
-      },
-      "gemini_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Gemini API key. Overrides platform_settings gemini_api_key when set."
-      },
-      "anthropic_api_key": {
-        "type": "string",
-        "required": false,
-        "description": "Anthropic API key. Overrides platform_settings anthropic_api_key when set."
-      },
-      "llm_temperature": {
-        "type": "number",
-        "required": false,
-        "description": "LLM sampling temperature. Overrides platform_settings llm_temperature when set."
-      },
-      "llm_max_tokens": {
-        "type": "integer",
-        "required": false,
-        "description": "Maximum tokens per LLM response. Overrides platform_settings llm_max_tokens when set."
-      },
-      "llm_command_gen_temp": {
-        "type": "number",
-        "required": false,
-        "description": "Sampling temperature for command generation tribunal."
-      },
-      "llm_command_gen_enabled": {
-        "type": "boolean",
-        "required": false,
-        "description": "Whether command generation (Tribunal) is enabled. Overrides platform_settings llm_command_gen_enabled when set."
-      },
-      "llm_command_gen_verifier": {
-        "type": "boolean",
-        "required": false,
-        "description": "Whether command generation verifier pass is enabled. Overrides platform_settings llm_command_gen_verifier when set."
-      },
-      "llm_command_gen_passes": {
-        "type": "integer",
-        "required": false,
-        "description": "Number of Tribunal passes for command generation. Overrides platform_settings llm_command_gen_passes when set."
-      },
-      "google_search_enabled": {
-        "type": "boolean",
-        "required": false
-      },
-      "google_search_api_key": {
-        "type": "string",
-        "required": false
-      },
-      "google_search_engine_id": {
-        "type": "string",
-        "required": false
-      },
-      "vertex_search_enabled": {
-        "type": "boolean",
-        "required": false,
-        "description": "Whether Vertex AI Search is enabled for this user."
-      },
-      "vertex_search_project_id": {
-        "type": "string",
-        "required": false
-      },
-      "vertex_search_engine_id": {
-        "type": "string",
-        "required": false
-      },
-      "vertex_search_location": {
-        "type": "string",
-        "required": false
-      },
-      "vertex_search_api_key": {
-        "type": "string",
-        "required": false
-      },
-      "enable_command_whitelisting": {
-        "type": "boolean",
-        "required": false
-      },
-      "enable_command_blacklisting": {
-        "type": "boolean",
-        "required": false
-      },
-      "g8e_api_key": {
-        "type": "string",
-        "required": false
-      },
-      "passkey_rp_name": {
-        "type": "string",
-        "required": false,
-        "default": "g8e"
-      },
-      "passkey_rp_id": {
-        "type": "string",
-        "required": false,
-        "default": "localhost"
-      },
-      "passkey_origin": {
-        "type": "string",
-        "required": false,
-        "default": "https://localhost"
-      },
-      "app_url": {
-        "type": "string",
-        "required": false,
-        "default": "https://localhost"
-      },
-      "allowed_origins": {
-        "type": "string",
-        "required": false,
-        "default": ""
+      "eval_judge": {
+        "_description": "Maps to g8ee EvalJudgeSettings model. Keys use alias names.",
+        "eval_judge_model":       { "type": "string",  "required": false },
+        "eval_judge_temperature": { "type": "number",  "required": false },
+        "eval_judge_max_tokens":  { "type": "integer", "required": false }
       }
     },
 
@@ -167,12 +55,14 @@
       "created_at": {
         "type": "string",
         "format": "iso8601",
-        "required": true
+        "required": true,
+        "description": "Managed by G8eIdentifiableModel."
       },
       "updated_at": {
         "type": "string",
         "format": "iso8601",
-        "required": true
+        "required": true,
+        "description": "Managed by G8eIdentifiableModel."
       }
     }
   }

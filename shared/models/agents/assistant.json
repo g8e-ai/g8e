@@ -1,0 +1,16 @@
+{
+  "_comment": "Canonical Assistant AI model. Fast-path AI for simple tasks — shares the full tool set with the Primary AI but uses a smaller, lower-latency model.",
+  "name": "AssistantAI",
+  "description": "Fast-path AI for simple tasks.",
+  "request": {
+    "message": { "type": "string", "description": "The user message to process." },
+    "investigation_id": { "type": "string", "description": "The current investigation ID." },
+    "conversation_history": { "type": "array", "items": { "$ref": "../conversation_message.json" }, "description": "Full conversation history." },
+    "attachments": { "type": "array", "items": { "type": "object" }, "description": "Metadata for any attached files." },
+    "agent_mode": { "type": "string", "description": "The current AI mode (operator_bound, operator_not_bound, etc.)" }
+  },
+  "result": {
+    "content": { "type": "string", "description": "The primary text output of the AI." },
+    "tool_calls": { "type": "array", "items": { "type": "object" }, "description": "Optional list of tool calls initiated by the Assistant AI." }
+  }
+}

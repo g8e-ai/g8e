@@ -18,7 +18,7 @@ A set of rules that determines which users or systems can access specific resour
 
 ## Anchored Operator Terminal
 
-The pinned terminal at the bottom of the chat interface in VSOD for direct SSH-like command execution without AI involvement. Features command history (up/down arrows), collapsible view, real-time output via SSE, and displays AI-initiated events (approvals, execution results). Provides direct user input bypassing the AI while showing events routed from the AI execution flow.
+The pinned terminal at the bottom of the chat interface in g8ed for direct SSH-like command execution without AI involvement. Features command history (up/down arrows), collapsible view, real-time output via SSE, and displays AI-initiated events (approvals, execution results). Provides direct user input bypassing the AI while showing events routed from the AI execution flow.
 
 ---
 
@@ -75,7 +75,7 @@ The same ~4MB Operator binary started with `--cloud` (which defaults to `true`).
 An Operator started with `--cloud --provider aws` that implements **Zero Standing Privileges** and **Just-in-Time Access**. The Operator launches with zero AWS permissions beyond self-discovery and dynamically requests permissions through user-approved Intents via the Intent-Based Policy System. Features a two-role IAM separation of execution from authority (Operator Role + Escalation Role), 1-hour TTL on granted permissions, and instant revocation capability.
 
 Deployment targets:
-- **g8e-pod** (local dev) — always started as Cloud Operator for AWS; credentials from `~/.aws` mount
+- **g8ep** (local dev) — always started as Cloud Operator for AWS; credentials from `~/.aws` mount
 - **EC2 in VPC** — credentials from EC2 instance profile (IMDS); two-role IAM setup via CloudFormation
 
 ---
@@ -112,7 +112,7 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 ## g8e
 
-The platform name. g8e is a Zero-Trust AI for Real Production platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
+The platform name. g8e is an open-source, air-gapped capable AI governance platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
 
 ---
 
@@ -142,7 +142,7 @@ The comprehensive security model designed for organizations requiring regulatory
 
 ## Environment
 
-The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by VSE to provide the AI with accurate context about the Operator's execution environment — for example, whether to avoid `systemctl` commands in a containerized environment. Distinct from any platform-level deployment concept; g8e is self-hosted and has a single deployment environment.
+The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8ee to provide the AI with accurate context about the Operator's execution environment — for example, whether to avoid `systemctl` commands in a containerized environment. Distinct from any platform-level deployment concept; g8e is self-hosted and has a single deployment environment.
 
 ---
 
@@ -160,13 +160,13 @@ The security architecture aligned with Federal Risk and Authorization Management
 
 ## Tool Calling Loop
 
-The execution pattern used by VSE where the AI generates tool calls to interact with Operators, receives results, and generates subsequent calls based on the outcomes. Enables complex multi-step workflows and adaptive reasoning about system state.
+The execution pattern used by g8ee where the AI generates tool calls to interact with Operators, receives results, and generates subsequent calls based on the outcomes. Enables complex multi-step workflows and adaptive reasoning about system state.
 
 ---
 
 ## Coordination Store (SQLite)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. VSODB is the single source of truth — a single SQLite database in WAL mode shared by all components via VSODB's document store, KV, and pub/sub APIs. VSE and VSOD are stateless with respect to persistence and access all data through the VSODB HTTP API. Replaces the former Google Cloud Firestore dependency.
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. g8es is the single source of truth — a single SQLite database in WAL mode shared by all components via g8es's document store, KV, and pub/sub APIs. g8ee and g8ed are stateless with respect to persistence and access all data through the g8ed HTTP API. Replaces the former Google Cloud Firestore dependency.
 
 ---
 
@@ -286,7 +286,7 @@ Two-way TLS authentication where both client and server verify each other's cert
 
 ## Internal Auth Token
 
-The shared secret (`X-Internal-Auth`) used for all service-to-service communication between VSOD, VSE, and VSODB. Generated by VSODB on first boot and persisted exclusively in the `g8e-data-ssl` volume at `/ssl/internal_auth_token`. Discovered by VSE and VSOD at startup by reading the shared volume. This secret is **never stored in the database**, ensuring platform identity is decoupled from the database lifecycle. Strictly enforced by VSODB for all HTTP and WebSocket routes.
+The shared secret (`X-Internal-Auth`) used for all service-to-service communication between g8ed, g8ee, and g8es. Generated by g8es on first boot and persisted exclusively in the `g8es-ssl` volume at `/ssl/internal_auth_token`. Discovered by g8ee and g8ed at startup by reading the shared volume. This secret is **never stored in the database**, ensuring platform identity is decoupled from the database lifecycle. Strictly enforced by g8es for all HTTP and WebSocket routes.
 
 ---
 
@@ -352,7 +352,7 @@ A server certificate embedded in the Operator binary at compile time. Prevents m
 
 ## ReAct
 
-A reasoning pattern used by VSE where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action (command, file operation, tool call), observes the result, and uses that observation to inform the next reasoning step. This enables complex multi-step workflows where the AI can adapt its approach based on command outputs and system state. The Tribunal refines command syntax within this loop without re-invoking the main LLM.
+A reasoning pattern used by g8ee where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action (command, file operation, tool call), observes the result, and uses that observation to inform the next reasoning step. This enables complex multi-step workflows where the AI can adapt its approach based on command outputs and system state. The Tribunal refines command syntax within this loop without re-invoking the main LLM.
 
 ---
 
@@ -382,7 +382,7 @@ A globally-accessible knowledge base of adversary tactics and techniques based o
 
 ## Operator
 
-The core deployable agent that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution agent that operates with least-privilege principles. Operators connect via outbound-only WebSocket (Gateway Protocol) to VSOD — no inbound connectivity required. VSOD bridges commands between the internal VSODB pub/sub bus and the Operator's WebSocket connection. The reference implementation (VSA) is a ~4MB Go binary for Linux and macOS.
+The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution environment that operates with least-privilege principles. Any client that follows the g8e events protocol can act as an Operator. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal g8es pub/sub bus and the Operator's WebSocket connection. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS.
 
 Three types exist, determined at startup:
 - **System Operator** (`--cloud=false`) — cloud CLI tools blocked
@@ -405,13 +405,13 @@ The web UI component that displays all Operators belonging to a user, showing th
 
 ## Operator Slot
 
-The accounting unit for Operators. Each running Operator — System or Cloud — occupies one slot. Slots are created explicitly at provisioning time (e.g. initial setup, g8e-pod reauth) or on demand when a Device Link is claimed and no AVAILABLE slot exists for the user. Slot limits are configurable per deployment (default: unlimited in self-hosted mode).
+The accounting unit for Operators. Each running Operator — System or Cloud — occupies one slot. Slots are created explicitly at provisioning time (e.g. initial setup, g8ep reauth) or on demand when a Device Link is claimed and no AVAILABLE slot exists for the user. Slot limits are configurable per deployment (default: unlimited in self-hosted mode).
 
 ---
 
-## VSODB Pub/Sub
+## g8es Pub/Sub
 
-The internal real-time messaging system used for communication between VSE, VSOD, and Operators. Each Operator has dedicated VSODB channels for commands, results, and heartbeats. VSOD's Gateway Connection Manager bridges these VSODB channels to the Operator's WebSocket connection via the Gateway Protocol. Operators connect to VSODB via WebSocket at the `/ws/pubsub` endpoint; the base URL and port are configurable via `G8E_OPERATOR_PUBSUB_URL`.
+The internal real-time messaging system used for communication between g8ee, g8ed, and Operators. Each Operator has dedicated g8es channels for commands, results, and heartbeats. g8ed's Gateway Connection Manager bridges these g8es channels to the Operator's WebSocket connection via the Gateway Protocol. Operators connect to g8es via WebSocket at the `/ws/pubsub` endpoint; the base URL and port are configurable via `G8E_OPERATOR_PUBSUB_URL`.
 
 ---
 
@@ -429,7 +429,7 @@ The minimal bootstrap permissions granted to Cloud Operators at launch, allowing
 
 ## Tribunal
 
-A heterogeneous multi-agent architecture in VSE for refining command syntax. Implements a 4-stage pipeline that fires only for `run_commands_with_operator` workflows:
+A heterogeneous multi-model architecture in g8ee for refining command syntax. Implements a 4-stage pipeline that fires only for `run_commands_with_operator` workflows:
 
 1. **Generation** — N independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Each pass uses a member-specific temperature (AXIOM=0.5, CONCORD=0.7, VARIANCE=1.2) to encourage diverse candidates.
 
@@ -463,37 +463,37 @@ The ability to restore files to any previous state using the Ledger's git histor
 
 ## Unified Approval
 
-The batch execution approval dialog in VSOD that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, VSOD displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and VSE executes the command on each Operator sequentially after approval.
+The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee executes the command on each Operator sequentially after approval.
 
 ---
 
-## VSA (Virtual Service Agent)
+## g8eo (g8e Operator)
 
 Also known as: **g8e.operator**
 
-The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides command execution, file operations, local storage, and heartbeat monitoring. Connects to VSOD via the Gateway Protocol (WebSocket) for command dispatch, result delivery, and heartbeat telemetry.
+The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. It follows the g8e events protocol, connecting to g8ed via the Gateway Protocol (WebSocket) for command dispatch, result delivery, and heartbeat telemetry.
 
 ---
 
-## VSE (Virtual Service Engineer)
+## g8ee
 
-Also known as: **g8e-engine**
+Also known as: **g8ee**
 
-The AI engine component with LLM provider abstraction supporting any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) or cloud LLM APIs. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
-
----
-
-## VSOD (Virtual Service Organization Dashboard)
-
-Also known as: **g8e-dashboard**
-
-The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and VSE.
+The AI engine component with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
 
 ---
 
-## VSODB (Virtual Service Organization Data Bus)
+## g8ed (g8e Dashboard)
 
-Also known as: **g8e-data**
+Also known as: **g8ed**
+
+The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
+
+---
+
+## g8es (g8e Data Bus)
+
+Also known as: **g8es**
 
 The Operator binary (`g8e.operator`) running in `--listen` mode. Serves as the platform's single source of truth for persistence and messaging. Provides a document store, KV store, and pub/sub broker via a single static binary with zero external dependencies. See **Coordination Store (SQLite)**.
 
@@ -501,13 +501,13 @@ The Operator binary (`g8e.operator`) running in `--listen` mode. Serves as the p
 
 ## Ollama (Remote)
 
-The remote LLM inference component. g8e supports any remote Ollama server that provides an OpenAI-compatible API at `/v1`. Used as an LLM backend for VSE. Configure the endpoint via the setup wizard or `./g8e llm setup`.
+The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for g8ee. Configure the endpoint via the setup wizard or `./g8e llm setup`.
 
 ---
 
 ## WebSession
 
-An authenticated browser session. VSODB document store is the authoritative store; VSODB KV acts as a fast read cache (cache-aside pattern). Contains user identity and session metadata. Operator–web session bindings are tracked separately by `BoundSessionsService`. Sessions use encrypted cookies with idle timeout (8 hours) and absolute timeout (24 hours).
+An authenticated browser session. g8es document store is the authoritative store; g8es KV acts as a fast read cache (cache-aside pattern). Contains user identity and session metadata. Operator–web session bindings are tracked separately by `BoundSessionsService`. Sessions use encrypted cookies with idle timeout (8 hours) and absolute timeout (24 hours).
 
 ---
 
@@ -517,7 +517,7 @@ A security model exclusive to the Cloud Operator for AWS where the Operator laun
 
 ---
 
-## Zero-Trust AI for Real Production
+## Zero-Trust AI Architecture
 
-The platform's core positioning. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel before platform transmission, and all execution happens with human oversight.
+The platform's core security model. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel before platform transmission, and all execution happens with human oversight.
 

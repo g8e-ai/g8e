@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wire envelope for all pub/sub messages crossing component boundaries. VSE publishes VSOMessage (vse component), VSA publishes ResultMessage (vsa component). Both follow this shape. Consumers: VSE (Python), VSA (Go), VSOD (JS).",
+  "_comment": "Canonical wire envelope for all pub/sub messages crossing component boundaries. g8ee publishes G8eMessage (g8ee component), g8eo publishes ResultMessage (g8eo component). Both follow this shape. Consumers: g8ee (Python), g8eo (Go), g8ed (JS).",
 
   "envelope": {
     "_description": "Outer envelope wrapping every pub/sub message on any channel.",
@@ -19,7 +19,7 @@
       "source_component": {
         "type": "string",
         "required": true,
-        "values": ["vse", "vsa", "vsod"],
+        "values": ["g8ee", "g8eo", "g8ed"],
         "description": "Component that published this message. See status.json component.name."
       },
       "event_type": {
@@ -30,12 +30,12 @@
       "operator_id": {
         "type": "string",
         "required": false,
-        "description": "Operator identifier. Required for all VSA-originated messages."
+        "description": "Operator identifier. Required for all g8eo-originated messages."
       },
       "operator_session_id": {
         "type": "string",
         "required": false,
-        "description": "Operator session identifier. Required for all VSA-originated messages."
+        "description": "Operator session identifier. Required for all g8eo-originated messages."
       },
       "case_id": {
         "type": "string",
@@ -60,12 +60,12 @@
       "instance_id": {
         "type": "string",
         "required": false,
-        "description": "Source component instance identifier. VSE-only, optional."
+        "description": "Source component instance identifier. g8ee-only, optional."
       },
       "system_fingerprint": {
         "type": "string",
         "required": false,
-        "description": "SHA256 fingerprint of the operator host system. VSA-only, included in VSA-originated messages."
+        "description": "SHA256 fingerprint of the operator host system. g8eo-only, included in g8eo-originated messages."
       },
       "payload": {
         "type": "object",
@@ -76,13 +76,13 @@
       "metadata": {
         "type": "object",
         "required": false,
-        "description": "Auxiliary routing metadata (e.g. reply_to_topic). Not used by VSA.",
+        "description": "Auxiliary routing metadata (e.g. reply_to_topic). Not used by g8eo.",
         "default": {}
       }
     }
   },
 
-  "_comment.vsa": "VSA's ResultMessage uses `payload` as a raw JSON blob (json.RawMessage). Fields `instance_id` and `metadata` are absent in VSA-originated messages. Fields `system_fingerprint` and `source_component` are always present in VSA messages.",
-  "_comment.vse": "VSE's VSOMessage uses `payload` as a typed dict. Fields `system_fingerprint` is absent in VSE-originated messages.",
+  "_comment.g8eo": "g8eo's ResultMessage uses `payload` as a raw JSON blob (json.RawMessage). Fields `instance_id` and `metadata` are absent in g8eo-originated messages. Fields `system_fingerprint` and `source_component` are always present in g8eo messages.",
+  "_comment.g8ee": "g8ee's G8eMessage uses `payload` as a typed dict. Fields `system_fingerprint` is absent in g8ee-originated messages.",
   "_comment.channels": "Messages are published to channels defined in channels.json. The envelope is the same regardless of channel."
 }

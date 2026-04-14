@@ -113,8 +113,8 @@ _read_env() {
 
 _write_to_db() {
     local db_args=("$@")
-    if docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
-        if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set "${db_args[@]}" 2>/dev/null; then
+    if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
+        if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set "${db_args[@]}" 2>/dev/null; then
             _ok "Settings written to DB"
         else
             _warn "Could not write to DB — settings will apply after next platform restart"
@@ -218,30 +218,30 @@ if [[ "$NON_INTERACTIVE" == true ]]; then
         _err "--project-id, --engine-id, and --api-key (or GEMINI_API_KEY) are all required"
         exit 1
     fi
-    VS_PROJECT_ID="$ARG_PROJECT_ID"
-    VS_ENGINE_ID="$ARG_ENGINE_ID"
-    VS_API_KEY="$ARG_API_KEY"
-    VS_LOCATION="${ARG_LOCATION:-global}"
+    G8E_SEARCH_PROJECT_ID="$ARG_PROJECT_ID"
+    G8E_SEARCH_ENGINE_ID="$ARG_ENGINE_ID"
+    G8E_SEARCH_API_KEY="$ARG_API_KEY"
+    G8E_SEARCH_LOCATION="${ARG_LOCATION:-global}"
 else
     _header "GCP Project ID"
     _info "Found in the GCP console URL: console.cloud.google.com/... — the project selector at the top."
     echo
     printf "  Project ID [%s]: " "${_current_project_id:-your-gcp-project-id}" >&2
     IFS= read -r _input
-    VS_PROJECT_ID="${_input:-$_current_project_id}"
-    if [[ -z "$VS_PROJECT_ID" ]]; then
+    G8E_SEARCH_PROJECT_ID="${_input:-$_current_project_id}"
+    if [[ -z "$G8E_SEARCH_PROJECT_ID" ]]; then
         _err "Project ID is required."
         exit 1
     fi
 
     _header "Vertex AI Search Engine ID"
     _info "The App ID shown in the Search App details page."
-    _info "https://console.cloud.google.com/gen-app-builder/engines?project=${VS_PROJECT_ID}"
+    _info "https://console.cloud.google.com/gen-app-builder/engines?project=${G8E_SEARCH_PROJECT_ID}"
     echo
     printf "  Engine ID [%s]: " "${_current_engine_id:-your-engine-id}" >&2
     IFS= read -r _input
-    VS_ENGINE_ID="${_input:-$_current_engine_id}"
-    if [[ -z "$VS_ENGINE_ID" ]]; then
+    G8E_SEARCH_ENGINE_ID="${_input:-$_current_engine_id}"
+    if [[ -z "$G8E_SEARCH_ENGINE_ID" ]]; then
         _err "Engine ID is required."
         exit 1
     fi
@@ -252,12 +252,12 @@ else
     echo
     printf "  Location [%s]: " "${_current_location:-global}" >&2
     IFS= read -r _input
-    VS_LOCATION="${_input:-${_current_location:-global}}"
+    G8E_SEARCH_LOCATION="${_input:-${_current_location:-global}}"
 
     _header "GCP API Key"
     _info "A single API key scoped to both Discovery Engine API and Gemini for Google Cloud API."
     _info "This is the same key used for your Gemini LLM provider (GEMINI_API_KEY)."
-    _info "https://console.cloud.google.com/apis/credentials?project=${VS_PROJECT_ID}"
+    _info "https://console.cloud.google.com/apis/credentials?project=${G8E_SEARCH_PROJECT_ID}"
     echo
     _gemini_key_fallback="$(_read_env GEMINI_API_KEY)"
     _api_key_default="${_current_api_key:-$_gemini_key_fallback}"
@@ -267,12 +267,12 @@ else
         else
             _info "GEMINI_API_KEY is set — leave blank to use the same key."
         fi
-        VS_API_KEY="$(_prompt_secret "API key")"
-        [[ -z "$VS_API_KEY" ]] && VS_API_KEY="$_api_key_default"
+        G8E_SEARCH_API_KEY="$(_prompt_secret "API key")"
+        [[ -z "$G8E_SEARCH_API_KEY" ]] && G8E_SEARCH_API_KEY="$_api_key_default"
     else
-        VS_API_KEY="$(_prompt_secret "API key")"
+        G8E_SEARCH_API_KEY="$(_prompt_secret "API key")"
     fi
-    if [[ -z "$VS_API_KEY" ]]; then
+    if [[ -z "$G8E_SEARCH_API_KEY" ]]; then
         _err "API key is required."
         exit 1
     fi
@@ -284,10 +284,10 @@ fi
 
 _header "Validating API key"
 echo
-_info "Testing connectivity to Vertex AI Search via g8e-pod..."
+_info "Testing connectivity to Vertex AI Search via g8ep..."
 echo
 
-_CONTAINER="g8e-pod"
+_CONTAINER="g8ep"
 _validate_output=""
 _validate_exit=0
 
@@ -295,14 +295,14 @@ if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${_CONTAINER}$"; then
     _validate_output="$(docker exec -i "$_CONTAINER" \
         /opt/venv/bin/python3 -c "
 import asyncio, sys
-sys.path.insert(0, '/app/components/vse')
+sys.path.insert(0, '/app/components/g8ee')
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 async def run():
     p = WebSearchProvider(
-        project_id='${VS_PROJECT_ID}',
-        engine_id='${VS_ENGINE_ID}',
-        api_key='${VS_API_KEY}',
-        location='${VS_LOCATION}',
+        project_id='${G8E_SEARCH_PROJECT_ID}',
+        engine_id='${G8E_SEARCH_ENGINE_ID}',
+        api_key='${G8E_SEARCH_API_KEY}',
+        location='${G8E_SEARCH_LOCATION}',
     )
     r = await p.search(query='test', num=1)
     if r.success:
@@ -323,7 +323,7 @@ asyncio.run(run())
         _info "$_validate_output"
     fi
 else
-    _warn "g8e-pod container is not running — skipping live validation."
+    _warn "g8ep container is not running — skipping live validation."
     _info "Run './g8e platform start' then './g8e search setup' to validate."
 fi
 
@@ -336,15 +336,15 @@ echo
 
 _write_to_db \
     "vertex_search_enabled=true" \
-    "vertex_search_project_id=$VS_PROJECT_ID" \
-    "vertex_search_engine_id=$VS_ENGINE_ID" \
-    "vertex_search_location=$VS_LOCATION" \
-    "vertex_search_api_key=$VS_API_KEY"
+    "vertex_search_project_id=$G8E_SEARCH_PROJECT_ID" \
+    "vertex_search_engine_id=$G8E_SEARCH_ENGINE_ID" \
+    "vertex_search_location=$G8E_SEARCH_LOCATION" \
+    "vertex_search_api_key=$G8E_SEARCH_API_KEY"
 
 _ok "VERTEX_SEARCH_ENABLED    = true"
-_ok "VERTEX_SEARCH_PROJECT_ID = $VS_PROJECT_ID"
-_ok "VERTEX_SEARCH_ENGINE_ID  = $VS_ENGINE_ID"
-_ok "VERTEX_SEARCH_LOCATION   = $VS_LOCATION"
+_ok "VERTEX_SEARCH_PROJECT_ID = $G8E_SEARCH_PROJECT_ID"
+_ok "VERTEX_SEARCH_ENGINE_ID  = $G8E_SEARCH_ENGINE_ID"
+_ok "VERTEX_SEARCH_LOCATION   = $G8E_SEARCH_LOCATION"
 _ok "VERTEX_SEARCH_API_KEY    = (set)"
 
 # =============================================================================

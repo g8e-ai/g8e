@@ -1,10 +1,10 @@
 {
-  "_comment": "Canonical inbound command payload shapes published by VSE to the cmd:{operator_id}:{operator_session_id} pub/sub channel. VSA deserializes these from the channel. Each payload is the `data` field inside the pub/sub message. Consumers: VSE (Python, publishes), VSA (Go models/commands.go, consumes).",
+  "_comment": "Canonical inbound command payload shapes published by g8ee to the cmd:{operator_id}:{operator_session_id} pub/sub channel. g8eo deserializes these from the channel. Each payload is the `data` field inside the pub/sub message. Consumers: g8ee (Python, publishes), g8eo (Go models/commands.go, consumes).",
 
-  "_comment.wire_format": "VSE publishes a JSON object with fields: event_type, payload (one of the schemas below), plus routing fields (operator_id, operator_session_id, case_id, investigation_id, web_session_id). VSA reads event_type to select the correct payload deserializer.",
+  "_comment.wire_format": "g8ee publishes a JSON object with fields: event_type, payload (one of the schemas below), plus routing fields (operator_id, operator_session_id, case_id, investigation_id, web_session_id). g8eo reads event_type to select the correct payload deserializer.",
 
   "command": {
-    "_description": "Payload for event_type: g8e.v1.operator.command.requested. VSA executes a shell command.",
+    "_description": "Payload for event_type: g8e.v1.operator.command.requested. g8eo executes a shell command.",
     "_event_types": ["g8e.v1.operator.command.requested"],
     "fields": {
       "command": {
@@ -36,7 +36,7 @@
   },
 
   "command_cancel": {
-    "_description": "Payload for event_type: g8e.v1.operator.command.cancel.requested. VSA cancels an in-flight execution.",
+    "_description": "Payload for event_type: g8e.v1.operator.command.cancel.requested. g8eo cancels an in-flight execution.",
     "_event_types": ["g8e.v1.operator.command.cancel.requested"],
     "fields": {
       "execution_id": {
@@ -48,7 +48,7 @@
   },
 
   "file_edit": {
-    "_description": "Payload for event_type: g8e.v1.operator.file.edit.requested. VSA performs a file operation.",
+    "_description": "Payload for event_type: g8e.v1.operator.file.edit.requested. g8eo performs a file operation.",
     "_event_types": ["g8e.v1.operator.file.edit.requested"],
     "fields": {
       "file_path": {
@@ -133,7 +133,7 @@
   },
 
   "fs_list": {
-    "_description": "Payload for event_type: g8e.v1.operator.filesystem.list.requested. VSA lists directory contents.",
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.list.requested. g8eo lists directory contents.",
     "_event_types": ["g8e.v1.operator.filesystem.list.requested"],
     "fields": {
       "path": {
@@ -163,7 +163,7 @@
   },
 
   "fs_read": {
-    "_description": "Payload for event_type: g8e.v1.operator.filesystem.read.requested. VSA reads a file and returns its content.",
+    "_description": "Payload for event_type: g8e.v1.operator.filesystem.read.requested. g8eo reads a file and returns its content.",
     "_event_types": ["g8e.v1.operator.filesystem.read.requested"],
     "fields": {
       "path": {
@@ -186,7 +186,7 @@
   },
 
   "fetch_logs": {
-    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.requested. VSA fetches stored execution output from its local vault.",
+    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.requested. g8eo fetches stored execution output from its local vault.",
     "_event_types": ["g8e.v1.operator.logs.fetch.requested"],
     "fields": {
       "execution_id": {
@@ -203,13 +203,13 @@
   },
 
   "fetch_history": {
-    "_description": "Payload for event_type: g8e.v1.operator.history.fetch.requested. VSA returns a list of past execution IDs.",
+    "_description": "Payload for event_type: g8e.v1.operator.history.fetch.requested. g8eo returns a list of past execution IDs.",
     "_event_types": ["g8e.v1.operator.history.fetch.requested"],
     "fields": {}
   },
 
   "fetch_file_history": {
-    "_description": "Payload for event_type: g8e.v1.operator.file.history.fetch.requested. VSA returns file edit history for a path.",
+    "_description": "Payload for event_type: g8e.v1.operator.file.history.fetch.requested. g8eo returns file edit history for a path.",
     "_event_types": ["g8e.v1.operator.file.history.fetch.requested"],
     "fields": {
       "file_path": {
@@ -221,7 +221,7 @@
   },
 
   "fetch_file_diff": {
-    "_description": "Payload for event_type: g8e.v1.operator.file.diff.fetch.requested. VSA returns diff entries from the scrubbed vault.",
+    "_description": "Payload for event_type: g8e.v1.operator.file.diff.fetch.requested. g8eo returns diff entries from the scrubbed vault.",
     "_event_types": ["g8e.v1.operator.file.diff.fetch.requested"],
     "fields": {
       "diff_id": {
@@ -248,7 +248,7 @@
   },
 
   "restore_file": {
-    "_description": "Payload for event_type: g8e.v1.operator.file.restore.requested. VSA restores a file to a prior git commit.",
+    "_description": "Payload for event_type: g8e.v1.operator.file.restore.requested. g8eo restores a file to a prior git commit.",
     "_event_types": ["g8e.v1.operator.file.restore.requested"],
     "fields": {
       "file_path": {
@@ -265,7 +265,7 @@
   },
 
   "port_check": {
-    "_description": "Payload for event_type: g8e.v1.operator.network.port.check.requested. VSA checks whether a network port is reachable on a specified host.",
+    "_description": "Payload for event_type: g8e.v1.operator.network.port.check.requested. g8eo checks whether a network port is reachable on a specified host.",
     "_event_types": ["g8e.v1.operator.network.port.check.requested"],
     "fields": {
       "execution_id": {
@@ -295,7 +295,7 @@
   },
 
   "shutdown": {
-    "_description": "Payload for event_type: g8e.v1.operator.shutdown.requested. VSA initiates a graceful shutdown.",
+    "_description": "Payload for event_type: g8e.v1.operator.shutdown.requested. g8eo initiates a graceful shutdown.",
     "_event_types": ["g8e.v1.operator.shutdown.requested"],
     "fields": {
       "reason": {
@@ -307,13 +307,13 @@
   },
 
   "heartbeat_request": {
-    "_description": "Payload for event_type: g8e.v1.operator.heartbeat.requested. VSA immediately sends a heartbeat.",
+    "_description": "Payload for event_type: g8e.v1.operator.heartbeat.requested. g8eo immediately sends a heartbeat.",
     "_event_types": ["g8e.v1.operator.heartbeat.requested"],
     "fields": {}
   },
 
   "audit_user_msg": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.user.recorded. VSA stores a user chat message in its local audit log.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.user.recorded. g8eo stores a user chat message in its local audit log.",
     "_event_types": ["g8e.v1.operator.audit.user.recorded"],
     "fields": {
       "content": {
@@ -330,7 +330,7 @@
   },
 
   "audit_ai_msg": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.ai.recorded. VSA stores an AI response in its local audit log.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.ai.recorded. g8eo stores an AI response in its local audit log.",
     "_event_types": ["g8e.v1.operator.audit.ai.recorded"],
     "fields": {
       "content": {
@@ -347,7 +347,7 @@
   },
 
   "audit_direct_cmd": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.recorded. VSE sends this when a user runs a command directly from the anchored terminal.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.recorded. g8ee sends this when a user runs a command directly from the anchored terminal.",
     "_event_types": ["g8e.v1.operator.audit.direct.command.recorded"],
     "fields": {
       "command": {
@@ -369,7 +369,7 @@
   },
 
   "audit_direct_exec_result": {
-    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.result.recorded. VSE sends the Sentinel-scrubbed result of a direct terminal command.",
+    "_description": "Payload for event_type: g8e.v1.operator.audit.direct.command.result.recorded. g8ee sends the Sentinel-scrubbed result of a direct terminal command.",
     "_event_types": ["g8e.v1.operator.audit.direct.command.result.recorded"],
     "fields": {
       "command": {

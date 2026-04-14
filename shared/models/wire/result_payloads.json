@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical outbound result payload shapes published by VSA to the results:{operator_id}:{operator_session_id} pub/sub channel. These payloads are embedded in the `payload` field of the VSA ResultMessage envelope (see envelope.json). Consumers: VSE (Python, processes results), VSOD (JS, forwards to frontend via SSE).",
+  "_comment": "Canonical outbound result payload shapes published by g8eo to the results:{operator_id}:{operator_session_id} pub/sub channel. These payloads are embedded in the `payload` field of the g8eo ResultMessage envelope (see envelope.json). Consumers: g8ee (Python, processes results), g8ed (JS, forwards to frontend via SSE).",
 
-  "_comment.wire_format": "VSA wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. VSE and VSOD read `event_type` from the envelope to select the correct payload deserializer.",
+  "_comment.wire_format": "g8eo wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. g8ee and g8ed read `event_type` from the envelope to select the correct payload deserializer.",
 
   "execution_result": {
     "_description": "Payload for event_type: g8e.v1.operator.command.completed | g8e.v1.operator.command.failed. Final result of a command execution.",
@@ -574,7 +574,7 @@
   },
 
   "lfaa_error": {
-    "_description": "Payload for LFAA error responses from VSA when a request cannot be processed.",
+    "_description": "Payload for LFAA error responses from g8eo when a request cannot be processed.",
     "fields": {
       "success": {
         "type": "boolean",

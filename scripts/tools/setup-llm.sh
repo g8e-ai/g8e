@@ -164,10 +164,10 @@ _read_env() {
 }
 
 _exec_in_pod() {
-    if docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
-        docker exec -i g8e-pod "$@"
+    if docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
+        docker exec -i g8ep "$@"
     else
-        _err "Platform not running — g8e-pod is required (run ./g8e platform start)"
+        _err "Platform not running — g8ep is required (run ./g8e platform start)"
         exit 1
     fi
 }
@@ -180,12 +180,12 @@ case "$COMMAND" in
     show)
         _header "Current LLM Settings"
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG
         exit 0
         ;;
     get)
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings get "${EXT_ARGS[@]}" $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings get "${EXT_ARGS[@]}" $USER_ID_ARG
         exit 0
         ;;
     set)
@@ -207,18 +207,18 @@ case "$COMMAND" in
         fi
 
         [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings set "${SET_ARGS[@]}" $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings set "${SET_ARGS[@]}" $USER_ID_ARG
         
         echo ""
         _header "Effective LLM Settings"
-        _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG
+        _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG
         exit 0
         ;;
     restart)
         _header "Restarting LLM Services"
         # Since we are on the host, we can call docker compose if available, 
         # but the standard way in this repo is via build.sh
-        bash "$REPO_ROOT/scripts/core/build.sh" restart vsod vse
+        bash "$REPO_ROOT/scripts/core/build.sh" restart g8ed g8ee
         exit 0
         ;;
 esac
@@ -234,7 +234,7 @@ esac
 [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
 
 # Export all settings as JSON for robust extraction
-_SETTINGS_JSON="$(_exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings export --section llm $USER_ID_ARG 2>/dev/null || echo "{}")"
+_SETTINGS_JSON="$(_exec_in_pod python3 /app/scripts/data/manage-g8es.py settings export --section llm $USER_ID_ARG 2>/dev/null || echo "{}")"
 
 _get_setting() {
     echo "$_SETTINGS_JSON" | jq -r ".$1 // \"\""
@@ -254,7 +254,7 @@ _cur_anthropic_key=""
 
 _header "g8e LLM Setup"
 echo
-_info "Configures the AI provider for VSE (command generation, investigations, assistant)."
+_info "Configures the AI provider for g8ee (command generation, investigations, assistant)."
 echo
 
 if [[ -n "$_cur_provider" ]]; then
@@ -271,9 +271,9 @@ fi
 if [[ "$NON_INTERACTIVE" == true ]]; then
     LLM_PROVIDER="$ARG_PROVIDER"
     case "$LLM_PROVIDER" in
-        gemini|anthropic|openai|ollama|vllm) ;;
+        gemini|anthropic|openai|ollama) ;;
         *)
-            _err "Unknown provider: $LLM_PROVIDER. Supported: gemini, anthropic, openai, ollama, vllm"
+            _err "Unknown provider: $LLM_PROVIDER. Supported: gemini, anthropic, openai, ollama"
             exit 1 ;;
     esac
 else
@@ -282,20 +282,14 @@ else
     echo "  1) Gemini       (Google — recommended, most tested)"
     echo "  2) Anthropic    (Claude)"
     echo "  3) OpenAI       (GPT)"
-    echo "  4) Ollama       (remote Ollama server, OpenAI-compatible)"
-    echo "  5) vLLM         (self-hosted OpenAI-compatible)"
+    echo "  4) Ollama       (remote Ollama server)"
     echo
 
     _default_choice=""
     case "$_cur_provider" in
         gemini)           _default_choice="1" ;;
         anthropic)        _default_choice="2" ;;
-        openai)
-            if [[ "$_cur_endpoint" == *"11434"* ]]; then
-                _default_choice="5"
-            else
-                _default_choice="3"
-            fi ;;
+        openai)           _default_choice="3" ;;
         ollama)           _default_choice="4" ;;
     esac
 
@@ -308,7 +302,6 @@ else
         2) LLM_PROVIDER="anthropic" ;;
         3) LLM_PROVIDER="openai" ;;
         4) LLM_PROVIDER="ollama" ;;
-        5) LLM_PROVIDER="vllm" ;;
         *)
             _err "Invalid choice: $_choice"
             exit 1 ;;
@@ -452,7 +445,7 @@ case "$LLM_PROVIDER" in
     ollama)
         _header "Ollama Configuration"
         echo
-        _info "Connects to an existing remote Ollama server (OpenAI-compatible API)."
+        _info "Connects to an existing remote Ollama server."
         echo
 
         if [[ "$NON_INTERACTIVE" == true ]]; then
@@ -461,8 +454,8 @@ case "$LLM_PROVIDER" in
                 _err "--endpoint is required for Ollama"
                 exit 1
             fi
-            LLM_MODEL="${ARG_MODEL:-gemma3:1b}"
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma3:1b}"
+            LLM_MODEL="${ARG_MODEL:-gemma4:e4b}"
+            LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma4:e4b}"
         else
             printf "  Ollama endpoint [%s]: " "${_cur_endpoint:-https://your-ollama-host:11434/v1}" >&2
             IFS= read -r _input
@@ -472,69 +465,19 @@ case "$LLM_PROVIDER" in
                 exit 1
             fi
 
-            printf "  Primary model [%s]: " "${_cur_model:-gemma3:1b}" >&2
+            printf "  Primary model [%s]: " "${_cur_model:-gemma4:e4b}" >&2
             IFS= read -r _input
-            LLM_MODEL="${_input:-${_cur_model:-gemma3:1b}}"
+            LLM_MODEL="${_input:-${_cur_model:-gemma4:e4b}}"
 
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-gemma3:1b}" >&2
+            printf "  Assistant model [%s]: " "${_cur_asst_model:-gemma4:e4b}" >&2
             IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-gemma3:1b}}"
+            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-gemma4:e4b}}"
         fi
 
         LLM_API_KEY="ollama"
         LLM_PROVIDER_VAL="ollama"
         ;;
 
-    # ── vLLM (self-hosted) ────────────────────────────────────────────────────
-    vllm)
-        _header "vLLM Configuration"
-        echo
-        _info "Self-hosted OpenAI-compatible API server."
-        echo
-
-        if [[ "$NON_INTERACTIVE" == true ]]; then
-            LLM_ENDPOINT="${ARG_ENDPOINT:-}"
-            if [[ -z "$LLM_ENDPOINT" ]]; then
-                _err "--endpoint is required for vLLM"
-                exit 1
-            fi
-            LLM_MODEL="${ARG_MODEL:-}"
-            if [[ -z "$LLM_MODEL" ]]; then
-                _err "--model is required for vLLM"
-                exit 1
-            fi
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-$LLM_MODEL}"
-            LLM_API_KEY="${ARG_API_KEY:-}"
-        else
-            printf "  vLLM endpoint [%s]: " "${_cur_endpoint:-https://your-vllm-host:443/v1}" >&2
-            IFS= read -r _input
-            LLM_ENDPOINT="${_input:-$_cur_endpoint}"
-            if [[ -z "$LLM_ENDPOINT" ]]; then
-                _err "Endpoint is required."
-                exit 1
-            fi
-
-            printf "  Primary model [%s]: " "${_cur_model:-your-model-name}" >&2
-            IFS= read -r _input
-            LLM_MODEL="${_input:-$_cur_model}"
-            if [[ -z "$LLM_MODEL" ]]; then
-                _err "Model name is required."
-                exit 1
-            fi
-
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-$LLM_MODEL}" >&2
-            IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-$LLM_MODEL}}"
-
-            if [[ -n "$_cur_api_key" ]]; then
-                _info "An existing API key is set. Leave blank to keep it."
-            fi
-            LLM_API_KEY="$(_prompt_secret "API key (leave blank if not required)")"
-            [[ -z "$LLM_API_KEY" ]] && LLM_API_KEY="$_cur_api_key"
-        fi
-
-        LLM_PROVIDER_VAL="openai"
-        ;;
 esac
 
 # =============================================================================
@@ -570,18 +513,18 @@ _build_db_args() {
 _write_to_db() {
     _build_db_args
 
-    if ! docker ps --filter "name=^g8e-pod$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8e-pod$"; then
+    if ! docker ps --filter "name=^g8ep$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^g8ep$"; then
         _warn "Platform not running — DB write skipped (run ./g8e platform start)"
         return 1
     fi
 
-    if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
-        _ok "LLM settings written to DB (via VSOD)"
+    if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set "${DB_ARGS[@]}" 2>/dev/null; then
+        _ok "LLM settings written to DB (via g8ed)"
         return 0
     fi
 
-    _info "VSOD unavailable — writing directly to VSODB"
-    if docker exec g8e-pod python3 /app/scripts/data/manage-vsodb.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
+    _info "g8ed unavailable — writing directly to g8es"
+    if docker exec g8ep python3 /app/scripts/data/manage-g8es.py settings set --direct "${DB_ARGS[@]}" 2>/dev/null; then
         _ok "LLM settings written to DB (direct)"
         return 0
     fi
@@ -597,7 +540,7 @@ if [[ $_write_rc -eq 0 ]]; then
     echo ""
     _header "Effective LLM Settings"
     [[ -n "$ARG_USER_ID" ]] && USER_ID_ARG="--user-id=$ARG_USER_ID" || USER_ID_ARG=""
-    _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show --section llm $USER_ID_ARG 2>/dev/null || true
+    _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show --section llm $USER_ID_ARG 2>/dev/null || true
 fi
 
 # =============================================================================

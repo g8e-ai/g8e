@@ -1,10 +1,10 @@
 {
-  "_comment": "Canonical Triage agent model. Classifies incoming user messages into complexity and intent buckets to route to the appropriate model (Assistant vs Primary).",
-  "name": "TriageAgent",
+  "_comment": "Canonical Triage model. Classifies incoming user messages into complexity and intent buckets to route to the appropriate AI (Assistant vs Primary).",
+  "name": "Triage",
   "description": "Routes user messages based on complexity and intent.",
   "request": {
     "message": { "type": "string", "description": "The user message to triage." },
-    "agent_mode": { "type": "string", "description": "The current agent mode (operator_bound, operator_not_bound, etc.)" },
+    "agent_mode": { "type": "string", "description": "The current AI mode (operator_bound, operator_not_bound, etc.)" },
     "conversation_history": { "type": "array", "items": { "$ref": "../conversation_message.json" }, "description": "Recent conversation turns." },
     "attachments": { "type": "array", "items": { "type": "object" }, "description": "Metadata for any attached files." },
     "model_override": { "type": "string", "nullable": true, "description": "Optional model override." }

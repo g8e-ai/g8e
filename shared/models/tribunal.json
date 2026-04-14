@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical Tribunal model. The Tribunal is a three-member heterogeneous AI panel used by VSE for command generation refinement. Each member has a distinct reasoning profile and temperature configuration. VSE is the sole authority — VSOD and VSA consume Tribunal events via SSE but do not interact with members directly. Tribunal member temperature values are sourced from shared/constants/agents.json (tribunal.temperatures section).",
+  "_comment": "Canonical Tribunal model. The Tribunal is a three-member heterogeneous AI panel used by g8ee for command generation refinement. Each member has a distinct reasoning profile and temperature configuration. g8ee is the sole authority — g8ed and g8eo consume Tribunal events via SSE but do not interact with members directly. Tribunal member temperature values are sourced from shared/constants/agents.json (tribunal.temperatures section).",
 
-  "_authority": "VSE (command_generator.py)",
-  "_consumers": ["VSOD (JS — renders Tribunal widget in anchored terminal output)"],
+  "_authority": "g8ee (command_generator.py)",
+  "_consumers": ["g8ed (JS — renders Tribunal widget in anchored terminal output)"],
 
   "tribunal": {
     "_description": "The Tribunal — a three-member AI panel that refines command syntax through multi-perspective voting and verification. Fires only for run_commands_with_operator workflows.",

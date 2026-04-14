@@ -35,6 +35,8 @@ x-web-node: &web-node
   tty: true
   labels:
     - "demo.service=web-node"
+  volumes:
+    - g8es-ssl:/g8es:ro
 
 services:
   node-01:
@@ -132,3 +134,8 @@ services:
       - ./containers/dashboard/public:/app/public
     labels:
       - "demo.service=dashboard"
+
+
+volumes:
+  g8es-ssl:
+    external: true

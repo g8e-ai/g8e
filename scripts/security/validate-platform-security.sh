@@ -48,35 +48,35 @@ check_env_var() {
     fi
 }
 
-# 1. vsodb file checks
-echo -e "\n${YELLOW}1. Checking vsodb security files...${NC}"
+# 1. g8es file checks
+echo -e "\n${YELLOW}1. Checking g8es security files...${NC}"
 FAILED=0
-check_file_exists g8e-data /ssl/ca.crt || FAILED=1
-check_file_exists g8e-data /ssl/server.crt || FAILED=1
-check_file_exists g8e-data /ssl/server.key || FAILED=1
-check_file_exists g8e-data /ssl/internal_auth_token || FAILED=1
-check_file_exists g8e-data /ssl/session_encryption_key || FAILED=1
+check_file_exists g8es /ssl/ca.crt || FAILED=1
+check_file_exists g8es /ssl/server.crt || FAILED=1
+check_file_exists g8es /ssl/server.key || FAILED=1
+check_file_exists g8es /ssl/internal_auth_token || FAILED=1
+check_file_exists g8es /ssl/session_encryption_key || FAILED=1
 
 # 2. Volume mount checks
 echo -e "\n${YELLOW}2. Checking volume mounts...${NC}"
-check_file_exists g8e-dashboard /vsodb/ca.crt || FAILED=1
-check_file_exists g8e-dashboard /vsodb/internal_auth_token || FAILED=1
-check_file_exists g8e-dashboard /vsodb/session_encryption_key || FAILED=1
-check_file_exists g8e-engine /vsodb/ca.crt || FAILED=1
-check_file_exists g8e-engine /vsodb/internal_auth_token || FAILED=1
-check_file_exists g8e-engine /vsodb/session_encryption_key || FAILED=1
+check_file_exists g8ed /g8es/ca.crt || FAILED=1
+check_file_exists g8ed /g8es/internal_auth_token || FAILED=1
+check_file_exists g8ed /g8es/session_encryption_key || FAILED=1
+check_file_exists g8ee /g8es/ca.crt || FAILED=1
+check_file_exists g8ee /g8es/internal_auth_token || FAILED=1
+check_file_exists g8ee /g8es/session_encryption_key || FAILED=1
 
 # 3. INTERNAL_AUTH_TOKEN checks
 echo -e "\n${YELLOW}3. Checking G8E_INTERNAL_AUTH_TOKEN environment variables...${NC}"
-check_env_var g8e-data G8E_INTERNAL_AUTH_TOKEN /ssl/internal_auth_token || FAILED=1
-check_env_var g8e-dashboard G8E_INTERNAL_AUTH_TOKEN /vsodb/internal_auth_token || FAILED=1
-check_env_var g8e-engine G8E_INTERNAL_AUTH_TOKEN /vsodb/internal_auth_token || FAILED=1
+check_env_var g8es G8E_INTERNAL_AUTH_TOKEN /ssl/internal_auth_token || FAILED=1
+check_env_var g8ed G8E_INTERNAL_AUTH_TOKEN /g8es/internal_auth_token || FAILED=1
+check_env_var g8ee G8E_INTERNAL_AUTH_TOKEN /g8es/internal_auth_token || FAILED=1
 
 # 4. SESSION_ENCRYPTION_KEY checks
 echo -e "\n${YELLOW}4. Checking G8E_SESSION_ENCRYPTION_KEY environment variables...${NC}"
-check_env_var g8e-data G8E_SESSION_ENCRYPTION_KEY /ssl/session_encryption_key || FAILED=1
-check_env_var g8e-dashboard G8E_SESSION_ENCRYPTION_KEY /vsodb/session_encryption_key || FAILED=1
-check_env_var g8e-engine G8E_SESSION_ENCRYPTION_KEY /vsodb/session_encryption_key || FAILED=1
+check_env_var g8es G8E_SESSION_ENCRYPTION_KEY /ssl/session_encryption_key || FAILED=1
+check_env_var g8ed G8E_SESSION_ENCRYPTION_KEY /g8es/session_encryption_key || FAILED=1
+check_env_var g8ee G8E_SESSION_ENCRYPTION_KEY /g8es/session_encryption_key || FAILED=1
 
 if [ $FAILED -eq 0 ]; then
     echo -e "\n${GREEN}Platform Security Validation PASSED!${NC}"

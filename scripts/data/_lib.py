@@ -14,13 +14,14 @@
 """
 Shared utilities for g8e data management scripts.
 
-Provides authentication, HTTP clients (VSODB direct + VSOD internal API),
+Provides authentication, HTTP clients (g8es direct + g8ed internal API),
 and terminal display helpers used across all resource scripts.
 """
 
 import json
 import os
 import shutil
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -33,10 +34,26 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-VSODB_BASE_URL = 'https://vsodb'
-VSOD_BASE_URL = 'https://vsod'
+G8ES_BASE_URL = 'https://g8es'
+G8ED_BASE_URL = 'https://g8ed'
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
+
+
+CA_CERT_PATH = Path('/g8es/ca.crt')
+
+
+def _create_ssl_context() -> Optional[ssl.SSLContext]:
+    """Create SSL context that trusts the platform CA."""
+    ctx = ssl.create_default_context()
+    if CA_CERT_PATH.exists():
+        ctx.load_verify_locations(str(CA_CERT_PATH))
+    else:
+        # Fallback to internal volume path
+        alt_path = Path('/g8es/ssl/ca.crt')
+        if alt_path.exists():
+            ctx.load_verify_locations(str(alt_path))
+    return ctx
 
 
 # =============================================================================
@@ -49,14 +66,14 @@ def get_internal_auth_token() -> str:
     if token:
         return token
 
-    token_path = Path('/vsodb/internal_auth_token')
+    token_path = Path('/g8es/internal_auth_token')
     if token_path.exists():
         try:
             return token_path.read_text().strip()
         except Exception:
             pass
 
-    token_path_ssl = Path('/vsodb/ssl/internal_auth_token')
+    token_path_ssl = Path('/g8es/ssl/internal_auth_token')
     if token_path_ssl.exists():
         try:
             return token_path_ssl.read_text().strip()
@@ -66,11 +83,11 @@ def get_internal_auth_token() -> str:
 
 
 # =============================================================================
-# VSODB HTTP client — direct DB/KV access (same as VSE's DBClient)
+# g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
 # =============================================================================
 
-def vsodb_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
-    url = f'{VSODB_BASE_URL}{path}'
+def g8es_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
+    url = f'{G8ES_BASE_URL}{path}'
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
@@ -79,8 +96,9 @@ def vsodb_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
         headers['X-Internal-Auth'] = token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    ctx = _create_ssl_context()
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=ctx) as resp:
             text = resp.read().decode()
             return json.loads(text) if text else None
     except urllib.error.HTTPError as e:
@@ -94,7 +112,7 @@ def vsodb_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
         raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f'Cannot reach VSODB at {VSODB_BASE_URL}. Is the platform running?\n  {e.reason}'
+            f'Cannot reach g8es at {G8ES_BASE_URL}. Is the platform running?\n  {e.reason}'
         )
 
 
@@ -102,41 +120,41 @@ def query_collection(collection: str, limit: int = 0) -> List[Dict]:
     body: Dict = {}
     if limit > 0:
         body['limit'] = limit
-    result = vsodb_request('POST', f'/db/{urllib.parse.quote(collection, safe="")}/_query', body)
+    result = g8es_request('POST', f'/db/{urllib.parse.quote(collection, safe="")}/_query', body)
     return result if isinstance(result, list) else []
 
 
 def get_document(collection: str, doc_id: str) -> Optional[Dict]:
-    return vsodb_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+    return g8es_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
 
 
 def delete_document(collection: str, doc_id: str) -> None:
-    vsodb_request('DELETE', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+    g8es_request('DELETE', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
 
 
 def kv_keys(pattern: str = '*') -> List[str]:
-    result = vsodb_request('POST', '/kv/_keys', {'pattern': pattern})
+    result = g8es_request('POST', '/kv/_keys', {'pattern': pattern})
     return result.get('keys', []) if isinstance(result, dict) else []
 
 
 def kv_get(key: str) -> Optional[str]:
-    result = vsodb_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
+    result = g8es_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
     return result.get('value') if isinstance(result, dict) else None
 
 
 def kv_delete_pattern(pattern: str) -> int:
-    result = vsodb_request('POST', '/kv/_delete_pattern', {'pattern': pattern})
+    result = g8es_request('POST', '/kv/_delete_pattern', {'pattern': pattern})
     return result.get('deleted', 0) if isinstance(result, dict) else 0
 
 
 # =============================================================================
-# VSOD internal API client — for resource management (users, operators, etc.)
+# g8ed internal API client — for resource management (users, operators, etc.)
 # =============================================================================
 
 INTERNAL_AUTH_HEADER = 'x-internal-auth'
 
 
-def vsod_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
+def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
     data = json.dumps(body).encode() if body is not None else None
     headers = {
         INTERNAL_AUTH_HEADER: get_internal_auth_token() or '',
@@ -144,8 +162,9 @@ def vsod_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         'Accept': 'application/json',
     }
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    ctx = _create_ssl_context()
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, context=ctx) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body_bytes = e.read()
@@ -157,7 +176,7 @@ def vsod_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         return err
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f"Could not reach VSOD at {VSOD_BASE_URL}. Is the platform running? "
+            f"Could not reach g8ed at {G8ED_BASE_URL}. Is the platform running? "
             f"(./g8e platform start)\n  {e.reason}"
         )
 
@@ -167,7 +186,7 @@ def resolve_user_id(user_id: Optional[str], email: Optional[str]) -> Optional[st
         return user_id
     if not email:
         return None
-    result = vsod_request('GET', f'{VSOD_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
+    result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
     if not result.get('success'):
         if result.get('_status_code') == 404:
             print(f"\nUser not found with email: {email}")

@@ -1,0 +1,42 @@
+<div class="bind-all-overlay" id="bind-single-overlay">
+    <div class="bind-all-modal bind-single-modal">
+        <div class="bind-all-header">
+            <div class="bind-all-header-content">
+                <span class="material-symbols-outlined bind-all-icon" data-bind-icon>link</span>
+                <div class="bind-all-title-section">
+                    <h3 class="bind-all-title" data-modal-title>Bind an Operator to your chat session</h3>
+                    <span class="bind-all-count" data-modal-subtitle></span>
+                </div>
+            </div>
+            <button class="bind-all-close-btn" data-action="close">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <div class="bind-all-description" data-modal-description>
+            Binding an Operator to your chat only authorizes the AI to know about that system. You must request and approve all actions via chat.
+        </div>
+
+        <div class="bind-all-operators-container">
+            <div class="bind-all-operators-list" data-operators-list>
+                <!-- Single operator item inserted here -->
+            </div>
+        </div>
+
+        <div class="bind-all-actions">
+            <button class="bind-all-action-btn cancel-btn" data-action="cancel">
+                <span class="material-symbols-outlined">cancel</span>
+                <span>Cancel</span>
+            </button>
+            <button class="bind-all-action-btn confirm-btn" data-action="confirm">
+                <span class="material-symbols-outlined" data-confirm-icon>link</span>
+                <span data-confirm-label>Bind Operator</span>
+            </button>
+        </div>
+
+        <div class="bind-all-processing initially-hidden" data-processing-indicator>
+            <div class="spinner"></div>
+            <span data-processing-label>Binding operator...</span>
+        </div>
+    </div>
+</div>
