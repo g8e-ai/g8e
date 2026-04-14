@@ -26,11 +26,7 @@ export class TerminalExecutionMixin {
         this.executionResultsContainers = new Map();
     }
 
-    _createAIBubbleWrapper(bubbleId) {
-        const group = document.createElement('div');
-        group.className = 'anchored-terminal__agent-message-group anchored-terminal__agent-message-group--execution';
-        if (bubbleId) group.setAttribute('data-execution-bubble', bubbleId);
-
+    _createAgentMessageHeader(timestamp = null) {
         const header = document.createElement('div');
         header.className = 'anchored-terminal__agent-message-header';
 
@@ -40,10 +36,20 @@ export class TerminalExecutionMixin {
 
         const time = document.createElement('span');
         time.className = 'anchored-terminal__ai-response-time';
-        time.textContent = this.formatTimestamp();
+        time.textContent = timestamp || this.formatTimestamp();
 
         header.appendChild(time);
         header.appendChild(sender);
+
+        return header;
+    }
+
+    _createAIBubbleWrapper(bubbleId) {
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group anchored-terminal__agent-message-group--execution';
+        if (bubbleId) group.setAttribute('data-execution-bubble', bubbleId);
+
+        const header = this._createAgentMessageHeader();
 
         const content = document.createElement('div');
         content.className = 'anchored-terminal__agent-message-content';

@@ -41,6 +41,24 @@ export class TerminalOutputMixin {
         if (welcome) welcome.remove();
     }
 
+    _createAgentMessageHeader(timestamp = null) {
+        const header = document.createElement('div');
+        header.className = 'anchored-terminal__agent-message-header';
+
+        const sender = document.createElement('span');
+        sender.className = 'anchored-terminal__ai-response-sender';
+        sender.textContent = 'g8e';
+
+        const time = document.createElement('span');
+        time.className = 'anchored-terminal__ai-response-time';
+        time.textContent = timestamp || this.formatTimestamp();
+
+        header.appendChild(time);
+        header.appendChild(sender);
+
+        return header;
+    }
+
     showWaitingIndicator(webSessionId) {
         if (!this.outputContainer) return null;
 
@@ -54,19 +72,7 @@ export class TerminalOutputMixin {
             group.setAttribute('data-web-session-id', webSessionId);
         }
 
-        const header = document.createElement('div');
-        header.className = 'anchored-terminal__agent-message-header';
-
-        const sender = document.createElement('span');
-        sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'g8e';
-
-        const time = document.createElement('span');
-        time.className = 'anchored-terminal__ai-response-time';
-        time.textContent = this.formatTimestamp();
-
-        header.appendChild(time);
-        header.appendChild(sender);
+        const header = this._createAgentMessageHeader();
 
         const content = document.createElement('div');
         content.className = 'anchored-terminal__agent-message-content';
@@ -142,19 +148,7 @@ export class TerminalOutputMixin {
         group.className = 'anchored-terminal__agent-message-group';
         group.id = existingId;
 
-        const header = document.createElement('div');
-        header.className = 'anchored-terminal__agent-message-header';
-
-        const sender = document.createElement('span');
-        sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'g8e';
-
-        const time = document.createElement('span');
-        time.className = 'anchored-terminal__ai-response-time';
-        time.textContent = this.formatTimestamp();
-
-        header.appendChild(time);
-        header.appendChild(sender);
+        const header = this._createAgentMessageHeader();
 
         const content = document.createElement('div');
         content.className = 'anchored-terminal__agent-message-content';
@@ -268,19 +262,7 @@ export class TerminalOutputMixin {
         const group = document.createElement('div');
         group.className = 'anchored-terminal__agent-message-group';
 
-        const header = document.createElement('div');
-        header.className = 'anchored-terminal__agent-message-header';
-
-        const sender = document.createElement('span');
-        sender.className = 'anchored-terminal__ai-response-sender';
-        sender.textContent = 'g8e';
-
-        const time = document.createElement('span');
-        time.className = 'anchored-terminal__ai-response-time';
-        time.textContent = timestamp || this.formatTimestamp();
-
-        header.appendChild(time);
-        header.appendChild(sender);
+        const header = this._createAgentMessageHeader(timestamp);
 
         const citationsHandler = this.citationsHandler;
         const sources = groundingMetadata?.sources;

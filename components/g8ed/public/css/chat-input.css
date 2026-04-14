@@ -321,7 +321,7 @@
     border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 0.25rem;
     background: rgba(var(--accent-blue-rgb), 0.06);
-    width: 150px;
+    width: auto;
 }
 
 @media (max-width: 1550px) {
