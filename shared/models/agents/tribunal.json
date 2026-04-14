@@ -1,6 +1,6 @@
 {
-  "_comment": "Canonical Tribunal agent model. Refines command syntax through multi-perspective voting and verification.",
-  "name": "TribunalAgent",
+  "_comment": "Canonical Tribunal model. Refines command syntax through multi-perspective voting and verification.",
+  "name": "Tribunal",
   "description": "Syntactic refinement and validation for shell commands.",
   "member_result": {
     "reasoning": { "type": "string", "description": "The logic behind the member's verdict or revision." },
@@ -8,7 +8,7 @@
     "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Confidence in the revision." }
   },
   "request": {
-    "original_command": { "type": "string", "description": "The command string proposed by the Primary agent." },
+    "original_command": { "type": "string", "description": "The command string proposed by the Primary AI." },
     "intent": { "type": "string", "description": "The user's original intent." },
     "system_context": {
       "type": "object",

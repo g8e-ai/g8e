@@ -211,6 +211,77 @@ footer {
 }
 
 footer a { color: #484f58; text-decoration: none; }
+
+.cli-block {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.cli-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #30363d;
+}
+
+.cli-tab {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s, background 0.15s;
+}
+
+.cli-tab:hover { color: #c9d1d9; background: rgba(88, 166, 255, 0.04); }
+
+.cli-tab.active {
+    color: #58a6ff;
+    background: rgba(88, 166, 255, 0.08);
+    border-bottom: 2px solid #58a6ff;
+}
+
+.cli-cmd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    gap: 0.5rem;
+}
+
+.cli-cmd code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.8125rem;
+    color: #e6edf3;
+    word-break: break-all;
+    user-select: all;
+}
+
+.cli-copy {
+    background: transparent;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 0.375rem;
+    color: #8b949e;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.cli-copy:hover { color: #c9d1d9; border-color: #484f58; }
+
+.cli-note {
+    padding: 0.5rem 1rem 0.75rem;
+    font-size: 0.75rem;
+    color: #6e7681;
+    border-top: 1px solid #30363d;
+}
 </style>
 </head>
 <body>
@@ -235,7 +306,29 @@ footer a { color: #484f58; text-decoration: none; }
 
         <div class="card-body">
 
-            <div class="row-label">Operating System</div>
+            <div class="row-label">Recommended: Terminal One-Liner</div>
+            <div class="cli-block">
+                <div class="cli-tabs">
+                    <button class="cli-tab active" id="cli-unix" onclick="selectCli('unix')">macOS / Linux</button>
+                    <button class="cli-tab" id="cli-win" onclick="selectCli('win')">Windows (PowerShell)</button>
+                </div>
+                <div class="cli-cmd" id="cli-cmd-unix">
+                    <code>curl -fsSL http://{{HOST}}/trust | sudo sh</code>
+                    <button class="cli-copy" onclick="copyCli('unix')" title="Copy to clipboard">
+                        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+                <div class="cli-cmd" id="cli-cmd-win" style="display:none;">
+                    <code>irm http://{{HOST}}/trust | iex</code>
+                    <button class="cli-copy" onclick="copyCli('win')" title="Copy to clipboard">
+                        <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                </div>
+                <div class="cli-note">Run in an elevated terminal. Automatically detects your OS and trusts the certificate.</div>
+            </div>
+
+            <div class="row-label" style="margin-top:1.5rem;">Alternative: Manual Download</div>
+            <div class="row-label" style="margin-top:0.5rem;">Operating System</div>
             <div class="tab-row" id="os-row">
                 <button class="tab-btn" id="os-mac" onclick="selectOs('mac')">macOS</button>
                 <button class="tab-btn" id="os-win" onclick="selectOs('win')">Windows</button>
@@ -281,10 +374,31 @@ footer a { color: #484f58; text-decoration: none; }
 var currentOs = 'mac';
 var currentMethod = 'trust';
 
+function selectCli(tab) {
+    document.querySelectorAll('.cli-tab').forEach(function(b) { b.classList.remove('active'); });
+    document.getElementById('cli-' + tab).classList.add('active');
+    document.getElementById('cli-cmd-unix').style.display = tab === 'unix' ? '' : 'none';
+    document.getElementById('cli-cmd-win').style.display = tab === 'win' ? '' : 'none';
+}
+
+function copyCli(tab) {
+    var code = document.querySelector('#cli-cmd-' + tab + ' code').textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(code);
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+    }
+}
+
 var installers = {
-    mac:   { trust: { href: '/trust-cert.sh',       download: 'trust-g8e-cert.sh',       label: 'Trust g8e Certificate (.sh)',  steps: ['Download the trust script', 'Run in Terminal: <code>sudo bash ~/Downloads/trust-g8e-cert.sh</code>', 'Enter your password'] } },
-    win:   { trust: { href: '/trust-cert.bat',      download: 'trust-g8e-cert.bat',      label: 'Trust g8e Certificate (.bat)', steps: ['Download the trust script', 'Double-click the file', 'Click Yes when prompted'] } },
-    linux: { trust: { href: '/trust-cert-linux.sh', download: 'trust-g8e-cert-linux.sh', label: 'Trust g8e Certificate (.sh)',  steps: ['Download the trust script', 'Open it in Terminal', 'Enter your password'] } },
+    mac:   { trust: { href: '/trust.sh',       download: 'trust-g8e-cert.sh',       label: 'Trust g8e Certificate (.sh)',  steps: ['Download the trust script', 'Run in Terminal: <code>sudo bash ~/Downloads/trust-g8e-cert.sh</code>', 'Enter your password'] } },
+    win:   { trust: { href: '/trust.bat',      download: 'trust-g8e-cert.bat',      label: 'Trust g8e Certificate (.bat)', steps: ['Download the trust script', 'Double-click the file', 'Click Yes when prompted'] } },
+    linux: { trust: { href: '/trust-linux.sh', download: 'trust-g8e-cert-linux.sh', label: 'Trust g8e Certificate (.sh)',  steps: ['Download the trust script', 'Open it in Terminal', 'Enter your password'] } },
     ios:     { crt: { href: '/ca.crt', download: 'g8e-ca.crt', label: 'Download Certificate (.crt)', steps: ['Download the certificate', 'Open the file', 'Enable full trust in Settings'] } },
     android: { crt: { href: '/ca.crt', download: 'g8e-ca.crt', label: 'Download Certificate (.crt)', steps: ['Download the certificate', 'Open the file', 'Trust as a CA certificate'] } },
 };

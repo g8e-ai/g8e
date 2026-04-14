@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical prompt file paths and agent mode constants for g8ee AI system. All values are relative to the prompts_data/ directory. Consumers: g8ee (Python).",
+  "_comment": "Canonical prompt file paths and AI mode constants for g8ee. All values are relative to the prompts_data/ directory. Consumers: g8ee (Python).",
 
   "agent.mode": {
     "g8e.bound": "operator_bound",

@@ -96,7 +96,7 @@ All component images have no build-time dependencies on each other and build in 
 
 3. **The KV and Blob stores** — platform settings, session data, operator binary blobs, file attachment metadata, and large binary blobs are all stored here. All requests are authenticated via the `X-Internal-Auth` header.
 
-4. **The pub/sub broker** — operators on remote machines maintain a persistent WebSocket connection to g8es (WSS/TLS). Command dispatch and result delivery for the AI agent flow through this broker. g8ee and g8ed also connect to this broker for real-time event distribution.
+4. **The pub/sub broker** — operators on remote machines maintain a persistent WebSocket connection to g8es (WSS/TLS). Command dispatch and result delivery for the AI flow through this broker. g8ee and g8ed also connect to this broker for real-time event distribution.
 
 5. **The operator binaries** — cross-compiled and UPX-compressed at image build time, baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads all 3 binaries (linux-amd64, linux-arm64, linux-386) to the blob store (namespace `operator-binary`). Served on demand via `GET /blob/operator-binary/{os}-{arch}`. The `./g8e operator build` commands in g8ep can override these by uploading fresh builds.
 

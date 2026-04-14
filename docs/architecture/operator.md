@@ -1,12 +1,12 @@
 # g8e Operator Binary
 
-The Operator (`g8e.operator`) is the backbone of the entire g8e platform. It is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Deploy it on a host, run it, and the platform has a fully capable agent.
+The Operator (`g8e.operator`) is the language-agnostic, platform-agnostic execution binary for the g8e platform. The reference implementation is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Deploy it on a host, run it, and the platform has a fully capable Operator. Any client that follows the g8e events protocol can act as an Operator.
 
 What makes this remarkable is the scope of what that single binary does. Depending on how it is invoked:
 
 - It is the **SSL certificate authority** for the entire platform — generating and signing the CA and all per-operator mTLS certificates at runtime on first start.
 - It is the **entire backend storage layer** — the document store, KV store, and pub/sub broker that g8ee and g8ed depend on.
-- It is the **execution agent** on every target host — running commands, editing files, and maintaining a local-first audit trail with LFAA, Sentinel, and the git Ledger.
+- It is the **execution environment** on every target host — running commands, editing files, and maintaining a local-first audit trail with LFAA, Sentinel, and the git Ledger.
 - It is the **fleet deployment tool** — capable of streaming itself to hundreds of hosts in parallel over SSH.
 
 No other component in the platform comes close to this scope. The AI, the web interface, and the backend services are all, at some level, orchestrating the Operator.
@@ -98,7 +98,7 @@ graph TD
 
 ### Standard Mode (default)
 
-The primary agent mode. The Operator authenticates with the platform over HTTP, receives its session credentials and a per-operator mTLS certificate, connects to the platform pub/sub bus over WebSocket, and waits for commands from the AI.
+The primary operating mode. The Operator authenticates with the platform over HTTP, receives its session credentials and a per-operator mTLS certificate, connects to the platform pub/sub bus over WebSocket, and waits for commands from the AI.
 
 **Startup sequence:**
 

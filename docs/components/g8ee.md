@@ -1,8 +1,8 @@
-# g8ee — g8e Engine
+# g8ee
 
 g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
 
-> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_agents.md](../architecture/ai_agents.md).
+> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_control_plane.md](../architecture/ai_control_plane.md).
 >
 > For deep-reference security documentation — internal auth token, Sentinel scrubbing patterns, LFAA vault encryption, operator binding, web/operator session security, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -10,11 +10,11 @@ g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for
 
 ## Architecture
 
-g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coordinator — it assembles context, drives the AI agent, and handles post-response persistence.
+g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coordinator — it assembles context, drives the LLM control plane, and handles post-response persistence.
 
 ```
 ChatPipelineService
-  ├── g8e agent            — Streaming agent with tool calling loop
+  ├── g8eEngine            — Streaming orchestrator with tool calling loop
   │     ├── AIToolService    — Tool registration and execution
   │     │     └── WebSearchProvider — Vertex AI Search (Discovery Engine) executor
   │     └── GroundingService — Provider-native grounding extraction, inline citation insertion
@@ -48,7 +48,7 @@ graph LR
     - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
     - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
     - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
-- **g8eo** -- Operator daemon running on target systems; executes commands and manages local audit storage.
+- **g8eo** -- Operator binary running on target systems; executes commands and manages local audit storage.
 
 ---
 
@@ -88,7 +88,7 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 
 | Method | Returns | Used For |
 |--------|---------|----------|
-| `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Agent main loop — yields chunks as they arrive |
+| `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Main primary loop — yields chunks as they arrive |
 | `generate_content_primary` | `GenerateContentResponse` | Non-streaming primary model calls |
 | `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls |
 | `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation |
@@ -108,7 +108,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 | `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; enables `think=true` for primary model calls to support Ollama's thinking feature; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 | `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 
-**Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagates to the agent's retry guard, which prevents re-attempting a partially-delivered response.
+**Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagate to the retry guard, which prevents re-attempting a partially-delivered response.
 
 **Thought signatures (Gemini 3):** Every tool call Part requires a thought signature or the API returns 400. `GeminiProvider` normalises inbound SDK `thought_signature` bytes to a base64 string (`ThoughtSignature.from_sdk`) and passes it through as-is on outbound requests. Thought and text parts carry signatures when available; signature-only parts are emitted as empty-text parts per the Gemini 3 streaming spec.
 
@@ -118,9 +118,9 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 - **SSL Verification:** Follows the standard SSL strategy — uses platform CA cert for internal endpoints, certifi bundle for external endpoints, disables verification for HTTP
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
-### Agent Streaming Loop
+### AI Streaming Loop
 
-`g8e agent.stream_response` (`app/services/ai/agent.py`) is the single streaming implementation used by all chat paths. It runs a ReAct function-calling loop and yields `StreamChunkFromModel` objects:
+The `ChatPipelineService` is the single streaming implementation used by all chat paths. It runs a ReAct function-calling loop and yields `StreamChunkFromModel` objects:
 
 ```
 stream_response
@@ -140,7 +140,7 @@ Retry behaviour in `stream_response`: if the provider raises a retryable error a
 
 ### SSE Delivery Pipeline
 
-`g8e agent.run_with_sse` consumes `stream_response` and delivers each `TEXT` chunk to the browser via `EventService` without batching or delay:
+`run_with_sse` consumes `stream_response` and delivers each `TEXT` chunk to the browser via `EventService` without batching or delay:
 
 ```
 LLM SDK  →  GeminiProvider  →  stream_response  →  deliver_via_sse
@@ -161,22 +161,22 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 
 | `StreamChunkFromModelType` | SSE event published | Side effect |
 |-------------------|--------------------|--------------|
-| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `AgentStreamingContext.response_text` |
-| `THINKING` | none | `AgentStreamingContext.set_thinking_started()` |
+| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `LLMStreamingContext.response_text` |
+| `THINKING` | none | `LLMStreamingContext.set_thinking_started()` |
 | `THINKING_UPDATE` | none | — |
-| `THINKING_END` | none | `AgentStreamingContext.set_thinking_ended()` |
+| `THINKING_END` | none | `LLMStreamingContext.set_thinking_ended()` |
 | `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
 | `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
-| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamingContext` |
-| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamingContext` |
+| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `LLMStreamingContext` |
+| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `LLMStreamingContext` |
 | `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
 | `RETRY` | none | — |
 
 `deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamingContext` state.
+`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `LLMStreamingContext` state.
 
-`AgentStreamingContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
+`LLMStreamingContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
 
 ### Error Handling
 
@@ -256,11 +256,11 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_context.py`) is the single entry point for building the context object the agent receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_context.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
 
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the agent proceeds without it.
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the AI proceeds without it.
 
 **Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
 
@@ -899,7 +899,7 @@ When using a Gemini provider with the `google_search` SDK tool enabled in `Gener
 | Model | Lives In | Consumes | Produces |
 |-------|----------|----------|----------|
 | `SdkGroundingRawData` | `app/llm/llm_types.py` | `GeminiProvider` only | Attached to `GenerateContentResponse.grounding_raw` |
-| `GroundingMetadata` | `app/models/grounding.py` | `WebSearchProvider`, `GroundingService`, `g8e agent`, wire | Canonical platform model |
+| `GroundingMetadata` | `app/models/grounding.py` | `WebSearchProvider`, `GroundingService`, `g8eEngine`, wire | Canonical platform model |
 | `GroundingSourceInfo` | `app/models/grounding.py` | Browser renderer | Resolved source with citation number and favicon |
 | `SearchWebResult` | `app/models/tool_results.py` | `AIToolService`, LLM boundary | Typed result from `search_web` tool call |
 

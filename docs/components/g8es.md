@@ -1,4 +1,4 @@
-# g8es — Operator Listen Mode Architecture
+# g8es — g8e Data Bus
 
 ## Overview
 

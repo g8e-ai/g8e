@@ -1,6 +1,6 @@
-# g8eo — Virtual Service Agent
+# g8eo — g8e Operator
 
-g8eo is the Go-based agent component of the g8e platform. It provides secure, real-time command execution and file management for remote system operations.
+g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, platform-agnostic, secure, real-time command execution and file management for remote system operations. Any client that adheres to the g8e events protocol can act as an Operator.
 
 > For deep-reference security documentation — CA trust bootstrap, mTLS, fingerprint binding, replay protection, operator binding, Sentinel pre-execution threat detection, output scrubbing patterns, LFAA vault encryption, and the Ledger — see [architecture/security.md](../architecture/security.md).
 
@@ -198,7 +198,7 @@ The g8e Operator (g8eo) operates in two mutually exclusive modes: **Outbound Mod
 This is the standard operating mode for remote systems and the `g8ep`.
 
 - **Connectivity**: **Outbound-only** on port 443 (WSS/HTTPS). It initiates all connections to the platform; no inbound ports are required.
-- **Role**: Remote execution agent. It receives commands from the platform, executes them locally, and broadcasts results/heartbeats back via the established WebSocket.
+- **Role**: Remote Operator. It receives commands from the platform, executes them locally, and broadcasts results/heartbeats back via the established WebSocket.
 - **Authentication**: Uses API Keys or Device Tokens to authenticate with the platform.
 - **Usage**:
   ```bash

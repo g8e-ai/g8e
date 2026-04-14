@@ -41,7 +41,7 @@ docs/
 ├── index.md              # Master index — every doc file must have an entry here
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
-├── architecture/         # Cross-component internals: storage, security, AI agents
+├── architecture/         # Cross-component internals: storage, security, AI control plane
 ├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
@@ -67,8 +67,8 @@ docs/
 | Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
 | Testing principles, g8ep environment, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
 | Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
-| AI agent cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
-| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
+| AI control plane cross-component architecture (transport, pipeline) | `docs/architecture/ai_control_plane.md` | `docs/components/g8ee.md` |
+| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_control_plane.md` |
 | g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | `docs/testing.md` for how to run tests |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 
@@ -135,7 +135,7 @@ One or two sentence summary of what this document covers and who it is for.
 - Use relative paths for all internal links — never absolute URLs.
 - When referencing a constant, model, or field defined in `shared/`, link to the relevant JSON file.
 - `docs/index.md` is the entry point — every doc must be reachable from it.
-- **Anti-bleed rule:** when updating any doc, scan for content that properly belongs in a different doc and move it — do not leave duplicated content in both places. Add a cross-link from the source to the authoritative location after moving.
+- **Single source of truth enforcement:** when updating any doc, scan for content that properly belongs in a different doc and move it — do not leave duplicated content in both places. Add a cross-link from the source to the authoritative location after moving.
 
 ---
 

@@ -28,6 +28,16 @@ Human control is a first-class architectural property. Every enforcement mechani
 
 ---
 
+### Technical Positioning
+
+g8e is often compared to existing access control and remote execution tools. Here is how it differs:
+
+- **vs. SSH**: SSH is a secure pipe; g8e is a governor. SSH has no concept of AI intent, multi-model consensus, or granular scrubbing. g8e uses the pipe to enforce a governance model that SSH cannot.
+- **vs. Teleport / Boundary**: These are fine-grained access control systems for **human** administrators. g8e is a governance system for **AI-powered automation** acting on behalf of humans. It assumes the AI control plane is potentially adversarial or error-prone.
+- **vs. Ansible / Terraform**: These are deterministic configuration tools. g8e is for non-deterministic, context-aware investigation and remediation where the AI must reason about real-time system state before proposing an action.
+
+---
+
 ## Platform Architecture Overview
 
 ```
@@ -44,7 +54,7 @@ g8es (g8eo binary in --listen mode — document store, KV store, pub/sub broker)
   │
   │  WebSocket + mTLS + Certificate Pinning + Replay Protection
   ▼
-g8eo   (Go binary — Operator agent on target host)
+g8eo   (Go binary — Operator daemon on target host)
   │  Sentinel pre-execution, local SQLite vaults, Git Ledger (LFAA)
   ▼
 Host Filesystem / AWS / Target System
@@ -137,7 +147,16 @@ All `X-G8E-*` identity headers are **injected by g8ed from the verified server-s
 
 ## SSL/CA Certificate Generation and Handling
 
-### Private Certificate Authority
+### CA Private Key Protection
+
+The platform CA private key (`ca.key`) is the most sensitive asset in the platform. It is protected by the following:
+
+- **Volume Isolation**: It is stored exclusively in the `g8es-ssl` Docker volume, which is separate from the application data volume.
+- **Service Access**: It is mounted into `g8ed` (for signing operator certificates) and `g8es` (for generating the CA) but is never exposed via any API.
+- **Read-Only Mounts**: On all other services, the `g8es-ssl` volume is mounted read-only.
+- **No Persistence in Hub**: The key is never stored in the SQLite database or the environment.
+
+---
 
 g8e operates its own private CA. There is no dependency on any public CA.
 
@@ -171,13 +190,33 @@ An Operator cannot connect without a valid platform-issued certificate. g8ed can
 
 ### Workstation CA Trust
 
-Because g8e uses a locally generated CA, users must configure their workstation browser and operating system to trust it before using the HTTPS UI. The platform exposes an HTTP onboarding portal on port 80 (`https://<host>`), which exists specifically to solve the trust bootstrap problem without browser certificate warnings. That page auto-selects the user's OS, presents a 1-Click Installer or raw `.crt` download as appropriate, and links trusted users forward to `https://<host>/setup`.
+Because g8e uses a locally generated CA, users must configure their workstation browser and operating system to trust it before using the HTTPS UI.
+
+#### Primary Method: Terminal One-Liner
+
+The recommended approach is a single curl command run from an elevated terminal on the user's machine. The platform serves a pipe-friendly trust script from `http://<host>/trust` that automatically detects the operating system and performs the full trust workflow: download the CA, remove any stale g8e certificates, and install the new CA into the system trust store.
+
+**macOS / Linux** (run in Terminal):
+```
+curl -fsSL http://<host>/trust | sudo sh
+```
+
+**Windows** (run in an elevated PowerShell terminal):
+```
+irm http://<host>/trust | iex
+```
+
+The `/trust` endpoint detects the caller's platform from the `User-Agent` header and returns the appropriate script — a POSIX shell script for macOS/Linux (which distinguishes between the two at runtime via `uname -s`), or a PowerShell script for Windows.
+
+#### Alternative: HTTP Onboarding Page
+
+The platform also exposes an HTTP onboarding portal on port 80 (`http://<host>`), which provides a browser-based UI for the same trust bootstrap. That page auto-selects the user's OS, presents a downloadable trust script or raw `.crt` as appropriate, and links trusted users forward to `https://<host>/setup`.
 
 | OS | Installation Method |
 |---|---|
-| **macOS** | 1-Click Installer (`.sh`) downloads the CA from g8ed, removes old g8e certs, and installs the new CA into the system keychain. The raw `.crt` remains available for manual trust flows. |
-| **Windows** | 1-Click Installer (`.bat`) self-elevates via UAC, downloads the CA from g8ed, removes old g8e certs, and installs the new CA via `certutil`. |
-| **Linux** | 1-Click Installer (`.sh`) downloads the CA from g8ed, removes old g8e certs, copies the new CA into the system trust store, and refreshes trusted certificates. |
+| **macOS** | Trust script (`.sh`) downloads the CA from g8ed, removes old g8e certs, and installs the new CA into the system keychain. The raw `.crt` remains available for manual trust flows. |
+| **Windows** | Trust script (`.bat`) self-elevates via UAC, downloads the CA from g8ed, removes old g8e certs, and installs the new CA via `certutil`. |
+| **Linux** | Trust script (`.sh`) downloads the CA from g8ed, removes old g8e certs, copies the new CA into the system trust store, and refreshes trusted certificates. |
 | **iOS** | Download the raw `.crt`, install the profile, then explicitly enable full trust in Certificate Trust Settings. |
 | **Android** | Download the raw `.crt`, open it from Downloads, and install it as a CA certificate. |
 
@@ -507,7 +546,14 @@ g8eo Operators open no inbound ports. All communication is Operator-initiated �
 
 ---
 
-## Operator Commands via Sentinel (g8eo)
+### Sentinel Enforcement Layers
+
+It is important to distinguish between the two distinct layers of Sentinel enforcement:
+
+1.  **Threat Detection (Non-Optional)**: All commands are scanned against MITRE ATT&CK patterns. This layer is always active and cannot be disabled by the user or the AI. Dangerous patterns (e.g., `rm -rf /`) are blocked before the user ever sees them.
+2.  **Explicit Constraints (Optional)**: The **Command Allowlist** and **Command Denylist** are user-defined constraints. These are disabled by default and can be enabled for environments requiring strict "known-good" command sets.
+
+---
 
 All commands dispatched to an Operator pass through Sentinel before execution. Sentinel is not optional and cannot be bypassed by the AI.
 
@@ -790,6 +836,18 @@ All other AWS operations require either explicit user approval or an intent gran
 ### Intent-Based Permission Escalation
 
 When the AI determines it needs AWS permissions, it calls `grant_intent_permission` which surfaces an approval prompt to the user. On approval, the Escalation Role attaches the corresponding pre-defined `Intent-*` IAM policy to the Operator Role. Permissions are revocable at any time via `revoke_intent_permission`.
+
+---
+
+## Out of Scope and Assumptions
+
+To maintain technical integrity, we explicitly state what g8e does **not** protect against and the assumptions made by the security model:
+
+- **Compromised Hub OS**: If the host machine running the g8e platform (the hub) is compromised at the root level, the attacker can access the SSL volume, the database, and the CA key.
+- **Compromised Workstation**: If the user's browser or OS is compromised, an attacker could hijack the active session or capture the FIDO2/WebAuthn interaction (though passkeys are resistant to many forms of this).
+- **Already-Compromised Operator Host**: If an Operator is deployed to a host that is already root-compromised, the attacker can intercept the binary, its memory, and its local vaults.
+- **Denial of Service (DoS)**: g8e is not designed to mitigate high-volume network-level DoS attacks.
+- **Physical Access**: The platform assumes that physical access to the hub and the managed hosts is restricted.
 
 ---
 

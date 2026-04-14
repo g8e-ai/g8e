@@ -463,7 +463,7 @@ The `CacheAsideService` (Hierarchy Level 2) coordinates between the authoritativ
 
 ## g8eo — Operator Storage
 
-The g8eo (Virtual Service Agent) is the Operator binary that runs on the target system. It is the **system of record** for all operational data under the LFAA. Raw command output, file contents, and unfiltered telemetry live exclusively on the Operator — the g8e platform only receives Sentinel-scrubbed metadata.
+The g8eo (g8e Operator) is the Operator binary that runs on the target system. It is the **system of record** for all operational data under the LFAA. Raw command output, file contents, and unfiltered telemetry live exclusively on the Operator — the g8e platform only receives Sentinel-scrubbed metadata.
 
 All g8eo SQLite databases use the same WAL-mode pragma configuration as g8es (see [SQLite Configuration](#sqlite-configuration)) and the same `sqliteutil.RunMigrations` framework for schema evolution.
 

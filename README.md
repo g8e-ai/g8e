@@ -1,278 +1,181 @@
 # g8e
 
-**Governance Architecture for Trustless Environments.**
+**Self-Hosted Command-and-Control for AI-Assisted Infrastructure.**
 
-## About g8e
-
-g8e is a self-hosted command-and-control platform for safe, AI-powered, human-driven remote system operations. It was designed for a future where AI is deeply embedded in infrastructure — and where the humans running that infrastructure refuse to hand over the keys.
-
-The premise is simple and non-negotiable: **AI is the advisor. You are the authority.** AI gathers deep context across your entire infrastructure, reasons about it, and proposes intelligent actions — but it never acts alone. Every operation, on every system, requires multiple layers of expressed human intent and approval before anything executes. There is no override. The AI has no mechanism to circumvent human control — the architecture makes it structurally impossible.
-
-Bind any number of remote systems to your web session. Tell the AI what you want. It fans out across every Operator in scope — investigating, correlating, proposing — then waits for you. You approve. Execution is instant, simultaneous, and audited. The AI never sees raw sensitive data, never stores your context in someone else's cloud, and never stops working the problem until your intent is fully satisfied.
-
-The g8e Operator is a featherweight ~4MB static binary — platform agnostic, language agnostic, dependency-free — deployable ephemerally to your entire fleet in seconds. Kill the process and it's gone. What remains is the audit trail, by design.
-
-MCP supported — all incoming MCP traffic is translated to the g8e protocol for secure communication with remote Operators over mTLS.
-
-**Premise:** Never trust AI. AI can be wrong. AI can be adversarial. Every architectural decision in this platform starts from that assumption.
-
-1. **Human authority** — AI proposes, you decide, nothing executes without your explicit approval. Human judgment is the security model.
-2. **Earned authority** — Standing trust is a liability. Trust is scoped to sessions, earned per-action, and never self-granted. No component can escalate its own privileges — execution and authorization are separated by design.
-3. **Layered enforcement** — No single control is relied upon. Governance is enforced at every boundary — Sentinel, Tribunal, approval, audit — so a failure at one layer doesn't compromise the others.
-4. **Source available** — Security through obscurity is false security. The enforcement logic, threat detection, approval mechanisms, and encryption are readable, auditable, and criticizable by anyone. You don't take our word for it — you read the code.
-5. **Local-first audit** — An append-only, encrypted audit trail is maintained at the site of execution. Accountability lives where the action happened.
-6. **Data sovereignty** — Sensitive data is scrubbed before AI sees it. Raw output never leaves the operator. Only sanitized context crosses component boundaries.
-7. **Minimal footprint** — Outbound-only. No root required. No dependencies. No install. A single process — kill it and it's gone. What stays behind is the audit trail, by design.
-8. **Universal runtime** — Any model, any provider, any OS. The platform has no opinion about your AI, your infrastructure, or your architecture. Governance is the constant; everything else is your choice.
-
-Read more about the [Origins, Governance, and Philosophy](docs/architecture/about.md).
+[Website](https://g8e.ai) | [Architecture](docs/architecture/about.md) | [Security](SECURITY.md) | [Quick Start](#quick-start)
 
 ---
 
-## Origins
+## What is g8e?
 
-g8e was built from scratch with the help of AI coding agents — the very kind of agents this platform is designed to govern. The entire stack was written, tested, and shipped by leveraging AI as a force multiplier while never letting it drive unsupervised.
+g8e is an open-source platform that lets AI safely investigate and manage your remote infrastructure. It operates on a strict zero-trust model: **The AI acts as an advisor; you are the final authority.**
 
-Read the full story in [Origins, Governance, and Philosophy](docs/architecture/about.md).
+The system securely binds your remote servers to a centralized web session. You tell the AI what you want to achieve. It fans out across your fleet, pulls context, reasons about the problem, and proposes terminal commands. **It cannot execute anything.** The architecture cryptographically guarantees that every state-changing action requires explicit human approval via FIDO2 WebAuthn. 
+
+There are no LLM system prompt constraints doing the heavy lifting here—safety is enforced structurally at the binary and network layers.
+
+### Key Engineering Properties
+
+1. **Absolute Human Authority** — Execution and authorization are strictly separated. The AI proposes; a human approves. 
+2. **Zero Standing Trust** — No long-lived execution credentials. Trust is mathematically bound to mTLS sessions and earned per action.
+3. **Ephemeral Footprint** — The Operator is a ~4MB dependency-free static Go binary. Outbound-only mTLS. No inbound ports. No root required.
+4. **Data Sovereignty** — The platform is 100% self-hosted. Raw operational data never leaves your hosts; the AI only receives heavily scrubbed, sanitized context.
+5. **Universal Runtime** — Bring your own models (Anthropic, OpenAI, local Ollama) and deploy the Operator to any OS.
 
 ---
 
 ## Quick Start
 
-**Prerequisites:** Docker 24+, docker compose v2
+**Prerequisites:** `docker` 24+ and `docker compose` v2.
 
-```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e && ./g8e platform setup
-```
+1. **Build and start the platform:**
+   ```bash
+   git clone https://github.com/g8e-ai/g8e.git && cd g8e && ./g8e platform build
+   ```
 
-### Access
-1. Open `https://127.0.0.1` (or `https://<server-ip>`) in your browser.
-2. **Trust the platform CA certificate (Mandatory).**
-3. Continue to the secure setup page.
+2. **Trust the platform CA certificate:**
+   The platform generates its own CA certificate. You must trust it on your workstation before accessing the dashboard.
+   
+   **Primary method (recommended):** The platform auto-detects your OS and installs the CA:
+   ```bash
+   # macOS / Linux (replace <host> with your server's IP or hostname)
+   curl -fsSL http://<host>/trust | sudo sh
 
-*Trust CA via terminal:* `./g8e security certs trust`
+   # Windows (PowerShell, run as Administrator)
+   irm http://<host>/trust | iex
+   ```
+   
+   **Alternative method:** Use the CLI wrapper:
+   ```bash
+   ./g8e security certs trust
+   ```
+
+3. **Access the dashboard:**
+   Open `https://<host>` in your browser and follow the setup wizard to register your FIDO2 passkey.
 
 ---
 
 ## Core Components
 
-1.  **The Operator (g8eo):** A ~4MB static Go binary. No installation, no inbound ports. Runs locally as the invoking user; raw output stays in encrypted local vaults.
-2.  **The Engine (g8ee):** Python agent orchestrating investigations and LLM interactions. Multi-agent consensus ensures command safety.
-3.  **The Dashboard (g8ed):** Central management console. Passkey-only (FIDO2) auth, mTLS gateway, and human-in-the-loop approval interface.
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    Start([User Message]) --> Context[Context Enrichment<br/>Investigation + Operator + Memory]
-    Context --> Triage{Triage Assistant}
-    
-    Triage -- Simple/Low Confidence --> FollowUp[Follow-up Question]
-    Triage -- Simple/High Confidence --> Asst[Assistant Model]
-    Triage -- Complex --> Primary[Primary Reasoning Agent]
-    
-    FollowUp --> SSE
-    Asst --> Loop
-    Primary --> Loop
-    
-    subgraph Loop [ReAct Streaming Loop]
-        direction TB
-        Reason[LLM Reasoning & Thinking] --> Action{Action Required?}
-        Action -- No --> Finish[Final Response]
-        Action -- Yes --> Tool[Tool Execution]
-        
-        Tool --> Command{Is Operator Command?}
-        Command -- Yes --> Tribunal[Tribunal Consensus<br/>Proposer + Swarm + Verifier]
-        Command -- No --> Exec[Direct Execution]
-        
-        Tribunal --> Approval{User Approval}
-        Approval -- Denied --> FeedBack[Tool Error/Cancel]
-        Approval -- Approved --> Exec
-        
-        Exec --> FeedBack[Append Tool Result to History]
-        FeedBack --> Reason
-    end
-    
-    Finish --> SSE[SSE Delivery to Browser]
-    SSE --> Post[Post-Turn Processing]
-    
-    subgraph Post [Background Tasks]
-        direction LR
-        Audit[LFAA Audit Logging]
-        Mem[Memory Analysis & Update]
-    end
-```
-
-### Tribunal Refinement Pipeline
-
-```mermaid
-flowchart TD
-    In([Operator Command Proposed]) --> Enabled{Is Tribunal Enabled?}
-    
-    Enabled -- No --> Fallback[Fallback: Original Command]
-    Enabled -- Yes --> Provider{Provider OK?}
-    
-    Provider -- No --> Fallback
-    Provider -- Yes --> Gen[Parallel Generation Phase]
-    
-    subgraph Gen [Stochastic Voting Swarm]
-        direction LR
-        P1[Axiom<br/>Pass 0 - Temp 0.5]
-        P2[Concord<br/>Pass 1 - Temp 0.7]
-        P3[Variance<br/>Pass 2 - Temp 1.2]
-    end
-    
-    Gen --> Vote[Weighted Majority Vote]
-    Vote --> Winner{Consensus Winner?}
-    
-    Winner -- No --> Fallback
-    Winner -- Yes --> VerifierEnabled{Is Verifier Enabled?}
-    
-    VerifierEnabled -- No --> OutVote[Final: Vote Winner]
-    VerifierEnabled -- Yes --> Verify[Final Verifier SLM<br/>Temp 0.0]
-    
-    Verify --> Review{Verdict}
-    Review -- OK --> OutVote
-    Review -- Error/Empty --> OutVote
-    Review -- Revised --> OutRev[Final: Revised Command]
-    
-    Fallback --> OutFall[Final: Original Command]
-```
-
 | Service | Container | Language | Role |
 |---------|-----------|----------|------|
 | **g8es** | `g8es` | Go | Persistence (SQLite), KV store, pub/sub broker |
-| **g8ee** | `g8ee` | Python | AI engine, LLM orchestration, tool calling |
-| **g8ed** | `g8ed` | Node.js | Web UI, auth, mTLS gateway, TLS termination |
+| **g8ee** | `g8ee` | Python | AI engine, LLM orchestration, ReAct loop |
+| **g8ed** | `g8ed` | Node.js | Web UI, passkey auth, mTLS gateway |
 | **g8ep** | `g8ep` | Multi | CLI runner, Operator build, SSL management |
-| **Operator** | *(runs on target)* | Go | Execution agent on managed systems |
-
-Detailed documentation in [docs/architecture/](docs/architecture/) and [docs/components/](docs/components/).
+| **Operator** | *(runs on target)* | Go | ~4MB Execution agent deployed to your fleet |
 
 ---
 
-## Data Plane Architecture
+## How It Works
 
-The Operator is the central data plane for the entire platform. In `--listen` mode (g8es), it provides the persistence and messaging backbone for g8ee and g8ed. On managed hosts, the Operator (Standard mode) maintains the authoritative system of record for all local operations.
+g8e uses a **Tribunal Refinement Pipeline** to ensure proposed commands are safe before they even reach a human for approval.
+
+1. **Investigation:** The ReAct loop (`g8ee`) queries the remote Operator for context.
+2. **Proposal:** An LLM proposes an action.
+3. **The Swarm (Parallel Generation):** Three different LLMs at varying temperatures independently evaluate the proposal and generate alternatives.
+4. **Consensus:** A weighted majority vote selects the best, safest command.
+5. **Verification:** A final zero-temperature SLM verifies the winning command.
+6. **Human Approval:** The command halts. You review and approve it via the dashboard.
+7. **Execution:** The Operator executes the command locally, recording the output to an encrypted, append-only local ledger.
 
 ```mermaid
-graph TD
-    subgraph "Control & Persistence Plane (Self-Hosted Hub)"
-        direction TB
-        g8es[("<b>g8es</b><br/>Operator in --listen mode<br/>(Central Data Plane)")]
-        
-        subgraph "g8es Services"
-            direction LR
-            DS["Document Store<br/>(Platform Data)"]
-            KS["KV Store<br/>(Ephemeral State)"]
-            PS["PubSub Broker<br/>(Message Routing)"]
-            BS["Blob Store<br/>(Artifacts)"]
-        end
-        g8es --- DS
-        g8es --- KS
-        g8es --- PS
-        g8es --- BS
-        
-        g8ee["<b>g8ee</b><br/>AI Engine"]
-        g8ed["<b>g8ed</b><br/>Dashboard & Gateway"]
-        
-        g8ee -- "REST / PubSub" --> g8es
-        g8ed -- "REST" --> g8es
-    end
-
-    subgraph "Execution Plane (Managed Hosts)"
-        direction TB
-        subgraph "Standard Operator A"
-            OPA["<b>Operator</b><br/>(Standard Mode)"]
-            subgraph "Authoritative Local Data (A)"
-                AVA["Audit Vault"]
-                RVA["Raw Vault"]
-                SVA["Scrubbed Vault"]
-                LGA["Git Ledger"]
-            end
-            OPA --- AVA
-            OPA --- RVA
-            OPA --- SVA
-            OPA --- LGA
-        end
-    end
-
-    %% Data Paths
-    OPA -- "mTLS WebSocket (Pub/Sub)" --> g8ed
-    g8ed -- "Internal Proxy" --> g8es
+flowchart TD
+    In([Operator Command Proposed]) --> Gen[Parallel Generation Phase]
     
-    %% Annotations
-    classDef hub fill:#f5f5f5,stroke:#333,stroke-width:2px;
-    classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
+    subgraph Gen [Stochastic Voting Swarm]
+        direction LR
+        P1[Pass 0 - Temp 0.5]
+        P2[Pass 1 - Temp 0.7]
+        P3[Pass 2 - Temp 1.2]
+    end
     
-    class g8es,g8ee,g8ed hub;
-    class OPA operator;
-    class DS,KS,PS,BS,AVA,RVA,SVA,LGA storage;
+    Gen --> Vote[Weighted Majority Vote]
+    Vote --> Verify[Final Verifier SLM Temp 0.0]
+    Verify --> Approval{Human FIDO2 Approval}
+    Approval -- Approved --> Exec[Remote Execution]
 ```
 
 ---
 
-## Security & Governance
+## Architecture & Security Plane
 
-Human agency is a first-class architectural property. Every enforcement mechanism ensures that the platform remains fully in service of your intent.
+The Operator acts as the central data plane. On managed hosts, it maintains the authoritative system of record for all local operations (Raw Vault, Audit Vault, Git Ledger). 
 
-- **Human-in-the-Loop:** Mandatory approval for all state-changing operations. No autonomous execution.
-- **Passkey Auth:** FIDO2/WebAuthn only; no passwords.
-- **Sentinel Security:** 50+ threat detectors block dangerous commands; 20+ scrubbing patterns protect PII/secrets.
-- **Data Sovereignty:** Raw output is stored in local encrypted vaults, never transmitted to the platform or cloud.
-- **Zero-Trust:** mTLS for all Operator and service communication.
+```mermaid
+flowchart TD
+    subgraph EP_B ["Execution Plane (Managed Hosts - Environment B)"]
+        direction LR
+        OPB1["Operator B1<br/>Static Go Binary"] --- LGB1["Encrypted Local Audit Ledger"]
+    end
 
-Read the [Security Architecture](docs/architecture/security.md) for more details.
+    subgraph Hub ["Control Plane (Self-Hosted Hub)"]
+        direction LR
+        subgraph App ["Application Layer"]
+            direction TB
+            g8ed["g8ed<br/>Dashboard & Gateway"]
+            g8ee["g8ee<br/>AI Engine"]
+            g8ee --> g8ed
+        end
+
+        subgraph Data ["Data Layer"]
+            g8es[("g8es<br/>SQLite/KV/PubSub")]
+        end
+
+        g8ed <--> g8es
+        g8ee <--> g8es
+    end
+
+    subgraph EP_A ["Execution Plane (Managed Hosts - Environment A)"]
+        direction LR
+        OPA1["Operator A1<br/>Static Go Binary"] --- LGA1["Encrypted Local Audit Ledger"]
+    end
+
+    OPB1 -- "Outbound mTLS WebSocket" --> g8ed
+    OPA1 -- "Outbound mTLS WebSocket" --> g8ed
+```
+
+- **Passkey Auth:** WebAuthn only. Passwords are not supported.
+- **Sentinel Security:** 50+ threat detectors preemptively block dangerous commands; 20+ scrubbing patterns protect PII and secrets from being sent to the LLM.
+- **Strict Isolation:** See [Security Architecture](docs/architecture/security.md) for a deep dive into our threat models.
 
 ---
 
 ## CLI Reference
 
-Everything is managed through `./g8e`. Run `./g8e --help` for full reference.
+Everything is managed through the `./g8e` wrapper script.
 
-### Platform Management
 ```bash
-./g8e platform setup    # Full first-time setup (no-cache build, start platform)
-./g8e platform rebuild  # Rebuild with layer cache and restart
-./g8e platform up       # Start existing platform
+# Platform Management
+./g8e platform setup    # First-time build and start
+./g8e platform up       # Start existing containers
 ./g8e platform down     # Stop all containers
-./g8e platform wipe     # Wipe data and restart fresh
-```
+./g8e platform wipe     # Destroy all data and restart fresh
 
-### Operator Deployment
-```bash
-./g8e operator build    # Rebuild Operator binary
-./g8e operator g8e <user@host> --endpoint <ip>  # Deploy to remote host
-```
+# Operator Deployment
+./g8e operator build    # Compile the Operator binary
+./g8e operator g8e <user@host> --endpoint <ip>  # Deploy via SSH
 
-### Tests & Diagnostics
-```bash
+# Tests
 ./g8e test              # Run all component tests
-./g8e security status   # Check TLS certificate status
 ```
 
-Full CLI documentation: [docs/architecture/scripts.md](docs/architecture/scripts.md)
+---
+
+## Project Status & Origins
+
+**Status: Alpha.** This is a highly technical research project. While built with a paranoia-first security mindset, it has not undergone external audits. Use in production at your own risk.
+
+**Origins:** g8e was built from scratch with the heavy assistance of AI coding agents. We built a platform to govern AI agents because we realized how dangerous unconstrained agents are while building this very platform. 
+
+Read the full story in [Origins, Governance, and Philosophy](docs/architecture/about.md).
 
 ---
 
 ## Contributing
 
-We welcome contributions to improve code quality, testing, and documentation.
-
-- **Alpha Quality:** This is a research project. Do not run in production without thorough review.
-- **Focus:** Fixing tech debt, improving test coverage, and clarifying documentation are high-value.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/developer.md](docs/developer.md).
-
----
+We explicitly welcome PRs that fix bugs, clean up smelly code, or remove tech debt. If you see something broken, fix it. See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup and guidelines.
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
-
----
-
-**[Website](https://g8e.ai)** | **[Docs](docs/index.md)** | **[Security](SECURITY.md)**
+[Apache License, Version 2.0](LICENSE).

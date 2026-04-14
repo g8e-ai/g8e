@@ -234,6 +234,140 @@ exec ./g8e.operator --device-token "\$_token" --endpoint "\$G8E_HOST"${portFlags
 }
 
 /**
+ * Pipe-friendly unified trust script for macOS and Linux.
+ * Detects the OS at runtime via `uname -s` and runs the appropriate
+ * trust logic. Designed for: curl -fsSL http://<host>/trust | sudo sh
+ *
+ * @param {string} host - Hostname of the onboarding server (no port)
+ * @param {number} port - HTTP port (default 80)
+ * @returns {string} POSIX shell script content
+ */
+export function universalTrustScript(host, port = 80) {
+    const portSuffix = port === 80 ? '' : `:${port}`;
+    return `#!/bin/sh
+set -eu
+
+HOST="${host}"
+URL="http://\${HOST}${portSuffix}/ca.crt"
+CERT_FILE="/tmp/g8e-ca.crt"
+
+if [ "\$(id -u)" -ne 0 ]; then
+    echo ""
+    echo "ERROR: This script must run as root."
+    echo "Usage: curl -fsSL http://\${HOST}${portSuffix}/trust | sudo sh"
+    echo ""
+    exit 1
+fi
+
+_OS="\$(uname -s)"
+
+echo "Downloading g8e CA certificate..."
+if ! curl -fsSL -o "\$CERT_FILE" "\$URL"; then
+    echo ""
+    echo "ERROR: Failed to download CA certificate from \$URL"
+    echo "Make sure the g8e platform is running and reachable."
+    exit 1
+fi
+
+case "\$_OS" in
+  Darwin)
+    KEYCHAIN="/Library/Keychains/System.keychain"
+
+    echo "Removing any existing g8e certificates..."
+    security find-certificate -a -Z "\$KEYCHAIN" 2>/dev/null \\
+        | awk '/^SHA-1/{sha=\$NF} /"alis"/{gsub(/.*"alis"<blob>="|"\$/, ""); if (tolower(\$0) ~ /g8e/) print \$0}' \\
+        | while IFS= read -r name; do
+            [ -z "\$name" ] && continue
+            security delete-certificate -c "\$name" "\$KEYCHAIN" 2>/dev/null && \\
+                echo "  Removed: \$name" || true
+          done
+
+    echo "Trusting g8e CA certificate..."
+    security add-trusted-cert -d -r trustRoot -k "\$KEYCHAIN" "\$CERT_FILE"
+    ;;
+
+  Linux)
+    echo "Removing any existing g8e certificates..."
+    find /usr/local/share/ca-certificates/ -iname 'g8e*' -delete 2>/dev/null || true
+    find /usr/share/ca-certificates/ -iname 'g8e*' -delete 2>/dev/null || true
+
+    if command -v certutil >/dev/null 2>&1; then
+        for db in "\$HOME/.pki/nssdb" "/etc/pki/nssdb"; do
+            [ -d "\$db" ] || continue
+            certutil -L -d "sql:\$db" 2>/dev/null \\
+                | awk '/[Gg]8[Ee]/{print \$1}' \\
+                | while IFS= read -r nick; do
+                    certutil -D -d "sql:\$db" -n "\$nick" 2>/dev/null && \\
+                        echo "  Removed NSS cert: \$nick" || true
+                  done
+        done
+    fi
+
+    echo "Trusting g8e CA certificate..."
+    cp "\$CERT_FILE" /usr/local/share/ca-certificates/g8e-ca.crt
+    chmod 644 /usr/local/share/ca-certificates/g8e-ca.crt
+    update-ca-certificates
+    ;;
+
+  *)
+    echo "Unsupported OS: \$_OS"
+    rm -f "\$CERT_FILE"
+    exit 1
+    ;;
+esac
+
+rm -f "\$CERT_FILE"
+echo ""
+echo "g8e CA certificate trusted successfully."
+echo "Restart your browser and navigate to https://\$HOST/setup"
+`;
+}
+
+/**
+ * Pipe-friendly PowerShell trust script for Windows.
+ * Designed for: irm http://<host>/trust | iex
+ * (run in an elevated PowerShell terminal)
+ *
+ * @param {string} host - Hostname of the onboarding server (no port)
+ * @param {number} port - HTTP port (default 80)
+ * @returns {string} PowerShell script content
+ */
+export function windowsPowerShellTrustScript(host, port = 80) {
+    const portSuffix = port === 80 ? '' : `:${port}`;
+    const url = `http://${host}${portSuffix}/ca.crt`;
+    return `#Requires -RunAsAdministrator
+$ErrorActionPreference = "Stop"
+
+$url = "${url}"
+$certFile = Join-Path $env:TEMP "g8e-ca.crt"
+
+Write-Host "Removing any existing g8e certificates..."
+Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object { $_.Subject -like "*g8e*" -or $_.FriendlyName -like "*g8e*" } | Remove-Item -Force -ErrorAction SilentlyContinue
+
+Write-Host "Downloading g8e CA certificate..."
+try {
+    Invoke-WebRequest -Uri $url -OutFile $certFile -UseBasicParsing
+} catch {
+    Write-Error "Failed to download CA certificate from $url. Make sure the g8e platform is running and reachable."
+    exit 1
+}
+
+Write-Host "Trusting g8e CA certificate..."
+certutil -addstore -f "Root" $certFile | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Remove-Item $certFile -Force -ErrorAction SilentlyContinue
+    Write-Error "Failed to trust the certificate. Run this in an elevated PowerShell terminal."
+    exit 1
+}
+Remove-Item $certFile -Force -ErrorAction SilentlyContinue
+
+Write-Host ""
+Write-Host "g8e CA certificate trusted successfully."
+Write-Host "Restart your browser and navigate to https://${host}/setup"
+`;
+}
+
+/**
  * @param {string} host - Hostname of the onboarding server (no port)
  * @param {number} port - HTTP port (default 80)
  * @returns {string} Linux bash script content
