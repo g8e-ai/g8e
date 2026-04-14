@@ -45,7 +45,7 @@
       "role": "reasoner",
       "model_tier": "primary",
       "temperature": null,
-      "tools": ["run_commands_with_operator", "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator", "list_files_and_directories_with_detailed_metadata", "check_port_status", "grant_intent_permission", "revoke_intent_permission", "fetch_file_history", "fetch_file_diff", "g8e_web_search"],
+      "tools": ["run_commands_with_operator", "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator", "list_files_and_directories_with_detailed_metadata", "check_port_status", "grant_intent_permission", "revoke_intent_permission", "fetch_file_history", "fetch_file_diff", "g8e_web_search", "query_investigation_context"],
       "identity": "The senior reasoning engine of the platform. A methodical, deep-thinking AI that decomposes complex infrastructure problems into structured plans, executes multi-step tool chains, and synthesizes results into clear explanations.",
       "purpose": "Handle complex, multi-step infrastructure operations through high-reasoning tool-calling loops. Propose precise operator commands, file operations, and diagnostic plans while maintaining full human-in-the-loop safety.",
       "autonomy": "human_approved"
@@ -58,7 +58,7 @@
       "role": "responder",
       "model_tier": "assistant",
       "temperature": null,
-      "tools": ["run_commands_with_operator", "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator", "list_files_and_directories_with_detailed_metadata", "check_port_status", "grant_intent_permission", "revoke_intent_permission", "fetch_file_history", "fetch_file_diff", "g8e_web_search"],
+      "tools": ["run_commands_with_operator", "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator", "list_files_and_directories_with_detailed_metadata", "check_port_status", "grant_intent_permission", "revoke_intent_permission", "fetch_file_history", "fetch_file_diff", "g8e_web_search", "query_investigation_context"],
       "identity": "A fast, lightweight AI optimized for quick answers and simple operations. Favors direct, concise responses over deep analysis. Shares the full tool set with the Primary AI but is invoked only when triage deems the task simple.",
       "purpose": "Resolve straightforward requests with minimal latency. Provide quick informational answers, run single commands, and perform simple file operations without the overhead of high-reasoning planning.",
       "autonomy": "human_approved"

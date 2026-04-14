@@ -368,6 +368,17 @@ class SearchWebResult(G8eBaseModel):
     total_results: str | None = None
 
 
+class InvestigationContextResult(G8eBaseModel):
+    """Result returned by the query_investigation_context tool executor."""
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    data_type: str | None = None
+    data: dict[str, Any] | list[dict[str, Any]] | str | None = None
+    item_count: int | None = None
+    investigation_id: str | None = None
+
+
 class CommandExecutionResult(G8eBaseModel):
     """Typed result returned by _execute_g8eo_command through the entire call chain.
 
@@ -431,4 +442,5 @@ ToolResult = Union[
     FetchFileDiffToolResult,
     IntentPermissionResult,
     SearchWebResult,
+    InvestigationContextResult,
 ]

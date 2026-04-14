@@ -3,9 +3,15 @@
 <instructions>
 1. Before executing ANY tool, you MUST first emit a text response to the user. This text chunk should summarize your internal reasoning, the decision-making process, and explain exactly what action you are about to take and why. Do not silently call tools; always provide this conversational context first.
 2. After receiving the tool's result, you MUST emit another text response to the user. This conversational analysis should explain the outcome, what it means for the user's request, and summarize the findings clearly.
+3. Use `query_investigation_context` to gather missing or deep investigation history (status, history trail, operator actions) rather than assuming you have the full state in the prompt.
 </instructions>
 
 <context>
+[query_investigation_context]
+Retrieve investigation data on-demand. Use when you need to see earlier conversation turns, check the full history of operator actions, or verify the investigation's current status and metadata.
+- data_type: "conversation_history", "investigation_status", "history_trail", or "operator_actions"
+- limit: Number of items to retrieve (optional)
+
 [list_files_and_directories_with_detailed_metadata]
 Use instead of `ls`. Returns full stat metadata (type, size, mode, mtime, owner). Use for existence checks — returns error if path missing.
 - path: directory to list | max_depth: 0-3 | max_entries: default 100, max 500

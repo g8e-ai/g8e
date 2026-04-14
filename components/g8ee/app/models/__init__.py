@@ -231,13 +231,6 @@ from .tool_results import (
     TokenUsage,
     ToolResult,
 )
-# from .triage import TriageResult  # Removed - moved to .agents
-from .g8ed_client import (
-    IntentOperationResult,
-)
-from .whitelist import (
-    CommandValidationResult,
-)
 
 ApprovalRequestBase.model_rebuild()
 CommandApprovalRequest.model_rebuild()

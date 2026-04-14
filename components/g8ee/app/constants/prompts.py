@@ -74,6 +74,7 @@ class PromptFile(str, Enum):
     TOOL_RESTORE_FILE = "tools/restore_file.txt"
     TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
     TOOL_READ_FILE_CONTENT = "tools/read_file_content.txt"
+    TOOL_QUERY_INVESTIGATION_CONTEXT = "tools/query_investigation_context.txt"
 
     # Analysis
     ANALYSIS_COMMAND_RISK = "analysis/command_risk.txt"

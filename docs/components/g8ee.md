@@ -405,6 +405,7 @@ Before invoking the primary model, g8ee classifies each incoming message as `sim
 | `check_port_status` | No | Check TCP/UDP port reachability |
 | `grant_intent_permission` | Yes (via intent flow) | Request AWS intent permissions for cloud operators |
 | `revoke_intent_permission` | Yes (via intent flow) | Revoke AWS intent permissions |
+| `query_investigation_context` | No | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
 | `search_web` | No | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
 
 Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures across multi-step operations.

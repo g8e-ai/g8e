@@ -95,6 +95,7 @@ _TOOL_DISPLAY_METADATA: dict[str, tuple[str, str, ToolDisplayCategory]] = {
     OperatorToolName.REVOKE_INTENT:          ("Revoking permission",   "shield-off", ToolDisplayCategory.GENERAL),
     OperatorToolName.FETCH_EXECUTION_OUTPUT: ("Fetching output",       "terminal",   ToolDisplayCategory.GENERAL),
     OperatorToolName.FETCH_SESSION_HISTORY:  ("Fetching history",      "clock",      ToolDisplayCategory.GENERAL),
+    OperatorToolName.QUERY_INVESTIGATION_CONTEXT: ("Querying investigation", "database", ToolDisplayCategory.GENERAL),
 }
 
 

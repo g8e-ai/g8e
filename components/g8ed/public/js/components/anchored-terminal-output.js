@@ -47,15 +47,15 @@ export class TerminalOutputMixin {
         this._removeWelcome();
         this.hideWaitingIndicator();
 
-        const entry = document.createElement('div');
-        entry.className = 'anchored-terminal__ai-response waiting';
-        entry.id = 'waiting-indicator';
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group waiting';
+        group.id = 'waiting-indicator';
         if (webSessionId) {
-            entry.setAttribute('data-web-session-id', webSessionId);
+            group.setAttribute('data-web-session-id', webSessionId);
         }
 
         const header = document.createElement('div');
-        header.className = 'anchored-terminal__ai-response-header';
+        header.className = 'anchored-terminal__agent-message-header';
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
@@ -69,19 +69,19 @@ export class TerminalOutputMixin {
         header.appendChild(sender);
 
         const content = document.createElement('div');
-        content.className = 'anchored-terminal__ai-response-content';
+        content.className = 'anchored-terminal__agent-message-content';
 
         const cursor = document.createElement('span');
         cursor.className = 'anchored-terminal__waiting-cursor';
         content.appendChild(cursor);
 
-        entry.appendChild(header);
-        entry.appendChild(content);
+        group.appendChild(header);
+        group.appendChild(content);
 
-        this.outputContainer.appendChild(entry);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
-        return entry;
+        return group;
     }
 
     hideWaitingIndicator() {
@@ -138,12 +138,12 @@ export class TerminalOutputMixin {
             return existing;
         }
 
-        const entry = document.createElement('div');
-        entry.className = 'anchored-terminal__ai-response streaming';
-        entry.id = existingId;
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group';
+        group.id = existingId;
 
         const header = document.createElement('div');
-        header.className = 'anchored-terminal__ai-response-header';
+        header.className = 'anchored-terminal__agent-message-header';
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
@@ -157,60 +157,54 @@ export class TerminalOutputMixin {
         header.appendChild(sender);
 
         const content = document.createElement('div');
-        content.className = 'anchored-terminal__ai-response-content';
+        content.className = 'anchored-terminal__agent-message-content';
 
-        entry.appendChild(header);
-        entry.appendChild(content);
+        group.appendChild(header);
+        group.appendChild(content);
 
-        this.outputContainer.appendChild(entry);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
-        return entry;
+        return content;
     }
 
     appendStreamingTextChunk(webSessionId, text) {
-        const entry = this.getOrCreateAIResponse(webSessionId);
-        if (!entry) return;
+        const contentEl = this.getOrCreateAIResponse(webSessionId);
+        if (!contentEl) return;
 
         if (!this._streamingTextAccumulator) {
             this._streamingTextAccumulator = new Map();
         }
 
-        const contentEl = entry.querySelector('.anchored-terminal__ai-response-content');
-        if (contentEl) {
-            const existing = this._streamingTextAccumulator.get(webSessionId) || '';
-            const newText = existing + text;
-            this._streamingTextAccumulator.set(webSessionId, newText);
+        const existing = this._streamingTextAccumulator.get(webSessionId) || '';
+        const newText = existing + text;
+        this._streamingTextAccumulator.set(webSessionId, newText);
 
-            const renderer = this.markdownRenderer;
-            if (renderer) {
-                contentEl.innerHTML = renderer.parseMarkdown(newText, true);
-            } else {
-                contentEl.textContent = newText;
-            }
+        const renderer = this.markdownRenderer;
+        if (renderer) {
+            contentEl.innerHTML = renderer.parseMarkdown(newText, true);
+        } else {
+            contentEl.textContent = newText;
         }
 
         this.scrollToBottom();
     }
 
     replaceStreamingHtml(webSessionId, html) {
-        const entry = this.getOrCreateAIResponse(webSessionId);
-        if (!entry) return;
+        const contentEl = this.getOrCreateAIResponse(webSessionId);
+        if (!contentEl) return;
 
-        const contentEl = entry.querySelector('.anchored-terminal__ai-response-content');
-        if (contentEl) {
-            // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
-            contentEl.innerHTML = html;
-        }
+        // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
+        contentEl.innerHTML = html;
 
         this.scrollToBottom();
     }
 
     finalizeAIResponseChunk(webSessionId, finalHtml, groundingMetadata = null) {
-        const entry = document.getElementById(`ai-response-${webSessionId}`);
-        if (!entry) return;
+        const group = document.getElementById(`ai-response-${webSessionId}`);
+        if (!group) return;
 
-        const contentEl = entry.querySelector('.anchored-terminal__ai-response-content');
+        const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
         if (contentEl) {
             // TRUSTED: Final HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
             contentEl.innerHTML = finalHtml;
@@ -221,9 +215,9 @@ export class TerminalOutputMixin {
             }
         }
 
-        entry.classList.remove('streaming');
-        entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
-        entry.id = `ai-response-${webSessionId}-${Date.now()}`;
+        group.classList.remove('streaming');
+        group.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+        group.id = `ai-response-${webSessionId}-${Date.now()}`;
 
         if (this._streamingTextAccumulator) {
             this._streamingTextAccumulator.delete(webSessionId);
@@ -244,16 +238,16 @@ export class TerminalOutputMixin {
             return;
         }
 
-        let entry = document.getElementById(`ai-response-${webSessionId}`);
-        if (!entry) {
+        let group = document.getElementById(`ai-response-${webSessionId}`);
+        if (!group) {
             const candidates = this.outputContainer?.querySelectorAll(`[id^="ai-response-${webSessionId}-"]`);
             if (candidates && candidates.length > 0) {
-                entry = candidates[candidates.length - 1];
+                group = candidates[candidates.length - 1];
             }
         }
-        if (!entry) return;
+        if (!group) return;
 
-        const contentEl = entry.querySelector('.anchored-terminal__ai-response-content');
+        const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
         if (!contentEl) return;
 
         // TRUSTED: HTML from citations handler adds citation markers to already-sanitized markdown output
@@ -271,11 +265,11 @@ export class TerminalOutputMixin {
 
         this._removeWelcome();
 
-        const entry = document.createElement('div');
-        entry.className = 'anchored-terminal__ai-response';
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group';
 
         const header = document.createElement('div');
-        header.className = 'anchored-terminal__ai-response-header';
+        header.className = 'anchored-terminal__agent-message-header';
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
@@ -295,7 +289,7 @@ export class TerminalOutputMixin {
         }
 
         const content = document.createElement('div');
-        content.className = 'anchored-terminal__ai-response-content';
+        content.className = 'anchored-terminal__agent-message-content';
         // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
         content.innerHTML = message;
 
@@ -304,13 +298,13 @@ export class TerminalOutputMixin {
             content.appendChild(sourcesPanel);
         }
 
-        entry.appendChild(header);
-        entry.appendChild(content);
+        group.appendChild(header);
+        group.appendChild(content);
 
-        this.outputContainer.appendChild(entry);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
-        return entry;
+        return content;
     }
 
     getOrCreateThinkingEntry(webSessionId) {
@@ -325,40 +319,18 @@ export class TerminalOutputMixin {
             return existing;
         }
 
-        // Get or create AI response bubble (prefer execution bubble if exists)
-        const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
-        const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
+        // Get or create agent message group (prefer execution group if exists)
+        const lastExecutionGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group[data-execution-bubble]:last-of-type');
+        const lastAgentGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group:last-of-type');
         let content;
-        
-        if (lastExecutionBubble) {
-            content = lastExecutionBubble.querySelector('.anchored-terminal__ai-response-content');
-        } else if (lastAiResponse) {
-            content = lastAiResponse.querySelector('.anchored-terminal__ai-response-content');
+
+        if (lastExecutionGroup) {
+            content = lastExecutionGroup.querySelector('.anchored-terminal__agent-message-content');
+        } else if (lastAgentGroup) {
+            content = lastAgentGroup.querySelector('.anchored-terminal__agent-message-content');
         } else {
-            // Create new AI response bubble if none exists
-            const bubble = document.createElement('div');
-            bubble.className = 'anchored-terminal__ai-response';
-
-            const header = document.createElement('div');
-            header.className = 'anchored-terminal__ai-response-header';
-
-            const sender = document.createElement('span');
-            sender.className = 'anchored-terminal__ai-response-sender';
-            sender.textContent = 'g8e';
-
-            const time = document.createElement('span');
-            time.className = 'anchored-terminal__ai-response-time';
-            time.textContent = this.formatTimestamp();
-
-            header.appendChild(time);
-            header.appendChild(sender);
-
-            content = document.createElement('div');
-            content.className = 'anchored-terminal__ai-response-content';
-
-            bubble.appendChild(header);
-            bubble.appendChild(content);
-            this.outputContainer.appendChild(bubble);
+            // Create new agent message group if none exists
+            content = this.getOrCreateAIResponse(webSessionId);
         }
 
         const entry = document.createElement('div');
@@ -513,11 +485,11 @@ export class TerminalOutputMixin {
     }
 
     sealStreamingResponse(webSessionId) {
-        const entry = document.getElementById(`ai-response-${webSessionId}`);
-        if (entry) {
-            entry.classList.remove('streaming');
-            entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
-            entry.id = `ai-response-${webSessionId}-${Date.now()}`;
+        const group = document.getElementById(`ai-response-${webSessionId}`);
+        if (group) {
+            group.classList.remove('streaming');
+            group.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+            group.id = `ai-response-${webSessionId}-${Date.now()}`;
         }
         if (this._streamingTextAccumulator) {
             this._streamingTextAccumulator.delete(webSessionId);
@@ -561,40 +533,18 @@ export class TerminalOutputMixin {
 
         this._removeWelcome();
 
-        // Get or create AI response bubble (prefer execution bubble if exists)
-        const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
-        const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
+        // Get or create agent message group (prefer execution group if exists)
+        const lastExecutionGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group[data-execution-bubble]:last-of-type');
+        const lastAgentGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group:last-of-type');
         let content;
-        
-        if (lastExecutionBubble) {
-            content = lastExecutionBubble.querySelector('.anchored-terminal__ai-response-content');
-        } else if (lastAiResponse) {
-            content = lastAiResponse.querySelector('.anchored-terminal__ai-response-content');
+
+        if (lastExecutionGroup) {
+            content = lastExecutionGroup.querySelector('.anchored-terminal__agent-message-content');
+        } else if (lastAgentGroup) {
+            content = lastAgentGroup.querySelector('.anchored-terminal__agent-message-content');
         } else {
-            // Create new AI response bubble if none exists
-            const bubble = document.createElement('div');
-            bubble.className = 'anchored-terminal__ai-response';
-
-            const header = document.createElement('div');
-            header.className = 'anchored-terminal__ai-response-header';
-
-            const sender = document.createElement('span');
-            sender.className = 'anchored-terminal__ai-response-sender';
-            sender.textContent = 'g8e';
-
-            const time = document.createElement('span');
-            time.className = 'anchored-terminal__ai-response-time';
-            time.textContent = this.formatTimestamp();
-
-            header.appendChild(time);
-            header.appendChild(sender);
-
-            content = document.createElement('div');
-            content.className = 'anchored-terminal__ai-response-content';
-
-            bubble.appendChild(header);
-            bubble.appendChild(content);
-            this.outputContainer.appendChild(bubble);
+            // Create new agent message group if none exists
+            content = this.getOrCreateAIResponse(id);
         }
 
         const widget = document.createElement('div');

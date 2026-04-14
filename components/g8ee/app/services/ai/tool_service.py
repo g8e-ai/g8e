@@ -44,6 +44,7 @@ from app.models.tool_results import (
     FsListToolResult,
     FsReadToolResult,
     IntentPermissionResult,
+    InvestigationContextResult,
     PortCheckToolResult,
     ToolResult,
 )
@@ -59,6 +60,7 @@ from app.models.command_payloads import (
     FsListArgs,
     FsReadArgs,
     GrantIntentArgs,
+    QueryInvestigationContextArgs,
     RevokeIntentArgs,
     SearchWebArgs,
 )
@@ -132,6 +134,9 @@ class AIToolService:
         (self._tool_declarations[OperatorToolName.FETCH_FILE_DIFF],
          self._tool_executors[OperatorToolName.FETCH_FILE_DIFF]) = self._build_fetch_file_diff_tool()
 
+        (self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
+         self._tool_executors[OperatorToolName.QUERY_INVESTIGATION_CONTEXT]) = self._build_query_investigation_context_tool()
+
     def start_invocation_context(
         self,
         g8e_context: G8eHttpContext,
@@ -169,8 +174,9 @@ class AIToolService:
     ) -> list[types.ToolGroup]:
         """Build tool declarations based on Operator workflow.
 
-        - OPERATOR_NOT_BOUND: g8e_web_search only (when configured)
-        - OPERATOR_BOUND: All tool declarations (g8e_web_search when configured + operator tools)
+        - OPERATOR_NOT_BOUND: query_investigation_context + g8e_web_search (when configured)
+        - OPERATOR_BOUND: All tool declarations (query_investigation_context + g8e_web_search when configured + operator tools)
+        - CLOUD_OPERATOR_BOUND: All tool declarations (query_investigation_context + g8e_web_search when configured + operator tools)
 
         Returns empty list if the model does not support tools.
         """
@@ -183,13 +189,19 @@ class AIToolService:
         g8e_web_search_available = OperatorToolName.G8E_SEARCH_WEB in self._tool_declarations
         resolved_workflow = agent_mode or AgentMode.OPERATOR_NOT_BOUND
 
+        universal_declarations = [
+            self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
+        ]
+
         if resolved_workflow == AgentMode.OPERATOR_NOT_BOUND:
             if not g8e_web_search_available:
-                logger.info("[TOOLS] OPERATOR_NOT_BOUND: no tools available (g8e_web_search not configured)")
-                return []
+                logger.info("[TOOLS] OPERATOR_NOT_BOUND: only query_investigation_context available (g8e_web_search not configured)")
+                return [
+                    types.ToolGroup(tools=universal_declarations)
+                ]
             return [
                 types.ToolGroup(
-                    tools=[
+                    tools=universal_declarations + [
                         self._tool_declarations[OperatorToolName.G8E_SEARCH_WEB],
                     ]
                 )
@@ -211,7 +223,7 @@ class AIToolService:
         if g8e_web_search_available:
             operator_declarations.insert(0, self._tool_declarations[OperatorToolName.G8E_SEARCH_WEB])
         return [
-            types.ToolGroup(tools=operator_declarations)
+            types.ToolGroup(tools=universal_declarations + operator_declarations)
         ]
 
     def _build_run_operator_commands_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
@@ -386,6 +398,20 @@ class AIToolService:
 
         return declaration, fetch_file_diff
 
+    def _build_query_investigation_context_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
+        """Register tool metadata and executor for investigation context queries."""
+
+        def query_investigation_context(args: QueryInvestigationContextArgs) -> ToolResult:
+            raise NotImplementedError("query_investigation_context should be called via execute_tool_call")
+
+        declaration = types.ToolDeclaration(
+            name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
+            description=load_prompt(PromptFile.TOOL_QUERY_INVESTIGATION_CONTEXT),
+            parameters=schema_from_model(QueryInvestigationContextArgs),
+        )
+
+        return declaration, query_investigation_context
+
     def _build_tool_handlers(self) -> dict[str, Callable]:
         """Build dispatch table mapping tool names to handler coroutines."""
         return {
@@ -401,6 +427,7 @@ class AIToolService:
             OperatorToolName.LIST_FILES: self._handle_list_files,
             OperatorToolName.GRANT_INTENT: self._handle_grant_intent,
             OperatorToolName.REVOKE_INTENT: self._handle_revoke_intent,
+            OperatorToolName.QUERY_INVESTIGATION_CONTEXT: self._handle_query_investigation_context,
         }
 
     async def _handle_run_commands(
@@ -585,6 +612,99 @@ class AIToolService:
         )
         logger.info("[REVOKE_INTENT] success=%s", result.success)
         return result
+
+    async def _get_investigation_helper(
+        self,
+        investigation_id: str,
+        data_type: str,
+    ) -> tuple[dict[str, Any] | None, InvestigationContextResult | None]:
+        """Helper to fetch investigation and handle missing error response."""
+        inv = await self.investigation_service.get_investigation(investigation_id)
+        if inv:
+            return inv.model_dump(), None
+        
+        return None, InvestigationContextResult(
+            success=False,
+            error=f"Investigation not found: {investigation_id}",
+            error_type=CommandErrorType.VALIDATION_ERROR,
+            data_type=data_type,
+            investigation_id=investigation_id,
+        )
+
+    async def _handle_query_investigation_context(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = QueryInvestigationContextArgs.model_validate(tool_args)
+        logger.info("[QUERY_INVESTIGATION_CONTEXT] data_type=%s limit=%s", args.data_type, args.limit)
+        
+        if not investigation or not investigation.id:
+            logger.error("[QUERY_INVESTIGATION_CONTEXT] No investigation ID available")
+            return InvestigationContextResult(
+                success=False,
+                error="No investigation ID available",
+                error_type=CommandErrorType.VALIDATION_ERROR,
+                data_type=args.data_type,
+            )
+        
+        investigation_id = investigation.id
+        data: dict[str, Any] | list[dict[str, Any]] | str | None = None
+        item_count: int | None = None
+        
+        try:
+            if args.data_type == "conversation_history":
+                messages = await self.investigation_service.get_chat_messages(investigation_id)
+                if args.limit:
+                    messages = messages[-args.limit:] if args.limit > 0 else messages
+                data = [msg.model_dump() for msg in messages]
+                item_count = len(messages)
+                
+            elif args.data_type == "investigation_status":
+                data, error_res = await self._get_investigation_helper(investigation_id, args.data_type)
+                if error_res:
+                    return error_res
+                item_count = 1
+                    
+            elif args.data_type == "history_trail":
+                data, error_res = await self._get_investigation_helper(investigation_id, args.data_type)
+                if error_res:
+                    return error_res
+                item_count = 1
+                    
+            elif args.data_type == "operator_actions":
+                data = await self.investigation_service.get_operator_actions_for_ai_context(investigation_id)
+                item_count = 1
+                
+            else:
+                return InvestigationContextResult(
+                    success=False,
+                    error=f"Invalid data_type: {args.data_type}. Valid values: conversation_history, investigation_status, history_trail, operator_actions",
+                    error_type=CommandErrorType.VALIDATION_ERROR,
+                    data_type=args.data_type,
+                    investigation_id=investigation_id,
+                )
+                
+            logger.info("[QUERY_INVESTIGATION_CONTEXT] success=True item_count=%s", item_count)
+            return InvestigationContextResult(
+                success=True,
+                data_type=args.data_type,
+                data=data,
+                item_count=item_count,
+                investigation_id=investigation_id,
+            )
+            
+        except Exception as e:
+            logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e)
+            return InvestigationContextResult(
+                success=False,
+                error=str(e),
+                error_type=CommandErrorType.EXECUTION_ERROR,
+                data_type=args.data_type,
+                investigation_id=investigation_id,
+            )
 
     async def execute_tool_call(
         self,

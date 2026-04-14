@@ -27,12 +27,12 @@ export class TerminalExecutionMixin {
     }
 
     _createAIBubbleWrapper(bubbleId) {
-        const bubble = document.createElement('div');
-        bubble.className = 'anchored-terminal__ai-response anchored-terminal__ai-response--execution';
-        if (bubbleId) bubble.setAttribute('data-execution-bubble', bubbleId);
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group anchored-terminal__agent-message-group--execution';
+        if (bubbleId) group.setAttribute('data-execution-bubble', bubbleId);
 
         const header = document.createElement('div');
-        header.className = 'anchored-terminal__ai-response-header';
+        header.className = 'anchored-terminal__agent-message-header';
 
         const sender = document.createElement('span');
         sender.className = 'anchored-terminal__ai-response-sender';
@@ -46,12 +46,12 @@ export class TerminalExecutionMixin {
         header.appendChild(sender);
 
         const content = document.createElement('div');
-        content.className = 'anchored-terminal__ai-response-content';
+        content.className = 'anchored-terminal__agent-message-content';
 
-        bubble.appendChild(header);
-        bubble.appendChild(content);
+        group.appendChild(header);
+        group.appendChild(content);
 
-        return bubble;
+        return group;
     }
 
     async showExecutingIndicator(command) {
@@ -60,8 +60,8 @@ export class TerminalExecutionMixin {
         if (this._execCounter === undefined) this._execCounter = 0;
         const id = `exec-${Date.now()}-${++this._execCounter}`;
 
-        const bubble = this._createAIBubbleWrapper(id);
-        const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+        const group = this._createAIBubbleWrapper(id);
+        const content = group.querySelector('.anchored-terminal__agent-message-content');
 
         const indicator = document.createElement('div');
         indicator.className = 'anchored-terminal__executing';
@@ -69,7 +69,7 @@ export class TerminalExecutionMixin {
         await templateLoader.renderTo(indicator, 'executing-indicator', { command });
 
         content.appendChild(indicator);
-        this.outputContainer.appendChild(bubble);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
         return id;
@@ -81,8 +81,8 @@ export class TerminalExecutionMixin {
         if (this._execCounter === undefined) this._execCounter = 0;
         const id = `exec-${Date.now()}-${++this._execCounter}`;
 
-        const bubble = this._createAIBubbleWrapper(id);
-        const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+        const group = this._createAIBubbleWrapper(id);
+        const content = group.querySelector('.anchored-terminal__agent-message-content');
 
         const indicator = document.createElement('div');
         indicator.className = 'anchored-terminal__executing';
@@ -90,7 +90,7 @@ export class TerminalExecutionMixin {
         await templateLoader.renderTo(indicator, 'preparing-indicator', { command });
 
         content.appendChild(indicator);
-        this.outputContainer.appendChild(bubble);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
         return id;
@@ -129,7 +129,7 @@ export class TerminalExecutionMixin {
     _findBubbleByExecId(execId) {
         if (!this.outputContainer || !execId) return null;
         return this.outputContainer.querySelector(
-            `.anchored-terminal__ai-response--execution[data-execution-bubble="${execId}"]`
+            `.anchored-terminal__agent-message-group[data-execution-bubble="${execId}"]`
         );
     }
 
@@ -139,12 +139,12 @@ export class TerminalExecutionMixin {
         if (id) {
             const indicator = document.getElementById(id);
             if (indicator) {
-                const parentBubble = indicator.closest('.anchored-terminal__ai-response--execution');
+                const parentGroup = indicator.closest('.anchored-terminal__agent-message-group');
                 indicator.remove();
-                if (parentBubble) {
-                    const content = parentBubble.querySelector('.anchored-terminal__ai-response-content');
+                if (parentGroup) {
+                    const content = parentGroup.querySelector('.anchored-terminal__agent-message-content');
                     if (content && content.children.length === 0) {
-                        parentBubble.remove();
+                        parentGroup.remove();
                     }
                 }
                 return;
@@ -164,33 +164,33 @@ export class TerminalExecutionMixin {
         const execId = data.execution_id;
         const approvalId = data.approval_id || data.execution_id;
 
-        let bubble = null;
+        let group = null;
         if (execId) {
             const preparingExec = this.activeExecutions.get(execId);
             if (preparingExec && preparingExec.indicatorId) {
-                bubble = this._findBubbleByExecId(preparingExec.indicatorId);
+                group = this._findBubbleByExecId(preparingExec.indicatorId);
                 const indicator = document.getElementById(preparingExec.indicatorId);
                 if (indicator) indicator.remove();
                 this.activeExecutions.delete(execId);
             }
         }
 
-        if (!bubble) {
-            // Reuse existing AI response bubble if exists, otherwise create new execution bubble
-            const lastAiResponse = this.outputContainer.querySelector('.anchored-terminal__ai-response:last-of-type');
-            const lastExecutionBubble = this.outputContainer.querySelector('.anchored-terminal__ai-response--execution:last-of-type');
-            
-            if (lastExecutionBubble) {
-                bubble = lastExecutionBubble;
-            } else if (lastAiResponse) {
-                bubble = lastAiResponse;
-                bubble.classList.add('anchored-terminal__ai-response--execution');
+        if (!group) {
+            // Reuse existing agent message group if exists, otherwise create new execution group
+            const lastAgentGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group:last-of-type');
+            const lastExecutionGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution:last-of-type');
+
+            if (lastExecutionGroup) {
+                group = lastExecutionGroup;
+            } else if (lastAgentGroup) {
+                group = lastAgentGroup;
+                group.classList.add('anchored-terminal__agent-message-group--execution');
             } else {
-                bubble = this._createAIBubbleWrapper(approvalId);
-                this.outputContainer.appendChild(bubble);
+                group = this._createAIBubbleWrapper(approvalId);
+                this.outputContainer.appendChild(group);
             }
         }
-        bubble.setAttribute('data-execution-bubble', approvalId);
+        group.setAttribute('data-execution-bubble', approvalId);
 
         const command = data.command;
         const justification = data.justification;
@@ -261,7 +261,7 @@ export class TerminalExecutionMixin {
         approveBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, true));
         denyBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, false));
 
-        const contentEl = bubble.querySelector('.anchored-terminal__ai-response-content');
+        const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
         contentEl.appendChild(approval);
         this.scrollToBottom();
     }
@@ -415,13 +415,13 @@ export class TerminalExecutionMixin {
         container.appendChild(toggle);
         container.appendChild(body);
 
-        const parentBubble = approvalEl?.closest('.anchored-terminal__ai-response--execution');
-        if (parentBubble) {
-            const contentEl = parentBubble.querySelector('.anchored-terminal__ai-response-content');
+        const parentGroup = approvalEl?.closest('.anchored-terminal__agent-message-group');
+        if (parentGroup) {
+            const contentEl = parentGroup.querySelector('.anchored-terminal__agent-message-content');
             if (contentEl) {
                 contentEl.appendChild(container);
             } else {
-                parentBubble.appendChild(container);
+                parentGroup.appendChild(container);
             }
         } else {
             this.outputContainer.appendChild(container);
@@ -713,10 +713,10 @@ export class TerminalExecutionMixin {
             timeHtml_raw: displayTime ? `<span class="approval-compact__time">${displayTime}</span>` : ''
         });
 
-        const bubble = this._createAIBubbleWrapper(executionId);
-        const contentEl = bubble.querySelector('.anchored-terminal__ai-response-content');
+        const group = this._createAIBubbleWrapper(executionId);
+        const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
         contentEl.appendChild(entry);
-        this.outputContainer.appendChild(bubble);
+        this.outputContainer.appendChild(group);
 
         if (wasApproved && executionId) {
             await this._createResultsContainer(executionId, entry);
