@@ -64,7 +64,7 @@
     padding: 8px 12px;
     margin: 4px 0;
     margin-left: auto;
-    max-width: 65%;
+    width: 65%;
 }
 
 .anchored-terminal__ai-response-header {
@@ -115,7 +115,7 @@
     flex-direction: column;
     margin: 4px 0;
     margin-left: auto;
-    max-width: 65%;
+    width: 65%;
     border-radius: 6px;
     overflow: hidden;
 }
@@ -201,7 +201,7 @@
     align-self: flex-end;
     padding: 6px 12px;
     margin: 4px 0;
-    max-width: 65%;
+    width: 65%;
     font-family: var(--font-sans, system-ui, sans-serif);
     font-size: 12px;
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -280,8 +280,7 @@
     gap: 6px;
     padding: 8px 12px;
     margin: 4px 0;
-    width: fit-content;
-    max-width: 65%;
+    width: 65%;
     min-width: 220px;
     background: var(--surface-secondary, rgba(139, 148, 158, 0.06));
     border: 1px solid var(--border-color, rgba(139, 148, 158, 0.15));
@@ -396,7 +395,7 @@
     padding: 8px 12px;
     margin: 4px 0;
     margin-left: auto;
-    max-width: 65%;
+    width: 65%;
 }
 
 .anchored-terminal__error-header {
@@ -646,7 +645,7 @@
     border: 3px solid rgba(var(--accent-green-rgb), 0.7);
     border-radius: 0.25rem;
     margin: 12px 0;
-    max-width: 65%;
+    width: 65%;
     align-self: flex-end;
     box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.25),
                 inset 0 0 30px rgba(var(--accent-green-rgb), 0.05);
@@ -704,7 +703,7 @@
 
 /* Execution AI bubble - wraps preparing/approval/results as a cohesive chat message */
 .anchored-terminal__ai-response--execution {
-    max-width: 65%;
+    width: 65%;
 }
 
 /* Elements inside AI response bubbles should be 100% width */
