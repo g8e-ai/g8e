@@ -1246,7 +1246,6 @@
   font-size: 0.7rem;
   color: var(--text-secondary);
   font-weight: 500;
-  min-width: 120px;
   text-align: left;
 }
 
@@ -1254,7 +1253,6 @@
   display: flex;
   align-items: center;
   min-width: 120px;
-  justify-content: flex-end;
 }
 
 .pagination-text {

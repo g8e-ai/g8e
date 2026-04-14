@@ -551,13 +551,71 @@ export class OperatorDocument extends G8eIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
+// OperatorSlotSystemInfo  (minimal system_info for operator panel list)
+// ---------------------------------------------------------------------------
+
+export class OperatorSlotSystemInfo extends G8eBaseModel {
+    static fields = {
+        hostname:    { type: F.string, default: null },
+        os:          { type: F.string, default: null },
+        internal_ip: { type: F.string, default: null },
+        public_ip:   { type: F.string, default: null },
+    };
+
+    static fromSystemInfo(systemInfo) {
+        if (!systemInfo) return new OperatorSlotSystemInfo({});
+        return new OperatorSlotSystemInfo({
+            hostname:    systemInfo.hostname ?? null,
+            os:          systemInfo.os ?? null,
+            internal_ip: systemInfo.internal_ip ?? null,
+            public_ip:   systemInfo.public_ip ?? null,
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OperatorSlot  (lightweight projection of OperatorDocument for panel list)
+// ---------------------------------------------------------------------------
+
+export class OperatorSlot extends G8eBaseModel {
+    static fields = {
+        operator_id:    { type: F.string,  required: true },
+        name:           { type: F.string,  default: null },
+        status:         { type: F.string,  default: null },
+        status_display: { type: F.string,  default: null },
+        status_class:   { type: F.string,  default: 'inactive' },
+        web_session_id: { type: F.string,  default: null },
+        is_g8ep:        { type: F.boolean, default: false },
+        first_deployed: { type: F.date,    default: null },
+        last_heartbeat: { type: F.date,    default: null },
+        system_info:    { type: F.object,  model: OperatorSlotSystemInfo, default: () => new OperatorSlotSystemInfo({}) },
+    };
+
+    static fromOperator(operator) {
+        const s = operator.status ?? OperatorStatus.OFFLINE;
+        return new OperatorSlot({
+            operator_id:    operator.operator_id,
+            name:           operator.name ?? null,
+            status:         s,
+            status_display: s,
+            status_class:   s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase(),
+            web_session_id: operator.web_session_id ?? null,
+            is_g8ep:        operator.is_g8ep ?? false,
+            first_deployed: operator.first_deployed ?? null,
+            last_heartbeat: operator.last_heartbeat ?? null,
+            system_info:    OperatorSlotSystemInfo.fromSystemInfo(operator.system_info),
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
 // OperatorListUpdatedEvent  (SSE payload for OPERATOR_LIST_UPDATED events)
 // ---------------------------------------------------------------------------
 
 export class OperatorListUpdatedEvent extends G8eBaseModel {
     static fields = {
         type:         { type: F.string, required: true },
-        operators:    { type: F.any,    default: () => [] },
+        operators:    { type: F.array,  items: OperatorSlot, default: () => [] },
         total_count:  { type: F.number, default: 0 },
         active_count: { type: F.number, default: 0 },
         used_slots:   { type: F.number, default: 0 },

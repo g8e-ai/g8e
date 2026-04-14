@@ -29,6 +29,7 @@ import {
     BindOperatorsResponse,
     UnbindOperatorsResponse,
     OperatorWithSessionContext,
+    OperatorSlot,
 } from '@g8ed/models/operator_model.js';
 import { OperatorStatus, OperatorType, CloudOperatorSubtype, HistoryEventType } from '@g8ed/constants/operator.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
@@ -709,7 +710,7 @@ describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const operators = [{ id: 'op-1', status: 'ACTIVE' }];
+        const operators = [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })];
         const event = OperatorListUpdatedEvent.parse({
             type: 'operator.list.updated',
             operators: operators,
@@ -718,7 +719,8 @@ describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
             used_slots: 3,
             max_slots: 10,
         });
-        expect(event.operators).toEqual(operators);
+        expect(event.operators[0].operator_id).toBe('op-1');
+        expect(event.operators[0].status).toBe('ACTIVE');
         expect(event.total_count).toBe(10);
         expect(event.active_count).toBe(5);
         expect(event.used_slots).toBe(3);

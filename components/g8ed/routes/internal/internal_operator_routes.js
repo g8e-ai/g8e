@@ -14,7 +14,6 @@
 import { IntentRequest } from '../../models/request_models.js';
 import express from 'express';
 import { logger } from '../../utils/logger.js';
-import { OperatorStatus } from '../../constants/operator.js';
 import { DeviceLinkError } from '../../constants/auth.js';
 import { OperatorDocument, OperatorWithSessionContext } from '../../models/operator_model.js';
 import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../../models/response_models.js';
@@ -227,12 +226,6 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
 
             const { operators, total_count, active_count } = await operatorService.getUserOperators(userId);
 
-            const clientOperators = operators.map((op) => {
-                const s = op.status ?? OperatorStatus.OFFLINE;
-                const base = op instanceof OperatorDocument ? op.forClient() : op;
-                return { ...base, status_display: s, status_class: s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase() };
-            });
-
             logger.info('[INTERNAL-HTTP] Operators listed for user', {
                 userId,
                 total_count,
@@ -241,7 +234,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
 
             return res.json(new OperatorListResponse({
                 success: true,
-                data: clientOperators,
+                data: operators,
                 total_count: total_count,
                 active_count: active_count
             }).forWire());

@@ -17,7 +17,7 @@
     position: relative;
     min-width: 200px;
     flex: 1;
-    max-width: 500px;
+    max-width: 450px;
     font-size: 13px;
     font-family: var(--font-mono);
     color: var(--text-muted);
@@ -321,11 +321,13 @@
     border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 0.25rem;
     background: rgba(var(--accent-blue-rgb), 0.06);
+    width: 150px;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1550px) {
     .llm-model-dropdown {
         padding: 0.5rem 0.375rem;
+        width: auto;
     }
 
     .llm-model-select {

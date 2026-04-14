@@ -14,7 +14,7 @@
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
-import { OperatorListUpdatedEvent } from '../../models/operator_model.js';
+import { OperatorListUpdatedEvent, OperatorSlot } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
 import { redactWebSessionId } from '../../utils/security.js';
 
@@ -42,27 +42,23 @@ export class OperatorNotificationService {
                 op.status !== OperatorStatus.TERMINATED
             );
 
-            const enhancedOperators = visibleOperators.map((op) => {
-                const s = op.status ?? OperatorStatus.OFFLINE;
-                return { ...op, status_display: s, status_class: s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase() };
-            });
-
-            const activeCount = enhancedOperators.filter(op =>
+            const activeCount = visibleOperators.filter(op =>
                 op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND
             ).length;
 
-            const { usedSlots } = calculateSlotUsageFn(enhancedOperators);
+            const { usedSlots } = calculateSlotUsageFn(visibleOperators);
+            const slots = visibleOperators.map(op => OperatorSlot.fromOperator(op));
 
             const userWebSessions = await this.webSessionService.getUserActiveSessions(userId);
             if (userWebSessions.length === 0) return;
 
             const event = OperatorListUpdatedEvent.parse({
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: enhancedOperators,
-                total_count: enhancedOperators.length,
+                operators: slots,
+                total_count: slots.length,
                 active_count: activeCount,
                 used_slots: usedSlots,
-                max_slots: enhancedOperators.length,
+                max_slots: slots.length,
                 timestamp: now(),
             });
 
@@ -91,24 +87,20 @@ export class OperatorNotificationService {
                 op.status !== OperatorStatus.TERMINATED
             );
 
-            const enhancedOperators = operators.map((op) => {
-                const s = op.status ?? OperatorStatus.OFFLINE;
-                return { ...op, status_display: s, status_class: s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase() };
-            });
-
-            const activeCount = enhancedOperators.filter(op =>
+            const activeCount = operators.filter(op =>
                 op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND
             ).length;
 
-            const { usedSlots } = calculateSlotUsageFn(enhancedOperators);
+            const { usedSlots } = calculateSlotUsageFn(operators);
+            const slots = operators.map(op => OperatorSlot.fromOperator(op));
 
             const event = OperatorListUpdatedEvent.parse({
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: enhancedOperators,
-                total_count: enhancedOperators.length,
+                operators: slots,
+                total_count: slots.length,
                 active_count: activeCount,
                 used_slots: usedSlots,
-                max_slots: enhancedOperators.length,
+                max_slots: slots.length,
                 timestamp: now(),
             });
 

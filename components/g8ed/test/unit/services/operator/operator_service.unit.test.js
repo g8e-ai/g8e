@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorService } from '@g8ed/services/operator/operator_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
-import { OperatorDocument, OperatorWithSessionContext } from '@g8ed/models/operator_model.js';
+import { OperatorDocument, OperatorWithSessionContext, OperatorSlot } from '@g8ed/models/operator_model.js';
 import { EventType } from '@g8ed/constants/events.js';
 
 describe('OperatorService', () => {
@@ -132,9 +132,9 @@ describe('OperatorService', () => {
     });
 
     describe('getUserOperators', () => {
-        it('should return enhanced operator list payload for UI', async () => {
+        it('should return OperatorSlot projections for the panel list', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', web_session_id: 'ws-1' }),
                 new OperatorDocument({ operator_id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
@@ -145,8 +145,20 @@ describe('OperatorService', () => {
             expect(result.operators).toHaveLength(2);
             expect(result.active_count).toBe(1);
             expect(result.used_slots).toBe(1);
-            expect(result.operators[0].status_display).toBe(OperatorStatus.ACTIVE);
-            expect(result.operators[0].status_class).toBe('active');
+
+            const slot = result.operators[0];
+            expect(slot).toBeInstanceOf(OperatorSlot);
+            expect(slot.operator_id).toBe('op-1');
+            expect(slot.name).toBe('node-01');
+            expect(slot.status).toBe(OperatorStatus.ACTIVE);
+            expect(slot.status_display).toBe(OperatorStatus.ACTIVE);
+            expect(slot.status_class).toBe('active');
+            expect(slot.web_session_id).toBe('ws-1');
+
+            expect(slot).not.toHaveProperty('api_key');
+            expect(slot).not.toHaveProperty('history_trail');
+            expect(slot).not.toHaveProperty('granted_intents');
+            expect(slot).not.toHaveProperty('runtime_config');
         });
     });
 

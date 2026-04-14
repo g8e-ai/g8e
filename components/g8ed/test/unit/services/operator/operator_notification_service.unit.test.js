@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorNotificationService } from '@g8ed/services/operator/operator_notification_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
 import { EventType } from '@g8ed/constants/events.js';
-import { OperatorDocument, OperatorListUpdatedEvent } from '@g8ed/models/operator_model.js';
+import { OperatorDocument, OperatorListUpdatedEvent, OperatorSlot } from '@g8ed/models/operator_model.js';
 
 describe('OperatorNotificationService', () => {
     let service;
@@ -59,6 +59,13 @@ describe('OperatorNotificationService', () => {
             const event = mocks.sseService.publishEvent.mock.calls[0][1];
             expect(event.operators).toHaveLength(2); // op-3 is filtered out
             expect(event.active_count).toBe(1);
+
+            const slot = event.operators[0];
+            expect(slot).toBeInstanceOf(OperatorSlot);
+            expect(slot.operator_id).toBe('op-1');
+            expect(slot.status).toBe(OperatorStatus.ACTIVE);
+            expect(slot).not.toHaveProperty('api_key');
+            expect(slot).not.toHaveProperty('history_trail');
         });
 
         it('should do nothing if user has no active sessions', async () => {

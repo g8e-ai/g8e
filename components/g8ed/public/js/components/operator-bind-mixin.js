@@ -351,7 +351,7 @@ export const BindOperatorsMixin = {
         if (unboundActiveCount > 0) {
             this.bindAllBtn.classList.remove('initially-hidden');
             const textSpan = this.bindAllBtn.querySelector('span:last-child');
-            if (textSpan) textSpan.textContent = `Bind All Active (${unboundActiveCount})`;
+            if (textSpan) textSpan.textContent = `Bind All (${unboundActiveCount})`;
         } else {
             this.bindAllBtn.classList.add('initially-hidden');
         }

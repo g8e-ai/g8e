@@ -21,6 +21,7 @@ import {
     OperatorStatusInfo, 
     OperatorWithSessionContext, 
     GrantedIntent, 
+    OperatorSlot,
 } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
 import { HistoryEventType } from '../../constants/operator.js';
@@ -217,19 +218,16 @@ class OperatorService {
 
     async getUserOperators(userId) {
         const stats = await this.getUserVisibleOperatorStats(userId);
-        const enhancedOperators = stats.operators.map((op) => {
-            const s = op.status ?? OperatorStatus.OFFLINE;
-            return { ...op, status_display: s, status_class: s === OperatorStatus.OFFLINE ? 'inactive' : s.toLowerCase() };
-        });
-        const { usedSlots } = this.calculateSlotUsage(enhancedOperators);
+        const { usedSlots } = this.calculateSlotUsage(stats.operators);
+        const slots = stats.operators.map(op => OperatorSlot.fromOperator(op));
 
         return {
             type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-            operators: enhancedOperators,
-            total_count: enhancedOperators.length,
+            operators: slots,
+            total_count: slots.length,
             active_count: stats.activeCount,
             used_slots: usedSlots,
-            max_slots: enhancedOperators.length,
+            max_slots: slots.length,
             timestamp: now(),
         };
     }
