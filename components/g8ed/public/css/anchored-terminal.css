@@ -112,6 +112,7 @@
 /* Thinking entry - inline collapsible thought stream */
 .anchored-terminal__thinking {
     display: flex;
+    justify-self: flex-end;
     flex-direction: column;
     margin: 4px 0;
     margin-left: auto;
@@ -158,7 +159,7 @@
 
 .anchored-terminal__thinking-content {
     color: var(--text-secondary);
-    padding: 0 10px 6px 10px;
+    padding: 1rem;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
@@ -280,8 +281,9 @@
     gap: 6px;
     padding: 8px 12px;
     margin: 4px 0;
-    width: 65%;
-    min-width: 220px;
+    width: 200px;
+    align-self: flex-end;
+    justify-self: flex-end;
     background: var(--surface-secondary, rgba(139, 148, 158, 0.06));
     border: 1px solid var(--border-color, rgba(139, 148, 158, 0.15));
     border-radius: 8px;
@@ -709,7 +711,6 @@
 /* Elements inside AI response bubbles should be 100% width */
 .anchored-terminal__ai-response .tribunal,
 .anchored-terminal__ai-response--execution .tribunal {
-    width: 100%;
     margin-left: 0;
 }
 
@@ -729,6 +730,19 @@
 .anchored-terminal__ai-response--execution .anchored-terminal__thinking {
     width: 100%;
     margin-left: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__thinking-header,
+.anchored-terminal__ai-response--execution .anchored-terminal__thinking-header {
+    justify-content: flex-end;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.anchored-terminal__ai-response .anchored-terminal__thinking-content,
+.anchored-terminal__ai-response--execution .anchored-terminal__thinking-content {
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .anchored-terminal__ai-response .anchored-terminal__approval {
@@ -753,14 +767,12 @@
     margin: 0;
     width: 100%;
     align-self: stretch;
-    border: none;
     border-top: 1px solid rgba(var(--accent-green-rgb), 0.15);
     border-radius: 0;
 }
 
 .anchored-terminal__ai-response--execution .anchored-terminal__executing {
     margin: 0;
-    width: 100%;
 }
 
 /* Executing indicator */
@@ -774,7 +786,6 @@
     border-radius: 4px;
     color: var(--text-primary);
     font-size: 12px;
-    margin: 8px 0;
 }
 
 .anchored-terminal__executing-spinner {
@@ -1445,8 +1456,6 @@
     border: 1px solid rgba(var(--accent-green-rgb), 0.2);
     border-top: none;
     border-radius: 0 0 6px 6px;
-    overflow: hidden;
-    max-width: 65%;
     align-self: flex-end;
     transition: border-color 0.2s ease;
 }

@@ -135,8 +135,8 @@ _help() {
     echo "    logs                          Follow all container logs"
     echo "    shell N=<nn>                  Shell into a specific node (e.g. N=01)"
     echo "    deploy DEVICE_TOKEN=<tok>     Deploy operators via API download"
-    echo "    ssh-key                       Extract SSH private key for streaming"
-    echo "    stream DEVICE_TOKEN=<tok>     Deploy operators via SSH streaming"
+    echo "    stream DEVICE_TOKEN=<tok>     Deploy operators via SSH streaming (auto-configures SSH)"
+    echo "    discover-hosts                List discovered demo fleet hosts"
     echo "    vanish                        Remove all operators (zero trace)"
     echo "    dashboard                     Print dashboard URL"
     echo ""
@@ -537,7 +537,7 @@ case "$TOP" in
             exit 1
         fi
         case "$SUB" in
-            up|down|status|clean|health|nginx-check|operators|logs|deploy|ssh-key|stream|vanish|dashboard)
+            up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
                 exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
             shell)
@@ -545,11 +545,11 @@ case "$TOP" in
                 exec make -C "$DEMO_DIR" shell "${@:3}" ;;
             "")
                 echo "[g8e] missing subcommand for 'demo'" >&2
-                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
                 exit 1 ;;
             *)
                 echo "[g8e] unknown demo subcommand: '$SUB'" >&2
-                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
                 exit 1 ;;
         esac ;;
 

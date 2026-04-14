@@ -83,7 +83,7 @@ export const TEMPLATE_FIXTURES = {
     <span class="tribunal__spinner"></span>
 </div>
 <div class="tribunal__command"></div>
-<div class="tribunal__passes">{{dots}}</div>
+<div class="tribunal__passes">{{{dots}}}</div>
 <div class="tribunal__status">Generating alternatives...</div>`,
 
     'bind-single-confirmation-overlay': `<div class="bind-single-confirmation-overlay">

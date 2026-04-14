@@ -2,10 +2,11 @@
 # Each node runs nginx proxying to a Flask backend.
 # 5 healthy, 5 broken in different ways. Deploy operators and fix with g8e.
 
-.PHONY: help build up down status clean deploy ssh-key stream vanish shell logs health nginx-check operators dashboard
+.PHONY: help build up down status clean deploy setup-ssh discover-hosts stream vanish shell logs health nginx-check operators dashboard
 
 COMPOSE := docker compose
 CONTAINER_PREFIX := web-node
+SSH_USER := appuser
 
 help:
 	@echo "Broken Web App Fleet Demo"
@@ -26,8 +27,8 @@ help:
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@echo "  deploy DEVICE_TOKEN=dlk_xxx  - Deploy operators via API download (device link)"
-	@echo "  stream DEVICE_TOKEN=dlk_xxx  - Deploy operators via SSH streaming (device link)"
-	@echo "  ssh-key                     - Extract SSH private key for streaming"
+	@echo "  stream DEVICE_TOKEN=dlk_xxx  - Deploy operators via SSH streaming (auto-configures SSH)"
+	@echo "  discover-hosts              - List discovered demo fleet hosts"
 	@echo "  vanish                      - Remove all operators (zero trace)"
 	@echo "  operators                   - Show operator status on all nodes"
 	@echo ""
@@ -64,8 +65,6 @@ build:
 up: build
 	@echo "Starting 10 web nodes..."
 	$(COMPOSE) up -d
-	@$(MAKE) ssh-key
-	@$(MAKE) setup-streaming
 	@echo ""
 	@echo "========================================"
 	@echo "  Broken Web App Fleet - 10 Nodes"
@@ -79,28 +78,21 @@ up: build
 	@echo "  node-09: High Load (504)"
 	@echo "  node-10: Crashed (nginx won't start)"
 	@echo ""
-	@echo "Operator Streaming Ready:"
-	@echo "  ./g8e operator stream --hosts /home/g8e/demo-hosts --endpoint g8e.local --device-token dlk_your_token"
+	@echo "Deploy operators:"
+	@echo "  ./g8e demo stream DEVICE_TOKEN=dlk_your_token"
 	@echo ""
 	@echo "Dashboard: http://localhost:3000"
 	@echo ""
 	@echo "========================================"
 
-setup-streaming:
-	@echo "Configuring g8ep for operator streaming..."
+setup-ssh:
+	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null && chmod 600 ./.demo-key
 	@docker exec g8ep mkdir -p /home/g8e/.ssh
 	@cat ./.demo-key | docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/id_ed25519"
-	@echo "Host web-node-* node-*" > ./.ssh-config
-	@echo "    User appuser" >> ./.ssh-config
-	@echo "    IdentityFile /home/g8e/.ssh/id_ed25519" >> ./.ssh-config
-	@echo "    StrictHostKeyChecking accept-new" >> ./.ssh-config
-	@cat ./.ssh-config | docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/config"
+	@printf 'Host web-node-* node-*\n    User $(SSH_USER)\n    IdentityFile /home/g8e/.ssh/id_ed25519\n    StrictHostKeyChecking accept-new\n' \
+		| docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/config"
 	@docker exec g8ep chmod 700 /home/g8e/.ssh
-	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519
-	@docker exec g8ep chmod 600 /home/g8e/.ssh/config
-	@rm ./.ssh-config
-	@cat ./hosts | docker exec -i g8ep bash -c "cat > /home/g8e/demo-hosts"
-	@echo "  Done."
+	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519 /home/g8e/.ssh/config
 
 down:
 	@echo "Stopping fleet..."
@@ -166,29 +158,21 @@ deploy:
 	done
 	@echo "Done."
 
-ssh-key:
-	@echo "Extracting SSH private key from fleet image..."
-	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null \
-		&& chmod 600 ./.demo-key \
-		&& echo "Key saved to .demo-key" \
-		|| echo "Error: run 'make up' first"
+discover-hosts:
+	@docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort
 
 stream:
 	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make stream DEVICE_TOKEN=dlk_xxx" && exit 1)
-	@test -f ./.demo-key || (echo "Run 'make ssh-key' first to extract the SSH key" && exit 1)
-	@echo "Preparing SSH streaming..."
-	@docker exec g8ep mkdir -p /home/g8e/.ssh
-	@docker cp ./.demo-key g8ep:/home/g8e/.ssh/id_ed25519
-	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519
-	@echo "SSH streaming operators to all 10 nodes..."
-	@docker exec g8ep /home/g8e/g8e.operator stream \
+	@echo "Configuring SSH in g8ep..."
+	@$(MAKE) -s setup-ssh
+	@echo "Discovering demo fleet hosts..."
+	@HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+	if [ -z "$$HOSTS" ]; then echo "No demo nodes found. Run './g8e demo up' first." && exit 1; fi; \
+	echo "  Streaming to: $$HOSTS"; \
+	docker exec g8ep /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
 		--device-token "$(DEVICE_TOKEN)" \
-		--ssh-config /dev/null \
-		appuser@web-node-01 appuser@web-node-02 appuser@web-node-03 \
-		appuser@web-node-04 appuser@web-node-05 appuser@web-node-06 \
-		appuser@web-node-07 appuser@web-node-08 appuser@web-node-09 \
-		appuser@web-node-10
+		$$HOSTS
 
 operators:
 	@echo ""

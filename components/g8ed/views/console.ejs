@@ -351,7 +351,9 @@
             } else {
                 res = await sc.get('g8ed', path);
             }
-            return res.json();
+            const json = await res.json();
+            const { success, message, error, ...rest } = json;
+            return { success, message, error, data: rest };
         }
 
         const tabInited = {};
@@ -827,16 +829,16 @@
             container.innerHTML = '';
             logsCount = 0;
 
-            const es = new EventType(`/api/console/logs/stream?level=${encodeURIComponent(level)}&limit=200`, { withCredentials: true });
+            const es = new EventSource(`/api/console/logs/stream?level=${encodeURIComponent(level)}&limit=200`, { withCredentials: true });
             logsEventSource = es;
 
             es.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    if (data.type === 'connected') {
+                    if (data.type === 'g8e.v1.platform.console.log.connected.confirmed') {
                         badge.textContent = 'Live';
                         badge.className = 'console-realtime-badge';
-                    } else if (data.type === 'log') {
+                    } else if (data.type === 'g8e.v1.platform.console.log.entry.received') {
                         appendLogEntry(data.entry);
                     }
                 } catch (_) {}
