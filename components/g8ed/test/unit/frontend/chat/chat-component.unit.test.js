@@ -855,17 +855,15 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
             expect(cancelSpy).toHaveBeenCalledOnce();
         });
 
-        it('appends error message to anchored terminal with error from data', () => {
-            chat._handleLLMChatIterationFailed({ 
-                web_session_id: WEB_SESSION_ID,
-                error: 'API rate limit exceeded'
-            });
-            expect(chat.anchoredTerminal.appendErrorMessage).toHaveBeenCalledWith('API rate limit exceeded');
+        it('hides waiting indicator on anchored terminal', () => {
+            chat._handleLLMChatIterationFailed({ web_session_id: WEB_SESSION_ID });
+            expect(chat.anchoredTerminal.hideWaitingIndicator).toHaveBeenCalledOnce();
         });
 
-        it('appends default error message when error is not provided', () => {
+        it('hides thinking indicator via thinkingManager', () => {
+            chat.thinkingManager = makeThinkingManagerSpy();
             chat._handleLLMChatIterationFailed({ web_session_id: WEB_SESSION_ID });
-            expect(chat.anchoredTerminal.appendErrorMessage).toHaveBeenCalledWith('AI processing failed');
+            expect(chat.thinkingManager.hideThinkingIndicator).toHaveBeenCalledWith(WEB_SESSION_ID);
         });
 
         it('sets streamingActive to false', () => {

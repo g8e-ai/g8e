@@ -18,6 +18,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
+import { makeAnchoredTerminalSpy } from '@test/utils/test-helpers.js';
 
 const INVESTIGATION_ID = 'inv-dispatch-abc123';
 const WEB_SESSION_ID = 'session-dispatch-abc123';
@@ -46,43 +47,6 @@ function cleanupGlobals() {
     delete window.casesManager;
     delete global.markdownit;
     delete global.DOMPurify;
-}
-
-function makeAnchoredTerminalSpy() {
-    return {
-        appendUserMessage: vi.fn(() => document.createElement('div')),
-        appendStreamingTextChunk: vi.fn(),
-        replaceStreamingHtml: vi.fn(),
-        appendDirectHtmlResponse: vi.fn(() => document.createElement('div')),
-        finalizeAIResponseChunk: vi.fn(),
-        appendSystemMessage: vi.fn(() => document.createElement('div')),
-        appendErrorMessage: vi.fn(),
-        appendThinkingContent: vi.fn(),
-        completeThinkingEntry: vi.fn(),
-        clearActivityIndicators: vi.fn(),
-        appendActivityIndicator: vi.fn(),
-        applyCitations: vi.fn(),
-        completeActivityIndicator: vi.fn(),
-        sealStreamingResponse: vi.fn(),
-        showTribunal: vi.fn(),
-        updateTribunalPass: vi.fn(),
-        updateTribunalStatus: vi.fn(),
-        completeTribunal: vi.fn(),
-        failTribunal: vi.fn(),
-        resetAutoScroll: vi.fn(),
-        showWaitingIndicator: vi.fn(),
-        hideWaitingIndicator: vi.fn(),
-        clear: vi.fn(),
-        focus: vi.fn(),
-        enable: vi.fn(),
-        disable: vi.fn(),
-        setUser: vi.fn(),
-        clearOutput: vi.fn(),
-        scrollToBottom: vi.fn(),
-        pendingApprovals: new Map(),
-        activeExecutions: new Map(),
-        executionResultsContainers: new Map(),
-    };
 }
 
 function makeCasesManagerStub(investigationId = INVESTIGATION_ID) {
@@ -221,29 +185,6 @@ describe('ChatComponent — handleChatError [FRONTEND - jsdom]', () => {
         expect(msg).toContain('x2');
     });
 
-    it('sets streamingActive to false', () => {
-        chat.handleChatError({
-            error: 'err',
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-        });
-
-        expect(chat.streamingActive).toBe(false);
-    });
-
-    it('disables the AI stop button when no other operations are active', () => {
-        chat.executionActive = false;
-        chat.approvalPending = false;
-
-        chat.handleChatError({
-            error: 'err',
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-        });
-
-        expect(chat.aiStopBtn.disabled).toBe(true);
-    });
-
     it('rejects event when investigation_id is missing', () => {
         chat.handleChatError({
             error: 'err',
@@ -270,6 +211,40 @@ describe('ChatComponent — handleChatError [FRONTEND - jsdom]', () => {
 
     it('does not throw when called with no argument', () => {
         expect(() => chat.handleChatError()).not.toThrow();
+    });
+
+    it('removes streaming class from ai-response element when web_session_id is present', () => {
+        const aiResponseDiv = document.createElement('div');
+        aiResponseDiv.id = `ai-response-${WEB_SESSION_ID}`;
+        aiResponseDiv.classList.add('streaming');
+        const cursor = document.createElement('span');
+        cursor.classList.add('streaming-cursor');
+        aiResponseDiv.appendChild(cursor);
+        document.body.appendChild(aiResponseDiv);
+
+        chat.handleChatError({
+            error: 'err',
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(aiResponseDiv.classList.contains('streaming')).toBe(false);
+        expect(aiResponseDiv.querySelectorAll('.streaming-cursor').length).toBe(0);
+    });
+
+    it('integration: ITERATION_FAILED event calls both handleChatError and _handleLLMChatIterationFailed', () => {
+        chat.setupSSEListeners();
+        const handleChatErrorSpy = vi.spyOn(chat, 'handleChatError');
+        const handleLLMChatIterationFailedSpy = vi.spyOn(chat, '_handleLLMChatIterationFailed');
+
+        eventBus.emit(EventType.LLM_CHAT_ITERATION_FAILED, {
+            error: 'Test error',
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(handleChatErrorSpy).toHaveBeenCalledOnce();
+        expect(handleLLMChatIterationFailedSpy).toHaveBeenCalledOnce();
     });
 });
 
@@ -514,6 +489,118 @@ describe('ChatComponent — handleChatStopped [FRONTEND - jsdom]', () => {
 
     it('does not throw when called with an empty object', () => {
         expect(() => chat.handleChatStopped({})).not.toThrow();
+    });
+
+    it('calls hideWaitingIndicator when anchoredTerminal is present', () => {
+        chat.handleChatStopped({
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(terminalSpy.hideWaitingIndicator).toHaveBeenCalledOnce();
+    });
+
+    it('removes streaming class from ai-response element when web_session_id is present', () => {
+        const aiResponseDiv = document.createElement('div');
+        aiResponseDiv.id = `ai-response-${WEB_SESSION_ID}`;
+        aiResponseDiv.classList.add('streaming');
+        const cursor = document.createElement('span');
+        cursor.classList.add('streaming-cursor');
+        aiResponseDiv.appendChild(cursor);
+        document.body.appendChild(aiResponseDiv);
+
+        chat.handleChatStopped({
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(aiResponseDiv.classList.contains('streaming')).toBe(false);
+        expect(aiResponseDiv.querySelectorAll('.streaming-cursor').length).toBe(0);
+    });
+});
+
+describe('ChatComponent — handleIterationStarted [FRONTEND - jsdom]', () => {
+    let ChatComponent;
+    let eventBus;
+    let chat;
+    let terminalSpy;
+    let authState;
+    let serviceClient;
+
+    beforeEach(async () => {
+        buildDOM();
+
+        authState = new MockAuthState();
+        authState.setAuthenticated({ id: WEB_SESSION_ID });
+        authState.loading = false;
+        authState.getWebSessionModel = () => ({ id: WEB_SESSION_ID });
+        authState.getWebSessionId = () => WEB_SESSION_ID;
+
+        serviceClient = new MockServiceClient();
+        installGlobals(authState, serviceClient);
+
+        eventBus = new MockEventBus();
+        ({ ChatComponent } = await import('@g8ed/public/js/components/chat.js'));
+
+        chat = new ChatComponent(eventBus);
+        terminalSpy = makeAnchoredTerminalSpy();
+        chat.anchoredTerminal = terminalSpy;
+        chat.casesManager = makeCasesManagerStub();
+        chat.currentUser = { id: WEB_SESSION_ID };
+        chat.currentWebSessionId = WEB_SESSION_ID;
+    });
+
+    afterEach(() => {
+        vi.clearAllMocks();
+        eventBus.removeAllListeners();
+        cleanupGlobals();
+        document.body.innerHTML = '';
+    });
+
+    it('calls showWaitingIndicator when investigation_id matches', () => {
+        chat.handleIterationStarted({
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(terminalSpy.showWaitingIndicator).toHaveBeenCalledOnce();
+        expect(terminalSpy.showWaitingIndicator).toHaveBeenCalledWith(WEB_SESSION_ID);
+    });
+
+    it('rejects event when investigation_id is missing', () => {
+        chat.handleIterationStarted({
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(terminalSpy.showWaitingIndicator).not.toHaveBeenCalled();
+    });
+
+    it('rejects event when investigation_id does not match', () => {
+        chat.handleIterationStarted({
+            investigation_id: 'wrong-investigation',
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(terminalSpy.showWaitingIndicator).not.toHaveBeenCalled();
+    });
+
+    it('rejects event when web_session_id is missing', () => {
+        chat.handleIterationStarted({
+            investigation_id: INVESTIGATION_ID,
+        });
+
+        expect(terminalSpy.showWaitingIndicator).not.toHaveBeenCalled();
+    });
+
+    it('event bus wiring: LLM_CHAT_ITERATION_STARTED triggers handleIterationStarted', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_CHAT_ITERATION_STARTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+        });
+
+        expect(terminalSpy.showWaitingIndicator).toHaveBeenCalledOnce();
     });
 });
 

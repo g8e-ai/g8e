@@ -46,6 +46,7 @@ from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
     AIResponseMetadata,
+    ConversationMessageMetadata,
 )
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model
@@ -59,6 +60,12 @@ from .chat_task_manager import ChatTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.models.agents.triage import TriageRequest
+from app.models.g8ed_client import (
+    ChatErrorPayload,
+    ChatProcessingStartedPayload,
+    ChatResponseChunkPayload,
+    ChatResponseCompletePayload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +205,6 @@ class ChatPipelineService:
         attachment_filenames = [att.filename for att in attachments] if attachments else []
 
         if investigation_id:
-            from app.models.investigations import ConversationMessageMetadata
             await self.investigation_service.add_chat_message(
                 investigation_id=investigation_id,
                 sender=MessageSender.USER_CHAT,
@@ -389,16 +395,23 @@ class ChatPipelineService:
             )
             raise
         except Exception as e:
-            # Defensive logging to identify what is None
-            logger.error(
-                "[SSE-CHAT] Debug info before error: g8e_context=%s, investigation_id=%s",
-                f"case_id={g8e_context.case_id}",
-                investigation_id
-            )
             logger.error(
                 "[SSE-CHAT] Background task crashed for investigation %s: %s",
                 investigation_id, e, exc_info=True
             )
+            try:
+                await self.g8ed_event_service.publish_investigation_event(
+                    investigation_id=investigation_id,
+                    event_type=EventType.LLM_CHAT_ITERATION_FAILED,
+                    payload=ChatErrorPayload(error=str(e)),
+                    web_session_id=g8e_context.web_session_id,
+                    case_id=g8e_context.case_id,
+                    user_id=g8e_context.user_id,
+                )
+            except Exception as notify_err:
+                logger.error(
+                    "[SSE-CHAT] Failed to send error event to frontend: %s", notify_err
+                )
         finally:
             if task and investigation_id:
                 await _task_manager.untrack(investigation_id)
@@ -446,8 +459,6 @@ class ChatPipelineService:
             )
             logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
-            from app.models.g8ed_client import ChatResponseChunkPayload, ChatResponseCompletePayload
-
             logger.info(
                 "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
                 ctx.model_to_use, ctx.agent_mode, len(ctx.contents), ctx.max_tokens
@@ -459,6 +470,15 @@ class ChatPipelineService:
             ):
                 follow_up = ctx.triage_result.follow_up_question
                 logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
+
+                await self.g8ed_event_service.publish_investigation_event(
+                    investigation_id=g8e_context.investigation_id,
+                    event_type=EventType.LLM_CHAT_ITERATION_STARTED,
+                    payload=ChatProcessingStartedPayload(agent_mode=ctx.agent_mode),
+                    web_session_id=g8e_context.web_session_id,
+                    case_id=g8e_context.case_id,
+                    user_id=g8e_context.user_id,
+                )
 
                 await self.g8ed_event_service.publish_investigation_event(
                     investigation_id=g8e_context.investigation_id,

@@ -91,8 +91,7 @@ def test_build_investigation_context_section_full(enriched_investigation):
     assert "<investigation_context>" in section
     assert "Case: Server issue" in section
     assert "Description: Server is slow" in section
-    assert "Conversation: 1 messages" in section
-    assert "Help me with my server" in section
+    assert "Conversation history is available via query_investigation_context." in section
 
 def test_build_learned_context_section_empty():
     assert prompts.build_learned_context_section([], []) == ""

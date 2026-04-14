@@ -38,8 +38,8 @@ export class TerminalExecutionMixin {
         time.className = 'anchored-terminal__ai-response-time';
         time.textContent = timestamp || this.formatTimestamp();
 
-        header.appendChild(time);
         header.appendChild(sender);
+        header.appendChild(time);
 
         return header;
     }

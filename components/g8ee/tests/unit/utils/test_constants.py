@@ -46,16 +46,19 @@ from app.constants import (
     ApprovalType,
     CaseStatus,
     CloudSubtype,
+    CommandErrorType,
     ComponentName,
     ComponentStatus,
     ConversationStatus,
     EscalationRisk,
     EventType,
     ExecutionStatus,
+    FileOperation,
     HealthStatus,
     HeartbeatType,
     InfrastructureStatus,
     InvestigationStatus,
+    NetworkProtocol,
     OperatorToolName,
     OperatorStatus,
     OperatorType,
@@ -821,6 +824,171 @@ class TestSessionTypeMatchesSharedJSON:
         enum_count = len(SessionType)
         assert enum_count == len(json_keys), (
             f"SessionType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestCommandErrorTypeMatchesSharedJSON:
+    def test_validation_error(self, status):
+        assert status["command.error.type"]["validation.error"] == CommandErrorType.VALIDATION_ERROR
+
+    def test_security_error(self, status):
+        assert status["command.error.type"]["security.error"] == CommandErrorType.SECURITY_ERROR
+
+    def test_security_violation(self, status):
+        assert status["command.error.type"]["security.violation"] == CommandErrorType.SECURITY_VIOLATION
+
+    def test_binding_violation(self, status):
+        assert status["command.error.type"]["binding.violation"] == CommandErrorType.BINDING_VIOLATION
+
+    def test_no_operators_available(self, status):
+        assert status["command.error.type"]["no.operators.available"] == CommandErrorType.NO_OPERATORS_AVAILABLE
+
+    def test_operator_resolution_error(self, status):
+        assert status["command.error.type"]["g8e.resolution.error"] == CommandErrorType.OPERATOR_RESOLUTION_ERROR
+
+    def test_cloud_operator_required(self, status):
+        assert status["command.error.type"]["cloud.operator.required"] == CommandErrorType.CLOUD_OPERATOR_REQUIRED
+
+    def test_blacklist_violation(self, status):
+        assert status["command.error.type"]["blacklist.violation"] == CommandErrorType.BLACKLIST_VIOLATION
+
+    def test_whitelist_violation(self, status):
+        assert status["command.error.type"]["whitelist.violation"] == CommandErrorType.WHITELIST_VIOLATION
+
+    def test_execution_failed(self, status):
+        assert status["command.error.type"]["execution.failed"] == CommandErrorType.EXECUTION_FAILED
+
+    def test_execution_error(self, status):
+        assert status["command.error.type"]["execution.error"] == CommandErrorType.EXECUTION_ERROR
+
+    def test_user_denied(self, status):
+        assert status["command.error.type"]["user.denied"] == CommandErrorType.USER_DENIED
+
+    def test_user_feedback(self, status):
+        assert status["command.error.type"]["user.feedback"] == CommandErrorType.USER_FEEDBACK
+
+    def test_permission_denied(self, status):
+        assert status["command.error.type"]["permission.denied"] == CommandErrorType.PERMISSION_DENIED
+
+    def test_command_timeout(self, status):
+        assert status["command.error.type"]["command.timeout"] == CommandErrorType.COMMAND_TIMEOUT
+
+    def test_command_execution_failed(self, status):
+        assert status["command.error.type"]["command.execution.failed"] == CommandErrorType.COMMAND_EXECUTION_FAILED
+
+    def test_pubsub_subscription_not_ready(self, status):
+        assert status["command.error.type"]["pubsub.subscription.not.ready"] == CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY
+
+    def test_unknown_tool(self, status):
+        assert status["command.error.type"]["unknown.tool"] == CommandErrorType.UNKNOWN_TOOL
+
+    def test_fs_list_failed(self, status):
+        assert status["command.error.type"]["fs.list.failed"] == CommandErrorType.FS_LIST_FAILED
+
+    def test_fs_read_failed(self, status):
+        assert status["command.error.type"]["fs.read.failed"] == CommandErrorType.FS_READ_FAILED
+
+    def test_user_cancelled(self, status):
+        assert status["command.error.type"]["user.cancelled"] == CommandErrorType.USER_CANCELLED
+
+    def test_risk_analysis_blocked(self, status):
+        assert status["command.error.type"]["risk.analysis.blocked"] == CommandErrorType.RISK_ANALYSIS_BLOCKED
+
+    def test_approval_denied(self, status):
+        assert status["command.error.type"]["approval.denied"] == CommandErrorType.APPROVAL_DENIED
+
+    def test_operation_timeout(self, status):
+        assert status["command.error.type"]["operation.timeout"] == CommandErrorType.OPERATION_TIMEOUT
+
+    def test_invalid_intent(self, status):
+        assert status["command.error.type"]["invalid.intent"] == CommandErrorType.INVALID_INTENT
+
+    def test_missing_operator_id(self, status):
+        assert status["command.error.type"]["missing.operator.id"] == CommandErrorType.MISSING_OPERATOR_ID
+
+    def test_partial_iam_update_failed(self, status):
+        assert status["command.error.type"]["partial.iam.update.failed"] == CommandErrorType.PARTIAL_IAM_UPDATE_FAILED
+
+    def test_partial_iam_detach_failed(self, status):
+        assert status["command.error.type"]["partial.iam.detach.failed"] == CommandErrorType.PARTIAL_IAM_DETACH_FAILED
+
+    def test_restore_file_failed(self, status):
+        assert status["command.error.type"]["restore.file.failed"] == CommandErrorType.RESTORE_FILE_FAILED
+
+    def test_fetch_file_diff_failed(self, status):
+        assert status["command.error.type"]["fetch.file.diff.failed"] == CommandErrorType.FETCH_FILE_DIFF_FAILED
+
+    def test_fetch_logs_failed(self, status):
+        assert status["command.error.type"]["fetch.logs.failed"] == CommandErrorType.FETCH_LOGS_FAILED
+
+    def test_fetch_history_failed(self, status):
+        assert status["command.error.type"]["fetch.history.failed"] == CommandErrorType.FETCH_HISTORY_FAILED
+
+    def test_fetch_file_history_failed(self, status):
+        assert status["command.error.type"]["fetch.file.history.failed"] == CommandErrorType.FETCH_FILE_HISTORY_FAILED
+
+    def test_port_check_failed(self, status):
+        assert status["command.error.type"]["port.check.failed"] == CommandErrorType.PORT_CHECK_FAILED
+
+    def test_approval_timeout(self, status):
+        assert status["command.error.type"]["approval.timeout"] == CommandErrorType.APPROVAL_TIMEOUT
+
+    def test_permission_error(self, status):
+        assert status["command.error.type"]["permission.error"] == CommandErrorType.PERMISSION_ERROR
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["command.error.type"].keys())
+        enum_count = len(CommandErrorType)
+        assert enum_count == len(json_keys), (
+            f"CommandErrorType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestFileOperationMatchesSharedJSON:
+    def test_read(self, status):
+        assert status["file.operation"]["read"] == FileOperation.READ
+
+    def test_create(self, status):
+        assert status["file.operation"]["create"] == FileOperation.CREATE
+
+    def test_write(self, status):
+        assert status["file.operation"]["write"] == FileOperation.WRITE
+
+    def test_update(self, status):
+        assert status["file.operation"]["update"] == FileOperation.UPDATE
+
+    def test_replace(self, status):
+        assert status["file.operation"]["replace"] == FileOperation.REPLACE
+
+    def test_insert(self, status):
+        assert status["file.operation"]["insert"] == FileOperation.INSERT
+
+    def test_delete(self, status):
+        assert status["file.operation"]["delete"] == FileOperation.DELETE
+
+    def test_patch(self, status):
+        assert status["file.operation"]["patch"] == FileOperation.PATCH
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["file.operation"].keys())
+        enum_count = len(FileOperation)
+        assert enum_count == len(json_keys), (
+            f"FileOperation has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestNetworkProtocolMatchesSharedJSON:
+    def test_tcp(self, status):
+        assert status["network.protocol"]["tcp"] == NetworkProtocol.TCP
+
+    def test_udp(self, status):
+        assert status["network.protocol"]["udp"] == NetworkProtocol.UDP
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["network.protocol"].keys())
+        enum_count = len(NetworkProtocol)
+        assert enum_count == len(json_keys), (
+            f"NetworkProtocol has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
         )
 
 

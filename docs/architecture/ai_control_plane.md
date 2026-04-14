@@ -145,10 +145,11 @@ Each mode directory provides up to three sections: `capabilities`, `execution`, 
 4. modes/<mode>/execution.txt
 5. modes/<mode>/tools.txt          (conditional)
 6. <system_context>                (when operator present)
-7. system/sentinel_mode.txt        (when sentinel_mode=True)
-8. <investigation_context>         (always when investigation present)
-9. system/response_constraints.txt
-10. <learned_context>              (when memories exist)
+7. docs                            (always included)
+8. system/sentinel_mode.txt        (when sentinel_mode=True)
+9. <investigation_context>         (always when investigation present)
+10. system/response_constraints.txt
+11. <learned_context>              (when memories exist)
 ```
 
 ---
@@ -443,17 +444,17 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 |---|---|---|
 | `ChatPipelineService` | `components/g8ee/app/services/ai/chat_pipeline.py` | Top-level orchestrator — assembles context, calls AI, persists results |
 | `ChatTaskManager` | `components/g8ee/app/services/ai/chat_task_manager.py` | Owns asyncio task tracking and cancellation for in-flight AI chat processing |
-| `g8e AI` | `components/g8ee/app/services/ai/AI.py` | ReAct streaming loop — retry logic, function loop, SSE delivery |
+| `g8eEngine` | `components/g8ee/app/services/ai/agent.py` | ReAct streaming loop — retry logic, function loop, SSE delivery |
 | `InvestigationService` | `components/g8ee/app/services/investigation/investigation_service.py` | (Domain Layer) Investigation fetch, operator enrichment, memory attachment, history orchestration |
 | `InvestigationDataService` | `components/g8ee/app/services/investigation/investigation_data_service.py` | (Data Layer) Pure CRUD for investigations and chat message persistence |
 | `AIToolService` | `components/g8ee/app/services/ai/tool_service.py` | Tool registration, declaration building, tool call dispatch |
 | `MemoryGenerationService` | `components/g8ee/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update |
 | `MemoryDataService` | `components/g8ee/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
-| `triage_message` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model |
-| `process_provider_turn` | `components/g8ee/app/services/ai/AI_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
-| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/AI_tool_loop.py` | Sequential tool call dispatch + grounding merge |
-| `execute_tool_call` | `components/g8ee/app/services/ai/AI_tool_loop.py` | Single function dispatch — Tribunal gate for `run_commands`; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` |
-| `deliver_via_sse` | `components/g8ee/app/services/ai/AI_sse.py` | StreamChunkFromModel → g8ed SSE event translation |
+| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification |
+| `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
+| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` |
+| `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — Tribunal gate for `run_commands`; returns `ToolResult` |
+| `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation |
 | `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push |
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts |
@@ -579,13 +580,25 @@ Memory prompts are built inline in `components/g8ee/app/llm/prompts.py`:
 
 `AIToolService` (`components/g8ee/app/services/ai/tool_service.py`) registers all tools at construction time. Each tool is a pair of `(FunctionDeclaration, executor)` stored in `_tool_declarations` and `_tool_executors` dicts keyed by `OperatorToolName`.
 
+### Tool Dispatch Mechanism
+
+Tool execution uses a dispatch table pattern:
+- `_tool_handlers` (dict[str, Callable]) built by `_build_tool_handlers()` maps tool names to handler coroutines
+- Each tool has a `_handle_*` method with uniform signature: `(self, tool_args, investigation, g8e_context, request_settings) -> ToolResult`
+- Handler lookup: `self._tool_handlers.get(tool_name)`
+- This replaces the previous long if/elif chain for better maintainability
+
+`OPERATOR_TOOLS` is a `frozenset` constant in `components/g8ee/app/constants/status.py` containing all operator tool values, imported by both `tool_service.py` and `agent_tool_loop.py`.
+
 Tool declarations are served to the LLM via `get_tools(AI_mode, model_name)`. Models that do not support tools (checked via `get_model_config`) receive an empty list.
 
 ### Tool Set by Workflow
 
-**`OPERATOR_NOT_BOUND`** — `search_web` only (when `VERTEX_SEARCH_ENABLED` is set and credentials are present).
+**`OPERATOR_NOT_BOUND`** — `query_investigation_context` + `search_web` (when `VERTEX_SEARCH_ENABLED` is set and credentials are present).
 
-**`OPERATOR_BOUND`** — all tools below plus `search_web` when configured.
+**`OPERATOR_BOUND`** — all operator tools plus `query_investigation_context` and `search_web` when configured.
+
+**`CLOUD_OPERATOR_BOUND`** — all operator tools plus `query_investigation_context` and `search_web` when configured.
 
 ### Tool Reference
 
@@ -603,8 +616,13 @@ Tool declarations are served to the LLM via `get_tools(AI_mode, model_name)`. Mo
 | `fetch_file_history` | File ops | Retrieve the version history of a file on the operator |
 | `fetch_file_diff` | File ops | Retrieve a diff between two versions of a file on the operator |
 | `g8e_web_search` | Search | Web search via Vertex AI Search — available in both bound and unbound workflows when configured |
+| `query_investigation_context` | General | Query investigation state (conversation history, status, history trail, operator actions) — universal tool available in all workflows |
 
-Note: `restore_file`, `read_file_content`, `fetch_execution_output`, `fetch_session_history` are referenced in display metadata but are not currently registered as active tools in `AIToolService`.
+Additional tools in `OPERATOR_TOOLS` (registered but less commonly used):
+- `read_file_content` — Read file content (alternative to file_read_on_operator)
+- `fetch_execution_output` — Fetch output of a previously executed command
+- `fetch_session_history` — Fetch session history
+- `restore_file` — Restore a file to a previous version
 
 ### `search_web` Tool
 
@@ -774,6 +792,10 @@ A `TRIBUNAL_SESSION_COMPLETED` SSE event (or `TRIBUNAL_SESSION_FALLBACK_TRIGGERE
 | Error | `all_passes_failed` | Every generation pass failed (non-system) — raises `TribunalGenerationFailedError` |
 | Error | `verifier_failed` | Verifier malfunction (empty, no revision, exception) — raises `TribunalVerifierFailedError` |
 | Error | `system_error` | All passes failed due to system errors (401, connection refused, DNS, SSL, etc.) — raises `TribunalSystemError` |
+
+#### Tribunal Error Handling
+
+Tribunal exception handlers in `orchestrate_tool_execution` use a shared `_tribunal_error_result(tool_name, original_command, error_msg)` helper to return consistent error results for all Tribunal failure modes. This helper creates a `ToolCallResult` with a `CommandExecutionResult` containing the error message and `EXECUTION_ERROR` type.
 
 The `TribunalFallbackPayload` includes `pass_errors: list[str] | None` for diagnostic visibility into individual pass failure messages.
 

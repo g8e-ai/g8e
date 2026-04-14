@@ -20,6 +20,7 @@ Verifies that when triage returns LOW confidence, the pipeline:
 3. Does NOT call the main LLM agent.
 """
 
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -152,14 +153,28 @@ async def test_run_chat_impl_short_circuits_correctly():
     events = svc.g8ed_event_service.published
     
     # Filter for our investigation and event types
+    started_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_STARTED]
     chunk_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
     complete_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
     
+    assert len(started_events) == 1
     assert len(chunk_events) == 1
     assert len(complete_events) == 1
     
+    # Verify STARTED arrives before CHUNK and COMPLETE
+    inv_events = [e for e in events if e.investigation_id == "inv-1"]
+    event_types = [e.event_type for e in inv_events]
+    started_idx = event_types.index(EventType.LLM_CHAT_ITERATION_STARTED)
+    chunk_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED)
+    complete_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED)
+    assert started_idx < chunk_idx < complete_idx
+    
+    # Verify Started Payload
+    from app.models.g8ed_client import ChatProcessingStartedPayload, ChatResponseChunkPayload, ChatResponseCompletePayload
+    assert isinstance(started_events[0].payload, ChatProcessingStartedPayload)
+    assert started_events[0].payload.agent_mode == AgentMode.OPERATOR_NOT_BOUND
+    
     # Verify Chunk Payload
-    from app.models.g8ed_client import ChatResponseChunkPayload, ChatResponseCompletePayload
     assert isinstance(chunk_events[0].payload, ChatResponseChunkPayload)
     assert chunk_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     
@@ -177,3 +192,50 @@ async def test_run_chat_impl_short_circuits_correctly():
     call_args = svc.investigation_service.add_chat_message.call_args
     assert call_args.kwargs["content"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     assert call_args.kwargs["investigation_id"] == "inv-1"
+
+
+async def test_run_chat_exception_handler_publishes_iteration_failed():
+    """Verify that when _run_chat_impl raises an exception, ITERATION_FAILED is published."""
+    svc = _make_pipeline()
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1", user_id="user-1", case_id="case-1")
+    
+    # Mock _run_chat_impl to raise an exception
+    test_error = ValueError("Test error from _run_chat_impl")
+    svc._run_chat_impl = AsyncMock(side_effect=test_error)
+    
+    # Mock ChatTaskManager
+    from app.services.ai.chat_task_manager import ChatTaskManager
+    mock_task_manager = MagicMock(spec=ChatTaskManager)
+    mock_task_manager.track = AsyncMock()
+    mock_task_manager.untrack = AsyncMock()
+    
+    from app.models.settings import G8eeUserSettings, LLMSettings
+    user_settings = G8eeUserSettings(llm=LLMSettings())
+    
+    # Call run_chat - should catch exception and publish ITERATION_FAILED
+    await svc.run_chat(
+        message="hello",
+        g8e_context=g8e_ctx,
+        attachments=[],
+        sentinel_mode=True,
+        llm_primary_provider="openai",
+        llm_assistant_provider="openai",
+        llm_primary_model="main-model",
+        llm_assistant_model="assistant-model",
+        _task_manager=mock_task_manager,
+        user_settings=user_settings,
+        _track_task=True,
+    )
+    
+    # Verify ITERATION_FAILED was published
+    events = svc.g8ed_event_service.published
+    failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
+    
+    assert len(failed_events) == 1
+    from app.models.g8ed_client import ChatErrorPayload
+    assert isinstance(failed_events[0].payload, ChatErrorPayload)
+    assert "Test error from _run_chat_impl" in failed_events[0].payload.error
+    
+    # Verify task was tracked and untracked
+    mock_task_manager.track.assert_called_once_with("inv-1", asyncio.current_task())
+    mock_task_manager.untrack.assert_called_once_with("inv-1")

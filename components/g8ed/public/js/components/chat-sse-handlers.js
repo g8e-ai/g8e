@@ -247,6 +247,7 @@ export const ChatSSEHandlersMixin = {
 
         if (this.anchoredTerminal) {
             this.anchoredTerminal.appendUserMessage(trimmedMessage);
+            this.anchoredTerminal.showWaitingIndicator(webSessionId);
         }
 
         if (!Array.isArray(attachments)) {
@@ -305,6 +306,8 @@ export const ChatSSEHandlersMixin = {
         if (!data.web_session_id) {
             return;
         }
+        if (!this.shouldProcessEvent(data)) return;
+
         if (this.anchoredTerminal) {
             this.anchoredTerminal.showWaitingIndicator(data.web_session_id);
         }
@@ -428,7 +431,10 @@ export const ChatSSEHandlersMixin = {
         const webSessionId = data.web_session_id;
         if (!webSessionId) return;
 
-        // Multi-turn boundary - no action needed since TEXT_COMPLETED handles finalization
+        if (this.streamingActive && this.anchoredTerminal) {
+            this.anchoredTerminal.sealStreamingResponse(webSessionId);
+            this.streamingActive = false;
+        }
     },
 
     handleTribunalStarted(data) {
@@ -444,6 +450,7 @@ export const ChatSSEHandlersMixin = {
             model: data.primary_model,
             numPasses: data.num_passes,
             command: data.original_command,
+            webSessionId: data.web_session_id,
         });
 
         const webSessionId = data.web_session_id;
@@ -543,6 +550,7 @@ export const ChatSSEHandlersMixin = {
 
         const webSessionId = data.web_session_id;
 
+        this.anchoredTerminal?.hideWaitingIndicator();
         this.anchoredTerminal?.clearActivityIndicators();
         this._searchWebIndicators?.clear();
         this._portCheckIndicators?.clear();
@@ -570,11 +578,14 @@ export const ChatSSEHandlersMixin = {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
 
-        if (this.anchoredTerminal && webSessionId) {
-            const entry = document.getElementById(`ai-response-${webSessionId}`);
-            if (entry) {
-                entry.classList.remove('streaming');
-                entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+        if (this.anchoredTerminal) {
+            this.anchoredTerminal.hideWaitingIndicator();
+            if (webSessionId) {
+                const entry = document.getElementById(`ai-response-${webSessionId}`);
+                if (entry) {
+                    entry.classList.remove('streaming');
+                    entry.querySelectorAll('.streaming-cursor').forEach(c => c.remove());
+                }
             }
         }
 
@@ -627,9 +638,6 @@ export const ChatSSEHandlersMixin = {
         } else {
             this.addSystemMessage(message, 'error');
         }
-
-        this.streamingActive = false;
-        this.hideAIStopButton();
     },
 
 };

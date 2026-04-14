@@ -18,6 +18,7 @@ import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockAuthState, MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/models/investigation-models.js';
+import { makeAnchoredTerminalSpy } from '@test/utils/test-helpers.js';
 
 const INVESTIGATION_ID = 'inv-test-abc123';
 const WEB_SESSION_ID = 'session-test-abc123';
@@ -46,35 +47,6 @@ function cleanupGlobals() {
     delete window.llmModelManager;
     delete global.markdownit;
     delete global.DOMPurify;
-}
-
-function makeAnchoredTerminalSpy() {
-    return {
-        finalizeAIResponseChunk: vi.fn(),
-        clearActivityIndicators: vi.fn(),
-        appendDirectHtmlResponse: vi.fn(() => document.createElement('div')),
-        replaceStreamingHtml: vi.fn(),
-        appendUserMessage: vi.fn(() => document.createElement('div')),
-        appendSystemMessage: vi.fn(() => document.createElement('div')),
-        appendErrorMessage: vi.fn(),
-        applyCitations: vi.fn(),
-        completeActivityIndicator: vi.fn(),
-        resetAutoScroll: vi.fn(),
-        showWaitingIndicator: vi.fn(),
-        clear: vi.fn(),
-        focus: vi.fn(),
-        enable: vi.fn(),
-        disable: vi.fn(),
-        setUser: vi.fn(),
-        clearOutput: vi.fn(),
-        scrollToBottom: vi.fn(),
-        restoreCommandExecution: vi.fn(),
-        restoreCommandResult: vi.fn(),
-        restoreApprovalRequest: vi.fn(),
-        pendingApprovals: new Map(),
-        activeExecutions: new Map(),
-        executionResultsContainers: new Map(),
-    };
 }
 
 function makeCasesManagerStub(investigationId = INVESTIGATION_ID) {
@@ -320,8 +292,34 @@ describe('ChatComponent response complete handling [FRONTEND - jsdom]', () => {
         });
     });
 
-    describe('handleTurnComplete — multi-turn boundary (no-op)', () => {
-        it('does nothing since TEXT_COMPLETED handles finalization', () => {
+    describe('handleTurnComplete — multi-turn boundary', () => {
+        it('seals streaming response at turn boundary when streaming is active', () => {
+            chat.streamingActive = true;
+
+            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+                web_session_id: WEB_SESSION_ID,
+                investigation_id: INVESTIGATION_ID,
+                turn: 1,
+            });
+
+            expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();
+            expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledWith(WEB_SESSION_ID);
+            expect(chat.streamingActive).toBe(false);
+        });
+
+        it('does not seal streaming when streaming is not active', () => {
+            chat.streamingActive = false;
+
+            eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {
+                web_session_id: WEB_SESSION_ID,
+                investigation_id: INVESTIGATION_ID,
+                turn: 1,
+            });
+
+            expect(terminalSpy.sealStreamingResponse).not.toHaveBeenCalled();
+        });
+
+        it('does not call finalizeAIResponseChunk', () => {
             chat.streamingActive = true;
 
             eventBus.emit(EventType.LLM_CHAT_ITERATION_COMPLETED, {

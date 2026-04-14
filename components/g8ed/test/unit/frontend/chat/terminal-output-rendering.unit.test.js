@@ -171,36 +171,41 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         });
     });
 
-    describe('getOrCreateAIResponse', () => {
-        it('creates a new streaming response element on first call', () => {
-            terminal.getOrCreateAIResponse(WEB_SESSION_ID);
+    describe('createAIResponse', () => {
+        it('creates a new streaming response element', () => {
+            terminal.createAIResponse(WEB_SESSION_ID);
 
             const el = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
             expect(el).not.toBeNull();
         });
 
-        it('applies the "streaming" class to the new element', () => {
-            terminal.getOrCreateAIResponse(WEB_SESSION_ID);
+        it('throws error if element already exists', () => {
+            terminal.createAIResponse(WEB_SESSION_ID);
 
-            const el = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
-            expect(el.classList.contains('streaming')).toBe(true);
-        });
-
-        it('returns the existing element on subsequent calls — no duplicates', () => {
-            const first = terminal.getOrCreateAIResponse(WEB_SESSION_ID);
-            const second = terminal.getOrCreateAIResponse(WEB_SESSION_ID);
-
-            expect(first).toBe(second);
-            const all = terminal.outputContainer.querySelectorAll(`#ai-response-${WEB_SESSION_ID}`);
-            expect(all.length).toBe(1);
+            expect(() => terminal.createAIResponse(WEB_SESSION_ID)).toThrow();
         });
 
         it('creates independent elements for different session IDs', () => {
-            terminal.getOrCreateAIResponse('session-A');
-            terminal.getOrCreateAIResponse('session-B');
+            terminal.createAIResponse('session-A');
+            terminal.createAIResponse('session-B');
 
             expect(document.getElementById('ai-response-session-A')).not.toBeNull();
             expect(document.getElementById('ai-response-session-B')).not.toBeNull();
+        });
+    });
+
+    describe('getAIResponse', () => {
+        it('returns null if element does not exist', () => {
+            const content = terminal.getAIResponse(WEB_SESSION_ID);
+            expect(content).toBeNull();
+        });
+
+        it('returns content element if exists', () => {
+            terminal.createAIResponse(WEB_SESSION_ID);
+            const content = terminal.getAIResponse(WEB_SESSION_ID);
+
+            expect(content).not.toBeNull();
+            expect(content.className).toBe('anchored-terminal__agent-message-content');
         });
     });
 
@@ -208,7 +213,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('appends text nodes to the content element', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'Hello');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.textContent).toBe('Hello');
         });
 
@@ -216,14 +221,14 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'Hello');
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, ' world');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.textContent).toBe('Hello world');
         });
 
         it('does not render HTML markup (text nodes, not innerHTML)', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, '<strong>bold</strong>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.innerHTML).toBe('&lt;strong&gt;bold&lt;/strong&gt;');
             expect(content.querySelector('strong')).toBeNull();
         });
@@ -250,7 +255,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('sets innerHTML of the content element to the provided HTML', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>Good morning</p>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.innerHTML).toBe('<p>Good morning</p>');
         });
 
@@ -258,14 +263,14 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>first</p>');
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>first second</p>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.innerHTML).toBe('<p>first second</p>');
         });
 
         it('renders HTML markup (not escaped)', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<strong>bold</strong>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.querySelector('strong')).not.toBeNull();
         });
 
@@ -291,21 +296,21 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('appends an AI response element to the output container', () => {
             terminal.appendDirectHtmlResponse('<p>Full response</p>');
 
-            const entry = terminal.outputContainer.querySelector('.anchored-terminal__ai-response');
+            const entry = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group');
             expect(entry).not.toBeNull();
         });
 
         it('sets innerHTML of the content to the provided HTML', () => {
             terminal.appendDirectHtmlResponse('<p>Hello there</p>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-content');
+            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
             expect(content.innerHTML).toContain('Hello there');
         });
 
         it('does NOT have the "streaming" class', () => {
             terminal.appendDirectHtmlResponse('<p>done</p>');
 
-            const entry = terminal.outputContainer.querySelector('.anchored-terminal__ai-response');
+            const entry = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group');
             expect(entry.classList.contains('streaming')).toBe(false);
         });
 
@@ -335,14 +340,14 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const el = terminal.appendDirectHtmlResponse('<p>ok</p>');
 
             expect(el).not.toBeNull();
-            expect(el.classList.contains('anchored-terminal__ai-response')).toBe(true);
+            expect(el.classList.contains('anchored-terminal__agent-message-group')).toBe(true);
         });
 
         it('appends multiple responses in order', () => {
             terminal.appendDirectHtmlResponse('<p>first</p>');
             terminal.appendDirectHtmlResponse('<p>second</p>');
 
-            const entries = terminal.outputContainer.querySelectorAll('.anchored-terminal__ai-response');
+            const entries = terminal.outputContainer.querySelectorAll('.anchored-terminal__agent-message-group');
             expect(entries.length).toBe(2);
         });
 
@@ -646,7 +651,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
     });
 
     describe('sealStreamingResponse', () => {
-        it('renames the element ID so getOrCreateAIResponse creates a new bubble', () => {
+        it('renames the element ID so appendStreamingTextChunk creates a new bubble', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'first message');
             terminal.sealStreamingResponse(WEB_SESSION_ID);
 
@@ -654,7 +659,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'second message');
 
-            const allBubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__ai-response');
+            const allBubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__agent-message-group');
             expect(allBubbles.length).toBe(2);
         });
 
@@ -674,7 +679,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'fresh start');
             const newEntry = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
-            const content = newEntry.querySelector('.anchored-terminal__ai-response-content');
+            const content = newEntry.querySelector('.anchored-terminal__agent-message-content');
             expect(content.textContent).toBe('fresh start');
         });
 
@@ -697,7 +702,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
     describe('applyCitations', () => {
         beforeEach(() => {
-            terminal.getOrCreateAIResponse(WEB_SESSION_ID);
+            terminal.createAIResponse(WEB_SESSION_ID);
         });
 
         it('calls citationsHandler.addInlineCitations with entry HTML', () => {
@@ -807,7 +812,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         const TEST_COMMAND = 'apt-get update && apt-get install -y tcpdump';
 
         it('renders the initial command literally via textContent', async () => {
-            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: TEST_COMMAND });
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: TEST_COMMAND, webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(WIDGET_ID);
             const commandEl = widget.querySelector('.tribunal__command');
@@ -818,7 +823,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         });
 
         it('renders voting dots as DOM elements inside tribunal__passes', async () => {
-            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls' });
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls', webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(WIDGET_ID);
             const passesEl = widget.querySelector('.tribunal__passes');
@@ -832,7 +837,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
         it('renders correct number of dots for custom numPasses', async () => {
             const id = 'tribunal-dots-5';
-            await terminal.showTribunal({ id, model: 'test-model', numPasses: 5, command: 'ls' });
+            await terminal.showTribunal({ id, model: 'test-model', numPasses: 5, command: 'ls', webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(id);
             const dots = widget.querySelectorAll('.tribunal__dot');
@@ -857,7 +862,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         const WIDGET_ID = 'tribunal-test-widget-1';
 
         beforeEach(async () => {
-            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls -la' });
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls -la', webSessionId: WEB_SESSION_ID });
         });
 
         it('widget remains in the DOM after completion', () => {
@@ -941,7 +946,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         const WIDGET_ID = 'tribunal-test-widget-2';
 
         beforeEach(async () => {
-            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'rm -rf /' });
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'rm -rf /', webSessionId: WEB_SESSION_ID });
         });
 
         it('widget remains in the DOM after fallback', () => {
@@ -1098,7 +1103,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 command: 'whoami'
             });
 
-            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubble).not.toBeNull();
             expect(bubble.getAttribute('data-execution-bubble')).toBeTruthy();
 
@@ -1113,7 +1118,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('wraps standalone executing indicator inside an AI chat bubble', async () => {
             const id = await terminal.showExecutingIndicator('date');
 
-            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubble).not.toBeNull();
 
             const indicator = bubble.querySelector('.anchored-terminal__executing');
@@ -1131,7 +1136,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 command: 'rm -rf /tmp/test'
             });
 
-            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubbleBefore).not.toBeNull();
 
             await terminal.handleApprovalRequest({
@@ -1141,7 +1146,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'Cleanup'
             });
 
-            const bubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__ai-response--execution');
+            const bubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__agent-message-group--execution');
             expect(bubbles.length).toBe(1);
 
             const approval = bubbles[0].querySelector('.anchored-terminal__approval');
@@ -1157,7 +1162,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'System info'
             });
 
-            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubble).not.toBeNull();
 
             const approval = bubble.querySelector('.anchored-terminal__approval');
@@ -1167,12 +1172,12 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
         it('removes empty bubble when hiding the only executing indicator', async () => {
             const id = await terminal.showExecutingIndicator('echo test');
 
-            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubbleBefore = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubbleBefore).not.toBeNull();
 
             terminal.hideExecutingIndicator(id);
 
-            const bubbleAfter = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubbleAfter = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubbleAfter).toBeNull();
         });
 
@@ -1192,10 +1197,10 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'List'
             });
 
-            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__ai-response--execution');
+            const bubble = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution');
             expect(bubble).not.toBeNull();
 
-            const content = bubble.querySelector('.anchored-terminal__ai-response-content');
+            const content = bubble.querySelector('.anchored-terminal__agent-message-content');
             expect(content.children.length).toBeGreaterThan(0);
         });
     });
