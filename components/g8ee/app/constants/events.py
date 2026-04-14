@@ -54,6 +54,9 @@ class EventType(str, Enum):
     LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED = "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
     LLM_CHAT_ITERATION_TEXT_COMPLETED = "g8e.v1.ai.llm.chat.iteration.text.completed"
     LLM_CHAT_ITERATION_TEXT_TRUNCATED = "g8e.v1.ai.llm.chat.iteration.text.truncated"
+    LLM_CHAT_ITERATION_RETRY = "g8e.v1.ai.llm.chat.iteration.retry"
+    LLM_CHAT_ITERATION_TOOL_CALL_STARTED = "g8e.v1.ai.llm.chat.iteration.tool.call.started"
+    LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED = "g8e.v1.ai.llm.chat.iteration.tool.call.completed"
 
     LLM_CHAT_ITERATION_STREAM_STARTED = "g8e.v1.ai.llm.chat.iteration.stream.started"
     LLM_CHAT_ITERATION_STREAM_DELTA_RECEIVED = "g8e.v1.ai.llm.chat.iteration.stream.delta.received"

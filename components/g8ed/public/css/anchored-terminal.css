@@ -32,6 +32,8 @@
     max-width: 65%;
     border-left: 2px solid var(--accent-blue, #58a6ff);
     padding-left: 12px;
+    line-height: 1.4;
+    font-size: 0.9rem;
 }
 
 /* Agent message group - groups thinking, tribunal, execution, and response */
@@ -70,8 +72,9 @@
 .anchored-terminal__agent-message-content {
     display: flex;
     flex-direction: column;
-    gap: 12px;
     width: 100%;
+    line-height: 1.4;
+    font-size: 0.9rem;
 }
 
 /* Waiting cursor */

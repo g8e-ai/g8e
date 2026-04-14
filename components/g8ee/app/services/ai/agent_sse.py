@@ -40,7 +40,9 @@ from app.models.g8ed_client import (
     ChatProcessingStartedPayload,
     ChatResponseChunkPayload,
     ChatResponseCompletePayload,
+    ChatRetryPayload,
     ChatThinkingPayload,
+    ChatToolCallPayload,
     ChatTurnCompletePayload,
     OperatorNetworkPortCheckPayload,
 )
@@ -150,10 +152,49 @@ async def deliver_via_sse(
                     user_id=user_id,
                 )
 
+            elif chunk.type == StreamChunkFromModelType.RETRY:
+                attempt = chunk.data.attempt or 0
+                max_attempts = chunk.data.max_attempts or 0
+                logger.info(
+                    "[SSE] RETRY chunk: attempt=%d max_attempts=%d",
+                    attempt, max_attempts,
+                )
+                await g8ed_event_service.publish_investigation_event(
+                    investigation_id=investigation_id,
+                    event_type=EventType.LLM_CHAT_ITERATION_RETRY,
+                    payload=ChatRetryPayload(
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                    ),
+                    web_session_id=web_session_id,
+                    case_id=case_id,
+                    user_id=user_id,
+                )
+
             elif chunk.type == StreamChunkFromModelType.TOOL_CALL:
                 fn = chunk.data.tool_name or ""
+                exec_id = chunk.data.execution_id or ""
+
+                # Emit generic tool call started event for all tools
+                await g8ed_event_service.publish_investigation_event(
+                    investigation_id=investigation_id,
+                    event_type=EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED,
+                    payload=ChatToolCallPayload(
+                        tool_name=fn,
+                        display_label=chunk.data.display_label,
+                        display_icon=chunk.data.display_icon,
+                        display_detail=chunk.data.display_detail,
+                        category=chunk.data.category,
+                        execution_id=exec_id,
+                        status=ToolCallStatus.STARTED,
+                    ),
+                    web_session_id=web_session_id,
+                    case_id=case_id,
+                    user_id=user_id,
+                )
+
+                # Keep specific events for search_web and check_port for backward compatibility
                 if fn == OperatorToolName.G8E_SEARCH_WEB:
-                    exec_id = chunk.data.execution_id or ""
                     query = chunk.data.display_detail
                     _pending_search_calls[exec_id] = query
                     await g8ed_event_service.publish_investigation_event(
@@ -184,6 +225,27 @@ async def deliver_via_sse(
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
                 exec_id = chunk.data.execution_id or ""
+                fn = chunk.data.tool_name or ""
+
+                # Emit generic tool call completed event for all tools
+                await g8ed_event_service.publish_investigation_event(
+                    investigation_id=investigation_id,
+                    event_type=EventType.LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED,
+                    payload=ChatToolCallPayload(
+                        tool_name=fn,
+                        display_label=chunk.data.display_label,
+                        display_icon=chunk.data.display_icon,
+                        display_detail=chunk.data.display_detail,
+                        category=chunk.data.category,
+                        execution_id=exec_id,
+                        status=ToolCallStatus.COMPLETED,
+                    ),
+                    web_session_id=web_session_id,
+                    case_id=case_id,
+                    user_id=user_id,
+                )
+
+                # Keep specific events for search_web for backward compatibility
                 if exec_id in _pending_search_calls:
                     query = _pending_search_calls.pop(exec_id)
                     succeeded = chunk.data.success is not False

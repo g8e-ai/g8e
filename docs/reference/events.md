@@ -37,13 +37,13 @@ g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
 
 ## Domains
 
-The protocol defines five top-level domains. Total event count: **238**.
+The protocol defines five top-level domains. Total event count: **241**.
 
 | Domain | Count | Description |
 |--------|-------|-------------|
 | `app` | 35 | Application-layer entities: cases, tasks, investigations |
 | `operator` | 114 | Operator (g8eo) lifecycle, commands, file ops, network, audit, bootstrap |
-| `ai` | 48 | LLM chat, streaming, lifecycle, tool calls, tribunal |
+| `ai` | 51 | LLM chat, streaming, lifecycle, tool calls, tribunal |
 | `platform` | 36 | Auth, SSE transport, terminal UI, telemetry, sentinel |
 | `source` | 5 | Event origin tags for message attribution |
 
@@ -418,8 +418,16 @@ The protocol defines five top-level domains. Total event count: **238**.
 | `g8e.v1.ai.llm.chat.iteration.completed` | LLM chat iteration completed |
 | `g8e.v1.ai.llm.chat.iteration.failed` | LLM chat iteration failed |
 | `g8e.v1.ai.llm.chat.iteration.stopped` | LLM chat iteration stopped (user-initiated) |
+| `g8e.v1.ai.llm.chat.iteration.retry` | LLM retry attempt (provider failure) |
 | `g8e.v1.ai.llm.chat.iteration.thinking.started` | LLM thinking phase started |
 | `g8e.v1.ai.llm.chat.iteration.citations.received` | Grounding citations received |
+
+### `ai.llm.chat.iteration.tool` -- Tool Call Activity
+
+| Wire Value | Description |
+|------------|-------------|
+| `g8e.v1.ai.llm.chat.iteration.tool.call.started` | Tool call started (generic for all tools) |
+| `g8e.v1.ai.llm.chat.iteration.tool.call.completed` | Tool call completed (generic for all tools) |
 
 ### `ai.llm.chat.iteration.text` -- Text Response
 
@@ -605,10 +613,10 @@ Not every component needs every event. This table shows which domains each compo
 |--------|:---:|:---:|:---:|:---:|:---:|
 | `app` | 35 | 35 | 35 | 35 | -- |
 | `operator` | 114 | 114 | 114 | 114 | 65 |
-| `ai` | 48 | 48 | 48 | 48 | -- |
+| `ai` | 51 | 51 | 51 | 51 | -- |
 | `platform` | 36 | 36 | 36 | 36 | -- |
 | `source` | 5 | 5 | 5 | 5 | -- |
-| **Total** | **238** | **238** | **238** | **238** | **65** |
+| **Total** | **241** | **241** | **241** | **241** | **65** |
 
 g8eo only binds the operator-domain events it produces or consumes. g8ed client JS mirrors all events with hardcoded values. g8ed server JS and g8ee mirror the full set.
 

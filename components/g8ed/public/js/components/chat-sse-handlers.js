@@ -50,6 +50,18 @@ export const ChatSSEHandlersMixin = {
             this._handleLLMChatIterationFailed(data);
         });
 
+        this.eventBus.on(EventType.LLM_CHAT_ITERATION_RETRY, (data) => {
+            this.handleChatRetry(data);
+        });
+
+        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, (data) => {
+            this.handleToolCallStarted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED, (data) => {
+            this.handleToolCallCompleted(data);
+        });
+
         this.eventBus.on(EventType.LLM_CHAT_ITERATION_STOPPED, (data) => {
             this.handleChatStopped(data);
         });
@@ -127,6 +139,10 @@ export const ChatSSEHandlersMixin = {
             if (data.execution_id && this.anchoredTerminal) {
                 this.anchoredTerminal.completeActivityIndicator(`fn-${data.execution_id}`);
             }
+        });
+
+        this.eventBus.on(EventType.OPERATOR_COMMAND_CANCELLED, (data) => {
+            this.handleCommandCancelled(data);
         });
 
         this.eventBus.on(EventType.OPERATOR_FILE_EDIT_STARTED, () => {
@@ -637,6 +653,62 @@ export const ChatSSEHandlersMixin = {
             this.anchoredTerminal.appendErrorMessage(message);
         } else {
             this.addSystemMessage(message, 'error');
+        }
+    },
+
+    handleChatRetry(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+
+        const attempt = data.attempt || 0;
+        const maxAttempts = data.max_attempts || 0;
+        const message = `Retrying (attempt ${attempt}/${maxAttempts})...`;
+
+        this.anchoredTerminal.appendSystemMessage(message);
+    },
+
+    handleToolCallStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+
+        const executionId = data.execution_id;
+        if (!executionId) return;
+
+        const indicatorId = `tool-${executionId}`;
+        if (!this._toolCallIndicators) this._toolCallIndicators = new Map();
+        this._toolCallIndicators.set(executionId, indicatorId);
+
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: data.display_icon || 'tool',
+            label: data.display_label || 'Processing',
+            detail: data.display_detail,
+            category: data.category,
+        });
+    },
+
+    handleToolCallCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._toolCallIndicators) return;
+
+        const indicatorId = this._toolCallIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._toolCallIndicators.delete(data.execution_id);
+    },
+
+    handleCommandCancelled(data) {
+        if (!this.shouldProcessEvent(data)) return;
+
+        this.executionActive = false;
+        this.approvalPending = false;
+        this.hideAIStopButton();
+
+        if (data.execution_id && this.anchoredTerminal) {
+            const execId = data.execution_id;
+            this.anchoredTerminal.completeActivityIndicator(`fn-${execId}`);
+            this.anchoredTerminal.completeActivityIndicator(`tool-${execId}`);
         }
     },
 

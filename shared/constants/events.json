@@ -331,8 +331,15 @@
           "completed": "g8e.v1.ai.llm.chat.iteration.completed",
           "failed":    "g8e.v1.ai.llm.chat.iteration.failed",
           "stopped":   "g8e.v1.ai.llm.chat.iteration.stopped",
+          "retry":     "g8e.v1.ai.llm.chat.iteration.retry",
           "thinking":  { "started":  "g8e.v1.ai.llm.chat.iteration.thinking.started" },
           "citations": { "received": "g8e.v1.ai.llm.chat.iteration.citations.received" },
+          "tool": {
+            "call": {
+              "started":   "g8e.v1.ai.llm.chat.iteration.tool.call.started",
+              "completed": "g8e.v1.ai.llm.chat.iteration.tool.call.completed"
+            }
+          },
           "text": {
             "received":  "g8e.v1.ai.llm.chat.iteration.text.received",
             "chunk":     { "received": "g8e.v1.ai.llm.chat.iteration.text.chunk.received" },

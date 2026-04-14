@@ -147,6 +147,18 @@ class CommandBlacklistValidator:
 
         return CommandBlacklistResult(is_allowed=True)
 
+    def get_forbidden_commands(self) -> list[dict[str, str]]:
+        """Get list of forbidden base commands with reasons."""
+        return [{"command": e.get("value", ""), "reason": e.get("reason", "")} for e in self._config["forbidden_commands"] if e.get("value")]
+
+    def get_forbidden_substrings(self) -> list[dict[str, str]]:
+        """Get list of forbidden command substrings with reasons."""
+        return [{"substring": e.get("value", ""), "reason": e.get("reason", "")} for e in self._config["forbidden_substrings"] if e.get("value")]
+
+    def get_forbidden_patterns(self) -> list[dict[str, str]]:
+        """Get list of forbidden regex patterns with reasons."""
+        return [{"pattern": e.get("value", ""), "reason": e.get("reason", "")} for e in self._config["forbidden_patterns"] if e.get("value")]
+
 
 _validator: CommandBlacklistValidator | None = None
 

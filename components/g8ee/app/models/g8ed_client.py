@@ -143,6 +143,25 @@ class ChatErrorPayload(G8eBaseModel):
     error: str = Field(description="Error message")
 
 
+class ChatRetryPayload(G8eBaseModel):
+    """Payload for EventType.LLM_CHAT_ITERATION_RETRY."""
+
+    attempt: int = Field(description="Current retry attempt number (1-indexed)")
+    max_attempts: int = Field(description="Maximum number of retry attempts")
+
+
+class ChatToolCallPayload(G8eBaseModel):
+    """Payload for EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED/COMPLETED."""
+
+    tool_name: str | None = Field(default=None, description="Name of the tool being called")
+    display_label: str | None = Field(default=None, description="Human-readable label for the tool")
+    display_icon: str | None = Field(default=None, description="Icon identifier for the tool")
+    display_detail: str | None = Field(default=None, description="Additional detail (e.g., file path, query)")
+    category: str | None = Field(default=None, description="Tool category (file, search, network, etc.)")
+    execution_id: str | None = Field(default=None, description="Execution ID for correlation")
+    status: ToolCallStatus = Field(default=ToolCallStatus.STARTED, description="Execution status")
+
+
 class AiProcessingStoppedPayload(G8eBaseModel):
     """Payload for EventType.LLM_CHAT_ITERATION_STOPPED."""
 

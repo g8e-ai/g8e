@@ -206,6 +206,7 @@ class OperatorToolName(str, Enum):
     FETCH_FILE_DIFF = "fetch_file_diff"
     G8E_SEARCH_WEB = "g8e_web_search"
     QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
+    GET_COMMAND_CONSTRAINTS = "get_command_constraints"
 
 OPERATOR_TOOLS = frozenset({
     OperatorToolName.RUN_COMMANDS.value,

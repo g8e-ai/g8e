@@ -30,13 +30,14 @@ from app.constants.prompts import AgentMode, PromptFile
 from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import G8eeUserSettings
+from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.llm.prompts import load_prompt
 from app.errors import ExternalServiceError, ValidationError, ConfigurationError
 from app.llm.llm_types import schema_from_model
 from app.models.agent import OperatorCommandArgs
 from app.models.model_configs import get_model_config
 from app.models.tool_results import (
+    CommandConstraintsResult,
     CommandExecutionResult,
     FetchFileHistoryToolResult,
     FetchFileDiffToolResult,
@@ -65,6 +66,8 @@ from app.models.command_payloads import (
     SearchWebArgs,
 )
 
+from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.whitelist_validator import CommandWhitelistValidator
 from .grounding.web_search_provider import WebSearchProvider
 from ..investigation.investigation_service import InvestigationService
 
@@ -79,10 +82,19 @@ class AIToolService:
         operator_command_service: "OperatorCommandService",
         investigation_service: InvestigationService,
         web_search_provider: WebSearchProvider | None,
+        platform_settings: G8eePlatformSettings | None = None,
+        whitelist_validator: CommandWhitelistValidator | None = None,
+        blacklist_validator: CommandBlacklistValidator | None = None,
     ):
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
         self._web_search_provider: WebSearchProvider | None = web_search_provider
+        self._platform_settings = platform_settings
+
+        from app.utils.validators import get_blacklist_validator, get_whitelist_validator
+        self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
+        self._blacklist_validator = blacklist_validator if blacklist_validator is not None else get_blacklist_validator()
+
         logger.info("AIToolService initialized")
 
         self._tool_context: ContextVar[G8eHttpContext | None] = ContextVar(
@@ -136,6 +148,9 @@ class AIToolService:
 
         (self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
          self._tool_executors[OperatorToolName.QUERY_INVESTIGATION_CONTEXT]) = self._build_query_investigation_context_tool()
+
+        (self._tool_declarations[OperatorToolName.GET_COMMAND_CONSTRAINTS],
+         self._tool_executors[OperatorToolName.GET_COMMAND_CONSTRAINTS]) = self._build_get_command_constraints_tool()
 
     def start_invocation_context(
         self,
@@ -191,6 +206,7 @@ class AIToolService:
 
         universal_declarations = [
             self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
+            self._tool_declarations[OperatorToolName.GET_COMMAND_CONSTRAINTS],
         ]
 
         if resolved_workflow == AgentMode.OPERATOR_NOT_BOUND:
@@ -412,6 +428,20 @@ class AIToolService:
 
         return declaration, query_investigation_context
 
+    def _build_get_command_constraints_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
+        """Register tool metadata and executor for command constraint queries."""
+
+        def get_command_constraints() -> ToolResult:
+            raise NotImplementedError("get_command_constraints should be called via execute_tool_call")
+
+        declaration = types.ToolDeclaration(
+            name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
+            description=load_prompt(PromptFile.TOOL_GET_COMMAND_CONSTRAINTS),
+            parameters=types.Schema(type=types.Type.OBJECT, properties={}, required=None),
+        )
+
+        return declaration, get_command_constraints
+
     def _build_tool_handlers(self) -> dict[str, Callable]:
         """Build dispatch table mapping tool names to handler coroutines."""
         return {
@@ -428,6 +458,7 @@ class AIToolService:
             OperatorToolName.GRANT_INTENT: self._handle_grant_intent,
             OperatorToolName.REVOKE_INTENT: self._handle_revoke_intent,
             OperatorToolName.QUERY_INVESTIGATION_CONTEXT: self._handle_query_investigation_context,
+            OperatorToolName.GET_COMMAND_CONSTRAINTS: self._handle_get_command_constraints,
         }
 
     async def _handle_run_commands(
@@ -705,6 +736,75 @@ class AIToolService:
                 data_type=args.data_type,
                 investigation_id=investigation_id,
             )
+
+    async def _handle_get_command_constraints(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
+
+        if self._platform_settings is None:
+            logger.warning(
+                "[GET_COMMAND_CONSTRAINTS] platform_settings is None - "
+                "command constraints will be reported as disabled. "
+                "This may indicate a configuration error."
+            )
+
+        cv = self._platform_settings.command_validation if self._platform_settings else None
+        whitelisting_enabled = cv.enable_whitelisting if cv else False
+        blacklisting_enabled = cv.enable_blacklisting if cv else False
+
+        whitelisted_commands: list[str] = []
+        global_forbidden_patterns: list[str] = []
+        global_forbidden_directories: list[str] = []
+        if whitelisting_enabled:
+            whitelisted_commands = sorted(self._whitelist_validator.all_commands)
+            global_forbidden_patterns = list(self._whitelist_validator.forbidden_patterns)
+            global_forbidden_directories = list(self._whitelist_validator.forbidden_directories)
+
+        blacklisted_commands: list[dict[str, str]] = []
+        blacklisted_substrings: list[dict[str, str]] = []
+        blacklisted_patterns: list[dict[str, str]] = []
+        if blacklisting_enabled:
+            blacklisted_commands = self._blacklist_validator.get_forbidden_commands()
+            blacklisted_substrings = self._blacklist_validator.get_forbidden_substrings()
+            blacklisted_patterns = self._blacklist_validator.get_forbidden_patterns()
+
+        parts = []
+        if not whitelisting_enabled and not blacklisting_enabled:
+            parts.append("No command constraints are currently enforced. All commands are permitted.")
+        else:
+            if whitelisting_enabled:
+                parts.append(
+                    f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "
+                    "Any command not in the whitelist will be blocked."
+                )
+            if blacklisting_enabled:
+                parts.append(
+                    "Blacklisting ENABLED: commands matching blacklisted entries will be blocked."
+                )
+
+        result = CommandConstraintsResult(
+            success=True,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            whitelisted_commands=whitelisted_commands,
+            blacklisted_commands=blacklisted_commands,
+            blacklisted_substrings=blacklisted_substrings,
+            blacklisted_patterns=blacklisted_patterns,
+            global_forbidden_patterns=global_forbidden_patterns,
+            global_forbidden_directories=global_forbidden_directories,
+            message=" ".join(parts),
+        )
+        logger.info(
+            "[GET_COMMAND_CONSTRAINTS] whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
+            whitelisting_enabled, blacklisting_enabled,
+            len(whitelisted_commands), len(blacklisted_commands),
+        )
+        return result
 
     async def execute_tool_call(
         self,
