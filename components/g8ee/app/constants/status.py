@@ -205,8 +205,26 @@ class OperatorToolName(str, Enum):
     RESTORE_FILE = "restore_file"
     FETCH_FILE_DIFF = "fetch_file_diff"
     G8E_SEARCH_WEB = "g8e_web_search"
+    QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
 
-OPERATOR_TOOLS = frozenset({member.value for member in OperatorToolName})
+OPERATOR_TOOLS = frozenset({
+    OperatorToolName.RUN_COMMANDS.value,
+    OperatorToolName.FILE_CREATE.value,
+    OperatorToolName.FILE_WRITE.value,
+    OperatorToolName.FILE_READ.value,
+    OperatorToolName.FILE_UPDATE.value,
+    OperatorToolName.CHECK_PORT.value,
+    OperatorToolName.LIST_FILES.value,
+    OperatorToolName.READ_FILE_CONTENT.value,
+    OperatorToolName.GRANT_INTENT.value,
+    OperatorToolName.REVOKE_INTENT.value,
+    OperatorToolName.FETCH_EXECUTION_OUTPUT.value,
+    OperatorToolName.FETCH_SESSION_HISTORY.value,
+    OperatorToolName.FETCH_FILE_HISTORY.value,
+    OperatorToolName.RESTORE_FILE.value,
+    OperatorToolName.FETCH_FILE_DIFF.value,
+    OperatorToolName.G8E_SEARCH_WEB.value,
+})
 
 class OperatorType(str, Enum):
     SYSTEM = _STATUS["g8e.type"]["system"]

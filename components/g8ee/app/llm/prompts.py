@@ -75,27 +75,7 @@ def build_investigation_context_section(
         context_parts.append(f"Severity: {investigation.severity}")
 
     if investigation.conversation_history:
-        messages = investigation.conversation_history
-        message_count = len(messages)
-        user_messages = sum(1 for m in messages if m.sender == MessageSender.USER_CHAT)
-        ai_messages = sum(1 for m in messages if m.sender == MessageSender.AI_PRIMARY)
-        context_parts.append(f"Conversation: {message_count} messages ({user_messages} user, {ai_messages} AI)")
-
-        operator_messages = [m for m in messages if m.sender == MessageSender.USER_CHAT]
-        if operator_messages:
-            command_completed = sum(1 for m in operator_messages if m.metadata and m.metadata.status == ExecutionStatus.COMPLETED)
-            context_parts.append(f"Commands executed: {command_completed}/{len(operator_messages)} completed")
-
-        last_user_msg = None
-        for m in reversed(messages):
-            if m.sender == MessageSender.USER_CHAT:
-                last_user_msg = m.content
-                break
-
-        if last_user_msg:
-            if len(last_user_msg) > 200:
-                last_user_msg = last_user_msg[:200] + "..."
-            context_parts.append(f"Latest request: {last_user_msg}")
+        context_parts.append("Conversation history is available via query_investigation_context.")
 
     operator_docs = investigation.operator_documents
     if operator_docs:

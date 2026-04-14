@@ -1,5 +1,10 @@
 <tools mode="cloud_operator_bound">
 
+<query_investigation_context>
+Retrieve investigation data on-demand. Use when you need to see earlier conversation turns, check the full history of operator actions, or verify the investigation's current status and metadata.
+- data_type: "conversation_history", "investigation_status", "history_trail", or "operator_actions"
+- limit: Number of items to retrieve (optional)
+
 <run_commands_with_operator>
 Execute commands on the Cloud Operator (EC2 inside customer VPC). `aws` CLI is authenticated via IAM role. Direct VPC network access available for internal service checks.
 - command, justification: REQUIRED | timeout_seconds: 300 (increase for long ops)

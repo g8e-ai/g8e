@@ -326,3 +326,19 @@ class RevokeIntentArgs(G8eBaseModel):
     )
 
 
+class QueryInvestigationContextArgs(G8eBaseModel):
+    """LLM tool call args for OperatorToolName.QUERY_INVESTIGATION_CONTEXT."""
+    data_type: str = Field(
+        ...,
+        description=(
+            "Type of data to retrieve. One of: conversation_history, investigation_status, "
+            "history_trail, operator_actions"
+        ),
+    )
+    limit: int | None = Field(
+        default=None,
+        description=(
+            "Maximum number of items to return (for conversation_history and history_trail). "
+            "Optional. Use to limit output size for large investigations."
+        ),
+    )
