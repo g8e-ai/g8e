@@ -5,21 +5,21 @@
 #   ./g8e platform start                   # Start core services (no build)
 #   ./g8e platform stop                    # Stop containers (preserve everything)
 #   ./g8e platform rebuild                 # Rebuild all services with layer cache (data volumes preserved)
-#   ./g8e platform rebuild vsod            # Rebuild a single service (data volumes preserved)
+#   ./g8e platform rebuild g8ed            # Rebuild a single service (data volumes preserved)
 #   ./g8e platform wipe                    # Clear app data; preserve SSL certs, platform settings, auth token
 #   ./g8e platform reset                   # Wipe DB data volumes + rebuild from scratch (SSL certs preserved)
 #   ./g8e platform clean                   # Full Docker cleanup: containers, images, volumes, networks
-#   ./g8e test vse                         # Run tests (never rebuilds)
+#   ./g8e test g8ee                         # Run tests (never rebuilds)
 #
 # Volume layout:
-#   g8e-data-data  — SQLite DB only (/data inside vsodb, wiped by reset)
-#   g8e-data-ssl   — TLS certs only (/ssl inside vsodb, NEVER wiped by reset or wipe)
-#   g8e-engine-data — VSE app data
-#   g8e-dashboard-data — VSOD app data
+#   g8es-data  — SQLite DB only (/data inside g8es, wiped by reset)
+#   g8es-ssl   — TLS certs only (/ssl inside g8es, NEVER wiped by reset or wipe)
+#   g8ee-data — g8ee app data
+#   g8ed-data — g8ed app data
 #
 # Profiles:
-#   (default)      - vsodb, vse, vsod, g8e-pod
-#   g8e-pod       - g8e-pod (never touched unless explicitly rebuilt or cleaned)
+#   (default)      - g8es, g8ee, g8ed, g8ep
+#   g8ep       - g8ep (never touched unless explicitly rebuilt or cleaned)
 #   development    - includes source bind mounts for hot reload
 #
 # Development:
@@ -33,28 +33,28 @@ services:
   # Core Components
   # =============================================================================
 
-  # g8e-engine (VSE) - AI backend
-  g8e-engine:
+  # g8ee (g8ee) - AI backend
+  g8ee:
     build:
       context: .
-      dockerfile: ./components/vse/Dockerfile
+      dockerfile: ./components/g8ee/Dockerfile
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-engine
+    container_name: g8ee
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
     restart: unless-stopped
     environment:
-      - G8E_CA_CERT_PATH=/vsodb/ca.crt
-      - NODE_EXTRA_CA_CERTS=/vsodb/ca.crt
+      - G8E_CA_CERT_PATH=/g8es/ca.crt
+      - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
       - G8E_DB_PATH=/data/g8e.db
       - G8E_DOCS_DIR=/docs
       - G8E_INTERNAL_AUTH_TOKEN
     volumes:
       - ./shared:/app/shared:ro
-      - vse-data:/data:noexec,nosuid,nodev
-      - vsodb-ssl:/vsodb:ro
+      - g8ee-data:/data:noexec,nosuid,nodev
+      - g8es-ssl:/g8es:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -74,7 +74,7 @@ services:
     networks:
       g8e-network:
         aliases:
-          - vse
+          - g8ee
     healthcheck:
       test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
       interval: 30s
@@ -82,36 +82,45 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      g8e-data:
+      g8es:
         condition: service_healthy
 
-  # g8e-dashboard (VSOD) - Web frontend + single external entry point
+  # g8ed (g8ed) - Web frontend + single external entry point
   #
-  # VSOD's G8ENodeOperatorService manages operator sessions inside the g8e-pod
+  # g8ed's G8ENodeOperatorService manages operator sessions inside the g8ep
   # container via Supervisor XML-RPC over the network (port 443).
-  g8e-dashboard:
+  g8ed:
     build:
       context: .
-      dockerfile: ./components/vsod/Dockerfile
+      dockerfile: ./components/g8ed/Dockerfile
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-dashboard
+    container_name: g8ed
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
     environment:
-      - NODE_EXTRA_CA_CERTS=/vsodb/ca.crt
+      - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
     ports:
       - "443:443"
       - "80:80"
     volumes:
-      - vsod-data:/data:noexec,nosuid,nodev
-      - vsodb-ssl:/vsodb:ro
+      - g8ed-data:/data:noexec,nosuid,nodev
+      - g8es-ssl:/g8es:ro
       - ./shared:/shared:ro
       - ./docs:/docs:ro
       - ./README.md:/readme/README.md:ro
-      - ./components/vsod/views:/app/views:ro
-      - ./components/vsod/public:/app/public:ro
+      - ./components/g8ed/server.js:/app/server.js:ro
+      - ./components/g8ed/app_factory.js:/app/app_factory.js:ro
+      - ./components/g8ed/vitest.config.js:/app/vitest.config.js:ro
+      - ./components/g8ed/constants:/app/constants:ro
+      - ./components/g8ed/middleware:/app/middleware:ro
+      - ./components/g8ed/models:/app/models:ro
+      - ./components/g8ed/routes:/app/routes:ro
+      - ./components/g8ed/services:/app/services:ro
+      - ./components/g8ed/utils:/app/utils:ro
+      - ./components/g8ed/views:/app/views:ro
+      - ./components/g8ed/public:/app/public:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -133,7 +142,7 @@ services:
         aliases:
           - localhost
           - g8e.local
-          - vsod
+          - g8ed
     healthcheck:
       test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
       interval: 30s
@@ -141,34 +150,34 @@ services:
       retries: 5
       start_period: 30s
     depends_on:
-      g8e-data:
+      g8es:
         condition: service_healthy
 
   # =============================================================================
   # Data Services
   # =============================================================================
 
-  # g8e-data (VSODB) - Operator in --listen mode: platform persistence + pub/sub broker
-  g8e-data:
+  # g8es (g8es) - Operator in --listen mode: platform persistence + pub/sub broker
+  g8es:
     build:
       context: .
-      dockerfile: ./components/vsodb/Dockerfile
+      dockerfile: ./components/g8es/Dockerfile
       args:
         VERSION: ${G8E_VERSION:-dev}
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-data
+    container_name: g8es
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
     restart: unless-stopped
     environment:
-      - G8E_CA_CERT_PATH=/vsodb/ca.crt
-      - NODE_EXTRA_CA_CERTS=/vsodb/ca.crt
+      - G8E_CA_CERT_PATH=/g8es/ca.crt
+      - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
       - G8E_INTERNAL_AUTH_TOKEN
     volumes:
-      - vsodb-data:/data:noexec,nosuid,nodev
-      - vsodb-ssl:/ssl:noexec,nosuid,nodev
+      - g8es-data:/data:noexec,nosuid,nodev
+      - g8es-ssl:/ssl:noexec,nosuid,nodev
     read_only: true
     tmpfs:
       - /tmp
@@ -185,7 +194,7 @@ services:
     networks:
       g8e-network:
         aliases:
-          - vsodb
+          - g8es
   # Internal services only - uses ports 9000 (HTTPS) and 9001 (WSS)
     healthcheck:
       test: ["CMD-SHELL", "curl -f -k https://localhost:9000/health"]
@@ -203,15 +212,15 @@ services:
   # Always running alongside core services. Run tests with: ./scripts/testing/run_tests.sh
   #
   # Docker socket: required for docker exec into service containers during tests and
-  # for operator build/stream/deploy workflows. g8e-pod is internal-only (never
+  # for operator build/stream/deploy workflows. g8ep is internal-only (never
   # public-facing). Runs as g8e (uid 1001).
-  g8e-pod:
+  g8ep:
     build:
       context: .
-      dockerfile: components/g8e-pod/Dockerfile
+      dockerfile: components/g8ep/Dockerfile
       labels:
         - "io.g8e.managed=true"
-    container_name: g8e-pod
+    container_name: g8ep
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
@@ -220,23 +229,22 @@ services:
     environment:
       - HOME=/home/g8e
       - G8E_DB_PATH=/data/g8e.db
-      - G8E_SSL_DIR=/vsodb
-      - G8E_PUBSUB_CA_CERT=/vsodb/ca.crt
-      - G8E_OPERATOR_PUBSUB_URL=wss://vsodb:9001
-      - G8E_SSL_CERT_FILE=/vsodb/ca.crt
-      - REQUESTS_CA_BUNDLE=/vsodb/ca.crt
+      - G8E_SSL_DIR=/g8es
+      - G8E_PUBSUB_CA_CERT=/g8es/ca.crt
+      - G8E_OPERATOR_PUBSUB_URL=wss://g8es:9001
+      - G8E_SSL_CERT_FILE=/g8es/ca.crt
       - RUNNING_IN_DOCKER=1
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY
     volumes:
-      - ./components/vse:/app/components/vse
-      - ./components/vsod:/app/components/vsod
-      - vsod-node-modules:/app/components/vsod/node_modules
-      - ./components/vsa:/app/components/vsa
-      - ./components/g8e-pod/scripts:/app/components/g8e-pod/scripts
+      - ./components/g8ee:/app/components/g8ee
+      - ./components/g8ed:/app/components/g8ed
+      - g8ed-node-modules:/app/components/g8ed/node_modules
+      - ./components/g8eo:/app/components/g8eo
+      - ./components/g8ep/scripts:/app/components/g8ep/scripts
       - ./shared:/app/shared
       - ./scripts:/app/scripts
-      - vsodb-ssl:/vsodb:ro
+      - g8es-ssl:/g8es:ro
       - /var/run/docker.sock:/var/run/docker.sock
     group_add:
       - ${DOCKER_GID:-0}
@@ -258,13 +266,18 @@ services:
     networks:
       g8e-network:
         aliases:
-          - drop-pod
+          - g8ep
     healthcheck:
       test: ["CMD", "pgrep", "-x", "supervisord"]
       interval: 5s
       timeout: 5s
       retries: 3
       start_period: 5s
+    depends_on:
+      g8ee:
+        condition: service_healthy
+      g8ed:
+        condition: service_healthy
 
 networks:
   g8e-network:
@@ -272,27 +285,27 @@ networks:
     labels:
       - "io.g8e.managed=true"
     # Internal DNS aliases for service-to-service communication
-    # VSODB uses port 9000 for HTTPS and port 9001 for WSS
+    # g8es uses port 9000 for HTTPS and port 9001 for WSS
     driver: bridge
 
 volumes:
-  vse-data:
-    name: g8e-engine-data
+  g8ee-data:
+    name: g8ee-data
     labels:
       - "io.g8e.managed=true"
-  vsod-data:
-    name: g8e-dashboard-data
+  g8ed-data:
+    name: g8ed-data
     labels:
       - "io.g8e.managed=true"
-  vsod-node-modules:
-    name: g8e-dashboard-node-modules
+  g8ed-node-modules:
+    name: g8ed-node-modules
     labels:
       - "io.g8e.managed=true"
-  vsodb-data:
-    name: g8e-data-data
+  g8es-data:
+    name: g8es-data
     labels:
       - "io.g8e.managed=true"
-  vsodb-ssl:
-    name: g8e-data-ssl
+  g8es-ssl:
+    name: g8es-ssl
     labels:
       - "io.g8e.managed=true"

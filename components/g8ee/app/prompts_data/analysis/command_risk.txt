@@ -1,0 +1,24 @@
+Classify the risk level of a shell command.
+
+<risk_levels>
+LOW: Read-only operations that cannot modify state.
+  Examples: cat, ls, grep, ps, df, top, echo, which, find (read-only), uptime, whoami, hostname, uname, free, vmstat, iostat, netstat, ss, ip, dig, nslookup, ping, traceroute, curl (GET), wget (GET)
+MEDIUM: State-changing operations that are reversible or scoped.
+  Examples: file writes, service restarts, package installs, chmod, mkdir
+HIGH: Destructive or irreversible operations.
+  Examples: rm -rf, mkfs, dd, truncate, kill -9, iptables -F, shutdown
+</risk_levels>
+
+<command>
+{command}
+</command>
+
+<justification>
+{justification}
+</justification>
+
+<working_directory>
+{working_dir}
+</working_directory>
+
+Classify the command risk level.

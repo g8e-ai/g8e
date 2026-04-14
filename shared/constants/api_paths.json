@@ -1,7 +1,7 @@
 {
-  "_comment": "AUTHORITIVE internal API paths shared across VSE and VSOD. All internal cluster communication must use these paths prefixed with /api/internal.",
+  "_comment": "AUTHORITIVE internal API paths shared across g8ee and g8ed. All internal cluster communication must use these paths prefixed with /api/internal.",
   "internal_prefix": "/api/internal",
-  "vse": {
+  "g8ee": {
     "chat": "/chat",
     "chat_stop": "/chat/stop",
     "investigations": "/investigations",
@@ -19,7 +19,7 @@
     "mcp_tools_list": "/mcp/tools/list",
     "mcp_tools_call": "/mcp/tools/call"
   },
-  "vsod": {
+  "g8ed": {
     "sse_push": "/sse/push",
     "grant_intent": "/operators/{operator_id}/grant-intent",
     "revoke_intent": "/operators/{operator_id}/revoke-intent",

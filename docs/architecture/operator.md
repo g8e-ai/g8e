@@ -1,12 +1,12 @@
 # g8e Operator Binary
 
-The Operator (`g8e.operator`) is the backbone of the entire g8e platform. It is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Drop it on a host, run it, and the platform has a fully capable agent.
+The Operator (`g8e.operator`) is the language-agnostic, platform-agnostic execution binary for the g8e platform. The reference implementation is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Deploy it on a host, run it, and the platform has a fully capable Operator. Any client that follows the g8e events protocol can act as an Operator.
 
 What makes this remarkable is the scope of what that single binary does. Depending on how it is invoked:
 
 - It is the **SSL certificate authority** for the entire platform — generating and signing the CA and all per-operator mTLS certificates at runtime on first start.
-- It is the **entire backend storage layer** — the document store, KV store, and pub/sub broker that VSE and VSOD depend on.
-- It is the **execution agent** on every target host — running commands, editing files, and maintaining a local-first audit trail with LFAA, Sentinel, and the git Ledger.
+- It is the **entire backend storage layer** — the document store, KV store, and pub/sub broker that g8ee and g8ed depend on.
+- It is the **execution environment** on every target host — running commands, editing files, and maintaining a local-first audit trail with LFAA, Sentinel, and the git Ledger.
 - It is the **fleet deployment tool** — capable of streaming itself to hundreds of hosts in parallel over SSH.
 
 No other component in the platform comes close to this scope. The AI, the web interface, and the backend services are all, at some level, orchestrating the Operator.
@@ -21,99 +21,77 @@ The binary has four distinct operating modes selected at launch. Each mode is mu
 
 ## Data Plane Architecture
 
-The Operator is the central data plane for the entire platform. When running in `--listen` mode (VSODB), it provides the persistence and messaging backbone for VSE and VSOD. When running in Standard mode on target hosts, it maintains the authoritative system of record for all local operations.
+The Operator is the central data plane for the entire platform. When running in `--listen` mode (g8es), it provides the persistence and messaging backbone for g8ee and g8ed. When running in Standard mode on target hosts, it maintains the authoritative system of record for all local operations.
 
 ```mermaid
-graph TD
-    subgraph "Control & Persistence Plane (Self-Hosted Hub)"
-        direction TB
-        VSODB[("<b>VSODB</b><br/>Operator in --listen mode<br/>(Central Data Plane)")]
-        
-        subgraph "VSODB Services"
-            direction LR
-            DS["Document Store<br/>(Platform Data)"]
-            KS["KV Store<br/>(Ephemeral State)"]
-            PS["PubSub Broker<br/>(Message Routing)"]
-            BS["Blob Store<br/>(Artifacts)"]
+flowchart TD
+    subgraph Hub ["Control & Persistence Plane (Self-Hosted Hub)"]
+        direction LR
+        subgraph App ["Application Layer"]
+            direction TB
+            g8ed["g8ed<br/>Dashboard & Gateway"]
+            g8ee["g8ee<br/>AI Engine"]
+            g8ee --> g8ed
         end
-        VSODB --- DS
-        VSODB --- KS
-        VSODB --- PS
-        VSODB --- BS
-        
-        VSE["<b>VSE</b><br/>AI Engine"]
-        VSOD["<b>VSOD</b><br/>Dashboard & Gateway"]
-        
-        VSE -- "REST / PubSub" --> VSODB
-        VSOD -- "REST" --> VSODB
+
+        subgraph Data ["Data Layer"]
+            direction TB
+            g8es[("g8es<br/>SQLite/KV/PubSub")]
+            subgraph "g8es Services"
+                direction LR
+                DS["Document Store"]
+                KS["KV Store"]
+                PS["PubSub Broker"]
+                BS["Blob Store"]
+            end
+            g8es --- DS
+            g8es --- KS
+            g8es --- PS
+            g8es --- BS
+        end
+
+        g8ed <--> g8es
+        g8ee <--> g8es
     end
 
-    subgraph "Execution Plane (Managed Hosts)"
-        direction TB
-        subgraph "Standard Operator A"
-            OPA["<b>Operator</b><br/>(Standard Mode)"]
-            subgraph "Authoritative Local Data (A)"
-                AVA["Audit Vault"]
-                RVA["Raw Vault"]
-                SVA["Scrubbed Vault"]
-                LGA["Git Ledger"]
-            end
-            OPA --- AVA
-            OPA --- RVA
-            OPA --- SVA
-            OPA --- LGA
-        end
-
-        subgraph "Standard Operator B"
-            OPB["<b>Operator</b><br/>(Standard Mode)"]
-            subgraph "Authoritative Local Data (B)"
-                AVB["Audit Vault"]
-                RVB["Raw Vault"]
-                SVB["Scrubbed Vault"]
-                LGB["Git Ledger"]
-            end
-            OPB --- AVB
-            OPB --- RVB
-            OPB --- SVB
-            OPB --- LGB
+    subgraph EP_A ["Execution Plane (Managed Hosts)"]
+        direction LR
+        subgraph OPA_Node ["Standard Operator A"]
+            OPA["Operator<br/>(Standard Mode)"] --- LGA["Encrypted Local Audit Ledger"]
         end
     end
 
-    %% Data Paths
-    OPA -- "mTLS WebSocket (Pub/Sub)" --> VSOD
-    OPB -- "mTLS WebSocket (Pub/Sub)" --> VSOD
-    VSOD -- "Internal Proxy" --> VSODB
-    
-    %% Annotations
-    classDef hub fill:#f5f5f5,stroke:#333,stroke-width:2px;
-    classDef operator fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef storage fill:#fff3e0,stroke:#e65100,stroke-dasharray: 5 5;
-    
-    class VSODB,VSE,VSOD hub;
-    class OPA,OPB operator;
-    class DS,KS,PS,BS,AVA,RVA,SVA,LGA,AVB,RVB,SVB,LGB storage;
+    subgraph EP_B ["Execution Plane (Managed Hosts)"]
+        direction LR
+        subgraph OPB_Node ["Standard Operator B"]
+            OPB["Operator<br/>(Standard Mode)"] --- LGB["Encrypted Local Audit Ledger"]
+        end
+    end
+
+    OPA -- "Outbound mTLS WebSocket" --> g8ed
+    OPB -- "Outbound mTLS WebSocket" --> g8ed
 ```
 
 ---
 
 ### Standard Mode (default)
 
-The primary agent mode. The Operator authenticates with the platform over HTTP, receives its session credentials and a per-operator mTLS certificate, connects to the platform pub/sub bus over WebSocket, and waits for commands from the AI.
+The primary operating mode. The Operator authenticates with the platform over HTTP, receives its session credentials and a per-operator mTLS certificate, connects to the platform pub/sub bus over WebSocket, and waits for commands from the AI.
 
 **Startup sequence:**
 
 1. Read environment and CLI flags
 2. Resolve the working directory (`--working-dir` or process cwd at launch)
 3. Load the platform CA certificate and install it as the trusted root for all subsequent TLS connections. The binary uses a **local-first** strategy — it checks well-known volume mount paths before attempting any network fetch:
-   1. If `--ca-url` is **not** set, scan these paths in order: `/ssl/ca.crt`, `/vsodb/ca.crt`, `/vsodb/ssl/ca.crt`, `/data/ssl/ca.crt`. The first path that exists and contains a valid PEM certificate is used immediately — no network request is made. Inside the Docker network (e.g., the g8e-pod container), the `vsodb-ssl` volume is mounted at `/vsodb`, so the CA is discovered locally at `/vsodb/ca.crt`.
+   1. If `--ca-url` is **not** set, scan these paths in order: `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`. The first path that exists and contains a valid PEM certificate is used immediately — no network request is made. Inside the Docker network (e.g., the g8ep container), the `g8es-ssl` volume is mounted at `/g8es`, so the CA is discovered locally at `/g8es/ca.crt`.
    2. If no local file is found, fall back to an HTTPS fetch from `https://{endpoint}/ssl/ca.crt`. This uses the OS system trust store (Go's default `http.Client`) with a 15-second timeout. The response body is capped at 64 KB and validated as PEM before being accepted.
-   3. If `--ca-url` **is** set, skip local discovery entirely and fetch from the provided URL.
+   3. If `--ca-url` **is** set, skip local discovery entirely and fetch from the provided URL with the same 15-second timeout and 64 KB response cap.
    4. If all paths fail (no local file, network unreachable, invalid PEM, non-200 response), the operator exits immediately with `ExitConfigError`.
 4. Authenticate (see [Authentication](#authentication))
 5. POST to `/api/auth/operator` — receive session credentials, bootstrap config, and per-operator mTLS certificate
 6. Rebuild the HTTP transport with the issued mTLS client certificate — all subsequent connections use it
 7. Initialize on-host storage: audit vault, scrubbed vault (AI-accessible), raw vault (local-only), and git ledger (see [On-Host Storage](#on-host-storage))
-8. Connect to VSODB over `wss://{endpoint}:{wss-port}` using mTLS
+8. Connect to g8es over `wss://{endpoint}:{wss-port}` using mTLS
 9. Subscribe to `cmd:{operator_id}:{operator_session_id}`
 10. Send automatic heartbeat and stand by for commands
 
@@ -121,7 +99,7 @@ The primary agent mode. The Operator authenticates with the platform over HTTP, 
 
 Transforms the binary into the platform's entire backend. In listen mode, the Operator becomes the SSL certificate authority, the database server, the KV store, and the pub/sub broker that all other platform components depend on.
 
-This is how VSODB works — it is the Operator binary running with `--listen`, not a separate service.
+This is how g8es works — it is the Operator binary running with `--listen`, not a separate service.
 
 **What runs in listen mode:**
 
@@ -139,13 +117,13 @@ In listen mode, the Operator is the authoritative generator and keeper of the pl
 
 These secrets are persisted in the SSL volume (`--ssl-dir`) as the authoritative source, and synchronized into the database (`settings/platform_settings` document) at startup. If a file is missing, the Operator generates a new random 32-byte hex value, writes it to the volume, and inserts it into the database. On subsequent starts, the file on disk takes precedence and the database copy is updated to match.
 
-Two TLS servers run in parallel: one on `--wss-listen-port` (default: 443) for operator pub/sub connections, and one on `--http-listen-port` (default: 443) for internal VSE/VSOD traffic and CA certificate distribution. Both use the same TLS configuration and handler. Graceful shutdown has a 10-second timeout — in-flight requests drain, pub/sub clients disconnect, and the database closes cleanly.
+Two TLS servers run in parallel: one on `--wss-listen-port` (default: 443) for operator pub/sub connections, and one on `--http-listen-port` (default: 443) for internal g8ee/g8ed traffic and CA certificate distribution. Both use the same TLS configuration and handler. Graceful shutdown has a 10-second timeout — in-flight requests drain, pub/sub clients disconnect, and the database closes cleanly.
 
 For the full storage schema and API details, see [docs/architecture/storage.md](storage.md).
 
 ### OpenClaw Mode (`--openclaw`) — Work in Progress
 
-Connects the Operator to an OpenClaw Gateway as a standalone node host, completely independent of any g8e infrastructure. No VSE, no VSOD, no bootstrap auth — the Operator connects directly to the Gateway via WebSocket using a shared-secret token and advertises two capabilities: `system.run` (execute a shell command, return stdout/stderr/exit code) and `system.which` (resolve binary paths on the host).
+Connects the Operator to an OpenClaw Gateway as a standalone node host, completely independent of any g8e infrastructure. No g8ee, no g8ed, no bootstrap auth — the Operator connects directly to the Gateway via WebSocket using a shared-secret token and advertises two capabilities: `system.run` (execute a shell command, return stdout/stderr/exit code) and `system.which` (resolve binary paths on the host).
 
 **OpenClaw integration is not yet complete.** The node host protocol is implemented and functional, but the full integration with the OpenClaw Gateway — including capability negotiation, session lifecycle, and result routing — is a work in progress. This mode is available for experimentation but should not be considered production-ready.
 
@@ -182,11 +160,11 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--key` | `-k` | `$G8E_OPERATOR_API_KEY` | API key for authentication. If not set, the binary prompts interactively with echo disabled. |
 | `--operator_session` | `-S` | `$G8E_OPERATOR_SESSION_ID` | Pre-authorized operator session ID (from device link auth) |
 | `--device-token` | `-D` | `$G8E_DEVICE_TOKEN` | Device link token for automated and fleet deployments |
-| `--endpoint` | `-e` | `$G8E_OPERATOR_ENDPOINT` | Platform endpoint — hostname or IP of the host running VSODB |
+| `--endpoint` | `-e` | `$G8E_OPERATOR_ENDPOINT` | Platform endpoint — hostname or IP of the host running g8es |
 | `--ca-url` | | | Override URL for hub CA certificate fetch (default: `https://{endpoint}/ssl/ca.crt`) |
 | `--working-dir` | | process cwd | Working directory — all commands and storage are anchored here |
-| `--wss-port` | | `443` / `9000` | WSS port for pub/sub connection to VSODB (platform default: 9000) |
-| `--http-port` | | `443` / `9001` | HTTPS port for bootstrap auth via VSOD (platform default: 9001) |
+| `--wss-port` | | `443` | WSS port for pub/sub connection to g8es |
+| `--http-port` | | `443` | HTTPS port for bootstrap auth via g8ed |
 | `--cloud` | `-c` | `true` | Cloud Operator mode. Pass `--cloud=false` for System Operator (blocks all cloud CLI tools). |
 | `--provider` | `-p` | | Cloud provider: `aws`, `gcp`, `azure`. Required for Cloud Operator for AWS. |
 | `--local-storage` | `-s` | `true` | Enable on-host storage (audit vault, raw vault, scrubbed vault, ledger) |
@@ -200,8 +178,8 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | Flag | Default | Description |
 |---|---|---|
 | `--listen` | | Enable listen mode |
-| `--wss-listen-port` | `443` / `9000` | TLS/WSS port for operator connections and pub/sub (platform default: 9000) |
-| `--http-listen-port` | `443` / `9001` | TLS/HTTPS port for internal VSE/VSOD traffic and CA distribution (platform default: 9001) |
+| `--wss-listen-port` | `443` | TLS/WSS port for operator connections and pub/sub |
+| `--http-listen-port` | `443` | TLS/HTTPS port for internal g8ee/g8ed traffic and CA distribution |
 | `--data-dir` | `.g8e/data` in working dir | SQLite database and SSL certificate directory |
 | `--ssl-dir` | `data-dir/ssl` | Directory for TLS certificates (override with --ssl-dir) |
 | `--binary-dir` | `.g8e/bin` in working dir | Legacy flag — operator binaries are now served from the blob store |
@@ -240,7 +218,7 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--key` | | API key for remote operators |
 | `--no-git` | | Disable ledger on remote operators |
 | `--ssh-config` | `~/.ssh/config` | SSH config file path |
-| `--binary-dir` | `/app/components/vsa/build` | Directory containing arch-specific operator builds |
+| `--binary-dir` | `/app/components/g8eo/build` | Directory containing arch-specific operator builds |
 
 ---
 
@@ -258,6 +236,14 @@ All environment variables are read once at startup. No code path calls `os.Geten
 | `G8E_DATA_DIR` | Override for vault and data directory |
 | `G8E_IP_SERVICE` | URL for public IP detection |
 | `G8E_IP_RESOLVER` | UDP target for local IP detection |
+| `G8E_INTERNAL_AUTH_TOKEN` | Internal auth token for listen mode (X-Internal-Auth header) |
+| `G8E_SSL_DIR` | SSL certificate directory override |
+| `G8E_PUBSUB_CA_CERT` | PubSub CA certificate path override |
+| `G8E_LOCAL_STORE_ENABLED` | Enable/disable local storage override |
+| `G8E_LOCAL_DB_PATH` | Local database path override |
+| `G8E_LOCAL_STORE_MAX_SIZE_MB` | Local storage max size override |
+| `G8E_LOCAL_STORE_RETENTION_DAYS` | Local storage retention days override |
+| `G8E_OPERATOR_PUBSUB_URL` | Operator pub/sub URL override |
 | `OPENCLAW_GATEWAY_TOKEN` | OpenClaw Gateway auth token |
 | `SHELL`, `LANG`, `TERM`, `TZ` | Passed through to command execution environment and heartbeat |
 | `PATH` | Passed through to heartbeat and OpenClaw node advertisement |
@@ -307,13 +293,13 @@ On first authentication, the platform permanently binds this fingerprint to the 
 
 ## Pub/Sub Connectivity
 
-After bootstrap, the Operator's sole connection to the platform is a WebSocket over mTLS to VSODB. This is how commands arrive and results are returned.
+After bootstrap, the Operator's sole connection to the platform is a WebSocket over mTLS to g8es. This is how commands arrive and results are returned.
 
 **Channel naming:**
 
 | Direction | Channel | Description |
 |---|---|---|
-| Inbound | `cmd:{operator_id}:{operator_session_id}` | VSE publishes commands here |
+| Inbound | `cmd:{operator_id}:{operator_session_id}` | g8ee publishes commands here |
 | Outbound | `results:{operator_id}:{operator_session_id}` | Operator publishes results here |
 | Outbound | `heartbeat:{operator_id}:{operator_session_id}` | Operator publishes heartbeats here |
 
@@ -339,6 +325,11 @@ On subscription, an automatic heartbeat is sent immediately. Reconnection uses e
 | `g8e.v1.operator.audit.ai.recorded` | Record AI message to audit log |
 | `g8e.v1.operator.audit.direct.command.recorded` | Record a direct terminal command to audit log |
 | `g8e.v1.operator.audit.direct.command.result.recorded` | Record the result of a direct terminal command |
+| `g8e.v1.operator.mcp.tools.call` | Call an MCP (Model Context Protocol) tool |
+| `g8e.v1.operator.mcp.tools.result` | Return result from an MCP tool call |
+| `g8e.v1.operator.mcp.resources.list` | List available MCP resources |
+| `g8e.v1.operator.mcp.resources.read` | Read an MCP resource |
+| `g8e.v1.operator.mcp.resources.result` | Return result from an MCP resource read |
 | `g8e.v1.operator.shutdown.requested` | Acknowledge shutdown |
 
 ---
@@ -407,6 +398,7 @@ For full schema details, retention policies, and data flow documentation, see [d
     data/
       g8e.db        Audit Vault — append-only session history (encrypted at rest)
       ledger/           Git Ledger — cryptographic file version history
+      vault.header      Vault header — metadata and wrapped DEK for encrypted vaults
     raw_vault.db        Raw Vault — unscrubbed command output (never transmitted)
     local_state.db      Scrubbed Vault — Sentinel-processed output (AI-accessible)
 ```
@@ -439,25 +431,25 @@ The Operator's security model is built around two principles: defense in depth, 
 
 **At a high level, the Operator enforces:**
 
-- **Outbound-only architecture** — the Operator opens no inbound ports. All communication is Operator-initiated: an outbound WebSocket to VSODB on port 443. Works behind any NAT, firewall, or VPC without special network configuration.
+- **Outbound-only architecture** — the Operator opens no inbound ports. All communication is Operator-initiated: an outbound WebSocket to g8es on port 443. Works behind any NAT, firewall, or VPC without special network configuration.
 - **mTLS on every connection** — both sides present certificates. The Operator will not connect to a server whose certificate isn't signed by the pinned platform CA. The server cannot be impersonated.
 - **TLS kill switch** — if certificate verification fails for any reason, the Operator exits with code `7` (`ExitCertTrustFailure`). The connection is never downgraded, and the binary never retries insecurely. Resolution: install a new binary.
 - **Sentinel pre-execution threat detection** — every command and file edit is analyzed against MITRE ATT&CK-mapped threat patterns before execution. Dangerous commands are blocked outright before any process is spawned. The AI cannot bypass Sentinel.
-- **Sentinel post-execution output scrubbing** — before any command output reaches VSE (and therefore any AI provider), Sentinel removes credentials, PII, API keys, and secrets. Raw output stays on the host in the Raw Vault.
+- **Sentinel post-execution output scrubbing** — before any command output reaches g8ee (and therefore any AI provider), Sentinel removes credentials, PII, API keys, and secrets. Raw output stays on the host in the Raw Vault.
 - **In-memory credentials** — the API key and mTLS certificate are held only in process memory. Nothing sensitive is written to disk in recoverable form.
 - **Human approval required** — every state-changing command requires explicit user consent in the UI. The AI proposes; the human decides.
 
 ---
 
-## Drop Script Deployment
+## Deployment Script
 
-The simplest way to deploy the operator on a remote Linux system. VSOD serves a POSIX shell script at `http://<host>/g8e` (port 80) that handles CA trust, binary download, and operator launch in a single command:
+The simplest way to deploy the operator on a remote Linux system. g8ed serves a POSIX shell script at `http://<host>/g8e` (port 80) that handles CA trust, binary download, and operator launch in a single command:
 
 ```bash
 curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ```
 
-The device link token is generated in the VSOD UI and authenticates both the binary download (as Bearer auth on the HTTPS download endpoint) and the operator session (passed as `--device-token`).
+The device link token is generated in the g8ed UI and authenticates both the binary download (as Bearer auth on the HTTPS download endpoint) and the operator session (passed as `--device-token`).
 
 **Sequence:**
 1. Script detects architecture via `uname -m` (supports `amd64`, `arm64`, `386`)
@@ -467,7 +459,7 @@ The device link token is generated in the VSOD UI and authenticates both the bin
 
 The script requires only `curl` or `wget` and a POSIX-compliant `/bin/sh`. No root access, no package installation, no persistent files beyond the operator binary itself.
 
-See [VSOD — Operator Drop Script](../components/vsod.md#operator-drop-script) for implementation details.
+See [g8ed — Operator Deployment Script](../components/g8ed.md#operator-deployment-script) for implementation details.
 
 ---
 
@@ -524,7 +516,7 @@ All storage paths are relative to it:
 
 ```
 {workdir}/
-  .g8e/data/          Audit vault and git ledger
+  .g8e/data/          Audit vault, git ledger, and vault header
   .g8e/raw_vault.db   Raw (unscrubbed) command output
   .g8e/local_state.db Scrubbed (AI-accessible) command output
   .g8e/bin/           Legacy binary directory (operator binaries now stored in blob store)

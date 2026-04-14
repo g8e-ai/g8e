@@ -1,7 +1,7 @@
 #!/bin/bash
 # g8e node g8e node
 #
-# Runs tests in the g8e-pod container. Infrastructure must already be running (use build.sh).
+# Runs tests in the g8ep container. Infrastructure must already be running (use build.sh).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -20,7 +20,7 @@ NC=$'\033[0m'
 
 log_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  [g8e-pod] $1${NC}"
+    echo -e "${BLUE}  [g8ep] $1${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 log_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -35,7 +35,7 @@ _footer() {
     local rc=$?
     [[ $rc -eq 0 ]] || return
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  [g8e-pod] run_tests.sh complete${NC}"
+    echo -e "${GREEN}  [g8ep] run_tests.sh complete${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 trap _footer EXIT
@@ -47,7 +47,9 @@ trap _footer EXIT
 COMPONENT="all"
 COVERAGE=false
 PYRIGHT=false
+E2E=false
 TEST_LLM_PROVIDER="${TEST_LLM_PROVIDER:-}"
+TEST_LLM_ASSISTANT_PROVIDER="${TEST_LLM_ASSISTANT_PROVIDER:-}"
 TEST_LLM_PRIMARY_MODEL="${TEST_LLM_PRIMARY_MODEL:-}"
 TEST_LLM_ASSISTANT_MODEL="${TEST_LLM_ASSISTANT_MODEL:-}"
 TEST_LLM_ENDPOINT_URL="${TEST_LLM_ENDPOINT_URL:-}"
@@ -63,14 +65,16 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: ./run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: all, vse, vsod, vsa, security"
+            echo "Components: all, g8ee, g8ed, g8eo, security"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
-            echo "  --pyright                 Run pyright strict gate (VSE only)"
+            echo "  --pyright                 Run pyright strict gate (g8ee only)"
+            echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo ""
             echo "LLM Options (enables ai_integration tests):"
-            echo "  -p, --llm-provider        LLM provider (gemini, openai, anthropic, ollama)"
+            echo "  -p, --llm-provider        Primary LLM provider (gemini, openai, anthropic, ollama)"
+            echo "  -ap, --assistant-provider Assistant LLM provider (gemini, openai, anthropic, ollama)"
             echo "  -m, --primary-model       Primary model name"
             echo "  -a, --assistant-model      Assistant model name"
             echo "  -e, --llm-endpoint-url    API endpoint URL"
@@ -92,10 +96,18 @@ while [[ $# -gt 0 ]]; do
             PYRIGHT=true
             shift
             ;;
+        --e2e)
+            E2E=true
+            shift
+            ;;
         --llm-provider|-p)
             TEST_LLM_PROVIDER="$2"; shift 2 ;;
         --llm-provider=*)
             TEST_LLM_PROVIDER="${1#*=}"; shift ;;
+        --assistant-provider|-ap)
+            TEST_LLM_ASSISTANT_PROVIDER="$2"; shift 2 ;;
+        --assistant-provider=*)
+            TEST_LLM_ASSISTANT_PROVIDER="${1#*=}"; shift ;;
         --primary-model|-m)
             TEST_LLM_PRIMARY_MODEL="$2"; shift 2 ;;
         --primary-model=*)
@@ -134,7 +146,7 @@ while [[ $# -gt 0 ]]; do
             break
             ;;
         *)
-            if [[ "$1" =~ ^(all|vse|vsod|vsa|security)$ ]]; then
+            if [[ "$1" =~ ^(all|g8ee|g8ed|g8eo|security)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -148,31 +160,30 @@ done
 # Container Environment Setup
 # =============================================================================
 
-_settings_script=(/app/scripts/data/manage-vsodb.py settings)
+_settings_script=(/app/scripts/data/manage-g8es.py settings)
 
 _install_ca_cert() {
-    local ca_cert="/vsodb/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/vsodb/ca/ca.crt"
+    local ca_cert="/g8es/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
     if [[ ! -f "$ca_cert" ]]; then
         log_warn "Platform CA cert not found"
         return
     fi
     export G8E_SSL_CERT_FILE="$ca_cert"
-    export REQUESTS_CA_BUNDLE="$ca_cert"
     export NODE_EXTRA_CA_CERTS="$ca_cert"
     log_ok "Platform CA cert set (G8E_SSL_CERT_FILE=$ca_cert)"
 }
 
 _load_platform_secrets() {
-    local auth_token_file="/vsodb/internal_auth_token"
-    local session_key_file="/vsodb/session_encryption_key"
+    local auth_token_file="/g8es/internal_auth_token"
+    local session_key_file="/g8es/session_encryption_key"
     if [[ -f "$auth_token_file" ]]; then
         export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file")
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from /vsodb"
+        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from /g8es"
     fi
     if [[ -f "$session_key_file" ]]; then
         export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file")
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from /vsodb"
+        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from /g8es"
     fi
 }
 
@@ -183,8 +194,8 @@ setup_container_environment() {
 }
 
 verify_container_infrastructure() {
-    local ca_cert="/vsodb/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/vsodb/ca/ca.crt"
+    local ca_cert="/g8es/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
     local curl_args=()
     if [[ -f "$ca_cert" ]]; then
         curl_args=("--cacert" "$ca_cert")
@@ -193,20 +204,20 @@ verify_container_infrastructure() {
         log_warn "CA cert not found, using insecure connection"
     fi
     
-    if ! curl -sf "${curl_args[@]}" https://vsodb:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "VSODB not accessible at https://vsodb:9000/health"
+    if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
+        log_err "g8es not accessible at https://g8es:9000/health"
         exit 1
     fi
-    log_ok "VSODB connected"
+    log_ok "g8es connected"
 }
 
 # =============================================================================
 # Component Runners
 # =============================================================================
 
-run_vse() {
-    log_header "Running VSE tests on g8e-pod"
-    cd "$PROJECT_ROOT/components/vse"
+run_g8ee() {
+    log_header "Running g8ee tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
     fi
@@ -215,17 +226,23 @@ run_vse() {
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
-run_vsod() {
-    log_header "Running VSOD tests on g8e-pod"
-    cd "$PROJECT_ROOT/components/vsod"
+run_e2e() {
+    log_header "Running E2E operator lifecycle tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8ee"
+    pytest -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
+}
+
+run_g8ed() {
+    log_header "Running g8ed tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8ed"
     local cov_flag=""
     [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
     NODE_PATH="./node_modules" npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
 }
 
-run_vsa() {
-    log_header "Running VSA tests on g8e-pod"
-    cd "$PROJECT_ROOT/components/vsa"
+run_g8eo() {
+    log_header "Running g8eo tests on g8ep"
+    cd "$PROJECT_ROOT/components/g8eo"
     local test_target="./..."
     local pass_through_args=()
     
@@ -247,7 +264,7 @@ run_vsa() {
         local rc=$?
         if [[ -f coverage.out ]]; then
             echo ""
-            log_header "VSA Coverage Report"
+            log_header "g8eo Coverage Report"
             go tool cover -func=coverage.out
         fi
         return $rc
@@ -258,10 +275,10 @@ run_vsa() {
 
 run_component() {
     case "$COMPONENT" in
-        vse) run_vse ;;
-        vsod) run_vsod ;;
-        vsa) run_vsa ;;
-        all) run_vse; run_vsod; run_vsa ;;
+        g8ee) run_g8ee ;;
+        g8ed) run_g8ed ;;
+        g8eo) run_g8eo ;;
+        all) run_g8ee; run_g8ed; run_g8eo ;;
     esac
 }
 
@@ -269,7 +286,8 @@ _show_llm_config() {
     if [[ -n "${TEST_LLM_PROVIDER:-}" ]]; then
         echo ""
         echo -e "${CYAN}  LLM Configuration (from CLI flags)${NC}"
-        echo -e "  Provider:        ${TEST_LLM_PROVIDER}"
+        echo -e "  Primary Provider:   ${TEST_LLM_PROVIDER}"
+        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]   && echo -e "  Primary Model:   ${TEST_LLM_PRIMARY_MODEL}"
         [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]] && echo -e "  Assistant Model: ${TEST_LLM_ASSISTANT_MODEL}"
         [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]    && echo -e "  Endpoint:        ${TEST_LLM_ENDPOINT_URL}"
@@ -305,28 +323,30 @@ _show_web_search_config() {
 # =============================================================================
 
 run_in_container() {
-    if ! docker ps --filter "name=^g8e-pod$" --filter "status=running" -q | grep -q .; then
-        log_warn "g8e-pod not running — starting it..."
-        docker compose up -d g8e-pod
+    if ! docker ps --filter "name=^g8ep$" --filter "status=running" -q | grep -q .; then
+        log_warn "g8ep not running — starting it..."
+        docker compose up -d g8ep
     fi
     local exec_args=("$COMPONENT")
     [[ "$COVERAGE" == "true" ]] && exec_args+=("--coverage")
     [[ "$PYRIGHT" == "true" ]] && exec_args+=("--pyright")
+    [[ "$E2E" == "true" ]] && exec_args+=("--e2e")
     [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && exec_args+=("--" "${EXTRA_ARGS[@]}")
 
     local env_args=(-e RUNNING_IN_CONTAINER=true)
-    [[ -n "$TEST_LLM_PROVIDER" ]]        && env_args+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]    && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]     && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
-    [[ -n "$TEST_LLM_API_KEY" ]]          && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
+    [[ -n "$TEST_LLM_PROVIDER" ]]           && env_args+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
+    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
+    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
+    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
+    [[ -n "$TEST_LLM_API_KEY" ]]            && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && env_args+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && env_args+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
     [[ -n "$TEST_WEB_SEARCH_API_KEY" ]]     && env_args+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
     [[ -n "$TEST_WEB_SEARCH_LOCATION" ]]    && env_args+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
 
-    docker exec "${env_args[@]}" g8e-pod /app/scripts/testing/run_tests.sh "${exec_args[@]}"
+    docker exec "${env_args[@]}" g8ep /app/scripts/testing/run_tests.sh "${exec_args[@]}"
 }
 
 # =============================================================================
@@ -337,11 +357,12 @@ if in_container; then
     setup_container_environment
     verify_container_infrastructure
 
-    [[ -n "$TEST_LLM_PROVIDER" ]]        && export TEST_LLM_PROVIDER
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]   && export TEST_LLM_PRIMARY_MODEL
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]] && export TEST_LLM_ASSISTANT_MODEL
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]    && export TEST_LLM_ENDPOINT_URL
-    [[ -n "$TEST_LLM_API_KEY" ]]         && export TEST_LLM_API_KEY
+    [[ -n "$TEST_LLM_PROVIDER" ]]           && export TEST_LLM_PROVIDER
+    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && export TEST_LLM_ASSISTANT_PROVIDER
+    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && export TEST_LLM_PRIMARY_MODEL
+    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && export TEST_LLM_ASSISTANT_MODEL
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && export TEST_LLM_ENDPOINT_URL
+    [[ -n "$TEST_LLM_API_KEY" ]]            && export TEST_LLM_API_KEY
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && export TEST_WEB_SEARCH_PROJECT_ID
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && export TEST_WEB_SEARCH_ENGINE_ID
@@ -352,9 +373,13 @@ if in_container; then
     
     _show_llm_config
     _show_web_search_config
-    run_component
+    if [[ "$E2E" == "true" ]]; then
+        run_e2e
+    else
+        run_component
+    fi
 else
-    # Host-side: ALWAYS launch in g8e-pod. 
+    # Host-side: ALWAYS launch in g8ep. 
     # Direct execution on host is strictly forbidden for tests.
     run_in_container
 fi

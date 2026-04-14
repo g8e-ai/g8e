@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical wire format for bound operator context carried in X-VSO-Bound-Operators header from VSOD to VSE. This model ensures wire compatibility and enforces consistency across components.",
+  "_comment": "Canonical wire format for bound operator context carried in X-G8E-Bound-Operators header from g8ed to G8EE. This model ensures wire compatibility and enforces consistency across components.",
 
   "bound_operator_context": {
-    "_description": "Single bound operator entry in the X-VSO-Bound-Operators header array. VSOD resolves this from the database (BoundSessionsDocument + operator docs) and VSE parses it from the HTTP header.",
+    "_description": "Single bound operator entry in the X-G8E-Bound-Operators header array. g8ed resolves this from the database (BoundSessionsDocument + operator docs) and g8ee parses it from the HTTP header.",
     "fields": {
       "operator_id": {
         "type": "string",

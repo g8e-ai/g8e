@@ -162,6 +162,15 @@
       "web_session_id": "test-web-session-id"
     }
   },
+  "llm_chat_iteration_started": {
+    "type": "g8e.v1.ai.llm.chat.iteration.started",
+    "data": {
+      "agent_mode": "g8e.not.bound",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
   "llm_lifecycle_started": {
     "type": "g8e.v1.ai.llm.lifecycle.started",
     "data": {

@@ -14,23 +14,23 @@
 """
 Platform Settings Script
 
-Read and write effective platform settings via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Read and write effective platform settings via the g8ed internal HTTP API.
+Runs inside g8ep and communicates with g8ed over the internal network.
 Secret values (API keys, tokens) are never returned by the internal endpoint.
 
-The --direct flag bypasses VSOD and writes straight to VSODB. Use this when
-VSOD is not running (e.g. initial LLM setup before first platform start).
+The --direct flag bypasses g8ed and writes straight to g8es. Use this when
+g8ed is not running (e.g. initial LLM setup before first platform start).
 
 Usage:
-    python manage-vsodb.py settings show
-    python manage-vsodb.py settings show --section llm
-    python manage-vsodb.py settings show --section general
-    python manage-vsodb.py settings get llm_provider
-    python manage-vsodb.py settings get llm_model
-    python manage-vsodb.py settings set llm_provider=openai llm_model=gemma3:4b
-    python manage-vsodb.py settings set --direct llm_provider=openai llm_endpoint=https://api.openai.com/v1
-    python manage-vsodb.py settings set llm_endpoint=https://10.0.0.1:11434/v1
-    python manage-vsodb.py settings rotate-token
+    python manage-g8es.py settings show
+    python manage-g8es.py settings show --section llm
+    python manage-g8es.py settings show --section general
+    python manage-g8es.py settings get llm_provider
+    python manage-g8es.py settings get llm_model
+    python manage-g8es.py settings set llm_provider=openai llm_model=gemma3:4b
+    python manage-g8es.py settings set --direct llm_provider=openai llm_endpoint=https://api.openai.com/v1
+    python manage-g8es.py settings set llm_endpoint=https://10.0.0.1:11434/v1
+    python manage-g8es.py settings rotate-token
 """
 
 import argparse
@@ -42,16 +42,16 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from _lib import (
-    VSOD_BASE_URL,
-    VSODB_BASE_URL,
+    G8ED_BASE_URL,
+    g8es_BASE_URL,
     get_document,
     print_banner,
-    vsod_request,
-    vsodb_request,
+    g8ed_request,
+    g8es_request,
 )
 
-INTERNAL_API_URL = f'{VSOD_BASE_URL}/api/internal/settings'
-VSODB_SETTINGS_COLLECTION = 'settings'
+INTERNAL_API_URL = f'{G8ED_BASE_URL}/api/internal/settings'
+G8ES_SETTINGS_COLLECTION = 'settings'
 PLATFORM_SETTINGS_ID = 'platform_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'
 
@@ -60,14 +60,14 @@ def _api_get(user_id: Optional[str] = None) -> Dict[str, Any]:
     url = INTERNAL_API_URL
     if user_id:
         url += f'?user_id={user_id}'
-    return vsod_request('GET', url)
+    return g8ed_request('GET', url)
 
 
 def _api_put(settings: Dict[str, str], user_id: Optional[str] = None) -> Dict[str, Any]:
     payload: Dict[str, Any] = {'settings': settings}
     if user_id:
         payload['user_id'] = user_id
-    return vsod_request('PUT', INTERNAL_API_URL, payload)
+    return g8ed_request('PUT', INTERNAL_API_URL, payload)
 
 
 _SECTION_ORDER = ['general', 'llm', 'search', 'security', 'validation']
@@ -169,7 +169,7 @@ def exec_show(args: argparse.Namespace) -> None:
         print(f"[settings] Error: {result.get('error', 'Unknown error')}", file=sys.stderr)
         sys.exit(1)
 
-    # The VSOD API returns settings inside a 'data' object
+    # The g8ed API returns settings inside a 'data' object
     data = result.get('data', {})
     settings = data.get('settings', {})
     if not settings:
@@ -195,21 +195,21 @@ def exec_get(args: argparse.Namespace) -> None:
         print(value, end='')
 
 
-def _vsodb_get_platform_settings() -> Dict[str, Any]:
-    result = get_document(VSODB_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
+def _g8es_get_platform_settings() -> Dict[str, Any]:
+    result = get_document(G8ES_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
     return result if result else {}
 
 
-def _vsodb_put_platform_settings(doc: Dict[str, Any]) -> None:
-    vsodb_request('PUT', f'/db/{VSODB_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
+def _g8es_put_platform_settings(doc: Dict[str, Any]) -> None:
+    g8es_request('PUT', f'/db/{G8ES_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
 
 
 def exec_rotate_token(_args: argparse.Namespace) -> None:
     new_token = secrets.token_hex(32)
     now = datetime.now(timezone.utc).isoformat()
 
-    # 1. Update VSODB document
-    doc = _vsodb_get_platform_settings()
+    # 1. Update g8es document
+    doc = _g8es_get_platform_settings()
 
     if not doc:
         doc = {
@@ -222,10 +222,10 @@ def exec_rotate_token(_args: argparse.Namespace) -> None:
     doc['settings']['internal_auth_token'] = new_token
     doc['updated_at'] = now
 
-    _vsodb_put_platform_settings(doc)
+    _g8es_put_platform_settings(doc)
 
     # 2. Update token file in SSL volume
-    token_path = Path('/vsodb/ssl/internal_auth_token')
+    token_path = Path('/g8es/ssl/internal_auth_token')
     if token_path.parent.exists():
         try:
             token_path.write_text(new_token)
@@ -247,9 +247,9 @@ def _parse_assignments(assignments: list) -> Dict[str, str]:
 
 
 def _direct_set(settings: Dict[str, str]) -> None:
-    """Write settings directly to the VSODB platform_settings document."""
+    """Write settings directly to the g8es platform_settings document."""
     now = datetime.now(timezone.utc).isoformat()
-    doc = _vsodb_get_platform_settings()
+    doc = _g8es_get_platform_settings()
 
     if not doc:
         doc = {
@@ -263,7 +263,7 @@ def _direct_set(settings: Dict[str, str]) -> None:
         doc['settings'][key] = value
     doc['updated_at'] = now
 
-    _vsodb_put_platform_settings(doc)
+    _g8es_put_platform_settings(doc)
     for key in settings:
         print(f"  [OK] {key}")
 
@@ -315,7 +315,7 @@ def exec_export(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Read and write platform settings via the VSOD internal API.',
+        description='Read and write platform settings via the g8ed internal API.',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -352,7 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--direct',
         action='store_true',
         default=False,
-        help='Write directly to VSODB, bypassing the VSOD internal API (use when VSOD is not running)',
+        help='Write directly to g8es, bypassing the g8ed internal API (use when g8ed is not running)',
     )
     sp.set_defaults(func=exec_set)
 
@@ -368,7 +368,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser(
         'rotate-token',
-        help='Generate a new internal_auth_token and write it directly to VSODB',
+        help='Generate a new internal_auth_token and write it directly to g8es',
     ).set_defaults(func=exec_rotate_token)
 
     return parser
@@ -383,12 +383,12 @@ def run(argv: List[str]) -> int:
 
     _machine_readable = args.command in ('get', 'rotate-token')
     if not _machine_readable:
-        print_banner('manage-vsodb.py settings', ' '.join(argv))
+        print_banner('manage-g8es.py settings', ' '.join(argv))
 
     try:
         args.func(args)
     except RuntimeError as e:
-        print(f'[manage-vsodb settings] {e}', file=sys.stderr)
+        print(f'[manage-g8es settings] {e}', file=sys.stderr)
         return 1
     return 0
 

@@ -1,6 +1,6 @@
 # g8e Documentation Index
 
-Documentation for the g8e platform, organized by category.
+Documentation for the g8e AI governance platform, organized by category.
 
 ---
 
@@ -8,8 +8,8 @@ Documentation for the g8e platform, organized by category.
 
 | Document | Description |
 |----------|-------------|
-| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, code quality rules (VSA/VSE/VSOD), shared constants and models, project structure |
-| [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8e-pod environment, CI workflows, and component-specific guidelines (VSA, VSOD, VSE) |
+| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, governance-first code quality rules (g8eo/g8ee/g8ed), shared constants and models, project structure |
+| [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8ep environment, CI workflows, and component-specific guidelines (g8eo, g8ed, g8ee) |
 | [glossary.md](glossary.md) | Essential terminology for understanding the g8e platform, organized alphabetically |
 | [docs-guidelines.md](docs-guidelines.md) | Documentation authoring standards — structure, style, formatting, file locations, ownership rules, and sync rules |
 
@@ -22,12 +22,12 @@ Cross-component internals — data flows, protocols, and system-wide design deci
 | Document | Description |
 |----------|-------------|
 | [architecture/about.md](architecture/about.md) | Platform origins, story, and governance |
-| [architecture/ai_agents.md](architecture/ai_agents.md) | AI agent cross-component architecture — transport, conversation data models, command execution pipeline |
+| [architecture/ai_control_plane.md](architecture/ai_control_plane.md) | AI control plane cross-component architecture — transport, conversation data models, command execution pipeline |
 | [architecture/builds.md](architecture/builds.md) | Build system — component builds, operator binary distribution, and CI workflows |
 | [architecture/dashboard.md](architecture/dashboard.md) | Dashboard architecture — SSE fan-out, operator panel, and frontend integration |
 | [architecture/docker.md](architecture/docker.md) | Docker architecture — service configuration, non-root users, security hardening, capability model, read-only filesystems, docker socket threat model, and dev/prod compose split |
 | [architecture/mcp.md](architecture/mcp.md) | MCP (Model Context Protocol) gateway architecture |
-| [architecture/operator.md](architecture/operator.md) | Operator architecture — VSA lifecycle, session management, command dispatch, binding protocol, and Sentinel integration |
+| [architecture/operator.md](architecture/operator.md) | Operator architecture — g8eo lifecycle, session management, command dispatch, binding protocol, and Sentinel integration |
 | [architecture/storage.md](architecture/storage.md) | Data storage architecture — all storage layers, component roles, topology, encryption, and retention |
 | [architecture/security.md](architecture/security.md) | Complete security architecture — authentication, session management, operator security, authorization, API security, data protection, LFAA encryption, Sentinel, threat model, and governance |
 
@@ -39,11 +39,11 @@ Technical reference for each platform component.
 
 | Document | Description |
 |----------|-------------|
-| [components/vsa.md](components/vsa.md) | VSA (Virtual Service Agent) — Go-based operator providing secure, real-time command execution and file management for remote system operations |
-| [components/vse.md](components/vse.md) | VSE (Virtual Support Engineer) — AI engine providing agentic, LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
-| [components/vsod.md](components/vsod.md) | VSOD (VSO Dashboard) — authentication, session management, dashboard backend, operator lifecycle, SSE fan-out, and WebSocket proxy |
-| [components/vsodb.md](components/vsodb.md) | VSODB — operator binary in `--listen` mode; single source of truth for persistence (SQLite document store, KV store, SSE event buffer, and pub/sub broker) |
-| [components/g8e-pod.md](components/g8e-pod.md) | g8e node — always-on sidecar container for running all component tests (VSE/VSOD/VSA), security scans, and ephemeral SSH deployment |
+| [components/g8eo.md](components/g8eo.md) | g8eo (g8e Operator) — Go-based reference implementation of the Operator providing secure, real-time command execution and file management for remote system operations |
+| [components/g8ee.md](components/g8ee.md) | g8ee — AI engine providing LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
+| [components/g8ed.md](components/g8ed.md) | g8ed (g8e Dashboard) — authentication, session management, dashboard backend, operator lifecycle, SSE fan-out, and WebSocket proxy |
+| [components/g8es.md](components/g8es.md) | g8es (g8e Data Bus) — Operator binary in `--listen` mode; single source of truth for persistence (SQLite document store, KV store, SSE event buffer, and pub/sub broker) |
+| [components/g8ep.md](components/g8ep.md) | g8e node — always-on sidecar container for running all component tests (g8ee/g8ed/g8eo), security scans, and ephemeral SSH deployment |
 
 ---
 
@@ -63,5 +63,6 @@ External resources and reference materials (do not modify).
 
 | Document | Description |
 |----------|-------------|
+| [reference/events.md](reference/events.md) | g8e event type specification -- complete wire-protocol event registry (238 events across 5 domains) |
 | [reference/core_principles.md](reference/core_principles.md) | Core platform principles and design philosophy |
 | [reference/mcp.yaml](reference/mcp.yaml) | MCP (Model Context Protocol) schema and tool definitions |

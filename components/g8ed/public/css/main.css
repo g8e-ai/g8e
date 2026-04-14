@@ -1,0 +1,1447 @@
+
+/* CSS Custom Properties for Theming */
+:root {
+    /* Primary Colors */
+    --primary-color: #0a59a8;
+    --primary-rgb: 10, 89, 168;
+    --primary-hover: #528bc4;
+    --secondary-color: #34ad59;
+    --secondary-color-rgb: 52, 173, 89;
+    --danger-color: #dc3545;
+    --danger-color-rgb: 220, 53, 69;
+    --warning-color: #ffc107;
+    --warning-color-rgb: 255, 193, 7;
+    --info-color: #17a2b8;
+    --info-color-rgb: 23, 162, 184;
+
+    /* Accent Colors - Dark Mode */
+    --accent-green: #10b981;
+    --accent-green-rgb: 16, 185, 129;
+    --accent-green-dark: #059669;
+    --accent-green-dark-rgb: 5, 150, 105;
+    --accent-green-light: #86efac;
+    --accent-green-solid: #16a34a;
+    --accent-green-solid-rgb: 22, 163, 74;
+    --accent-green-muted: #2d6a5a;
+    --accent-green-muted-rgb: 45, 106, 90;
+    --accent-blue: #58a6ff;
+    --accent-blue-rgb: 88, 166, 255;
+    --accent-blue-dark: #0969da;
+    --accent-blue-dark-rgb: 9, 105, 218;
+    --accent-blue-light: #60a5fa;
+    --accent-blue-lighter: #93c5fd;
+    --accent-blue-solid: #3b82f6;
+    --accent-blue-solid-rgb: 59, 130, 246;
+    --accent-aws: #fb923c;
+    --accent-aws-rgb: 251, 146, 60;
+    --accent-orange: #fb923c;
+    --accent-orange-rgb: 251, 146, 60;
+    --accent-orange-solid: #f97316;
+    --accent-orange-solid-rgb: 249, 115, 22;
+    --accent-orange-dark: #ea580c;
+    --accent-orange-dark-rgb: 234, 88, 12;
+    --accent-orange-darker: #c2410c;
+    --accent-orange-darker-rgb: 194, 65, 12;
+    --accent-purple: #a78bfa;
+    --accent-purple-rgb: 167, 139, 250;
+    --accent-purple-dark: #8b5cf6;
+    --accent-purple-dark-rgb: 139, 92, 246;
+    --accent-teal: #14b8a6;
+    --accent-teal-rgb: 20, 184, 166;
+    --accent-teal-dark: #0d9488;
+    --accent-red: #ef4444;
+    --accent-red-rgb: 239, 68, 68;
+    --accent-red-dark: #dc2626;
+    --accent-red-dark-rgb: 220, 38, 38;
+    --accent-red-darker: #7f1d1d;
+    --accent-red-darker-rgb: 127, 29, 29;
+    --accent-amber: #f59e0b;
+    --accent-amber-rgb: 245, 158, 11;
+    --accent-amber-dark: #d97706;
+    --accent-amber-dark-rgb: 217, 119, 6;
+    --accent-amber-light: #fbbf24;
+    --accent-amber-lighter: #fcd34d;
+    --accent-yellow: #facc15;
+    --accent-yellow-dark: #ca8a04;
+    --accent-color: #58a6ff;
+    --accent-cyan: #22d3ee;
+    --accent-cyan-rgb: 34, 211, 238;
+    --accent-cyan-dark: #06b6d4;
+    --accent-cyan-dark-rgb: 6, 182, 212;
+    --accent-cyan-light: #67e8f9;
+    --accent-cyan-light-rgb: 103, 232, 249;
+    --accent-hover: #79c0ff;
+    --accent-secondary: #34d399;
+    --aws-orange: #ff9900;
+    
+    /* Link Colors - Dark Mode */
+    --link-color: #58a6ff;
+    --link-hover: #79c0ff;
+    --link-visited: #bc8cff;
+    --link-visited-hover: #d2a8ff;
+
+    /* Background & Layout */
+    --bg-primary: #0a0a0a;
+    --bg-dark: #0a0a0a;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --bg-card: #161b22;
+    --bg-hover: #1c2128;
+    --bg-elevated: #21262d;
+    --bg-color: #0a0a0a;
+    --background-color: #0a0a0a;
+    --border-color: #30363d;
+    --border-hover: #484f58;
+    --border-secondary: #21262d;
+    --border-subtle: #21262d;
+    --border-primary: #30363d;
+    
+    /* Surface Colors */
+    --surface-color: #161b22;
+    --surface-primary: #161b22;
+    --surface-secondary: #21262d;
+    --surface-tertiary: #30363d;
+    --surface-hover: #30363d;
+
+    /* Terminal */
+    --terminal-bg: #0a0a0a;
+    --terminal-text: #c9d1d9;
+    --terminal-cursor: #58a6ff;
+    
+    /* Terminal Mockup - Always Dark (theme-invariant) */
+    --terminal-mockup-bg: #0d1117;
+    --terminal-mockup-header-bg: #1f2937;
+    --terminal-mockup-border: #30363d;
+    --terminal-mockup-header-border: #374151;
+    --terminal-mockup-title: #d1d5db;
+    --terminal-mockup-text: #c9d1d9;
+    --terminal-mockup-prompt: #4ade80;
+    --terminal-mockup-comment: #6b7280;
+    --terminal-mockup-info: #9ca3af;
+    --terminal-mockup-mode: #9ca3af;
+    --terminal-mockup-success: #4ade80;
+    --terminal-mockup-warning: #fbbf24;
+    --terminal-mockup-error: #f87171;
+
+    /* Chat variables moved to chat.css */
+
+    /* Text Colors */
+    --text-primary: #c9d1d9;
+    --text-bright: #e6edf3;
+    --text-dim: #8b949e;
+    --text-secondary: #7d8590;
+    --text-muted: #656d76;
+    --text-muted-rgb: 101, 109, 118;
+    --text-tertiary: #484f58;
+    --text-tertiary-rgb: 72, 79, 88;
+    --text-rgb: 201, 209, 217;
+
+    /* Input / form background */
+    --bg-input: #0d1117;
+    
+    /* Status Colors */
+    --error-color: #f85149;
+    --error-color-rgb: 248, 81, 73;
+    --success-color: #3fb950;
+    --success-color-rgb: 63, 185, 80;
+
+    /* Semantic UI Colors */
+    --approval-orange: #ffa500;
+    --approval-orange-rgb: 255, 165, 0;
+    --confidence-green: #00ff88;
+    --confidence-green-rgb: 0, 255, 136;
+    --confidence-red: #ff4444;
+    --confidence-red-rgb: 255, 68, 68;
+    --led-green: #4caf50;
+    --led-green-rgb: 76, 175, 80;
+    --btn-navy: #1e3c72;
+    --btn-navy-rgb: 30, 60, 114;
+    --btn-navy-accent: #4a69bd;
+    --btn-navy-accent-rgb: 74, 105, 189;
+    --deploy-cta-bg: #1a237e;
+    --deploy-cta-bg-rgb: 26, 35, 126;
+    --deploy-cta-bg-light: #3949ab;
+    --deploy-cta-bg-light-rgb: 57, 73, 171;
+    --command-center-green: #388e3c;
+    --command-center-green-rgb: 56, 142, 60;
+
+    /* Metric Level Colors (progress bars, gauges, latency indicators) */
+    --level-low: #22c55e;
+    --level-low-rgb: 34, 197, 94;
+    --level-low-light: #4ade80;
+    --level-low-light-rgb: 74, 222, 128;
+    --level-medium: #f59e0b;
+    --level-medium-light: #fbbf24;
+    --level-high: #ef4444;
+    --level-high-light: #f87171;
+    
+    /* Primary Color Variants */
+    --primary-color-dark: #084b8a;
+    --primary-color-rgb: 10, 89, 168;
+    --primary-color-muted: #3d5a80;
+    --primary-color-muted-rgb: 61, 90, 128;
+
+    --case-id-color: #10b981;
+
+    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-secondary: 'Fira Code', 'Monaco', 'Consolas', monospace;
+    --font-sans: var(--font-primary);
+    --font-mono: var(--font-secondary);
+    /* Typography System Base Font Size
+       All message-related components should use relative units based on this variable
+       for consistent scaling across devices and breakpoints. Use calc(var(--font-size-base) * multiplier)
+       for smaller/larger sizes. Example: calc(var(--font-size-base) * 0.833) for 83.3% of base size.
+    */
+    --font-size-base: 0.9rem;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.3);
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    --transition-fast: 150ms ease;
+    --transition-normal: 300ms ease;
+    --transition-slow: 500ms ease;
+
+    /* CTA Button Colors */
+    --cta-gradient-start: #4facfe;
+    --cta-gradient-end: #00f2fe;
+    --cta-text: #0a0a0a;
+    --cta-shadow-rgb: 79, 172, 254;
+
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    /* Accent Colors - Light Mode (darker, less bright) */
+    --accent-green: #059669;
+    --accent-green-rgb: 5, 150, 105;
+    --accent-green-dark: #10b981;
+    --accent-green-dark-rgb: 16, 185, 129;
+    --accent-green-light: #16a34a;
+    --accent-green-light-rgb: 22, 163, 74;
+    --accent-green-solid: #15803d;
+    --accent-green-solid-rgb: 21, 128, 61;
+    --accent-green-muted: #4a7c6f;
+    --accent-green-muted-rgb: 74, 124, 111;
+    --accent-blue: #0066cc;
+    --accent-blue-rgb: 0, 102, 204;
+    --accent-blue-dark: #0052a3;
+    --accent-blue-dark-rgb: 0, 82, 163;
+    --accent-blue-light: #2563eb;
+    --accent-blue-lighter: #1d4ed8;
+    --accent-blue-solid: #2563eb;
+    --accent-blue-solid-rgb: 37, 99, 235;
+    --accent-purple: #9333ea;
+    --accent-purple-rgb: 147, 51, 234;
+    --accent-purple-dark: #7c3aed;
+    --accent-purple-dark-rgb: 124, 58, 237;
+    --accent-teal: #0d9488;
+    --accent-teal-rgb: 13, 148, 136;
+    --accent-teal-dark: #0f766e;
+    --accent-red: #dc2626;
+    --accent-red-rgb: 220, 38, 38;
+    --accent-red-dark: #b91c1c;
+    --accent-red-dark-rgb: 185, 28, 28;
+    --accent-red-darker: #991b1b;
+    --accent-red-darker-rgb: 153, 27, 27;
+    --accent-amber: #d97706;
+    --accent-amber-rgb: 217, 119, 6;
+    --accent-amber-dark: #b45309;
+    --accent-amber-dark-rgb: 180, 83, 9;
+    --accent-amber-light: #ca8a04;
+    --accent-amber-lighter: #a16207;
+    --accent-yellow: #ca8a04;
+    --accent-yellow-dark: #a16207;
+    --accent-color: #0066cc;
+    --accent-cyan: #0891b2;
+    --accent-cyan-rgb: 8, 145, 178;
+    --accent-cyan-dark: #0e7490;
+    --accent-cyan-dark-rgb: 14, 116, 144;
+    --accent-cyan-light: #06b6d4;
+    --accent-cyan-light-rgb: 6, 182, 212;
+    --accent-hover: #0052a3;
+    --accent-secondary: #10b981;
+    --accent-orange: #ea580c;
+    --accent-orange-rgb: 234, 88, 12;
+    --accent-orange-solid: #ea580c;
+    --accent-orange-solid-rgb: 234, 88, 12;
+    --accent-orange-dark: #c2410c;
+    --accent-orange-dark-rgb: 194, 65, 12;
+    --accent-orange-darker: #9a3412;
+    --accent-orange-darker-rgb: 154, 52, 18;
+    --aws-orange: #d97706;
+    
+    /* Link Colors - Light Mode (using standard primary blue) */
+    --link-color: #0066cc;
+    --link-hover: #0052a3;
+    --link-visited: #6f42c1;
+    --link-visited-hover: #553098;
+
+    /* Background & Layout */
+    --bg-primary: #ffffff;
+    --bg-dark: #ffffff;
+    --bg-secondary: #f6f8fa;
+    --bg-tertiary: #eaeef2;
+    --bg-card: #f6f8fa;
+    --bg-hover: #f0f2f4;
+    --bg-elevated: #ffffff;
+    --bg-color: #ffffff;
+    --background-color: #ffffff;
+    --border-color: #d0d7de;
+    --border-hover: #afb8c1;
+    --border-secondary: #eaeef2;
+    --border-subtle: #eaeef2;
+    --border-primary: #d0d7de;
+    
+    /* Surface Colors */
+    --surface-color: #f6f8fa;
+    --surface-primary: #f6f8fa;
+    --surface-secondary: #eaeef2;
+    --surface-tertiary: #d0d7de;
+    --surface-hover: #eaeef2;
+    
+    /* Text Colors */
+    --text-primary: #24292f;
+    --text-bright: #111827;
+    --text-dim: #6b7280;
+    --text-secondary: #57606a;
+    --text-muted: #6e7781;
+    --text-muted-rgb: 110, 119, 129;
+    --text-tertiary: #8c959f;
+    --text-tertiary-rgb: 140, 149, 159;
+    --text-rgb: 36, 41, 47;
+
+    /* Input / form background */
+    --bg-input: #ffffff;
+    
+    /* Status Colors */
+    --error-color: #cf222e;
+    --error-color-rgb: 207, 34, 46;
+    --success-color: #1a7f37;
+    --success-color-rgb: 26, 127, 55;
+
+    /* Semantic UI Colors - Light Mode */
+    --approval-orange: #e69500;
+    --approval-orange-rgb: 230, 149, 0;
+    --confidence-green: #059669;
+    --confidence-green-rgb: 5, 150, 105;
+    --confidence-red: #dc2626;
+    --confidence-red-rgb: 220, 38, 38;
+    --led-green: #388e3c;
+    --led-green-rgb: 56, 142, 60;
+    --btn-navy: #1e3c72;
+    --btn-navy-rgb: 30, 60, 114;
+    --btn-navy-accent: #4a69bd;
+    --btn-navy-accent-rgb: 74, 105, 189;
+    --deploy-cta-bg: #3949ab;
+    --deploy-cta-bg-rgb: 57, 73, 171;
+    --deploy-cta-bg-light: #5c6bc0;
+    --deploy-cta-bg-light-rgb: 92, 107, 192;
+    --command-center-green: #2e7d32;
+    --command-center-green-rgb: 46, 125, 50;
+
+    /* Metric Level Colors (progress bars, gauges, latency indicators) */
+    --level-low: #16a34a;
+    --level-low-rgb: 22, 163, 74;
+    --level-low-light: #22c55e;
+    --level-low-light-rgb: 34, 197, 94;
+    --level-medium: #d97706;
+    --level-medium-light: #f59e0b;
+    --level-high: #dc2626;
+    --level-high-light: #ef4444;
+    
+    /* Primary Color Variants */
+    --primary-color-dark: #0052a3;
+    --primary-color-rgb: 10, 89, 168;
+    --primary-color-muted: #5a7a9a;
+    --primary-color-muted-rgb: 90, 122, 154;
+    
+    /* Terminal */
+    --terminal-bg: #f6f8fa;
+    --terminal-text: #0a0a0a;
+    /* Chat variables moved to chat.css */
+
+    --case-id-color: #059669;
+
+    /* CTA Button Colors - Light Mode */
+    --cta-gradient-start: #0066cc;
+    --cta-gradient-end: #0080ff;
+    --cta-text: #ffffff;
+    --cta-shadow-rgb: 0, 102, 204;
+}
+
+html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-mono);
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Text-based logo styling */
+.logo-icon,
+.login-logo-img,
+.setup-logo {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--primary-color);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo-accent {
+    color: var(--accent-green);
+}
+
+/* Medium mobile screens - further optimize space */
+
+
+@media (max-width: 480px) {
+    .logo-container {
+        display: none;
+    }
+
+    .logo-icon {
+        font-size: 1.25rem;
+    }
+
+    /* Text already hidden by 768px breakpoint */
+    .logo-text {
+        display: none;
+    }
+
+
+    .app-header {
+        padding: 0 0.75rem;
+    }
+
+    .btn {
+        font-size: 0.8125rem;
+        padding: 0.375rem 0.75rem;
+    }
+
+    /* Make theme toggle button smaller */
+    .theme-toggle-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .theme-toggle-btn .material-symbols-outlined {
+        font-size: 18px;
+    }
+
+    .chat-message {
+        max-width: 100%;
+    }
+}
+
+/* Very small screens - ultra compact */
+@media (max-width: 480px) {
+    .app-header {
+        padding: 0 0.5rem;
+    }
+
+    .logo-container {
+        min-width: 32px;
+        max-width: 32px;
+    }
+
+    .logo-icon {
+        font-size: 1.125rem;
+    }
+
+    .theme-toggle-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    .theme-toggle-btn .material-symbols-outlined {
+        font-size: 16px;
+    }
+}
+
+/* Focus Visible */
+:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* ============================================================
+   Global Scrollbar — single definition, all pages inherit
+   ============================================================ */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) var(--bg-secondary);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+}
+
+::-webkit-scrollbar-corner {
+    background: var(--bg-secondary);
+}
+
+/* Enhanced Chat Message Structure */
+
+
+.chat-message.user {
+    align-self: flex-start;
+    flex-direction: row;
+}
+
+
+/* Animation for chat messages */
+@keyframes messageFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* Pulse animation for attention */
+@keyframes operatorPulse {
+    0% {
+        box-shadow: 0 4px 12px rgba(var(--btn-navy-rgb), 0.3);
+    }
+
+    50% {
+        box-shadow: 0 4px 20px rgba(var(--btn-navy-rgb), 0.5), 0 0 0 3px rgba(var(--btn-navy-accent-rgb), 0.3);
+    }
+
+    100% {
+        box-shadow: 0 4px 12px rgba(var(--btn-navy-rgb), 0.3);
+    }
+}
+
+/* Deploy Operator CTA in Chat */
+
+
+@keyframes slideInFromBottom {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes toolBounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+/* LED Indicators */
+
+
+.led-indicator.offline {
+    background: var(--text-muted);
+    opacity: 0.3;
+}
+
+.led-indicator.online {
+    background: var(--led-green);
+    opacity: 1;
+    box-shadow:
+        inset 0 0 2px rgba(var(--led-green-rgb), 0.5),
+        0 0 8px rgba(var(--led-green-rgb), 0.6);
+}
+
+.led-indicator.online.pulse {
+    animation: ledPulse 2s ease-in-out infinite;
+}
+
+@keyframes ledPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Status Text */
+.status-text {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+/* Deploy Button */
+
+
+.btn-deploy-operator.loading {
+    animation: buttonPulse 1s ease-in-out infinite;
+}
+
+.btn-deploy-operator.disabled,
+.btn-deploy-operator:disabled {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.btn-deploy-operator.disabled:hover,
+.btn-deploy-operator:disabled:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-deploy-operator.unauthenticated .deploy-text {
+    color: var(--text-muted);
+}
+
+@keyframes buttonPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Signal Strength Indicator */
+
+
+.signal-bar.active {
+    background: var(--primary-color);
+}
+
+/* Responsive adjustments for authentication */
+@media (max-width: 768px) {
+    .auth-section {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .user-info {
+        padding: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .user-avatar {
+        width: 28px;
+        height: 28px;
+    }
+
+    .user-name {
+        font-size: 1.4;
+    }
+
+    /* Legacy user profile responsive styles removed */
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .command-approval-actions {
+        flex-direction: column;
+    }
+
+    .command-approval-actions .btn {
+        margin: 0.25rem 0;
+    }
+
+    .approval-request {
+        padding: 1rem;
+    }
+
+    .command-text {
+        font-size: 0.9rem;
+    }
+
+    .approval-metadata {
+        font-size: 0.9rem;
+    }
+
+    .approval-actions {
+        gap: 0.5rem;
+    }
+
+    .approval-actions .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    .approval-request-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .approval-request-title {
+        font-size: 1rem;
+    }
+
+    .approval-request-id {
+        font-size: 0.75rem;
+    }
+
+    .command-details {
+        margin: 0.75rem 0;
+    }
+
+    .command-text {
+        padding: 0.5rem;
+    }
+
+    .approval-metadata {
+        margin: 0.5rem 0;
+    }
+
+    .approval-actions {
+        margin-top: 1rem;
+    }
+
+    .approval-actions .btn {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .approval-request {
+        margin: 0.5rem 0;
+    }
+
+    .approval-request-header {
+        padding-bottom: 0.75rem;
+    }
+
+    .approval-request-content {
+        padding-top: 0.75rem;
+    }
+}
+
+/* Light Theme Authentication Status */
+
+
+[data-theme="light"] .status-indicator.authenticated {
+    border-color: rgba(var(--secondary-color-rgb), 0.7);
+    box-shadow:
+        0 0 6px rgba(var(--secondary-color-rgb), 0.4),
+        0 0 12px rgba(var(--secondary-color-rgb), 0.2),
+        inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="light"] .status-indicator.error {
+    border-color: rgba(var(--danger-color-rgb), 0.7);
+    box-shadow:
+        0 0 6px rgba(var(--danger-color-rgb), 0.4),
+        0 0 12px rgba(var(--danger-color-rgb), 0.2),
+        inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+.command-center-intro .message-content {
+    background: var(--bg-hover);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--command-center-green);
+    font-style: italic;
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .command-center-intro .message-content {
+    background: var(--bg-tertiary);
+    border-left-color: var(--led-green);
+}
+
+@media (max-width: 768px) {
+    .command-center-badge {
+        padding: 0.5rem 1rem;
+        font-size: 0.8125rem;
+    }
+
+    .command-center-icon {
+        font-size: 1.25rem;
+    }
+
+    .command-center-intro .message-content {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* Terminal Line Animation */
+@keyframes terminalLineSlide {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* AI Command Streaming Styles */
+
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .terminal-line.highlighted.important {
+    background: rgba(var(--accent-blue-rgb), 0.05);
+}
+
+[data-theme="light"] .terminal-line.highlighted.success {
+    background: rgba(var(--secondary-color-rgb), 0.05);
+}
+
+[data-theme="light"] .terminal-line.highlighted.warning {
+    background: rgba(var(--warning-color-rgb), 0.05);
+}
+
+/* Chat Message Restoration Styles */
+
+
+.chat-message.restored-message .message-content {
+    position: relative;
+}
+
+.chat-message.restored-message .message-timestamp {
+    font-size: 0.7em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* System Messages Base Styling */
+.chat-message.system_message {
+    align-self: center;
+    max-width: 70%;
+    text-align: center;
+    font-size: 0.85em;
+    font-style: italic;
+    padding: 8px 16px;
+    margin: 8px 0;
+    border-radius: var(--radius-lg);
+    background: rgba(var(--level-low-rgb), 0.1);
+    border: 1px solid rgba(var(--level-low-rgb), 0.2);
+    color: var(--text-primary);
+}
+
+/* Light Theme System Messages */
+[data-theme="light"] .chat-message.system_message {
+    background: rgba(var(--level-low-rgb), 0.1);
+    border: 1px solid rgba(var(--level-low-rgb), 0.3);
+    color: var(--text-primary);
+}
+
+/* Dark Theme System Messages */
+[data-theme="dark"] .chat-message.system_message,
+:root .chat-message.system_message {
+    background: rgba(var(--level-low-rgb), 0.15);
+    border: 1px solid rgba(var(--level-low-rgb), 0.4);
+    color: var(--text-primary);
+}
+
+/* System Messages for Restoration */
+.chat-message.system_message.case-context {
+    background: linear-gradient(90deg, rgba(var(--accent-green-rgb), 0.08) 0%, transparent 100%);
+    border-left: 3px solid var(--accent-green-solid);
+    font-weight: bold;
+    text-align: left;
+    font-style: normal;
+}
+
+.chat-message.system_message.case-description {
+    background: rgba(var(--info-color-rgb), 0.1);
+    border-left: 3px solid var(--info-color);
+    font-style: italic;
+    text-align: left;
+}
+
+.chat-message.system_message.case-status {
+    background: rgba(var(--warning-color-rgb), 0.1);
+    border-left: 3px solid var(--warning-color);
+    font-weight: bold;
+    text-align: left;
+    font-style: normal;
+}
+
+.chat-message.system_message.separator {
+    text-align: center;
+    font-weight: bold;
+    color: var(--text-secondary);
+    background: transparent;
+    border: none;
+    margin: 10px 0;
+}
+
+.chat-message.system_message.restoration {
+    background: linear-gradient(90deg, rgba(var(--primary-rgb), 0.1) 0%, transparent 100%);
+    border-left: 3px solid var(--primary-color);
+    font-weight: bold;
+    text-align: left;
+    font-style: normal;
+}
+
+/* Auto-focus animation */
+@keyframes auto-focus-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(var(--primary-rgb), 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(var(--primary-rgb), 0);
+    }
+}
+
+/* Chat Container */
+.chat-container {
+    position: relative;
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    background: var(--bg-color);
+    font-family: var(--font-mono);
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Chat Panel */
+.chat-panel {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--bg-secondary);
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Messages Panel */
+.chat-messages-panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    overflow-y: auto;
+    backdrop-filter: blur(10px);
+    min-height: 0;
+    position: relative;
+}
+
+.messages-container {
+    flex: 1 1 auto;
+    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0.5rem;
+}
+
+
+/* Message Items */
+.message-item {
+    display: flex;
+    flex-direction: column;
+    animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Order for g8e_ai_agent messages: confidence, timestamp, sender */
+
+
+.message-right-section .message-timestamp {
+    order: 2;
+}
+
+.message-right-section .message-sender {
+    order: 3;
+}
+
+/* Typing animation for streaming responses */
+
+
+@keyframes typeIn {
+    0% {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Streaming Indicators */
+
+
+@keyframes typing {
+
+    0%,
+    80%,
+    100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+
+    40% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+
+/* Thinking Chat Messages */
+.message-item.thinking .message-content {
+    background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.08) 0%, rgba(var(--accent-green-dark-rgb), 0.05) 100%);
+    border-right: 3px solid rgba(var(--accent-green-rgb), 0.6);
+    border-left: none;
+    opacity: 0.9;
+    font-style: italic;
+}
+
+.message-item.thinking .sender-label {
+    opacity: 0.8;
+}
+
+.message-item.thinking .content-text {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Input Panel */
+.chat-input-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* New Case Button */
+.new-case-btn {
+    background: rgba(var(--accent-green-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-green-rgb), 0.3);
+    border-radius: 0.25rem;
+    color: var(--accent-green);
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    outline: none;
+}
+
+.new-case-btn:hover:not(:disabled) {
+    background: rgba(var(--accent-green-rgb), 0.15);
+    border-color: rgba(var(--accent-green-rgb), 0.4);
+    color: var(--accent-green);
+    transform: translateY(-1px);
+}
+
+.new-case-btn:active {
+    transform: translateY(0);
+}
+
+.new-case-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Hide 'New Chat' text on mobile, show only + icon */
+
+
+#chat-input {
+    width: 100%;
+    max-height: 150px;
+    padding: 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--text-bright);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    font-family: var(--font-mono);
+}
+
+#chat-input::placeholder {
+    color: var(--text-muted);
+}
+
+#chat-input:focus {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Attachments Display */
+
+
+.send-btn.ready {
+    background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-dark) 100%);
+    color: var(--text-bright);
+    border-color: rgba(var(--accent-green-rgb), 0.5);
+    box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.3);
+}
+
+.send-btn.ready:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--accent-green-dark) 0%, var(--accent-green-solid) 100%);
+    box-shadow: 0 4px 20px rgba(var(--accent-green-rgb), 0.4);
+    transform: translateY(-2px);
+}
+
+.send-btn.ready .send-icon {
+    transform: translateX(2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .chat-panel {
+        padding: 0.75rem;
+        gap: 0.75rem;
+    }
+
+    .chat-header-panel {
+        padding: 0.75rem 1rem;
+    }
+
+    .title-text {
+        font-size: 1rem;
+    }
+
+    .input-container {
+        border-radius: 0.25rem;
+    }
+
+    #chat-input {
+        padding: 1rem;
+    }
+
+    .send-btn {
+        padding: 0.5rem 1rem;
+    }
+
+    .user-message {
+        margin-left: 1rem;
+        margin-right: auto;
+    }
+
+    .g8e_ai_agent-message {
+        margin-left: auto;
+        margin-right: 1rem;
+    }
+}
+/* Chat Container - Light Theme */
+[data-theme="light"] .chat-container {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+
+/* Messages Panel - Light Theme */
+[data-theme="light"] .chat-messages-panel {
+    background: var(--bg-elevated);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+/* Case Dropdown - Light Theme - moved to chat-input.css */
+
+
+[data-theme="light"] #chat-input {
+    color: var(--text-primary);
+}
+
+[data-theme="light"] #chat-input::placeholder {
+    color: var(--text-muted);
+}
+
+[data-theme="light"] #chat-input:focus {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* New Case Button - Light Theme */
+[data-theme="light"] .new-case-btn {
+    background: rgba(var(--accent-green-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-green-rgb), 0.3);
+    color: var(--accent-green);
+}
+
+[data-theme="light"] .new-case-btn:hover:not(:disabled) {
+    background: rgba(var(--accent-green-rgb), 0.15);
+    border-color: rgba(var(--accent-green-rgb), 0.4);
+    color: var(--accent-green-dark);
+}
+
+/* Attachments Display - Light Theme */
+
+
+[data-theme="light"] .send-btn.ready {
+    background: linear-gradient(135deg, var(--accent-green) 0%, var(--accent-green-dark) 100%);
+    color: var(--text-bright);
+    border-color: rgba(var(--accent-green-rgb), 0.5);
+    box-shadow: 0 0 20px rgba(var(--accent-green-rgb), 0.2);
+}
+
+[data-theme="light"] .send-btn.ready:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--accent-green-dark) 0%, var(--accent-green-solid) 100%);
+    box-shadow: 0 4px 20px rgba(var(--accent-green-rgb), 0.3);
+}
+/* Command Approval Message */
+
+
+@keyframes approvalPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 10px rgba(var(--approval-orange-rgb), 0.3);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(var(--approval-orange-rgb), 0.5);
+    }
+}
+
+/* Approval Status */
+
+
+.approval-status.approved {
+    background: rgba(var(--secondary-color-rgb), 0.1);
+    border: 1px solid rgba(var(--secondary-color-rgb), 0.3);
+}
+
+.approval-status.rejected {
+    background: rgba(var(--danger-color-rgb), 0.1);
+    border: 1px solid rgba(var(--danger-color-rgb), 0.3);
+}
+
+.status-text {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.approval-status.approved .status-text {
+    color: var(--secondary-color);
+}
+
+/* Footer */
+.app-footer {
+    background-color: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    min-height: 32px;
+    flex-shrink: 0;
+}
+
+.footer-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    font-size: 0.75rem;
+}
+
+.footer-content > div {
+    flex: 1;
+}
+
+.footer-content > div:first-child {
+    text-align: left;
+}
+
+.footer-content > div:nth-child(2) {
+    text-align: center;
+}
+
+.footer-content > div:last-child {
+    text-align: right;
+}
+
+.footer-links {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.footer-content > .footer-links:first-child {
+    justify-content: flex-start;
+}
+
+.footer-content > .footer-links:last-child {
+    justify-content: flex-end;
+}
+
+.footer-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.footer-link:hover {
+    color: var(--text-primary);
+}
+
+.footer-separator {
+    color: var(--text-muted);
+    font-size: 0.625rem;
+}
+
+.footer-copyright {
+    color: var(--text-muted);
+}
+
+@media (max-width: 768px) {
+    .app-footer {
+        padding: 0 0.75rem;
+        min-height: 28px;
+    }
+
+    .footer-content {
+        gap: 0.75rem;
+        font-size: 0.7rem;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links {
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+    }
+
+    .footer-copyright {
+        white-space: nowrap;
+    }
+}
+
+.approval-status.rejected .status-text {
+    color: var(--danger-color);
+}

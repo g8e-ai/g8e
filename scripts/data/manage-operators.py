@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Operator Management Script for VSO Platform
+Operator Management Script for g8e Platform
 
-Manage operator documents via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Manage operator documents via the g8ed internal HTTP API.
+Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-vsodb.py operators list --user-id USER_ID
-    python manage-vsodb.py operators list --email user@example.com
-    python manage-vsodb.py operators get --id OPERATOR_ID
-    python manage-vsodb.py operators init-slots --user-id USER_ID
-    python manage-vsodb.py operators init-slots --email user@example.com
-    python manage-vsodb.py operators refresh-key --id OPERATOR_ID
-    python manage-vsodb.py operators get-key --id OPERATOR_ID
-    python manage-vsodb.py operators reset --id OPERATOR_ID
+    python manage-g8es.py operators list --user-id USER_ID
+    python manage-g8es.py operators list --email user@example.com
+    python manage-g8es.py operators get --id OPERATOR_ID
+    python manage-g8es.py operators init-slots --user-id USER_ID
+    python manage-g8es.py operators init-slots --email user@example.com
+    python manage-g8es.py operators refresh-key --id OPERATOR_ID
+    python manage-g8es.py operators get-key --id OPERATOR_ID
+    python manage-g8es.py operators reset --id OPERATOR_ID
 """
 
 import argparse
@@ -33,19 +33,19 @@ import sys
 from typing import Optional, Dict, Any, List
 
 from _lib import (
-    VSOD_BASE_URL,
+    G8ED_BASE_URL,
     print_banner,
     resolve_user_id,
-    vsod_request,
+    g8ed_request,
 )
 
-INTERNAL_OPERATORS_BASE = f'{VSOD_BASE_URL}/api/internal/operators'
-INTERNAL_USERS_BASE = f'{VSOD_BASE_URL}/api/internal/users'
+INTERNAL_OPERATORS_BASE = f'{G8ED_BASE_URL}/api/internal/operators'
+INTERNAL_USERS_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
 class OperatorManager:
     """
-    Manage operator documents via the VSOD internal HTTP API.
+    Manage operator documents via the g8ed internal HTTP API.
     """
 
     def _format_operator_summary(self, op: Dict[str, Any]) -> str:
@@ -56,7 +56,7 @@ class OperatorManager:
         op_type = (op.get('operator_type') or 'N/A')[:10]
         has_key = 'yes' if op.get('has_api_key') or op.get('operator_api_key') else 'no'
         claimed = 'yes' if op.get('claimed') else 'no'
-        is_g8e_pod = 'yes' if op.get('is_g8e_pod') else 'no'
+        is_g8ep = 'yes' if op.get('is_g8ep') else 'no'
         heartbeat = (op.get('last_heartbeat') or 'never')[:19]
         return (
             f"  {op_id}  "
@@ -66,7 +66,7 @@ class OperatorManager:
             f"type={op_type:<10} "
             f"key={has_key:<3} "
             f"claimed={claimed:<3} "
-            f"g8e_pod={is_g8e_pod:<3} "
+            f"g8ep={is_g8ep:<3} "
             f"heartbeat={heartbeat}"
         )
 
@@ -84,7 +84,7 @@ class OperatorManager:
             f"  Slot Number:       {op.get('slot_number', 'N/A')}",
             f"  Operator Type:     {op.get('operator_type', 'N/A')}",
             f"  Cloud Subtype:     {op.get('cloud_subtype', 'N/A')}",
-            f"  Is g8e node:       {op.get('is_g8e_pod', False)}",
+            f"  Is g8e node:       {op.get('is_g8ep', False)}",
             f"  Slot Cost:         {op.get('slot_cost', 'N/A')}",
             "",
             "  Status:",
@@ -141,7 +141,7 @@ class OperatorManager:
         if not uid:
             return []
 
-        result = vsod_request('GET', f'{INTERNAL_OPERATORS_BASE}/user/{uid}')
+        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/user/{uid}')
         if not result.get('success'):
             raise RuntimeError(result.get('error', 'Failed to list operators'))
 
@@ -164,7 +164,7 @@ class OperatorManager:
         return operators
 
     def get_operator(self, operator_id: str) -> Optional[Dict]:
-        result = vsod_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
+        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
                 print(f"\nOperator not found: {operator_id}")
@@ -181,12 +181,12 @@ class OperatorManager:
         if not uid:
             return None
 
-        user_result = vsod_request('GET', f'{INTERNAL_USERS_BASE}/{uid}')
+        user_result = g8ed_request('GET', f'{INTERNAL_USERS_BASE}/{uid}')
         org_id = uid
         if user_result.get('success'):
             org_id = user_result['data'].get('organization_id') or uid
 
-        result = vsod_request(
+        result = g8ed_request(
             'POST',
             f'{INTERNAL_OPERATORS_BASE}/user/{uid}/initialize-slots',
             {'organization_id': org_id}
@@ -205,7 +205,7 @@ class OperatorManager:
         return operator_ids
 
     def refresh_key(self, operator_id: str, force: bool = False) -> Optional[Dict]:
-        existing = vsod_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
+        existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:
                 print(f"\nOperator not found: {operator_id}")
@@ -234,7 +234,7 @@ class OperatorManager:
         if not user_id:
             raise RuntimeError("Operator has no user_id — cannot refresh")
 
-        result = vsod_request(
+        result = g8ed_request(
             'POST',
             f'{INTERNAL_OPERATORS_BASE}/{operator_id}/refresh-key',
             {'user_id': user_id}
@@ -252,7 +252,7 @@ class OperatorManager:
         return result
 
     def get_key(self, operator_id: str) -> Optional[str]:
-        result = vsod_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
+        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
                 print(f"\nOperator not found: {operator_id}")
@@ -277,7 +277,7 @@ class OperatorManager:
         return api_key
 
     def reset(self, operator_id: str, force: bool = False) -> Optional[Dict]:
-        existing = vsod_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
+        existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:
                 print(f"\nOperator not found: {operator_id}")
@@ -302,7 +302,7 @@ class OperatorManager:
                 print("Reset cancelled.")
                 return None
 
-        result = vsod_request(
+        result = g8ed_request(
             'POST',
             f'{INTERNAL_OPERATORS_BASE}/{operator_id}/reset-cache'
         )
@@ -318,21 +318,21 @@ class OperatorManager:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Operator Management Script for VSO Platform',
+        description='Operator Management Script for g8e Platform',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-vsodb.py operators list --user-id USER_ID
-  python manage-vsodb.py operators list --email user@example.com
-  python manage-vsodb.py operators list --email user@example.com --all
-  python manage-vsodb.py operators get --id OPERATOR_ID
-  python manage-vsodb.py operators init-slots --user-id USER_ID
-  python manage-vsodb.py operators init-slots --email user@example.com
-  python manage-vsodb.py operators refresh-key --id OPERATOR_ID
-  python manage-vsodb.py operators refresh-key --id OPERATOR_ID --force
-  python manage-vsodb.py operators get-key --id OPERATOR_ID
-  python manage-vsodb.py operators reset --id OPERATOR_ID
-  python manage-vsodb.py operators reset --id OPERATOR_ID --force
+  python manage-g8es.py operators list --user-id USER_ID
+  python manage-g8es.py operators list --email user@example.com
+  python manage-g8es.py operators list --email user@example.com --all
+  python manage-g8es.py operators get --id OPERATOR_ID
+  python manage-g8es.py operators init-slots --user-id USER_ID
+  python manage-g8es.py operators init-slots --email user@example.com
+  python manage-g8es.py operators refresh-key --id OPERATOR_ID
+  python manage-g8es.py operators refresh-key --id OPERATOR_ID --force
+  python manage-g8es.py operators get-key --id OPERATOR_ID
+  python manage-g8es.py operators reset --id OPERATOR_ID
+  python manage-g8es.py operators reset --id OPERATOR_ID --force
         """
     )
 
@@ -379,7 +379,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-vsodb.py operators', ' '.join(argv))
+    print_banner('manage-g8es.py operators', ' '.join(argv))
     manager = OperatorManager()
 
     try:
@@ -406,7 +406,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'reset':
             manager.reset(args.operator_id, force=args.force)
     except RuntimeError as e:
-        print(f'[manage-vsodb operators] {e}', file=sys.stderr)
+        print(f'[manage-g8es operators] {e}', file=sys.stderr)
         return 1
 
     return 0

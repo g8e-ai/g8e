@@ -1,6 +1,6 @@
 {
-  "_comment": "Canonical Verifier agent model. A separate, fast Tribunal call that provides final syntactic validation of the voting winner.",
-  "name": "VerifierAgent",
+  "_comment": "Canonical Verifier model. A separate, fast Tribunal call that provides final syntactic validation of the voting winner.",
+  "name": "Verifier",
   "description": "Syntactic validation and final review of command candidates.",
   "request": {
     "intent": { "type": "string", "description": "The original user intent." },

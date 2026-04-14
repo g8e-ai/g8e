@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Passkey Management Script for VSO Platform
+Passkey Management Script for g8e Platform
 
-Manage FIDO2/WebAuthn passkey credentials via the VSOD internal HTTP API.
-Runs inside g8e-pod and communicates with g8e-dashboard over the internal network.
+Manage FIDO2/WebAuthn passkey credentials via the g8ed internal HTTP API.
+Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
     ./g8e security passkeys list --id USER_ID
@@ -37,16 +37,16 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
 sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'data'))
 
 from _lib import (
-    VSOD_BASE_URL,
+    G8ED_BASE_URL,
     resolve_user_id,
-    vsod_request,
+    g8ed_request,
 )
 
-INTERNAL_USER_BASE = f'{VSOD_BASE_URL}/api/internal/users'
+INTERNAL_USER_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
 def _api_request(method: str, path: str, body: Optional[Dict] = None) -> Dict:
-    return vsod_request(method, f'{INTERNAL_USER_BASE}{path}', body)
+    return g8ed_request(method, f'{INTERNAL_USER_BASE}{path}', body)
 
 
 class PasskeyManager:
@@ -205,7 +205,7 @@ def main():
     print("")
 
     parser = argparse.ArgumentParser(
-        description='Passkey Management Script for VSO Platform',
+        description='Passkey Management Script for g8e Platform',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

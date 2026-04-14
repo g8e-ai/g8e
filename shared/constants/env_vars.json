@@ -1,6 +1,6 @@
 {
   "llm": {
-    "G8E_LLM_PROVIDER": "llm.provider",
+    "G8E_LLM_PROVIDER": "llm.primary_provider",
     "G8E_LLM_PRIMARY_MODEL": "llm.primary_model",
     "G8E_LLM_ASSISTANT_MODEL": "llm.assistant_model",
     "G8E_LLM_OPENAI_ENDPOINT": "llm.openai_endpoint",
@@ -39,10 +39,10 @@
     "G8E_GOOGLE_SEARCH_API_KEY": "google_search.api_key",
     "G8E_GOOGLE_SEARCH_ENGINE_ID": "google_search.engine_id"
   },
-  "vsodb": {
+  "g8es": {
     "G8E_INTERNAL_HTTP_URL": "listen.http_url",
     "G8E_INTERNAL_PUBSUB_URL": "listen.pubsub_url",
-    "G8E_VSODB_BLOB_URL": "listen.blob_url"
+    "G8E_G8ES_BLOB_URL": "listen.blob_url"
   },
   "platform": {
     "G8E_DOCKER_GID": "platform.docker_gid",
@@ -56,10 +56,10 @@
     "G8E_DOCS_DIR": "platform.docs_dir",
     "G8E_SUPERVISOR_PORT": "platform.supervisor_port"
   },
-  "service_urls": {
-    "G8E_VSE_URL": "service_urls.vse_url",
-    "G8E_VSOD_URL": "service_urls.vsod_url",
-    "G8E_OPERATOR_ENDPOINT": "service_urls.operator_endpoint"
+  "component_urls": {
+    "G8EE_URL": "component_urls.g8ee_url",
+    "G8E_G8ED_URL": "component_urls.g8ed_url",
+    "G8E_OPERATOR_ENDPOINT": "component_urls.operator_endpoint"
   },
   "command_validation": {
     "G8E_ENABLE_COMMAND_WHITELISTING": "command_validation.enable_whitelisting",
@@ -68,7 +68,6 @@
   "ssl": {
     "G8E_SSL_DIR": "ssl.ssl_dir",
     "G8E_PUBSUB_CA_CERT": "ssl.pubsub_ca_cert",
-    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file",
-    "REQUESTS_CA_BUNDLE": "ssl.requests_ca_bundle"
+    "G8E_SSL_CERT_FILE": "ssl.ssl_cert_file"
   }
 }

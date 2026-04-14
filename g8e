@@ -3,37 +3,37 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
-CONTAINER="g8e-pod"
+CONTAINER="g8ep"
 
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
 }
 
-_g8e_pod_running() {
+_g8ep_running() {
     docker ps --filter "name=^${CONTAINER}$" --filter "status=running" -q 2>/dev/null | grep -q .
 }
 
-_g8e_pod_exists() {
+_g8ep_exists() {
     docker ps -a --filter "name=^${CONTAINER}$" -q 2>/dev/null | grep -q .
 }
 
-_ensure_g8e_pod() {
+_ensure_g8ep() {
     local _cmd="${1:-}"
-    if ! _g8e_pod_running; then
-        if ! _g8e_pod_exists; then
+    if ! _g8ep_running; then
+        if ! _g8ep_exists; then
             [[ -n "$_cmd" ]] && echo "[g8e] Running: ./g8e $_cmd"
-            echo "[g8e] g8e-pod is the sandboxed environment used to run this command."
-            echo "[g8e] First run — building g8e-pod image (requires Docker)..."
+            echo "[g8e] g8ep is the sandboxed environment used to run this command."
+            echo "[g8e] First run — building g8ep image (requires Docker)..."
             echo ""
-            $COMPOSE build g8e-pod
+            $COMPOSE build g8ep
             echo ""
         fi
-        $COMPOSE up -d --wait g8e-pod
+        $COMPOSE up -d --wait g8ep
     fi
 }
 
 _exec_in_pod() {
-    _ensure_g8e_pod "$TOP${SUB:+ $SUB}"
+    _ensure_g8ep "$TOP${SUB:+ $SUB}"
     if [ -t 0 ] && [ -t 1 ]; then
         exec docker exec -it "$CONTAINER" "$@"
     else
@@ -63,19 +63,19 @@ _help() {
     echo "    logs [service]                Tail service logs"
     echo ""
     echo "  operator                      Build and deploy the operator binary"
-    echo "    init                          Build the operator binary inside g8e-pod (first time)"
-    echo "    build                         Rebuild the operator binary inside g8e-pod"
+    echo "    init                          Build the operator binary inside g8ep (first time)"
+    echo "    build                         Rebuild the operator binary inside g8ep"
     echo "    build-all                     Build all operator architectures with compression (for distribution)"
     echo "    deploy <user@host>       Copy the operator binary to a remote host via scp"
     echo "    stream <host...>              Stream-inject operator to one or more remote hosts"
     echo "    ssh-config                    Configure ~/.ssh/config for high-concurrency streaming"
-    echo "    reauth                        Kill and relaunch the g8e-pod operator for a user"
+    echo "    reauth                        Kill and relaunch the g8ep operator for a user"
     echo "    (run: ./g8e operator --help for full option details)"
     echo ""
-    echo "  test [suite] [options]        Run test suites inside g8e-pod"
-    echo "    vse                           Python/pytest tests"
-    echo "    vsod                          TypeScript/vitest tests"
-    echo "    vsa                           Go tests"
+    echo "  test [suite] [options]        Run test suites inside g8ep"
+    echo "    g8ee                           Python/pytest tests"
+    echo "    g8ed                          TypeScript/vitest tests"
+    echo "    g8eo                           Go tests"
     echo "    LLM flags (enables ai_integration tests):"
     echo "      -p, --llm-provider          gemini | openai | anthropic | ollama"
     echo "      -m, --primary-model         Primary model name"
@@ -83,7 +83,7 @@ _help() {
     echo "      -e, --llm-endpoint-url      API endpoint URL"
     echo "      -k, --llm-api-key           API key"
     echo ""
-    echo "  security                      Security tools (runs inside g8e-pod)"
+    echo "  security                      Security tools (runs inside g8ep)"
     echo "    validate                      Validate platform security (volumes, env vars, tokens)"
     echo "    certs [generate|rotate|status|trust]"
     echo "    mtls-test                     Test mTLS connectivity"
@@ -91,10 +91,10 @@ _help() {
     echo "    passkeys                      Manage user passkey credentials"
     echo "    rotate-internal-token         Rotate the internal auth token across all components"
     echo ""
-    echo "  data                          Data management tools (runs inside g8e-pod)"
+    echo "  data                          Data management tools (runs inside g8ep)"
     echo "    users                         Manage platform users"
     echo "    operators                     Manage operator documents"
-    echo "    store                         Manage VSODB data store"
+    echo "    store                         Manage g8es data store"
     echo "    settings                      Read/write platform settings"
     echo "    audit                         Manage audit log (LFAA)"
     echo "    device-links                  Manage device link tokens (generate, list, revoke, delete)"
@@ -102,6 +102,14 @@ _help() {
     echo "  search                        Manage web search (runs on host)"
     echo "    setup                         Configure Vertex AI Search for the search_web tool"
     echo "    disable                       Remove web search configuration"
+    echo ""
+    echo "  mcp                           MCP client integration (Claude Code, Windsurf, Cursor, etc.)"
+    echo "    config                        Generate MCP config for a specific AI tool"
+    echo "      --client <name>               claude-code | windsurf | cursor | generic"
+    echo "      --email <email>               User email (to resolve G8eKey)"
+    echo "    test                          Test MCP endpoint connectivity"
+    echo "      --email <email>               User email (to resolve G8eKey)"
+    echo "    status                        Show MCP endpoint info and supported clients"
     echo ""
     echo "  llm                           Manage LLM tooling"
     echo "    setup                         Install and configure LLM provider (interactive or --flags)"
@@ -111,10 +119,10 @@ _help() {
     echo "    set <key=value> [...]         Write one or more LLM settings (e.g. llm_model=gpt-4o)"
     echo ""
     echo "  ssh                           Configure SSH credentials for operator streaming (runs on host)"
-    echo "    setup                         Mount an SSH directory into g8e-pod"
+    echo "    setup                         Mount an SSH directory into g8ep"
     echo ""
     echo "  aws                           Configure AWS credentials for AI tools (runs on host)"
-    echo "    setup                         Mount an AWS credentials directory into g8e-pod"
+    echo "    setup                         Mount an AWS credentials directory into g8ep"
     echo ""
     echo "  demo                          Manage the broken-fleet demo (runs on host)"
     echo "    up                            Build and start all 10 web nodes"
@@ -127,8 +135,8 @@ _help() {
     echo "    logs                          Follow all container logs"
     echo "    shell N=<nn>                  Shell into a specific node (e.g. N=01)"
     echo "    deploy DEVICE_TOKEN=<tok>     Deploy operators via API download"
-    echo "    ssh-key                       Extract SSH private key for streaming"
-    echo "    stream DEVICE_TOKEN=<tok>     Deploy operators via SSH streaming"
+    echo "    stream DEVICE_TOKEN=<tok>     Deploy operators via SSH streaming (auto-configures SSH)"
+    echo "    discover-hosts                List discovered demo fleet hosts"
     echo "    vanish                        Remove all operators (zero trace)"
     echo "    dashboard                     Print dashboard URL"
     echo ""
@@ -147,9 +155,9 @@ SUB="${2:-}"
 # This ensures that all subcommands have access to the token for internal API calls.
 INTERNAL_AUTH_TOKEN=""
 if [[ "$TOP" != "platform" || ("$SUB" != "start" && "$SUB" != "status" && "$SUB" != "stop" && "$SUB" != "restart" && "$SUB" != "rebuild" && "$SUB" != "reset" && "$SUB" != "wipe" && "$SUB" != "clean") ]]; then
-    if _g8e_pod_running; then
-        # Use docker exec to read the token directly from the SSL volume mount in g8e-pod
-        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /vsodb/internal_auth_token 2>/dev/null || true)
+    if _g8ep_running; then
+        # Use docker exec to read the token directly from the SSL volume mount in g8ep
+        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /g8es/internal_auth_token 2>/dev/null || true)
     fi
 fi
 readonly INTERNAL_AUTH_TOKEN
@@ -169,7 +177,7 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
             settings)
                 _banner "platform settings"
-                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py settings show "${@:3}" ;;
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;
             update)
                 _banner "platform update"
                 git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
@@ -221,7 +229,7 @@ case "$TOP" in
         esac ;;
 
     # ------------------------------------------------------------------
-    # operator — build/deploy must run on host; test runs in g8e-pod
+    # operator — build/deploy must run on host; test runs in g8ep
     # ------------------------------------------------------------------
     operator)
         case "$SUB" in
@@ -240,7 +248,7 @@ case "$TOP" in
                 echo "    --no-git                      Disable ledger"
                 echo "  stream <host...>              Stream-inject operator to one or more remote hosts concurrently"
                 echo "                                Uses Go crypto/ssh — no system ssh binary, 1,000+ node capable"
-                echo "                                Binary piped directly from g8e-pod — never written to local disk"
+                echo "                                Binary piped directly from g8ep — never written to local disk"
                 echo "                                Remote binary is volatile: deleted automatically on session close"
                 echo "    --arch amd64|arm64|386        Architecture (default: amd64)"
                 echo "    --hosts <file|->              File of hosts (one per line), or - for stdin"
@@ -255,13 +263,13 @@ case "$TOP" in
                 echo "                                Creates ~/.ssh/sockets/ and appends g8e multiplexing stanza"
                 echo "    --print                       Print the stanza without writing anything"
                 echo "    --force                       Replace stanza even if g8e block already present"
-                echo "  reauth --user-id <id>         Kill and relaunch the g8e-pod operator for a user"
+                echo "  reauth --user-id <id>         Kill and relaunch the g8ep operator for a user"
                 echo "         --email <email>          Resolve user by email instead of ID"
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
             reauth)
                 _banner "operator reauth"
-                _ensure_g8e_pod "operator reauth"
+                _ensure_g8ep "operator reauth"
 
                 USER_ID=""
                 EMAIL=""
@@ -288,7 +296,7 @@ case "$TOP" in
 
                 if [[ -n "$EMAIL" && -z "$USER_ID" ]]; then
                     USER_ID="$(docker exec -i "$CONTAINER" \
-                        python3 /app/scripts/data/manage-vsodb.py users get --email "$EMAIL" 2>/dev/null \
+                        python3 /app/scripts/data/manage-g8es.py users get --email "$EMAIL" 2>/dev/null \
                         | grep -E '^  ID:' | awk '{print $2}')"
                     if [[ -z "$USER_ID" ]]; then
                         echo "[g8e] No user found with email: $EMAIL" >&2
@@ -296,7 +304,7 @@ case "$TOP" in
                     fi
                 fi
 
-                RESPONSE="$(docker exec -i g8e-dashboard \
+                RESPONSE="$(docker exec -i g8ed \
                     curl -sf -X POST \
                     -H 'Content-Type: application/json' \
                     -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
@@ -309,24 +317,24 @@ case "$TOP" in
                 fi
 
                 echo "$RESPONSE" | grep -q '"success":true' \
-                    && echo "[g8e] g8e-pod operator relaunched for user $USER_ID" \
+                    && echo "[g8e] g8ep operator relaunched for user $USER_ID" \
                     || { echo "[g8e] Reauth failed: $RESPONSE" >&2; exit 1; }
                 exit 0 ;;
 
             init)
                 _banner "operator init"
-                _ensure_g8e_pod "operator init"
+                _ensure_g8ep "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
-                docker exec g8e-pod bash -c "
+                docker exec g8ep bash -c "
                     set -e
-                    cd /app/components/vsa
+                    cd /app/components/g8eo
                     mkdir -p certs
-                    [ -f /vsodb/ssl/ca.crt ] && cp /vsodb/ssl/ca.crt certs/server_ca.crt
+                    [ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt
                     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \\
                         -trimpath -buildvcs=false \\
                         -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
                         -o /home/g8e/g8e.operator .
-                    echo '[g8e-pod] Built: /home/g8e/g8e.operator'
+                    echo '[g8ep] Built: /home/g8e/g8e.operator'
                 "
                 echo ""
                 echo "Operator binary built."
@@ -379,14 +387,14 @@ case "$TOP" in
                     echo "  Usage: ./g8e operator deploy <user@host> [options]" >&2
                     exit 1
                 fi
-                _ensure_g8e_pod "operator deploy"
+                _ensure_g8ep "operator deploy"
                 _REMOTE_EXEC="${_DEPLOY_DEST}"
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
-                echo "Fetching linux/${_DEPLOY_ARCH} operator from VSODB blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
-                docker exec -i g8e-pod curl -sf \
+                echo "Fetching linux/${_DEPLOY_ARCH} operator from g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
+                docker exec -i g8ep curl -sf \
                     -H "X-Internal-Auth: ${INTERNAL_AUTH_TOKEN}" \
-                    --cacert /vsodb/ca.crt \
-                    "https://vsodb:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+                    --cacert /g8es/ca.crt \
+                    "https://g8es:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
                     | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
                 echo "  Done."
                 if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
@@ -404,7 +412,7 @@ case "$TOP" in
                 exit 0 ;;
             stream)
                 if [[ "${3:-}" == "-h" || "${3:-}" == "--help" || "${3:-}" == "" ]]; then
-                    _ensure_g8e_pod "operator stream"
+                    _ensure_g8ep "operator stream"
                     if [ -t 0 ] && [ -t 1 ]; then
                         exec docker exec -it "$CONTAINER" /home/g8e/g8e.operator stream --help
                     else
@@ -412,9 +420,9 @@ case "$TOP" in
                     fi
                 fi
                 _banner "operator stream ${@:3}"
-                _ensure_g8e_pod "operator stream"
+                _ensure_g8ep "operator stream"
                 if ! docker exec "$CONTAINER" test -f /home/g8e/g8e.operator 2>/dev/null; then
-                    echo "[g8e] Operator binary not found in g8e-pod at /home/g8e/g8e.operator" >&2
+                    echo "[g8e] Operator binary not found in g8ep at /home/g8e/g8e.operator" >&2
                     echo "  Run: ./g8e operator build" >&2
                     exit 1
                 fi
@@ -444,13 +452,13 @@ case "$TOP" in
         esac ;;
 
     # ------------------------------------------------------------------
-    # test — runs inside g8e-pod
+    # test — runs inside g8ep
     # ------------------------------------------------------------------
     test)
         _exec_in_pod /app/scripts/testing/run_tests.sh "${@:2}" ;;
 
     # ------------------------------------------------------------------
-    # security — runs inside g8e-pod
+    # security — runs inside g8ep
     # ------------------------------------------------------------------
     security)
         case "$SUB" in
@@ -479,16 +487,16 @@ case "$TOP" in
                 _exec_in_pod /app/scripts/security/manage-passkeys.py "${@:3}" ;;
             rotate-internal-token)
                 _banner "security rotate-internal-token"
-                _ensure_g8e_pod "security rotate-internal-token"
+                _ensure_g8ep "security rotate-internal-token"
                 echo "  Rotating internal auth token..."
-                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-vsodb.py settings rotate-token 2>&1)"
+                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-g8es.py settings rotate-token 2>&1)"
                 if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then
                     echo "[g8e] Failed to rotate token: $_new_token" >&2
                     exit 1
                 fi
-                echo "  Token written to VSODB."
-                echo "  Restarting vsod and vse to pick up new token..."
-                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart vsod vse
+                echo "  Token written to g8es."
+                echo "  Restarting g8ed and g8ee to pick up new token..."
+                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart g8ed g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
             "")
@@ -502,13 +510,13 @@ case "$TOP" in
         esac ;;
 
     # ------------------------------------------------------------------
-    # data — runs inside g8e-pod
+    # data — runs inside g8ep
     # ------------------------------------------------------------------
     data)
         case "$SUB" in
             users|operators|store|settings|audit|device-links)
                 _banner "data $SUB ${@:3}"
-                _exec_in_pod python3 /app/scripts/data/manage-vsodb.py "$SUB" "${@:3}" ;;
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py "$SUB" "${@:3}" ;;
             "")
                 echo "[g8e] missing subcommand for 'data'" >&2
                 echo "  Valid: users, operators, store, settings, audit, device-links" >&2
@@ -529,7 +537,7 @@ case "$TOP" in
             exit 1
         fi
         case "$SUB" in
-            up|down|status|clean|health|nginx-check|operators|logs|deploy|ssh-key|stream|vanish|dashboard)
+            up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
                 exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
             shell)
@@ -537,11 +545,11 @@ case "$TOP" in
                 exec make -C "$DEMO_DIR" shell "${@:3}" ;;
             "")
                 echo "[g8e] missing subcommand for 'demo'" >&2
-                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
                 exit 1 ;;
             *)
                 echo "[g8e] unknown demo subcommand: '$SUB'" >&2
-                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, ssh-key, stream, vanish, dashboard" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
                 exit 1 ;;
         esac ;;
 
@@ -599,6 +607,29 @@ case "$TOP" in
             *)
                 echo "[g8e] unknown search subcommand: '$SUB'" >&2
                 echo "  Valid: setup, disable" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # mcp — MCP client integration; runs inside g8ep
+    # ------------------------------------------------------------------
+    mcp)
+        case "$SUB" in
+            config|test|status)
+                _banner "mcp $SUB"
+                _exec_in_pod python3 /app/scripts/data/manage-g8es.py mcp "$SUB" "${@:3}" ;;
+            "")
+                echo "[g8e] missing subcommand for 'mcp'" >&2
+                echo "  Valid: config, test, status" >&2
+                echo "" >&2
+                echo "  Examples:" >&2
+                echo "    ./g8e mcp config --client claude-code --email user@example.com" >&2
+                echo "    ./g8e mcp test --email user@example.com" >&2
+                echo "    ./g8e mcp status" >&2
+                exit 1 ;;
+            *)
+                echo "[g8e] unknown mcp subcommand: '$SUB'" >&2
+                echo "  Valid: config, test, status" >&2
                 exit 1 ;;
         esac ;;
 

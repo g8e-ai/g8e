@@ -1,23 +1,23 @@
 {
-  "_comment": "Canonical ConversationHistoryMessage wire shape. VSE is the authority — it creates these messages and persists them in investigation conversation_history arrays. VSOD consumes them via VSE HTTP API to render chat history and flatten audit events. A field mismatch breaks conversation history loading and operator command restoration.",
+  "_comment": "Canonical ConversationHistoryMessage wire shape. g8ee is the authority — it creates these messages and persists them in investigation conversation_history arrays. g8ed consumes them via g8ee HTTP API to render chat history and flatten audit events. A field mismatch breaks conversation history loading and operator command restoration.",
 
-  "_authority": "VSE (Python — ConversationHistoryMessage in app/models/investigations.py)",
-  "_consumers": ["VSOD (JS — InvestigationHistoryEntry.parse() in public/js/models/investigation-models.js, AuditService.flattenInvestigationEvents in services/platform/audit_service.js)"],
+  "_authority": "g8ee (Python — ConversationHistoryMessage in app/models/investigations.py)",
+  "_consumers": ["g8ed (JS — InvestigationHistoryEntry.parse() in public/js/models/investigation-models.js, AuditService.flattenInvestigationEvents in services/platform/audit_service.js)"],
 
   "conversation_history_message": {
-    "_description": "Single message in an investigation's conversation_history array. Messages are appended by VSE during chat turns, operator command executions, approval flows, and system notifications. VSOD parses these into InvestigationHistoryEntry instances for UI rendering.",
+    "_description": "Single message in an investigation's conversation_history array. Messages are appended by g8ee during chat turns, operator command executions, approval flows, and system notifications. g8ed parses these into InvestigationHistoryEntry instances for UI rendering.",
 
     "id": {
       "type": "string",
       "format": "uuid",
       "required": true,
-      "description": "Unique message identifier (UUID v4). Generated server-side by VSE."
+      "description": "Unique message identifier (UUID v4). Generated server-side by G8EE."
     },
     "sender": {
       "type": "string",
       "required": true,
       "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system"],
-      "description": "Message sender path. See senders.json message.sender. VSOD derives event_type from this field via _senderToEventType mapping."
+      "description": "Message sender path. See senders.json message.sender. g8ed derives event_type from this field via _senderToEventType mapping."
     },
     "content": {
       "type": "string",
@@ -35,14 +35,14 @@
       "type": "object",
       "required": false,
       "default": {},
-      "description": "Typed metadata object. Shape varies by sender — see metadata_by_sender below. All fields are optional; VSOD reads specific fields based on metadata.sender and metadata.event_type.",
+      "description": "Typed metadata object. Shape varies by sender — see metadata_by_sender below. All fields are optional; g8ed reads specific fields based on metadata.sender and metadata.event_type.",
 
-      "_note": "The base ConversationMessageMetadata in VSE carries all possible fields with extra='ignore' on deserialization. On the wire, only fields relevant to the message category are populated. VSOD should not assume any metadata field is present beyond sender.",
+      "_note": "The base ConversationMessageMetadata in g8ee carries all possible fields with extra='ignore' on deserialization. On the wire, only fields relevant to the message category are populated. g8ed should not assume any metadata field is present beyond sender.",
 
       "common_fields": {
         "sender": {
           "type": "string",
-          "description": "Echoes the top-level sender field. Always present after VSE persistence."
+          "description": "Echoes the top-level sender field. Always present after g8ee persistence."
         },
         "event_type": {
           "type": "string",

@@ -1,0 +1,39 @@
+Query investigation data from the current investigation context.
+
+<purpose>
+Use this tool to retrieve investigation-specific data on-demand without relying solely on pre-loaded conversation history. This gives you flexible access to different data domains within the current investigation, including conversation history, investigation status, event trails, and operator actions. This is a read-only local data query that does not require operator approval.
+</purpose>
+
+<parameters>
+- data_type: Type of data to retrieve. Required. One of:
+  - conversation_history: Full conversation history (messages, senders, timestamps)
+  - investigation_status: Investigation metadata (status, priority, severity, case title/description, customer/technical context)
+  - history_trail: Event trail (command executions, file edits, status changes)
+  - operator_actions: Formatted operator action history
+- limit: Maximum number of items to return (for conversation_history and history_trail). Optional. Use to limit output size for large investigations.
+</parameters>
+
+<returns>
+- success: Whether the query succeeded
+- data_type: The type of data retrieved
+- data: The retrieved data (structure varies by data_type)
+- item_count: Number of items returned (if applicable)
+- investigation_id: The investigation ID queried
+- error: Error message if query failed
+</returns>
+
+<behavior>
+- This is a read-only data query operation
+- Does not require operator approval or binding
+- Available in all agent modes (OPERATOR_BOUND, OPERATOR_NOT_BOUND, CLOUD_OPERATOR_BOUND)
+- Queries g8ee's own investigation data via InvestigationService (backed by CacheAside)
+- Use limit parameter to avoid excessive output for large investigations
+- Data is returned in a structured format suitable for analysis
+</behavior>
+
+<examples>
+- Get recent conversation: data_type='conversation_history', limit=50
+- Check investigation status: data_type='investigation_status'
+- Review command history: data_type='history_trail', limit=100
+- See operator actions: data_type='operator_actions'
+</examples>

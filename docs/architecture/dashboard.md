@@ -1,6 +1,6 @@
 # Dashboard
 
-The dashboard is the primary UI surface in VSOD. It is served at `/chat` and consists of four main areas: the Header (with profile dropdown), the Operator Panel, the chat/message area, and the Terminal. All components communicate exclusively through `EventBus` — no component holds a direct reference to another.
+The dashboard is the primary UI surface in g8ed. It is served at `/chat` and consists of four main areas: the Header (with profile dropdown), the Operator Panel, the chat/message area, and the Terminal. All components communicate exclusively through `EventBus` — no component holds a direct reference to another.
 
 ---
 
@@ -48,7 +48,6 @@ Pressing Enter while focused on an input or select on steps 1–3 advances to th
 |---|---|
 | 1 | Email is required and must match `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` |
 | 2 | A provider must be selected; if the provider requires an API key that field must not be empty |
-| 3 | If Google is selected as search provider, Google Project ID, Vertex AI Search App ID, and API key must not be empty |
 
 ### AI Provider Selection
 
@@ -61,7 +60,7 @@ On `init()`, `_loadPreflight()` calls `GET /api/setup/config` to pre-fill existi
 ### Finish
 
 The Finish button (`#finish-btn`) on step 4:
-1. `POST /api/setup/config` — saves the collected settings to VSODB.
+1. `POST /api/setup/config` — saves the collected settings to g8es.
 2. `POST /api/auth/register` — creates the admin account (email + optional name)
 3. Calls `navigator.credentials.create` for passkey registration (WebAuthn challenge/verify round-trip)
 4. On success, redirects to `/chat`
@@ -75,11 +74,6 @@ Settings collected by `_collectSettings()`:
 | `gemini_assistant_model` / `anthropic_assistant_model` / `openai_assistant_model` / `ollama_assistant_model` | Assistant model select |
 | `gemini_api_key` / `anthropic_api_key` / `openai_api_key` | Provider-specific key input |
 | `ollama_url` | User-supplied for Ollama |
-| `search_provider` | Search provider selection (Google/None) |
-| `google_project_id` | Google Project ID for Vertex AI Search |
-| `vertex_ai_search_app_id` | Vertex AI Search App ID |
-| `search_api_key` | API key for Google Search |
-| `vertex_search_enabled` | Set to `'true'` if Google Search selected |
 
 ---
 
@@ -166,8 +160,10 @@ On `_applyOperatorState`, the cause determines the update path:
 
 ### Operator List
 
-`OperatorListMixin.displayOperators(operators)` renders paginated operator cards. Sort priority:
-1. g8e node Operators (`is_g8e_pod`)
+`OperatorListMixin.displayOperators(operators)` renders paginated operator cards. The `operators` array contains `OperatorSlot` projections — lightweight objects with only the fields needed for the operator list UI (~10 fields instead of the full `OperatorDocument`). This reduces SSE payload size significantly.
+
+Sort priority:
+1. g8e node Operators (`is_g8ep`)
 2. Bound to current web session
 3. Bound to another session
 4. Active
@@ -182,7 +178,7 @@ Pagination: 10 operators per page. Each operator card (`operator-list-item`) sho
 
 Action buttons:
 - **Get Device Link Token** (`dns`)
-- **Restart g8e-pod Operator** (`restart_alt`)
+- **Restart g8ep Operator** (`restart_alt`)
 - **Copy API Key** (`vpn_key`)
 - **Refresh API Key** (`key_off`)
 - **Bind/Unbind** (`link` / `link_off`)
@@ -337,9 +333,9 @@ ArrowUp/ArrowDown traverse `commandHistory` in reverse; at the end of the list t
 Prerequisites: Operator must be bound (`isOperatorBound === true`); active web session required.
 
 Flow:
-1. `showExecutingIndicator(command)` — renders spinning indicator; returns indicator ID
+1. `showExecutingIndicator(command)` — creates an AI response bubble (`.anchored-terminal__ai-response--execution`) with header showing sender "g8e" and timestamp, renders spinning indicator inside the bubble content; returns indicator ID
 2. `POST /api/operator/approval/direct-command` with `{ command, operator_id, web_session_id, hostname }`
-3. `hideExecutingIndicator(executingId)` unconditionally on response
+3. `hideExecutingIndicator(executingId)` removes the indicator and cleans up empty parent bubbles
 4. Success with `execution_id`: tracked in `activeExecutions`; output arrives via command execution events
 5. Failure: results container created immediately with the error rendered as a failed result
 
@@ -424,7 +420,7 @@ For shell commands, a risk badge shows `risk_level` from `data.risk_analysis`:
 
 The badge tooltip includes `risk_score/10`, destructive flag, and blast radius when present.
 
-`handleApprovalRequest` stores the approval in `pendingApprovals` (keyed by `approval_id` or `execution_id`), renders the `approval-card` template, and attaches Approve/Deny click handlers.
+`handleApprovalRequest` stores the approval in `pendingApprovals` (keyed by `approval_id` or `execution_id`), creates or reuses an AI response bubble (`.anchored-terminal__ai-response--execution`) with header, renders the `approval-card` template inside the bubble content, and attaches Approve/Deny click handlers.
 
 `handleApprovalResponse(approvalId, approved)`:
 1. Disables both buttons immediately
@@ -441,7 +437,7 @@ The badge tooltip includes `risk_score/10`, destructive flag, and blast radius w
 After an approval or `/run` command, the Operator reports progress via pub/sub → SSE → event-bus. `handleCommandExecutionEvent` drives a state machine on `data.eventType`:
 
 - **`OPERATOR_COMMAND_STARTED`**: looks up or creates a results container; registers in `activeExecutions`
-- **Final events** (completed/failed/cancelled/approval granted/rejected for commands and file edits): retrieves output/error/exit code, hides executing indicator, appends result entry to the results container, removes from `activeExecutions`
+- **Final events** (completed/failed/cancelled/approval granted/rejected for commands and file edits): retrieves output/error/exit code, hides executing indicator, appends result entry to the results container (which is nested inside the AI bubble content when a parent bubble exists), removes from `activeExecutions`
 
 Each result entry shows: status icon, hostname badge (if present), command string, timestamp, combined stdout+stderr (HTML-escaped; `(No output)` if both empty), exit code badge (green for 0, red otherwise). Results containers are collapsible; toggle label reads `Result` or `Results`.
 
@@ -449,7 +445,7 @@ Each result entry shows: status icon, hostname badge (if present), command strin
 
 ### Session Restore
 
-When a case is loaded, `ChatComponent.restoreConversationHistory()` calls `restoreApprovalRequest`, `restoreCommandExecution`, and `restoreCommandResult` on the Terminal to replay prior history. These methods use the same DOM structure as live events so restored history is visually identical.
+When a case is loaded, `ChatComponent.restoreConversationHistory()` calls `restoreApprovalRequest`, `restoreCommandExecution`, and `restoreCommandResult` on the Terminal to replay prior history. These methods use the same DOM structure as live events (including AI bubble wrappers for approvals and results) so restored history is visually identical.
 
 ### Scroll Behaviour
 
@@ -523,8 +519,8 @@ When Sentinel is ON, the Operator's local vault stores only redacted data and th
 `LlmModelManager` (`llm-model-manager.js`) manages two model pickers: primary (complex tasks) and assistant (simple tasks).
 
 - **DOM**: `#llm-primary-model-container` + `#llm-primary-model-select`, `#llm-assistant-model-container` + `#llm-assistant-model-select`
-- Provider-specific model lists delivered via `LLM_CONFIG_RECEIVED` (`g8e.v1.ai.llm.config.received`) with `{ primary_models: [...], assistant_models: [...], default_primary_model, default_assistant_model }`; each model has `id` and `label`
-- `handleConfigReceived` populates both `<select>` elements and toggles `initially-hidden` on each container independently
+- Models from all configured providers are delivered via `LLM_CONFIG_RECEIVED` (`g8e.v1.ai.llm.config.received`) in a `provider_models` map grouped by provider: `{ provider_models: { gemini: { label, primary: [...], assistant: [...] }, anthropic: { ... } }, default_primary_model, default_assistant_model }`. Each model has `id` and `label`.
+- `handleConfigReceived` populates both `<select>` elements with `<optgroup>` elements per provider and toggles `initially-hidden` on each container independently
 - `CASE_SWITCHED` → restores `data.investigation.llm_primary_model` and `llm_assistant_model`; `CASE_CLEARED` → resets both to server defaults
 
 `LlmModelManager.getPrimaryModel()` and `.getAssistantModel()` are called by `ChatComponent` when building the `POST /api/chat/send` payload. Empty string tells the server to use its configured default.
@@ -565,7 +561,7 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 | Active Sessions | `sessions.web` | `sessions.operator` operator sessions |
 | Investigations (7d) | `ai.totalInvestigations` | `ai.activeInvestigations` active |
 
-**System health banner** (`#health-banner`) shows overall health derived from VSODB KV and DB connectivity — `healthy` (green) or `degraded` (yellow). The banner includes latency readings for each subsystem.
+**System health banner** (`#health-banner`) shows overall health derived from g8es KV and DB connectivity — `healthy` (green) or `degraded` (yellow). The banner includes latency readings for each subsystem.
 
 **Panels** (two-column grid):
 
@@ -576,7 +572,7 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 
 **Cache Performance** (full-width panel): hit rate, total hits/misses, cost savings, per-type breakdown (hits/misses per cache category). Data comes from `getCacheStats()` which reads `cacheMetrics.getStats()` directly — this panel is not cached through `_getCachedMetric`.
 
-`GET /api/console/metrics/realtime` → `getRealTimeMetrics()` — returns VSOD process heap used/peak and current cache stats. This endpoint is not cached.
+`GET /api/console/metrics/realtime` → `getRealTimeMetrics()` — returns g8ed process heap used/peak and current cache stats. This endpoint is not cached.
 
 #### Components
 
@@ -584,10 +580,10 @@ Activated by default on page load. Calls `loadOverview()`, `loadLoginAudit()`, a
 
 | Component | Probe | Details |
 |---|---|---|
-| VSOD | Always healthy (self-check) | uptime (seconds), heap used (MB), PID |
-| VSODB KV | `GET __console_health_check__` via Redis client | round-trip latency ms |
-| VSODB DB | `getDocument(COMPONENTS, 'platform_settings')` | round-trip latency ms |
-| VSE | `GET /health` via internal HTTP client | reported status from VSE response |
+| g8ed | Always healthy (self-check) | uptime (seconds), heap used (MB), PID |
+| g8es KV | `GET __console_health_check__` via Redis client | round-trip latency ms |
+| g8es DB | `getDocument(COMPONENTS, 'platform_settings')` | round-trip latency ms |
+| g8ee | `GET /health` via internal HTTP client | reported status from g8ee response |
 
 Overall status: `healthy` if all components healthy; `unhealthy` if any is unhealthy; `degraded` otherwise.
 
@@ -595,7 +591,7 @@ Each component row renders: status icon (`check_circle` / `warning` / `error`), 
 
 #### KV Store
 
-`GET /api/console/kv/scan?pattern=<glob>&cursor=<cursor>&count=<n>` — paginated VSODB KV key scan using `SCAN` with `MATCH`. Maximum `count` per request is 200. Returns `{ cursor, keys, count }`. The UI starts with `cursor='0'` and advances using the returned cursor until `cursor === '0'` again (SCAN cursor wrap).
+`GET /api/console/kv/scan?pattern=<glob>&cursor=<cursor>&count=<n>` — paginated g8es KV key scan using `SCAN` with `MATCH`. Maximum `count` per request is 200. Returns `{ cursor, keys, count }`. The UI starts with `cursor='0'` and advances using the returned cursor until `cursor === '0'` again (SCAN cursor wrap).
 
 Clicking a key: `GET /api/console/kv/key?key=<key>` → `getKVKey(key)` — fetches value and TTL via `GET` + `TTL` in parallel. The detail panel (`#kv-detail-panel`) renders the key name, value, TTL, and existence flag.
 
