@@ -23,6 +23,7 @@ from app.constants.status import (
     CommandErrorType,
     ComponentName,
     FileOperation,
+    OPERATOR_TOOLS,
     OperatorToolName,
 )
 from app.constants.prompts import AgentMode, PromptFile
@@ -89,6 +90,7 @@ class AIToolService:
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
+        self._tool_handlers: dict[str, Callable] = self._build_tool_handlers()
 
         (self._tool_declarations[OperatorToolName.RUN_COMMANDS],
          self._tool_executors[OperatorToolName.RUN_COMMANDS]) = self._build_run_operator_commands_tool()
@@ -384,6 +386,206 @@ class AIToolService:
 
         return declaration, fetch_file_diff
 
+    def _build_tool_handlers(self) -> dict[str, Callable]:
+        """Build dispatch table mapping tool names to handler coroutines."""
+        return {
+            OperatorToolName.RUN_COMMANDS: self._handle_run_commands,
+            OperatorToolName.FILE_CREATE: self._handle_file_create,
+            OperatorToolName.FILE_WRITE: self._handle_file_write,
+            OperatorToolName.FILE_READ: self._handle_file_read,
+            OperatorToolName.FILE_UPDATE: self._handle_file_update,
+            OperatorToolName.FETCH_FILE_HISTORY: self._handle_fetch_file_history,
+            OperatorToolName.FETCH_FILE_DIFF: self._handle_fetch_file_diff,
+            OperatorToolName.G8E_SEARCH_WEB: self._handle_search_web,
+            OperatorToolName.CHECK_PORT: self._handle_port_check,
+            OperatorToolName.LIST_FILES: self._handle_list_files,
+            OperatorToolName.GRANT_INTENT: self._handle_grant_intent,
+            OperatorToolName.REVOKE_INTENT: self._handle_revoke_intent,
+        }
+
+    async def _handle_run_commands(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = OperatorCommandArgs.model_validate(tool_args)
+        logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
+        result = await self.execute_command(
+            args, g8e_context, investigation, request_settings=request_settings
+        )
+        logger.info("[RUN_OPERATOR_COMMANDS] Result: %s", result)
+        return result
+
+    async def _handle_file_create(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE, "create_if_missing": True})
+        logger.info("[FILE_CREATE] File path: %s", args.file_path)
+        result = await self._execute_file_edit(
+            args, investigation, g8e_context
+        )
+        logger.info("[FILE_CREATE] Result: %s", result)
+        return result
+
+    async def _handle_file_write(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE})
+        logger.info("[FILE_WRITE] File path: %s", args.file_path)
+        result = await self._execute_file_edit(
+            args, investigation, g8e_context
+        )
+        logger.info("[FILE_WRITE] Result: %s", result)
+        return result
+
+    async def _handle_file_read(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.READ})
+        logger.info("[FILE_READ] File path: %s", args.file_path)
+        result = await self._execute_file_edit(
+            args, investigation, g8e_context
+        )
+        logger.info("[FILE_READ] Result: %s", result)
+        return result
+
+    async def _handle_file_update(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.REPLACE})
+        logger.info("[FILE_UPDATE] File path: %s", args.file_path)
+        result = await self._execute_file_edit(
+            args, investigation, g8e_context
+        )
+        logger.info("[FILE_UPDATE] Result: %s", result)
+        return result
+
+    async def _handle_fetch_file_history(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FetchFileHistoryArgs.model_validate(tool_args)
+        logger.info("[FETCH_FILE_HISTORY] File path: %s", args.file_path)
+        result = await self._execute_fetch_file_history(
+            args, investigation, g8e_context
+        )
+        logger.info("[FETCH_FILE_HISTORY] Result: %s", result)
+        return result
+
+    async def _handle_fetch_file_diff(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FetchFileDiffArgs.model_validate(tool_args)
+        logger.info("[FETCH_FILE_DIFF] File path: %s", args.file_path)
+        result = await self._execute_fetch_file_diff(
+            args, investigation, g8e_context
+        )
+        logger.info("[FETCH_FILE_DIFF] Result: %s", result)
+        return result
+
+    async def _handle_search_web(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        if self.web_search_provider is None:
+            raise ConfigurationError("g8e_web_search called but WebSearchProvider is not configured")
+        args = SearchWebArgs.model_validate(tool_args)
+        logger.info("[G8E_WEB_SEARCH] Query: %s", args.query)
+        result: ToolResult = await self.web_search_provider.search(query=args.query, num=args.num)
+        logger.info("[G8E_WEB_SEARCH] Result: %s", result)
+        return result
+
+    async def _handle_port_check(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = CheckPortArgs.model_validate(tool_args)
+        logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
+            args.host, args.port, args.protocol)
+        result = await self._execute_port_check(
+            args, investigation, g8e_context
+        )
+        logger.info("[CHECK_PORT_STATUS] Result: %s", result)
+        return result
+
+    async def _handle_list_files(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = FsListArgs.model_validate(tool_args)
+        logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
+            args.path, args.max_depth, args.max_entries)
+        result = await self._execute_fs_list(
+            args, investigation, g8e_context
+        )
+        logger.info("[LIST_DIRECTORY] entries=%d truncated=%s",
+            result.total_count, result.truncated)
+        return result
+
+    async def _handle_grant_intent(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = GrantIntentArgs.model_validate(tool_args)
+        logger.info("[REQUEST_INTENT] Intent: %s", args.intent_name)
+        result = await self._execute_intent_permission_request(
+            args=args, investigation=investigation, g8e_context=g8e_context
+        )
+        logger.info("[REQUEST_INTENT] approved=%s", result.approved)
+        return result
+
+    async def _handle_revoke_intent(
+        self,
+        tool_args: dict[str, object],
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        request_settings: G8eeUserSettings,
+    ) -> ToolResult:
+        args = RevokeIntentArgs.model_validate(tool_args)
+        logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
+        result = await self._execute_intent_revocation(
+            args=args, investigation=investigation, g8e_context=g8e_context
+        )
+        logger.info("[REVOKE_INTENT] success=%s", result.success)
+        return result
+
     async def execute_tool_call(
         self,
         tool_name: str,
@@ -412,22 +614,7 @@ class AIToolService:
                         blocked_pattern=pattern
                     )
 
-        # CRITICAL: Validate operator binding from G8eHttpContext before any operator-bound tool execution.
-        operator_tools = {
-            OperatorToolName.RUN_COMMANDS,
-            OperatorToolName.FILE_CREATE,
-            OperatorToolName.FILE_WRITE,
-            OperatorToolName.FILE_READ,
-            OperatorToolName.FILE_UPDATE,
-            OperatorToolName.CHECK_PORT,
-            OperatorToolName.LIST_FILES,
-            OperatorToolName.FETCH_FILE_HISTORY,
-            OperatorToolName.FETCH_FILE_DIFF,
-            OperatorToolName.GRANT_INTENT,
-            OperatorToolName.REVOKE_INTENT,
-        }
-
-        if tool_name in operator_tools:
+        if tool_name in OPERATOR_TOOLS:
             if not g8e_context or not g8e_context.has_bound_operator():
                 error_msg = (
                     "No operators are currently BOUND to this session. "
@@ -448,118 +635,8 @@ class AIToolService:
         )
         logger.info("[TOOL_CALL] Investigation ID: %s", investigation.id if investigation else "None")
 
-        try:
-            if tool_name == OperatorToolName.RUN_COMMANDS:
-                args = OperatorCommandArgs.model_validate(tool_args)
-                logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
-                result = await self.execute_command(
-                    args, g8e_context, investigation, request_settings=request_settings
-                )
-                logger.info("[RUN_OPERATOR_COMMANDS] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FILE_CREATE:
-                args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE, "create_if_missing": True})
-                logger.info("[FILE_CREATE] File path: %s", args.file_path)
-                result = await self._execute_file_edit(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FILE_CREATE] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FILE_WRITE:
-                args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE})
-                logger.info("[FILE_WRITE] File path: %s", args.file_path)
-                result = await self._execute_file_edit(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FILE_WRITE] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FILE_READ:
-                args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.READ})
-                logger.info("[FILE_READ] File path: %s", args.file_path)
-                result = await self._execute_file_edit(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FILE_READ] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FILE_UPDATE:
-                args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.REPLACE})
-                logger.info("[FILE_UPDATE] File path: %s", args.file_path)
-                result = await self._execute_file_edit(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FILE_UPDATE] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FETCH_FILE_HISTORY:
-                args = FetchFileHistoryArgs.model_validate(tool_args)
-                logger.info("[FETCH_FILE_HISTORY] File path: %s", args.file_path)
-                result = await self._execute_fetch_file_history(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FETCH_FILE_HISTORY] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.FETCH_FILE_DIFF:
-                args = FetchFileDiffArgs.model_validate(tool_args)
-                logger.info("[FETCH_FILE_DIFF] File path: %s", args.file_path)
-                result = await self._execute_fetch_file_diff(
-                    args, investigation, g8e_context
-                )
-                logger.info("[FETCH_FILE_DIFF] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.G8E_SEARCH_WEB:
-                if self.web_search_provider is None:
-                    raise ConfigurationError("g8e_web_search called but WebSearchProvider is not configured")
-                args = SearchWebArgs.model_validate(tool_args)
-                logger.info("[G8E_WEB_SEARCH] Query: %s", args.query)
-                result: ToolResult = await self.web_search_provider.search(query=args.query, num=args.num)
-                logger.info("[G8E_WEB_SEARCH] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.CHECK_PORT:
-                args = CheckPortArgs.model_validate(tool_args)
-                logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
-                    args.host, args.port, args.protocol)
-                result = await self._execute_port_check(
-                    args, investigation, g8e_context
-                )
-                logger.info("[CHECK_PORT_STATUS] Result: %s", result)
-                return result
-
-            if tool_name == OperatorToolName.LIST_FILES:
-                args = FsListArgs.model_validate(tool_args)
-                logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
-                    args.path, args.max_depth, args.max_entries)
-                result = await self._execute_fs_list(
-                    args, investigation, g8e_context
-                )
-                logger.info("[LIST_DIRECTORY] entries=%d truncated=%s",
-                    result.total_count, result.truncated)
-                return result
-
-            if tool_name == OperatorToolName.GRANT_INTENT:
-                args = GrantIntentArgs.model_validate(tool_args)
-                logger.info("[REQUEST_INTENT] Intent: %s", args.intent_name)
-                result = await self._execute_intent_permission_request(
-                    args=args, investigation=investigation, g8e_context=g8e_context
-                )
-                logger.info("[REQUEST_INTENT] approved=%s", result.approved)
-                return result
-
-            if tool_name == OperatorToolName.REVOKE_INTENT:
-                args = RevokeIntentArgs.model_validate(tool_args)
-                logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
-                result = await self._execute_intent_revocation(
-                    args=args, investigation=investigation, g8e_context=g8e_context
-                )
-                logger.info("[REVOKE_INTENT] success=%s", result.success)
-                return result
-
+        handler = self._tool_handlers.get(tool_name)
+        if not handler:
             error_msg = (
                 f"Unknown function: {tool_name}. "
                 f"Registered functions: {', '.join(self._tool_executors.keys())}"
@@ -572,6 +649,8 @@ class AIToolService:
                 error_type=CommandErrorType.UNKNOWN_TOOL
             )
 
+        try:
+            return await handler(tool_args, investigation, g8e_context, request_settings)
         except (ValidationError, ExternalServiceError):
             raise
         except Exception as e:
