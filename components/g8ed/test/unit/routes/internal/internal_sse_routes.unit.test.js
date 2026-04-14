@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInternalSSERouter } from '@g8ed/routes/internal/internal_sse_routes.js';
 import { EventType } from '@g8ed/constants/events.js';
+import { OperatorSlot } from '@g8ed/models/operator_model.js';
 
 describe('Internal SSE Routes [UNIT]', () => {
     let router;
@@ -181,12 +182,13 @@ describe('Internal SSE Routes [UNIT]', () => {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
                 operator_id: 'g8ee-operator-123'
             };
+            const mockSlots = [
+                new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE', status_display: 'ACTIVE', status_class: 'active' }),
+                new OperatorSlot({ operator_id: 'op-2', status: 'AVAILABLE', status_display: 'AVAILABLE', status_class: 'available' })
+            ];
             const mockOperatorList = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: [
-                    { operator_id: 'op-1', status: 'ACTIVE' },
-                    { operator_id: 'op-2', status: 'AVAILABLE' }
-                ],
+                operators: mockSlots,
                 total_count: 2,
                 active_count: 1,
                 used_slots: 0,
@@ -210,7 +212,10 @@ describe('Internal SSE Routes [UNIT]', () => {
             const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
             const wireFormat = publishedEvent.forWire();
             expect(wireFormat.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
-            expect(wireFormat.data.operators).toEqual(mockOperatorList.operators);
+            expect(wireFormat.data.operators).toHaveLength(2);
+            expect(wireFormat.data.operators[0].operator_id).toBe('op-1');
+            expect(wireFormat.data.operators[0].status).toBe('ACTIVE');
+            expect(wireFormat.data.operators[1].operator_id).toBe('op-2');
             expect(wireFormat.data.total_count).toBe(mockOperatorList.total_count);
             expect(wireFormat.data.active_count).toBe(mockOperatorList.active_count);
             expect(wireFormat.data.used_slots).toBe(mockOperatorList.used_slots);

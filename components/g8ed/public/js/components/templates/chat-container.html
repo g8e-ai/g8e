@@ -45,7 +45,6 @@
                     <button class="new-case-btn" id="new-case-btn" title="Start New Chat">+</button>
                 </div>
                 <div class="anchored-terminal__header-center">
-                    <!-- Case selector and controls moved here -->
                     <div class="case-selector-container">
                         <div class="case-dropdown" id="case-dropdown" tabindex="0">
                             <div class="case-dropdown__selected" id="case-dropdown-selected">
@@ -57,26 +56,28 @@
                             </div>
                         </div>
                         <input type="hidden" id="case-dropdown-value" value="">
-                        <div class="header-actions" id="sentinel-mode-container">
-                            <div class="llm-model-dropdown" id="llm-primary-model-container">
-                                <span class="material-symbols-outlined llm-model-icon" title="Primary LLM model for complex tasks">psychology</span>
-                                <select class="llm-model-select" id="llm-primary-model-select" title="Primary LLM model for complex tasks"></select>
-                            </div>
-                            <div class="llm-model-dropdown" id="llm-assistant-model-container">
-                                <span class="material-symbols-outlined llm-model-icon" title="Assistant LLM model for simple tasks">engineering</span>
-                                <select class="llm-model-select" id="llm-assistant-model-select" title="Assistant LLM model for simple tasks"></select>
-                            </div>
-                            <label class="sentinel-mode-toggle" id="sentinel-mode-toggle" title="Sentinel Mode: AI receives only scrubbed/redacted data. Works with or without a bound operator. Toggle anytime during your conversation.">
-                                <input type="checkbox" id="sentinel-mode-checkbox">
-                                <span class="sentinel-mode-slider"></span>
-                                <span class="sentinel-mode-label">
-                                    <span class="material-symbols-outlined sentinel-mode-icon">shield_lock</span>
-                                </span>
-                            </label>
-                            <button class="ai-stop-btn" id="ai-stop-btn" title="Stop AI Response" disabled>
-                                <span class="material-symbols-outlined">stop_circle</span>
-                            </button>
+                    </div>
+                    <div class="llm-models-container">
+                        <div class="llm-model-dropdown" id="llm-primary-model-container">
+                            <span class="material-symbols-outlined llm-model-icon" title="Primary LLM model for complex tasks">psychology</span>
+                            <select class="llm-model-select" id="llm-primary-model-select" title="Primary LLM model for complex tasks"></select>
                         </div>
+                        <div class="llm-model-dropdown" id="llm-assistant-model-container">
+                            <span class="material-symbols-outlined llm-model-icon" title="Assistant LLM model for simple tasks">engineering</span>
+                            <select class="llm-model-select" id="llm-assistant-model-select" title="Assistant LLM model for simple tasks"></select>
+                        </div>
+                    </div>
+                    <div class="header-actions" id="sentinel-mode-container">
+                        <label class="sentinel-mode-toggle" id="sentinel-mode-toggle" title="Sentinel Mode: AI receives only scrubbed/redacted data. Works with or without a bound operator. Toggle anytime during your conversation.">
+                            <input type="checkbox" id="sentinel-mode-checkbox">
+                            <span class="sentinel-mode-slider"></span>
+                            <span class="sentinel-mode-label">
+                                <span class="material-symbols-outlined sentinel-mode-icon">shield_lock</span>
+                            </span>
+                        </label>
+                        <button class="ai-stop-btn" id="ai-stop-btn" title="Stop AI Response" disabled>
+                            <span class="material-symbols-outlined">stop_circle</span>
+                        </button>
                     </div>
                 </div>
                 <div class="anchored-terminal__header-right">

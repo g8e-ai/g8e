@@ -531,6 +531,7 @@
     border-top: 1px solid rgba(48, 54, 61, 0.6);
     min-height: 20px;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .anchored-terminal__header-left {
@@ -1045,9 +1046,18 @@
     flex: 1;
     display: flex;
     justify-content: center;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
 }
 
 .anchored-terminal__header-center .case-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.anchored-terminal__header-center .llm-models-container {
     display: flex;
     align-items: center;
     gap: 8px;
