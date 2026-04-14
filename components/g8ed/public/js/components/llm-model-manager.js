@@ -23,9 +23,6 @@
  */
 
 import { EventType } from '../constants/events.js';
-import { CssClass } from '../constants/ui-constants.js';
-import { ApiPaths } from '../constants/api-paths.js';
-import { ComponentName } from '../constants/service-client-constants.js';
 
 export class LlmModelManager {
     constructor(eventBus) {
@@ -60,12 +57,6 @@ export class LlmModelManager {
 
     requestConfig() {
         this.eventBus.emit(EventType.LLM_CONFIG_REQUESTED);
-        
-        // Also call the API to explicitly request a re-push
-        if (typeof window !== 'undefined' && window.serviceClient) {
-            window.serviceClient.post(ComponentName.G8ED, ApiPaths.sse.config())
-                .catch(e => console.warn('[LlmModelManager] Failed to request config repush:', e));
-        }
     }
 
     setupDOMElements() {
