@@ -206,6 +206,8 @@ class OperatorToolName(str, Enum):
     FETCH_FILE_DIFF = "fetch_file_diff"
     G8E_SEARCH_WEB = "g8e_web_search"
 
+OPERATOR_TOOLS = frozenset({member.value for member in OperatorToolName})
+
 class OperatorType(str, Enum):
     SYSTEM = _STATUS["g8e.type"]["system"]
     CLOUD = _STATUS["g8e.type"]["cloud"]

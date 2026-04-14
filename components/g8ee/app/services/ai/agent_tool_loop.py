@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 
 from app.constants.status import (
     CommandErrorType,
+    OPERATOR_TOOLS,
     OperatorToolName,
 )
 from app.constants.settings import (
@@ -138,6 +139,34 @@ def merge_grounding(
     )
 
 
+def _tribunal_error_result(
+    tool_name: str,
+    original_command: str,
+    error_msg: str,
+) -> ToolCallResult:
+    error_result = CommandExecutionResult(
+        success=False,
+        error=error_msg,
+        error_type=CommandErrorType.EXECUTION_ERROR,
+    )
+    return ToolCallResult(
+        tool_name=tool_name,
+        call_info=StreamChunkData(
+            tool_name=tool_name,
+            execution_id=None,
+            command=original_command,
+            is_operator_tool=True,
+        ),
+        result_info=StreamChunkData(
+            execution_id=None,
+            success=False,
+            result=error_result,
+            error_type=CommandErrorType.EXECUTION_ERROR,
+        ),
+        result=error_result,
+    )
+
+
 async def orchestrate_tool_execution(
     tool_call: ToolCall,
     tool_executor: AIToolService,
@@ -161,8 +190,7 @@ async def orchestrate_tool_execution(
         tool_name, list(raw_args.keys()),
     )
 
-    operator_tools = {member for member in OperatorToolName}
-    is_operator_tool = tool_name in operator_tools
+    is_operator_tool = tool_name in OPERATOR_TOOLS
     typed_args: OperatorCommandArgs | None = None
     gen_result: CommandGenerationResult | None = None
 
@@ -201,116 +229,40 @@ async def orchestrate_tool_execution(
                     "[CMD_GEN] Tribunal system error — halting command execution: %s",
                     exc.pass_errors,
                 )
-                return ToolCallResult(
+                return _tribunal_error_result(
                     tool_name=tool_name,
-                    call_info=StreamChunkData(
-                        tool_name=tool_name,
-                        execution_id=None,
-                        command=original_command,
-                        is_operator_tool=True,
-                    ),
-                    result_info=StreamChunkData(
-                        execution_id=None,
-                        success=False,
-                        result=CommandExecutionResult(
-                            success=False,
-                            error=f"Tribunal system error: {'; '.join(exc.pass_errors)}",
-                            error_type=CommandErrorType.EXECUTION_ERROR,
-                        ),
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
-                    result=CommandExecutionResult(
-                        success=False,
-                        error=f"Tribunal system error: {'; '.join(exc.pass_errors)}",
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
+                    original_command=original_command,
+                    error_msg=f"Tribunal system error: {'; '.join(exc.pass_errors)}",
                 )
             except TribunalProviderUnavailableError as exc:
                 logger.error(
                     "[CMD_GEN] Tribunal provider unavailable — halting command execution: %s",
                     exc.error,
                 )
-                return ToolCallResult(
+                return _tribunal_error_result(
                     tool_name=tool_name,
-                    call_info=StreamChunkData(
-                        tool_name=tool_name,
-                        execution_id=None,
-                        command=original_command,
-                        is_operator_tool=True,
-                    ),
-                    result_info=StreamChunkData(
-                        execution_id=None,
-                        success=False,
-                        result=CommandExecutionResult(
-                            success=False,
-                            error=f"Tribunal provider unavailable ({exc.provider}): {exc.error}",
-                            error_type=CommandErrorType.EXECUTION_ERROR,
-                        ),
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
-                    result=CommandExecutionResult(
-                        success=False,
-                        error=f"Tribunal provider unavailable ({exc.provider}): {exc.error}",
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
+                    original_command=original_command,
+                    error_msg=f"Tribunal provider unavailable ({exc.provider}): {exc.error}",
                 )
             except TribunalGenerationFailedError as exc:
                 logger.error(
                     "[CMD_GEN] Tribunal generation failed — halting command execution: %s",
                     exc.pass_errors,
                 )
-                return ToolCallResult(
+                return _tribunal_error_result(
                     tool_name=tool_name,
-                    call_info=StreamChunkData(
-                        tool_name=tool_name,
-                        execution_id=None,
-                        command=original_command,
-                        is_operator_tool=True,
-                    ),
-                    result_info=StreamChunkData(
-                        execution_id=None,
-                        success=False,
-                        result=CommandExecutionResult(
-                            success=False,
-                            error=f"Tribunal generation failed: {'; '.join(exc.pass_errors)}",
-                            error_type=CommandErrorType.EXECUTION_ERROR,
-                        ),
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
-                    result=CommandExecutionResult(
-                        success=False,
-                        error=f"Tribunal generation failed: {'; '.join(exc.pass_errors)}",
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
+                    original_command=original_command,
+                    error_msg=f"Tribunal generation failed: {'; '.join(exc.pass_errors)}",
                 )
             except TribunalVerifierFailedError as exc:
                 logger.error(
                     "[CMD_GEN] Tribunal verifier failed — halting command execution: %s",
                     exc.error,
                 )
-                return ToolCallResult(
+                return _tribunal_error_result(
                     tool_name=tool_name,
-                    call_info=StreamChunkData(
-                        tool_name=tool_name,
-                        execution_id=None,
-                        command=original_command,
-                        is_operator_tool=True,
-                    ),
-                    result_info=StreamChunkData(
-                        execution_id=None,
-                        success=False,
-                        result=CommandExecutionResult(
-                            success=False,
-                            error=f"Tribunal verifier failed ({exc.reason}): {exc.error}",
-                            error_type=CommandErrorType.EXECUTION_ERROR,
-                        ),
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
-                    result=CommandExecutionResult(
-                        success=False,
-                        error=f"Tribunal verifier failed ({exc.reason}): {exc.error}",
-                        error_type=CommandErrorType.EXECUTION_ERROR,
-                    ),
+                    original_command=original_command,
+                    error_msg=f"Tribunal verifier failed ({exc.reason}): {exc.error}",
                 )
 
             if gen_result.final_command != original_command:
