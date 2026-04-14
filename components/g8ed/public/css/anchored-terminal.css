@@ -46,6 +46,16 @@
     padding-left: 12px;
 }
 
+/* Thinking group - unique group for thinking events */
+.anchored-terminal__agent-message-group--thinking {
+    border-left-color: var(--accent-yellow, #d29922);
+}
+
+.anchored-terminal__agent-message-group--thinking .anchored-terminal__thinking {
+    width: 100%;
+    margin-left: 0;
+}
+
 .anchored-terminal__agent-message-header {
     display: flex;
     align-items: center;

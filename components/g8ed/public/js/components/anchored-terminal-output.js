@@ -53,8 +53,8 @@ export class TerminalOutputMixin {
         time.className = 'anchored-terminal__ai-response-time';
         time.textContent = timestamp || this.formatTimestamp();
 
-        header.appendChild(time);
         header.appendChild(sender);
+        header.appendChild(time);
 
         return header;
     }
@@ -132,20 +132,20 @@ export class TerminalOutputMixin {
         return entry;
     }
 
-    getOrCreateAIResponse(webSessionId) {
+    createAIResponse(webSessionId) {
         if (!this.outputContainer) return null;
-
-        this._removeWelcome();
-        this.hideWaitingIndicator();
 
         const existingId = `ai-response-${webSessionId}`;
         const existing = document.getElementById(existingId);
         if (existing) {
-            return existing;
+            throw new Error(`AI response element ${existingId} already exists`);
         }
 
+        this._removeWelcome();
+        this.hideWaitingIndicator();
+
         const group = document.createElement('div');
-        group.className = 'anchored-terminal__agent-message-group';
+        group.className = 'anchored-terminal__agent-message-group streaming';
         group.id = existingId;
 
         const header = this._createAgentMessageHeader();
@@ -162,8 +162,20 @@ export class TerminalOutputMixin {
         return content;
     }
 
+    getAIResponse(webSessionId) {
+        const existingId = `ai-response-${webSessionId}`;
+        const existing = document.getElementById(existingId);
+        if (!existing) {
+            return null;
+        }
+        return existing.querySelector('.anchored-terminal__agent-message-content');
+    }
+
     appendStreamingTextChunk(webSessionId, text) {
-        const contentEl = this.getOrCreateAIResponse(webSessionId);
+        let contentEl = this.getAIResponse(webSessionId);
+        if (!contentEl) {
+            contentEl = this.createAIResponse(webSessionId);
+        }
         if (!contentEl) return;
 
         if (!this._streamingTextAccumulator) {
@@ -185,7 +197,10 @@ export class TerminalOutputMixin {
     }
 
     replaceStreamingHtml(webSessionId, html) {
-        const contentEl = this.getOrCreateAIResponse(webSessionId);
+        let contentEl = this.getAIResponse(webSessionId);
+        if (!contentEl) {
+            contentEl = this.createAIResponse(webSessionId);
+        }
         if (!contentEl) return;
 
         // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
@@ -286,7 +301,7 @@ export class TerminalOutputMixin {
         this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
-        return content;
+        return group;
     }
 
     getOrCreateThinkingEntry(webSessionId) {
@@ -301,19 +316,15 @@ export class TerminalOutputMixin {
             return existing;
         }
 
-        // Get or create agent message group (prefer execution group if exists)
-        const lastExecutionGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group[data-execution-bubble]:last-of-type');
-        const lastAgentGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group:last-of-type');
-        let content;
+        // Create a dedicated thinking group
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__agent-message-group anchored-terminal__agent-message-group--thinking';
+        group.setAttribute('data-thinking-bubble', webSessionId);
 
-        if (lastExecutionGroup) {
-            content = lastExecutionGroup.querySelector('.anchored-terminal__agent-message-content');
-        } else if (lastAgentGroup) {
-            content = lastAgentGroup.querySelector('.anchored-terminal__agent-message-content');
-        } else {
-            // Create new agent message group if none exists
-            content = this.getOrCreateAIResponse(webSessionId);
-        }
+        const header = this._createAgentMessageHeader();
+
+        const content = document.createElement('div');
+        content.className = 'anchored-terminal__agent-message-content';
 
         const entry = document.createElement('div');
         entry.className = 'anchored-terminal__thinking active';
@@ -344,6 +355,9 @@ export class TerminalOutputMixin {
         entry.appendChild(thinkingHeader);
         entry.appendChild(thinkingContent);
         content.appendChild(entry);
+        group.appendChild(header);
+        group.appendChild(content);
+        this.outputContainer.appendChild(group);
         this.scrollToBottom();
 
         return entry;
@@ -510,7 +524,7 @@ export class TerminalOutputMixin {
         this.scrollToBottom();
     }
 
-    async showTribunal({ id, model, numPasses, command }) {
+    async showTribunal({ id, model, numPasses, command, webSessionId }) {
         if (!this.outputContainer) return null;
 
         this._removeWelcome();
@@ -524,9 +538,17 @@ export class TerminalOutputMixin {
             content = lastExecutionGroup.querySelector('.anchored-terminal__agent-message-content');
         } else if (lastAgentGroup) {
             content = lastAgentGroup.querySelector('.anchored-terminal__agent-message-content');
+        } else if (webSessionId) {
+            // Check if there's already an AI response group for this session
+            const existingResponse = this.getAIResponse(webSessionId);
+            if (existingResponse) {
+                content = existingResponse;
+            } else {
+                content = this.createAIResponse(webSessionId);
+            }
         } else {
-            // Create new agent message group if none exists
-            content = this.getOrCreateAIResponse(id);
+            // Create new agent message group if none exists and no webSessionId
+            content = this.createAIResponse(id);
         }
 
         const widget = document.createElement('div');

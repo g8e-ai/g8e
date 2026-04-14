@@ -58,7 +58,7 @@ class TestSSEEventContract:
             investigation_id="contract-test-inv-007",
             web_session_id="contract-test-sess-007",
             user_id="contract-test-user-007",
-            agent_mode="default",
+            agent_mode="g8e.not.bound",
         )
         event_svc = make_g8ed_event_service()
 

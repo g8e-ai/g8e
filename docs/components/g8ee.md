@@ -384,7 +384,7 @@ Before invoking the primary model, g8ee classifies each incoming message as `sim
 - **Short-circuit:** Messages with attachments always escalate to the primary model (multimodal analysis).
 - **Empty messages:** Escalated to primary model with a default follow-up question.
 - **Complexity signals:** Assistant model looks for technical depth, reasoning chains, or explicit requests for action.
-- **Short-circuit Follow-up:** If triage returns a `follow_up_question` with low confidence, `ChatPipelineService` delivers it immediately and stops further processing.
+- **Short-circuit Follow-up:** If triage returns a `follow_up_question` with low confidence, `ChatPipelineService` emits `LLM_CHAT_ITERATION_STARTED` (with `ChatProcessingStartedPayload`), then delivers the follow-up question via `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` and `LLM_CHAT_ITERATION_TEXT_COMPLETED`, and stops further processing.
 
 ---
 

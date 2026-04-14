@@ -1065,6 +1065,7 @@ class TestToolIntegration:
             OperatorToolName.CHECK_PORT,
             OperatorToolName.GRANT_INTENT,
             OperatorToolName.REVOKE_INTENT,
+            OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
         }
         
         # Add G8E_SEARCH_WEB if available

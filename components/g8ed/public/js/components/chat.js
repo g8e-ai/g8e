@@ -342,7 +342,10 @@ export class ChatComponent {
         console.error('[CHAT] LLM chat iteration failed:', data.error);
 
         if (this.anchoredTerminal) {
-            this.anchoredTerminal.appendErrorMessage(data.error || 'AI processing failed');
+            this.anchoredTerminal.hideWaitingIndicator();
+        }
+        if (this.thinkingManager) {
+            this.thinkingManager.hideThinkingIndicator(data.web_session_id);
         }
 
         this._debouncedRenderChunk?.cancel();
