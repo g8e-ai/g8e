@@ -16,11 +16,28 @@ import { MockEventBus, MockElement } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { LlmModelManager } from '@g8ed/public/js/components/llm-model-manager.js';
 
-function buildSelectElement(id) {
-    const el = new MockElement('select', id);
+function buildDropdownElement(id) {
+    const el = new MockElement('div', id);
+    el.classList = {
+        _classes: new Set(),
+        add: function(className) { this._classes.add(className); },
+        remove: function(className) { this._classes.delete(className); },
+        contains: function(className) { return this._classes.has(className); },
+    };
     el.innerHTML = '';
-    el.options = [];
-    el.value = '';
+    return el;
+}
+
+function buildTextElement(id) {
+    const el = new MockElement('span', id);
+    el.textContent = '';
+    return el;
+}
+
+function buildMenuElement(id) {
+    const el = new MockElement('div', id);
+    el.innerHTML = '';
+    el.querySelectorAll = (selector) => [];
     return el;
 }
 
@@ -70,23 +87,34 @@ function emitConfig(eventBus, overrides = {}) {
 describe('LlmModelManager [UNIT]', () => {
     let eventBus;
     let manager;
-    let primarySelect;
-    let assistantSelect;
+    let primaryDropdown;
+    let assistantDropdown;
+    let primaryText;
+    let assistantText;
+    let primaryMenu;
+    let assistantMenu;
 
     beforeEach(() => {
         eventBus = new MockEventBus();
-        primarySelect = buildSelectElement('llm-primary-model-select');
-        assistantSelect = buildSelectElement('llm-assistant-model-select');
+        primaryDropdown = buildDropdownElement('llm-primary-model-dropdown');
+        assistantDropdown = buildDropdownElement('llm-assistant-model-dropdown');
+        primaryText = buildTextElement('llm-primary-model-text');
+        assistantText = buildTextElement('llm-assistant-model-text');
+        primaryMenu = buildMenuElement('llm-primary-model-menu');
+        assistantMenu = buildMenuElement('llm-assistant-model-menu');
 
         global.document = {
             getElementById: (id) => {
-                if (id === 'llm-primary-model-select') return primarySelect;
-                if (id === 'llm-assistant-model-select') return assistantSelect;
-                if (id === 'llm-primary-model-container') return new MockElement('div', id);
-                if (id === 'llm-assistant-model-container') return new MockElement('div', id);
+                if (id === 'llm-primary-model-dropdown') return primaryDropdown;
+                if (id === 'llm-assistant-model-dropdown') return assistantDropdown;
+                if (id === 'llm-primary-model-text') return primaryText;
+                if (id === 'llm-assistant-model-text') return assistantText;
+                if (id === 'llm-primary-model-menu') return primaryMenu;
+                if (id === 'llm-assistant-model-menu') return assistantMenu;
                 return null;
             },
             createElement: (tag) => new MockElement(tag),
+            addEventListener: vi.fn(),
         };
 
         manager = new LlmModelManager(eventBus);

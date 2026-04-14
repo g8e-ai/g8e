@@ -74,7 +74,8 @@
     flex-direction: column;
     width: 100%;
     line-height: 1.4;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    gap: 0.5rem;
 }
 
 /* Waiting cursor */
@@ -582,7 +583,7 @@
     border-top: 1px solid rgba(48, 54, 61, 0.6);
     min-height: 20px;
     flex-shrink: 0;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .anchored-terminal__header-left {

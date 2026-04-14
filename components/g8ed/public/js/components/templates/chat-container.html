@@ -58,13 +58,23 @@
                         <input type="hidden" id="case-dropdown-value" value="">
                     </div>
                     <div class="llm-models-container">
-                        <div class="llm-model-dropdown" id="llm-primary-model-container">
-                            <span class="material-symbols-outlined llm-model-icon" title="Primary LLM model for complex tasks">psychology</span>
-                            <select class="llm-model-select" id="llm-primary-model-select" title="Primary LLM model for complex tasks"></select>
+                        <div class="llm-model-dropdown custom-dropdown" id="llm-primary-model-dropdown" tabindex="0">
+                            <div class="llm-model-dropdown__selected">
+                                <span class="material-symbols-outlined llm-model-icon" title="Primary LLM model for complex tasks">psychology</span>
+                                <span class="llm-model-dropdown__text" id="llm-primary-model-text">Loading...</span>
+                                <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_less</span>
+                            </div>
+                            <div class="llm-model-dropdown__menu" id="llm-primary-model-menu">
+                            </div>
                         </div>
-                        <div class="llm-model-dropdown" id="llm-assistant-model-container">
-                            <span class="material-symbols-outlined llm-model-icon" title="Assistant LLM model for simple tasks">engineering</span>
-                            <select class="llm-model-select" id="llm-assistant-model-select" title="Assistant LLM model for simple tasks"></select>
+                        <div class="llm-model-dropdown custom-dropdown" id="llm-assistant-model-dropdown" tabindex="0">
+                            <div class="llm-model-dropdown__selected">
+                                <span class="material-symbols-outlined llm-model-icon" title="Assistant LLM model for simple tasks">engineering</span>
+                                <span class="llm-model-dropdown__text" id="llm-assistant-model-text">Loading...</span>
+                                <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_less</span>
+                            </div>
+                            <div class="llm-model-dropdown__menu" id="llm-assistant-model-menu">
+                            </div>
                         </div>
                     </div>
                     <div class="header-actions" id="sentinel-mode-container">

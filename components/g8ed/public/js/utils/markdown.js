@@ -110,8 +110,8 @@ class MarkdownRenderer {
             return slf.renderToken(tokens, idx, options);
         };
 
-        this.md.renderer.rules.paragraph_open = () => '<p class="markdown-paragraph">';
-        this.md.renderer.rules.paragraph_close = () => '</p>';
+        this.md.renderer.rules.paragraph_open = () => '<div class="markdown-paragraph">';
+        this.md.renderer.rules.paragraph_close = () => '</div>';
 
         this.md.renderer.rules.heading_open = (tokens, idx, options, env, slf) => {
             const token = tokens[idx];

@@ -295,8 +295,6 @@ class G8edServer {
         });
 
         this.app.use(express.static(path.join(__dirname, 'public'), {
-            maxAge: '1y',
-            immutable: true,
             etag: true,
             lastModified: true,
             setHeaders: (res, filePath) => {
