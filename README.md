@@ -20,7 +20,7 @@ MCP supported — all incoming MCP traffic is translated to the g8e protocol for
 2. **Earned authority** — Standing trust is a liability. Trust is scoped to sessions, earned per-action, and never self-granted. No component can escalate its own privileges — execution and authorization are separated by design.
 3. **Layered enforcement** — No single control is relied upon. Governance is enforced at every boundary — Sentinel, Tribunal, approval, audit — so a failure at one layer doesn't compromise the others.
 4. **Source available** — Security through obscurity is false security. The enforcement logic, threat detection, approval mechanisms, and encryption are readable, auditable, and criticizable by anyone. You don't take our word for it — you read the code.
-5. **Local-first audit** — An append-only, encrypted audit trail is maintained at the site of execution. Accountability lives where the action happened, not in the cloud.
+5. **Local-first audit** — An append-only, encrypted audit trail is maintained at the site of execution. Accountability lives where the action happened.
 6. **Data sovereignty** — Sensitive data is scrubbed before AI sees it. Raw output never leaves the operator. Only sanitized context crosses component boundaries.
 7. **Minimal footprint** — Outbound-only. No root required. No dependencies. No install. A single process — kill it and it's gone. What stays behind is the audit trail, by design.
 8. **Universal runtime** — Any model, any provider, any OS. The platform has no opinion about your AI, your infrastructure, or your architecture. Governance is the constant; everything else is your choice.

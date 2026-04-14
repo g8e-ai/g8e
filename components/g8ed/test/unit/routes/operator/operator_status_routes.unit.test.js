@@ -102,7 +102,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.operator_id).toBe('test-op-id');
-            expect(res.body.status_display).toBe(OperatorStatus.ACTIVE);
+            expect(res.body.status_display).toBe('ACTIVE');
         });
     });
 

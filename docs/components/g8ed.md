@@ -557,6 +557,30 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 Route handlers and other services interact with these via the main `OperatorService` coordinator.
 
+### OperatorSlot Projection for SSE Optimization
+
+Operator list events (`OPERATOR_PANEL_LIST_UPDATED`, keepalive operator_list payloads) use `OperatorSlot` projections instead of full `OperatorDocument` objects to reduce SSE payload size. `OperatorSlot` is a lightweight model containing only the ~10 fields needed by the operator list UI:
+
+- `operator_id` — unique identifier
+- `name` — operator name
+- `status` — current status
+- `status_display` — human-readable status string
+- `status_class` — CSS class for status badge
+- `web_session_id` — bound web session (if any)
+- `is_g8ep` — g8e node operator flag
+- `first_deployed` — first deployment timestamp
+- `last_heartbeat` — last heartbeat timestamp
+- `system_info` — minimal system info (hostname, os, internal_ip, public_ip)
+
+**Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
+
+**Route changes:**
+- `GET /api/operator/:operatorId/details` now returns `OperatorSlot` instead of full `OperatorDocument`
+- `getUserOperators()` returns `OperatorSlot[]` via `OperatorListUpdatedEvent`
+- SSE keepalive events embed `OperatorSlot[]` in `OperatorListData`
+
+This optimization significantly reduces bandwidth for operator list updates, especially for users with many operators.
+
 ### SSE Connection Initialization
 
 When the browser establishes a new SSE connection, `SSEService.pushInitialState(userId, webSessionId, organizationId)` fires two parallel side effects:
