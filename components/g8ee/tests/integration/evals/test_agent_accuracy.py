@@ -114,6 +114,10 @@ async def test_agent_accuracy(
             log_prefix="[EVAL]",
         )
 
+        logger.info(f"[EVAL] Scenario agent_mode={scenario['agent_mode']}, Bound operators count: {len(bound_operators)}")
+        if bound_operators:
+            logger.info(f"[EVAL] First bound operator: id={bound_operators[0].operator_id} session_id={bound_operators[0].operator_session_id} status={bound_operators[0].status}")
+
         # Step 1: Create a real investigation in g8es
         investigation_request = InvestigationCreateRequest(
             case_id=unique_case_id,
@@ -154,7 +158,7 @@ async def test_agent_accuracy(
             message=user_query,
             g8e_context=g8e_context,
             attachments=[],
-            sentinel_mode=True,
+            sentinel_mode=False,
             llm_primary_provider=None,
             llm_assistant_provider=None,
             llm_primary_model=llm_settings.primary_model,

@@ -37,7 +37,7 @@ from typing import Any
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from app.constants import AgentMode, EventType, OperatorStatus
+from app.constants import AgentMode, EventType
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.benchmark_judge import (
     BenchmarkJudge,
@@ -121,9 +121,13 @@ async def test_agent_benchmark(
     4. Grade captured tool calls with BenchmarkJudge (deterministic, no LLM)
     5. Record results for aggregate reporting
     """
+    print(f"[BENCH_START] Test function called for scenario {scenario_data.get('id', 'unknown')}")
     start_time = datetime.now(timezone.utc)
     scenario = _build_scenario(scenario_data)
     result_data = BenchmarkTestResult(scenario_id=scenario.id, category=scenario.category)
+
+    print(f"[BENCH_PRINT] ===== Starting test for scenario {scenario.id} =====")
+    logger.info("[BENCH] ===== Starting test for scenario %s =====", scenario.id)
 
     investigation_service = all_services['investigation_service']
     investigation_data_service = all_services['investigation_data_service']
@@ -135,9 +139,11 @@ async def test_agent_benchmark(
     response_text = ""
 
     try:
+        logger.info("[BENCH] Entered try block for scenario %s", scenario.id)
         llm_settings = test_user_settings.llm
-        agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "OPERATOR_BOUND" else AgentMode.OPERATOR_NOT_BOUND
+        agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "operator_bound" else AgentMode.OPERATOR_NOT_BOUND
 
+        logger.info("[BENCH] About to call seed_operator_if_bound with agent_mode=%s", agent_mode)
         bound_operators = await seed_operator_if_bound(
             agent_mode=agent_mode,
             operator_id=unique_operator_id,
@@ -146,6 +152,11 @@ async def test_agent_benchmark(
             cleanup=cleanup,
             log_prefix="[BENCH]",
         )
+
+        logger.info("[BENCH] Scenario agent_mode=%s, Bound operators count: %d", scenario.agent_mode, len(bound_operators))
+        if bound_operators:
+            logger.info("[BENCH] First bound operator: id=%s session_id=%s status=%s",
+                        bound_operators[0].operator_id, bound_operators[0].operator_session_id, bound_operators[0].status)
 
         investigation_request = InvestigationCreateRequest(
             case_id=unique_case_id,
@@ -174,6 +185,8 @@ async def test_agent_benchmark(
             nonlocal captured_tribunal
             tool_name = tool_call.name or ""
             raw_args = dict(tool_call.args) if tool_call.args else {}
+
+            logger.info("[BENCH_PATCH] Intercepted tool call: %s with args_keys=%s", tool_name, list(raw_args.keys()))
 
             result = await _real_orchestrate(
                 tool_call=tool_call,
@@ -219,7 +232,7 @@ async def test_agent_benchmark(
                 message=scenario.user_query,
                 g8e_context=g8e_context,
                 attachments=[],
-                sentinel_mode=True,
+                sentinel_mode=False,
                 llm_primary_provider=None,
                 llm_assistant_provider=None,
                 llm_primary_model=llm_settings.primary_model,
