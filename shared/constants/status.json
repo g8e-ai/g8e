@@ -509,7 +509,8 @@
     "restore.file": "restore_file",
     "fetch.file.diff": "fetch_file_diff",
     "g8e.web.search": "g8e_web_search",
-    "query.investigation.context": "query_investigation_context"
+    "query.investigation.context": "query_investigation_context",
+    "get.command.constraints": "get_command_constraints"
   },
 
   "_comment.llm.models": "Canonical LLM model identifiers shared across g8ee, g8eo, and g8ed.",

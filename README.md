@@ -194,7 +194,7 @@ g8e is a governance primitive. The current implementation covers infrastructure 
 - **Air-gapped environments** — Run the entire platform disconnected from the internet with a local Ollama instance. No external API calls required.
 - **Custom Operators** — The Operator is a protocol, not just a binary. Any client that speaks the g8e event protocol can act as an Operator. Build specialized agents for databases, network devices, or any system that needs governed AI interaction.
 
-We have built the foundation, but we want to be fully transparent about the current state of the codebase and platform: it is admittedly raw and the edges are rough. Because a large portion of this code was written by human-driven AI, some of it is rubbish—you will find joined ends that go nowhere, dead code, and areas needing significant cleanup.
+We have built the foundation, but we want to be fully transparent about the current state of the codebase and platform: it is admittedly raw and the edges are rough. Because a large portion of this code was written by human-driven AI, some of it is rubbish... you will find joined ends that go nowhere, dead code, and areas needing significant cleanup.
 
 Our primary objective right now and for the foreseeable future is hardening the platform and protocol. This means focusing on code refactors for a quality foundation, deep and robust testing, industry-standard accuracy and safety measurements, and third-party security reviews. 
 
