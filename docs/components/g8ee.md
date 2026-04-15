@@ -2,7 +2,7 @@
 
 g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
 
-> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_control_plane.md](../architecture/ai_control_plane.md).
+> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_agents.md](../architecture/ai_agents.md).
 >
 > For deep-reference security documentation — internal auth token, Sentinel scrubbing patterns, LFAA vault encryption, operator binding, web/operator session security, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -979,14 +979,31 @@ Temperatures are fixed per Tribunal member and are not configurable. Values are 
 
 **Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
 
+**Forbidden patterns:** Tribunal prompts dynamically include the canonical `FORBIDDEN_COMMAND_PATTERNS` constant from `app.constants.settings.py`. This ensures that forbidden command patterns (e.g., `sudo`, `su `, `pkexec`, `doas`, etc.) are always reflected in Tribunal prompts without hardcoding. The `_format_forbidden_patterns_message()` helper generates this message dynamically.
+
+**Command constraints:** Tribunal prompts can include command whitelist/blacklist constraints when passed to `generate_command()`. These constraints are formatted by `_format_command_constraints_message()` and injected into prompts via the `{command_constraints_message}` placeholder. The `generate_command()` function accepts these optional parameters:
+- `whitelisting_enabled` (bool): Whether command whitelisting is active
+- `blacklisting_enabled` (bool): Whether command blacklisting is active
+- `whitelisted_commands` (list[str] | None): List of whitelisted command patterns
+- `blacklisted_commands` (list[dict[str, str]] | None): List of blacklisted command patterns with metadata
+
+The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_settings.command_validation` and passes them to `generate_command()`, ensuring Tribunal is aware of downstream command validation rules configured per-user.
+
 #### Security & Auth (`AuthSettings`, `CommandValidationSettings`)
 
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `internal_auth_token` | — | Component-to-component auth (`X-Internal-Auth` header); required before g8ee accepts requests |
 | `g8e_api_key` | — | Optional API key for external client authentication |
-| `enable_command_whitelisting` | `false` | Restrict commands to an allowlist |
-| `enable_command_blacklisting` | `false` | Block commands matching a denylist |
+
+**Command Validation Settings** (per-user, in `G8eeUserSettings.command_validation`):
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `enable_whitelisting` | `false` | Restrict commands to an allowlist |
+| `enable_blacklisting` | `false` | Block commands matching a denylist |
+
+> **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
 #### Vertex AI Search (`VertexSearchSettings`)
 

@@ -74,15 +74,6 @@ def enriched_investigation():
         conversation_history=[msg]
     )
 
-def test_build_memory_analysis_system_instruction():
-    instruction = prompts.build_memory_analysis_system_instruction("Test Case")
-    assert "Test Case" in instruction
-    assert "investigation_summary" in instruction
-
-def test_build_memory_analysis_request():
-    request = prompts.build_memory_analysis_request()
-    assert "Analyze the conversation" in request
-
 def test_build_investigation_context_section_empty():
     assert prompts.build_investigation_context_section(None) == ""  # type: ignore[arg-type]
 

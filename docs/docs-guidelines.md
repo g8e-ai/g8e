@@ -67,8 +67,8 @@ docs/
 | Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
 | Testing principles, g8ep environment, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
 | Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
-| AI control plane cross-component architecture (transport, pipeline) | `docs/architecture/ai_control_plane.md` | `docs/components/g8ee.md` |
-| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_control_plane.md` |
+| AI agents cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
+| g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
 | g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | `docs/testing.md` for how to run tests |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 

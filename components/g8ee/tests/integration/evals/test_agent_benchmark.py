@@ -218,7 +218,6 @@ async def test_agent_benchmark(
         bound_operators = await seed_operator_if_bound(
             agent_mode=agent_mode,
             operator_id=unique_operator_id,
-            operator_session_id=unique_session_id,
             operator_data_service=operator_data_service,
             cleanup=cleanup,
             log_prefix="[BENCH]",

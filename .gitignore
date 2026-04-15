@@ -232,6 +232,8 @@ bin/
 .env
 .env.local
 .env.*.local
+.local.dev
+.local.dev/**
 
 # Database files
 *.db

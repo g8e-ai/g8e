@@ -98,7 +98,7 @@ from tests.fakes.factories import (
     create_investigation_data,
     create_investigation_memory,
     create_investigation_request,
-    build_operator_document,
+    build_production_operator_document,
     build_g8e_http_context,
 )
 
@@ -492,7 +492,7 @@ class TestOperatorEnrichment:
         
         # Create investigation and operator
         investigation = create_investigation_data()
-        operator = build_operator_document()
+        operator = build_production_operator_document()
         
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
@@ -550,9 +550,9 @@ class TestOperatorEnrichment:
         
         # Create investigation and multiple operators
         investigation = create_investigation_data()
-        operator1 = build_operator_document(hostname="host-1")
-        operator2 = build_operator_document(hostname="host-2")
-        operator3 = build_operator_document(hostname="host-3")
+        operator1 = build_production_operator_document(hostname="host-1")
+        operator2 = build_production_operator_document(hostname="host-2")
+        operator3 = build_production_operator_document(hostname="host-3")
         
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
@@ -616,9 +616,13 @@ class TestOperatorEnrichment:
         
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
-        bound_operator = build_operator_document(status=OperatorStatus.BOUND)
-        claimed_operator = build_operator_document(status=OperatorStatus.AVAILABLE)
-        offline_operator = build_operator_document(status=OperatorStatus.OFFLINE)
+        bound_operator = build_production_operator_document()
+        claimed_operator = build_production_operator_document()
+        offline_operator = build_production_operator_document()
+        
+        # Manually set different statuses since factory hardcodes BOUND
+        claimed_operator.status = OperatorStatus.AVAILABLE
+        offline_operator.status = OperatorStatus.OFFLINE
         
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
@@ -723,9 +727,8 @@ class TestOperatorEnrichment:
         operator_data_service = all_services['operator_data_service']
 
         # Create cloud operator with intents
-        cloud_operator = build_operator_document(
+        cloud_operator = build_production_operator_document(
             operator_type=OperatorType.CLOUD,
-            status=OperatorStatus.BOUND,
         )
         cloud_operator.cloud_subtype = "aws"
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
@@ -818,8 +821,8 @@ class TestCompleteContextAssembly:
             response_style="Comprehensive with context and background information",
             problem_solving_approach="Holistic system thinking, considers dependencies",
         )
-        operator1 = build_operator_document(hostname="prod-server-01")
-        operator2 = build_operator_document(hostname="prod-server-02")
+        operator1 = build_production_operator_document(hostname="prod-server-01")
+        operator2 = build_production_operator_document(hostname="prod-server-02")
         
         await memory_data_service.save_memory(memory, is_new=True)
         await operator_data_service.create_operator(operator1)
@@ -990,7 +993,7 @@ class TestAIContextExtraction:
     ):
         """extract_system_context returns primary operator context."""
         # Create test operator with full system details and specific ID
-        operator = build_operator_document(
+        operator = build_production_operator_document(
             operator_id="op-extract-001",
             hostname="extract-host",
         )
@@ -1118,14 +1121,14 @@ class TestAIContextExtraction:
     ):
         """extract_all_operators_context returns all operator contexts."""
         # Create multiple operators with different characteristics and specific IDs
-        linux_operator = build_operator_document(
+        linux_operator = build_production_operator_document(
             operator_id="op-linux-001",
             hostname="linux-server",
             operator_type=OperatorType.SYSTEM,
         )
         linux_operator.granted_intents = []
 
-        cloud_operator = build_operator_document(
+        cloud_operator = build_production_operator_document(
             operator_id="op-cloud-001",
             hostname="aws-instance",
             operator_type=OperatorType.CLOUD,
@@ -1208,7 +1211,7 @@ class TestAIContextExtraction:
     ):
         """Context extraction handles missing heartbeat data gracefully."""
         # Create operator with no heartbeat snapshot
-        operator = build_operator_document(operator_id="op-no-hb")
+        operator = build_production_operator_document(operator_id="op-no-hb")
         operator.latest_heartbeat_snapshot = None  # No heartbeat data
         
         investigation = EnrichedInvestigationContext(
@@ -1233,14 +1236,14 @@ class TestAIContextExtraction:
         assert isinstance(context, OperatorContext)
         assert context.operator_id == "op-no-hb"
         assert context.os == "linux"  # From system_info
-        assert context.hostname == "test-host"  # From system_info
+        assert context.hostname == "eval-node-01"  # From system_info
         
         # Fields that exist in system_info fallback should NOT be None
-        assert context.working_directory == "/home/test-user"  # Fallback from system_info
+        assert context.working_directory == "/root"  # Fallback from system_info
+        assert context.username == "root"  # Fallback from system_info
         
         # Truly heartbeat-only fields (not in default system_info) should be None
         assert context.distro is None
         assert context.kernel is None
-        assert context.username is None
         assert context.disk_percent is None
         assert context.memory_percent is None

@@ -41,7 +41,7 @@ from app.services.mcp.gateway_service import MCPGatewayService
 from app.services.operator.operator_data_service import OperatorDataService
 from tests.fakes.factories import (
     build_bound_operator,
-    build_operator_document,
+    build_minimal_operator_document,
     build_g8e_http_context,
 )
 
@@ -121,7 +121,7 @@ class TestCallTool:
     async def test_success_returns_mcp_content(self):
         gateway, tool_service, _, operator_data_service = _make_gateway()
 
-        operator_doc = build_operator_document(operator_id="op-1", user_id="u-1")
+        operator_doc = build_minimal_operator_document(operator_id="op-1", user_id="u-1")
         operator_data_service.get_operator = AsyncMock(return_value=operator_doc)
 
         tool_service.start_invocation_context.return_value = "token"
@@ -246,7 +246,7 @@ class TestBuildInvestigationContext:
     async def test_resolves_operator_documents(self):
         gateway, _, _, operator_data_service = _make_gateway()
 
-        op_doc = build_operator_document(operator_id="op-1", user_id="u-1")
+        op_doc = build_minimal_operator_document(operator_id="op-1", user_id="u-1")
         operator_data_service.get_operator = AsyncMock(return_value=op_doc)
 
         ctx = build_g8e_http_context(

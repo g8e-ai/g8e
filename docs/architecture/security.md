@@ -613,12 +613,40 @@ Final command presented to human for approval
 
 ### Command Allowlist and Denylist
 
-Two optional operator-level controls are available as additional constraints — **disabled by default**, enabled via `ENABLE_COMMAND_WHITELISTING` and `ENABLE_COMMAND_BLACKLISTING` in `platform_settings`.
+Two optional operator-level controls are available as additional constraints — **disabled by default**, configured via user settings.
 
-- **Allowlist (`config/whitelist.json`)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
-- **Denylist (`config/blacklist.json`)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
+- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
+- **Denylist (blacklist)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
 
-When the denylist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+When the blacklist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+
+#### Configuration
+
+Command validation is configured per-user via the `command_validation` field in user settings:
+
+```json
+{
+  "user_id": "...",
+  "settings": {
+    "command_validation": {
+      "enable_whitelisting": false,
+      "enable_blacklisting": false
+    },
+    "llm": { ... },
+    "search": { ... },
+    "eval_judge": { ... }
+  }
+}
+```
+
+- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted
+- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked
+
+Users can configure these settings through:
+1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist
+2. **API** — Update user settings via the `/api/settings/user` endpoint
+
+The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist and blacklist state for Tribunal awareness during command generation.
 
 ---
 

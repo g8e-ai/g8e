@@ -39,7 +39,7 @@ from app.models.tool_results import PortCheckToolResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
     build_enriched_context,
-    build_operator_document,
+    build_minimal_operator_document,
     build_g8e_http_context,
 )
 from tests.fakes.fake_event_service import FakeEventService

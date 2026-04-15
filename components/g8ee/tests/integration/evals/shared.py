@@ -191,17 +191,20 @@ def load_and_validate_benchmark_set(benchmark_path: str) -> list[dict[str, Any]]
 async def seed_operator_if_bound(
     agent_mode: AgentMode,
     operator_id: str,
-    operator_session_id: str,
     operator_data_service,
     cleanup,
     log_prefix: str,
 ) -> list[BoundOperator]:
-    """Create and seed operator document for operator-bound scenarios.
+    """Create and seed a realistic operator document for operator-bound eval/benchmark scenarios.
+
+    Uses ``build_production_operator_document`` which reflects a production Operator
+    environment (root user, uid=0, systemd init, bare-metal Linux). This gives
+    the LLM and Tribunal accurate privilege context so they avoid injecting
+    unnecessary ``sudo`` into commands.
 
     Args:
         agent_mode: The agent mode for the test scenario.
         operator_id: Unique operator ID.
-        operator_session_id: Unique operator session ID.
         operator_data_service: Service for creating operator documents.
         cleanup: Cleanup tracker for operator teardown.
         log_prefix: Prefix for log messages (e.g., "[BENCH]" or "[EVAL]").
@@ -212,19 +215,18 @@ async def seed_operator_if_bound(
     if agent_mode != AgentMode.OPERATOR_BOUND:
         return []
 
-    from tests.fakes.factories import build_bound_operator, build_operator_document
+    from tests.fakes.factories import build_bound_operator, build_production_operator_document
+
+    operator_doc = build_production_operator_document(operator_id=operator_id)
 
     bound_operators = [build_bound_operator(
-        operator_id=operator_id,
-        operator_session_id=operator_session_id,
+        operator_id=operator_doc.operator_id,
+        operator_session_id=operator_doc.operator_session_id,
         status=OperatorStatus.BOUND,
     )]
 
-    operator_doc = build_operator_document(
-        operator_id=operator_id,
-    )
     await operator_data_service.create_operator(operator_doc)
     logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.operator_id)
-    cleanup.track_operator(operator_id)
+    cleanup.track_operator(operator_doc.operator_id)
 
     return bound_operators

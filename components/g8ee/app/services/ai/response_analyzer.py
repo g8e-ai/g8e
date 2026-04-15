@@ -16,8 +16,6 @@ import logging
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
-from app.constants.prompts import PromptFile
-from app.prompts_data.loader import load_prompt
 from app.llm import get_llm_provider, Role
 from app.models.base import G8eBaseModel
 from app.models.tool_results import (
@@ -29,6 +27,7 @@ from app.models.tool_results import (
     FileOperationRiskContext,
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +100,8 @@ class AIResponseAnalyzer:
         working_dir = context.working_directory
         resolved_settings = settings
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_COMMAND_RISK)
-        prompt = prompt_template.format(
+        command_risk_persona = get_agent_persona("response_analyzer_command_risk")
+        prompt = command_risk_persona.persona.format(
             command=command,
             justification=justification,
             working_dir=working_dir
@@ -153,8 +152,8 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
             )
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_ERROR_SUGGESTION)
-        prompt = prompt_template.format(
+        error_persona = get_agent_persona("response_analyzer_error")
+        prompt = error_persona.persona.format(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -223,8 +222,8 @@ class AIResponseAnalyzer:
 
         content_preview = content[:500] if content else "N/A"
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_FILE_RISK)
-        prompt = prompt_template.format(
+        file_risk_persona = get_agent_persona("response_analyzer_file_risk")
+        prompt = file_risk_persona.persona.format(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,

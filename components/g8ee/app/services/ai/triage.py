@@ -34,60 +34,9 @@ from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
-
-_TRIAGE_PROMPT_TEMPLATE = """\
-You are a routing and intent-analysis assistant. Your goal is to identify the user's TRUE intent and classify the complexity of their request.
-
-<definitions>
-# Intent Categories
-- information: The user is asking for an explanation, fact, or concept. No action required.
-- action: The user wants something DONE (execution, modification, deployment, debugging).
-- unknown: The intent is ambiguous or missing.
-
-# Complexity Levels
-- simple: A single, self-contained conversational or factual question.
-  - No code execution, no file operations, no system commands needed.
-  - No multi-step reasoning required.
-  - Can be answered confidently in one pass without tools.
-  - Examples: "What is a reverse proxy?", "How many MB in a GB?", "What does chmod 755 mean?"
-
-- complex: Anything that requires tools, commands, multi-step reasoning, or technical depth.
-  - Requires running commands or accessing a system.
-  - Requires reading, writing, or analysing files or logs.
-  - Involves debugging, root-cause analysis, or a sequence of steps.
-  - Involves configuring, deploying, or modifying infrastructure.
-  - The user wants something *done*, not just explained.
-</definitions>
-
-<instructions>
-1. Summarize the user's true intent: what is their end goal? What do they ultimately need?
-2. Classify the intent category as 'information', 'action', or 'unknown'.
-3. Rate your confidence in the intent classification as 'high' or 'low'.
-4. Classify the complexity as 'simple' or 'complex'.
-5. Rate your confidence in the complexity classification as 'high' or 'low'.
-6. If intent confidence is 'low', provide a concise follow-up question to clarify their ultimate goal.
-</instructions>
-
-<conversation_tail>
-{conversation_tail}
-</conversation_tail>
-
-<message>
-{message}
-</message>
-
-Respond ONLY with a JSON object following this structure:
-{{
-  "intent_summary": "string",
-  "intent": "information" | "action" | "unknown",
-  "intent_confidence": "high" | "low",
-  "complexity": "simple" | "complex",
-  "complexity_confidence": "high" | "low",
-  "follow_up_question": "string" | null
-}}
-"""
 
 
 class TriageAgent:
@@ -139,10 +88,9 @@ class TriageAgent:
 
             conversation_tail = self._build_conversation_tail(request.conversation_history)
 
-            prompt = _TRIAGE_PROMPT_TEMPLATE.format(
-                conversation_tail=conversation_tail,
-                message=request.message,
-            )
+            persona = get_agent_persona("triage")
+            prompt_template = persona.get_system_prompt()
+            prompt = f"{prompt_template}\n\n<conversation_tail>\n{conversation_tail}\n</conversation_tail>\n\n<message>\n{request.message}\n</message>"
 
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=model,

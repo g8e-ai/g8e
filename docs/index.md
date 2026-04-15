@@ -22,7 +22,7 @@ Cross-component internals — data flows, protocols, and system-wide design deci
 | Document | Description |
 |----------|-------------|
 | [architecture/about.md](architecture/about.md) | Platform origins, story, and governance |
-| [architecture/ai_control_plane.md](architecture/ai_control_plane.md) | AI control plane cross-component architecture — transport, conversation data models, command execution pipeline |
+| [architecture/ai_agents.md](architecture/ai_agents.md) | AI agents cross-component architecture — transport, conversation data models, command execution pipeline |
 | [architecture/builds.md](architecture/builds.md) | Build system — component builds, operator binary distribution, and CI workflows |
 | [architecture/dashboard.md](architecture/dashboard.md) | Dashboard architecture — SSE fan-out, operator panel, and frontend integration |
 | [architecture/docker.md](architecture/docker.md) | Docker architecture — service configuration, non-root users, security hardening, capability model, read-only filesystems, docker socket threat model, and dev/prod compose split |

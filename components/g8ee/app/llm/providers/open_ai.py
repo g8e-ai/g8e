@@ -166,23 +166,20 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            kwargs["stop"] = primary_llm_settings.stop_sequences
-        if openai_tools:
-            kwargs["tools"] = openai_tools
 
         if openai_tools:
             # Some endpoints hang on streaming when tools are present.
             # Use non-streaming and yield the response as chunks.
-            response = await self._client.chat.completions.create(**kwargs, stream=False)
+            response = await self._client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=effective_temperature,
+                max_tokens=effective_max_tokens,
+                top_p=primary_llm_settings.top_p_nucleus_sampling,
+                stop=primary_llm_settings.stop_sequences,
+                tools=openai_tools,
+                stream=False,
+            )
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
 
@@ -214,7 +211,16 @@ class OpenAIProvider(LLMProvider):
                 )
             yield StreamChunkFromModel(finish_reason=finish_reason or "stop", usage_metadata=usage)
         else:
-            stream = await self._client.chat.completions.create(**kwargs, stream=True)
+            stream = await self._client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=effective_temperature,
+                max_tokens=effective_max_tokens,
+                top_p=primary_llm_settings.top_p_nucleus_sampling,
+                stop=primary_llm_settings.stop_sequences,
+                tools=openai_tools,
+                stream=True,
+            )
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
@@ -243,20 +249,16 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            kwargs["stop"] = primary_llm_settings.stop_sequences
-        if openai_tools:
-            kwargs["tools"] = openai_tools
 
-        response = await self._client.chat.completions.create(**kwargs)
+        response = await self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            top_p=primary_llm_settings.top_p_nucleus_sampling,
+            stop=primary_llm_settings.stop_sequences,
+            tools=openai_tools,
+        )
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -304,19 +306,11 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            kwargs["stop"] = assistant_llm_settings.stop_sequences
+
+        response_format = None
         if assistant_llm_settings.response_format is not None:
             rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["response_format"] = {
+            response_format = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": rjs.name,
@@ -325,7 +319,16 @@ class OpenAIProvider(LLMProvider):
                 },
             }
 
-        stream = await self._client.chat.completions.create(**kwargs, stream=True)
+        stream = await self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            top_p=assistant_llm_settings.top_p_nucleus_sampling,
+            stop=assistant_llm_settings.stop_sequences,
+            response_format=response_format,
+            stream=True,
+        )
 
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -347,19 +350,11 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            kwargs["stop"] = assistant_llm_settings.stop_sequences
+
+        response_format = None
         if assistant_llm_settings.response_format is not None:
             rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["response_format"] = {
+            response_format = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": rjs.name,
@@ -368,7 +363,15 @@ class OpenAIProvider(LLMProvider):
                 },
             }
 
-        response = await self._client.chat.completions.create(**kwargs)
+        response = await self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            top_p=assistant_llm_settings.top_p_nucleus_sampling,
+            stop=assistant_llm_settings.stop_sequences,
+            response_format=response_format,
+        )
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -403,19 +406,11 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            kwargs["stop"] = lite_llm_settings.stop_sequences
+
+        response_format = None
         if lite_llm_settings.response_format is not None:
             rjs = lite_llm_settings.response_format.json_schema
-            kwargs["response_format"] = {
+            response_format = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": rjs.name,
@@ -424,7 +419,16 @@ class OpenAIProvider(LLMProvider):
                 },
             }
 
-        stream = await self._client.chat.completions.create(**kwargs, stream=True)
+        stream = await self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            top_p=lite_llm_settings.top_p_nucleus_sampling,
+            stop=lite_llm_settings.stop_sequences,
+            response_format=response_format,
+            stream=True,
+        )
 
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -446,19 +450,11 @@ class OpenAIProvider(LLMProvider):
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "temperature": effective_temperature,
-            "max_tokens": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            kwargs["stop"] = lite_llm_settings.stop_sequences
+
+        response_format = None
         if lite_llm_settings.response_format is not None:
             rjs = lite_llm_settings.response_format.json_schema
-            kwargs["response_format"] = {
+            response_format = {
                 "type": "json_schema",
                 "json_schema": {
                     "name": rjs.name,
@@ -467,7 +463,15 @@ class OpenAIProvider(LLMProvider):
                 },
             }
 
-        response = await self._client.chat.completions.create(**kwargs)
+        response = await self._client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=effective_temperature,
+            max_tokens=effective_max_tokens,
+            top_p=lite_llm_settings.top_p_nucleus_sampling,
+            stop=lite_llm_settings.stop_sequences,
+            response_format=response_format,
+        )
 
         parts = []
         choice = response.choices[0] if response.choices else None

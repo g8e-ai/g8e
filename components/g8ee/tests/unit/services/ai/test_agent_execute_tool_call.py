@@ -74,6 +74,18 @@ def _make_tool_executor() -> MagicMock:
     mock_exec_svc._settings = MagicMock()
     executor.operator_command_service = mock_exec_svc
     
+    # Mock user settings and validators for command constraints
+    from app.models.settings import CommandValidationSettings
+    mock_user_settings = MagicMock()
+    mock_user_settings.command_validation = CommandValidationSettings()
+    executor._user_settings = mock_user_settings
+    
+    from app.utils.whitelist_validator import CommandWhitelistValidator
+    from app.utils.blacklist_validator import CommandBlacklistValidator
+    from app.utils.validators import get_whitelist_validator, get_blacklist_validator
+    executor._whitelist_validator = get_whitelist_validator()
+    executor._blacklist_validator = get_blacklist_validator()
+    
     return executor
 
 

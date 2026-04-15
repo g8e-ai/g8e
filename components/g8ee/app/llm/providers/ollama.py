@@ -144,26 +144,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            options["stop"] = primary_llm_settings.stop_sequences
 
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": True, # enable thinking for primary
-        }
-        if ollama_tools:
-            kwargs["tools"] = ollama_tools
-
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": primary_llm_settings.top_p_nucleus_sampling,
+                "stop": primary_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=True,
+            tools=ollama_tools or None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -200,26 +194,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            options["stop"] = primary_llm_settings.stop_sequences
 
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": True,
-        }
-        if ollama_tools:
-            kwargs["tools"] = ollama_tools
-
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": primary_llm_settings.top_p_nucleus_sampling,
+                "stop": primary_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=True,
+            tools=ollama_tools or None,
+        )
         
         parts = []
         if getattr(response.message, "thinking", None):
@@ -258,28 +246,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            options["stop"] = assistant_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": False,
-        }
-        
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": assistant_llm_settings.top_p_nucleus_sampling,
+                "stop": assistant_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=False,
+            format=assistant_llm_settings.response_format.json_schema.schema if assistant_llm_settings.response_format else None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -306,28 +286,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            options["stop"] = assistant_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": False,
-        }
-        
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": assistant_llm_settings.top_p_nucleus_sampling,
+                "stop": assistant_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=False,
+            format=assistant_llm_settings.response_format.json_schema.schema if assistant_llm_settings.response_format else None,
+        )
         
         parts = []
         if getattr(response.message, "content", None):
@@ -359,28 +331,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            options["stop"] = lite_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": False,
-        }
-        
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": lite_llm_settings.top_p_nucleus_sampling,
+                "stop": lite_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=False,
+            format=lite_llm_settings.response_format.json_schema.schema if lite_llm_settings.response_format else None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -407,28 +371,20 @@ class OllamaProvider(LLMProvider):
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            options["stop"] = lite_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": False,
-        }
-        
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": lite_llm_settings.top_p_nucleus_sampling,
+                "stop": lite_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=False,
+            format=lite_llm_settings.response_format.json_schema.schema if lite_llm_settings.response_format else None,
+        )
         
         parts = []
         if getattr(response.message, "content", None):

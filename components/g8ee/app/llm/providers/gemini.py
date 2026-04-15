@@ -360,12 +360,10 @@ class GeminiProvider(LLMProvider):
             return None
         if tc.thinking_level is None and not tc.include_thoughts:
             return None
-        kwargs: dict[str, object] = {}
-        if tc.thinking_level is not None:
-            kwargs["thinking_level"] = tc.thinking_level
-        if tc.include_thoughts:
-            kwargs["include_thoughts"] = True
-        return genai_types.ThinkingConfig(**kwargs)
+        return genai_types.ThinkingConfig(
+            thinking_level=tc.thinking_level,
+            include_thoughts=tc.include_thoughts,
+        )
 
     @staticmethod
     def _build_genai_config(
@@ -409,7 +407,7 @@ class GeminiProvider(LLMProvider):
                 max_output_tokens=settings.max_output_tokens,
                 top_p=settings.top_p_nucleus_sampling,
                 top_k=settings.top_k_filtering,
-                system_instructions=settings.system_instructions,
+                system_instruction=settings.system_instructions,
                 thinking_config=thinking_config,
                 tools=genai_tools,
                 tool_config=tool_config,

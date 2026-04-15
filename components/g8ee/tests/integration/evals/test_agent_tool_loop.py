@@ -29,7 +29,7 @@ from tests.fakes.factories import (
     build_g8e_http_context,
     build_enriched_investigation,
     build_bound_operator,
-    build_operator_document,
+    build_production_operator_document,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,10 +98,9 @@ async def test_orchestrate_tool_execution_security_violation(
 
     This tests the REAL security validation in AIToolService.execute_tool_call.
     """
-    operator_doc = build_operator_document(
+    operator_doc = build_production_operator_document(
         operator_id="op-test-001",
         hostname="test-server-01",
-        status=OperatorStatus.BOUND,
     )
 
     investigation = build_enriched_investigation(

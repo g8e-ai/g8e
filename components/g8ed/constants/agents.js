@@ -74,4 +74,10 @@ export const AgentMetadata = Object.freeze({
     AXIOM:            _AGENTS['agent.metadata'].axiom,
     CONCORD:          _AGENTS['agent.metadata'].concord,
     VARIANCE:         _AGENTS['agent.metadata'].variance,
+    MEMORY_GENERATOR: _AGENTS['agent.metadata'].memory_generator,
+    EVAL_JUDGE:       _AGENTS['agent.metadata'].eval_judge,
+    RESPONSE_ANALYZER: _AGENTS['agent.metadata'].response_analyzer,
+    RESPONSE_ANALYZER_COMMAND_RISK: _AGENTS['agent.metadata'].response_analyzer_command_risk,
+    RESPONSE_ANALYZER_ERROR: _AGENTS['agent.metadata'].response_analyzer_error,
+    RESPONSE_ANALYZER_FILE_RISK: _AGENTS['agent.metadata'].response_analyzer_file_risk,
 });

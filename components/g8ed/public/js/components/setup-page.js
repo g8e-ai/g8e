@@ -192,6 +192,11 @@ export class SetupPage {
                 this._showStatus('error', 'Select an assistant model');
                 return false;
             }
+            const lite = document.getElementById('lite_model')?.value;
+            if (!lite) {
+                this._showStatus('error', 'Select a lite model');
+                return false;
+            }
         }
 
         return true;
@@ -273,30 +278,37 @@ export class SetupPage {
         const active = this._getActiveProviders();
         const primarySelect = document.getElementById('primary_model');
         const assistantSelect = document.getElementById('assistant_model');
-        if (!primarySelect || !assistantSelect) return;
+        const liteSelect = document.getElementById('lite_model');
+        if (!primarySelect || !assistantSelect || !liteSelect) return;
 
         const prevPrimary = primarySelect.value;
         const prevAssistant = assistantSelect.value;
+        const prevLite = liteSelect.value;
 
         primarySelect.innerHTML = '';
         assistantSelect.innerHTML = '';
+        liteSelect.innerHTML = '';
 
         if (active.length === 0) {
             primarySelect.disabled = true;
             assistantSelect.disabled = true;
+            liteSelect.disabled = true;
             const placeholder = document.createElement('option');
             placeholder.value = '';
             placeholder.textContent = 'Enter at least one API key above';
             primarySelect.appendChild(placeholder);
             assistantSelect.appendChild(placeholder.cloneNode(true));
+            liteSelect.appendChild(placeholder.cloneNode(true));
             return;
         }
 
         primarySelect.disabled = false;
         assistantSelect.disabled = false;
+        liteSelect.disabled = false;
 
         let firstPrimaryDefault = null;
         let firstAssistantDefault = null;
+        let firstLiteDefault = null;
 
         for (const provider of active) {
             const config = PROVIDER_MODELS[provider];
@@ -324,8 +336,19 @@ export class SetupPage {
             }
             assistantSelect.appendChild(aGroup);
 
+            const lGroup = document.createElement('optgroup');
+            lGroup.label = providerLabel;
+            for (const m of config.lite) {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.label;
+                lGroup.appendChild(opt);
+            }
+            liteSelect.appendChild(lGroup);
+
             if (!firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
             if (!firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
+            if (!firstLiteDefault) firstLiteDefault = config.defaultLite;
         }
 
         if (prevPrimary && this._selectHasValue(primarySelect, prevPrimary)) {
@@ -339,6 +362,12 @@ export class SetupPage {
         } else if (firstAssistantDefault) {
             assistantSelect.value = firstAssistantDefault;
         }
+
+        if (prevLite && this._selectHasValue(liteSelect, prevLite)) {
+            liteSelect.value = prevLite;
+        } else if (firstLiteDefault) {
+            liteSelect.value = firstLiteDefault;
+        }
     }
 
     _selectHasValue(selectEl, value) {
@@ -350,7 +379,8 @@ export class SetupPage {
         if (active.length === 0) return false;
         const primary = document.getElementById('primary_model')?.value;
         const assistant = document.getElementById('assistant_model')?.value;
-        return !!(primary && assistant);
+        const lite = document.getElementById('lite_model')?.value;
+        return !!(primary && assistant && lite);
     }
 
     // ---------------------------------------------------------------------------
@@ -390,6 +420,7 @@ export class SetupPage {
     _renderSummary() {
         const primaryModel = document.getElementById('primary_model')?.value || '';
         const assistantModel = document.getElementById('assistant_model')?.value || '';
+        const liteModel = document.getElementById('lite_model')?.value || '';
         const primaryProvider = _modelToProvider(primaryModel);
         const email = document.getElementById('account_email').value.trim();
         const name = document.getElementById('account_name').value.trim();
@@ -406,6 +437,7 @@ export class SetupPage {
             { icon: 'psychology',     label: 'Providers',       value: providerLabels },
             { icon: 'model_training', label: 'Primary Model',   value: primaryModel },
             { icon: 'assistant',      label: 'Assistant Model', value: assistantModel },
+            { icon: 'bolt',           label: 'Lite Model',      value: liteModel },
             { icon: 'travel_explore', label: 'Web Search',      value: searchProviderLabel },
         ];
 
@@ -440,8 +472,10 @@ export class SetupPage {
 
         const primaryModel = document.getElementById('primary_model')?.value || '';
         const assistantModel = document.getElementById('assistant_model')?.value || '';
+        const liteModel = document.getElementById('lite_model')?.value || '';
         const primaryProvider = _modelToProvider(primaryModel);
         const assistantProvider = _modelToProvider(assistantModel);
+        const liteProvider = _modelToProvider(liteModel);
 
         if (primaryProvider) {
             userSettings.llm_primary_provider = primaryProvider;
@@ -449,8 +483,12 @@ export class SetupPage {
         if (assistantProvider) {
             userSettings.llm_assistant_provider = assistantProvider;
         }
+        if (liteProvider) {
+            userSettings.llm_lite_provider = liteProvider;
+        }
         if (primaryModel) userSettings.llm_model = primaryModel;
         if (assistantModel) userSettings.llm_assistant_model = assistantModel;
+        if (liteModel) userSettings.llm_lite_model = liteModel;
 
         const geminiKey = document.getElementById('gemini_api_key')?.value.trim();
         if (geminiKey) userSettings.gemini_api_key = geminiKey;

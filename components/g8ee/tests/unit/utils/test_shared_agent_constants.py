@@ -61,7 +61,7 @@ class TestAgentConstantsMatchSharedJSON:
 
     def test_metadata_completeness(self):
         """Verify all expected agents have metadata in the shared constants."""
-        expected = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance"}
+        expected = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance", "memory_generator", "eval_judge", "response_analyzer", "response_analyzer_command_risk", "response_analyzer_error", "response_analyzer_file_risk"}
         actual = set(_AGENTS["agent.metadata"].keys())
         assert actual == expected
 
@@ -70,7 +70,7 @@ class TestAgentMetadataPersonaFields:
 
     REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "temperature", "tools", "identity", "purpose", "autonomy"}
     VALID_AUTONOMY_VALUES = {"fully_autonomous", "human_approved"}
-    ALL_AGENT_KEYS = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance"}
+    ALL_AGENT_KEYS = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance", "memory_generator", "eval_judge", "response_analyzer", "response_analyzer_command_risk", "response_analyzer_error", "response_analyzer_file_risk"}
 
     def test_all_agents_have_persona_fields(self):
         metadata = _AGENTS["agent.metadata"]

@@ -315,24 +315,30 @@ class SSEService {
 
             const provider = userSettings.llm_primary_provider ?? platformSettings.llm_primary_provider ?? '';
             const assistantProvider = userSettings.llm_assistant_provider ?? platformSettings.llm_assistant_provider ?? '';
+            const liteProvider = userSettings.llm_lite_provider ?? platformSettings.llm_lite_provider ?? '';
             const currentPrimary = userSettings.llm_model ?? platformSettings.llm_model ?? '';
             const currentAssistant = userSettings.llm_assistant_model ?? platformSettings.llm_assistant_model ?? '';
+            const currentLite = userSettings.llm_lite_model ?? platformSettings.llm_lite_model ?? '';
 
             const configuredProviders = SSEService._getConfiguredProviders(userSettings, platformSettings);
             const providerModels = SSEService._buildProviderModels(configuredProviders);
 
             const primaryModels = SSEService._getModelOptionsForProvider(provider, 'llm_model');
             const assistantModels = SSEService._getModelOptionsForProvider(assistantProvider, 'llm_assistant_model');
+            const liteModels = SSEService._getModelOptionsForProvider(liteProvider, 'llm_lite_model');
 
             await this.publishEvent(webSessionId, LLMConfigEvent.parse({
                 type: EventType.LLM_CONFIG_RECEIVED,
                 data: LLMConfigData.parse({
                     provider,
                     assistant_provider: assistantProvider,
+                    lite_provider: liteProvider,
                     default_primary_model: currentPrimary,
                     default_assistant_model: currentAssistant,
+                    default_lite_model: currentLite,
                     primary_models: primaryModels,
                     assistant_models: assistantModels,
+                    lite_models: liteModels,
                     provider_models: providerModels,
                     timestamp: now()
                 })
@@ -343,7 +349,8 @@ class SSEService {
                 provider,
                 configuredProviders,
                 primaryModelCount: primaryModels.length,
-                assistantModelCount: assistantModels.length
+                assistantModelCount: assistantModels.length,
+                liteModelCount: liteModels.length
             });
         } catch (error) {
             logger.error('[SSE-SERVICE] Failed to push LLM config', {
@@ -361,6 +368,8 @@ class SSEService {
             return config.primary || [];
         } else if (settingKey === 'llm_assistant_model') {
             return config.assistant || [];
+        } else if (settingKey === 'llm_lite_model') {
+            return config.lite || [];
         }
         
         return [];
@@ -396,10 +405,12 @@ class SSEService {
         for (const provider of configuredProviders) {
             const primaryOpts = SSEService._getModelOptionsForProvider(provider, 'llm_model');
             const assistantOpts = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
+            const liteOpts = SSEService._getModelOptionsForProvider(provider, 'llm_lite_model');
             result[provider] = {
                 label: SSEService._PROVIDER_LABELS[provider] || provider,
                 primary: primaryOpts,
                 assistant: assistantOpts,
+                lite: liteOpts,
             };
         }
         return result;

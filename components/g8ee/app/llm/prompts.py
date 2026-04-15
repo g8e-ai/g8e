@@ -25,31 +25,6 @@ from ..prompts_data.loader import load_mode_prompts, load_prompt
 logger = logging.getLogger(__name__)
 
 
-def build_memory_analysis_system_instruction(case_title: str) -> str:
-    """Build the system instruction for AI memory analysis calls."""
-    return (
-        f"You are analyzing a technical support conversation for case: {case_title}. "
-        "Infer the user's preferences and technical background from the conversation turns. "
-        "Populate every output field — infer from available signal even if limited. "
-        "Do not include hostnames, IPs, or system-specific identifiers in investigation_summary."
-    )
-
-
-def build_memory_analysis_request() -> str:
-    """Build the closing user-role turn that triggers memory field population."""
-    return (
-        "Analyze the conversation above and populate the memory fields. "
-        "Return a JSON object with these fields:\n"
-        '- "investigation_summary": high-level summary (no hostnames/IPs)\n'
-        '- "communication_preferences": how the user prefers to communicate\n'
-        '- "technical_background": user\'s technical experience and skills\n'
-        '- "response_style": how they want information presented\n'
-        '- "problem_solving_approach": how they debug and investigate\n'
-        '- "interaction_style": meta-preferences about questions and context\n'
-        "All fields are optional but try to populate each one."
-    )
-
-
 def build_investigation_context_section(
     investigation: EnrichedInvestigationContext
 ) -> str:
@@ -241,7 +216,8 @@ def build_modular_system_prompt(
             if ctx.hostname:
                 system_parts.append(f"Hostname: {ctx.hostname}")
             if ctx.username:
-                system_parts.append(f"User: {ctx.username}")
+                uid_suffix = f" (uid={ctx.uid})" if ctx.uid else ""
+                system_parts.append(f"User: {ctx.username}{uid_suffix}")
             if ctx.working_directory:
                 system_parts.append(f"Working Directory: {ctx.working_directory}")
 
@@ -257,7 +233,7 @@ def build_modular_system_prompt(
 
             excluded_keys = {
                 "operator_id", "operator_session_id",
-                "os", "hostname", "username", "working_directory",
+                "os", "hostname", "username", "uid", "working_directory",
                 "operator_type", "cloud_subtype",
                 "is_cloud_operator", "granted_intents",
                 "is_container", "container_runtime", "init_system",

@@ -920,3 +920,39 @@ Apply settings without a full rebuild:
 ```bash
 ./g8e platform restart
 ```
+
+---
+
+## Configuring Command Validation (Whitelist/Blacklist)
+
+Command validation controls which commands the AI is allowed to execute on operators. These settings are configured **per-user** and provide an additional layer of safety beyond the Tribunal and human approval gates.
+
+### Configuration Options
+
+Command validation is controlled via the `command_validation` field in user settings:
+
+| Setting | Type | Default | Purpose |
+|---------|------|---------|---------|
+| `enable_whitelisting` | bool | `false` | Restrict AI to only pre-approved commands |
+| `enable_blacklisting` | bool | `false` | Block commands matching dangerous patterns |
+
+### How to Configure
+
+Users can configure command validation through:
+
+1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist
+2. **API** — Update user settings via the `/api/settings/user` endpoint with the `command_validation` field
+
+### How It Works
+
+- **Whitelist mode** — When enabled, the AI can only execute commands that are explicitly allowed. All other commands are blocked before reaching the approval prompt.
+- **Blacklist mode** — When enabled, commands matching dangerous patterns (e.g., `rm -rf`, destructive operations) are blocked before reaching the approval prompt.
+- **Tribunal awareness** — The AI is informed of active command constraints via the `get_command_constraints` tool, ensuring the Tribunal considers these rules during command generation.
+
+> **Note:** Command validation is a per-user setting. Each user can configure their own whitelist/blacklist preferences independently. For full details on the security model and enforcement layers, see [Security Architecture — Command Allowlist and Denylist](security.md#command-allowlist-and-denylist).
+
+Apply settings without a full rebuild:
+
+```bash
+./g8e platform restart
+```

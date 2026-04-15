@@ -628,9 +628,83 @@ class TestCommandGenerationIntegration:
         # Verify function signature (this will be tested more thoroughly in agent tests)
         import inspect
         sig = inspect.signature(generate_command)
-        expected_params = ['original_command', 'intent', 'os_name', 'shell', 'working_directory', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings']
+        expected_params = ['original_command', 'intent', 'os_name', 'shell', 'working_directory', 'user_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
+
+    async def test_forbidden_patterns_dynamic_integration(self, test_settings):
+        """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""
+        from app.llm.factory import get_llm_settings
+        from app.constants import FORBIDDEN_COMMAND_PATTERNS
+        from app.services.ai.command_generator import _format_forbidden_patterns_message
+        
+        llm = get_llm_settings()
+        if not llm or not llm.primary_model:
+            pytest.skip("LLM provider is not configured")
+        
+        # Verify that the forbidden patterns message is dynamically generated from the constant
+        message = _format_forbidden_patterns_message()
+        
+        # Check that all patterns in FORBIDDEN_COMMAND_PATTERNS are reflected in the message
+        for pattern in FORBIDDEN_COMMAND_PATTERNS:
+            # Strip whitespace for comparison
+            base_pattern = pattern.strip()
+            if base_pattern:  # Skip empty patterns
+                # The message should contain the base pattern (without trailing whitespace)
+                assert base_pattern in message or pattern in message, f"Pattern {pattern} not found in forbidden patterns message"
+        
+        # Verify the message contains critical keywords
+        assert "CRITICAL" in message
+        assert "NEVER" in message
+        assert "privilege escalation" in message
+
+    async def test_command_constraints_message_formatting(self, test_settings):
+        """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
+        from app.services.ai.command_generator import _format_command_constraints_message
+        
+        # Test with no constraints
+        message = _format_command_constraints_message(
+            whitelisting_enabled=False,
+            blacklisting_enabled=False,
+            whitelisted_commands=None,
+            blacklisted_commands=None,
+        )
+        assert "No whitelist or blacklist constraints are active" in message
+        
+        # Test with whitelist only
+        message = _format_command_constraints_message(
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            whitelisted_commands=["ls -la", "pwd", "whoami"],
+            blacklisted_commands=None,
+        )
+        assert "COMMAND WHITELIST ACTIVE" in message
+        assert "Only these 3 commands are permitted" in message
+        assert "ls -la" in message
+        assert "pwd" in message
+        assert "whoami" in message
+        
+        # Test with blacklist only
+        message = _format_command_constraints_message(
+            whitelisting_enabled=False,
+            blacklisting_enabled=True,
+            whitelisted_commands=None,
+            blacklisted_commands=[{"pattern": "rm -rf"}, {"pattern": "sudo"}],
+        )
+        assert "COMMAND BLACKLIST ACTIVE" in message
+        assert "Commands matching these patterns are forbidden" in message
+        assert "rm -rf" in message
+        assert "sudo" in message
+        
+        # Test with both whitelist and blacklist
+        message = _format_command_constraints_message(
+            whitelisting_enabled=True,
+            blacklisting_enabled=True,
+            whitelisted_commands=["ls", "cat"],
+            blacklisted_commands=[{"pattern": "rm"}],
+        )
+        assert "COMMAND WHITELIST ACTIVE" in message
+        assert "COMMAND BLACKLIST ACTIVE" in message
 
 
 # ---------------------------------------------------------------------------

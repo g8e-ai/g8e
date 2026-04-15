@@ -70,8 +70,12 @@ export const PROVIDER_MODELS = Object.freeze({
             { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
             { id: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
         ],
+        lite: [
+            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+        ],
         defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
         defaultAssistant: GeminiModel.FLASH_PREVIEW,
+        defaultLite: GeminiModel.FLASH_PREVIEW,
     },
     [LLMProvider.ANTHROPIC]: {
         primary: [
@@ -83,8 +87,12 @@ export const PROVIDER_MODELS = Object.freeze({
             { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
             { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
         ],
+        lite: [
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+        ],
         defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
         defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        defaultLite: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
     },
     [LLMProvider.OPENAI]: {
         primary: [
@@ -98,8 +106,13 @@ export const PROVIDER_MODELS = Object.freeze({
             { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
             { id: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
         ],
+        lite: [
+            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+            { id: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
+        ],
         defaultPrimary: OpenAIModel.GPT_5_4,
         defaultAssistant: OpenAIModel.GPT_5_4_MINI,
+        defaultLite: OpenAIModel.GPT_5_4_NANO,
     },
     [LLMProvider.OLLAMA]: {
         primary: [
@@ -121,7 +134,12 @@ export const PROVIDER_MODELS = Object.freeze({
             { id: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
             { id: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
         ],
+        lite: [
+            { id: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
+            { id: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
+        ],
         defaultPrimary: OllamaModel.GEMMA4_E4B,
         defaultAssistant: OllamaModel.GEMMA4_E4B,
+        defaultLite: OllamaModel.GEMMA3_1B,
     },
 });

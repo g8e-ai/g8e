@@ -24,25 +24,9 @@ from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
 from app.llm.llm_types import Content, Part, LiteLLMSettings, ResponseFormat, ResponseJsonSchema
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
-
-_TITLE_GENERATION_PROMPT = """\
-Generate a concise, specific title for this conversation.
-
-<message>
-{description}
-</message>
-
-<constraints>
-- Output ONLY the title — a single complete sentence fragment, no trailing words cut off
-- Short and specific (3-7 words), always fully formed and grammatically complete
-- Describe the actual topic, not generic categories
-- No quotes, no metadata, no explanations, no line breaks
-- Base the title ONLY on the provided message content
-</constraints>
-
-Title:"""
 
 
 async def generate_case_title(
@@ -81,7 +65,8 @@ async def generate_case_title(
                 fallback=True
             )
 
-        prompt = _TITLE_GENERATION_PROMPT.format(description=description)
+        persona = get_agent_persona("title_generator")
+        prompt = f"{persona.get_system_prompt()}\n\n<message>\n{description}\n</message>\n\nTitle:"
 
         logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 

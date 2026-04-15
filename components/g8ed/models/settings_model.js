@@ -60,6 +60,22 @@ export const USER_SETTINGS = Object.freeze([
         placeholder: '',
         default: '',
     }),
+    Object.freeze({
+        key: 'llm_lite_provider',
+        section: 'llm',
+        label: 'Lite LLM Provider',
+        description: 'Lite AI provider type.',
+        type: 'select',
+        options: Object.freeze([
+            Object.freeze({ value: LLMProvider.OPENAI,    label: 'OpenAI' }),
+            Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
+            Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
+            Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+        ]),
+        secret: false,
+        placeholder: '',
+        default: '',
+    }),
     // -------------------------------------------------------------------------
     // OpenAI Specific
     // -------------------------------------------------------------------------
@@ -94,6 +110,21 @@ export const USER_SETTINGS = Object.freeze([
         secret: false,
         placeholder: '',
         default: OpenAIModel.GPT_5_4_MINI,
+    }),
+    Object.freeze({
+        key: 'llm_lite_model',
+        section: 'llm',
+        label: 'Lite LLM Model',
+        description: 'Ultra-lightweight model for quick tasks.',
+        type: 'select',
+        provider: LLMProvider.OPENAI,
+        options: Object.freeze([
+            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 nano' }),
+            Object.freeze({ value: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o mini' }),
+        ]),
+        secret: false,
+        placeholder: '',
+        default: OpenAIModel.GPT_5_4_NANO,
     }),
     Object.freeze({
         key: 'openai_endpoint',
@@ -187,6 +218,20 @@ export const USER_SETTINGS = Object.freeze([
         provider: LLMProvider.ANTHROPIC,
         options: Object.freeze([
             Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
+            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
+        ]),
+        secret: false,
+        placeholder: '',
+        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+    }),
+    Object.freeze({
+        key: 'llm_lite_model',
+        section: 'llm',
+        label: 'Lite LLM Model',
+        description: 'Ultra-lightweight model for quick tasks.',
+        type: 'select',
+        provider: LLMProvider.ANTHROPIC,
+        options: Object.freeze([
             Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
         ]),
         secret: false,
@@ -476,6 +521,7 @@ function validateCrossFieldDependencies(updates) {
 
     const primaryProvider = updates.llm_primary_provider;
     const assistantProvider = updates.llm_assistant_provider;
+    const liteProvider = updates.llm_lite_provider;
 
     if (primaryProvider && primaryProvider !== '') {
         const required = PROVIDER_CREDENTIAL_REQUIREMENTS[primaryProvider];
@@ -494,6 +540,17 @@ function validateCrossFieldDependencies(updates) {
             for (const credField of required) {
                 if (!updates[credField] || updates[credField].trim() === '') {
                     errors.push(`${credField} is required when ${assistantProvider} is set as assistant provider`);
+                }
+            }
+        }
+    }
+
+    if (liteProvider && liteProvider !== '') {
+        const required = PROVIDER_CREDENTIAL_REQUIREMENTS[liteProvider];
+        if (required) {
+            for (const credField of required) {
+                if (!updates[credField] || updates[credField].trim() === '') {
+                    errors.push(`${credField} is required when ${liteProvider} is set as lite provider`);
                 }
             }
         }
@@ -591,8 +648,10 @@ export const SETTINGS_PAGE_SECTIONS = Object.freeze([
 const LLM_KEY_MAP = Object.freeze({
     llm_primary_provider:   'primary_provider',
     llm_assistant_provider: 'assistant_provider',
+    llm_lite_provider:      'lite_provider',
     llm_model:              'primary_model',
     llm_assistant_model:    'assistant_model',
+    llm_lite_model:         'lite_model',
     openai_endpoint:        'openai_endpoint',
     openai_api_key:         'openai_api_key',
     ollama_endpoint:        'ollama_endpoint',
@@ -653,8 +712,10 @@ export function structureUserSettings(flat) {
 const REVERSE_LLM_MAP    = Object.freeze({
     primary_provider: 'llm_primary_provider',
     assistant_provider: 'llm_assistant_provider',
+    lite_provider: 'llm_lite_provider',
     primary_model: 'llm_model',
     assistant_model: 'llm_assistant_model',
+    lite_model: 'llm_lite_model',
     openai_endpoint: 'openai_endpoint',
     openai_api_key: 'openai_api_key',
     ollama_endpoint: 'ollama_endpoint',

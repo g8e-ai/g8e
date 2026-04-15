@@ -75,8 +75,10 @@ export class ChatMessageRequest extends G8eBaseModel {
         sentinel_mode:        { type: F.boolean, default: true },
         llm_primary_provider: { type: F.string,  default: null },
         llm_assistant_provider: { type: F.string,  default: null },
+        llm_lite_provider:    { type: F.string,  default: null },
         llm_primary_model:    { type: F.string,  default: null },
         llm_assistant_model:  { type: F.string,  default: null },
+        llm_lite_model:       { type: F.string,  default: null },
         case_id:              { type: F.string,  default: null },
         investigation_id:     { type: F.string,  default: null },
     };
@@ -88,8 +90,10 @@ export class ChatMessageRequest extends G8eBaseModel {
             sentinel_mode:         this.sentinel_mode,
             llm_primary_provider:  this.llm_primary_provider,
             llm_assistant_provider: this.llm_assistant_provider,
+            llm_lite_provider:     this.llm_lite_provider,
             llm_primary_model:     this.llm_primary_model,
             llm_assistant_model:   this.llm_assistant_model,
+            llm_lite_model:        this.llm_lite_model,
         };
     }
 }

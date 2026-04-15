@@ -591,8 +591,8 @@ def mock_operator_document():
     Returns a properly configured OperatorDocument with system info
     for agent accuracy testing scenarios.
     """
-    from tests.fakes.factories import build_mock_operator_document
-    return build_mock_operator_document()
+    from tests.fakes.factories import build_production_operator_document
+    return build_production_operator_document()
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)

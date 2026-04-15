@@ -17,7 +17,7 @@ import re
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider, Role
-from app.llm.prompts import build_memory_analysis_request, build_memory_analysis_system_instruction
+from app.utils.agent_persona_loader import get_agent_persona
 from app.models.settings import G8eeUserSettings
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
 from app.models.memory import InvestigationMemory, MemoryAnalysis
@@ -120,7 +120,8 @@ class MemoryGenerationService:
     ) -> None:
         contents = self._conversation_to_contents(conversation_history, memory)
 
-        system_instructions = build_memory_analysis_system_instruction(memory.case_title)
+        memory_persona = get_agent_persona("memory_generator")
+        system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
 
         assistant_model = settings.llm.resolved_assistant_model
         if not assistant_model:
@@ -218,7 +219,7 @@ class MemoryGenerationService:
         # Add the analysis request
         contents.append(types.Content(
             role=Role.USER,
-            parts=[types.Part.from_text(text=build_memory_analysis_request())],
+            parts=[types.Part.from_text(text="Analyze the conversation above and populate the memory fields. Return a JSON object with these fields:\n- \"investigation_summary\": high-level summary (no hostnames/IPs)\n- \"communication_preferences\": how the user prefers to communicate\n- \"technical_background\": user's technical experience and skills\n- \"response_style\": how they want information presented\n- \"problem_solving_approach\": how they debug and investigate\n- \"interaction_style\": meta-preferences about questions and context\nAll fields are optional but try to populate each one.")],
         ))
         return contents
 
