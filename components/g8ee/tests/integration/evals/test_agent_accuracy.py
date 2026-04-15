@@ -37,12 +37,12 @@ from app.models.settings import G8eeUserSettings, SearchSettings
 from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
 from app.models.model_configs import get_model_config
-from tests.fakes.factories import (
-    build_g8e_http_context,
-    build_bound_operator,
-    build_mock_operator_document,
+from tests.fakes.factories import build_g8e_http_context
+from tests.integration.evals.shared import (
+    AccuracyTestResult,
+    load_and_validate_gold_set,
+    seed_operator_if_bound,
 )
-from tests.integration.evals.shared import AccuracyTestResult, load_and_validate_gold_set
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ async def test_agent_accuracy(
     unique_case_id,
     unique_web_session_id,
     unique_user_id,
+    unique_operator_id,
+    unique_session_id,
     eval_results_collector,
 ):
     """
@@ -102,27 +104,15 @@ async def test_agent_accuracy(
         agent_mode = AgentMode.OPERATOR_BOUND if agent_mode_str == "operator_bound" else AgentMode.OPERATOR_NOT_BOUND
 
         # Build G8E context with bound operators for operator_bound scenarios
-        bound_operators = []
-        if agent_mode == AgentMode.OPERATOR_BOUND:
-            # Create a bound operator for testing with unique ID
-            import uuid
-            operator_id = f"op-eval-{uuid.uuid4().hex[:8]}"
-            operator_session_id = f"sess-eval-{uuid.uuid4().hex[:8]}"
-
-            bound_operators = [build_bound_operator(
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                status=OperatorStatus.BOUND,
-            )]
-
-            # Seed the operator document in cache so investigation_service.get_operator() can find it
-            operator_data_service = all_services['operator_data_service']
-            operator_doc = build_mock_operator_document(
-                operator_id=operator_id,
-            )
-            await operator_data_service.create_operator(operator_doc)
-            logger.info(f"[EVAL] Seeded operator document in cache: {operator_doc.operator_id}")
-            cleanup.track_operator(operator_id)
+        operator_data_service = all_services['operator_data_service']
+        bound_operators = await seed_operator_if_bound(
+            agent_mode=agent_mode,
+            operator_id=unique_operator_id,
+            operator_session_id=unique_session_id,
+            operator_data_service=operator_data_service,
+            cleanup=cleanup,
+            log_prefix="[EVAL]",
+        )
 
         # Step 1: Create a real investigation in g8es
         investigation_request = InvestigationCreateRequest(

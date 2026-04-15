@@ -18,14 +18,14 @@ All g8ee-specific services that extend shared base services.
 
 Modular AI Services (separation of concerns):
 - ChatPipelineService: Chat context assembly and pipeline coordination
-- ChatTaskManager: Asyncio task tracking and cancellation
+- BackgroundTaskManager: Asyncio task tracking and cancellation
 - AIRequestBuilder: Builds request contents and generation config
 - AIResponseAnalyzer: Analyzes AI responses (grounding, citations)
 - AIToolService: Executes AI tool/tool calls
 """
 
 from .ai.chat_pipeline import ChatPipelineService
-from .ai.chat_task_manager import ChatTaskManager
+from .ai.chat_task_manager import BackgroundTaskManager
 from .ai.generation_config_builder import AIGenerationConfigBuilder
 from .ai.request_builder import AIRequestBuilder
 from .ai.response_analyzer import AIResponseAnalyzer
@@ -36,7 +36,7 @@ from .protocols import EventServiceProtocol
 
 __all__ = [
     "ChatPipelineService",
-    "ChatTaskManager",
+    "BackgroundTaskManager",
     "AIGenerationConfigBuilder",
     "AIRequestBuilder",
     "AIResponseAnalyzer",

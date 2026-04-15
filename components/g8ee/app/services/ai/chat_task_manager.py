@@ -25,12 +25,14 @@ from app.services.infra.g8ed_event_service import EventService
 logger = logging.getLogger(__name__)
 
 
-class ChatTaskManager:
-    """Owns asyncio task tracking and cancellation for in-flight AI chat processing.
+class BackgroundTaskManager:
+    """Owns asyncio task tracking and cancellation for background operations.
 
-    Single responsibility: track one asyncio.Task per investigation_id so that
-    the stop-processing endpoint can cancel it on demand.  No LLM, DB, or
-    business logic lives here.
+    Single responsibility: track asyncio.Task objects so they can be:
+    - Cancelled on demand (e.g., stop-processing endpoint)
+    - Awaited during cleanup (e.g., test teardown)
+
+    No LLM, DB, or business logic lives here.
     """
 
     def __init__(self) -> None:
@@ -39,61 +41,61 @@ class ChatTaskManager:
 
     async def track(
         self,
-        investigation_id: str,
+        task_id: str,
         task: asyncio.Task[None],
         auto_cancel_previous: bool = True,
     ) -> None:
-        """Register a task for an investigation, optionally cancelling any prior one."""
+        """Register a task by ID, optionally cancelling any prior task with the same ID."""
         async with self._task_lock:
-            if auto_cancel_previous and investigation_id in self._active_tasks:
-                old_task = self._active_tasks[investigation_id]
+            if auto_cancel_previous and task_id in self._active_tasks:
+                old_task = self._active_tasks[task_id]
                 if not old_task.done():
                     old_task.cancel()
                     logger.info(
-                        "Auto-cancelled previous AI task for %s (new message)",
-                        investigation_id,
-                        extra={"investigation_id": investigation_id},
+                        "Auto-cancelled previous task for %s (new task)",
+                        task_id,
+                        extra={"task_id": task_id},
                     )
 
-            self._active_tasks[investigation_id] = task
-            logger.info("Tracking AI task for %s", investigation_id)
+            self._active_tasks[task_id] = task
+            logger.info("Tracking task for %s", task_id)
 
-    async def untrack(self, investigation_id: str) -> None:
+    async def untrack(self, task_id: str) -> None:
         """Remove a task from active tracking."""
         async with self._task_lock:
-            self._active_tasks.pop(investigation_id, None)
-            logger.info("Untracked AI task for %s", investigation_id)
+            self._active_tasks.pop(task_id, None)
+            logger.info("Untracked task for %s", task_id)
 
     async def cancel(
         self,
-        investigation_id: str,
+        task_id: str,
         reason: str,
-        web_session_id: str,
-        user_id: str,
-        case_id: str,
-        g8ed_event_service: EventService,
+        web_session_id: str | None = None,
+        user_id: str | None = None,
+        case_id: str | None = None,
+        g8ed_event_service: EventService | None = None,
     ) -> bool:
-        """Cancel active AI processing for an investigation.
+        """Cancel active task for the given ID.
 
         Returns True if a task was cancelled, False if no active task existed.
         Publishes AI_PROCESSING_STOPPED via g8ed_event_service when both
         web_session_id and g8ed_event_service are provided.
         """
         async with self._task_lock:
-            task = self._active_tasks.get(investigation_id)
+            task = self._active_tasks.get(task_id)
             if not task or task.done():
                 logger.info(
-                    "No active AI task to cancel for investigation %s",
-                    investigation_id,
-                    extra={"investigation_id": investigation_id, "reason": reason},
+                    "No active task to cancel for %s",
+                    task_id,
+                    extra={"task_id": task_id, "reason": reason},
                 )
                 return False
 
             task.cancel()
             logger.info(
-                "Cancelled AI processing for investigation %s",
-                investigation_id,
-                extra={"investigation_id": investigation_id, "reason": reason},
+                "Cancelled task for %s",
+                task_id,
+                extra={"task_id": task_id, "reason": reason},
             )
 
         if web_session_id and case_id and g8ed_event_service:
@@ -106,9 +108,9 @@ class ChatTaskManager:
                             timestamp=now(),
                         ),
                         web_session_id=web_session_id,
-                        user_id=user_id,
+                        user_id=user_id or "",
                         case_id=case_id,
-                        investigation_id=investigation_id,
+                        investigation_id=task_id,
                     )
                 )
             except Exception as e:
@@ -116,12 +118,54 @@ class ChatTaskManager:
         elif not g8ed_event_service:
             logger.warning(
                 "Cannot send ai.processing_stopped event - no g8ed_event_service provided",
-                extra={"investigation_id": investigation_id},
+                extra={"task_id": task_id},
             )
         elif not web_session_id:
             logger.warning(
                 "Cannot send ai.processing_stopped event - no web_session_id provided",
-                extra={"investigation_id": investigation_id},
+                extra={"task_id": task_id},
             )
 
         return True
+
+    async def wait_all(self, timeout: float | None = None) -> None:
+        """Await completion of all tracked tasks.
+
+        This is used during cleanup to ensure all background operations
+        complete before resource deletion. Tasks that are already done are
+        skipped. Cancelled tasks are awaited to ensure proper cleanup.
+
+        Args:
+            timeout: Optional timeout in seconds. If provided, raises TimeoutError
+                    if not all tasks complete within the timeout.
+        """
+        async with self._task_lock:
+            tasks = list(self._active_tasks.values())
+
+        if not tasks:
+            logger.debug("No tasks to await")
+            return
+
+        logger.info("Awaiting completion of %d tracked tasks", len(tasks))
+
+        try:
+            if timeout is not None:
+                async with asyncio.timeout(timeout):
+                    await asyncio.gather(*tasks, return_exceptions=True)
+            else:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info("All tracked tasks completed")
+        except TimeoutError:
+            logger.warning(
+                "Timeout waiting for %d tasks to complete after %s seconds",
+                len(tasks),
+                timeout,
+            )
+            raise
+        except Exception as e:
+            logger.error("Error awaiting tracked tasks: %s", e, exc_info=True)
+            raise
+
+
+# Backward compatibility alias
+ChatTaskManager = BackgroundTaskManager

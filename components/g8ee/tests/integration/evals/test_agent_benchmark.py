@@ -31,7 +31,6 @@ Aggregate metrics:
 """
 
 import os
-import uuid
 import logging
 import pytest
 from typing import Any
@@ -50,11 +49,11 @@ from app.services.ai.benchmark_judge import (
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
-from tests.fakes.factories import (
-    build_bound_operator,
-    build_mock_operator_document,
+from tests.integration.evals.shared import (
+    BenchmarkTestResult,
+    load_and_validate_benchmark_set,
+    seed_operator_if_bound,
 )
-from tests.integration.evals.shared import BenchmarkTestResult, load_and_validate_benchmark_set
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +108,8 @@ async def test_agent_benchmark(
     unique_case_id,
     unique_web_session_id,
     unique_user_id,
+    unique_operator_id,
+    unique_session_id,
     benchmark_results_collector,
 ):
     """
@@ -126,6 +127,7 @@ async def test_agent_benchmark(
 
     investigation_service = all_services['investigation_service']
     investigation_data_service = all_services['investigation_data_service']
+    operator_data_service = all_services['operator_data_service']
     chat_pipeline = all_services['chat_pipeline']
 
     captured_tool_calls: list[ToolCallCapture] = []
@@ -136,24 +138,14 @@ async def test_agent_benchmark(
         llm_settings = test_user_settings.llm
         agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "OPERATOR_BOUND" else AgentMode.OPERATOR_NOT_BOUND
 
-        bound_operators = []
-        if agent_mode == AgentMode.OPERATOR_BOUND:
-            operator_id = f"op-bench-{uuid.uuid4().hex[:8]}"
-            operator_session_id = f"sess-bench-{uuid.uuid4().hex[:8]}"
-
-            bound_operators = [build_bound_operator(
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                status=OperatorStatus.BOUND,
-            )]
-
-            operator_data_service = all_services['operator_data_service']
-            operator_doc = build_mock_operator_document(
-                operator_id=operator_id,
-            )
-            await operator_data_service.create_operator(operator_doc)
-            logger.info("[BENCH] Seeded operator document: %s", operator_doc.operator_id)
-            cleanup.track_operator(operator_id)
+        bound_operators = await seed_operator_if_bound(
+            agent_mode=agent_mode,
+            operator_id=unique_operator_id,
+            operator_session_id=unique_session_id,
+            operator_data_service=operator_data_service,
+            cleanup=cleanup,
+            log_prefix="[BENCH]",
+        )
 
         investigation_request = InvestigationCreateRequest(
             case_id=unique_case_id,

@@ -56,7 +56,7 @@ from .agent import g8eEngine
 from ..investigation.investigation_service import extract_all_operators_context, InvestigationService
 from ..investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
-from .chat_task_manager import ChatTaskManager
+from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.models.agents.triage import TriageRequest
@@ -346,7 +346,7 @@ class ChatPipelineService:
         llm_assistant_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
-        _task_manager: ChatTaskManager,
+        _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
     ) -> None:

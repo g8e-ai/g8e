@@ -23,6 +23,9 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
+from app.constants import AgentMode, OperatorStatus
+from app.models.http_context import BoundOperator
+
 logger = logging.getLogger(__name__)
 
 REQUIRED_SCENARIO_FIELDS = {"id", "user_query", "agent_mode", "expected_behavior", "required_concepts"}
@@ -183,3 +186,45 @@ def load_and_validate_benchmark_set(benchmark_path: str) -> list[dict[str, Any]]
 
     logger.info("Loaded %d valid benchmark scenarios (%s)", len(valid), benchmark_path)
     return valid
+
+
+async def seed_operator_if_bound(
+    agent_mode: AgentMode,
+    operator_id: str,
+    operator_session_id: str,
+    operator_data_service,
+    cleanup,
+    log_prefix: str,
+) -> list[BoundOperator]:
+    """Create and seed operator document for operator-bound scenarios.
+
+    Args:
+        agent_mode: The agent mode for the test scenario.
+        operator_id: Unique operator ID.
+        operator_session_id: Unique operator session ID.
+        operator_data_service: Service for creating operator documents.
+        cleanup: Cleanup tracker for operator teardown.
+        log_prefix: Prefix for log messages (e.g., "[BENCH]" or "[EVAL]").
+
+    Returns:
+        List of bound operators (empty if not operator-bound mode).
+    """
+    if agent_mode != AgentMode.OPERATOR_BOUND:
+        return []
+
+    from tests.fakes.factories import build_bound_operator, build_operator_document
+
+    bound_operators = [build_bound_operator(
+        operator_id=operator_id,
+        operator_session_id=operator_session_id,
+        status=OperatorStatus.BOUND,
+    )]
+
+    operator_doc = build_operator_document(
+        operator_id=operator_id,
+    )
+    await operator_data_service.create_operator(operator_doc)
+    logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.operator_id)
+    cleanup.track_operator(operator_id)
+
+    return bound_operators

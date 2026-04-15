@@ -277,6 +277,7 @@ async def e2e_cache_aside(e2e_settings):
         default_ttl=settings.listen.default_ttl,
     )
     yield cas
+    await cas.close()
     await raw_db.close()
     await raw_kv.close()
 

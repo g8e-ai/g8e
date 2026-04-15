@@ -21,7 +21,7 @@ and investigation context.
 
 from .agent import g8eEngine
 from .chat_pipeline import ChatPipelineService
-from .chat_task_manager import ChatTaskManager
+from .chat_task_manager import BackgroundTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
 from .grounding import AttachmentGroundingProvider, GroundingService, WebSearchProvider
 from ..investigation.investigation_service import extract_all_operators_context, extract_system_context
@@ -33,7 +33,7 @@ from .tool_service import AIToolService
 __all__ = [
     "AttachmentGroundingProvider",
     "ChatPipelineService",
-    "ChatTaskManager",
+    "BackgroundTaskManager",
     "g8eEngine",
     "extract_all_operators_context",
     "extract_system_context",

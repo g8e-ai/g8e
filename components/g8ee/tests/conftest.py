@@ -814,12 +814,14 @@ async def cache_aside_service(test_settings):
     kv = KVService(raw_kv)
     db = DBService(raw_db)
     
-    yield CacheAsideService(
+    service = CacheAsideService(
         kv=kv,
         db=db,
         component_name=ComponentName.G8EE,
         default_ttl=settings.listen.default_ttl,
     )
+    yield service
+    await service.close()
     await raw_db.close()
     await raw_kv.close()
 

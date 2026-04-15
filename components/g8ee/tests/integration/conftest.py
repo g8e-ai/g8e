@@ -59,6 +59,17 @@ async def all_services(cache_aside_service, test_settings):
     approval_service.set_on_approval_requested(_auto_approve_callback)
 
     yield services
+    
+    # Await all background tasks before stopping services to prevent race conditions
+    chat_task_manager = services.get('chat_task_manager')
+    if chat_task_manager is not None:
+        try:
+            await chat_task_manager.wait_all(timeout=5.0)
+        except TimeoutError:
+            logger.warning("Background tasks did not complete within 5s timeout, proceeding with cleanup")
+        except Exception as exc:
+            logger.error("Error awaiting background tasks: %s", exc)
+    
     await ServiceFactory.stop_services(services)
 
 
@@ -81,12 +92,25 @@ def chat_pipeline(all_services):
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service):
+async def cleanup(cache_aside_service, all_services):
     """Autouse-friendly cleanup tracker for integration tests.
 
     Track documents created during a test via ``cleanup.track_investigation(id)``
     etc. All tracked documents are deleted after the test, even on failure.
+    
+    Awaits all background tasks before document deletion to prevent race conditions.
     """
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
+    
+    # Await all background tasks before document deletion
+    chat_task_manager = all_services.get('chat_task_manager')
+    if chat_task_manager is not None:
+        try:
+            await chat_task_manager.wait_all(timeout=5.0)
+        except TimeoutError:
+            logger.warning("Background tasks did not complete within 5s timeout, proceeding with document cleanup")
+        except Exception as exc:
+            logger.error("Error awaiting background tasks: %s", exc)
+    
     await tracker.cleanup()
