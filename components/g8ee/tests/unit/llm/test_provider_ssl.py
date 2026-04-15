@@ -221,7 +221,7 @@ class TestFactorySSL:
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
 
-        llm_settings = LLMSettings(primary_provider=LLMProvider.GEMINI, gemini_api_key="test")
+        llm_settings = LLMSettings(primary_provider="gemini", gemini_api_key="test")
         mock_settings = MagicMock(spec=G8eePlatformSettings)
         mock_settings.ca_cert_path = INTERNAL_CA
         set_settings(mock_settings)
@@ -239,7 +239,7 @@ class TestFactorySSL:
         from app.constants import LLMProvider
 
         llm_settings = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
+            primary_provider="ollama",
             ollama_endpoint="https://localhost:11434/v1",
             ollama_api_key="test"
         )
@@ -259,7 +259,7 @@ class TestFactorySSL:
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
 
-        llm_settings = LLMSettings(primary_provider=LLMProvider.ANTHROPIC, anthropic_api_key="test")
+        llm_settings = LLMSettings(primary_provider="anthropic", anthropic_api_key="test")
         mock_settings = MagicMock(spec=G8eePlatformSettings)
         mock_settings.ca_cert_path = INTERNAL_CA
         set_settings(mock_settings)
@@ -277,7 +277,7 @@ class TestFactorySSL:
         from app.constants import LLMProvider
 
         llm_settings = LLMSettings(
-            primary_provider=LLMProvider.OPENAI,
+            primary_provider="openai",
             openai_api_key="test",
             openai_endpoint="https://api.openai.com/v1",
         )

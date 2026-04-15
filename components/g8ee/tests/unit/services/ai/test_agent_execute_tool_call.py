@@ -259,8 +259,8 @@ class TestOperatorToolDetection:
 
         assert result.call_info.is_operator_tool is True
 
-    async def test_search_web_is_operator_tool(self):
-        """search_web is OperatorToolName.G8E_SEARCH_WEB and must be detected as such."""
+    async def test_search_web_is_not_operator_tool(self):
+        """search_web does not require an operator."""
         executor = _make_tool_executor()
         result = CommandExecutionResult(success=True, output="results")
         executor.execute_tool_call = AsyncMock(return_value=result)
@@ -274,7 +274,7 @@ class TestOperatorToolDetection:
             request_settings=REQUEST_SETTINGS,
         )
 
-        assert result.call_info.is_operator_tool is True
+        assert result.call_info.is_operator_tool is False
 
     async def test_unregistered_tool_not_operator_tool(self):
         executor = _make_tool_executor()

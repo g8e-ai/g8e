@@ -19,6 +19,7 @@ from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.constants.prompts import PromptFile
 from app.prompts_data.loader import load_prompt
 from app.llm import get_llm_provider, Role
+from app.models.base import G8eBaseModel
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -45,7 +46,7 @@ class AIResponseAnalyzer:
     async def _run_assistant_analysis(
         self,
         prompt: str,
-        response_model: type,
+        response_model: type[G8eBaseModel],
         assistant_model: str | None,
         settings: G8eeUserSettings,
         fallback_no_model,
@@ -62,9 +63,9 @@ class AIResponseAnalyzer:
             client = get_llm_provider(settings.llm, is_assistant=True)
             config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
-                temperature=None,
-                max_tokens=None,
-                system_instructions="",
+                temperature=settings.llm.llm_temperature,
+                max_tokens=settings.llm.llm_max_tokens,
+                system_instructions=prompt,
                 response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
             )
             response = await client.generate_content_assistant(

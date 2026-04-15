@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from app.constants import ThinkingLevel
+from app.models.base import G8eBaseModel
 
 
 @dataclass(frozen=True)
@@ -237,17 +238,35 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
     )
 
 
-@dataclass
-class ToolDeclaration:
+class ToolDeclaration(G8eBaseModel):
     name: str
     description: str
     parameters: Any
 
 
-@dataclass
-class ToolGroup:
-    tools: list[ToolDeclaration] = field(default_factory=list)
+class ToolGroup(G8eBaseModel):
+    tools: list[ToolDeclaration] = []
     google_search: bool = False
+
+    def flatten_for_llm(self) -> list:
+        """Convert ToolGroup to google.genai Tool format for LLM boundary."""
+        from app.llm.providers.gemini import genai_types
+
+        genai_tools = []
+        funcs = []
+        for tool in self.tools:
+            funcs.append({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            })
+        if funcs:
+            genai_tools.append(genai_types.Tool(function_declarations=funcs))
+
+        if self.google_search:
+            genai_tools.append(genai_types.Tool(google_search=genai_types.GoogleSearch()))
+
+        return genai_tools
 
 
 @dataclass
@@ -415,12 +434,12 @@ class LiteLLMSettings:
 class GenerateContentConfig:
     temperature: float
     max_output_tokens: int
+    system_instructions: str
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
     tools: list[ToolGroup] = field(default_factory=list)
-    system_instructions: str = ""
     thinking_config: ThinkingConfig = field(default_factory=lambda: ThinkingConfig(thinking_level=None, include_thoughts=False))
     tool_config: ToolConfig = field(default_factory=lambda: ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")))
     response_format: ResponseFormat | None = None

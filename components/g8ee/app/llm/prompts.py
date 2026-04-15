@@ -315,7 +315,7 @@ def build_modular_system_prompt(
     if user_memories or case_memories:
         section_labels.append(PromptSection.LEARNED_CONTEXT)
 
-    logger.info(
+    logger.debug(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections), len(full_prompt), operator_bound, ", ".join(section_labels)
     )

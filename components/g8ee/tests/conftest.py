@@ -128,8 +128,8 @@ async def _probe_llm_capabilities(settings):
             logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
         except Exception as e:
             error_msg = str(e).lower()
-            # Common error patterns for lack of tool support
-            if any(p in error_msg for p in ["tool", "function call", "not supported", "400"]):
+            # Common error patterns for lack of tool support - be specific to avoid false positives
+            if any(p in error_msg for p in ["tools not supported", "function calling not supported", "tool use not supported", "does not support tools"]):
                 _PROBED_CAPABILITIES["supports_tools"] = False
                 _PROBED_CAPABILITIES["tools_error"] = str(e)
                 logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
