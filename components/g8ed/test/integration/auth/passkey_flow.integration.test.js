@@ -73,7 +73,8 @@ describe('Passkey Flow Integration [INTEGRATION]', () => {
         // Isolation
         userService.collectionName = TEST_USERS_COLLECTION;
         cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService, {
-            usersCollection: TEST_USERS_COLLECTION
+            usersCollection: TEST_USERS_COLLECTION,
+            operatorsCollection: services.operatorService.collectionName
         });
     });
 

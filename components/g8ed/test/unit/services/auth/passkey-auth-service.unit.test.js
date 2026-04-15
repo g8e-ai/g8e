@@ -85,7 +85,9 @@ describe('PasskeyAuthService [UNIT]', () => {
             services = await getTestServices();
             userService = services.userService;
             
-            cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService);
+            cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService, {
+                operatorsCollection: services.operatorService.collectionName
+            });
 
             // Use real services from getTestServices() but mock the userService methods we need
             vi.spyOn(userService, 'getUser');

@@ -201,7 +201,8 @@ describe('Setup Flow End-to-End Tests', () => {
         // Setup cleanup tracking
         cleanup = new TestCleanupHelper(kvClient, cacheAside, {
             usersCollection: userService.collectionName,
-            settingsCollection: settingsService.collectionName
+            settingsCollection: settingsService.collectionName,
+            operatorsCollection: services.operatorService.collectionName
         });
     });
 
