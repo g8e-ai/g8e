@@ -332,7 +332,7 @@ async def _run_generation_pass(
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
         system_instructions="",
-        response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+        response_format=None,
     )
     try:
         response = await provider.generate_content_lite(
@@ -406,7 +406,7 @@ async def _run_verifier(
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
         system_instructions="",
-        response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+        response_format=None,
     )
     try:
         response = await provider.generate_content_lite(

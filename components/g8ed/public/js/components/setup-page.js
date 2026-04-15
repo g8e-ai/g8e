@@ -86,6 +86,7 @@ export class SetupPage {
     constructor() {
         this._step           = 1;
         this._searchProvider = '';
+        this._selectedModels = { primary: '', assistant: '', lite: '' };
     }
 
     init() {
@@ -94,6 +95,7 @@ export class SetupPage {
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
+        this._initModelDropdowns();
         this._updateProviderStates();
         this._updateNav();
     }
@@ -182,17 +184,17 @@ export class SetupPage {
                 this._showStatus('error', 'Enter at least one provider API key');
                 return false;
             }
-            const primary = document.getElementById('primary_model')?.value;
+            const primary = this._selectedModels.primary;
             if (!primary) {
                 this._showStatus('error', 'Select a primary model');
                 return false;
             }
-            const assistant = document.getElementById('assistant_model')?.value;
+            const assistant = this._selectedModels.assistant;
             if (!assistant) {
                 this._showStatus('error', 'Select an assistant model');
                 return false;
             }
-            const lite = document.getElementById('lite_model')?.value;
+            const lite = this._selectedModels.lite;
             if (!lite) {
                 this._showStatus('error', 'Select a lite model');
                 return false;
@@ -274,112 +276,181 @@ export class SetupPage {
         if (modelSection) modelSection.classList.toggle('active', active.length > 0);
     }
 
+    _initModelDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (!dropdown) return;
+
+            dropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._toggleDropdown(role);
+            });
+
+            dropdown.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this._toggleDropdown(role);
+                } else if (e.key === 'Escape') {
+                    this._closeAllDropdowns();
+                }
+            });
+        });
+
+        document.addEventListener('click', () => {
+            this._closeAllDropdowns();
+        });
+    }
+
+    _toggleDropdown(role) {
+        const dropdown = document.getElementById(`${role}_model`);
+        if (!dropdown || dropdown.classList.contains('disabled')) return;
+        
+        const isOpen = dropdown.classList.contains('open');
+        this._closeAllDropdowns();
+        
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            dropdown.setAttribute('aria-expanded', 'true');
+        }
+    }
+
+    _closeAllDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (dropdown) {
+                dropdown.classList.remove('open');
+                dropdown.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
     _updateModelDropdowns() {
         const active = this._getActiveProviders();
-        const primarySelect = document.getElementById('primary_model');
-        const assistantSelect = document.getElementById('assistant_model');
-        const liteSelect = document.getElementById('lite_model');
-        if (!primarySelect || !assistantSelect || !liteSelect) return;
-
-        const prevPrimary = primarySelect.value;
-        const prevAssistant = assistantSelect.value;
-        const prevLite = liteSelect.value;
-
-        primarySelect.innerHTML = '';
-        assistantSelect.innerHTML = '';
-        liteSelect.innerHTML = '';
+        const roles = ['primary', 'assistant', 'lite'];
 
         if (active.length === 0) {
-            primarySelect.disabled = true;
-            assistantSelect.disabled = true;
-            liteSelect.disabled = true;
-            const placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = 'Enter at least one API key above';
-            primarySelect.appendChild(placeholder);
-            assistantSelect.appendChild(placeholder.cloneNode(true));
-            liteSelect.appendChild(placeholder.cloneNode(true));
+            roles.forEach(role => {
+                const dropdown = document.getElementById(`${role}_model`);
+                const menu = document.getElementById(`${role}_model-menu`);
+                const text = dropdown?.querySelector('.llm-model-dropdown__text');
+                
+                if (dropdown) dropdown.classList.add('disabled');
+                if (menu) menu.innerHTML = '';
+                if (text) text.textContent = 'Enter at least one API key above';
+                this._selectedModels[role] = '';
+            });
             return;
         }
-
-        primarySelect.disabled = false;
-        assistantSelect.disabled = false;
-        liteSelect.disabled = false;
 
         let firstPrimaryDefault = null;
         let firstAssistantDefault = null;
         let firstLiteDefault = null;
 
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            const menu = document.getElementById(`${role}_model-menu`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            
+            if (!dropdown || !menu) return;
+            
+            dropdown.classList.remove('disabled');
+            menu.innerHTML = '';
+            
+            const prevValue = this._selectedModels[role];
+            
+            for (const provider of active) {
+                const config = PROVIDER_MODELS[provider];
+                if (!config) continue;
+
+                const providerLabel = PROVIDER_LABELS[provider] || provider;
+                const models = config[role] || [];
+                
+                if (models.length === 0) continue;
+
+                const category = document.createElement('div');
+                category.className = 'llm-model-dropdown__category';
+                category.textContent = providerLabel;
+                menu.appendChild(category);
+
+                for (const model of models) {
+                    const option = document.createElement('div');
+                    option.className = 'llm-model-dropdown__option';
+                    option.textContent = model.label;
+                    option.dataset.value = model.id;
+                    option.dataset.provider = provider;
+
+                    if (model.id === prevValue) {
+                        option.classList.add('selected');
+                        if (text) text.textContent = model.label;
+                    }
+
+                    if (role === 'primary' && !firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
+                    if (role === 'assistant' && !firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
+                    if (role === 'lite' && !firstLiteDefault) firstLiteDefault = config.defaultLite;
+
+                    option.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this._selectModel(role, model.id, model.label);
+                    });
+
+                    menu.appendChild(option);
+                }
+            }
+
+            if (menu.children.length === 0) {
+                if (text) text.textContent = 'No models available';
+                this._selectedModels[role] = '';
+            } else if (!prevValue) {
+                const defaultModel = role === 'primary' ? firstPrimaryDefault : role === 'assistant' ? firstAssistantDefault : firstLiteDefault;
+                if (defaultModel) {
+                    this._selectModel(role, defaultModel, this._findModelLabel(role, defaultModel));
+                }
+            }
+        });
+    }
+
+    _findModelLabel(role, modelId) {
+        const active = this._getActiveProviders();
         for (const provider of active) {
             const config = PROVIDER_MODELS[provider];
             if (!config) continue;
-
-            const providerLabel = PROVIDER_LABELS[provider] || provider;
-
-            const pGroup = document.createElement('optgroup');
-            pGroup.label = providerLabel;
-            for (const m of config.primary) {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label;
-                pGroup.appendChild(opt);
-            }
-            primarySelect.appendChild(pGroup);
-
-            const aGroup = document.createElement('optgroup');
-            aGroup.label = providerLabel;
-            for (const m of config.assistant) {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label;
-                aGroup.appendChild(opt);
-            }
-            assistantSelect.appendChild(aGroup);
-
-            const lGroup = document.createElement('optgroup');
-            lGroup.label = providerLabel;
-            for (const m of config.lite) {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label;
-                lGroup.appendChild(opt);
-            }
-            liteSelect.appendChild(lGroup);
-
-            if (!firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
-            if (!firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
-            if (!firstLiteDefault) firstLiteDefault = config.defaultLite;
+            const models = config[role] || [];
+            const model = models.find(m => m.id === modelId);
+            if (model) return model.label;
         }
-
-        if (prevPrimary && this._selectHasValue(primarySelect, prevPrimary)) {
-            primarySelect.value = prevPrimary;
-        } else if (firstPrimaryDefault) {
-            primarySelect.value = firstPrimaryDefault;
-        }
-
-        if (prevAssistant && this._selectHasValue(assistantSelect, prevAssistant)) {
-            assistantSelect.value = prevAssistant;
-        } else if (firstAssistantDefault) {
-            assistantSelect.value = firstAssistantDefault;
-        }
-
-        if (prevLite && this._selectHasValue(liteSelect, prevLite)) {
-            liteSelect.value = prevLite;
-        } else if (firstLiteDefault) {
-            liteSelect.value = firstLiteDefault;
-        }
+        return modelId;
     }
 
-    _selectHasValue(selectEl, value) {
-        return Array.from(selectEl.options).some(o => o.value === value);
+    _selectModel(role, modelId, label) {
+        this._selectedModels[role] = modelId;
+        
+        const dropdown = document.getElementById(`${role}_model`);
+        const menu = document.getElementById(`${role}_model-menu`);
+        const text = dropdown?.querySelector('.llm-model-dropdown__text');
+        
+        if (text) text.textContent = label;
+        
+        const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
+        options.forEach(option => {
+            if (option.dataset.value === modelId) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+        
+        this._closeAllDropdowns();
+        this._updateNav();
     }
 
     _isProviderStepReady() {
         const active = this._getActiveProviders();
         if (active.length === 0) return false;
-        const primary = document.getElementById('primary_model')?.value;
-        const assistant = document.getElementById('assistant_model')?.value;
-        const lite = document.getElementById('lite_model')?.value;
+        const primary = this._selectedModels.primary;
+        const assistant = this._selectedModels.assistant;
+        const lite = this._selectedModels.lite;
         return !!(primary && assistant && lite);
     }
 
@@ -418,9 +489,9 @@ export class SetupPage {
     // ---------------------------------------------------------------------------
 
     _renderSummary() {
-        const primaryModel = document.getElementById('primary_model')?.value || '';
-        const assistantModel = document.getElementById('assistant_model')?.value || '';
-        const liteModel = document.getElementById('lite_model')?.value || '';
+        const primaryModel = this._selectedModels.primary || '';
+        const assistantModel = this._selectedModels.assistant || '';
+        const liteModel = this._selectedModels.lite || '';
         const primaryProvider = _modelToProvider(primaryModel);
         const email = document.getElementById('account_email').value.trim();
         const name = document.getElementById('account_name').value.trim();
@@ -470,9 +541,9 @@ export class SetupPage {
     _collectUserSettings() {
         const userSettings = {};
 
-        const primaryModel = document.getElementById('primary_model')?.value || '';
-        const assistantModel = document.getElementById('assistant_model')?.value || '';
-        const liteModel = document.getElementById('lite_model')?.value || '';
+        const primaryModel = this._selectedModels.primary || '';
+        const assistantModel = this._selectedModels.assistant || '';
+        const liteModel = this._selectedModels.lite || '';
         const primaryProvider = _modelToProvider(primaryModel);
         const assistantProvider = _modelToProvider(assistantModel);
         const liteProvider = _modelToProvider(liteModel);

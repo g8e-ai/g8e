@@ -184,21 +184,36 @@
                         <div class="wizard-model-fields">
                             <div class="setup-field">
                                 <label class="setup-label" for="primary_model">Primary Model</label>
-                                <select id="primary_model" class="setup-select" disabled>
-                                    <option value="">Enter at least one API key above</option>
-                                </select>
+                                <div id="primary_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">model_training</span>
+                                        <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="primary_model-menu"></div>
+                                </div>
                             </div>
                             <div class="setup-field">
                                 <label class="setup-label" for="assistant_model">Assistant Model</label>
-                                <select id="assistant_model" class="setup-select" disabled>
-                                    <option value="">Enter at least one API key above</option>
-                                </select>
+                                <div id="assistant_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">psychology</span>
+                                        <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="assistant_model-menu"></div>
+                                </div>
                             </div>
                             <div class="setup-field">
                                 <label class="setup-label" for="lite_model">Lite Model</label>
-                                <select id="lite_model" class="setup-select" disabled>
-                                    <option value="">Enter at least one API key above</option>
-                                </select>
+                                <div id="lite_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">bolt</span>
+                                        <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="lite_model-menu"></div>
+                                </div>
                             </div>
                         </div>
                     </div>
