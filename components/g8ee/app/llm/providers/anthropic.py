@@ -18,7 +18,6 @@ import logging
 from collections.abc import AsyncGenerator
 
 import anthropic
-import httpx
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
@@ -37,7 +36,7 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -164,50 +163,21 @@ def _build_usage(response_usage) -> UsageMetadata:
 
 
 class AnthropicProvider(LLMProvider):
-    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
-    _LIMITS = httpx.Limits(
-        max_connections=20,
-        max_keepalive_connections=10,
-        keepalive_expiry=30.0,
-    )
-
-    @staticmethod
-    def _is_internal_endpoint(endpoint: str | None) -> bool:
-        return is_internal_endpoint(endpoint)
-
-    def __init__(self, endpoint: str | None, api_key: str, ca_cert_path: str | None = None):
+    def __init__(self, endpoint: str | None, api_key: str):
         super().__init__()
-        import ssl
-        verify: ssl.SSLContext | bool
-        if self._is_internal_endpoint(endpoint):
-            if endpoint and endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
-
-        http_client = httpx.AsyncClient(
-            timeout=self._TIMEOUT,
-            limits=self._LIMITS,
-            verify=verify,
-        )
-        kwargs: dict = {"http_client": http_client, "max_retries": 0}
+        kwargs: dict = {"max_retries": 0}
         if api_key:
             kwargs["api_key"] = api_key
         if endpoint:
             kwargs["base_url"] = endpoint
         self._client = anthropic.AsyncAnthropic(**kwargs)
-        self._http_client = http_client
         logger.info("Anthropic provider initialized")
 
     async def _close_resources(self):
-        """Clean up the httpx client to prevent resource leaks."""
-        if self._http_client:
-            await self._http_client.aclose()
-            logger.info("Anthropic provider closed")
+        """Clean up provider resources."""
+        if hasattr(self._client, 'close'):
+            await self._client.close()
+        logger.info("Anthropic provider closed")
 
     def _build_kwargs(
         self,

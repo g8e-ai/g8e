@@ -37,13 +37,13 @@ Aggregate metrics:
   - Tribunal improvement rate: how often the Tribunal corrected a Primary Agent error
 """
 
-import os
 import logging
 import pytest
 from typing import Any
 from datetime import datetime, timezone
 
 from app.constants import AgentMode, EventType
+from app.constants.paths import PATHS
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.benchmark_judge import (
     BenchmarkJudge,
@@ -68,11 +68,8 @@ from tests.integration.conftest import auto_approve_pending
 
 logger = logging.getLogger(__name__)
 
-BENCHMARK_PATH = os.path.join(os.path.dirname(__file__), "benchmark_gold_set.json")
-
-
 def load_benchmark_set() -> list[dict[str, Any]]:
-    return load_and_validate_benchmark_set(BENCHMARK_PATH)
+    return load_and_validate_benchmark_set(PATHS["g8ee"]["evals"]["benchmark_path"])
 
 
 pytestmark = [

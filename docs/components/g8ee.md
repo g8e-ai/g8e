@@ -126,7 +126,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 **Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
 - **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
 - **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
-- **SSL Verification:** Follows the standard SSL strategy — uses platform CA cert for internal endpoints, certifi bundle for external endpoints, disables verification for HTTP
+- **SSL Verification:** Uses the Ollama SDK's default SSL verification behavior
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
 ### AI Streaming Loop

@@ -28,7 +28,6 @@ Test flow:
 Skips if settings.llm.primary_provider != LLMProvider.GEMINI.
 """
 
-import os
 import pytest
 import logging
 from typing import Any
@@ -36,6 +35,7 @@ from datetime import datetime, timezone
 
 import app.llm.llm_types as types
 from app.constants import LLMProvider
+from app.constants.paths import PATHS
 from app.llm.prompts import build_modular_system_prompt
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.ai.eval_judge import EvalJudge, EvalGrade, EvalJudgeError
@@ -43,11 +43,8 @@ from tests.evals.shared import AccuracyTestResult, load_and_validate_gold_set
 
 logger = logging.getLogger(__name__)
 
-GOLD_SET_PATH = os.path.join(os.path.dirname(__file__), "..", "gold_set.json")
-
-
 def load_gold_set() -> list[dict[str, Any]]:
-    return load_and_validate_gold_set(GOLD_SET_PATH)
+    return load_and_validate_gold_set(PATHS["g8ee"]["evals"]["gold_set_path"])
 
 
 # Use ai_integration marker to ensure this only runs when LLM is configured

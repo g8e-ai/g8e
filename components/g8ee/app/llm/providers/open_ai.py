@@ -15,7 +15,6 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-import httpx
 from openai import AsyncOpenAI
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -34,7 +33,7 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -98,58 +97,23 @@ def _tools_to_openai(tools: list[ToolGroup] | None) -> list[dict] | None:
 
 
 class OpenAIProvider(LLMProvider):
-    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
-    _LIMITS = httpx.Limits(
-        max_connections=10,
-        max_keepalive_connections=5,
-        keepalive_expiry=30.0,
-    )
-
-    def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        import ssl
+    def __init__(self, endpoint: str, api_key: str):
         super().__init__()
-
-        verify: ssl.SSLContext | bool
-        if is_internal_endpoint(endpoint):
-            if endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
 
         # Ensure endpoint has /v1 suffix for OpenAI API
         base_url = endpoint
         if not base_url.endswith('/v1'):
             base_url = base_url + '/v1'
 
-        # Shared HTTP client for direct API calls
-        self._http_client = httpx.AsyncClient(
-            timeout=self._TIMEOUT,
-            limits=self._LIMITS,
-            verify=verify,
-        )
-
-        # OpenAI client for chat completions
-        openai_base_url = endpoint
         self._client = AsyncOpenAI(
-            base_url=openai_base_url,
+            base_url=base_url,
             api_key=api_key or "not-needed",
-            http_client=httpx.AsyncClient(
-                timeout=self._TIMEOUT,
-                limits=self._LIMITS,
-                verify=verify,
-            ),
             max_retries=0,
         )
-        logger.info(f"OpenAI provider initialized: {endpoint} -> {openai_base_url}")
+        logger.info(f"OpenAI provider initialized: {endpoint} -> {base_url}")
 
     async def _close_resources(self):
-        """Clean up the httpx clients to prevent resource leaks."""
-        if self._http_client:
-            await self._http_client.aclose()
+        """Clean up provider resources."""
         if hasattr(self._client, 'close'):
             await self._client.close()
         logger.info("OpenAI provider closed")

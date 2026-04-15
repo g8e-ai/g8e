@@ -106,10 +106,6 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
         key_parts.append(settings.ollama_endpoint or "")
         key_parts.append(settings.ollama_api_key or "")
 
-    platform_settings = get_settings()
-    if platform_settings and platform_settings.ca_cert_path:
-        key_parts.append(platform_settings.ca_cert_path)
-
     return "|".join(key_parts)
 
 
@@ -153,21 +149,16 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
 
     provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
 
-    platform_settings = get_settings()
-    ca_cert_path = platform_settings.ca_cert_path if platform_settings else None
-
     if provider_type == LLMProvider.OLLAMA:
         from .providers.ollama import OllamaProvider
         provider = OllamaProvider(
             endpoint=settings.ollama_endpoint,
             api_key=settings.ollama_api_key,
-            ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.OPENAI:
         provider = OpenAIProvider(
             endpoint=settings.openai_endpoint,
             api_key=settings.openai_api_key,
-            ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.GEMINI:
         provider = GeminiProvider(api_key=settings.gemini_api_key)
@@ -175,7 +166,6 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
         provider = AnthropicProvider(
             endpoint=settings.anthropic_endpoint,
             api_key=settings.anthropic_api_key,
-            ca_cert_path=ca_cert_path,
         )
     else:
         raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")

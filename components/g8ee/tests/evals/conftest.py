@@ -25,11 +25,18 @@ import pytest
 import pytest_asyncio
 from typing import Any
 
-from app.llm.factory import get_llm_settings
+from app.llm.factory import get_llm_settings, clear_provider_cache
 from app.models.settings import G8eeUserSettings, SearchSettings, EvalJudgeSettings
 from app.services.service_factory import ServiceFactory
 
 logger = logging.getLogger(__name__)
+
+
+@pytest_asyncio.fixture(scope="session", autouse=True, loop_scope="session")
+async def clear_llm_provider_cache():
+    """Clear LLM provider cache at session end to prevent unclosed client session warnings."""
+    yield
+    await clear_provider_cache()
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")

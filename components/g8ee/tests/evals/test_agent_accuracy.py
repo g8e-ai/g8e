@@ -23,21 +23,20 @@ chat_pipeline.run_chat() with real services, reads the persisted AI response fro
 g8es, and grades it with EvalJudge (Primary Model grades Assistant Model).
 """
 
-import os
 import pytest
 import logging
 from typing import Any
 from datetime import datetime, timezone
 
-from app.constants import AgentMode, EventType, OperatorStatus
+from app.constants import AgentMode, EventType
+from app.constants.paths import PATHS
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from app.llm.factory import get_llm_provider
 from app.models.settings import G8eeUserSettings, SearchSettings
-from app.models.http_context import G8eHttpContext, BoundOperator
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
-from app.models.model_configs import get_model_config
-from tests.fakes.factories import build_g8e_http_context
+
 from tests.evals.shared import (
     AccuracyTestResult,
     load_and_validate_gold_set,
@@ -47,11 +46,8 @@ from tests.integration.conftest import auto_approve_pending
 
 logger = logging.getLogger(__name__)
 
-GOLD_SET_PATH = os.path.join(os.path.dirname(__file__), "gold_set.json")
-
-
 def load_gold_set() -> list[dict[str, Any]]:
-    return load_and_validate_gold_set(GOLD_SET_PATH)
+    return load_and_validate_gold_set(PATHS["g8ee"]["evals"]["gold_set_path"])
 
 
 # Use ai_integration marker to ensure this only runs when LLM is configured

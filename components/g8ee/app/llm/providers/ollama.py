@@ -2,9 +2,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-import httpx
 from ollama import AsyncClient, Message as OllamaMessage
-from ollama._client import BaseClient
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
@@ -22,18 +20,9 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
-
-class _InjectedAsyncClient(AsyncClient):
-    """
-    Subclass that overrides AsyncClient to properly inject an existing httpx client instance
-    rather than letting the SDK construct its own internal instance.
-    """
-    def __init__(self, httpx_client: httpx.AsyncClient, host: str | None = None, **kwargs):
-        # Pass a factory function that ignores kwargs and returns our instance
-        BaseClient.__init__(self, lambda **k: httpx_client, host, **kwargs)
 
 def _contents_to_messages(
     contents: list[Content],
@@ -92,10 +81,7 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 
 
 class OllamaProvider(LLMProvider):
-    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
-
-    def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        import ssl
+    def __init__(self, endpoint: str, api_key: str):
         super().__init__()
 
         cleaned_endpoint = endpoint.rstrip('/')
@@ -105,33 +91,13 @@ class OllamaProvider(LLMProvider):
         if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
             cleaned_endpoint = 'http://' + cleaned_endpoint
 
-        self._original_endpoint = cleaned_endpoint
-
-        verify: ssl.SSLContext | bool
-        if is_internal_endpoint(cleaned_endpoint):
-            if cleaned_endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
-
-        self._httpx_client = httpx.AsyncClient(
-            base_url=self._original_endpoint,
-            timeout=self._TIMEOUT,
-            verify=verify,
-        )
-        self._client = _InjectedAsyncClient(
-            httpx_client=self._httpx_client,
-            host=self._original_endpoint,
-        )
-        logger.info("Ollama provider initialized: %s", self._original_endpoint)
+        self._client = AsyncClient(host=cleaned_endpoint)
+        logger.info("Ollama provider initialized: %s", cleaned_endpoint)
 
     async def _close_resources(self):
-        """Clean up the underlying httpx client."""
-        await self._httpx_client.aclose()
+        """Clean up provider resources."""
+        if hasattr(self._client, 'close'):
+            await self._client.close()
         
     async def generate_content_stream_primary(
         self,
