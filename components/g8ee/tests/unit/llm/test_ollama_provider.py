@@ -278,7 +278,7 @@ class TestOllamaProviderGeneration:
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
             stop_sequences=[],
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         response = await provider.generate_content_assistant("llama3", contents, settings)
@@ -307,7 +307,7 @@ class TestOllamaProviderGeneration:
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
             stop_sequences=[],
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         response = await provider.generate_content_lite("llama3", contents, settings)

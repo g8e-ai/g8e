@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_investigation_context_section(
-    investigation: EnrichedInvestigationContext
+    investigation: EnrichedInvestigationContext | None
 ) -> str:
     """Build investigation context with case details and conversation summary."""
     if not investigation:
@@ -121,7 +121,7 @@ def build_modular_system_prompt(
     system_context: OperatorContext | list[OperatorContext] | None,
     user_memories: list[InvestigationMemory],
     case_memories: list[InvestigationMemory],
-    investigation: EnrichedInvestigationContext,
+    investigation: EnrichedInvestigationContext | None,
     g8e_web_search_available: bool = True,
 ) -> str:
     """

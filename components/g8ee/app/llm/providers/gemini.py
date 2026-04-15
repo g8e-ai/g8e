@@ -430,7 +430,7 @@ class GeminiProvider(LLMProvider):
                 top_p=settings.top_p_nucleus_sampling,
                 top_k=settings.top_k_filtering,
                 response_mime_type="application/json" if settings.response_format else None,
-                response_json_schema=settings.response_format.json_schema.schema if settings.response_format else None,
+                response_json_schema=settings.response_format.flatten_for_gemini() if settings.response_format else None,
             )
 
     @staticmethod

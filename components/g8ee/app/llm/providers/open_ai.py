@@ -307,17 +307,7 @@ class OpenAIProvider(LLMProvider):
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response_format = None
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
+        response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
 
         stream = await self._client.chat.completions.create(
             model=model,
@@ -351,17 +341,7 @@ class OpenAIProvider(LLMProvider):
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response_format = None
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
+        response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
 
         response = await self._client.chat.completions.create(
             model=model,
@@ -407,17 +387,7 @@ class OpenAIProvider(LLMProvider):
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response_format = None
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
+        response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
 
         stream = await self._client.chat.completions.create(
             model=model,
@@ -451,17 +421,7 @@ class OpenAIProvider(LLMProvider):
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response_format = None
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": rjs.name,
-                    "schema": rjs.schema,
-                    "strict": rjs.strict,
-                },
-            }
+        response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
 
         response = await self._client.chat.completions.create(
             model=model,

@@ -361,20 +361,36 @@ class StreamChunkFromModel:
     thought_signature: ThoughtSignature | None = None
 
 
-@dataclass
-class ResponseJsonSchema:
-    schema: dict
+class ResponseJsonSchema(G8eBaseModel):
+    json_schema_dict: dict
     name: str = "response"
     strict: bool = False
 
+    def flatten_for_ollama(self) -> dict:
+        return self.json_schema_dict
 
-@dataclass
-class ResponseFormat:
+    def flatten_for_gemini(self) -> dict:
+        return self.json_schema_dict
+
+    def flatten_for_openai(self) -> dict:
+        return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
+
+
+class ResponseFormat(G8eBaseModel):
     json_schema: ResponseJsonSchema
 
     @classmethod
     def from_pydantic_schema(cls, json_schema: dict, name: str = "response") -> "ResponseFormat":
-        return cls(json_schema=ResponseJsonSchema(schema=json_schema, name=name))
+        return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
+
+    def flatten_for_ollama(self) -> dict:
+        return self.json_schema.flatten_for_ollama()
+
+    def flatten_for_gemini(self) -> dict:
+        return self.json_schema.flatten_for_gemini()
+
+    def flatten_for_openai(self) -> dict:
+        return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}
 
 
 @dataclass

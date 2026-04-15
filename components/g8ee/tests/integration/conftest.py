@@ -30,13 +30,73 @@ and avoid code duplication.
 """
 
 import asyncio
+import logging
 
 import pytest
 import pytest_asyncio
-from app.models.operators import PendingApproval
 from app.services.service_factory import ServiceFactory
 from app.utils.timestamp import now
 from tests.integration.cleanup import IntegrationCleanupTracker
+
+logger = logging.getLogger(__name__)
+
+
+async def auto_approve_pending(approval_service) -> None:
+    """Simple helper to approve all pending approvals.
+
+    Used in integration tests with fake operators to prevent infinite loops
+    when commands are dispatched.
+    """
+    pending = approval_service.get_pending_approvals()
+    for approval_id, pending_approval in pending.items():
+        pending_approval.resolve(
+            approved=True,
+            reason="Auto-approved by integration test runner",
+            responded_at=now(),
+        )
+        logger.info("[AUTO-APPROVE] Approved %s", approval_id)
+
+
+async def approve_via_http(
+    approval_id: str,
+    approval_service,
+    approved: bool = True,
+    reason: str = "",
+    operator_session_id: str = "",
+    operator_id: str = "",
+) -> dict:
+    """Simple helper to send approval HTTP call to g8ee internal API.
+
+    Used in integration tests to approve pending approvals via HTTP instead
+    of directly resolving the pending approval object.
+
+    Returns a simple dict with the approval result.
+    """
+    from app.models.internal_api import OperatorApprovalResponse
+
+    response = OperatorApprovalResponse(
+        approval_id=approval_id,
+        approved=approved,
+        reason=reason,
+        operator_session_id=operator_session_id,
+        operator_id=operator_id,
+    )
+
+    await approval_service.handle_approval_response(response)
+
+    result = {
+        "approved": approved,
+        "feedback": False,
+        "approval_id": approval_id,
+    }
+
+    logger.info(
+        "[APPROVAL-HTTP] Simulated approval via HTTP: approval_id=%s, approved=%s",
+        approval_id,
+        approved,
+    )
+
+    return result
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
@@ -44,32 +104,17 @@ async def all_services(cache_aside_service, test_settings):
     """Fixture that returns all g8ee services properly configured.
 
     This is the recommended way to get services for integration tests.
+    Use auto_approve_pending helper to approve pending approvals during tests.
     """
     services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
 
-    def _auto_approve_callback(approval_id: str, pending: PendingApproval):
-        loop = asyncio.get_event_loop()
-        loop.call_later(0.01, lambda: pending.resolve(
-            approved=True,
-            reason="Auto-approved by integration test runner",
-            responded_at=now(),
-        ))
-
-    approval_service = services['approval_service']
-    approval_service.set_on_approval_requested(_auto_approve_callback)
-
     yield services
-    
+
     # Await all background tasks before stopping services to prevent race conditions
     chat_task_manager = services.get('chat_task_manager')
     if chat_task_manager is not None:
-        try:
-            await chat_task_manager.wait_all(timeout=5.0)
-        except TimeoutError:
-            logger.warning("Background tasks did not complete within 5s timeout, proceeding with cleanup")
-        except Exception as exc:
-            logger.error("Error awaiting background tasks: %s", exc)
-    
+        await chat_task_manager.wait_all(timeout=5.0)
+
     await ServiceFactory.stop_services(services)
 
 
@@ -106,11 +151,6 @@ async def cleanup(cache_aside_service, all_services):
     # Await all background tasks before document deletion
     chat_task_manager = all_services.get('chat_task_manager')
     if chat_task_manager is not None:
-        try:
-            await chat_task_manager.wait_all(timeout=5.0)
-        except TimeoutError:
-            logger.warning("Background tasks did not complete within 5s timeout, proceeding with document cleanup")
-        except Exception as exc:
-            logger.error("Error awaiting background tasks: %s", exc)
+        await chat_task_manager.wait_all(timeout=5.0)
     
     await tracker.cleanup()

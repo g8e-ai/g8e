@@ -31,6 +31,7 @@ from tests.fakes.factories import (
     build_bound_operator,
     build_production_operator_document,
 )
+from tests.integration.conftest import auto_approve_pending
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,10 @@ async def test_orchestrate_tool_execution_no_bound_operator(
         g8e_context=g8e_context,
         request_settings=user_settings,
     )
+
+    # Approve any pending approvals from fake operators
+    approval_service = all_services['approval_service']
+    await auto_approve_pending(approval_service)
 
     assert result.success is False
     assert "No operators are currently BOUND" in result.error
@@ -137,6 +142,10 @@ async def test_orchestrate_tool_execution_security_violation(
         g8e_context=g8e_context,
         request_settings=user_settings,
     )
+
+    # Approve any pending approvals from fake operators
+    approval_service = all_services['approval_service']
+    await auto_approve_pending(approval_service)
 
     assert result.success is False
     assert "SECURITY VIOLATION" in result.error

@@ -20,10 +20,11 @@ Uses a lightweight model optimized for quick text generation tasks.
 
 import logging
 
+from app.constants import LLM_DEFAULT_TEMPERATURE
 from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
-from app.llm.llm_types import Content, Part, LiteLLMSettings, ResponseFormat, ResponseJsonSchema
+from app.llm.llm_types import Content, Part, LiteLLMSettings
 from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
@@ -72,14 +73,15 @@ async def generate_case_title(
 
         from app.models.model_configs import get_model_config
         model_config = get_model_config(model)
+        temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
         settings = LiteLLMSettings(
-            temperature=None,
-            max_output_tokens=None,
+            temperature=temperature,
+            max_output_tokens=256,
             top_p_nucleus_sampling=model_config.top_p,
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,
             system_instructions="",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=None,
         )
         response = await provider.generate_content_lite(
             model=model,

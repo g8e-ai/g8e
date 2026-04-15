@@ -138,6 +138,8 @@ async def _probe_llm_capabilities(settings):
 
         # Update the registry for the duration of the session
         config = get_model_config(primary_model)
+        original_supports_thinking = config.supports_thinking
+        original_supports_tools = config.supports_tools
         config.supports_thinking = _PROBED_CAPABILITIES["supports_thinking"]
         config.supports_tools = _PROBED_CAPABILITIES["supports_tools"]
 
@@ -175,6 +177,10 @@ async def _probe_llm_capabilities(settings):
                 break
         if not found:
             MODEL_REGISTRY.configs.append(config)
+
+        # Restore original config values to prevent global state pollution
+        config.supports_thinking = original_supports_thinking
+        config.supports_tools = original_supports_tools
 
 logger = logging.getLogger(__name__)
 

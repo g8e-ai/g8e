@@ -254,55 +254,56 @@ class ApprovalErrorType(str, Enum):
 
 
 # OpenAI models
-OPENAI_GPT_5_4                   = "gpt-5.4"
-OPENAI_GPT_5_3_INSTANT           = "gpt-5.3-instant"
-OPENAI_GPT_5_4_MINI              = "gpt-5.4-mini"
-OPENAI_GPT_5_4_NANO              = "gpt-5.4-nano"
+OPENAI_GPT_3_5_TURBO            = "gpt-3.5-turbo"
+OPENAI_GPT_4_TURBO              = "gpt-4-turbo"
 OPENAI_GPT_4O                   = "gpt-4o"
 OPENAI_GPT_4O_MINI              = "gpt-4o-mini"
-OPENAI_GPT_4_TURBO              = "gpt-4-turbo"
-OPENAI_GPT_3_5_TURBO            = "gpt-3.5-turbo"
+OPENAI_GPT_5_3_INSTANT          = "gpt-5.3-instant"
+OPENAI_GPT_5_4                  = "gpt-5.4"
+OPENAI_GPT_5_4_NANO             = "gpt-5.4-nano"
+OPENAI_GPT_5_4_THINKING         = "gpt-5.4-thinking"
+OPENAI_GPT_5_4_INSTANT          = "gpt-5.4-instant"
+OPENAI_GPT_5_4_MINI             = "gpt-5.4-mini"
 
 # Anthropic models
-ANTHROPIC_CLAUDE_OPUS_4_6       = "claude-opus-4-6"
-ANTHROPIC_CLAUDE_SONNET_4_6     = "claude-sonnet-4-6"
-ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4-5"
+ANTHROPIC_CLAUDE_OPUS_4_6       = "claude-opus-4.6"
+ANTHROPIC_CLAUDE_SONNET_4_6     = "claude-sonnet-4.6"
+ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4.5"
 
-GEMINI_3_1_PRO_PREVIEW          = "gemini-3.1-pro-preview"
-GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS = "gemini-3.1-pro-preview-customtools"
-GEMINI_3_1_FLASH_LITE_PREVIEW     = "gemini-3.1-flash-lite-preview"
-GEMINI_3_FLASH_PREVIEW          = "gemini-3-flash-preview"
+GEMINI_3_1_PRO                  = "gemini-3.1-pro-preview"
+GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
+GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite-preview"
+GEMINI_3_FLASH                  = "gemini-3-flash-preview"
 
-GEMMA3_27B                      = "gemma3:27b"
-GEMMA3_12B                      = "gemma3:12b"
-GEMMA3_4B                       = "gemma3:4b"
-GEMMA3_1B                       = "gemma3:1b"
-GEMMA4_E4B                      = "gemma4:e4b"
-GEMMA4_E2B                      = "gemma4:e2b"
-GEMMA4                          = "gemma4"
+GEMMA3_1B                     = "gemma3-1b"
+GEMMA3_4B                     = "gemma3-4b"
+GEMMA3_12B                    = "gemma3-12b"
+GEMMA3_27B                    = "gemma3-27b"
+GEMMA4                        = "gemma4"
+GEMMA4_E2B                    = "gemma4-e2b"
+GEMMA4_E4B                    = "gemma4-e4b"
 
-QWEN3_CODER_30B                 = "qwen3-coder:30b"
-QWEN3_1B7                       = "qwen3:1.7b"
-QWEN25_14B                      = "qwen2.5:14b"
-QWEN25_7B                       = "qwen2.5:7b"
+OLLAMA_QWEN3_5_122B             = "qwen3.5-122b"
+OLLAMA_GLM_5_1                 = "glm-5.1"
+OLLAMA_GEMMA4_26B              = "gemma4-26b"
+OLLAMA_NEMOTRON_3_30B          = "nemotron-3-30b"
+OLLAMA_LLAMA_3_2_3B            = "llama-3.2-3b"
+OLLAMA_QWEN3_5_2B              = "qwen3.5-2b"
+OLLAMA_CODELLAMA_7B            = "codellama-7b"
+OLLAMA_LLAMA3_70B              = "llama3-70b"
+OLLAMA_LLAMA3_8B               = "llama3-8b"
+OLLAMA_MISTRAL_7B              = "mistral-7b"
 
-# OpenAI models
-OPENAI_GPT_4O                   = "gpt-4o"
-OPENAI_GPT_4O_MINI              = "gpt-4o-mini"
-OPENAI_GPT_4_TURBO              = "gpt-4-turbo"
-OPENAI_GPT_3_5_TURBO            = "gpt-3.5-turbo"
-
-# Ollama models (common ones)
-OLLAMA_LLAMA3_8B                = "llama3:8b"
-OLLAMA_LLAMA3_70B               = "llama3:70b"
-OLLAMA_CODELLAMA_7B             = "codellama:7b"
-OLLAMA_MISTRAL_7B              = "mistral:7b"
+QWEN3_1B7                     = "qwen3-1b7"
+QWEN3_CODER_30B               = "qwen3-coder-30b"
+QWEN25_7B                     = "qwen25-7b"
+QWEN25_14B                    = "qwen25-14b"
 
 # Provider default models
-OPENAI_DEFAULT_MODEL            = OPENAI_GPT_4O_MINI
-OLLAMA_DEFAULT_MODEL            = GEMMA4_E4B
+OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4_THINKING
+OLLAMA_DEFAULT_MODEL            = OLLAMA_QWEN3_5_122B
 ANTHROPIC_DEFAULT_MODEL        = ANTHROPIC_CLAUDE_OPUS_4_6
-GEMINI_DEFAULT_MODEL            = GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS
+GEMINI_DEFAULT_MODEL            = GEMINI_3_FLASH
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT         = "https://api.openai.com/v1"

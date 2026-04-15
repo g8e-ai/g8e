@@ -516,42 +516,27 @@
   "_comment.llm.models": "Canonical LLM model identifiers shared across g8ee, g8eo, and g8ed.",
   "llm.models": {
     "gemini": {
-      "3.1.pro.preview": "gemini-3.1-pro-preview",
-      "3.1.pro.preview.customtools": "gemini-3.1-pro-preview-customtools",
-      "3.1.flash.lite.preview": "gemini-3.1-flash-lite-preview",
-      "3.flash.preview": "gemini-3-flash-preview"
+      "3.1.pro": "gemini-3.1-pro",
+      "3.1.flash": "gemini-3.1-flash",
+      "3.1.flash.lite": "gemini-3.1-flash-lite"
     },
     "openai": {
-      "gpt.5.4": "gpt-5.4",
-      "gpt.5.3.instant": "gpt-5.3-instant",
-      "gpt.5.4.mini": "gpt-5.4-mini",
-      "gpt.5.4.nano": "gpt-5.4-nano",
-      "gpt.4o": "gpt-4o",
-      "gpt.4o.mini": "gpt-4o-mini",
-      "gpt.4.turbo": "gpt-4-turbo",
-      "gpt.3.5.turbo": "gpt-3.5-turbo"
+      "gpt.5.4.thinking": "gpt-5.4-thinking",
+      "gpt.5.4.instant": "gpt-5.4-instant",
+      "gpt.5.4.mini": "gpt-5.4-mini"
     },
     "anthropic": {
-      "claude.4.6.opus": "claude-opus-4-6",
-      "claude.4.6.sonnet": "claude-sonnet-4-6",
-      "claude.4.5.haiku": "claude-haiku-4-5"
+      "claude.4.6.opus": "claude-opus-4.6",
+      "claude.4.6.sonnet": "claude-sonnet-4.6",
+      "claude.4.5.haiku": "claude-haiku-4.5"
     },
     "ollama": {
-      "gemma3.27b": "gemma3:27b",
-      "gemma3.12b": "gemma3:12b",
-      "gemma3.4b": "gemma3:4b",
-      "gemma3.1b": "gemma3:1b",
-      "gemma4.e4b": "gemma4:e4b",
-      "gemma4.e2b": "gemma4:e2b",
-      "gemma4": "gemma4",
-      "llama3.8b": "llama3:8b",
-      "llama3.70b": "llama3:70b",
-      "codellama.7b": "codellama:7b",
-      "mistral.7b": "mistral:7b",
-      "qwen3.coder.30b": "qwen3-coder:30b",
-      "qwen3.1b7": "qwen3:1.7b",
-      "qwen2.5.14b": "qwen2.5:14b",
-      "qwen2.5.7b": "qwen2.5:7b"
+      "qwen3.5.122b": "qwen3.5-122b",
+      "glm.5.1": "glm-5.1",
+      "gemma4.26b": "gemma4-26b",
+      "nemotron.3.30b": "nemotron-3-30b",
+      "llama.3.2.3b": "llama-3.2-3b",
+      "qwen3.5.2b": "qwen3.5-2b"
     }
   }
 }

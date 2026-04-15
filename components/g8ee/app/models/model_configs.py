@@ -28,35 +28,22 @@ from app.constants import (
     ANTHROPIC_CLAUDE_OPUS_4_6,
     ANTHROPIC_CLAUDE_SONNET_4_6,
     ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_3_1_PRO_PREVIEW,
-    GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
-    GEMINI_3_1_FLASH_LITE_PREVIEW,
-    GEMINI_3_FLASH_PREVIEW,
+    GEMINI_3_1_PRO,
+    GEMINI_3_1_PRO_CUSTOM_TOOLS,
+    GEMINI_3_1_FLASH_LITE,
+    GEMINI_3_FLASH,
     GEMINI_DEFAULT_MODEL,
-    GEMMA3_1B,
-    GEMMA3_4B,
-    GEMMA3_12B,
-    GEMMA3_27B,
-    GEMMA4_E2B,
-    GEMMA4_E4B,
-    OPENAI_DEFAULT_MODEL,
-    OPENAI_GPT_3_5_TURBO,
-    OPENAI_GPT_4O,
-    OPENAI_GPT_4O_MINI,
-    OPENAI_GPT_4_TURBO,
-    OPENAI_GPT_5_3_INSTANT,
-    OPENAI_GPT_5_4,
-    OPENAI_GPT_5_4_MINI,
-    OPENAI_GPT_5_4_NANO,
-    OLLAMA_CODELLAMA_7B,
     OLLAMA_DEFAULT_MODEL,
-    OLLAMA_LLAMA3_70B,
-    OLLAMA_LLAMA3_8B,
-    OLLAMA_MISTRAL_7B,
-    QWEN25_14B,
-    QWEN25_7B,
-    QWEN3_1B7,
-    QWEN3_CODER_30B,
+    OLLAMA_GEMMA4_26B,
+    OLLAMA_GLM_5_1,
+    OLLAMA_LLAMA_3_2_3B,
+    OLLAMA_NEMOTRON_3_30B,
+    OLLAMA_QWEN3_5_122B,
+    OLLAMA_QWEN3_5_2B,
+    OPENAI_DEFAULT_MODEL,
+    OPENAI_GPT_5_4_INSTANT,
+    OPENAI_GPT_5_4_MINI,
+    OPENAI_GPT_5_4_THINKING,
     ThinkingLevel,
 )
 from app.models.base import G8eBaseModel
@@ -79,9 +66,9 @@ class LLMModelConfig(G8eBaseModel):
     stop_sequences: list[str] | None = None
 
 
-# Google Gemma 3 models (Ollama)
-GEMINI_3_PRO_PREVIEW = LLMModelConfig(
-    name=GEMINI_3_1_PRO_PREVIEW,
+# Gemini models
+GEMINI_3_1_PRO_CONFIG = LLMModelConfig(
+    name=GEMINI_3_1_PRO,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
     supports_tools=True,
@@ -91,8 +78,8 @@ GEMINI_3_PRO_PREVIEW = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
-    name=GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
+GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLMModelConfig(
+    name=GEMINI_3_1_PRO_CUSTOM_TOOLS,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
     supports_tools=True,
@@ -102,8 +89,19 @@ GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_FLASH_PREVIEW = LLMModelConfig(
-    name=GEMINI_3_FLASH_PREVIEW,
+GEMINI_3_1_FLASH_LITE_CONFIG = LLMModelConfig(
+    name=GEMINI_3_1_FLASH_LITE,
+    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=1_000_000,
+    context_window_output=64_000,
+    default_temperature=1.0,
+    max_output_tokens=64_000,
+)
+
+GEMINI_3_FLASH_CONFIG = LLMModelConfig(
+    name=GEMINI_3_FLASH,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
     supports_tools=True,
@@ -113,94 +111,10 @@ GEMINI_3_FLASH_PREVIEW = LLMModelConfig(
     max_output_tokens=64_000,
 )
 
-GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG = LLMModelConfig(
-    name=GEMINI_3_1_FLASH_LITE_PREVIEW,
-    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=1_000_000,
-    context_window_output=64_000,
-    default_temperature=1.0,
-    max_output_tokens=64_000,
-)
-
-GEMMA3_27B = LLMModelConfig(
-    name=GEMMA3_27B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-GEMMA3_12B = LLMModelConfig(
-    name=GEMMA3_12B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-GEMMA3_4B = LLMModelConfig(
-    name=GEMMA3_4B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-GEMMA3_1B = LLMModelConfig(
-    name=GEMMA3_1B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=32_768,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-# Gemma 4 models (Ollama) - support thinking
-GEMMA4_E4B_CONFIG = LLMModelConfig(
-    name=GEMMA4_E4B,
-    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-GEMMA4_E2B_CONFIG = LLMModelConfig(
-    name=GEMMA4_E2B,
-    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-# Qwen 3 Coder models (Ollama) — agentic coding, MoE architecture, native tool calling
-QWEN3_CODER_30B = LLMModelConfig(
-    name=QWEN3_CODER_30B,
-    supported_thinking_levels=[],
+# Ollama models
+OLLAMA_QWEN3_5_122B_CONFIG = LLMModelConfig(
+    name=OLLAMA_QWEN3_5_122B,
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
     supports_thinking=True,
     supports_tools=True,
     context_window_input=256_000,
@@ -210,9 +124,44 @@ QWEN3_CODER_30B = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-# Qwen 3 models (Ollama) — native tool calling support across all sizes
-QWEN3_1B7 = LLMModelConfig(
-    name=QWEN3_1B7,
+OLLAMA_GLM_5_1_CONFIG = LLMModelConfig(
+    name=OLLAMA_GLM_5_1,
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=256_000,
+    context_window_output=8_192,
+    top_k=40,
+    top_p=1.0,
+    max_output_tokens=8_192,
+)
+
+OLLAMA_GEMMA4_26B_CONFIG = LLMModelConfig(
+    name=OLLAMA_GEMMA4_26B,
+    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=8_192,
+    top_k=40,
+    top_p=1.0,
+    max_output_tokens=8_192,
+)
+
+OLLAMA_NEMOTRON_3_30B_CONFIG = LLMModelConfig(
+    name=OLLAMA_NEMOTRON_3_30B,
+    supported_thinking_levels=[ThinkingLevel.MINIMAL, ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH],
+    supports_thinking=True,
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=8_192,
+    top_k=40,
+    top_p=1.0,
+    max_output_tokens=8_192,
+)
+
+OLLAMA_LLAMA_3_2_3B_CONFIG = LLMModelConfig(
+    name=OLLAMA_LLAMA_3_2_3B,
     supported_thinking_levels=[],
     supports_thinking=True,
     supports_tools=True,
@@ -223,21 +172,8 @@ QWEN3_1B7 = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-# Qwen 2.5 models (Ollama) — strong tool calling support
-QWEN25_14B = LLMModelConfig(
-    name=QWEN25_14B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=32_768,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-QWEN25_7B = LLMModelConfig(
-    name=QWEN25_7B,
+OLLAMA_QWEN3_5_2B_CONFIG = LLMModelConfig(
+    name=OLLAMA_QWEN3_5_2B,
     supported_thinking_levels=[],
     supports_thinking=True,
     supports_tools=True,
@@ -298,8 +234,8 @@ ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
 )
 
 # OpenAI models
-OPENAI_GPT_5_4_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_5_4,
+OPENAI_GPT_5_4_THINKING_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_4_THINKING,
     supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
     supports_thinking=True,
     supports_tools=True,
@@ -310,8 +246,8 @@ OPENAI_GPT_5_4_CONFIG = LLMModelConfig(
     max_output_tokens=8_192,
 )
 
-OPENAI_GPT_5_3_INSTANT_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_5_3_INSTANT,
+OPENAI_GPT_5_4_INSTANT_CONFIG = LLMModelConfig(
+    name=OPENAI_GPT_5_4_INSTANT,
     supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
     supports_thinking=True,
     supports_tools=True,
@@ -324,7 +260,7 @@ OPENAI_GPT_5_3_INSTANT_CONFIG = LLMModelConfig(
 
 OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
     name=OPENAI_GPT_5_4_MINI,
-    supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
+    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MINIMAL],
     supports_thinking=True,
     supports_tools=True,
     context_window_input=200_000,
@@ -332,66 +268,6 @@ OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
     top_k=40,
     top_p=1.0,
     max_output_tokens=8_192,
-)
-
-OPENAI_GPT_5_4_NANO_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_5_4_NANO,
-    supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MINIMAL],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-OPENAI_GPT_4O_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_4O,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OPENAI_GPT_4O_MINI_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_4O_MINI,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OPENAI_GPT_4_TURBO_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_4_TURBO,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=128_000,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OPENAI_GPT_3_5_TURBO_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_3_5_TURBO,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=16_385,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
 )
 
 OPENAI_DEFAULT_CONFIG = LLMModelConfig(
@@ -407,54 +283,6 @@ OPENAI_DEFAULT_CONFIG = LLMModelConfig(
 )
 
 # Ollama models
-OLLAMA_LLAMA3_8B_CONFIG = LLMModelConfig(
-    name=OLLAMA_LLAMA3_8B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=8_192,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OLLAMA_LLAMA3_70B_CONFIG = LLMModelConfig(
-    name=OLLAMA_LLAMA3_70B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=8_192,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OLLAMA_CODELLAMA_7B_CONFIG = LLMModelConfig(
-    name=OLLAMA_CODELLAMA_7B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=8_192,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
-OLLAMA_MISTRAL_7B_CONFIG = LLMModelConfig(
-    name=OLLAMA_MISTRAL_7B,
-    supported_thinking_levels=[],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=8_192,
-    context_window_output=4_096,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=4_096,
-)
-
 OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
     name=OLLAMA_DEFAULT_MODEL,
     supported_thinking_levels=[],
@@ -541,34 +369,21 @@ MODEL_REGISTRY = LLMModelRegistry(configs=[
     ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG,
     ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
     ANTHROPIC_DEFAULT_CONFIG,
-    OPENAI_GPT_5_4_CONFIG,
-    OPENAI_GPT_5_3_INSTANT_CONFIG,
+    OPENAI_GPT_5_4_THINKING_CONFIG,
+    OPENAI_GPT_5_4_INSTANT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
-    OPENAI_GPT_5_4_NANO_CONFIG,
-    OPENAI_GPT_4O_CONFIG,
-    OPENAI_GPT_4O_MINI_CONFIG,
-    OPENAI_GPT_4_TURBO_CONFIG,
-    OPENAI_GPT_3_5_TURBO_CONFIG,
     OPENAI_DEFAULT_CONFIG,
-    OLLAMA_LLAMA3_8B_CONFIG,
-    OLLAMA_LLAMA3_70B_CONFIG,
-    OLLAMA_CODELLAMA_7B_CONFIG,
-    OLLAMA_MISTRAL_7B_CONFIG,
+    OLLAMA_QWEN3_5_122B_CONFIG,
+    OLLAMA_GLM_5_1_CONFIG,
+    OLLAMA_GEMMA4_26B_CONFIG,
+    OLLAMA_NEMOTRON_3_30B_CONFIG,
+    OLLAMA_LLAMA_3_2_3B_CONFIG,
+    OLLAMA_QWEN3_5_2B_CONFIG,
     OLLAMA_DEFAULT_CONFIG,
-    GEMINI_3_PRO_PREVIEW,
-    GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG,
-    GEMINI_3_FLASH_PREVIEW,
-    GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG,
-    GEMMA3_27B,
-    GEMMA3_12B,
-    GEMMA3_4B,
-    GEMMA3_1B,
-    GEMMA4_E4B_CONFIG,
-    GEMMA4_E2B_CONFIG,
-    QWEN3_CODER_30B,
-    QWEN3_1B7,
-    QWEN25_14B,
-    QWEN25_7B,
+    GEMINI_3_1_PRO_CONFIG,
+    GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG,
+    GEMINI_3_1_FLASH_LITE_CONFIG,
+    GEMINI_3_FLASH_CONFIG,
 ])
 
 

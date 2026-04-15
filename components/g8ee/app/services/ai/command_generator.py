@@ -66,18 +66,13 @@ from app.constants import (
     CommandGenerationOutcome,
     ComponentName,
     FORBIDDEN_COMMAND_PATTERNS,
-    LLMProvider as LLMProviderEnum,
     TribunalFallbackReason,
     TribunalMember,
     EventType,
     VerifierReason,
-    OPENAI_DEFAULT_MODEL,
-    OLLAMA_DEFAULT_MODEL,
-    ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat, ResponseJsonSchema
+from app.llm.llm_types import Content, Part, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,

@@ -38,11 +38,12 @@ from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import build_g8e_http_context
-from tests.integration.evals.shared import (
+from tests.evals.shared import (
     AccuracyTestResult,
     load_and_validate_gold_set,
     seed_operator_if_bound,
 )
+from tests.integration.conftest import auto_approve_pending
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +167,10 @@ async def test_agent_accuracy(
             user_settings=user_settings,
             _track_task=False,  # Don't track task for eval tests
         )
+
+        # Approve any pending approvals from fake operators
+        approval_service = all_services['approval_service']
+        await auto_approve_pending(approval_service)
 
         # Step 4: Read conversation history from g8es to extract AI response
         conversation_history = await investigation_service.get_chat_messages(

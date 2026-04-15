@@ -258,7 +258,7 @@ class OllamaProvider(LLMProvider):
             },
             stream=True,
             think=False,
-            format=assistant_llm_settings.response_format.json_schema.schema if assistant_llm_settings.response_format else None,
+            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
         )
         
         async for chunk in stream:
@@ -298,7 +298,7 @@ class OllamaProvider(LLMProvider):
             },
             stream=False,
             think=False,
-            format=assistant_llm_settings.response_format.json_schema.schema if assistant_llm_settings.response_format else None,
+            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
         )
         
         parts = []
@@ -343,7 +343,7 @@ class OllamaProvider(LLMProvider):
             },
             stream=True,
             think=False,
-            format=lite_llm_settings.response_format.json_schema.schema if lite_llm_settings.response_format else None,
+            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
         )
         
         async for chunk in stream:
@@ -383,7 +383,7 @@ class OllamaProvider(LLMProvider):
             },
             stream=False,
             think=False,
-            format=lite_llm_settings.response_format.json_schema.schema if lite_llm_settings.response_format else None,
+            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
         )
         
         parts = []

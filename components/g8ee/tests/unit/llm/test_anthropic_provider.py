@@ -449,7 +449,7 @@ class TestPublicMethodsDelegateCorrectly:
             top_k_filtering=40,
             stop_sequences=[],
             system_instructions="analyze",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
 
         await provider.generate_content_assistant(
@@ -479,7 +479,7 @@ class TestPublicMethodsDelegateCorrectly:
             top_k_filtering=40,
             stop_sequences=[],
             system_instructions="triage",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
 
         await provider.generate_content_lite(
@@ -570,7 +570,7 @@ class TestStreamCompletionVerification:
             top_k_filtering=40,
             stop_sequences=[],
             system_instructions="",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         chunks = []
@@ -609,7 +609,7 @@ class TestStreamCompletionVerification:
             top_k_filtering=40,
             stop_sequences=[],
             system_instructions="",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         with pytest.raises(Exception, match="Network error"):
@@ -661,7 +661,7 @@ class TestStreamCompletionVerification:
             top_k_filtering=40,
             stop_sequences=[],
             system_instructions="",
-            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         chunks = []

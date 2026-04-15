@@ -83,7 +83,7 @@ class SettingsService:
         This replaces legacy configuration with platform defaults and
         secure bootstrap service for secrets from g8es volume.
         """
-        settings = G8eePlatformSettings(port=443)  # type: ignore[arg-type]
+        settings = G8eePlatformSettings(port=443)
         
         # Load secrets from bootstrap service
         internal_token = self._bootstrap.load_internal_auth_token()

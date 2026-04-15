@@ -75,7 +75,7 @@ def enriched_investigation():
     )
 
 def test_build_investigation_context_section_empty():
-    assert prompts.build_investigation_context_section(None) == ""  # type: ignore[arg-type]
+    assert prompts.build_investigation_context_section(None) == ""
 
 def test_build_investigation_context_section_full(enriched_investigation):
     section = prompts.build_investigation_context_section(enriched_investigation)
@@ -135,7 +135,7 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
         system_context=cloud_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     assert "Operator Type: Cloud Operator for AWS" in prompt
@@ -154,7 +154,7 @@ def test_build_modular_system_prompt_g8ep_cloud_operator(mock_loader):
         system_context=g8ep_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
 
     assert "Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD" in prompt
@@ -173,7 +173,7 @@ def test_build_modular_system_prompt_cloud_operator_missing_subtype(mock_loader)
         system_context=no_subtype_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
 
     assert "Operator Type: Cloud Operator - Least-privilege intent-based access" in prompt
@@ -193,7 +193,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
         system_context=no_systemd_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     assert "WARNING: systemd is NOT available" in prompt
@@ -248,7 +248,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         system_context=[operator1, operator2, operator3],
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     # Should contain all three operators with proper tags
@@ -281,7 +281,7 @@ def test_build_modular_system_prompt_backward_compatibility(mock_loader, operato
         system_context=operator_context,  # Single context, not list
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     # Should work exactly like before - no operator tags for single operator
@@ -310,7 +310,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         system_context=system_operator,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     # This test mainly ensures the function doesn't crash with mixed operators
     
@@ -320,7 +320,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         system_context=[system_operator, cloud_operator],
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     # Should contain both operators
     assert "<operator index=\"0\">" in prompt

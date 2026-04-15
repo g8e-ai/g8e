@@ -12,9 +12,9 @@
 # limitations under the License.
 
 """
-Ollama Model Accuracy Evaluation Test Suite.
+Gemini Model Accuracy Evaluation Test Suite.
 
-Tests raw Ollama model quality without the ChatPipeline. This is a direct
+Tests raw Gemini model quality without the ChatPipeline. This is a direct
 LLM evaluation that tests the model's ability to respond to scenarios in the
 gold set without any pipeline overhead, investigation context, or g8es I/O.
 
@@ -25,7 +25,7 @@ Test flow:
 4. Extract response text from GenerateContentResponse
 5. Grade with EvalJudge
 
-Skips if settings.llm.primary_provider != LLMProvider.OLLAMA.
+Skips if settings.llm.primary_provider != LLMProvider.GEMINI.
 """
 
 import os
@@ -34,14 +34,12 @@ import logging
 from typing import Any
 from datetime import datetime, timezone
 
-import httpx
 import app.llm.llm_types as types
 from app.constants import LLMProvider
 from app.llm.prompts import build_modular_system_prompt
-from app.llm.factory import get_llm_settings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.ai.eval_judge import EvalJudge, EvalGrade, EvalJudgeError
-from tests.integration.evals.shared import AccuracyTestResult, load_and_validate_gold_set
+from tests.evals.shared import AccuracyTestResult, load_and_validate_gold_set
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +57,14 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration, pytest.mark.a
 
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.parametrize("scenario", load_gold_set(), ids=lambda s: s["id"])
-async def test_ollama_accuracy(
+async def test_gemini_accuracy(
     scenario: dict[str, Any],
     llm_provider,
     test_settings,
     eval_results_collector,
 ):
     """
-    Evaluate raw Ollama model accuracy for a specific scenario using a Judge model.
+    Evaluate raw Gemini model accuracy for a specific scenario using a Judge model.
 
     This test bypasses the ChatPipeline entirely and calls the LLM provider directly:
     1. Build system prompt (no investigation context, no operator context)
@@ -81,17 +79,18 @@ async def test_ollama_accuracy(
     result_data = AccuracyTestResult(scenario_id=scenario["id"])
 
     try:
-        llm_settings = get_llm_settings()
-        if not llm_settings or not llm_settings.primary_model:
+        from app.llm.factory import get_llm_settings
+        llm = get_llm_settings()
+        if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
-        if llm_settings.primary_provider != LLMProvider.OLLAMA:
-            pytest.skip(f"This test only runs with Ollama provider, current provider: {llm_settings.primary_provider}")
+        if llm.primary_provider != LLMProvider.GEMINI:
+            pytest.skip(f"This test only runs with Gemini provider, current provider: {llm.primary_provider}")
 
         # Use the primary model for this test (raw model quality)
-        model_name = llm_settings.primary_model
+        model_name = llm.primary_model
 
-        logger.info(f"[OLLAMA_EVAL] Running scenario {scenario['id']} with model {model_name}")
+        logger.info(f"[GEMINI_EVAL] Running scenario {scenario['id']} with model {model_name}")
 
         # Step 1: Build system prompt (minimal, no investigation context)
         system_prompt = build_modular_system_prompt(
@@ -106,8 +105,8 @@ async def test_ollama_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=llm_settings.llm_temperature,
-            max_tokens=llm_settings.llm_max_tokens or 4096,
+            temperature=llm.llm_temperature,
+            max_tokens=llm.llm_max_tokens or 4096,
             system_instructions=system_prompt,
             tools=[],
         )
@@ -116,17 +115,11 @@ async def test_ollama_accuracy(
         user_query = scenario["user_query"]
         contents = [types.Content(role="user", parts=[types.Part.from_text(text=user_query)])]
 
-        try:
-            response = await llm_provider.generate_content_primary(
-                model=model_name,
-                contents=contents,
-                primary_llm_settings=generation_settings,
-            )
-        except (httpx.ConnectTimeout, httpx.ConnectError, httpx.RemoteProtocolError) as e:
-            pytest.skip(
-                f"Ollama endpoint at {llm_settings.ollama_endpoint} is not reachable. "
-                f"Ensure Ollama is running and accessible. Error: {e}"
-            )
+        response = await llm_provider.generate_content_primary(
+            model=model_name,
+            contents=contents,
+            primary_llm_settings=generation_settings,
+        )
 
         # Step 4: Extract response text using canonical response.text property
         response_text = response.text if response.text else ""
@@ -135,10 +128,10 @@ async def test_ollama_accuracy(
             pytest.fail(f"No response text found for scenario {scenario['id']}")
 
         result_data.response_text = response_text
-        logger.info(f"[OLLAMA_EVAL] Response length: {len(response_text)} chars")
+        logger.info(f"[GEMINI_EVAL] Response length: {len(response_text)} chars")
 
         # Step 5: Grade with EvalJudge
-        judge = EvalJudge(provider=llm_provider, model=llm_settings.primary_model)
+        judge = EvalJudge(provider=llm_provider, model=llm.primary_model)
 
         # Build interaction trace for the judge
         trace_lines = [
@@ -173,21 +166,21 @@ async def test_ollama_accuracy(
 
         # Output structured result
         logger.info("=" * 60)
-        logger.info(f"[OLLAMA_EVAL_RESULT] Scenario: {scenario['id']}")
-        logger.info(f"[OLLAMA_EVAL_RESULT] Score: {grade.score}/5")
-        logger.info(f"[OLLAMA_EVAL_RESULT] Passed: {grade.passed}")
-        logger.info(f"[OLLAMA_EVAL_RESULT] Execution Time: {result_data.execution_time_ms:.1f}ms")
-        logger.info(f"[OLLAMA_EVAL_RESULT] Reasoning: {grade.reasoning}")
+        logger.info(f"[GEMINI_EVAL_RESULT] Scenario: {scenario['id']}")
+        logger.info(f"[GEMINI_EVAL_RESULT] Score: {grade.score}/5")
+        logger.info(f"[GEMINI_EVAL_RESULT] Passed: {grade.passed}")
+        logger.info(f"[GEMINI_EVAL_RESULT] Execution Time: {result_data.execution_time_ms:.1f}ms")
+        logger.info(f"[GEMINI_EVAL_RESULT] Reasoning: {grade.reasoning}")
         logger.info("=" * 60)
 
         # Assert that the evaluation passed
         assert grade.passed, (
-            f"Ollama accuracy evaluation failed for {scenario['id']}: "
+            f"Gemini accuracy evaluation failed for {scenario['id']}: "
             f"{grade.reasoning} (Score: {grade.score})"
         )
 
     except Exception as e:
         result_data.error = str(e)
         result_data.passed = False
-        logger.exception(f"[OLLAMA_EVAL] Fatal error in scenario {scenario['id']}: {e}")
+        logger.exception(f"[GEMINI_EVAL] Fatal error in scenario {scenario['id']}: {e}")
         raise

@@ -130,9 +130,9 @@ export const SearchProvider = Object.freeze({
  * Must match g8ee's constants/settings.py GEMINI_* constants exactly.
  */
 export const GeminiModel = Object.freeze({
-    PRO_PREVIEW:              _STATUS['llm.models']['gemini']['3.1.pro.preview'],
-    PRO_PREVIEW_CUSTOMTOOLS:  _STATUS['llm.models']['gemini']['3.1.pro.preview.customtools'],
-    FLASH_PREVIEW:            _STATUS['llm.models']['gemini']['3.flash.preview'],
+    PRO:         _STATUS['llm.models']['gemini']['3.1.pro'],
+    FLASH:       _STATUS['llm.models']['gemini']['3.1.flash'],
+    FLASH_LITE:  _STATUS['llm.models']['gemini']['3.1.flash.lite'],
 });
 
 /**
@@ -141,14 +141,9 @@ export const GeminiModel = Object.freeze({
  * Must match g8ee's constants/settings.py OPENAI_* constants exactly.
  */
 export const OpenAIModel = Object.freeze({
-    GPT_5_4:        _STATUS['llm.models']['openai']['gpt.5.4'],
-    GPT_5_3_INSTANT: _STATUS['llm.models']['openai']['gpt.5.3.instant'],
-    GPT_5_4_MINI:   _STATUS['llm.models']['openai']['gpt.5.4.mini'],
-    GPT_5_4_NANO:   _STATUS['llm.models']['openai']['gpt.5.4.nano'],
-    GPT_4O:         _STATUS['llm.models']['openai']['gpt.4o'],
-    GPT_4O_MINI:    _STATUS['llm.models']['openai']['gpt.4o.mini'],
-    GPT_4_TURBO:    _STATUS['llm.models']['openai']['gpt.4.turbo'],
-    GPT_3_5_TURBO:  _STATUS['llm.models']['openai']['gpt.3.5.turbo'],
+    GPT_5_4_THINKING: _STATUS['llm.models']['openai']['gpt.5.4.thinking'],
+    GPT_5_4_INSTANT:  _STATUS['llm.models']['openai']['gpt.5.4.instant'],
+    GPT_5_4_MINI:     _STATUS['llm.models']['openai']['gpt.5.4.mini'],
 });
 
 /**
@@ -165,104 +160,76 @@ export const AnthropicModel = Object.freeze({
 /**
  * Ollama model identifiers.
  * Sourced from shared/constants/status.json llm.models.ollama.
- * Must match g8ee's constants/settings.py GEMMA3_*, GEMMA4_*, and GEMMA4 constants exactly.
+ * Must match g8ee's constants/settings.py OLLAMA_* constants exactly.
  */
 export const OllamaModel = Object.freeze({
-    GEMMA3_27B:         _STATUS['llm.models']['ollama']['gemma3.27b'],
-    GEMMA3_12B:         _STATUS['llm.models']['ollama']['gemma3.12b'],
-    GEMMA3_4B:          _STATUS['llm.models']['ollama']['gemma3.4b'],
-    GEMMA3_1B:          _STATUS['llm.models']['ollama']['gemma3.1b'],
-    GEMMA4_E4B:         _STATUS['llm.models']['ollama']['gemma4.e4b'],
-    GEMMA4_E2B:         _STATUS['llm.models']['ollama']['gemma4.e2b'],
-    GEMMA4:             _STATUS['llm.models']['ollama']['gemma4'],
-    LLAMA3_8B:          _STATUS['llm.models']['ollama']['llama3.8b'],
-    LLAMA3_70B:         _STATUS['llm.models']['ollama']['llama3.70b'],
-    CODELLAMA_7B:       _STATUS['llm.models']['ollama']['codellama.7b'],
-    MISTRAL_7B:         _STATUS['llm.models']['ollama']['mistral.7b'],
+    QWEN3_5_122B:    _STATUS['llm.models']['ollama']['qwen3.5.122b'],
+    GLM_5_1:         _STATUS['llm.models']['ollama']['glm.5.1'],
+    GEMMA4_26B:      _STATUS['llm.models']['ollama']['gemma4.26b'],
+    NEMOTRON_3_30B:  _STATUS['llm.models']['ollama']['nemotron.3.30b'],
+    LLAMA_3_2_3B:    _STATUS['llm.models']['ollama']['llama.3.2.3b'],
+    QWEN3_5_2B:      _STATUS['llm.models']['ollama']['qwen3.5.2b'],
 });
 
 export const PROVIDER_MODELS = Object.freeze({
     [LLMProvider.GEMINI]: {
         primary: [
-            { id: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS, label: 'Gemini 3.1 Pro (Custom Tools)' },
-            { id: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
-            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro (Frontier Reasoning)' },
         ],
         assistant: [
-            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
-            { id: GeminiModel.PRO_PREVIEW, label: 'Gemini 3.1 Pro' },
+            { id: GeminiModel.FLASH, label: 'Gemini 3.1 Flash (Balanced)' },
         ],
         lite: [
-            { id: GeminiModel.FLASH_PREVIEW, label: 'Gemini 3 Flash' },
+            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite (Utility)' },
         ],
-        defaultPrimary: GeminiModel.PRO_PREVIEW_CUSTOMTOOLS,
-        defaultAssistant: GeminiModel.FLASH_PREVIEW,
-        defaultLite: GeminiModel.FLASH_PREVIEW,
+        defaultPrimary: GeminiModel.PRO,
+        defaultAssistant: GeminiModel.FLASH,
+        defaultLite: GeminiModel.FLASH_LITE,
     },
     [LLMProvider.ANTHROPIC]: {
         primary: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6 (Frontier Reasoning)' },
         ],
         assistant: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6 (Balanced)' },
         ],
         lite: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5 (Utility)' },
         ],
         defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
-        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
         defaultLite: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
     },
     [LLMProvider.OPENAI]: {
         primary: [
-            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
-            { id: OpenAIModel.GPT_5_3_INSTANT, label: 'GPT-5.3 Instant' },
-            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-            { id: OpenAIModel.GPT_4O, label: 'GPT-4o' },
+            { id: OpenAIModel.GPT_5_4_THINKING, label: 'GPT-5.4 Thinking (Frontier Reasoning)' },
         ],
         assistant: [
-            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
-            { id: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
+            { id: OpenAIModel.GPT_5_4_INSTANT, label: 'GPT-5.4 Instant (Balanced)' },
         ],
         lite: [
-            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
-            { id: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o Mini' },
+            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini (Utility)' },
         ],
-        defaultPrimary: OpenAIModel.GPT_5_4,
-        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
-        defaultLite: OpenAIModel.GPT_5_4_NANO,
+        defaultPrimary: OpenAIModel.GPT_5_4_THINKING,
+        defaultAssistant: OpenAIModel.GPT_5_4_INSTANT,
+        defaultLite: OpenAIModel.GPT_5_4_MINI,
     },
     [LLMProvider.OLLAMA]: {
         primary: [
-            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
-            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
-            { id: OllamaModel.GEMMA4, label: 'Gemma 4' },
-            { id: OllamaModel.GEMMA3_27B, label: 'Gemma 3 27B' },
-            { id: OllamaModel.GEMMA3_12B, label: 'Gemma 3 12B' },
-            { id: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
-            { id: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
-            { id: OllamaModel.CODELLAMA_7B, label: 'CodeLlama 7B' },
+            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B (Frontier Reasoning)' },
+            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 (Frontier Reasoning)' },
         ],
         assistant: [
-            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 e4b' },
-            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 e2b' },
-            { id: OllamaModel.GEMMA4, label: 'Gemma 4' },
-            { id: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
-            { id: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
-            { id: OllamaModel.LLAMA3_8B, label: 'Llama 3 8B' },
-            { id: OllamaModel.MISTRAL_7B, label: 'Mistral 7B' },
+            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B (Balanced)' },
+            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B (Balanced)' },
         ],
         lite: [
-            { id: OllamaModel.GEMMA3_1B, label: 'Gemma 3 1B' },
-            { id: OllamaModel.GEMMA3_4B, label: 'Gemma 3 4B' },
+            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B (Utility)' },
+            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B (Utility)' },
         ],
-        defaultPrimary: OllamaModel.GEMMA4_E4B,
-        defaultAssistant: OllamaModel.GEMMA4_E4B,
-        defaultLite: OllamaModel.GEMMA3_1B,
+        defaultPrimary: OllamaModel.QWEN3_5_122B,
+        defaultAssistant: OllamaModel.GEMMA4_26B,
+        defaultLite: OllamaModel.LLAMA_3_2_3B,
     },
 });
 

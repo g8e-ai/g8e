@@ -79,7 +79,8 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
     // ---------------------------------------------------------------------------
 
     // Setup flow: Only allowed if first-run setup is active
-    router.post(PasskeyPaths.REGISTER_VERIFY, passkeyRateLimiter, requireFirstRun, async (req, res, next) => {
+    // SECURITY: Use a separate path for setup registration
+    router.post('/register-verify-setup', passkeyRateLimiter, requireFirstRun, async (req, res, next) => {
         try {
             const verifyReq = PasskeyRegisterVerifyRequest.parse(req.body);
             const user = await userService.getUser(verifyReq.user_id);
@@ -118,7 +119,8 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
     });
 
     // Post-setup flow: First passkey registration for a new user (no session yet)
-    router.post(PasskeyPaths.REGISTER_VERIFY, passkeyRateLimiter, async (req, res, next) => {
+    // SECURITY: Only allow this if the user has NO passkeys yet.
+    router.post('/register-verify-initial', passkeyRateLimiter, async (req, res, next) => {
         try {
             const verifyReq = PasskeyRegisterVerifyRequest.parse(req.body);
             const user = await userService.getUser(verifyReq.user_id);
@@ -126,10 +128,9 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
                 throw new ResourceNotFoundError('User not found');
             }
 
-            // SECURITY: Only allow this non-session path if the user has NO passkeys yet.
-            // This prevents an attacker from hijacking an account that already has a passkey.
+            // SECURITY: Explicitly block if user already has passkeys
             if (user.passkey_credentials.length > 0) {
-                return next(); // Fall through to requireAuth handler
+                throw new AuthorizationError('User already has passkeys registered. Use authenticated path.');
             }
 
             const result = await passkeyAuthService.verifyRegistration(req, user, verifyReq.attestation_response);

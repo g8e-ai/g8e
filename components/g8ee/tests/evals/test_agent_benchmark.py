@@ -26,7 +26,7 @@ test records the pre-Tribunal and post-Tribunal command strings and measures
 whether the Tribunal improved the syntactic accuracy.
 
 IMPORTANT: If test fails with 0 tool calls captured, run with:
-    pytest -s --log-cli-level=INFO tests/integration/evals/test_agent_benchmark.py
+    pytest -s --log-cli-level=INFO tests/evals/test_agent_benchmark.py
 
 Check the [AGENT] "Loading model:" log line which includes tools=N. If tools=0,
 operator tools are not being declared to the LLM - investigate get_generation_config
@@ -59,11 +59,12 @@ from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
 from tests.fakes.fake_event_service import FakeEventService
-from tests.integration.evals.shared import (
+from tests.evals.shared import (
     BenchmarkTestResult,
     load_and_validate_benchmark_set,
     seed_operator_if_bound,
 )
+from tests.integration.conftest import auto_approve_pending
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,10 @@ async def test_agent_benchmark(
             )
         finally:
             chat_pipeline.g8ed_event_service = real_event_service
+
+        # Approve any pending approvals from fake operators
+        approval_service = all_services['approval_service']
+        await auto_approve_pending(approval_service)
 
         captured_tribunal = _extract_tribunal_from_events(fake_event_service.published)
         captured_tool_calls = _extract_tool_calls_from_events(fake_event_service.published)
