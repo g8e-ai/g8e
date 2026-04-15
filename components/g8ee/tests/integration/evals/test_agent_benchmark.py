@@ -25,6 +25,13 @@ The Tribunal delta is tracked: for each run_commands_with_operator call, the
 test records the pre-Tribunal and post-Tribunal command strings and measures
 whether the Tribunal improved the syntactic accuracy.
 
+IMPORTANT: If test fails with 0 tool calls captured, run with:
+    pytest -s --log-cli-level=INFO tests/integration/evals/test_agent_benchmark.py
+
+Check the [AGENT] "Loading model:" log line which includes tools=N. If tools=0,
+operator tools are not being declared to the LLM - investigate get_generation_config
+and tool_service.get_tools() to understand why.
+
 Aggregate metrics:
   - Pass rate: passed_scenarios / total_scenarios (the "real percentage")
   - Tribunal improvement rate: how often the Tribunal corrected a Primary Agent error
@@ -35,7 +42,6 @@ import logging
 import pytest
 from typing import Any
 from datetime import datetime, timezone
-from unittest.mock import patch
 
 from app.constants import AgentMode, EventType
 from app.services.ai.chat_task_manager import ChatTaskManager
@@ -46,9 +52,13 @@ from app.services.ai.benchmark_judge import (
     ToolCallCapture,
     TribunalCapture,
 )
+from app.models.events import SessionEvent
+from app.models.g8ed_client import ChatToolCallPayload
+from app.models.agents.tribunal import TribunalSessionCompletedPayload
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
+from tests.fakes.fake_event_service import FakeEventService
 from tests.integration.evals.shared import (
     BenchmarkTestResult,
     load_and_validate_benchmark_set,
@@ -95,6 +105,59 @@ def _build_scenario(raw: dict[str, Any]) -> BenchmarkScenario:
     )
 
 
+def _extract_tribunal_from_events(
+    published: list[SessionEvent],
+) -> TribunalCapture | None:
+    """Extract Tribunal data from TRIBUNAL_SESSION_COMPLETED events.
+
+    Tribunal delta tracking requires event interception since Tribunal
+    results are not persisted in conversation history.
+    """
+    for event in published:
+        if not isinstance(event, SessionEvent):
+            continue
+
+        if event.event_type == EventType.TRIBUNAL_SESSION_COMPLETED:
+            payload = event.payload
+            if isinstance(payload, TribunalSessionCompletedPayload):
+                return TribunalCapture(
+                    original_command=payload.original_command,
+                    final_command=payload.final_command,
+                    outcome=payload.outcome,
+                    vote_score=payload.vote_score,
+                    verifier_passed=None,
+                    verifier_revision=None,
+                )
+
+    return None
+
+
+def _extract_tool_calls_from_events(
+    published: list[SessionEvent],
+) -> list[ToolCallCapture]:
+    """Extract tool calls from TOOL_CALL_STARTED events.
+
+    Tool calls are not persisted in conversation history, so we must
+    intercept events to capture them.
+    """
+    tool_calls: list[ToolCallCapture] = []
+
+    for event in published:
+        if not isinstance(event, SessionEvent):
+            continue
+
+        if event.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED:
+            payload = event.payload
+            if isinstance(payload, ChatToolCallPayload) and payload.tool_name:
+                command = payload.display_detail or ""
+                tool_calls.append(ToolCallCapture(
+                    tool_name=payload.tool_name,
+                    args={"command": command} if command else {},
+                ))
+
+    return tool_calls
+
+
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.parametrize("scenario_data", load_benchmark_set(), ids=lambda s: s["id"])
 async def test_agent_benchmark(
@@ -116,17 +179,20 @@ async def test_agent_benchmark(
     Benchmark a single scenario against the full agent pipeline.
 
     1. Create investigation and operator context
-    2. Patch orchestrate_tool_execution to capture tool call args + Tribunal data
+    2. Inject FakeEventService to capture pipeline events
     3. Run the full ChatPipelineService.run_chat
-    4. Grade captured tool calls with BenchmarkJudge (deterministic, no LLM)
-    5. Record results for aggregate reporting
+    4. Extract tool calls and Tribunal data from captured events
+    5. Grade with BenchmarkJudge (deterministic, no LLM)
+    6. Record results for aggregate reporting
+
+    Note: Both tool calls and Tribunal data use event interception since
+    neither are persisted in conversation history. Run with -s --log-cli-level=INFO
+    to see [AGENT] logs including tools=N which indicates if tools were declared to the LLM.
     """
-    print(f"[BENCH_START] Test function called for scenario {scenario_data.get('id', 'unknown')}")
     start_time = datetime.now(timezone.utc)
     scenario = _build_scenario(scenario_data)
     result_data = BenchmarkTestResult(scenario_id=scenario.id, category=scenario.category)
 
-    print(f"[BENCH_PRINT] ===== Starting test for scenario {scenario.id} =====")
     logger.info("[BENCH] ===== Starting test for scenario %s =====", scenario.id)
 
     investigation_service = all_services['investigation_service']
@@ -134,16 +200,21 @@ async def test_agent_benchmark(
     operator_data_service = all_services['operator_data_service']
     chat_pipeline = all_services['chat_pipeline']
 
-    captured_tool_calls: list[ToolCallCapture] = []
-    captured_tribunal: TribunalCapture | None = None
     response_text = ""
 
     try:
-        logger.info("[BENCH] Entered try block for scenario %s", scenario.id)
         llm_settings = test_user_settings.llm
-        agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "operator_bound" else AgentMode.OPERATOR_NOT_BOUND
+        agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "OPERATOR_BOUND" else AgentMode.OPERATOR_NOT_BOUND
 
-        logger.info("[BENCH] About to call seed_operator_if_bound with agent_mode=%s", agent_mode)
+        logger.info("[BENCH-SETTINGS] Tribunal configuration:")
+        logger.info("[BENCH-SETTINGS]   llm_command_gen_enabled=%s", llm_settings.llm_command_gen_enabled)
+        logger.info("[BENCH-SETTINGS]   llm_command_gen_verifier=%s", llm_settings.llm_command_gen_verifier)
+        logger.info("[BENCH-SETTINGS]   llm_command_gen_passes=%d", llm_settings.llm_command_gen_passes)
+        logger.info("[BENCH-SETTINGS]   assistant_provider=%s", llm_settings.assistant_provider)
+        logger.info("[BENCH-SETTINGS]   assistant_model=%s", llm_settings.assistant_model)
+        logger.info("[BENCH-SETTINGS]   eval_judge_model=%s", test_user_settings.eval_judge.model)
+
+        logger.info("[BENCH] agent_mode=%s expected_tool=%s", agent_mode, scenario.expected_tool)
         bound_operators = await seed_operator_if_bound(
             agent_mode=agent_mode,
             operator_id=unique_operator_id,
@@ -153,10 +224,7 @@ async def test_agent_benchmark(
             log_prefix="[BENCH]",
         )
 
-        logger.info("[BENCH] Scenario agent_mode=%s, Bound operators count: %d", scenario.agent_mode, len(bound_operators))
-        if bound_operators:
-            logger.info("[BENCH] First bound operator: id=%s session_id=%s status=%s",
-                        bound_operators[0].operator_id, bound_operators[0].operator_session_id, bound_operators[0].status)
+        logger.info("[BENCH] bound_operators=%d", len(bound_operators))
 
         investigation_request = InvestigationCreateRequest(
             case_id=unique_case_id,
@@ -166,7 +234,7 @@ async def test_agent_benchmark(
             web_session_id=unique_web_session_id,
         )
         created_investigation = await investigation_data_service.create_investigation(investigation_request)
-        logger.info("[BENCH] Created investigation %s for %s", created_investigation.id, scenario.id)
+        logger.info("[BENCH] investigation_id=%s", created_investigation.id)
         cleanup.track_investigation(created_investigation.id)
 
         g8e_context = G8eHttpContext(
@@ -179,55 +247,18 @@ async def test_agent_benchmark(
             bound_operators=bound_operators,
         )
 
-        from app.services.ai.agent_tool_loop import orchestrate_tool_execution as _real_orchestrate
-
-        async def _capturing_orchestrate(tool_call, tool_executor, investigation, g8e_context, g8ed_event_service, request_settings):
-            nonlocal captured_tribunal
-            tool_name = tool_call.name or ""
-            raw_args = dict(tool_call.args) if tool_call.args else {}
-
-            logger.info("[BENCH_PATCH] Intercepted tool call: %s with args_keys=%s", tool_name, list(raw_args.keys()))
-
-            result = await _real_orchestrate(
-                tool_call=tool_call,
-                tool_executor=tool_executor,
-                investigation=investigation,
-                g8e_context=g8e_context,
-                g8ed_event_service=g8ed_event_service,
-                request_settings=request_settings,
-            )
-
-            actual_args = dict(raw_args)
-            tr = result.tribunal_result
-            if tool_name == "run_commands_with_operator" and tr is not None:
-                actual_args["command"] = tr.final_command
-
-            captured_tool_calls.append(ToolCallCapture(
-                tool_name=tool_name,
-                args=actual_args,
-            ))
-
-            if tool_name == "run_commands_with_operator" and tr is not None:
-                captured_tribunal = TribunalCapture(
-                    original_command=tr.original_command,
-                    final_command=tr.final_command,
-                    outcome=tr.outcome,
-                    vote_score=tr.vote_score,
-                    verifier_passed=tr.verifier_passed,
-                    verifier_revision=tr.verifier_revision,
-                )
-
-            return result
+        fake_event_service = FakeEventService()
+        real_event_service = chat_pipeline.g8ed_event_service
+        chat_pipeline.g8ed_event_service = fake_event_service
 
         user_settings = test_user_settings
+        logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
+        logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
         task_manager = ChatTaskManager()
 
         logger.info("[BENCH] Running scenario %s", scenario.id)
 
-        with patch(
-            "app.services.ai.agent_tool_loop.orchestrate_tool_execution",
-            side_effect=_capturing_orchestrate,
-        ):
+        try:
             await chat_pipeline.run_chat(
                 message=scenario.user_query,
                 g8e_context=g8e_context,
@@ -241,6 +272,11 @@ async def test_agent_benchmark(
                 user_settings=user_settings,
                 _track_task=False,
             )
+        finally:
+            chat_pipeline.g8ed_event_service = real_event_service
+
+        captured_tribunal = _extract_tribunal_from_events(fake_event_service.published)
+        captured_tool_calls = _extract_tool_calls_from_events(fake_event_service.published)
 
         conversation_history = await investigation_service.get_chat_messages(
             investigation_id=created_investigation.id
@@ -251,11 +287,12 @@ async def test_agent_benchmark(
                 break
 
         logger.info(
-            "[BENCH] Captured %d tool call(s) for %s",
-            len(captured_tool_calls), scenario.id,
+            "[BENCH] tool_calls_captured=%d tribunal_captured=%s",
+            len(captured_tool_calls),
+            captured_tribunal is not None,
         )
         for tc in captured_tool_calls:
-            logger.info("[BENCH]   tool=%s args_keys=%s", tc.tool_name, list(tc.args.keys()))
+            logger.info("[BENCH] tool=%s", tc.tool_name)
             if "command" in tc.args:
                 logger.info("[BENCH]   command=%s", str(tc.args["command"])[:200])
 

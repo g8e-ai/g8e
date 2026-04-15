@@ -87,12 +87,12 @@ class TestBuildKwargs:
         kwargs = self._build(top_k=None)
         assert "top_k" not in kwargs
 
-    def test_system_instruction_included(self):
-        kwargs = self._build(system_instruction="be helpful")
+    def test_system_instructions_included(self):
+        kwargs = self._build(system_instructions="be helpful")
         assert kwargs["system"] == "be helpful"
 
-    def test_system_instruction_omitted_when_empty(self):
-        kwargs = self._build(system_instruction="")
+    def test_system_instructions_omitted_when_empty(self):
+        kwargs = self._build(system_instructions="")
         assert "system" not in kwargs
 
     def test_tools_included(self):
@@ -398,7 +398,7 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=4096,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
-            system_instruction="test",
+            system_instructions="test",
         )
 
         result = await provider.generate_content_primary(
@@ -429,7 +429,7 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
-            system_instruction="analyze",
+            system_instructions="analyze",
         )
 
         await provider.generate_content_assistant(
@@ -457,7 +457,7 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=1024,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
-            system_instruction="triage",
+            system_instructions="triage",
         )
 
         await provider.generate_content_lite(
@@ -486,7 +486,7 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=20000,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
-            system_instruction="think",
+            system_instructions="think",
             thinking_config=ThinkingConfig(
                 thinking_level=ThinkingLevel.HIGH,
                 include_thoughts=True,

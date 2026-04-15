@@ -71,21 +71,29 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
         tools: list[types.ToolGroup],
     ) -> PrimaryLLMSettings:
         """Build PrimaryLLMSettings for main-model calls."""
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
+        model_config = get_model_config(model)
 
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         settings = PrimaryLLMSettings(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
             thinking_config=thinking_config,
             tools=tools,
-            system_instruction=system_instruction,
+            system_instructions=system_instructions,
         )
 
         thinking_level = getattr(thinking_config, "thinking_level", None)
@@ -105,17 +113,26 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
         response_format: types.ResponseFormat | None = None,
     ) -> AssistantLLMSettings:
         """Build AssistantLLMSettings for analysis calls."""
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        model_config = get_model_config(model)
+
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         settings = AssistantLLMSettings(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
-            system_instruction=system_instruction,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
+            system_instructions=system_instructions,
             response_format=response_format if response_format else None,
         )
 
@@ -129,20 +146,29 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
         response_format: types.ResponseFormat | None = None,
     ) -> LiteLLMSettings:
         """Build LiteLLMSettings for stateless analysis calls.
 
         Used by triage, memory updates, risk analysis, and error analysis.
         """
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        model_config = get_model_config(model)
+
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         settings = LiteLLMSettings(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
-            system_instruction=system_instruction,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
+            system_instructions=system_instructions,
             response_format=response_format if response_format else None,
         )
 
@@ -156,21 +182,29 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
         tools: list[types.ToolGroup],
     ) -> types.GenerateContentConfig:
         """Shared config construction. All public methods delegate here."""
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
+        model_config = get_model_config(model)
 
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
             thinking_config=thinking_config,
             tools=tools,
-            system_instruction=system_instruction,
+            system_instructions=system_instructions,
         )
 
         thinking_level = getattr(thinking_config, "thinking_level", None)
@@ -190,7 +224,7 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
     ) -> types.GenerateContentConfig:
         """Build a lightweight GenerateContentConfig for stateless analysis calls.
 
@@ -199,15 +233,23 @@ class AIGenerationConfigBuilder:
         text output and must never emit thought tokens.
         """
         no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
+        model_config = get_model_config(model)
 
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
             thinking_config=no_thinking,
-            system_instruction=system_instruction,
+            system_instructions=system_instructions,
         )
 
         logger.info(
@@ -223,9 +265,15 @@ class AIGenerationConfigBuilder:
 
         Stops at the first newline.
         """
+        model_config = get_model_config(model)
+        effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+
         config = types.GenerateContentConfig(
-            temperature=LLM_DEFAULT_TEMPERATURE,
-            max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+            temperature=effective_temperature,
+            max_output_tokens=effective_max_tokens,
+            top_p_nucleus_sampling=effective_top_p,
             stop_sequences=["\n"],
         )
 
@@ -240,20 +288,28 @@ class AIGenerationConfigBuilder:
         json_schema: dict[str, object],
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
     ) -> types.GenerateContentConfig:
         """Build a lightweight GenerateContentConfig for structured JSON output calls."""
         no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
+        model_config = get_model_config(model)
 
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
             thinking_config=no_thinking,
             response_format=types.ResponseFormat.from_pydantic_schema(json_schema),  # type: ignore[arg-type]
-            system_instruction=system_instruction,
+            system_instructions=system_instructions,
         )
 
         logger.info(
@@ -266,7 +322,7 @@ class AIGenerationConfigBuilder:
         model: str,
         temperature: float | None,
         max_tokens: int | None,
-        system_instruction: str,
+        system_instructions: str,
     ) -> types.GenerateContentConfig:
         """Build a lightweight GenerateContentConfig that requests JSON but doesn't enforce schema.
 
@@ -275,15 +331,23 @@ class AIGenerationConfigBuilder:
         The caller is responsible for parsing the response with fallback strategies.
         """
         no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
+        model_config = get_model_config(model)
 
-        effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        if temperature is not None:
+            effective_temperature = temperature
+        else:
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
+        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
+        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
+            top_k_filtering=effective_top_k,
+            top_p_nucleus_sampling=effective_top_p,
             thinking_config=no_thinking,
-            system_instruction=system_instruction,
+            system_instructions=system_instructions,
         )
 
         logger.info(

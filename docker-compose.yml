@@ -274,6 +274,8 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
+      g8es:
+        condition: service_healthy
       g8ee:
         condition: service_healthy
       g8ed:

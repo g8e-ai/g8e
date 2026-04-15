@@ -204,6 +204,19 @@ async def orchestrate_tool_execution(
             original_command = typed_args.command
             intent = typed_args.justification
 
+            logger.info(
+                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: command=%r intent_len=%d target_operator=%s",
+                original_command[:100], len(intent), typed_args.target_operator,
+            )
+            logger.info(
+                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                request_settings.llm.llm_command_gen_enabled,
+                request_settings.llm.llm_command_gen_verifier,
+                request_settings.llm.llm_command_gen_passes,
+                request_settings.llm.assistant_model,
+                request_settings.eval_judge.model,
+            )
+
             op_context = extract_operator_context_by_target(
                 investigation,
                 typed_args.target_operator,
@@ -213,6 +226,8 @@ async def orchestrate_tool_execution(
             working_directory = (
                 op_context.working_directory if op_context else None
             ) or DEFAULT_WORKING_DIRECTORY
+
+            logger.info("[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s", os_name, shell, working_directory)
 
             try:
                 gen_result = await generate_command(
@@ -228,9 +243,16 @@ async def orchestrate_tool_execution(
                     investigation_id=investigation.id,
                     settings=request_settings,
                 )
+                logger.info(
+                    "[TRIBUNAL-RESULT] generate_command completed: original=%r final=%r outcome=%s refined=%s",
+                    gen_result.original_command[:80] if gen_result else None,
+                    gen_result.final_command[:80] if gen_result else None,
+                    gen_result.outcome if gen_result else None,
+                    gen_result.final_command != gen_result.original_command if gen_result else None,
+                )
             except TribunalSystemError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal system error — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal system error — halting command execution: %s",
                     exc.pass_errors,
                 )
                 return _tribunal_error_result(
@@ -240,7 +262,7 @@ async def orchestrate_tool_execution(
                 )
             except TribunalProviderUnavailableError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal provider unavailable — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal provider unavailable — halting command execution: %s",
                     exc.error,
                 )
                 await g8ed_event_service.publish_investigation_event(
@@ -263,7 +285,7 @@ async def orchestrate_tool_execution(
                 )
             except TribunalGenerationFailedError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal generation failed — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal generation failed — halting command execution: %s",
                     exc.pass_errors,
                 )
                 return _tribunal_error_result(

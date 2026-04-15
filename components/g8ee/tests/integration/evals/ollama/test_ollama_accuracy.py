@@ -108,7 +108,7 @@ async def test_ollama_accuracy(
             model=model_name,
             temperature=llm_settings.llm_temperature,
             max_tokens=llm_settings.llm_max_tokens or 4096,
-            system_instruction=system_prompt,
+            system_instructions=system_prompt,
             tools=[],
         )
 

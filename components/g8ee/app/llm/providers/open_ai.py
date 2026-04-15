@@ -41,12 +41,12 @@ logger = logging.getLogger(__name__)
 
 def _contents_to_messages(
     contents: list[Content],
-    system_instruction: str,
+    system_instructions: str,
 ) -> list[dict]:
     messages = []
 
-    if system_instruction:
-        messages.append({"role": "system", "content": system_instruction})
+    if system_instructions:
+        messages.append({"role": "system", "content": system_instructions})
 
     for content in contents:
         role = "assistant" if content.role == "model" else content.role
@@ -107,6 +107,8 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
         import ssl
+        super().__init__()
+
         verify: ssl.SSLContext | bool
         if is_internal_endpoint(endpoint):
             if endpoint.startswith("http://"):
@@ -144,7 +146,7 @@ class OpenAIProvider(LLMProvider):
         )
         logger.info(f"OpenAI provider initialized: {endpoint} -> {openai_base_url}")
 
-    async def close(self):
+    async def _close_resources(self):
         """Clean up the httpx clients to prevent resource leaks."""
         if self._http_client:
             await self._http_client.aclose()
@@ -159,7 +161,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
@@ -236,7 +238,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
@@ -298,7 +300,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -341,7 +343,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -397,7 +399,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -440,7 +442,7 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS

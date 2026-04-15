@@ -130,52 +130,51 @@ class TriageAgent:
             )
 
         try:
-            async with get_llm_provider(request.settings.llm, is_assistant=True) as provider:
-                model = request.model_override or request.settings.llm.assistant_model
+            provider = get_llm_provider(request.settings.llm, is_assistant=True)
+            model = request.model_override or request.settings.llm.assistant_model
 
-                if not model:
-                    logger.warning("[TRIAGE] No model available, defaulting to complex")
-                    return self._fallback_result("No model configured for triage.")
+            if not model:
+                logger.warning("[TRIAGE] No model available, defaulting to complex")
+                return self._fallback_result("No model configured for triage.")
 
-                conversation_tail = self._build_conversation_tail(request.conversation_history)
+            conversation_tail = self._build_conversation_tail(request.conversation_history)
 
-                prompt = _TRIAGE_PROMPT_TEMPLATE.format(
-                    conversation_tail=conversation_tail,
-                    message=request.message,
+            prompt = _TRIAGE_PROMPT_TEMPLATE.format(
+                conversation_tail=conversation_tail,
+                message=request.message,
+            )
+
+            config = AIGenerationConfigBuilder.build_lite_settings(
+                model=model,
+                temperature=None,
+                max_tokens=None,
+                system_instructions="",
+            )
+
+            response = await provider.generate_content_lite(
+                model=model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                lite_llm_settings=config,
+            )
+
+            if not response or not response.text:
+                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
+                return self._fallback_result("Could not determine intent (no model response).")
+
+            try:
+                result = self._parse_response(response.text)
+
+                logger.info(
+                    "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
+                    result.complexity,
+                    result.intent_confidence,
+                    model,
+                    result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
                 )
-
-                config = AIGenerationConfigBuilder.build_lite_settings(
-                    model=model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                )
-
-                response = await provider.generate_content_lite(
-                    model=model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    lite_llm_settings=config,
-                )
-
-                if not response or not response.text:
-                    logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
-                    return self._fallback_result("Could not determine intent (no model response).")
-
-                try:
-                    result = self._parse_response(response.text)
-
-                    logger.info(
-                        "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
-                        result.complexity,
-                        result.intent_confidence,
-                        model,
-                        result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
-                    )
-                    return result
-
-                except (ValueError, Exception) as e:
-                    logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
-                    return self._fallback_result("Could not parse intent summary from model response.")
+                return result
+            except (ValueError, Exception) as e:
+                logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
+                return self._fallback_result("Could not parse intent summary from model response.")
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")

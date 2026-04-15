@@ -189,7 +189,7 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
         )
@@ -231,7 +231,7 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
         )
@@ -261,7 +261,7 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = AssistantLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
         )
@@ -286,7 +286,7 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = LiteLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
         )

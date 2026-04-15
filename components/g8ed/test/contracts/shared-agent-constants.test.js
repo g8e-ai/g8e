@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, AgentMetadata, TribunalTemperatures } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, AgentMetadata, TribunalMember } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -53,15 +53,15 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
-    describe('TribunalTemperatures constants', () => {
-        it('AXIOM temperature matches JSON', () => {
-            expect(TribunalTemperatures.AXIOM).toBe(_AGENTS['tribunal.temperatures'].axiom);
+    describe('TribunalMember constants', () => {
+        it('AXIOM member matches JSON', () => {
+            expect(TribunalMember.AXIOM).toBe(_AGENTS['tribunal.members'].axiom);
         });
-        it('CONCORD temperature matches JSON', () => {
-            expect(TribunalTemperatures.CONCORD).toBe(_AGENTS['tribunal.temperatures'].concord);
+        it('CONCORD member matches JSON', () => {
+            expect(TribunalMember.CONCORD).toBe(_AGENTS['tribunal.members'].concord);
         });
-        it('VARIANCE temperature matches JSON', () => {
-            expect(TribunalTemperatures.VARIANCE).toBe(_AGENTS['tribunal.temperatures'].variance);
+        it('VARIANCE member matches JSON', () => {
+            expect(TribunalMember.VARIANCE).toBe(_AGENTS['tribunal.members'].variance);
         });
     });
 

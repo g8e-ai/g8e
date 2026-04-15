@@ -199,11 +199,16 @@ class EvalJudge:
             student_interaction=interaction_trace,
         )
 
-        effective_temperature = self._settings.temperature if self._settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
+        from app.models.model_configs import get_model_config
+
+        effective_temperature = self._settings.temperature if self._settings.temperature is not None else None
+        if effective_temperature is None:
+            model_config = get_model_config(self._model)
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
         settings = LiteLLMSettings(
             temperature=effective_temperature,
             max_output_tokens=self._settings.max_output_tokens,
-            system_instruction="",
+            system_instructions="",
             response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",

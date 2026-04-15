@@ -107,7 +107,7 @@ async def test_gemini_accuracy(
             model=model_name,
             temperature=llm.llm_temperature,
             max_tokens=llm.llm_max_tokens or 4096,
-            system_instruction=system_prompt,
+            system_instructions=system_prompt,
             tools=[],
         )
 

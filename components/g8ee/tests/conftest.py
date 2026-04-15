@@ -82,7 +82,7 @@ async def _probe_llm_capabilities(settings):
             thinking_llm_settings = types.PrimaryLLMSettings(
                 max_output_tokens=1024,
                 thinking_config=thinking_config,
-                system_instruction="",
+                system_instructions="",
             )
             await provider.generate_content_primary(
                 model=primary_model,
@@ -118,7 +118,7 @@ async def _probe_llm_capabilities(settings):
             tools_llm_settings = types.PrimaryLLMSettings(
                 max_output_tokens=1024,
                 tools=[tool_group],
-                system_instruction="",
+                system_instructions="",
             )
             await provider.generate_content_primary(
                 model=primary_model,

@@ -54,16 +54,16 @@ async def generate_case_title(
         )
 
     try:
-        async with get_llm_provider(settings.llm, is_assistant=True) as provider:
-            model = settings.llm.resolved_assistant_model
-            if not model:
-                logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
-                return CaseTitleResult(
-                    generated_title=_create_fallback_title(description, max_length),
-                    fallback=True
-                )
+        provider = get_llm_provider(settings.llm, is_assistant=True)
+        model = settings.llm.resolved_assistant_model
+        if not model:
+            logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
+            return CaseTitleResult(
+                generated_title=_create_fallback_title(description, max_length),
+                fallback=True
+            )
 
-            prompt = f"""<task>
+        prompt = f"""<task>
 Generate a concise, specific title for this conversation.
 </task>
 
@@ -81,26 +81,26 @@ Generate a concise, specific title for this conversation.
 
 Title:"""
 
-            logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
+        logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
-            assistant_settings = AssistantLLMSettings(
-                temperature=None,
-                max_output_tokens=None,
-                stop_sequences=["\n"],
-                system_instruction="",
-            )
-            response = await provider.generate_content_assistant(
-                model=model,
-                contents=[Content(role=Role.USER, parts=[Part(text=prompt)])],
-                assistant_llm_settings=assistant_settings,
-            )
+        assistant_settings = AssistantLLMSettings(
+            temperature=None,
+            max_output_tokens=None,
+            stop_sequences=["\n"],
+            system_instructions="",
+        )
+        response = await provider.generate_content_assistant(
+            model=model,
+            contents=[Content(role=Role.USER, parts=[Part(text=prompt)])],
+            assistant_llm_settings=assistant_settings,
+        )
 
-            if not response or not response.text:
-                logger.warning("[TITLE-GEN] No response from LLM, using fallback title")
-                return CaseTitleResult(
-                    generated_title=_create_fallback_title(description, max_length),
-                    fallback=True
-                )
+        if not response or not response.text:
+            logger.warning("[TITLE-GEN] No response from LLM, using fallback title")
+            return CaseTitleResult(
+                generated_title=_create_fallback_title(description, max_length),
+                fallback=True
+            )
 
             generated_title = response.text.strip()
 

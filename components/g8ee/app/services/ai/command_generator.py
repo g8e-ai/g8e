@@ -50,13 +50,9 @@ Configuration:
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
   LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
 
-Temperatures are fixed per Tribunal member and are sourced from shared/constants/agents.json:
-
-  Axiom    (pass 0, cycles) — 0.0  (fully deterministic, statistical probability and resource efficiency)
-  Concord  (pass 1, cycles) — 0.4  (moderate determinism with ethical flexibility)
-  Variance (pass 2, cycles) — 0.8  (high creativity and intentional unpredictability)
-
-  Verifier (arbitrator)      — 0.0  (deterministic evaluation)
+Temperatures are sourced from the model's default temperature configuration:
+  - Generation passes use the configured model's default_temperature
+  - Verifier uses the configured model's default_temperature
     """
 
 import asyncio
@@ -72,7 +68,6 @@ from app.constants import (
     LLMProvider as LLMProviderEnum,
     TribunalFallbackReason,
     TribunalMember,
-    TRIBUNAL_MEMBER_TEMPERATURES,
     EventType,
     VerifierReason,
     OPENAI_DEFAULT_MODEL,
@@ -229,9 +224,13 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
     return _TRIBUNAL_MEMBERS[pass_index % len(_TRIBUNAL_MEMBERS)]
 
 
-def _temperature_for_pass(pass_index: int) -> float:
-    """Return the canonical temperature for the member assigned to a given pass."""
-    return TRIBUNAL_MEMBER_TEMPERATURES[_member_for_pass(pass_index)]
+def _temperature_for_pass(pass_index: int, model: str) -> float:
+    """Return the model's default temperature for the given pass."""
+    from app.models.model_configs import get_model_config
+    from app.constants import LLM_DEFAULT_TEMPERATURE
+
+    model_config = get_model_config(model)
+    return model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
 
 
 def _normalise_command(raw: str) -> str:
@@ -317,7 +316,7 @@ async def _run_generation_pass(
     classify the failure mode (system vs. legitimate).
     """
     member = _member_for_pass(pass_index)
-    temperature = _temperature_for_pass(pass_index)
+    temperature = _temperature_for_pass(pass_index, model)
     prompt = _GENERATION_PROMPT_TEMPLATE.format(
         intent=intent,
         os=os_name,
@@ -328,7 +327,7 @@ async def _run_generation_pass(
     settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=_MAX_TOKENS_GENERATION,
-        system_instruction="",
+        system_instructions="",
     )
     try:
         response = await provider.generate_content_lite(
@@ -379,15 +378,20 @@ async def _run_verifier(
         TribunalVerifierStartedPayload(candidate_command=candidate_command),
     )
 
+    from app.models.model_configs import get_model_config
+    from app.constants import LLM_DEFAULT_TEMPERATURE
+
     prompt = _VERIFIER_PROMPT_TEMPLATE.format(
         intent=intent,
         os=os_name,
         candidate_command=candidate_command,
     )
+    model_config = get_model_config(model)
+    temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
     settings = LiteLLMSettings(
-        temperature=0.0,
+        temperature=temperature,
         max_output_tokens=_MAX_TOKENS_VERIFIER,
-        system_instruction="",
+        system_instructions="",
     )
     try:
         response = await provider.generate_content_lite(
@@ -623,6 +627,20 @@ async def generate_command(
     settings: G8eeUserSettings,
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to refine a command string."""
+    logger.info(
+        "[TRIBUNAL-ENTRY] generate_command called: command=%r intent_len=%d os=%s shell=%s",
+        original_command[:100], len(intent), os_name, shell,
+    )
+    logger.info(
+        "[TRIBUNAL-ENTRY] Settings state: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_provider=%s assistant_model=%s eval_judge_model=%s",
+        settings.llm.llm_command_gen_enabled,
+        settings.llm.llm_command_gen_verifier,
+        settings.llm.llm_command_gen_passes,
+        settings.llm.assistant_provider,
+        settings.llm.assistant_model,
+        settings.eval_judge.model,
+    )
+
     g8e_context = G8eHttpContext(
         web_session_id=web_session_id,
         user_id=user_id,
@@ -633,7 +651,7 @@ async def generate_command(
     emitter = TribunalEmitter(g8ed_event_service, g8e_context)
 
     if not settings.llm.llm_command_gen_enabled:
-        logger.info("[TRIBUNAL] Disabled via LLM_COMMAND_GEN_ENABLED; using original command")
+        logger.warning("[TRIBUNAL] DISABLED via llm_command_gen_enabled=False; using original command without Tribunal")
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(reason=TribunalFallbackReason.DISABLED, original_command=original_command, final_command=original_command),
@@ -646,8 +664,9 @@ async def generate_command(
 
     try:
         model = _resolve_model(settings.llm)
+        logger.info("[TRIBUNAL] Model resolved: %s", model)
     except TribunalModelNotConfiguredError as exc:
-        logger.error("[TRIBUNAL] Model not configured: %s", exc)
+        logger.error("[TRIBUNAL] Model not configured: %s - assistant_model=%s primary_model=%s", exc, settings.llm.assistant_model, settings.llm.primary_model)
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(
@@ -663,8 +682,8 @@ async def generate_command(
     members = [_member_for_pass(i) for i in range(num_passes)]
 
     logger.info(
-        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d",
-        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
+        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d verifier_enabled=%s",
+        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent), settings.llm.llm_command_gen_verifier,
     )
 
     await emitter.emit(
@@ -680,7 +699,7 @@ async def generate_command(
     )
 
     try:
-        provider_ctx = get_llm_provider(settings.llm, is_assistant=True)
+        provider = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
         logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
         raise TribunalProviderUnavailableError(
@@ -689,29 +708,28 @@ async def generate_command(
             original_command=original_command,
         ) from exc
 
-    async with provider_ctx as provider:
-        candidates = await _run_generation_stage(
-            provider=provider, model=model, intent=intent,
-            original_command=original_command, os_name=os_name, shell=shell,
-            working_directory=working_directory, num_passes=num_passes,
-            emitter=emitter,
-        )
+    candidates = await _run_generation_stage(
+        provider=provider, model=model, intent=intent,
+        original_command=original_command, os_name=os_name, shell=shell,
+        working_directory=working_directory, num_passes=num_passes,
+        emitter=emitter,
+    )
 
-        vote_winner, vote_score = await _run_voting_stage(
-            candidates=candidates, original_command=original_command,
-            emitter=emitter,
-        )
+    vote_winner, vote_score = await _run_voting_stage(
+        candidates=candidates, original_command=original_command,
+        emitter=emitter,
+    )
 
-        final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
-            provider=provider, model=model, intent=intent,
-            vote_winner=vote_winner, os_name=os_name,
-            verifier_enabled=settings.llm.llm_command_gen_verifier,
-            emitter=emitter,
-        )
+    final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
+        provider=provider, model=model, intent=intent,
+        vote_winner=vote_winner, os_name=os_name,
+        verifier_enabled=settings.llm.llm_command_gen_verifier,
+        emitter=emitter,
+    )
 
-        return await _build_and_emit_result(
-            original_command=original_command, final_command=final_command,
-            outcome=outcome, candidates=candidates, vote_winner=vote_winner,
-            vote_score=vote_score, verifier_passed=verifier_passed,
-            verifier_revision=verifier_revision, emitter=emitter,
-        )
+    return await _build_and_emit_result(
+        original_command=original_command, final_command=final_command,
+        outcome=outcome, candidates=candidates, vote_winner=vote_winner,
+        vote_score=vote_score, verifier_passed=verifier_passed,
+        verifier_revision=verifier_revision, emitter=emitter,
+    )

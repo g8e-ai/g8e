@@ -371,7 +371,7 @@ class ToolConfig:
 
 @dataclass
 class ThinkingConfig:
-    thinking_level: ThinkingLevel | None = None
+    thinking_level: ThinkingLevel
     include_thoughts: bool = False
 
 
@@ -379,49 +379,49 @@ class ThinkingConfig:
 class PrimaryLLMSettings:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    response_modalities: list[str] = field(default_factory=list)
-    tools: list[ToolGroup] = field(default_factory=list)
-    system_instruction: str = ""
-    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
-    tool_config: ToolConfig = None
+    top_p_nucleus_sampling: float
+    top_k_filtering: int
+    stop_sequences: list[str]
+    response_modalities: list[str]
+    tools: list[ToolGroup]
+    system_instructions: str
+    thinking_config: ThinkingConfig
+    tool_config: ToolConfig
 
 
 @dataclass
 class AssistantLLMSettings:
-    temperature: float | None = None
-    max_output_tokens: int | None = None
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    system_instruction: str = ""
-    response_format: ResponseFormat | None = None
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float
+    top_k_filtering: int
+    stop_sequences: list[str]
+    system_instructions: str
+    response_format: ResponseFormat
 
 
 @dataclass
 class LiteLLMSettings:
-    temperature: float | None = None
-    max_output_tokens: int | None = None
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    system_instruction: str = ""
-    response_format: ResponseFormat | None = None
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float
+    top_k_filtering: int
+    stop_sequences: list[str]
+    system_instructions: str
+    response_format: ResponseFormat
 
 
 @dataclass
 class GenerateContentConfig:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    response_modalities: list[str] = field(default_factory=list)
-    tools: list[ToolGroup] = field(default_factory=list)
-    system_instruction: str = ""
-    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
-    tool_config: ToolConfig | None = None
-    response_format: ResponseFormat | None = None
+    top_p_nucleus_sampling: float
+    top_k_filtering: int
+    stop_sequences: list[str]
+    response_modalities: list[str]
+    tools: list[ToolGroup]
+    system_instructions: str
+    thinking_config: ThinkingConfig
+    tool_config: ToolConfig
+    response_format: ResponseFormat
 

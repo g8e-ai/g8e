@@ -18,11 +18,6 @@
     "concord": "concord",
     "variance": "variance"
   },
-  "tribunal.temperatures": {
-    "axiom": 0.0,
-    "concord": 0.4,
-    "variance": 0.8
-  },
   "agent.metadata": {
     "triage": {
       "id": "triage",

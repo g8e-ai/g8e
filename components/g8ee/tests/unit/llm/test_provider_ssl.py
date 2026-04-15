@@ -34,6 +34,32 @@ INTERNAL_CA = "/g8es/ca.crt"
 pytestmark = [pytest.mark.unit]
 
 
+class TestOllamaProviderSSL:
+    """Ollama does not support SSL - verify is always False."""
+
+    def test_ollama_never_uses_ssl_verification(self):
+        with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
+            from app.llm.providers.ollama import OllamaProvider
+            OllamaProvider(
+                endpoint="https://localhost:11434/v1",
+                api_key="test-key",
+            )
+            assert mock_client.call_count == 2
+            for call in mock_client.call_args_list:
+                assert call.kwargs["verify"] is False
+
+    def test_ollama_http_always_false_verify(self):
+        with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
+            from app.llm.providers.ollama import OllamaProvider
+            OllamaProvider(
+                endpoint="http://localhost:11434/v1",
+                api_key="test-key",
+            )
+            assert mock_client.call_count == 2
+            for call in mock_client.call_args_list:
+                assert call.kwargs["verify"] is False
+
+
 class TestOpenAIProviderSSL:
     """SSL verification strategy for OpenAI provider."""
 
@@ -175,7 +201,7 @@ class TestFactorySSL:
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
 
-        llm_settings = LLMSettings(provider=LLMProvider.GEMINI, gemini_api_key="test")
+        llm_settings = LLMSettings(primary_provider=LLMProvider.GEMINI, gemini_api_key="test")
         mock_settings = MagicMock(spec=G8eePlatformSettings)
         mock_settings.ca_cert_path = INTERNAL_CA
         set_settings(mock_settings)
@@ -187,13 +213,13 @@ class TestFactorySSL:
         finally:
             reset_settings()
 
-    def test_ollama_gets_ca_cert_path(self):
+    def test_ollama_does_not_get_ca_cert_path(self):
         from app.llm.factory import get_llm_provider, set_settings, reset_settings
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
 
         llm_settings = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             ollama_endpoint="https://localhost:11434/v1",
             ollama_api_key="test"
         )
@@ -204,7 +230,7 @@ class TestFactorySSL:
         try:
             with patch("app.llm.providers.ollama.OllamaProvider") as mock_ollama:
                 get_llm_provider(llm_settings)
-                assert mock_ollama.call_args.kwargs["ca_cert_path"] == INTERNAL_CA
+                assert "ca_cert_path" not in mock_ollama.call_args.kwargs
         finally:
             reset_settings()
 
@@ -213,7 +239,7 @@ class TestFactorySSL:
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
 
-        llm_settings = LLMSettings(provider=LLMProvider.ANTHROPIC, anthropic_api_key="test")
+        llm_settings = LLMSettings(primary_provider=LLMProvider.ANTHROPIC, anthropic_api_key="test")
         mock_settings = MagicMock(spec=G8eePlatformSettings)
         mock_settings.ca_cert_path = INTERNAL_CA
         set_settings(mock_settings)
@@ -231,7 +257,7 @@ class TestFactorySSL:
         from app.constants import LLMProvider
 
         llm_settings = LLMSettings(
-            provider=LLMProvider.OPENAI,
+            primary_provider=LLMProvider.OPENAI,
             openai_api_key="test",
             openai_endpoint="https://api.openai.com/v1",
         )

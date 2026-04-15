@@ -359,6 +359,7 @@ class GeminiProvider(LLMProvider):
         )
 
     def __init__(self, api_key: str):
+        super().__init__()
         from google import genai
         from google.genai import types as genai_types
 
@@ -371,7 +372,7 @@ class GeminiProvider(LLMProvider):
         )
         logger.info("Gemini provider initialized")
 
-    async def close(self):
+    async def _close_resources(self):
         """Clean up SDK-internal httpx clients."""
         try:
             if hasattr(self._client, '_api_client'):
@@ -410,21 +411,25 @@ class GeminiProvider(LLMProvider):
         genai_tools: list | None,
         model: str,
     ):
-        """Build a genai_types.GenerateContentConfig from PrimaryLLMSettings."""
-        from google.genai import types as genai_types
-
-        temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        if model.startswith("gemini-3"):
-            temperature = 1.0
+        """Build a genai_types.GenerateContentConfig from PrimaryLLMSettings."""       
+        from app.models.model_configs import get_model_config
+        model_config = get_model_config(model)
+        temperature = model_config.default_temperature 
 
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
+            "max_output_tokens": primary_llm_settings.max_output_tokens,
             "top_p": primary_llm_settings.top_p_nucleus_sampling,
             "top_k": primary_llm_settings.top_k_filtering,
-            "system_instruction": primary_llm_settings.system_instruction,
+            "thinking_config": primary_llm_settings.thinking_config,
+            "tool_config": primary_llm_settings.tool_config,
+            "tools": primary_llm_settings.tools,
+            "system_instructions": primary_llm_settings.system_instructions,
         }
+        if primary_llm_settings.top_k_filtering is not None:
+            gen_config_kwargs["top_k"] = primary_llm_settings.top_k_filtering
 
-        effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        effective_max_tokens = primary_llm_settings.max_output_tokens 
         gen_config_kwargs["max_output_tokens"] = effective_max_tokens
 
         thinking_config = GeminiProvider._build_thinking_config_gemini3(primary_llm_settings.thinking_config, genai_types)
@@ -447,16 +452,16 @@ class GeminiProvider(LLMProvider):
                 function_calling_config=genai_types.FunctionCallingConfig(**fc_kwargs)
             )
 
-        logger.info(
+        logger.debug(
             "[GEMINI] Building config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%d system_instruction_len=%d tools_count=%d "
+            "top_p=%.2f top_k=%s system_instructions_len=%d tools_count=%d "
             "thinking_level=%s include_thoughts=%s tool_calling_mode=%s allowed_tools=%d",
             model,
             temperature,
             effective_max_tokens,
             primary_llm_settings.top_p_nucleus_sampling,
-            primary_llm_settings.top_k_filtering,
-            len(primary_llm_settings.system_instruction),
+            primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
+            len(primary_llm_settings.system_instructions),
             len(genai_tools) if genai_tools else 0,
             primary_llm_settings.thinking_config.thinking_level if primary_llm_settings.thinking_config else None,
             primary_llm_settings.thinking_config.include_thoughts if primary_llm_settings.thinking_config else False,
@@ -475,15 +480,14 @@ class GeminiProvider(LLMProvider):
         from google.genai import types as genai_types
 
         temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        if model.startswith("gemini-3"):
-            temperature = 1.0
 
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
             "top_p": assistant_llm_settings.top_p_nucleus_sampling,
-            "top_k": assistant_llm_settings.top_k_filtering,
-            "system_instruction": assistant_llm_settings.system_instruction,
+            "system_instructions": assistant_llm_settings.system_instructions,
         }
+        if assistant_llm_settings.top_k_filtering is not None:
+            gen_config_kwargs["top_k"] = assistant_llm_settings.top_k_filtering
 
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         gen_config_kwargs["max_output_tokens"] = effective_max_tokens
@@ -494,13 +498,13 @@ class GeminiProvider(LLMProvider):
 
         logger.info(
             "[GEMINI] Building assistant config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%d system_instruction_len=%d response_format=%s",
+            "top_p=%.2f top_k=%s system_instructions_len=%d response_format=%s",
             model,
             temperature,
             effective_max_tokens,
             assistant_llm_settings.top_p_nucleus_sampling,
-            assistant_llm_settings.top_k_filtering,
-            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
+            len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
 
@@ -514,16 +518,20 @@ class GeminiProvider(LLMProvider):
         """Build a genai_types.GenerateContentConfig from LiteLLMSettings."""
         from google.genai import types as genai_types
 
-        temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
-        if model.startswith("gemini-3"):
-            temperature = 1.0
+        if lite_llm_settings.temperature is not None:
+            temperature = lite_llm_settings.temperature
+        else:
+            from app.models.model_configs import get_model_config
+            model_config = get_model_config(model)
+            temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
 
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
             "top_p": lite_llm_settings.top_p_nucleus_sampling,
-            "top_k": lite_llm_settings.top_k_filtering,
-            "system_instruction": lite_llm_settings.system_instruction,
+            "system_instructions": lite_llm_settings.system_instructions,
         }
+        if lite_llm_settings.top_k_filtering is not None:
+            gen_config_kwargs["top_k"] = lite_llm_settings.top_k_filtering
 
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         gen_config_kwargs["max_output_tokens"] = effective_max_tokens
@@ -534,13 +542,13 @@ class GeminiProvider(LLMProvider):
 
         logger.info(
             "[GEMINI] Building lite config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%d system_instruction_len=%d response_format=%s",
+            "top_p=%.2f top_k=%s system_instructions_len=%d response_format=%s",
             model,
             temperature,
             effective_max_tokens,
             lite_llm_settings.top_p_nucleus_sampling,
-            lite_llm_settings.top_k_filtering,
-            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
+            len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
 
@@ -711,17 +719,18 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_primary: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d tools=%d",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
-            primary_llm_settings.temperature,
+            effective_temperature,
             primary_llm_settings.max_output_tokens,
-            primary_llm_settings.top_k_filtering,
+            primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
             primary_llm_settings.top_p_nucleus_sampling,
-            len(primary_llm_settings.system_instruction),
+            len(primary_llm_settings.system_instructions),
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
 
@@ -744,17 +753,18 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
-            assistant_llm_settings.temperature,
+            effective_temperature,
             assistant_llm_settings.max_output_tokens,
-            assistant_llm_settings.top_k_filtering,
+            assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
             assistant_llm_settings.top_p_nucleus_sampling,
-            len(assistant_llm_settings.system_instruction),
+            len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
 
@@ -777,17 +787,18 @@ class GeminiProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
+        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
-            lite_llm_settings.temperature,
+            effective_temperature,
             lite_llm_settings.max_output_tokens,
-            lite_llm_settings.top_k_filtering,
+            lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
             lite_llm_settings.top_p_nucleus_sampling,
-            len(lite_llm_settings.system_instruction),
+            len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
 

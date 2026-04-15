@@ -28,7 +28,6 @@ from app.constants import (
     CommandGenerationOutcome,
     TribunalMember,
     VerifierReason,
-    TRIBUNAL_MEMBER_TEMPERATURES,
 )
 
 pytestmark = pytest.mark.unit
@@ -65,18 +64,6 @@ class TestAgentConstantsMatchSharedJSON:
         expected = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance"}
         actual = set(_AGENTS["agent.metadata"].keys())
         assert actual == expected
-
-    def test_tribunal_temperatures_sourced_from_shared(self):
-        """Verify TRIBUNAL_MEMBER_TEMPERATURES is sourced from shared constants."""
-        shared_temps = _AGENTS["tribunal.temperatures"]
-        # Verify values match shared constants
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.AXIOM] == shared_temps["axiom"]
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.CONCORD] == shared_temps["concord"]
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.VARIANCE] == shared_temps["variance"]
-        # Verify the dict is properly typed
-        assert isinstance(TRIBUNAL_MEMBER_TEMPERATURES, dict)
-        assert all(isinstance(v, float) for v in TRIBUNAL_MEMBER_TEMPERATURES.values())
-
 
 class TestAgentMetadataPersonaFields:
     """Verifies all agents have first-class persona fields."""

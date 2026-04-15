@@ -59,31 +59,31 @@ class AIResponseAnalyzer:
             return fallback_no_model()
 
         try:
-            async with get_llm_provider(settings.llm, is_assistant=True) as client:
-                config = AIGenerationConfigBuilder.build_assistant_settings(
-                    model=assistant_model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                    response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
-                )
-                response = await client.generate_content_assistant(
-                    model=assistant_model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    assistant_llm_settings=config,
-                )
+            client = get_llm_provider(settings.llm, is_assistant=True)
+            config = AIGenerationConfigBuilder.build_assistant_settings(
+                model=assistant_model,
+                temperature=None,
+                max_tokens=None,
+                system_instructions="",
+                response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
+            )
+            response = await client.generate_content_assistant(
+                model=assistant_model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                assistant_llm_settings=config,
+            )
 
-                response_text = response.text
-                if response_text is None:
-                    logger.error("%s: LLM returned no text content", log_context)
-                    return fallback_no_response()
-                analysis = response_model.model_validate_json(response_text)
+            response_text = response.text
+            if response_text is None:
+                logger.error("%s: LLM returned no text content", log_context)
+                return fallback_no_response()
+            analysis = response_model.model_validate_json(response_text)
 
-                if post_process:
-                    post_process(analysis)
+            if post_process:
+                post_process(analysis)
 
-                logger.info("%s completed", log_context)
-                return analysis
+            logger.info("%s completed", log_context)
+            return analysis
 
         except Exception as e:
             logger.error("%s failed: %s", log_context, e, exc_info=True)

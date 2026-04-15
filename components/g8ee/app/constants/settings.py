@@ -145,13 +145,6 @@ class VerifierReason(str, Enum):
     VERIFIER_ERROR    = "verifier_error"
 
 
-TRIBUNAL_MEMBER_TEMPERATURES: dict[str, float] = {
-    TribunalMember.AXIOM:    _AGENTS["tribunal.temperatures"]["axiom"],
-    TribunalMember.CONCORD:  _AGENTS["tribunal.temperatures"]["concord"],
-    TribunalMember.VARIANCE: _AGENTS["tribunal.temperatures"]["variance"],
-}
-
-
 class ToolDisplayCategory(str, Enum):
     __str__ = lambda self: self.value
     EXECUTION = "execution"

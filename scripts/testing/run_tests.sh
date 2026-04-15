@@ -235,6 +235,8 @@ run_g8ee() {
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
+    # Add diagnostic logging for LLM tests to see tool declarations
+    [[ -n "$TEST_LLM_PROVIDER" ]] && cov_args+=("-s" "--log-cli-level=INFO")
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 

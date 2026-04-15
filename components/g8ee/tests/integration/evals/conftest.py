@@ -24,7 +24,7 @@ import pytest
 from typing import Any
 
 from app.llm.factory import get_llm_settings
-from app.models.settings import G8eeUserSettings, SearchSettings
+from app.models.settings import G8eeUserSettings, SearchSettings, EvalJudgeSettings
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,8 @@ def test_user_settings():
         pytest.skip("LLM provider is not configured")
 
     search_settings = SearchSettings(enabled=False)
-    return G8eeUserSettings(llm=llm_settings, search=search_settings)
+    eval_judge_settings = EvalJudgeSettings(model=llm_settings.primary_model)
+    return G8eeUserSettings(llm=llm_settings, search=search_settings, eval_judge=eval_judge_settings)
 
 
 @pytest.fixture(scope="session")

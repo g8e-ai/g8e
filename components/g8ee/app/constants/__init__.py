@@ -269,7 +269,6 @@ from app.constants.settings import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
     TRIAGE_EMPTY_CONVERSATION,
     TRIAGE_LOG_TRUNCATION_LENGTH,
-    TRIBUNAL_MEMBER_TEMPERATURES,
     ThinkingActionType,
     ThinkingLevel,
     TimestampErrorCode,

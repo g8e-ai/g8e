@@ -68,10 +68,14 @@ class LLMModelConfig(G8eBaseModel):
     name: str
     supported_thinking_levels: list[ThinkingLevel] = Field(default_factory=list)
     supports_image_generation: bool = False
-    supports_thinking: bool = True
-    supports_tools: bool = True
-    context_window_input: int = 1_000_000
-    context_window_output: int = 8_192
+    supports_thinking: bool | None = None
+    supports_tools: bool | None = None
+    context_window_input: int | None = None
+    context_window_output: int | None = None
+    default_temperature: float | None = None
+    top_k: int | None = None
+    top_p: float | None = None
+    max_output_tokens: int | None = None
 
 
 # Google Gemma 3 models (Ollama)
@@ -82,6 +86,8 @@ GEMINI_3_PRO_PREVIEW = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
+    default_temperature=1.0,
+    max_output_tokens=64_000,
 )
 
 GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
@@ -91,6 +97,8 @@ GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
+    default_temperature=1.0,
+    max_output_tokens=64_000,
 )
 
 GEMINI_3_FLASH_PREVIEW = LLMModelConfig(
@@ -100,6 +108,8 @@ GEMINI_3_FLASH_PREVIEW = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
+    default_temperature=1.0,
+    max_output_tokens=64_000,
 )
 
 GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG = LLMModelConfig(
@@ -109,6 +119,8 @@ GEMINI_3_1_FLASH_LITE_PREVIEW_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
+    default_temperature=1.0,
+    max_output_tokens=64_000,
 )
 
 GEMMA3_27B = LLMModelConfig(
@@ -118,6 +130,8 @@ GEMMA3_27B = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 GEMMA3_12B = LLMModelConfig(
@@ -127,6 +141,8 @@ GEMMA3_12B = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 GEMMA3_4B = LLMModelConfig(
@@ -136,6 +152,8 @@ GEMMA3_4B = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 GEMMA3_1B = LLMModelConfig(
@@ -145,6 +163,8 @@ GEMMA3_1B = LLMModelConfig(
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Gemma 4 models (Ollama) - support thinking
@@ -155,6 +175,8 @@ GEMMA4_E4B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 GEMMA4_E2B_CONFIG = LLMModelConfig(
@@ -164,6 +186,8 @@ GEMMA4_E2B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Qwen 3 Coder models (Ollama) — agentic coding, MoE architecture, native tool calling
@@ -174,6 +198,8 @@ QWEN3_CODER_30B = LLMModelConfig(
     supports_tools=True,
     context_window_input=256_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Qwen 3 models (Ollama) — native tool calling support across all sizes
@@ -184,6 +210,8 @@ QWEN3_1B7 = LLMModelConfig(
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Qwen 2.5 models (Ollama) — strong tool calling support
@@ -194,6 +222,8 @@ QWEN25_14B = LLMModelConfig(
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 QWEN25_7B = LLMModelConfig(
@@ -203,6 +233,8 @@ QWEN25_7B = LLMModelConfig(
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Anthropic models
@@ -213,6 +245,8 @@ ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLMModelConfig(
@@ -222,6 +256,8 @@ ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLMModelConfig(
@@ -231,6 +267,8 @@ ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
@@ -240,6 +278,8 @@ ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # OpenAI models
@@ -250,6 +290,8 @@ OPENAI_GPT_5_4_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 OPENAI_GPT_5_3_INSTANT_CONFIG = LLMModelConfig(
@@ -259,6 +301,8 @@ OPENAI_GPT_5_3_INSTANT_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
@@ -268,6 +312,8 @@ OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 OPENAI_GPT_5_4_NANO_CONFIG = LLMModelConfig(
@@ -277,6 +323,8 @@ OPENAI_GPT_5_4_NANO_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 OPENAI_GPT_4O_CONFIG = LLMModelConfig(
@@ -286,6 +334,8 @@ OPENAI_GPT_4O_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OPENAI_GPT_4O_MINI_CONFIG = LLMModelConfig(
@@ -295,6 +345,8 @@ OPENAI_GPT_4O_MINI_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OPENAI_GPT_4_TURBO_CONFIG = LLMModelConfig(
@@ -304,6 +356,8 @@ OPENAI_GPT_4_TURBO_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OPENAI_GPT_3_5_TURBO_CONFIG = LLMModelConfig(
@@ -313,6 +367,8 @@ OPENAI_GPT_3_5_TURBO_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=16_385,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OPENAI_DEFAULT_CONFIG = LLMModelConfig(
@@ -322,6 +378,8 @@ OPENAI_DEFAULT_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 # Ollama models
@@ -332,6 +390,8 @@ OLLAMA_LLAMA3_8B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=8_192,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OLLAMA_LLAMA3_70B_CONFIG = LLMModelConfig(
@@ -341,6 +401,8 @@ OLLAMA_LLAMA3_70B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=8_192,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OLLAMA_CODELLAMA_7B_CONFIG = LLMModelConfig(
@@ -350,6 +412,8 @@ OLLAMA_CODELLAMA_7B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=8_192,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OLLAMA_MISTRAL_7B_CONFIG = LLMModelConfig(
@@ -359,6 +423,8 @@ OLLAMA_MISTRAL_7B_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=8_192,
     context_window_output=4_096,
+    top_p=1.0,
+    max_output_tokens=4_096,
 )
 
 OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
@@ -368,6 +434,8 @@ OLLAMA_DEFAULT_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    top_p=1.0,
+    max_output_tokens=8_192,
 )
 
 

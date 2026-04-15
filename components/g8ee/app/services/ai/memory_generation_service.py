@@ -120,26 +120,26 @@ class MemoryGenerationService:
     ) -> None:
         contents = self._conversation_to_contents(conversation_history, memory)
 
-        system_instruction = build_memory_analysis_system_instruction(memory.case_title)
+        system_instructions = build_memory_analysis_system_instruction(memory.case_title)
 
         assistant_model = settings.llm.resolved_assistant_model
         if not assistant_model:
             logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
             return
 
-        async with get_llm_provider(settings.llm, is_assistant=True) as provider:
-            config = AIGenerationConfigBuilder.build_assistant_settings(
-                model=assistant_model,
-                temperature=None,
-                max_tokens=None,
-                system_instruction=system_instruction,
-                response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
-            )
-            response = await provider.generate_content_assistant(
-                model=assistant_model,
-                contents=contents,
-                assistant_llm_settings=config,
-            )
+        provider = get_llm_provider(settings.llm, is_assistant=True)
+        config = AIGenerationConfigBuilder.build_assistant_settings(
+            model=assistant_model,
+            temperature=None,
+            max_tokens=None,
+            system_instructions=system_instructions,
+            response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
+        )
+        response = await provider.generate_content_assistant(
+            model=assistant_model,
+            contents=contents,
+            assistant_llm_settings=config,
+        )
 
         if not response or not response.text:
             logger.warning(

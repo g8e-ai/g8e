@@ -22,7 +22,7 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,12 @@ class _InjectedAsyncClient(AsyncClient):
 
 def _contents_to_messages(
     contents: list[Content],
-    system_instruction: str,
+    system_instructions: str,
 ) -> list[OllamaMessage]:
     messages = []
 
-    if system_instruction:
-        messages.append(OllamaMessage(role="system", content=system_instruction))
+    if system_instructions:
+        messages.append(OllamaMessage(role="system", content=system_instructions))
 
     for content in contents:
         role = "assistant" if content.role == "model" else content.role
@@ -94,35 +94,24 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 class OllamaProvider(LLMProvider):
     _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
 
-    def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
+    def __init__(self, endpoint: str, api_key: str):
         # Strip /v1 suffix if present - ollama SDK handles API paths internally
         cleaned_endpoint = endpoint.rstrip('/')
+        super().__init__()
+
         if cleaned_endpoint.endswith('/v1'):
             cleaned_endpoint = cleaned_endpoint[:-3]
-        
+
         # Ensure protocol prefix exists - Ollama SDK requires http:// or https://
         if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
             cleaned_endpoint = 'http://' + cleaned_endpoint
-        
+
         self._original_endpoint = cleaned_endpoint
-
-        import ssl
-
-        verify: ssl.SSLContext | bool
-        if is_internal_endpoint(endpoint):
-            if endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
 
         self._httpx_client = httpx.AsyncClient(
             base_url=self._original_endpoint,
             timeout=self._TIMEOUT,
-            verify=verify,
+            verify=False,
         )
         self._client = _InjectedAsyncClient(
             httpx_client=self._httpx_client,
@@ -130,7 +119,7 @@ class OllamaProvider(LLMProvider):
         )
         logger.info(f"Ollama provider initialized: {self._original_endpoint}")
 
-    async def close(self):
+    async def _close_resources(self):
         """Clean up the underlying httpx client."""
         await self._httpx_client.aclose()
         
@@ -140,7 +129,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
@@ -196,7 +185,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
@@ -255,7 +244,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -303,7 +292,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -356,7 +345,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -404,7 +393,7 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
