@@ -449,10 +449,39 @@
     background: rgba(var(--accent-green-rgb), 0.1);
 }
 
+@media (max-width: 1680px) {
+    .llm-model-dropdown.custom-dropdown {
+        min-width: auto;
+        max-width: auto;
+        width: auto;
+    }
+
+    .llm-model-dropdown__text,
+    .llm-model-dropdown__arrow {
+        display: none;
+    }
+
+    .llm-model-dropdown__selected {
+        padding: 0.5rem;
+    }
+
+    .llm-model-dropdown.open .llm-model-dropdown__menu {
+        min-width: 200px;
+        max-width: 300px;
+        left: auto;
+        right: 0;
+    }
+}
+
 @media (max-width: 768px) {
     .llm-model-dropdown.custom-dropdown {
         min-width: 140px;
         max-width: 180px;
+    }
+
+    .llm-model-dropdown__text,
+    .llm-model-dropdown__arrow {
+        display: block;
     }
 }
 
