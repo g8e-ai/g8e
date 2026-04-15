@@ -126,7 +126,7 @@ class EvalJudgeSettings(G8eBaseModel):
     )
 
     model: str | None = Field(None, alias="eval_judge_model")
-    temperature: float = Field(0.0, alias="eval_judge_temperature")
+    temperature: float | None = Field(None, alias="eval_judge_temperature")
     max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
 
 class LLMSettings(G8eBaseModel):

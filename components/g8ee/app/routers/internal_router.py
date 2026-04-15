@@ -765,7 +765,7 @@ async def mcp_tools_list(
     logger.info(
         "[INTERNAL-HTTP] MCP tools/list request",
         extra={
-            "agent_mode": agent_mode.value,
+            "agent_mode": agent_mode,
             "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
         }
     )

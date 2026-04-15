@@ -36,7 +36,7 @@ import logging
 import pytest
 from typing import Any
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app.constants import AgentMode, EventType, OperatorStatus
 from app.services.ai.chat_task_manager import ChatTaskManager
@@ -47,7 +47,6 @@ from app.services.ai.benchmark_judge import (
     ToolCallCapture,
     TribunalCapture,
 )
-from app.llm.factory import get_llm_settings
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
@@ -104,6 +103,7 @@ async def test_agent_benchmark(
     all_services,
     cache_aside_service,
     test_settings,
+    test_user_settings,
     cleanup,
     unique_investigation_id,
     unique_case_id,
@@ -133,10 +133,7 @@ async def test_agent_benchmark(
     response_text = ""
 
     try:
-        llm_settings = get_llm_settings()
-        if not llm_settings or not llm_settings.primary_model:
-            pytest.skip("LLM provider is not configured")
-
+        llm_settings = test_user_settings.llm
         agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "OPERATOR_BOUND" else AgentMode.OPERATOR_NOT_BOUND
 
         bound_operators = []
@@ -217,9 +214,7 @@ async def test_agent_benchmark(
 
             return result
 
-        from app.models.settings import SearchSettings
-        search_settings = SearchSettings(enabled=False)
-        user_settings = G8eeUserSettings(llm=llm_settings, search=search_settings)
+        user_settings = test_user_settings
         task_manager = ChatTaskManager()
 
         logger.info("[BENCH] Running scenario %s", scenario.id)

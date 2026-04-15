@@ -23,7 +23,30 @@ import os
 import pytest
 from typing import Any
 
+from app.llm.factory import get_llm_settings
+from app.models.settings import G8eeUserSettings, SearchSettings
+
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(scope="session")
+def test_user_settings():
+    """Session-scoped fixture providing G8eeUserSettings for integration eval tests.
+
+    Constructs user settings with LLM configuration from environment variables
+    (via get_llm_settings()) and search disabled by default. Tests that require
+    search enabled can override the search field on the returned object.
+
+    Eliminates duplication across test_agent_benchmark.py, test_agent_accuracy.py,
+    and provider-specific accuracy tests.
+    """
+    llm_settings = get_llm_settings()
+    if not llm_settings or not llm_settings.primary_model:
+        pytest.skip("LLM provider is not configured")
+
+    search_settings = SearchSettings(enabled=False)
+    return G8eeUserSettings(llm=llm_settings, search=search_settings)
+
 
 @pytest.fixture(scope="session")
 def eval_results_collector(request):

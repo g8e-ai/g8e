@@ -211,16 +211,40 @@ def _llm_settings_from_env() -> LLMSettings | None:
         logger.warning("TEST_LLM_PROVIDER=%s is not a valid provider", provider_str)
         return None
 
+    assistant_provider_str = os.environ.get("TEST_LLM_ASSISTANT_PROVIDER", "").strip()
+    if assistant_provider_str:
+        try:
+            assistant_provider = LLMProvider(assistant_provider_str)
+        except ValueError:
+            logger.warning("TEST_LLM_ASSISTANT_PROVIDER=%s is not a valid provider, falling back to primary", assistant_provider_str)
+            assistant_provider = provider
+    else:
+        assistant_provider = provider
+
     api_key = os.environ.get("TEST_LLM_API_KEY", "").strip() or None
     endpoint = os.environ.get("TEST_LLM_ENDPOINT_URL", "").strip() or None
+    assistant_api_key = os.environ.get("TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
+    assistant_endpoint = os.environ.get("TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
+    temperature_str = os.environ.get("TEST_LLM_TEMPERATURE", "").strip() or None
+    max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
-    kwargs: dict = {"provider": provider}
+    kwargs: dict = {"provider": provider, "assistant_provider": assistant_provider}
     if primary:
         kwargs["primary_model"] = primary
     if assistant:
         kwargs["assistant_model"] = assistant
+    if temperature_str:
+        try:
+            kwargs["llm_temperature"] = float(temperature_str)
+        except ValueError:
+            logger.warning("TEST_LLM_TEMPERATURE=%s is not a valid float, ignoring", temperature_str)
+    if max_tokens_str:
+        try:
+            kwargs["llm_max_tokens"] = int(max_tokens_str)
+        except ValueError:
+            logger.warning("TEST_LLM_MAX_TOKENS=%s is not a valid int, ignoring", max_tokens_str)
 
     _PROVIDER_KEY_FIELD = {
         LLMProvider.GEMINI: "gemini_api_key",
@@ -242,6 +266,15 @@ def _llm_settings_from_env() -> LLMSettings | None:
         field = _PROVIDER_ENDPOINT_FIELD.get(provider)
         if field:
             kwargs[field] = endpoint
+
+    if assistant_api_key:
+        field = _PROVIDER_KEY_FIELD.get(assistant_provider)
+        if field:
+            kwargs[field] = assistant_api_key
+    if assistant_endpoint:
+        field = _PROVIDER_ENDPOINT_FIELD.get(assistant_provider)
+        if field:
+            kwargs[field] = assistant_endpoint
 
     return LLMSettings(**kwargs)
     
@@ -755,26 +788,6 @@ def provider_config():
 # ---------------------------------------------------------------------------
 # Real g8es fixtures for integration tests
 # ---------------------------------------------------------------------------
-
-@pytest_asyncio.fixture(scope="function", loop_scope="session")
-async def cleanup(cache_aside_service):
-    """Integration test cleanup tracker.
-
-    Tracks g8es documents created during tests and automatically
-    cleans them up after each test, even on assertion failure.
-
-    Usage:
-        async def test_example(cache_aside_service, cleanup):
-            inv = await investigation_data_service.create_investigation(...)
-            cleanup.track_investigation(inv.id)
-            # ... assertions ...
-            # cleanup happens automatically
-    """
-    from tests.integration.cleanup import IntegrationCleanupTracker
-    tracker = IntegrationCleanupTracker(cache_aside_service)
-    yield tracker
-    await tracker.cleanup()
-
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cache_aside_service(test_settings):

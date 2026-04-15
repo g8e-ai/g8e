@@ -54,6 +54,8 @@ TEST_LLM_PRIMARY_MODEL="${TEST_LLM_PRIMARY_MODEL:-}"
 TEST_LLM_ASSISTANT_MODEL="${TEST_LLM_ASSISTANT_MODEL:-}"
 TEST_LLM_ENDPOINT_URL="${TEST_LLM_ENDPOINT_URL:-}"
 TEST_LLM_API_KEY="${TEST_LLM_API_KEY:-}"
+TEST_LLM_ASSISTANT_ENDPOINT_URL="${TEST_LLM_ASSISTANT_ENDPOINT_URL:-}"
+TEST_LLM_ASSISTANT_API_KEY="${TEST_LLM_ASSISTANT_API_KEY:-}"
 TEST_WEB_SEARCH_PROJECT_ID="${TEST_WEB_SEARCH_PROJECT_ID:-}"
 TEST_WEB_SEARCH_ENGINE_ID="${TEST_WEB_SEARCH_ENGINE_ID:-}"
 TEST_WEB_SEARCH_API_KEY="${TEST_WEB_SEARCH_API_KEY:-}"
@@ -77,8 +79,10 @@ while [[ $# -gt 0 ]]; do
             echo "  -ap, --assistant-provider Assistant LLM provider (gemini, openai, anthropic, ollama)"
             echo "  -m, --primary-model       Primary model name"
             echo "  -a, --assistant-model      Assistant model name"
-            echo "  -e, --llm-endpoint-url    API endpoint URL"
-            echo "  -k, --llm-api-key         API key"
+            echo "  -e, --llm-endpoint-url         Primary API endpoint URL"
+            echo "  -k, --llm-api-key              Primary API key"
+            echo "  -ae, --assistant-endpoint-url Assistant API endpoint URL"
+            echo "  -ak, --assistant-api-key      Assistant API key"
             echo ""
             echo "Web Search Options (enables requires_web_search tests):"
             echo "  --web-search-project-id   GCP project ID"
@@ -124,6 +128,14 @@ while [[ $# -gt 0 ]]; do
             TEST_LLM_API_KEY="$2"; shift 2 ;;
         --llm-api-key=*)
             TEST_LLM_API_KEY="${1#*=}"; shift ;;
+        --assistant-endpoint-url|-ae)
+            TEST_LLM_ASSISTANT_ENDPOINT_URL="$2"; shift 2 ;;
+        --assistant-endpoint-url=*)
+            TEST_LLM_ASSISTANT_ENDPOINT_URL="${1#*=}"; shift ;;
+        --assistant-api-key|-ak)
+            TEST_LLM_ASSISTANT_API_KEY="$2"; shift 2 ;;
+        --assistant-api-key=*)
+            TEST_LLM_ASSISTANT_API_KEY="${1#*=}"; shift ;;
         --web-search-project-id)
             TEST_WEB_SEARCH_PROJECT_ID="$2"; shift 2 ;;
         --web-search-project-id=*)
@@ -290,8 +302,10 @@ _show_llm_config() {
         [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]   && echo -e "  Primary Model:   ${TEST_LLM_PRIMARY_MODEL}"
         [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]] && echo -e "  Assistant Model: ${TEST_LLM_ASSISTANT_MODEL}"
-        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]    && echo -e "  Endpoint:        ${TEST_LLM_ENDPOINT_URL}"
-        [[ -n "${TEST_LLM_API_KEY:-}" ]]         && echo -e "  API Key:         (set)"
+        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]              && echo -e "  Primary Endpoint:   ${TEST_LLM_ENDPOINT_URL}"
+        [[ -n "${TEST_LLM_API_KEY:-}" ]]                   && echo -e "  Primary API Key:    (set)"
+        [[ -n "${TEST_LLM_ASSISTANT_ENDPOINT_URL:-}" ]]    && echo -e "  Assistant Endpoint: ${TEST_LLM_ASSISTANT_ENDPOINT_URL}"
+        [[ -n "${TEST_LLM_ASSISTANT_API_KEY:-}" ]]         && echo -e "  Assistant API Key:  (set)"
         echo ""
     else
         echo ""
@@ -338,8 +352,10 @@ run_in_container() {
     [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
     [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
     [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
-    [[ -n "$TEST_LLM_API_KEY" ]]            && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]            && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
+    [[ -n "$TEST_LLM_API_KEY" ]]                 && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
+    [[ -n "$TEST_LLM_ASSISTANT_ENDPOINT_URL" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_ENDPOINT_URL=$TEST_LLM_ASSISTANT_ENDPOINT_URL")
+    [[ -n "$TEST_LLM_ASSISTANT_API_KEY" ]]       && env_args+=(-e "TEST_LLM_ASSISTANT_API_KEY=$TEST_LLM_ASSISTANT_API_KEY")
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && env_args+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && env_args+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
@@ -361,8 +377,10 @@ if in_container; then
     [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && export TEST_LLM_ASSISTANT_PROVIDER
     [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && export TEST_LLM_PRIMARY_MODEL
     [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && export TEST_LLM_ASSISTANT_MODEL
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && export TEST_LLM_ENDPOINT_URL
-    [[ -n "$TEST_LLM_API_KEY" ]]            && export TEST_LLM_API_KEY
+    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]            && export TEST_LLM_ENDPOINT_URL
+    [[ -n "$TEST_LLM_API_KEY" ]]                 && export TEST_LLM_API_KEY
+    [[ -n "$TEST_LLM_ASSISTANT_ENDPOINT_URL" ]]  && export TEST_LLM_ASSISTANT_ENDPOINT_URL
+    [[ -n "$TEST_LLM_ASSISTANT_API_KEY" ]]       && export TEST_LLM_ASSISTANT_API_KEY
 
     [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && export TEST_WEB_SEARCH_PROJECT_ID
     [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && export TEST_WEB_SEARCH_ENGINE_ID

@@ -32,8 +32,8 @@ from datetime import datetime, timezone
 from app.constants import AgentMode, EventType, OperatorStatus
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
-from app.llm.factory import get_llm_provider, get_llm_settings
-from app.models.settings import G8eeUserSettings
+from app.llm.factory import get_llm_provider
+from app.models.settings import G8eeUserSettings, SearchSettings
 from app.models.http_context import G8eHttpContext, BoundOperator
 from app.models.investigations import InvestigationCreateRequest
 from app.models.model_configs import get_model_config
@@ -65,6 +65,7 @@ async def test_agent_accuracy(
     all_services,
     cache_aside_service,
     test_settings,
+    test_user_settings,
     cleanup,
     unique_investigation_id,
     unique_case_id,
@@ -91,9 +92,7 @@ async def test_agent_accuracy(
     chat_pipeline = all_services['chat_pipeline']
 
     try:
-        llm_settings = get_llm_settings()
-        if not llm_settings or not llm_settings.primary_model:
-            pytest.skip("LLM provider is not configured")
+        llm_settings = test_user_settings.llm
 
         # The Assistant Model is being tested
         model_name = llm_settings.assistant_model
@@ -150,13 +149,12 @@ async def test_agent_accuracy(
 
         # Step 3: Call chat_pipeline.run_chat() with real services
         # Enable web search for scenarios that expect it
-        from app.models.settings import SearchSettings
         search_settings = SearchSettings(enabled="g8e_web_search" in scenario.get("expected_tools", []))
-        user_settings = G8eeUserSettings(llm=llm_settings, search=search_settings)
+        user_settings = G8eeUserSettings(llm=test_user_settings.llm, search=search_settings)
         task_manager = ChatTaskManager()
 
         logger.info(f"[EVAL] Running scenario {scenario['id']} with model {model_name}")
-        logger.info(f"[EVAL] Agent mode: {agent_mode.value}")
+        logger.info(f"[EVAL] Agent mode: {agent_mode}")
         logger.info(f"[EVAL] Investigation ID: {created_investigation.id}")
 
         user_query = scenario["user_query"]
@@ -200,7 +198,7 @@ async def test_agent_accuracy(
         # Build interaction trace for the judge
         trace_lines = [
             f"USER_QUERY: {user_query}",
-            f"AGENT_MODE: {agent_mode.value}",
+            f"AGENT_MODE: {agent_mode}",
             f"RESPONSE: {ai_response_text}",
         ]
         interaction_trace = "\n".join(trace_lines)
@@ -248,7 +246,3 @@ async def test_agent_accuracy(
         result_data.passed = False
         logger.exception(f"[EVAL] Fatal error in scenario {scenario['id']}: {e}")
         raise
-
-    finally:
-        # Cleanup is handled by the cleanup fixture automatically
-        pass

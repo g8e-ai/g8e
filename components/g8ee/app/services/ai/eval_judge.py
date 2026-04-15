@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
+from app.constants import LLM_DEFAULT_TEMPERATURE
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +165,7 @@ class EvalJudge:
         self._provider = provider
         self._settings = settings or EvalJudgeSettings(
             eval_judge_model=None,
-            eval_judge_temperature=0.0,
+            eval_judge_temperature=None,
             eval_judge_max_tokens=4096,
         )
         self._model = model or self._settings.model
@@ -198,8 +199,9 @@ class EvalJudge:
             student_interaction=interaction_trace,
         )
 
+        effective_temperature = self._settings.temperature if self._settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         settings = LiteLLMSettings(
-            temperature=self._settings.temperature,
+            temperature=effective_temperature,
             max_output_tokens=self._settings.max_output_tokens,
             system_instruction="",
             response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
