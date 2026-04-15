@@ -92,12 +92,18 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 <input id="ollama_url" type="text" />
             </div>
             <div id="wizard-model-selection">
-                <select id="primary_model" disabled>
-                    <option value="">Enter at least one API key above</option>
-                </select>
-                <select id="assistant_model" disabled>
-                    <option value="">Enter at least one API key above</option>
-                </select>
+                <div id="primary_model" class="llm-model-dropdown disabled" aria-expanded="false">
+                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                </div>
+                <div id="primary_model-menu" class="llm-model-dropdown__menu"></div>
+                <div id="assistant_model" class="llm-model-dropdown disabled" aria-expanded="false">
+                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                </div>
+                <div id="assistant_model-menu" class="llm-model-dropdown__menu"></div>
+                <div id="lite_model" class="llm-model-dropdown disabled" aria-expanded="false">
+                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                </div>
+                <div id="lite_model-menu" class="llm-model-dropdown__menu"></div>
             </div>
             <select id="search_provider">
                 <option value="">None</option>
@@ -366,6 +372,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage._step = 2;
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             setupPage._updateNav();
             const nextBtn = document.getElementById('wizard-next-btn');
             expect(nextBtn.style.display).toBe('');
@@ -426,24 +433,28 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('returns true for step 2 with Gemini key and models selected', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
         it('returns true for step 2 with OpenAI key and models selected', () => {
             document.getElementById('openai_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
         it('returns true for step 2 with Anthropic key and models selected', () => {
             document.getElementById('anthropic_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
         it('returns true for step 2 with Ollama URL and models selected', () => {
             document.getElementById('ollama_url').value = 'http://localhost:11434';
             setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
@@ -534,44 +545,44 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage = new SetupPage();
         });
 
-        it('disables selects when no providers active', () => {
+        it('disables dropdowns when no providers active', () => {
             setupPage._updateModelDropdowns();
-            expect(document.getElementById('primary_model').disabled).toBe(true);
-            expect(document.getElementById('assistant_model').disabled).toBe(true);
+            expect(document.getElementById('primary_model').classList.contains('disabled')).toBe(true);
+            expect(document.getElementById('assistant_model').classList.contains('disabled')).toBe(true);
         });
 
-        it('enables selects when a provider is active', () => {
+        it('enables dropdowns when a provider is active', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._updateModelDropdowns();
-            expect(document.getElementById('primary_model').disabled).toBe(false);
-            expect(document.getElementById('assistant_model').disabled).toBe(false);
+            expect(document.getElementById('primary_model').classList.contains('disabled')).toBe(false);
+            expect(document.getElementById('assistant_model').classList.contains('disabled')).toBe(false);
         });
 
         it('populates models for active provider', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._updateModelDropdowns();
-            const primary = document.getElementById('primary_model');
-            expect(primary.options.length).toBeGreaterThan(0);
-            expect(primary.value).not.toBe('');
+            const primaryMenu = document.getElementById('primary_model-menu');
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            expect(primaryMenu.children.length).toBeGreaterThan(0);
+            expect(primaryText.textContent).not.toBe('Enter at least one API key above');
         });
 
         it('populates models from multiple active providers', () => {
             document.getElementById('gemini_api_key').value = 'key1';
             document.getElementById('openai_api_key').value = 'key2';
             setupPage._updateModelDropdowns();
-            const primary = document.getElementById('primary_model');
-            const groups = primary.querySelectorAll('optgroup');
-            expect(groups.length).toBe(2);
+            const primaryMenu = document.getElementById('primary_model-menu');
+            const categories = primaryMenu.querySelectorAll('.llm-model-dropdown__category');
+            expect(categories.length).toBe(2);
         });
 
         it('preserves previous selection if still available', () => {
             document.getElementById('gemini_api_key').value = 'key1';
             setupPage._updateModelDropdowns();
-            const primary = document.getElementById('primary_model');
-            const firstValue = primary.value;
+            const firstSelected = setupPage._selectedModels.primary;
             document.getElementById('openai_api_key').value = 'key2';
             setupPage._updateModelDropdowns();
-            expect(primary.value).toBe(firstValue);
+            expect(setupPage._selectedModels.primary).toBe(firstSelected);
         });
     });
 
@@ -586,7 +597,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('returns true when key entered and models populated', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
-            setupPage._updateModelDropdowns();
+            setupPage._onProviderKeyChange();
+            // Models are auto-selected by _updateModelDropdowns
             expect(setupPage._isProviderStepReady()).toBe(true);
         });
     });
@@ -762,7 +774,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('renders primary model from unified dropdown', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
-            setupPage._updateModelDropdowns();
+            setupPage._onProviderKeyChange();
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
@@ -771,7 +783,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('renders assistant model from unified dropdown', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
-            setupPage._updateModelDropdowns();
+            setupPage._onProviderKeyChange();
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
@@ -783,7 +795,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[4].querySelector('.wizard-summary-value').textContent).toBe('Google');
+            expect(rows[5].querySelector('.wizard-summary-value').textContent).toBe('Google');
         });
 
         it('renders None for search provider when not set', () => {
@@ -791,7 +803,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage._renderSummary();
             const container = document.getElementById('wizard-summary');
             const rows = container.querySelectorAll('.wizard-summary-row');
-            expect(rows[4].querySelector('.wizard-summary-value').textContent).toBe('None');
+            expect(rows[5].querySelector('.wizard-summary-value').textContent).toBe('None');
         });
     });
 
@@ -814,7 +826,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('derives llm_primary_provider and llm_assistant_provider from selected models', () => {
             document.getElementById('gemini_api_key').value = 'test-key';
-            setupPage._updateModelDropdowns();
+            setupPage._onProviderKeyChange();
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.GEMINI);
             expect(settings.llm_assistant_provider).toBe(LLMProvider.GEMINI);
@@ -824,9 +836,10 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('derives correct provider for Anthropic models', () => {
             document.getElementById('anthropic_api_key').value = 'test';
-            setupPage._updateModelDropdowns();
-            document.getElementById('primary_model').value = AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6;
-            document.getElementById('assistant_model').value = AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5;
+            setupPage._onProviderKeyChange();
+            // Manually set selected models to test provider derivation
+            setupPage._selectedModels.primary = AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6;
+            setupPage._selectedModels.assistant = AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5;
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.ANTHROPIC);
             expect(settings.llm_assistant_provider).toBe(LLMProvider.ANTHROPIC);
@@ -834,8 +847,9 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('derives correct provider for Ollama models', () => {
             document.getElementById('ollama_url').value = 'test';
-            setupPage._updateModelDropdowns();
-            document.getElementById('primary_model').value = OllamaModel.GEMMA4_E4B;
+            setupPage._onProviderKeyChange();
+            // Manually set selected model to test provider derivation
+            setupPage._selectedModels.primary = OllamaModel.GEMMA4_E4B;
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.OLLAMA);
         });
@@ -1219,6 +1233,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage._step = 2;
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
+            // Ensure all models are selected (auto-selected by _updateModelDropdowns)
+            expect(setupPage._isProviderStepReady()).toBe(true);
             document.getElementById('gemini_api_key').focus();
             
             const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
