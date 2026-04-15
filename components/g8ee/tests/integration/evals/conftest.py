@@ -17,16 +17,79 @@ Provides eval_results_collector fixture that collects all evaluation results
 and displays them in a summary at the end of the test run.
 """
 
+import asyncio
 import logging
 import os
 
 import pytest
+import pytest_asyncio
 from typing import Any
 
 from app.llm.factory import get_llm_settings
+from app.models.operators import PendingApproval
 from app.models.settings import G8eeUserSettings, SearchSettings, EvalJudgeSettings
+from app.services.service_factory import ServiceFactory
+from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def all_services(cache_aside_service, test_settings):
+    """Fixture that returns all g8ee services properly configured with auto-approval.
+
+    Benchmark and eval tests use fake operators (documents only, no real process).
+    Auto-approval is required to prevent infinite loops when commands are dispatched.
+    """
+    services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+
+    def _auto_approve_callback(approval_id: str, pending: PendingApproval):
+        loop = asyncio.get_event_loop()
+        loop.call_later(0.01, lambda: pending.resolve(
+            approved=True,
+            reason="Auto-approved by eval test runner",
+            responded_at=now(),
+        ))
+
+    approval_service = services['approval_service']
+    approval_service.set_on_approval_requested(_auto_approve_callback)
+
+    yield services
+
+    chat_task_manager = services.get('chat_task_manager')
+    if chat_task_manager is not None:
+        try:
+            await chat_task_manager.wait_all(timeout=5.0)
+        except TimeoutError:
+            logger.warning("Background tasks did not complete within 5s timeout, proceeding with cleanup")
+        except Exception as exc:
+            logger.error("Error awaiting background tasks: %s", exc)
+
+    await ServiceFactory.stop_services(services)
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def cleanup(cache_aside_service, all_services):
+    """Autouse-friendly cleanup tracker for integration tests.
+
+    Track documents created during a test via ``cleanup.track_investigation(id)``
+    etc. All tracked documents are deleted after the test, even on failure.
+    """
+    from tests.integration.cleanup import IntegrationCleanupTracker
+
+    tracker = IntegrationCleanupTracker(cache_aside_service)
+    yield tracker
+
+    chat_task_manager = all_services.get('chat_task_manager')
+    if chat_task_manager is not None:
+        try:
+            await chat_task_manager.wait_all(timeout=5.0)
+        except TimeoutError:
+            logger.warning("Background tasks did not complete within 5s timeout, proceeding with document cleanup")
+        except Exception as exc:
+            logger.error("Error awaiting background tasks: %s", exc)
+
+    await tracker.cleanup()
 
 
 @pytest.fixture(scope="session")
