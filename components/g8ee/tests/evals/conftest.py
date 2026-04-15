@@ -50,6 +50,12 @@ async def all_services(cache_aside_service, test_settings):
     await ServiceFactory.stop_services(services)
 
 
+@pytest.fixture(scope="function")
+def tool_service(all_services):
+    """Returns the AIToolService from all_services."""
+    return all_services['tool_service']
+
+
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service, all_services):
     """Autouse-friendly cleanup tracker for integration tests.

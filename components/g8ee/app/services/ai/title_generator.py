@@ -20,7 +20,7 @@ Uses a lightweight model optimized for quick text generation tasks.
 
 import logging
 
-from app.constants import LLM_DEFAULT_TEMPERATURE
+from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
@@ -74,9 +74,10 @@ async def generate_case_title(
         from app.models.model_configs import get_model_config
         model_config = get_model_config(model)
         temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        max_output_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         settings = LiteLLMSettings(
             temperature=temperature,
-            max_output_tokens=256,
+            max_output_tokens=max_output_tokens,
             top_p_nucleus_sampling=model_config.top_p,
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,
