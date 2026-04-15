@@ -1656,7 +1656,8 @@ class TestMaxTokensConstants:
                 'default_temperature': 0.0,
                 'max_output_tokens': _MAX_TOKENS_VERIFIER,
                 'top_p': 1.0,
-                'top_k': None
+                'top_k': None,
+                'stop_sequences': None,
             })()
             mock_get_config.return_value = mock_config
 

@@ -44,6 +44,62 @@ class AIGenerationConfigBuilder:
     """
 
     @staticmethod
+    def _get_effective_temperature(
+        model_config,
+        temperature: float | None,
+    ) -> float:
+        """Get effective temperature value with fallback to model config or default."""
+        if temperature is not None:
+            return temperature
+        return (
+            model_config.default_temperature
+            if model_config and model_config.default_temperature is not None
+            else LLM_DEFAULT_TEMPERATURE
+        )
+
+    @staticmethod
+    def _get_effective_max_tokens(
+        model_config,
+        max_tokens: int | None,
+    ) -> int:
+        """Get effective max_tokens value with fallback to model config or default."""
+        if max_tokens is not None:
+            return max_tokens
+        return (
+            model_config.max_output_tokens
+            if model_config and model_config.max_output_tokens is not None
+            else LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        )
+
+    @staticmethod
+    def _get_effective_values(
+        model_config,
+        temperature: float | None,
+        max_tokens: int | None,
+    ) -> tuple[float, int, int | None, float | None, list[str] | None]:
+        """Get all effective values from model config with fallbacks.
+
+        Returns:
+            (temperature, max_tokens, top_k, top_p, stop_sequences)
+        """
+        return (
+            AIGenerationConfigBuilder._get_effective_temperature(model_config, temperature),
+            AIGenerationConfigBuilder._get_effective_max_tokens(model_config, max_tokens),
+            model_config.top_k if model_config else None,
+            model_config.top_p if model_config else None,
+            model_config.stop_sequences if model_config else None,
+        )
+
+    @staticmethod
+    def _extract_tool_names(tools: list[types.ToolGroup]) -> list[str]:
+        """Extract tool names from tool groups for logging."""
+        tool_names = []
+        for t in (tools or []):
+            for fd in (t.tools or []):
+                tool_names.append(getattr(fd, 'name', '?'))
+        return tool_names
+
+    @staticmethod
     def _build_thinking_config(model_name: str) -> types.ThinkingConfig:
         """Build ThinkingConfig based on model capabilities.
 
@@ -78,13 +134,9 @@ class AIGenerationConfigBuilder:
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
         model_config = get_model_config(model)
 
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        )
 
         settings = PrimaryLLMSettings(
             temperature=effective_temperature,
@@ -94,13 +146,13 @@ class AIGenerationConfigBuilder:
             thinking_config=thinking_config,
             tools=tools,
             system_instructions=system_instructions,
+            stop_sequences=stop_sequences,
+            response_modalities=["TEXT"],
+            tool_config=types.ToolConfig(tool_calling_config=types.ToolCallingConfig(mode="AUTO")),
         )
 
         thinking_level = getattr(thinking_config, "thinking_level", None)
-        tool_names = []
-        for t in (tools or []):
-            for fd in (t.tools or []):
-                tool_names.append(getattr(fd, 'name', '?'))  # type: ignore[attr-defined]
+        tool_names = AIGenerationConfigBuilder._extract_tool_names(tools)
         logger.info(
             f" [BUILD_CONFIG] primary model={model}, max_tokens={effective_max_tokens}, "
             f"thinking_level={thinking_level}, tools_count={len(tools) if tools else 0}, "
@@ -119,13 +171,9 @@ class AIGenerationConfigBuilder:
         """Build AssistantLLMSettings for analysis calls."""
         model_config = get_model_config(model)
 
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        )
 
         settings = AssistantLLMSettings(
             temperature=effective_temperature,
@@ -133,7 +181,8 @@ class AIGenerationConfigBuilder:
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
             system_instructions=system_instructions,
-            response_format=response_format if response_format else None,
+            response_format=response_format,
+            stop_sequences=stop_sequences,
         )
 
         logger.info(
@@ -155,13 +204,9 @@ class AIGenerationConfigBuilder:
         """
         model_config = get_model_config(model)
 
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        )
 
         settings = LiteLLMSettings(
             temperature=effective_temperature,
@@ -169,7 +214,8 @@ class AIGenerationConfigBuilder:
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
             system_instructions=system_instructions,
-            response_format=response_format if response_format else None,
+            response_format=response_format,
+            stop_sequences=stop_sequences,
         )
 
         logger.info(
@@ -185,17 +231,13 @@ class AIGenerationConfigBuilder:
         system_instructions: str,
         tools: list[types.ToolGroup],
     ) -> types.GenerateContentConfig:
-        """Shared config construction. All public methods delegate here."""
+        """Build GenerateContentConfig for main-model calls with tools."""
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
         model_config = get_model_config(model)
 
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        )
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
@@ -205,13 +247,11 @@ class AIGenerationConfigBuilder:
             thinking_config=thinking_config,
             tools=tools,
             system_instructions=system_instructions,
+            stop_sequences=stop_sequences,
         )
 
         thinking_level = getattr(thinking_config, "thinking_level", None)
-        tool_names = []
-        for t in (tools or []):
-            for fd in (t.tools or []):
-                tool_names.append(getattr(fd, 'name', '?'))  # type: ignore[attr-defined]
+        tool_names = AIGenerationConfigBuilder._extract_tool_names(tools)
         logger.info(
             f" [BUILD_CONFIG] model={model}, max_tokens={effective_max_tokens}, "
             f"thinking_level={thinking_level}, tools_count={len(tools) if tools else 0}, "
@@ -235,13 +275,9 @@ class AIGenerationConfigBuilder:
         no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
         model_config = get_model_config(model)
 
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, _ = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        )
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
@@ -266,91 +302,17 @@ class AIGenerationConfigBuilder:
         Stops at the first newline.
         """
         model_config = get_model_config(model)
-        effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
+
+        effective_temperature, effective_max_tokens, _, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, None, None)
+        )
 
         config = types.GenerateContentConfig(
             temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_p_nucleus_sampling=effective_top_p,
-            stop_sequences=["\n"],
+            stop_sequences=stop_sequences,
         )
 
-        logger.info(
-            f" [BUILD_CONFIG] title model={model}"
-        )
-        return config
-
-    @staticmethod
-    def get_lite_generation_config_with_schema(
-        model: str,
-        json_schema: dict[str, object],
-        temperature: float | None,
-        max_tokens: int | None,
-        system_instructions: str,
-    ) -> types.GenerateContentConfig:
-        """Build a lightweight GenerateContentConfig for structured JSON output calls."""
-        no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
-        model_config = get_model_config(model)
-
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
-
-        config = types.GenerateContentConfig(
-            temperature=effective_temperature,
-            max_output_tokens=effective_max_tokens,
-            top_k_filtering=effective_top_k,
-            top_p_nucleus_sampling=effective_top_p,
-            thinking_config=no_thinking,
-            response_format=types.ResponseFormat.from_pydantic_schema(json_schema),  # type: ignore[arg-type]
-            system_instructions=system_instructions,
-        )
-
-        logger.info(
-            f"[BUILD_CONFIG] lite+schema model={model}, max_tokens={effective_max_tokens}, thinking=disabled"
-        )
-        return config
-
-    @staticmethod
-    def get_lite_generation_config_for_json(
-        model: str,
-        temperature: float | None,
-        max_tokens: int | None,
-        system_instructions: str,
-    ) -> types.GenerateContentConfig:
-        """Build a lightweight GenerateContentConfig that requests JSON but doesn't enforce schema.
-
-        More forgiving than get_lite_generation_config_with_schema - suitable for local
-        models that may return partial JSON, markdown-wrapped JSON, or plain text.
-        The caller is responsible for parsing the response with fallback strategies.
-        """
-        no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
-        model_config = get_model_config(model)
-
-        if temperature is not None:
-            effective_temperature = temperature
-        else:
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
-        effective_max_tokens = max_tokens if max_tokens is not None else (model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS)
-        effective_top_k = model_config.top_k if model_config and model_config.top_k is not None else None
-        effective_top_p = model_config.top_p if model_config and model_config.top_p is not None else 1.0
-
-        config = types.GenerateContentConfig(
-            temperature=effective_temperature,
-            max_output_tokens=effective_max_tokens,
-            top_k_filtering=effective_top_k,
-            top_p_nucleus_sampling=effective_top_p,
-            thinking_config=no_thinking,
-            system_instructions=system_instructions,
-        )
-
-        logger.info(
-            f"[BUILD_CONFIG] lite+json model={model}, max_tokens={effective_max_tokens}, thinking=disabled, schema=flexible"
-        )
+        logger.info(f" [BUILD_CONFIG] title model={model}")
         return config

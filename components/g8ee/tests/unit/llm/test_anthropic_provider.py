@@ -30,9 +30,13 @@ from app.llm.llm_types import (
     LiteLLMSettings,
     Part,
     PrimaryLLMSettings,
+    ResponseFormat,
+    ResponseJsonSchema,
     ThinkingConfig,
     ThoughtSignature,
     ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
     ToolResponse,
     ToolDeclaration,
     ToolGroup,
@@ -61,6 +65,10 @@ class TestBuildKwargs:
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
             "temperature": 0.4,
             "max_tokens": 8192,
+            "top_k": None,
+            "system_instructions": "",
+            "anthropic_tools": None,
+            "thinking_config": None,
         }
         defaults.update(overrides)
         return provider._build_kwargs(**defaults)
@@ -115,6 +123,9 @@ class TestBuildKwargsThinkingMode:
             "messages": [],
             "temperature": 0.7,
             "max_tokens": 20000,
+            "top_k": None,
+            "system_instructions": "",
+            "anthropic_tools": None,
             "thinking_config": ThinkingConfig(
                 thinking_level=ThinkingLevel.HIGH,
                 include_thoughts=True,
@@ -155,6 +166,8 @@ class TestBuildKwargsThinkingMode:
             temperature=0.5,
             max_tokens=8192,
             top_k=40,
+            system_instructions="",
+            anthropic_tools=None,
             thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
         )
         assert kwargs["temperature"] == 0.5
@@ -398,7 +411,12 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=4096,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
             system_instructions="test",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
         result = await provider.generate_content_primary(
@@ -429,7 +447,9 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
+            stop_sequences=[],
             system_instructions="analyze",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
 
         await provider.generate_content_assistant(
@@ -457,7 +477,9 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=1024,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
+            stop_sequences=[],
             system_instructions="triage",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
 
         await provider.generate_content_lite(
@@ -486,11 +508,15 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=20000,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
             system_instructions="think",
             thinking_config=ThinkingConfig(
                 thinking_level=ThinkingLevel.HIGH,
                 include_thoughts=True,
             ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
         await provider.generate_content_primary(
@@ -540,6 +566,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
         
         chunks = []
@@ -574,6 +605,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
         
         with pytest.raises(Exception, match="Network error"):
@@ -621,6 +657,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
         
         chunks = []
@@ -668,6 +709,14 @@ class TestStreamCompletionVerification:
         settings = PrimaryLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         chunks = []
@@ -702,6 +751,14 @@ class TestStreamCompletionVerification:
         settings = PrimaryLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         with pytest.raises(Exception, match="Network error"):

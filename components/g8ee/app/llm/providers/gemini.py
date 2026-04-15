@@ -419,13 +419,13 @@ class GeminiProvider(LLMProvider):
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
             "max_output_tokens": primary_llm_settings.max_output_tokens,
-            "top_p": primary_llm_settings.top_p_nucleus_sampling,
-            "top_k": primary_llm_settings.top_k_filtering,
             "thinking_config": primary_llm_settings.thinking_config,
             "tool_config": primary_llm_settings.tool_config,
             "tools": primary_llm_settings.tools,
             "system_instructions": primary_llm_settings.system_instructions,
         }
+        if primary_llm_settings.top_p_nucleus_sampling is not None:
+            gen_config_kwargs["top_p"] = primary_llm_settings.top_p_nucleus_sampling
         if primary_llm_settings.top_k_filtering is not None:
             gen_config_kwargs["top_k"] = primary_llm_settings.top_k_filtering
 
@@ -454,12 +454,12 @@ class GeminiProvider(LLMProvider):
 
         logger.debug(
             "[GEMINI] Building config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%s system_instructions_len=%d tools_count=%d "
+            "top_p=%s top_k=%s system_instructions_len=%d tools_count=%d "
             "thinking_level=%s include_thoughts=%s tool_calling_mode=%s allowed_tools=%d",
             model,
             temperature,
             effective_max_tokens,
-            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
             primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
             len(primary_llm_settings.system_instructions),
             len(genai_tools) if genai_tools else 0,
@@ -483,9 +483,10 @@ class GeminiProvider(LLMProvider):
 
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
-            "top_p": assistant_llm_settings.top_p_nucleus_sampling,
             "system_instructions": assistant_llm_settings.system_instructions,
         }
+        if assistant_llm_settings.top_p_nucleus_sampling is not None:
+            gen_config_kwargs["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
         if assistant_llm_settings.top_k_filtering is not None:
             gen_config_kwargs["top_k"] = assistant_llm_settings.top_k_filtering
 
@@ -498,11 +499,11 @@ class GeminiProvider(LLMProvider):
 
         logger.info(
             "[GEMINI] Building assistant config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%s system_instructions_len=%d response_format=%s",
+            "top_p=%s top_k=%s system_instructions_len=%d response_format=%s",
             model,
             temperature,
             effective_max_tokens,
-            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
             assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
             len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
@@ -527,9 +528,10 @@ class GeminiProvider(LLMProvider):
 
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
-            "top_p": lite_llm_settings.top_p_nucleus_sampling,
             "system_instructions": lite_llm_settings.system_instructions,
         }
+        if lite_llm_settings.top_p_nucleus_sampling is not None:
+            gen_config_kwargs["top_p"] = lite_llm_settings.top_p_nucleus_sampling
         if lite_llm_settings.top_k_filtering is not None:
             gen_config_kwargs["top_k"] = lite_llm_settings.top_k_filtering
 
@@ -542,11 +544,11 @@ class GeminiProvider(LLMProvider):
 
         logger.info(
             "[GEMINI] Building lite config: model=%s temperature=%.2f max_output_tokens=%d "
-            "top_p=%.2f top_k=%s system_instructions_len=%d response_format=%s",
+            "top_p=%s top_k=%s system_instructions_len=%d response_format=%s",
             model,
             temperature,
             effective_max_tokens,
-            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
             lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
             len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
@@ -722,14 +724,14 @@ class GeminiProvider(LLMProvider):
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_primary: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
             effective_temperature,
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
-            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(primary_llm_settings.system_instructions),
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
@@ -756,14 +758,14 @@ class GeminiProvider(LLMProvider):
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             effective_temperature,
             assistant_llm_settings.max_output_tokens,
             assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
-            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
@@ -790,14 +792,14 @@ class GeminiProvider(LLMProvider):
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         logger.info(
             "[GEMINI] generate_content_stream_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             effective_temperature,
             lite_llm_settings.max_output_tokens,
             lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
-            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )

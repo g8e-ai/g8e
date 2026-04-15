@@ -76,7 +76,7 @@ from app.constants import (
     GEMINI_DEFAULT_MODEL,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings
+from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat, ResponseJsonSchema
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -324,10 +324,16 @@ async def _run_generation_pass(
         working_directory=working_directory,
         original_command=original_command,
     )
+    from app.models.model_configs import get_model_config
+    model_config = get_model_config(model)
     settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=_MAX_TOKENS_GENERATION,
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
         system_instructions="",
+        response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
     )
     try:
         response = await provider.generate_content_lite(
@@ -391,7 +397,11 @@ async def _run_verifier(
     settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=_MAX_TOKENS_VERIFIER,
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
         system_instructions="",
+        response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
     )
     try:
         response = await provider.generate_content_lite(

@@ -33,7 +33,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettings
+from app.llm.llm_types import Content, Part, ResponseFormat, ResponseJsonSchema, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
 from app.constants import LLM_DEFAULT_TEMPERATURE
@@ -205,9 +205,13 @@ class EvalJudge:
         if effective_temperature is None:
             model_config = get_model_config(self._model)
             effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        model_config = get_model_config(self._model)
         settings = LiteLLMSettings(
             temperature=effective_temperature,
             max_output_tokens=self._settings.max_output_tokens,
+            top_p_nucleus_sampling=model_config.top_p,
+            top_k_filtering=model_config.top_k,
+            stop_sequences=model_config.stop_sequences,
             system_instructions="",
             response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
                 _JUDGE_RESPONSE_SCHEMA,

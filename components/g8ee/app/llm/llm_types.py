@@ -379,9 +379,9 @@ class ThinkingConfig:
 class PrimaryLLMSettings:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float
-    top_k_filtering: int
-    stop_sequences: list[str]
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
     response_modalities: list[str]
     tools: list[ToolGroup]
     system_instructions: str
@@ -393,35 +393,35 @@ class PrimaryLLMSettings:
 class AssistantLLMSettings:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float
-    top_k_filtering: int
-    stop_sequences: list[str]
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
     system_instructions: str
-    response_format: ResponseFormat
+    response_format: ResponseFormat | None
 
 
 @dataclass
 class LiteLLMSettings:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float
-    top_k_filtering: int
-    stop_sequences: list[str]
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
     system_instructions: str
-    response_format: ResponseFormat
+    response_format: ResponseFormat | None
 
 
 @dataclass
 class GenerateContentConfig:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float
-    top_k_filtering: int
-    stop_sequences: list[str]
-    response_modalities: list[str]
-    tools: list[ToolGroup]
-    system_instructions: str
-    thinking_config: ThinkingConfig
-    tool_config: ToolConfig
-    response_format: ResponseFormat
+    top_p_nucleus_sampling: float | None = None
+    top_k_filtering: int | None = None
+    stop_sequences: list[str] | None = None
+    response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
+    tools: list[ToolGroup] = field(default_factory=list)
+    system_instructions: str = ""
+    thinking_config: ThinkingConfig = field(default_factory=lambda: ThinkingConfig(thinking_level=None, include_thoughts=False))
+    tool_config: ToolConfig = field(default_factory=lambda: ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")))
+    response_format: ResponseFormat | None = None
 

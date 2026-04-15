@@ -334,14 +334,14 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_primary: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
             primary_llm_settings.temperature,
             primary_llm_settings.max_output_tokens,
             primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
-            primary_llm_settings.top_p_nucleus_sampling,
+            primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(primary_llm_settings.system_instructions),
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
@@ -478,14 +478,14 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             assistant_llm_settings.temperature,
             assistant_llm_settings.max_output_tokens,
             assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
-            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
@@ -497,6 +497,8 @@ class AnthropicProvider(LLMProvider):
             max_tokens=assistant_llm_settings.max_output_tokens,
             top_k=assistant_llm_settings.top_k_filtering,
             system_instructions=assistant_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
         async for chunk in self._stream_text_only(kwargs):
@@ -510,14 +512,14 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             assistant_llm_settings.temperature,
             assistant_llm_settings.max_output_tokens,
             assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
-            assistant_llm_settings.top_p_nucleus_sampling,
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
@@ -529,6 +531,8 @@ class AnthropicProvider(LLMProvider):
             max_tokens=assistant_llm_settings.max_output_tokens,
             top_k=assistant_llm_settings.top_k_filtering,
             system_instructions=assistant_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
         response = await self._client.messages.create(**kwargs)
@@ -542,14 +546,14 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             lite_llm_settings.temperature,
             lite_llm_settings.max_output_tokens,
             lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
-            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
@@ -561,6 +565,8 @@ class AnthropicProvider(LLMProvider):
             max_tokens=lite_llm_settings.max_output_tokens,
             top_k=lite_llm_settings.top_k_filtering,
             system_instructions=lite_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
         async for chunk in self._stream_text_only(kwargs):
@@ -574,14 +580,14 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%.2f "
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
             "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             lite_llm_settings.temperature,
             lite_llm_settings.max_output_tokens,
             lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
-            lite_llm_settings.top_p_nucleus_sampling,
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
             len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
@@ -593,6 +599,8 @@ class AnthropicProvider(LLMProvider):
             max_tokens=lite_llm_settings.max_output_tokens,
             top_k=lite_llm_settings.top_k_filtering,
             system_instructions=lite_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
         response = await self._client.messages.create(**kwargs)

@@ -51,6 +51,7 @@ def mock_provider():
     provider = AsyncMock()
     provider.__aenter__ = AsyncMock(return_value=provider)
     provider.__aexit__ = AsyncMock(return_value=False)
+    provider.generate_content_lite = AsyncMock()
     with patch("app.services.ai.title_generator.get_llm_provider", return_value=provider):
         yield provider
 
@@ -81,14 +82,14 @@ async def test_generate_title_returns_default_for_empty_description(mock_setting
 @pytest.mark.asyncio
 async def test_generate_title_success(mock_provider, mock_settings):
     """Test successful title generation using LLM."""
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response("Fixed DNS Resolution Issue")
-    
+    mock_provider.generate_content_lite.return_value = create_real_llm_response("Fixed DNS Resolution Issue")
+
     result = await generate_case_title(
         description="I am having trouble resolving DNS on my local machine.",
         max_length=80,
         settings=mock_settings
     )
-    
+
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Fixed DNS Resolution Issue"
     assert result.fallback is False
@@ -97,13 +98,13 @@ async def test_generate_title_success(mock_provider, mock_settings):
 @pytest.mark.asyncio
 async def test_generate_title_removes_quotes(mock_provider, mock_settings):
     """Test that LLM-generated quotes are stripped."""
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response('"Database Connection Error"')
+    mock_provider.generate_content_lite.return_value = create_real_llm_response('"Database Connection Error"')
     result = await generate_case_title("db is down", max_length=80, settings=mock_settings)
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Database Connection Error"
     assert result.fallback is False
 
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response("'Service Restart Required'")
+    mock_provider.generate_content_lite.return_value = create_real_llm_response("'Service Restart Required'")
     result = await generate_case_title("restart svc", max_length=80, settings=mock_settings)
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Service Restart Required"
@@ -114,10 +115,10 @@ async def test_generate_title_removes_quotes(mock_provider, mock_settings):
 async def test_generate_title_truncates_long_titles(mock_provider, mock_settings):
     """Test truncation of titles exceeding max_length."""
     long_title = "This is an extremely long title that definitely exceeds the default character limit of eighty characters"
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response(long_title)
-    
+    mock_provider.generate_content_lite.return_value = create_real_llm_response(long_title)
+
     result = await generate_case_title("help", max_length=20, settings=mock_settings)
-    
+
     assert isinstance(result, CaseTitleResult)
     assert len(result.generated_title) <= 20
     assert result.generated_title == "This is an extrem..."
@@ -127,11 +128,11 @@ async def test_generate_title_truncates_long_titles(mock_provider, mock_settings
 @pytest.mark.asyncio
 async def test_generate_title_uses_fallback_on_empty_llm_response(mock_provider, mock_settings):
     """Test fallback when LLM returns no content."""
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response("")
-    
+    mock_provider.generate_content_lite.return_value = create_real_llm_response("")
+
     description = "Nginx service is failing to start on port 80"
     result = await generate_case_title(description, max_length=80, settings=mock_settings)
-    
+
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Nginx service is failing to start on port 80"
     assert result.fallback is True
@@ -140,11 +141,11 @@ async def test_generate_title_uses_fallback_on_empty_llm_response(mock_provider,
 @pytest.mark.asyncio
 async def test_generate_title_uses_fallback_on_short_llm_response(mock_provider, mock_settings):
     """Test fallback when LLM returns a title that is too short (< 5 chars)."""
-    mock_provider.generate_content_assistant.return_value = create_real_llm_response("Fix")
-    
+    mock_provider.generate_content_lite.return_value = create_real_llm_response("Fix")
+
     description = "Memory leak in the worker process"
     result = await generate_case_title(description, max_length=80, settings=mock_settings)
-    
+
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Memory leak in the worker process"
     assert result.fallback is True
@@ -153,11 +154,11 @@ async def test_generate_title_uses_fallback_on_short_llm_response(mock_provider,
 @pytest.mark.asyncio
 async def test_generate_title_uses_fallback_on_exception(mock_provider, mock_settings):
     """Test fallback when an exception occurs during generation."""
-    mock_provider.generate_content_assistant.side_effect = Exception("LLM connection failed")
-    
+    mock_provider.generate_content_lite.side_effect = Exception("LLM connection failed")
+
     description = "Permission denied when accessing /var/log/syslog"
     result = await generate_case_title(description, max_length=80, settings=mock_settings)
-    
+
     assert isinstance(result, CaseTitleResult)
     assert result.generated_title == "Permission denied when accessing /var/log/syslog"
     assert result.fallback is True

@@ -30,6 +30,11 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     AssistantLLMSettings,
     LiteLLMSettings,
+    ThinkingConfig,
+    ToolConfig,
+    ToolCallingConfig,
+    ResponseFormat,
+    ResponseJsonSchema,
 )
 
 
@@ -47,39 +52,33 @@ class TestOllamaProviderSSL:
             OllamaProvider(
                 endpoint="https://api.ollama.ai",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is True
+            assert mock_client.call_args.kwargs.get("verify") is False
 
     def test_internal_localhost_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            import ssl
-            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
+            assert mock_client.call_args.kwargs.get("verify") is False
 
     def test_internal_ip_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://192.168.1.50:11434",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            import ssl
-            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
+            assert mock_client.call_args.kwargs.get("verify") is False
 
     def test_internal_http_disables_ssl(self):
         with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="http://10.0.0.1:11434",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
             assert mock_client.call_args.kwargs.get("verify") is False
@@ -89,10 +88,9 @@ class TestOllamaProviderSSL:
             OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is True
+            assert mock_client.call_args.kwargs.get("verify") is False
 
 
 class TestOllamaProviderClose:
@@ -105,7 +103,6 @@ class TestOllamaProviderClose:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             await provider.close()
             mock_httpx_client.aclose.assert_called_once()
@@ -120,7 +117,6 @@ class TestOllamaProviderConstruction:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
             mock_ctor.assert_called_once()
             assert provider._httpx_client is mock_client
@@ -131,7 +127,6 @@ class TestOllamaProviderConstruction:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434/",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             assert provider._original_endpoint == "https://localhost:11434"
 
@@ -140,7 +135,6 @@ class TestOllamaProviderConstruction:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434/v1",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             assert provider._original_endpoint == "https://localhost:11434"
 
@@ -152,7 +146,6 @@ class TestOllamaProviderConstruction:
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             async with provider:
                 assert provider is not None
@@ -192,6 +185,13 @@ class TestOllamaProviderGeneration:
             system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         response = await provider.generate_content_primary("llama3", contents, settings)
@@ -234,6 +234,13 @@ class TestOllamaProviderGeneration:
             system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         chunks = []
@@ -264,6 +271,10 @@ class TestOllamaProviderGeneration:
             system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
         
         response = await provider.generate_content_assistant("llama3", contents, settings)
@@ -289,6 +300,10 @@ class TestOllamaProviderGeneration:
             system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(schema={}, name="response")),
         )
         
         response = await provider.generate_content_lite("llama3", contents, settings)

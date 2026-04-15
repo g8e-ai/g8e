@@ -44,9 +44,8 @@ class TestOllamaProviderSSL:
                 endpoint="https://localhost:11434/v1",
                 api_key="test-key",
             )
-            assert mock_client.call_count == 2
-            for call in mock_client.call_args_list:
-                assert call.kwargs["verify"] is False
+            assert mock_client.call_count == 1
+            assert mock_client.call_args.kwargs["verify"] is False
 
     def test_ollama_http_always_false_verify(self):
         with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
@@ -55,9 +54,8 @@ class TestOllamaProviderSSL:
                 endpoint="http://localhost:11434/v1",
                 api_key="test-key",
             )
-            assert mock_client.call_count == 2
-            for call in mock_client.call_args_list:
-                assert call.kwargs["verify"] is False
+            assert mock_client.call_count == 1
+            assert mock_client.call_args.kwargs["verify"] is False
 
 
 class TestOpenAIProviderSSL:
