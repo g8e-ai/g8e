@@ -83,6 +83,7 @@ function makeAnchoredTerminalSpy() {
         clearActivityIndicators: vi.fn(),
         resetAutoScroll() { autoScrollResets++; },
         showWaitingIndicator: vi.fn(),
+        hideWaitingIndicator: vi.fn(),
         clear: vi.fn(),
         focus: vi.fn(),
         enable: vi.fn(),
