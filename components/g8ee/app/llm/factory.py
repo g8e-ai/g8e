@@ -162,6 +162,7 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
         provider = OllamaProvider(
             endpoint=settings.ollama_endpoint,
             api_key=settings.ollama_api_key,
+            ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.OPENAI:
         provider = OpenAIProvider(

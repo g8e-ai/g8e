@@ -54,25 +54,29 @@ class TestOllamaProviderSSL:
                 api_key="test-key",
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is False
+            assert mock_client.call_args.kwargs.get("verify") is True
 
     def test_internal_localhost_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
+                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is False
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
 
     def test_internal_ip_uses_platform_ca(self):
         with patch(PATCH_TARGET) as mock_client:
             OllamaProvider(
                 endpoint="https://192.168.1.50:11434",
                 api_key="test-key",
+                ca_cert_path=INTERNAL_CA,
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is False
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
 
     def test_internal_http_disables_ssl(self):
         with patch(PATCH_TARGET) as mock_client:
@@ -90,7 +94,7 @@ class TestOllamaProviderSSL:
                 api_key="test-key",
             )
             mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is False
+            assert mock_client.call_args.kwargs.get("verify") is True
 
 
 class TestOllamaProviderClose:

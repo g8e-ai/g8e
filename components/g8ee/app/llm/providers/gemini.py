@@ -419,9 +419,6 @@ class GeminiProvider(LLMProvider):
         gen_config_kwargs: dict[str, object] = {
             "temperature": temperature,
             "max_output_tokens": primary_llm_settings.max_output_tokens,
-            "thinking_config": primary_llm_settings.thinking_config,
-            "tool_config": primary_llm_settings.tool_config,
-            "tools": primary_llm_settings.tools,
             "system_instructions": primary_llm_settings.system_instructions,
         }
         if primary_llm_settings.top_p_nucleus_sampling is not None:
@@ -429,11 +426,8 @@ class GeminiProvider(LLMProvider):
         if primary_llm_settings.top_k_filtering is not None:
             gen_config_kwargs["top_k"] = primary_llm_settings.top_k_filtering
 
-        effective_max_tokens = primary_llm_settings.max_output_tokens 
-        gen_config_kwargs["max_output_tokens"] = effective_max_tokens
-
+        effective_max_tokens = primary_llm_settings.max_output_tokens
         thinking_config = GeminiProvider._build_thinking_config_gemini3(primary_llm_settings.thinking_config, genai_types)
-
         if thinking_config is not None:
             gen_config_kwargs["thinking_config"] = thinking_config
 

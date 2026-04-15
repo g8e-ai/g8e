@@ -35,9 +35,21 @@ pytestmark = [pytest.mark.unit]
 
 
 class TestOllamaProviderSSL:
-    """Ollama does not support SSL - verify is always False."""
+    """Ollama uses the same SSL strategy as Anthropic/OpenAI."""
 
-    def test_ollama_never_uses_ssl_verification(self):
+    def test_ollama_internal_https_with_ca_uses_ssl_context(self):
+        with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
+            from app.llm.providers.ollama import OllamaProvider
+            OllamaProvider(
+                endpoint="https://localhost:11434/v1",
+                api_key="test-key",
+                ca_cert_path=INTERNAL_CA,
+            )
+            assert mock_client.call_count == 1
+            import ssl
+            assert isinstance(mock_client.call_args.kwargs["verify"], ssl.SSLContext)
+
+    def test_ollama_internal_https_without_ca_uses_true(self):
         with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
             from app.llm.providers.ollama import OllamaProvider
             OllamaProvider(
@@ -45,9 +57,9 @@ class TestOllamaProviderSSL:
                 api_key="test-key",
             )
             assert mock_client.call_count == 1
-            assert mock_client.call_args.kwargs["verify"] is False
+            assert mock_client.call_args.kwargs["verify"] is True
 
-    def test_ollama_http_always_false_verify(self):
+    def test_ollama_http_disables_verification(self):
         with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
             from app.llm.providers.ollama import OllamaProvider
             OllamaProvider(
@@ -56,6 +68,16 @@ class TestOllamaProviderSSL:
             )
             assert mock_client.call_count == 1
             assert mock_client.call_args.kwargs["verify"] is False
+
+    def test_ollama_external_https_uses_default_verification(self):
+        with patch("app.llm.providers.ollama.httpx.AsyncClient") as mock_client:
+            from app.llm.providers.ollama import OllamaProvider
+            OllamaProvider(
+                endpoint="https://api.ollama.ai/v1",
+                api_key="test-key",
+            )
+            assert mock_client.call_count == 1
+            assert mock_client.call_args.kwargs["verify"] is True
 
 
 class TestOpenAIProviderSSL:
@@ -211,7 +233,7 @@ class TestFactorySSL:
         finally:
             reset_settings()
 
-    def test_ollama_does_not_get_ca_cert_path(self):
+    def test_ollama_gets_ca_cert_path(self):
         from app.llm.factory import get_llm_provider, set_settings, reset_settings
         from app.models.settings import LLMSettings, G8eePlatformSettings
         from app.constants import LLMProvider
@@ -228,7 +250,7 @@ class TestFactorySSL:
         try:
             with patch("app.llm.providers.ollama.OllamaProvider") as mock_ollama:
                 get_llm_provider(llm_settings)
-                assert "ca_cert_path" not in mock_ollama.call_args.kwargs
+                assert mock_ollama.call_args.kwargs["ca_cert_path"] == INTERNAL_CA
         finally:
             reset_settings()
 

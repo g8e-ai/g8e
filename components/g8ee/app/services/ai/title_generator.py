@@ -47,7 +47,8 @@ Title:"""
 
 async def generate_case_title(
     description: str,
-    max_length: int,
+    *,
+    max_length: int = 80,
     settings: G8eeUserSettings,
 ) -> CaseTitleResult:
     """

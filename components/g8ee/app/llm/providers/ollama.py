@@ -22,7 +22,7 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import schema_to_dict
+from ..utils import is_internal_endpoint, schema_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -94,30 +94,40 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 class OllamaProvider(LLMProvider):
     _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
 
-    def __init__(self, endpoint: str, api_key: str):
-        # Strip /v1 suffix if present - ollama SDK handles API paths internally
-        cleaned_endpoint = endpoint.rstrip('/')
+    def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
+        import ssl
         super().__init__()
 
+        cleaned_endpoint = endpoint.rstrip('/')
         if cleaned_endpoint.endswith('/v1'):
             cleaned_endpoint = cleaned_endpoint[:-3]
 
-        # Ensure protocol prefix exists - Ollama SDK requires http:// or https://
         if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
             cleaned_endpoint = 'http://' + cleaned_endpoint
 
         self._original_endpoint = cleaned_endpoint
 
+        verify: ssl.SSLContext | bool
+        if is_internal_endpoint(cleaned_endpoint):
+            if cleaned_endpoint.startswith("http://"):
+                verify = False
+            elif ca_cert_path:
+                verify = ssl.create_default_context(cafile=ca_cert_path)
+            else:
+                verify = True
+        else:
+            verify = True
+
         self._httpx_client = httpx.AsyncClient(
             base_url=self._original_endpoint,
             timeout=self._TIMEOUT,
-            verify=False,
+            verify=verify,
         )
         self._client = _InjectedAsyncClient(
             httpx_client=self._httpx_client,
             host=self._original_endpoint,
         )
-        logger.info(f"Ollama provider initialized: {self._original_endpoint}")
+        logger.info("Ollama provider initialized: %s", self._original_endpoint)
 
     async def _close_resources(self):
         """Clean up the underlying httpx client."""

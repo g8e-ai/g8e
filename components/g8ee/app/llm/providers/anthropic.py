@@ -217,9 +217,9 @@ class AnthropicProvider(LLMProvider):
         temperature: float,
         max_tokens: int,
         top_k: int,
-        system_instructions: str ,
-        anthropic_tools: list[dict],
-        thinking_config: ThinkingConfig,
+        system_instructions: str,
+        anthropic_tools: list[dict] | None = None,
+        thinking_config: ThinkingConfig | None = None,
     ) -> dict:
         """Build Anthropic API kwargs with proper parameter constraints.
 

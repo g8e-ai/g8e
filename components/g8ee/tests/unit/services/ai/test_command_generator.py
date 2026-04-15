@@ -28,6 +28,7 @@ from app.constants import (
     EventType,
 )
 from app.llm.llm_types import Content, Role
+from app.models.model_configs import LLMModelConfig
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.agents.tribunal import (
     TribunalFallbackPayload,
@@ -1652,13 +1653,14 @@ class TestMaxTokensConstants:
 
         # Mock get_model_config to return a config with default_temperature=0.0 for verifier
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_config = type('obj', (object,), {
-                'default_temperature': 0.0,
-                'max_output_tokens': _MAX_TOKENS_VERIFIER,
-                'top_p': 1.0,
-                'top_k': None,
-                'stop_sequences': None,
-            })()
+            mock_config = LLMModelConfig(
+                name="test-model",
+                default_temperature=0.0,
+                max_output_tokens=_MAX_TOKENS_VERIFIER,
+                top_p=1.0,
+                top_k=None,
+                stop_sequences=None,
+            )
             mock_get_config.return_value = mock_config
 
             await _run_verifier(
@@ -1691,7 +1693,7 @@ class TestTribunalMemberCycling:
 
         # Mock get_model_config to return a config with a specific temperature
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_config = type('obj', (object,), {'default_temperature': 0.7})()
+            mock_config = LLMModelConfig(name="test-model", default_temperature=0.7)
             mock_get_config.return_value = mock_config
 
             # Test that all passes return the model's default temperature
@@ -1710,7 +1712,7 @@ class TestTribunalMemberCycling:
 
         # Test fallback when default_temperature is None
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_config = type('obj', (object,), {'default_temperature': None})()
+            mock_config = LLMModelConfig(name="test-model", default_temperature=None)
             mock_get_config.return_value = mock_config
             temp = _temperature_for_pass(0, "test-model")
             assert temp == LLM_DEFAULT_TEMPERATURE
