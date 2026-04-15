@@ -189,8 +189,7 @@ go.work
 # Go workspace file
 go.work.sum
 
-# Dependency directories
-vendor/
+# Dependency directories (except components/g8eo/vendor which is intentionally committed)
 
 # Go build cache
 .cache/
