@@ -221,9 +221,9 @@ _preflight() {
 
     HOST_IPS=""
     if command -v ip >/dev/null 2>&1; then
-        HOST_IPS=$(ip -4 addr show scope global | awk '/inet / {split($2,a,"/"); print a[1]}' | tr '\n' ',' | sed 's/,$//')
+        HOST_IPS=$(ip -4 addr show scope global | awk '/inet / {split($2,a,"/"); print a[1]}' | grep -v '^172\.' | tr '\n' ',' | sed 's/,$//')
     elif command -v ifconfig >/dev/null 2>&1; then
-        HOST_IPS=$(ifconfig | awk '/inet / && !/127\.0\.0\.1/ {print $2}' | sed 's/addr://' | tr '\n' ',' | sed 's/,$//')
+        HOST_IPS=$(ifconfig | awk '/inet / && !/127\.0\.0\.1/ {print $2}' | sed 's/addr://' | grep -v '^172\.' | tr '\n' ',' | sed 's/,$//')
     fi
     export HOST_IPS
 }
@@ -236,18 +236,58 @@ _print_platform_info() {
     local _https_port="${HTTPS_PORT:-443}"
     local _app_url="${APP_URL:-}"
     local _dashboard_url
-    local _ssl_setup_url="https://127.0.0.1/trust"
+    local _ssl_setup_url
+    local _host_ip
     
     if [[ -n "$_app_url" ]]; then
         _dashboard_url="$_app_url"
+        _ssl_setup_url="${_app_url}/trust"
     elif [[ "$_https_port" == "443" ]]; then
         _dashboard_url="https://localhost"
+        _ssl_setup_url="https://127.0.0.1/trust"
     else
         _dashboard_url="https://localhost"
+        _ssl_setup_url="https://127.0.0.1/trust"
     fi
     
-    echo "  Dashboard : https://localhost"
-    echo "  SSL Setup  : https://127.0.0.1/trust"
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  g8e requires secure web connections (TLS 1.3 over a locally generated"
+    echo "  ECDSA P-384 private CA). Your device must trust this certificate before"
+    echo "  you can proceed."
+    echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "  Dashboard : $_dashboard_url"
+    echo "  SSL Setup  : $_ssl_setup_url"
+    
+    if [[ -n "$HOST_IPS" ]]; then
+        echo ""
+        echo "  Remote Access (from other devices on your network):"
+        IFS=',' read -ra IPS <<< "$HOST_IPS"
+        for ip in "${IPS[@]}"; do
+            echo "    Dashboard : https://$ip"
+            echo "    SSL Setup  : http://$ip/trust"
+        done
+    fi
+    
+    echo ""
+    echo "  Terminal one-liner (macOS/Linux):"
+    if [[ -n "$HOST_IPS" ]]; then
+        IFS=',' read -ra IPS <<< "$HOST_IPS"
+        echo "    curl -fsSL http://${IPS[0]}/trust | sudo sh"
+    else
+        echo "    curl -fsSL http://127.0.0.1/trust | sudo sh"
+    fi
+    echo ""
+    echo "  Windows (PowerShell):"
+    if [[ -n "$HOST_IPS" ]]; then
+        IFS=',' read -ra IPS <<< "$HOST_IPS"
+        echo "    irm http://${IPS[0]}/trust | iex"
+    else
+        echo "    irm http://127.0.0.1/trust | iex"
+    fi
+    echo ""
+    echo "  Alternative: Visit $_ssl_setup_url for manual download options."
+    echo "  After trusting, restart your browser."
 }
 
 if [[ -z "$COMMAND" ]]; then
