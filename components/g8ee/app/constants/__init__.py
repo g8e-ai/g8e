@@ -127,6 +127,7 @@ from app.constants.prompts import (
 )
 from app.constants.settings import (
     AGENT_MAX_RETRIES,
+    AGENT_MAX_TOOL_TURNS,
     AGENT_RETRYABLE_ERROR_SUBSTRINGS,
     AGENT_RETRYABLE_STATUS_CODES,
     AGENT_RETRY_BACKOFF_MULTIPLIER,

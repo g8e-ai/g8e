@@ -382,6 +382,7 @@ CACHE_TTL_ORGS                  = 7200
 AGENT_MAX_RETRIES               = 3
 AGENT_RETRY_DELAY_SECONDS       = 3.0
 AGENT_RETRY_BACKOFF_MULTIPLIER  = 1.5
+AGENT_MAX_TOOL_TURNS            = 25
 AGENT_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({408, 409, 423, 425, 429, 500, 502, 503, 504})
 AGENT_RETRYABLE_ERROR_SUBSTRINGS: tuple[str, ...] = (
     "model is overloaded",

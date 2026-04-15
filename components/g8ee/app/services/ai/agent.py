@@ -41,6 +41,7 @@ from collections.abc import AsyncGenerator
 import app.llm.llm_types as types
 from app.constants import (
     AGENT_MAX_RETRIES,
+    AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
     DEFAULT_FINISH_REASON,
@@ -275,6 +276,12 @@ class g8eEngine:
         loop_turn = 0
         while True:
             loop_turn += 1
+            if loop_turn > AGENT_MAX_TOOL_TURNS:
+                logger.error(
+                    "[AGENT] Tool loop exceeded max turns (%d), aborting to prevent infinite loop",
+                    AGENT_MAX_TOOL_TURNS,
+                )
+                break
             logger.info(
                 "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
                 loop_turn, len(contents), case_id, investigation_id,
