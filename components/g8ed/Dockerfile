@@ -30,6 +30,8 @@ RUN set -ex; \
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 COPY --from=g8ed-builder /app/node_modules ./node_modules
 
 COPY shared/ /shared/

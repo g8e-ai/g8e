@@ -3,6 +3,7 @@
 #
 # Service categories:
 #   Managed:  g8es, g8ee, g8ed, g8ep  (in scope for up/rebuild/clean)
+#   Test-runners: g8ee-test-runner, g8ed-test-runner, g8eo-test-runner (built separately)
 #   Data volumes:
 #     g8es-data     (g8es -- SQLite DB, users, settings; wiped by reset)
 #     g8es-ssl      (g8es -- TLS certs; NEVER wiped by reset or wipe)
@@ -37,7 +38,8 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-MANAGED_SERVICES=(g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner)
+MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
+TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
 
 _service_volume() {
     case "$1" in
@@ -63,6 +65,7 @@ Commands:
   rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
                                   Default (no components): g8es g8ee g8ed g8ep
                                   Valid: g8es g8ee g8ed g8ep
+  rebuild-test-runners            Rebuild test-runner containers
   reset                           Wipe DB data volumes + rebuild images from scratch
                                   Removes: g8es, g8ee, g8ed volumes; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
@@ -79,9 +82,10 @@ Examples:
   $(basename "$0") up                           Start the environment (no build)
   $(basename "$0") up g8ep                  Start only the g8ep container
   $(basename "$0") down                         Stop containers (preserve everything)
-  $(basename "$0") rebuild                      Rebuild g8es, g8ee, g8ed images (preserve volumes)
+  $(basename "$0") rebuild                      Rebuild g8es, g8ee, g8ed, g8ep images (preserve volumes)
   $(basename "$0") rebuild g8ee g8ed  Rebuild g8ee and g8ed only (preserve volumes)
   $(basename "$0") rebuild g8ep             Rebuild the g8ep image
+  $(basename "$0") rebuild-test-runners        Rebuild test-runner containers
   $(basename "$0") wipe                         Clear app data from the database; restart g8ee/g8ed
   $(basename "$0") reset                        Wipe ALL data volumes and rebuild from scratch
   $(basename "$0") clean                        Full Docker cleanup (managed services only)
@@ -97,7 +101,7 @@ while [[ $# -gt 0 ]]; do
             usage
             exit 0
             ;;
-        setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all)
+        setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all|rebuild-test-runners)
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
@@ -378,7 +382,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     _preflight
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner
+    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
@@ -532,7 +536,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner
+    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
@@ -554,7 +558,7 @@ fi
 
 if [[ "$COMMAND" == "rebuild" ]]; then
     if [[ ${#REBUILD_COMPONENTS[@]} -eq 0 ]]; then
-        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner)
+        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
@@ -587,6 +591,22 @@ if [[ "$COMMAND" == "operator-build" ]]; then
     docker exec g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
     echo ""
     echo "Operator binary built and uploaded to g8es blob store."
+    exit 0
+fi
+
+# ─── rebuild-test-runners ───────────────────────────────────────────────────────
+
+if [[ "$COMMAND" == "rebuild-test-runners" ]]; then
+    echo "Removing test-runner containers..."
+    docker compose rm -f "${TEST_RUNNER_SERVICES[@]}" 2>/dev/null || true
+
+    echo "Rebuilding and starting test-runners: ${TEST_RUNNER_SERVICES[*]}..."
+    docker compose up -d --build --force-recreate "${TEST_RUNNER_SERVICES[@]}"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Test-runner rebuild complete."
+    echo ""
+    docker compose ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 

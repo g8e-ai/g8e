@@ -70,7 +70,7 @@ Unified management sidecar with Python and network tools. Always running alongsi
 
 ## Test Runners
 
-g8e uses dedicated per-component test runner containers that are lean and parallel-buildable. These are defined in `docker-compose.yml` but are generally managed by the `./g8e test` command.
+g8e uses dedicated per-component test runner containers that are lean and parallel-buildable. These are defined in `docker-compose.yml` as a separate service group outside of the primary application services.
 
 | Service | Component | Purpose |
 |---------|-----------|---------|
@@ -79,6 +79,11 @@ g8e uses dedicated per-component test runner containers that are lean and parall
 | `g8eo-test-runner` | g8eo | Go/gotestsum tests and operator binary builder. |
 
 These runners share the same user (uid 1001) as production services and mount the relevant component source for fast test cycles.
+
+**Lifecycle Management:**
+- Test-runners are excluded from default platform lifecycle commands (`up`, `rebuild`, `setup`, `reset`)
+- Build test-runners explicitly via `./g8e platform rebuild-test-runners`
+- Run tests via `./g8e test <component>` which uses the appropriate test-runner container
 
 ## Non-Root Users
 

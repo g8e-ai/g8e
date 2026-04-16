@@ -62,8 +62,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 512M
     cap_drop:
       - ALL
     security_opt:
@@ -128,8 +132,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 512M
     cap_drop:
       - ALL
     security_opt:
@@ -185,8 +193,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          pids: 30
+          cpus: '1.0'
+          memory: 1G
+          pids: 50
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     cap_add:
       - NET_BIND_SERVICE
     cap_drop:
@@ -235,8 +247,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 100
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       g8e-network:
         aliases:
@@ -272,8 +288,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 512
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       g8e-network:
         aliases:
@@ -304,8 +324,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 4G
-          pids: 200
+          pids: 1024
+        reservations:
+          cpus: '0.5'
+          memory: 1G
     networks:
       g8e-network:
         aliases:
@@ -353,8 +377,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          cpus: '2.0'
+          memory: 6G
           pids: 200
+        reservations:
+          cpus: '0.5'
+          memory: 1G
     cap_add:
       - NET_RAW
       - NET_ADMIN
