@@ -85,7 +85,9 @@ describe('PasskeyAuthService [UNIT]', () => {
             services = await getTestServices();
             userService = services.userService;
             
-            cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService);
+            cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService, {
+                operatorsCollection: services.operatorService.collectionName
+            });
 
             // Use real services from getTestServices() but mock the userService methods we need
             vi.spyOn(userService, 'getUser');
@@ -144,16 +146,14 @@ describe('PasskeyAuthService [UNIT]', () => {
             expect(call.rpID).toBe('g8e.local');
         });
 
-        it('falls back to x-forwarded-host when settings is localhost', async () => {
-            const req = makeReq({
-                get: vi.fn((h) => h === HTTP_X_FORWARDED_HOST_HEADER ? 'forwarded.ai:8443' : null)
-            });
+        it('falls back to req.hostname when settings is localhost', async () => {
+            const req = makeReq({ hostname: 'req-host.local' });
             generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
 
             await service.generateRegistrationChallenge(req, makeUserDoc());
 
             const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('forwarded.ai');
+            expect(call.rpID).toBe('req-host.local');
         });
 
         it('falls back to req.hostname when settings is localhost and no header', async () => {

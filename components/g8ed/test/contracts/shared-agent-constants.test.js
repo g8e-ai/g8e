@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, AgentMetadata, TribunalTemperatures } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, AgentMetadata, TribunalMember } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -53,15 +53,30 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
-    describe('TribunalTemperatures constants', () => {
-        it('AXIOM temperature matches JSON', () => {
-            expect(TribunalTemperatures.AXIOM).toBe(_AGENTS['tribunal.temperatures'].axiom);
+    describe('TriageRequestPosture constants', () => {
+        it('NORMAL constant matches JSON', () => {
+            expect(TriageRequestPosture.NORMAL).toBe(_AGENTS['triage.posture'].normal);
         });
-        it('CONCORD temperature matches JSON', () => {
-            expect(TribunalTemperatures.CONCORD).toBe(_AGENTS['tribunal.temperatures'].concord);
+        it('ESCALATED constant matches JSON', () => {
+            expect(TriageRequestPosture.ESCALATED).toBe(_AGENTS['triage.posture'].escalated);
         });
-        it('VARIANCE temperature matches JSON', () => {
-            expect(TribunalTemperatures.VARIANCE).toBe(_AGENTS['tribunal.temperatures'].variance);
+        it('ADVERSARIAL constant matches JSON', () => {
+            expect(TriageRequestPosture.ADVERSARIAL).toBe(_AGENTS['triage.posture'].adversarial);
+        });
+        it('CONFUSED constant matches JSON', () => {
+            expect(TriageRequestPosture.CONFUSED).toBe(_AGENTS['triage.posture'].confused);
+        });
+    });
+
+    describe('TribunalMember constants', () => {
+        it('AXIOM member matches JSON', () => {
+            expect(TribunalMember.AXIOM).toBe(_AGENTS['tribunal.members'].axiom);
+        });
+        it('CONCORD member matches JSON', () => {
+            expect(TribunalMember.CONCORD).toBe(_AGENTS['tribunal.members'].concord);
+        });
+        it('VARIANCE member matches JSON', () => {
+            expect(TribunalMember.VARIANCE).toBe(_AGENTS['tribunal.members'].variance);
         });
     });
 
@@ -93,12 +108,30 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         it('VARIANCE metadata matches JSON', () => {
             expect(AgentMetadata.VARIANCE).toEqual(_AGENTS['agent.metadata'].variance);
         });
+        it('MEMORY_GENERATOR metadata matches JSON', () => {
+            expect(AgentMetadata.MEMORY_GENERATOR).toEqual(_AGENTS['agent.metadata'].memory_generator);
+        });
+        it('EVAL_JUDGE metadata matches JSON', () => {
+            expect(AgentMetadata.EVAL_JUDGE).toEqual(_AGENTS['agent.metadata'].eval_judge);
+        });
+        it('RESPONSE_ANALYZER metadata matches JSON', () => {
+            expect(AgentMetadata.RESPONSE_ANALYZER).toEqual(_AGENTS['agent.metadata'].response_analyzer);
+        });
+        it('RESPONSE_ANALYZER_COMMAND_RISK metadata matches JSON', () => {
+            expect(AgentMetadata.RESPONSE_ANALYZER_COMMAND_RISK).toEqual(_AGENTS['agent.metadata'].response_analyzer_command_risk);
+        });
+        it('RESPONSE_ANALYZER_ERROR metadata matches JSON', () => {
+            expect(AgentMetadata.RESPONSE_ANALYZER_ERROR).toEqual(_AGENTS['agent.metadata'].response_analyzer_error);
+        });
+        it('RESPONSE_ANALYZER_FILE_RISK metadata matches JSON', () => {
+            expect(AgentMetadata.RESPONSE_ANALYZER_FILE_RISK).toEqual(_AGENTS['agent.metadata'].response_analyzer_file_risk);
+        });
     });
 
     describe('AgentMetadata persona fields', () => {
         const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'temperature', 'tools', 'identity', 'purpose', 'autonomy'];
         const VALID_AUTONOMY_VALUES = ['fully_autonomous', 'human_approved'];
-        const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance'];
+        const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
 
         ALL_AGENT_KEYS.forEach(agentKey => {
             describe(`${agentKey} agent`, () => {
@@ -163,7 +196,7 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
 
         it('agent.metadata contains all agents', () => {
-            const expectedAgents = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance'];
+            const expectedAgents = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
             const actualAgents = Object.keys(_AGENTS['agent.metadata']);
             expect(actualAgents.sort()).toEqual(expectedAgents.sort());
         });

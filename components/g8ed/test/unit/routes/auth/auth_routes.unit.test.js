@@ -14,6 +14,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+
+// Pass-through the module-level authRateLimiter so this test suite's request
+// volume does not exhaust the real limiter's UserAuthRateLimit window.
+vi.mock('@g8ed/middleware/rate-limit.js', async () => {
+    const actual = await vi.importActual('@g8ed/middleware/rate-limit.js');
+    return {
+        ...actual,
+        authRateLimiter: (req, res, next) => next()
+    };
+});
+
 import { createAuthRouter } from '@g8ed/routes/auth/auth_routes.js';
 import { AuthPaths } from '@g8ed/constants/api_paths.js';
 import { UserRole } from '@g8ed/constants/auth.js';
@@ -83,11 +94,7 @@ describe('AuthRoutes Unit Tests', () => {
                 passkeyAuthService: mockPasskeyAuthService
             },
 
-            authMiddleware: mockAuthMiddleware,
-
-            rateLimiters: {
-                authRateLimiter: (req, res, next) => next()
-            }
+            authMiddleware: mockAuthMiddleware
         });
 
         app = express();

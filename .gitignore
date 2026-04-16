@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -189,14 +188,14 @@ go.work
 # Go workspace file
 go.work.sum
 
-# Dependency directories
-vendor/
+# Dependency directories (except components/g8eo/vendor which is intentionally committed)
 
 # Go build cache
 .cache/
 
 # Test binary, built with `go test -c`
 *.test
+!Dockerfile.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
@@ -232,6 +231,8 @@ bin/
 .env
 .env.local
 .env.*.local
+.local.dev
+.local.dev/**
 
 # Database files
 *.db
@@ -258,3 +259,6 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Windsurf
+.windsurf

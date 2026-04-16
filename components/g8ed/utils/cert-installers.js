@@ -41,6 +41,8 @@ if '%errorlevel%' NEQ '0' (
 )
 if exist "%temp%\\getadmin.vbs" ( del "%temp%\\getadmin.vbs" )
 
+set HOST=${host}
+
 echo Removing any existing g8e certificates...
 for /f "tokens=2 delims==" %%s in ('certutil -store Root ^| findstr /i "g8e"') do (
     certutil -delstore Root "%%s" >nul 2>&1
@@ -67,7 +69,21 @@ if %errorlevel% NEQ 0 (
 )
 del /f /q "%temp%\\g8e-ca.crt" >nul 2>&1
 echo.
-echo Certificate trusted. Restart your browser and go to https://${host}/setup
+echo Certificate trusted.
+
+echo %HOST% | findstr /R "^[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*$" >nul
+if %errorlevel% EQU 0 (
+    for /f "tokens=2 delims= " %%A in ('nslookup %HOST% 2^>nul ^| findstr /i "Name:"') do (
+        if not "%%A"=="" (
+            echo Resolved %HOST% to %%A
+            set HOST=%%A
+        ) else (
+            echo Could not resolve hostname for %HOST%, using IP address
+        )
+    )
+)
+
+echo Restart your browser and go to https://%HOST%/setup
 pause
 `;
 }
@@ -111,7 +127,23 @@ security add-trusted-cert -d -r trustRoot -k "$KEYCHAIN" "$CERT_FILE"
 rm -f "$CERT_FILE"
 
 echo ""
-echo "Certificate trusted. Restart your browser and go to https://$HOST/setup"
+echo "Certificate trusted."
+
+if [[ "$HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if command -v host >/dev/null 2>&1; then
+        RESOLVED_HOST=$(host "$HOST" 2>/dev/null | awk '/pointer/ {print $NF}' | sed 's/\.$//')
+        if [ -n "$RESOLVED_HOST" ]; then
+            echo "Resolved $HOST to $RESOLVED_HOST"
+            HOST="$RESOLVED_HOST"
+        else
+            echo "Could not resolve hostname for $HOST, using IP address"
+        fi
+    else
+        echo "host command not available, using IP address"
+    fi
+fi
+
+echo "Restart your browser and go to https://$HOST/setup"
 `;
 }
 
@@ -146,6 +178,19 @@ set -u
 G8E_HOST="${host}"
 G8E_HTTPS_HOST="${httpsHost}"
 G8E_HTTP_URL="${httpUrl}"
+
+# Reverse DNS lookup if host is an IP address
+if echo "\$G8E_HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if command -v host >/dev/null 2>&1; then
+        RESOLVED_HOST=\$(host "\$G8E_HOST" 2>/dev/null | awk '/pointer/ {print \$NF}' | sed 's/\.\$//')
+        if [ -n "\$RESOLVED_HOST" ]; then
+            _log "Resolved \$G8E_HOST to \$RESOLVED_HOST"
+            G8E_HOST="\$RESOLVED_HOST"
+            G8E_HTTPS_HOST="\${RESOLVED_HOST}${httpsPortSuffix}"
+            G8E_HTTP_URL="http://\${RESOLVED_HOST}${httpPortSuffix}"
+        fi
+    fi
+fi
 
 # --- Output helpers (color only when attached to a terminal) ---
 _C=0; [ -t 1 ] 2>/dev/null && _C=1
@@ -319,6 +364,21 @@ esac
 rm -f "\$CERT_FILE"
 echo ""
 echo "g8e CA certificate trusted successfully."
+
+if echo "\$HOST" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if command -v host >/dev/null 2>&1; then
+        RESOLVED_HOST=\$(host "\$HOST" 2>/dev/null | awk '/pointer/ {print \$NF}' | sed 's/\.\$//')
+        if [ -n "\$RESOLVED_HOST" ]; then
+            echo "Resolved \$HOST to \$RESOLVED_HOST"
+            HOST="\$RESOLVED_HOST"
+        else
+            echo "Could not resolve hostname for \$HOST, using IP address"
+        fi
+    else
+        echo "host command not available, using IP address"
+    fi
+fi
+
 echo "Restart your browser and navigate to https://\$HOST/setup"
 `;
 }
@@ -340,6 +400,7 @@ $ErrorActionPreference = "Stop"
 
 $url = "${url}"
 $certFile = Join-Path $env:TEMP "g8e-ca.crt"
+$g8eHost = "${host}"
 
 Write-Host "Removing any existing g8e certificates..."
 Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object { $_.Subject -like "*g8e*" -or $_.FriendlyName -like "*g8e*" } | Remove-Item -Force -ErrorAction SilentlyContinue
@@ -363,7 +424,19 @@ Remove-Item $certFile -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "g8e CA certificate trusted successfully."
-Write-Host "Restart your browser and navigate to https://${host}/setup"
+
+$ipRegex = "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$"
+if ($g8eHost -match $ipRegex) {
+    try {
+        $hostname = [System.Net.Dns]::GetHostEntry($g8eHost).HostName
+        Write-Host "Resolved $g8eHost to $hostname"
+        $g8eHost = $hostname
+    } catch {
+        Write-Host "Could not resolve hostname for $g8eHost, using IP address"
+    }
+}
+
+Write-Host "Restart your browser and navigate to https://$g8eHost/setup"
 `;
 }
 
@@ -417,7 +490,23 @@ update-ca-certificates
 rm -f "$CERT_FILE"
 
 echo ""
-echo "Certificate trusted. Restart your browser and go to https://$HOST/setup"
+echo "Certificate trusted."
+
+if [[ "$HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if command -v host >/dev/null 2>&1; then
+        RESOLVED_HOST=$(host "$HOST" 2>/dev/null | awk '/pointer/ {print $NF}' | sed 's/\.$//')
+        if [ -n "$RESOLVED_HOST" ]; then
+            echo "Resolved $HOST to $RESOLVED_HOST"
+            HOST="$RESOLVED_HOST"
+        else
+            echo "Could not resolve hostname for $HOST, using IP address"
+        fi
+    else
+        echo "host command not available, using IP address"
+    fi
+fi
+
+echo "Restart your browser and go to https://$HOST/setup"
 echo ""
 echo "Note: Chrome/Chromium also requires a manual import:"
 echo "  Settings > Privacy and security > Manage certificates > Authorities > Import"

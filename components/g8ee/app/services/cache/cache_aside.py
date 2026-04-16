@@ -97,6 +97,19 @@ class CacheAsideService(CacheAsideProtocol):
         """Access the underlying KV service."""
         return cast(KVServiceProtocol, self._kv)
 
+    async def close(self) -> None:
+        """Close underlying KV and DB HTTP clients to prevent resource leaks."""
+        try:
+            if hasattr(self._kv, 'close'):
+                await self._kv.close()
+        except Exception as exc:
+            logger.debug("Error closing KV service: %s", exc)
+        try:
+            if hasattr(self._db, 'close'):
+                await self._db.close()
+        except Exception as exc:
+            logger.debug("Error closing DB service: %s", exc)
+
     @property
     def db(self) -> DBServiceProtocol:
         """Access the underlying DB service."""

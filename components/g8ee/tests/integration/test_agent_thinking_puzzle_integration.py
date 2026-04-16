@@ -122,7 +122,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         model=model_name,
         temperature=None,
         max_tokens=None,
-        system_instruction=sys_prompt,
+        system_instructions=sys_prompt,
         tools=[],
     )
     

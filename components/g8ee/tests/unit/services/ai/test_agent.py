@@ -637,6 +637,147 @@ class TestStreamWithToolLoop:
 
 
 # =============================================================================
+# TEST: _stream_with_tool_loop - Max Turn Limit & Continuation Approval
+# =============================================================================
+
+@pytest.mark.asyncio(loop_scope="session")
+class TestMaxTurnLimitApproval:
+    """When loop_turn exceeds AGENT_MAX_TOOL_TURNS, the agent must request
+    operator approval via the approval pipeline to continue (or stop cleanly)."""
+
+    def _make_tool_calling_provider(self):
+        """Provider that always emits a tool call, forcing the loop to run indefinitely."""
+        from app.llm.llm_types import ToolCall
+
+        def _stream(**kwargs):
+            async def _gen():
+                yield make_provider_chunk(text="turn")
+                yield make_provider_chunk(
+                    tool_calls=[ToolCall(name="search_web", args={"query": "x"})],
+                    finish_reason="STOP",
+                )
+            return _gen()
+
+        provider = MagicMock()
+        provider.generate_content_stream_primary = MagicMock(side_effect=_stream)
+        return provider
+
+    async def test_requests_approval_when_max_turns_exceeded_and_stops_on_deny(self):
+        from tests.fakes.fake_approval_service import FakeApprovalService
+
+        approval_service = FakeApprovalService(approved=False)
+        provider = self._make_tool_calling_provider()
+
+        agent = make_g8e_agent(approval_service=approval_service)
+        context = make_agent_streaming_context()
+        gen_config = make_gen_config()
+        g8ed_event_service = make_g8ed_event_service()
+
+        with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
+             patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield  # make async generator
+            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+
+            chunks = []
+            async for chunk in agent._stream_with_tool_loop(
+                contents=[],
+                generation_config=gen_config,
+                model_name="test-model",
+                context=context,
+                g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
+            ):
+                chunks.append(chunk)
+
+        assert len(approval_service.command_approval_calls) == 1
+        req = approval_service.command_approval_calls[0]
+        assert "25" not in req.command or "2-turn" in req.command or "limit" in req.command
+        assert "turns" in req.justification
+        assert provider.generate_content_stream_primary.call_count == 2
+
+    async def test_continues_when_approval_granted(self):
+        from tests.fakes.fake_approval_service import FakeApprovalService
+
+        approval_service = FakeApprovalService(approved=True)
+        provider = self._make_tool_calling_provider()
+
+        agent = make_g8e_agent(approval_service=approval_service)
+        context = make_agent_streaming_context()
+        gen_config = make_gen_config()
+        g8ed_event_service = make_g8ed_event_service()
+
+        with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
+             patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield
+            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+
+            call_budget = {"n": 0}
+            original_side_effect = provider.generate_content_stream_primary.side_effect
+
+            def limited_stream(**kwargs):
+                call_budget["n"] += 1
+                if call_budget["n"] > 5:
+                    async def _stop():
+                        yield make_provider_chunk(text="done")
+                        yield make_provider_chunk(finish_reason="STOP")
+                    return _stop()
+                return original_side_effect(**kwargs)
+
+            provider.generate_content_stream_primary.side_effect = limited_stream
+
+            chunks = []
+            async for chunk in agent._stream_with_tool_loop(
+                contents=[],
+                generation_config=gen_config,
+                model_name="test-model",
+                context=context,
+                g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
+            ):
+                chunks.append(chunk)
+
+        # With limit=2, approval is requested after turn 2, granted; counter resets
+        # to 1, so we need another approval after turn 4, etc. We exercised >= 2 approvals.
+        assert len(approval_service.command_approval_calls) >= 2
+
+    async def test_no_approval_service_falls_back_to_abort(self):
+        provider = self._make_tool_calling_provider()
+
+        agent = make_g8e_agent(approval_service=None)
+        context = make_agent_streaming_context()
+        gen_config = make_gen_config()
+        g8ed_event_service = make_g8ed_event_service()
+
+        with patch("app.services.ai.agent.AGENT_MAX_TOOL_TURNS", 2), \
+             patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield
+            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+
+            chunks = []
+            async for chunk in agent._stream_with_tool_loop(
+                contents=[],
+                generation_config=gen_config,
+                model_name="test-model",
+                context=context,
+                g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
+            ):
+                chunks.append(chunk)
+
+        # Exactly max-turn provider calls, then abort (no approval possible)
+        assert provider.generate_content_stream_primary.call_count == 2
+
+
+# =============================================================================
 # TEST: _stream_with_tool_loop - Token Accumulation
 # =============================================================================
 

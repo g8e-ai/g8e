@@ -161,7 +161,7 @@ class FakeLLMProvider(LLMProvider):
         contents: list[Content],
         config: GenerateContentConfig,
         tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        system_instructions: str = None,
     ) -> GenerateContentResponse:
         self.call_log.append({
             "method": "generate_content",
@@ -169,7 +169,7 @@ class FakeLLMProvider(LLMProvider):
             "contents": contents,
             "config": config,
             "tools": tools,
-            "system_instruction": system_instruction,
+            "system_instructions": system_instructions,
         })
         if not self.responses:
             # Default fallback if no response queued, though tests should queue them
@@ -182,7 +182,7 @@ class FakeLLMProvider(LLMProvider):
         contents: list[Content],
         config: GenerateContentConfig,
         tools: list[ToolGroup] = None,
-        system_instruction: str = None,
+        system_instructions: str = None,
     ) -> AsyncGenerator[StreamChunkFromModel, None]:
         self.call_log.append({
             "method": "generate_content_stream",
@@ -190,7 +190,7 @@ class FakeLLMProvider(LLMProvider):
             "contents": contents,
             "config": config,
             "tools": tools,
-            "system_instruction": system_instruction,
+            "system_instructions": system_instructions,
         })
         if not self.stream_chunks:
             return

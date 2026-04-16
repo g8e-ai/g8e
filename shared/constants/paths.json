@@ -11,7 +11,11 @@
   "g8ee": {
     "app_dir": "/app/components/g8ee",
     "config_dir": "/app/components/g8ee/config",
-    "tests_dir": "/app/components/g8ee/tests"
+    "tests_dir": "/app/components/g8ee/tests",
+    "evals": {
+      "gold_set_path": "/app/components/g8ee/tests/evals/gold_set.json",
+      "benchmark_path": "/app/components/g8ee/tests/evals/benchmark_gold_set.json"
+    }
   },
   "g8ed": {
     "app_dir": "/app/components/g8ed",

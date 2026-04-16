@@ -21,7 +21,7 @@ describe('cert-installers', () => {
         it('should generate a script with the correct host', () => {
             const script = windowsTrustScript(testHost);
             expect(script).toContain(`http://${testHost}/ca.crt`);
-            expect(script).toContain(`https://${testHost}/setup`);
+            expect(script).toContain('https://%HOST%/setup');
             expect(script).toContain('certutil -addstore -f "Root"');
             expect(script).toContain('cacls.exe');
         });
@@ -61,7 +61,7 @@ describe('cert-installers', () => {
         it('should use LAN IP when provided', () => {
             const script = windowsTrustScript('10.0.0.2');
             expect(script).toContain('http://10.0.0.2/ca.crt');
-            expect(script).toContain('https://10.0.0.2/setup');
+            expect(script).toContain('https://%HOST%/setup');
         });
     });
 
@@ -266,7 +266,7 @@ describe('cert-installers', () => {
         it('should show success message with setup URL', () => {
             const script = windowsPowerShellTrustScript(testHost);
             expect(script).toContain('g8e CA certificate trusted successfully.');
-            expect(script).toContain(`https://${testHost}/setup`);
+            expect(script).toContain('https://$g8eHost/setup');
         });
     });
 

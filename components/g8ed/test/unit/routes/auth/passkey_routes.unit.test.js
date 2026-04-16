@@ -14,6 +14,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+
+// Mock the rate-limit middleware module so that the passkey rate limiter is a
+// pass-through during unit tests. The real limiter caps requests at
+// PasskeyRateLimit.MAX per window, which would otherwise cause flaky failures
+// across this test file's request volume.
+vi.mock('@g8ed/middleware/rate-limit.js', () => ({
+    passkeyRateLimiter: (req, res, next) => next()
+}));
+
 import { createPasskeyRouter } from '@g8ed/routes/auth/passkey_routes.js';
 import { PasskeyPaths } from '@g8ed/constants/api_paths.js';
 import { ApiKeyError } from '@g8ed/constants/auth.js';
@@ -24,7 +33,6 @@ describe('PasskeyRoutes Unit Tests', () => {
     let mockUserService;
     let mockPostLoginService;
     let mockAuthMiddleware;
-    let mockRateLimiters;
     let mockSetupService;
 
     beforeEach(() => {
@@ -65,10 +73,6 @@ describe('PasskeyRoutes Unit Tests', () => {
             }
         };
 
-        mockRateLimiters = {
-            passkeyRateLimiter: (req, res, next) => next()
-        };
-
         const router = createPasskeyRouter({
             services: {
                 passkeyAuthService: mockPasskeyAuthService,
@@ -76,9 +80,7 @@ describe('PasskeyRoutes Unit Tests', () => {
                 postLoginService: mockPostLoginService,
                 setupService: mockSetupService
             },
-
-            authMiddleware: mockAuthMiddleware,
-            rateLimiters: mockRateLimiters
+            authMiddleware: mockAuthMiddleware
         });
 
         app = express();
@@ -165,7 +167,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(true);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse
@@ -184,7 +186,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(true);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse
@@ -203,7 +205,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(false);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-initial')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse

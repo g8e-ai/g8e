@@ -68,7 +68,9 @@ describe('DeviceRegistrationService', () => {
         
         vi.spyOn(sessionAuthListener, 'listen').mockImplementation(() => {});
 
-        cleanup = new TestCleanupHelper(services.cacheAsideService);
+        cleanup = new TestCleanupHelper(services.cacheAsideService, null, {
+            operatorsCollection: services.operatorService.collectionName
+        });
 
         service = new DeviceRegistrationService({
             operatorService,

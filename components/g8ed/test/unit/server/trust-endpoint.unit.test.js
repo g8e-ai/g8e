@@ -228,7 +228,7 @@ describe('Trust Endpoint Logic', () => {
         it('should include host in generated PowerShell script', () => {
             const content = windowsPowerShellTrustScript(testHost, testPort);
             expect(content).toContain(`$url = "http://${testHost}/ca.crt"`);
-            expect(content).toContain(`https://${testHost}/setup`);
+            expect(content).toContain('https://$g8eHost/setup');
         });
 
         it('should include host in generated universal script', () => {

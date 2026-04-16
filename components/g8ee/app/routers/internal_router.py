@@ -81,7 +81,7 @@ from ..dependencies import (
     get_g8ee_user_settings,
 )
 from ..services.ai.chat_pipeline import ChatPipelineService
-from ..services.ai.chat_task_manager import ChatTaskManager
+from ..services.ai.chat_task_manager import BackgroundTaskManager
 from ..services.cache.cache_aside import CacheAsideService
 from ..services.data.attachment_store_service import AttachmentService
 from ..services.data.case_data_service import CaseDataService
@@ -142,7 +142,7 @@ async def internal_chat(
     platform_settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
     user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
-    chat_task_manager: ChatTaskManager = Depends(get_g8ee_chat_task_manager),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
     attachment_service: AttachmentService = Depends(get_g8ee_attachment_service),
@@ -220,7 +220,7 @@ async def internal_chat(
             )
 
         if request.message.strip():
-            asyncio.create_task(
+            task = asyncio.create_task(
                 _generate_and_update_title(
                     message=request.message,
                     case_id=g8e_context.case_id,
@@ -229,9 +229,12 @@ async def internal_chat(
                     user_id=g8e_context.user_id,
                     user_settings=user_settings,
                     case_service=case_service,
-                    investigation_service=investigation_service
+                    investigation_service=investigation_service,
                 )
             )
+            # Track background task for cleanup
+            task_id = f"title_generation_{g8e_context.investigation_id}"
+            asyncio.create_task(chat_task_manager.track(task_id, task, auto_cancel_previous=False))
 
         logger.info(
             "[INTERNAL-HTTP] New conversation created inline",
@@ -260,7 +263,7 @@ async def internal_chat(
             investigation_id=g8e_context.investigation_id or "",
         )
 
-    asyncio.create_task(
+    chat_task = asyncio.create_task(
         chat_pipeline.run_chat(
             message=request.message,
             g8e_context=g8e_context,
@@ -274,6 +277,9 @@ async def internal_chat(
             user_settings=user_settings,
         )
     )
+    # Track the task - run_chat will also track it internally, but we track it here
+    # to ensure it's in the registry before we return
+    asyncio.create_task(chat_task_manager.track(g8e_context.investigation_id, chat_task, auto_cancel_previous=False))
 
     return ChatStartedResponse(
         success=True,
@@ -286,7 +292,7 @@ async def internal_chat(
 async def stop_ai_processing(
     request: StopAIRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
-    chat_task_manager: ChatTaskManager = Depends(get_g8ee_chat_task_manager),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
     chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
 ):
     """
@@ -765,7 +771,7 @@ async def mcp_tools_list(
     logger.info(
         "[INTERNAL-HTTP] MCP tools/list request",
         extra={
-            "agent_mode": agent_mode.value,
+            "agent_mode": agent_mode,
             "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
         }
     )

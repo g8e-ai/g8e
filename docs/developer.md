@@ -1,6 +1,6 @@
 # g8e Developer Guide
 
-g8e is an open-source, self-hosted, air-gapped capable AI governance platform with zero cloud dependencies. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
+g8e is an open-source, self-hosted AI governance platform designed for offline operation: with a local LLM provider (Ollama or any OpenAI-compatible endpoint) it runs with zero cloud dependencies at runtime. Building the container images currently still requires outbound access to Docker Hub, PyPI, npmjs, and the Alpine/Debian package mirrors — see [`docs/architecture/air-gap.md`](architecture/air-gap.md) for the deployment path and current vendoring status. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
 
 ---
 
@@ -33,7 +33,7 @@ The platform is a stateless relay. Raw command output and file contents stay on 
 2.  **g8ed (Node.js/Express):** Web frontend and Gateway Protocol. Handles user authentication, session management, and routes requests to g8ee.
 3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, AI reasoning, tool orchestration, and coordinates with g8es for persistence.
 4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. Any client following the g8e events protocol can act as an Operator.
-5.  **g8es (Go/SQLite):** The persistence and pub/sub broker. Provides the document store and real-time message bus for all components.
+5.  **g8es (Go/SQLite):** A standalone Go service providing persistence (SQLite document store), KV cache, and pub/sub messaging. The g8eo binary can run in multiple modes: standard operator mode (executes commands on target systems), listen mode (acts as the platform's central persistence and pub/sub broker), or OpenClaw node host mode (connects to an OpenClaw Gateway).
 
 ### Communication Flow
 - **g8ed ↔ g8ee:** Synchronous HTTP for orchestration and state management.
@@ -127,7 +127,7 @@ Data Layer (CRUD)
 ├── InvestigationDataService ───> CacheAsideService
 ├── OperatorDataService ────────> CacheAsideService, InternalHttpClient
 ├── MemoryDataService ──────────> CacheAsideService
-└── AttachmentStoreService ─────> BlobService
+└── AttachmentService ──────────> BlobService
 
 Domain Layer (Orchestration)
 ├── InvestigationService ───────> InvestigationDataService, OperatorDataService,
@@ -139,17 +139,10 @@ Operator Services
 ├── ExecutionRegistryService
 ├── OperatorApprovalService ────> EventService, OperatorDataService,
 │                                 InvestigationDataService
-├── OperatorCommandService ─────> CacheAsideService, OperatorDataService,
+└── OperatorCommandService ─────> CacheAsideService, OperatorDataService,
 │                                 InvestigationService, EventService,
 │                                 ExecutionRegistryService, ApprovalService,
 │                                 InternalHttpClient, PubSubClient
-├── LFAAService
-├── FileService
-├── FilesystemService
-├── IntentService
-├── CloudCommandValidator
-├── IAMCommandBuilder
-└── PortService
 
 AI Pipeline
 ├── AIToolService ──────────────> OperatorCommandService, InvestigationService,
@@ -164,6 +157,8 @@ AI Pipeline
 │                                 AIRequestBuilder, g8eEngine,
 │                                 MemoryDataService, MemoryGenerationService
 ├── ChatTaskManager
+├── TriageAgent (instantiated directly by ChatPipelineService)
+├── BenchmarkJudge (instantiated directly by benchmark tests)
 ├── TitleGenerator
 ├── CommandGenerator
 ├── GenerationConfigBuilder
@@ -185,6 +180,44 @@ All component services must adhere to a two-tier hierarchy to ensure strict sepa
 2.  **Data Layer (CRUD):** Low-level services (e.g., `InvestigationDataService`) providing pure CRUD operations. These must not contain business logic or orchestration.
 
 **Dependency Management:** Services must interact via **Protocols** rather than concrete classes to prevent circular dependencies and enable clean mocking.
+
+---
+
+## AI Pipeline Services
+
+The AI pipeline in g8ee consists of several specialized services that orchestrate LLM interactions, tool execution, and result evaluation:
+
+### TriageAgent
+- **Location:** `app/services/ai/triage.py`
+- **Purpose:** Classifies incoming user messages as 'simple' or 'complex' using a lightweight assistant model before committing to the full main LLM.
+- **Integration:** Instantiated directly by `ChatPipelineService` (not wired via `ServiceFactory`).
+- **Key Behaviors:**
+  - Short-circuits to COMPLEX if attachments are present (multimodal analysis required)
+  - Returns COMPLEX for empty messages with a follow-up question
+  - Uses the assistant model for classification when available
+  - Falls back to COMPLEX on any error (safe default)
+  - Provides intent classification (INFORMATION, ACTION, UNKNOWN) and confidence levels
+
+### BenchmarkJudge
+- **Location:** `app/services/ai/benchmark_judge.py`
+- **Purpose:** Deterministic judge that grades agent tool call payloads against expected patterns using strict boolean pass/fail criteria. No LLM is involved — grading is purely regex matching on actual tool call arguments.
+- **Integration:** Instantiated directly by benchmark tests (not wired via `ServiceFactory`).
+- **Key Features:**
+  - Binary pass/fail per scenario (no partial credit)
+  - Regex matching against expected command flags and arguments
+  - Tribunal delta tracking: measures whether the Tribunal improved the Primary Agent's initial command
+  - Supports multi-step execution scenarios (evaluates matchers across union of all captured calls)
+  - Computes aggregate pass rate and Tribunal improvement statistics
+
+### Agent Turn Processing (agent_turn.py)
+- **Location:** `app/services/ai/agent_turn.py`
+- **Purpose:** Provider turn processing — thinking state machine, stream chunk parsing, model parts accumulation, token counting, parts consolidation, finish reason normalization, and retry error classification.
+- **Key Functions:**
+  - `handle_usage_chunk()` — Tracks token usage from stream chunks
+  - `handle_finish_reason_chunk()` — Normalizes finish reasons across providers
+  - `handle_thought_chunk()` — Processes thinking/reasoning blocks from Claude-style models
+  - State machine for tracking thinking state, pending tool calls, and response parts
+  - All functions are stateless and accept typed inputs for testability
 
 ---
 
@@ -211,6 +244,7 @@ Inside the application boundary, data lives as typed model instances — never a
 | Boundary | g8ed method | g8ee method |
 |---|---|---|
 | Database write | `model.forDB()` | `model.flatten_for_db()` |
+| KV cache write | `model.forKV()` | `model.flatten_for_db()` (uses same method) |
 | Outbound HTTP / pub-sub | `model.forWire()` | `model.flatten_for_wire()` |
 | Browser response | `model.forClient()` | `model.model_dump()` |
 | LLM tool response | — | `model.flatten_for_llm()` |

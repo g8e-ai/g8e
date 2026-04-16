@@ -12,19 +12,15 @@
 // limitations under the License.
 
 import express from 'express';
-import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
-import { ErrorResponse, PlatformSetupConfigResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { SetupPaths } from '../../constants/api_paths.js';
 
 /**
  * @param {Object} options
  * @param {Object} options.services - Services object containing all platform services
- * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createSetupRouter({ services, rateLimiters }) {
-    const { settingsService, setupService, passkeyAuthService } = services;
-    const { passkeyRateLimiter } = rateLimiters;
+export function createSetupRouter({ services }) {
+    const { setupService } = services;
     const router = express.Router();
 
     router.get(SetupPaths.WIZARD, async (req, res, next) => {

@@ -86,6 +86,7 @@ export class SetupPage {
     constructor() {
         this._step           = 1;
         this._searchProvider = '';
+        this._selectedModels = { primary: '', assistant: '', lite: '' };
     }
 
     init() {
@@ -94,6 +95,7 @@ export class SetupPage {
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
+        this._initModelDropdowns();
         this._updateProviderStates();
         this._updateNav();
     }
@@ -182,14 +184,25 @@ export class SetupPage {
                 this._showStatus('error', 'Enter at least one provider API key');
                 return false;
             }
-            const primary = document.getElementById('primary_model')?.value;
+            const primary = this._selectedModels.primary;
             if (!primary) {
                 this._showStatus('error', 'Select a primary model');
                 return false;
             }
-            const assistant = document.getElementById('assistant_model')?.value;
+            const assistant = this._selectedModels.assistant;
             if (!assistant) {
                 this._showStatus('error', 'Select an assistant model');
+                return false;
+            }
+            const lite = this._selectedModels.lite;
+            if (!lite) {
+                this._showStatus('error', 'Select a lite model');
+                return false;
+            }
+            const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
+            if (ollamaUrl && ollamaUrl.startsWith('https://')) {
+                this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
+                document.getElementById('ollama_url').focus();
                 return false;
             }
         }
@@ -269,88 +282,226 @@ export class SetupPage {
         if (modelSection) modelSection.classList.toggle('active', active.length > 0);
     }
 
-    _updateModelDropdowns() {
-        const active = this._getActiveProviders();
-        const primarySelect = document.getElementById('primary_model');
-        const assistantSelect = document.getElementById('assistant_model');
-        if (!primarySelect || !assistantSelect) return;
+    _initModelDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (!dropdown) return;
 
-        const prevPrimary = primarySelect.value;
-        const prevAssistant = assistantSelect.value;
+            dropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._toggleDropdown(role);
+            });
 
-        primarySelect.innerHTML = '';
-        assistantSelect.innerHTML = '';
+            dropdown.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this._toggleDropdown(role);
+                } else if (e.key === 'Escape') {
+                    this._closeAllDropdowns();
+                }
+            });
+        });
 
-        if (active.length === 0) {
-            primarySelect.disabled = true;
-            assistantSelect.disabled = true;
-            const placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = 'Enter at least one API key above';
-            primarySelect.appendChild(placeholder);
-            assistantSelect.appendChild(placeholder.cloneNode(true));
-            return;
-        }
+        document.addEventListener('click', () => {
+            this._closeAllDropdowns();
+        });
+    }
 
-        primarySelect.disabled = false;
-        assistantSelect.disabled = false;
-
-        let firstPrimaryDefault = null;
-        let firstAssistantDefault = null;
-
-        for (const provider of active) {
-            const config = PROVIDER_MODELS[provider];
-            if (!config) continue;
-
-            const providerLabel = PROVIDER_LABELS[provider] || provider;
-
-            const pGroup = document.createElement('optgroup');
-            pGroup.label = providerLabel;
-            for (const m of config.primary) {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label;
-                pGroup.appendChild(opt);
-            }
-            primarySelect.appendChild(pGroup);
-
-            const aGroup = document.createElement('optgroup');
-            aGroup.label = providerLabel;
-            for (const m of config.assistant) {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.label;
-                aGroup.appendChild(opt);
-            }
-            assistantSelect.appendChild(aGroup);
-
-            if (!firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
-            if (!firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
-        }
-
-        if (prevPrimary && this._selectHasValue(primarySelect, prevPrimary)) {
-            primarySelect.value = prevPrimary;
-        } else if (firstPrimaryDefault) {
-            primarySelect.value = firstPrimaryDefault;
-        }
-
-        if (prevAssistant && this._selectHasValue(assistantSelect, prevAssistant)) {
-            assistantSelect.value = prevAssistant;
-        } else if (firstAssistantDefault) {
-            assistantSelect.value = firstAssistantDefault;
+    _toggleDropdown(role) {
+        const dropdown = document.getElementById(`${role}_model`);
+        if (!dropdown || dropdown.classList.contains('disabled')) return;
+        
+        const isOpen = dropdown.classList.contains('open');
+        this._closeAllDropdowns();
+        
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            dropdown.setAttribute('aria-expanded', 'true');
         }
     }
 
-    _selectHasValue(selectEl, value) {
-        return Array.from(selectEl.options).some(o => o.value === value);
+    _closeAllDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (dropdown) {
+                dropdown.classList.remove('open');
+                dropdown.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    _updateModelDropdowns() {
+        const active = this._getActiveProviders();
+        const roles = ['primary', 'assistant', 'lite'];
+
+        if (active.length === 0) {
+            roles.forEach(role => {
+                const dropdown = document.getElementById(`${role}_model`);
+                const menu = document.getElementById(`${role}_model-menu`);
+                const text = dropdown?.querySelector('.llm-model-dropdown__text');
+                
+                if (dropdown) dropdown.classList.add('disabled');
+                if (menu) menu.innerHTML = '';
+                if (text) text.textContent = 'Enter at least one API key';
+                this._selectedModels[role] = '';
+            });
+            return;
+        }
+
+        let firstPrimaryDefault = null;
+        let firstAssistantDefault = null;
+        let firstLiteDefault = null;
+
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            const menu = document.getElementById(`${role}_model-menu`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            
+            if (!dropdown || !menu) return;
+            
+            dropdown.classList.remove('disabled');
+            menu.innerHTML = '';
+            
+            const prevValue = this._selectedModels[role];
+            
+            for (const provider of active) {
+                const config = PROVIDER_MODELS[provider];
+                if (!config) continue;
+
+                const providerLabel = PROVIDER_LABELS[provider] || provider;
+                const models = config.all || [];
+                
+                if (models.length === 0) continue;
+
+                const category = document.createElement('div');
+                category.className = 'llm-model-dropdown__category';
+                category.textContent = providerLabel;
+                menu.appendChild(category);
+
+                for (const model of models) {
+                    const option = document.createElement('div');
+                    option.className = 'llm-model-dropdown__option';
+                    option.textContent = model.label;
+                    option.dataset.value = model.id;
+                    option.dataset.provider = provider;
+
+                    if (model.id === prevValue) {
+                        option.classList.add('selected');
+                        if (text) text.textContent = model.label;
+                    }
+
+                    if (role === 'primary' && !firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
+                    if (role === 'assistant' && !firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
+                    if (role === 'lite' && !firstLiteDefault) firstLiteDefault = config.defaultLite;
+
+                    option.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this._selectModel(role, model.id, model.label);
+                    });
+
+                    menu.appendChild(option);
+                }
+            }
+
+            const customOption = document.createElement('div');
+            customOption.className = 'llm-model-dropdown__option';
+            customOption.textContent = 'Custom...';
+            customOption.dataset.value = 'custom';
+            customOption.dataset.custom = 'true';
+
+            if (prevValue === 'custom') {
+                customOption.classList.add('selected');
+                if (text) text.textContent = this._selectedModels[`${role}CustomLabel`] || 'Custom';
+            }
+
+            customOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._showCustomModelInput(role);
+            });
+
+            menu.appendChild(customOption);
+
+            if (menu.children.length === 0) {
+                if (text) text.textContent = 'No models available';
+                this._selectedModels[role] = '';
+            } else if (!prevValue) {
+                const defaultModel = role === 'primary' ? firstPrimaryDefault : role === 'assistant' ? firstAssistantDefault : firstLiteDefault;
+                if (defaultModel) {
+                    this._selectModel(role, defaultModel, this._findModelLabel(role, defaultModel));
+                }
+            }
+        });
+    }
+
+    _findModelLabel(role, modelId) {
+        const active = this._getActiveProviders();
+        for (const provider of active) {
+            const config = PROVIDER_MODELS[provider];
+            if (!config) continue;
+            const models = config.all || [];
+            const model = models.find(m => m.id === modelId);
+            if (model) return model.label;
+        }
+        return modelId;
+    }
+
+    _selectModel(role, modelId, label) {
+        this._selectedModels[role] = modelId;
+
+        const dropdown = document.getElementById(`${role}_model`);
+        const menu = document.getElementById(`${role}_model-menu`);
+        const text = dropdown?.querySelector('.llm-model-dropdown__text');
+
+        if (text) text.textContent = label;
+
+        const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
+        options.forEach(option => {
+            if (option.dataset.value === modelId) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+
+        this._closeAllDropdowns();
+        this._updateNav();
+    }
+
+    _showCustomModelInput(role) {
+        const customLabel = prompt('Enter custom model name:');
+        if (customLabel && customLabel.trim()) {
+            this._selectedModels[role] = 'custom';
+            this._selectedModels[`${role}CustomLabel`] = customLabel.trim();
+
+            const dropdown = document.getElementById(`${role}_model`);
+            const menu = document.getElementById(`${role}_model-menu`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+
+            if (text) text.textContent = customLabel.trim();
+
+            const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
+            options.forEach(option => {
+                if (option.dataset.value === 'custom') {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+
+            this._closeAllDropdowns();
+            this._updateNav();
+        }
     }
 
     _isProviderStepReady() {
         const active = this._getActiveProviders();
         if (active.length === 0) return false;
-        const primary = document.getElementById('primary_model')?.value;
-        const assistant = document.getElementById('assistant_model')?.value;
-        return !!(primary && assistant);
+        const primary = this._selectedModels.primary;
+        const assistant = this._selectedModels.assistant;
+        const lite = this._selectedModels.lite;
+        return !!(primary && assistant && lite);
     }
 
     // ---------------------------------------------------------------------------
@@ -388,9 +539,14 @@ export class SetupPage {
     // ---------------------------------------------------------------------------
 
     _renderSummary() {
-        const primaryModel = document.getElementById('primary_model')?.value || '';
-        const assistantModel = document.getElementById('assistant_model')?.value || '';
-        const primaryProvider = _modelToProvider(primaryModel);
+        const primaryModel = this._selectedModels.primary || '';
+        const assistantModel = this._selectedModels.assistant || '';
+        const liteModel = this._selectedModels.lite || '';
+
+        const primaryModelDisplay = primaryModel === 'custom' ? (this._selectedModels.primaryCustomLabel || 'Custom') : primaryModel;
+        const assistantModelDisplay = assistantModel === 'custom' ? (this._selectedModels.assistantCustomLabel || 'Custom') : assistantModel;
+        const liteModelDisplay = liteModel === 'custom' ? (this._selectedModels.liteCustomLabel || 'Custom') : liteModel;
+
         const email = document.getElementById('account_email').value.trim();
         const name = document.getElementById('account_name').value.trim();
 
@@ -404,8 +560,9 @@ export class SetupPage {
         const rows = [
             { icon: 'person',         label: 'Account',         value: name ? `${name} (${email})` : email },
             { icon: 'psychology',     label: 'Providers',       value: providerLabels },
-            { icon: 'model_training', label: 'Primary Model',   value: primaryModel },
-            { icon: 'assistant',      label: 'Assistant Model', value: assistantModel },
+            { icon: 'model_training', label: 'Primary Model',   value: primaryModelDisplay },
+            { icon: 'assistant',      label: 'Assistant Model', value: assistantModelDisplay },
+            { icon: 'bolt',           label: 'Lite Model',      value: liteModelDisplay },
             { icon: 'travel_explore', label: 'Web Search',      value: searchProviderLabel },
         ];
 
@@ -438,10 +595,17 @@ export class SetupPage {
     _collectUserSettings() {
         const userSettings = {};
 
-        const primaryModel = document.getElementById('primary_model')?.value || '';
-        const assistantModel = document.getElementById('assistant_model')?.value || '';
-        const primaryProvider = _modelToProvider(primaryModel);
-        const assistantProvider = _modelToProvider(assistantModel);
+        const primaryModel = this._selectedModels.primary || '';
+        const assistantModel = this._selectedModels.assistant || '';
+        const liteModel = this._selectedModels.lite || '';
+
+        const primaryModelValue = primaryModel === 'custom' ? this._selectedModels.primaryCustomLabel : primaryModel;
+        const assistantModelValue = assistantModel === 'custom' ? this._selectedModels.assistantCustomLabel : assistantModel;
+        const liteModelValue = liteModel === 'custom' ? this._selectedModels.liteCustomLabel : liteModel;
+
+        const primaryProvider = primaryModel === 'custom' ? this._getActiveProviders()[0] : _modelToProvider(primaryModel);
+        const assistantProvider = assistantModel === 'custom' ? this._getActiveProviders()[0] : _modelToProvider(assistantModel);
+        const liteProvider = liteModel === 'custom' ? this._getActiveProviders()[0] : _modelToProvider(liteModel);
 
         if (primaryProvider) {
             userSettings.llm_primary_provider = primaryProvider;
@@ -449,8 +613,12 @@ export class SetupPage {
         if (assistantProvider) {
             userSettings.llm_assistant_provider = assistantProvider;
         }
-        if (primaryModel) userSettings.llm_model = primaryModel;
-        if (assistantModel) userSettings.llm_assistant_model = assistantModel;
+        if (liteProvider) {
+            userSettings.llm_lite_provider = liteProvider;
+        }
+        if (primaryModelValue) userSettings.llm_model = primaryModelValue;
+        if (assistantModelValue) userSettings.llm_assistant_model = assistantModelValue;
+        if (liteModelValue) userSettings.llm_lite_model = liteModelValue;
 
         const geminiKey = document.getElementById('gemini_api_key')?.value.trim();
         if (geminiKey) userSettings.gemini_api_key = geminiKey;
@@ -528,7 +696,7 @@ export class SetupPage {
                 const cred    = await navigator.credentials.create({ publicKey: options });
 
                 this._showStatus('loading', 'Finalizing setup...');
-                const verifyRes  = await window.serviceClient.post(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+                const verifyRes  = await window.serviceClient.post(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                     user_id: userId,
                     attestation_response: _serializeCredential(cred)
                 });

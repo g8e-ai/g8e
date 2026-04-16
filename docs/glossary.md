@@ -431,7 +431,7 @@ The minimal bootstrap permissions granted to Cloud Operators at launch, allowing
 
 A heterogeneous multi-model architecture in g8ee for refining command syntax. Implements a 4-stage pipeline that fires only for `run_commands_with_operator` workflows:
 
-1. **Generation** — N independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Each pass uses a member-specific temperature (AXIOM=0.5, CONCORD=0.7, VARIANCE=1.2) to encourage diverse candidates.
+1. **Generation** — N independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. All passes use the configured model's default temperature; diversity is driven by distinct member personas (Axiom, Concord, Variance), not by per-pass temperature overrides.
 
 2. **Voting** — Candidates are normalized (stripped trailing whitespace/newlines) and grouped by exact value. Each unique string receives a weight equal to the sum of position-decay weights (earlier passes carry more weight). The highest aggregate weight wins.
 
@@ -439,7 +439,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 4. **Fallback** — If no consensus (all candidates unique or total weight tie), the original Large LLM command is used unchanged and `FALLBACK` is recorded.
 
-Configuration via environment variables: `LLM_COMMAND_GEN_PASSES` (default: 3), `LLM_COMMAND_GEN_TEMP` (default: 0.4), `LLM_COMMAND_GEN_VERIFIER` (default: true), `LLM_COMMAND_GEN_ENABLED` (default: true). Uses the lowest supported thinking level for models that support thinking (`include_thoughts=False`); models without thinking support receive a disabled thinking config.
+Configuration via environment variables: `LLM_COMMAND_GEN_PASSES` (default: 3), `LLM_COMMAND_GEN_VERIFIER` (default: true), `LLM_COMMAND_GEN_ENABLED` (default: true). Temperature is not a configurable Tribunal parameter — all passes inherit the configured model's `default_temperature`. Uses the lowest supported thinking level for models that support thinking (`include_thoughts=False`); models without thinking support receive a disabled thinking config.
 
 ---
 
@@ -463,7 +463,7 @@ The ability to restore files to any previous state using the Ledger's git histor
 
 ## Unified Approval
 
-The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee executes the command on each Operator sequentially after approval.
+The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee fans out the command to each Operator in parallel (bounded by `command_validation.max_batch_concurrency`), with all per-operator executions correlated back to the approval via a shared `batch_id`.
 
 ---
 

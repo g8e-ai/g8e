@@ -18,7 +18,6 @@ import logging
 from collections.abc import AsyncGenerator
 
 import anthropic
-import httpx
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
@@ -35,11 +34,32 @@ from app.llm.llm_types import (
     ToolGroup,
     UsageMetadata,
 )
+from app.models.base import G8eBaseModel, Field
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# LLM-boundary models for the Anthropic SDK
+#
+# These G8eBaseModel subclasses represent the known shapes of dicts passed to
+# the Anthropic SDK. flatten_for_llm() is called at the LLM boundary to produce
+# the plain dicts the SDK expects.
+# =============================================================================
+
+
+class AnthropicMessageRequest(G8eBaseModel):
+    model: str
+    messages: list[dict]
+    max_tokens: int
+    temperature: float
+    system: str | None = None
+    tools: list[dict] | None = None
+    top_k: int | None = None
+    thinking: dict | None = None
 
 
 def _contents_to_anthropic(contents: list[Content]) -> list[dict]:
@@ -164,63 +184,35 @@ def _build_usage(response_usage) -> UsageMetadata:
 
 
 class AnthropicProvider(LLMProvider):
-    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
-    _LIMITS = httpx.Limits(
-        max_connections=20,
-        max_keepalive_connections=10,
-        keepalive_expiry=30.0,
-    )
-
-    @staticmethod
-    def _is_internal_endpoint(endpoint: str | None) -> bool:
-        return is_internal_endpoint(endpoint)
-
-    def __init__(self, endpoint: str | None, api_key: str, ca_cert_path: str | None = None):
-        import ssl
-        verify: ssl.SSLContext | bool
-        if self._is_internal_endpoint(endpoint):
-            if endpoint and endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
-
-        http_client = httpx.AsyncClient(
-            timeout=self._TIMEOUT,
-            limits=self._LIMITS,
-            verify=verify,
-        )
-        kwargs: dict = {"http_client": http_client, "max_retries": 0}
+    def __init__(self, endpoint: str | None, api_key: str):
+        super().__init__()
+        kwargs: dict = {"max_retries": 0}
         if api_key:
             kwargs["api_key"] = api_key
         if endpoint:
             kwargs["base_url"] = endpoint
         self._client = anthropic.AsyncAnthropic(**kwargs)
-        self._http_client = http_client
         logger.info("Anthropic provider initialized")
 
-    async def close(self):
-        """Clean up the httpx client to prevent resource leaks."""
-        if self._http_client:
-            await self._http_client.aclose()
-            logger.info("Anthropic provider closed")
+    async def _close_resources(self):
+        """Clean up provider resources."""
+        if hasattr(self._client, 'close'):
+            await self._client.close()
+        logger.info("Anthropic provider closed")
 
     def _build_kwargs(
         self,
         *,
         model: str,
         messages: list[dict],
-        temperature: float | None,
-        max_tokens: int | None,
-        top_k: int | None = None,
-        system_instruction: str = "",
+        temperature: float,
+        max_tokens: int,
+        top_k: int | None,
+        system_instructions: str,
         anthropic_tools: list[dict] | None = None,
         thinking_config: ThinkingConfig | None = None,
-    ) -> dict:
-        """Build Anthropic API kwargs with proper parameter constraints.
+    ) -> AnthropicMessageRequest:
+        """Build Anthropic API request with proper parameter constraints.
 
         Anthropic constraints enforced here:
         - temperature and top_p are mutually exclusive; we always use temperature
@@ -229,50 +221,46 @@ class AnthropicProvider(LLMProvider):
         effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        kwargs: dict = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": effective_max_tokens,
-        }
-
         thinking_enabled = (
             thinking_config is not None
             and thinking_config.thinking_level is not None
         )
 
         if thinking_enabled:
-            kwargs["thinking"] = {
+            effective_temperature = 1.0
+            thinking_config_dict = {
                 "type": "enabled",
                 "budget_tokens": effective_max_tokens // 2,
             }
-            kwargs["temperature"] = 1.0
+            effective_top_k = None
         else:
-            kwargs["temperature"] = effective_temperature
-            if top_k is not None:
-                kwargs["top_k"] = top_k
+            thinking_config_dict = None
+            effective_top_k = top_k
 
-        if system_instruction:
-            kwargs["system"] = system_instruction
-        if anthropic_tools:
-            kwargs["tools"] = anthropic_tools
-
-        logger.info(
-            "[ANTHROPIC] Building API kwargs: model=%s temperature=%.2f max_tokens=%d "
-            "top_k=%s system_instruction_len=%d tools_count=%d thinking_enabled=%s "
-            "thinking_level=%s include_thoughts=%s messages_count=%d",
-            model,
-            kwargs["temperature"],
-            effective_max_tokens,
-            kwargs.get("top_k"),
-            len(system_instruction),
-            len(anthropic_tools) if anthropic_tools else 0,
-            thinking_enabled,
-            thinking_config.thinking_level if thinking_config else None,
-            thinking_config.include_thoughts if thinking_config else False,
-            len(messages),
+        request = AnthropicMessageRequest(
+            model=model,
+            messages=messages,
+            max_tokens=effective_max_tokens,
+            temperature=effective_temperature,
+            system=system_instructions if system_instructions else None,
+            tools=anthropic_tools,
+            top_k=effective_top_k,
+            thinking=thinking_config_dict,
         )
 
-        return kwargs
+        logger.debug(
+            "[ANTHROPIC] Building API request: model=%s temperature=%.2f max_tokens=%d "
+            "top_k=%s system_instructions_len=%d tools_count=%d thinking_enabled=%s",
+            model,
+            request.temperature,
+            request.max_tokens,
+            request.top_k,
+            len(system_instructions),
+            len(anthropic_tools) if anthropic_tools else 0,
+            thinking_enabled,
+        )
+
+        return request
 
     def _build_response(self, response) -> GenerateContentResponse:
         """Parse a non-streaming Anthropic response into canonical form."""
@@ -337,25 +325,25 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_primary: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d tools=%d",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
+            "system_instructions_len=%d tools_count=%d",
             model,
             len(contents),
             primary_llm_settings.temperature,
             primary_llm_settings.max_output_tokens,
-            primary_llm_settings.top_k_filtering,
-            primary_llm_settings.top_p_nucleus_sampling,
-            len(primary_llm_settings.system_instruction),
+            primary_llm_settings.top_k_filtering if primary_llm_settings.top_k_filtering is not None else "None",
+            primary_llm_settings.top_p_nucleus_sampling if primary_llm_settings.top_p_nucleus_sampling is not None else "None",
+            len(primary_llm_settings.system_instructions),
             len(primary_llm_settings.tools) if primary_llm_settings.tools else 0,
         )
 
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=primary_llm_settings.temperature,
             max_tokens=primary_llm_settings.max_output_tokens,
             top_k=primary_llm_settings.top_k_filtering,
-            system_instruction=primary_llm_settings.system_instruction,
+            system_instructions=primary_llm_settings.system_instructions,
             anthropic_tools=_tools_to_anthropic(primary_llm_settings.tools),
             thinking_config=primary_llm_settings.thinking_config,
         )
@@ -368,7 +356,7 @@ class AnthropicProvider(LLMProvider):
         finish_reason_received = False
         stream_exhausted = False
 
-        async with self._client.messages.stream(**kwargs) as stream:
+        async with self._client.messages.stream(**request.model_dump(mode="json", exclude_none=True)) as stream:
             try:
                 async for event in stream:
                     event_type = event.type
@@ -459,18 +447,18 @@ class AnthropicProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=primary_llm_settings.temperature,
             max_tokens=primary_llm_settings.max_output_tokens,
             top_k=primary_llm_settings.top_k_filtering,
-            system_instruction=primary_llm_settings.system_instruction,
+            system_instructions=primary_llm_settings.system_instructions,
             anthropic_tools=_tools_to_anthropic(primary_llm_settings.tools),
             thinking_config=primary_llm_settings.thinking_config,
         )
 
-        response = await self._client.messages.create(**kwargs)
+        response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
         return self._build_response(response)
 
     async def generate_content_stream_assistant(
@@ -481,28 +469,30 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             assistant_llm_settings.temperature,
             assistant_llm_settings.max_output_tokens,
-            assistant_llm_settings.top_k_filtering,
-            assistant_llm_settings.top_p_nucleus_sampling,
-            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
+            len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
 
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=assistant_llm_settings.temperature,
             max_tokens=assistant_llm_settings.max_output_tokens,
             top_k=assistant_llm_settings.top_k_filtering,
-            system_instruction=assistant_llm_settings.system_instruction,
+            system_instructions=assistant_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
-        async for chunk in self._stream_text_only(kwargs):
+        async for chunk in self._stream_text_only(request.model_dump(mode="json", exclude_none=True)):
             yield chunk
 
     async def generate_content_assistant(
@@ -513,28 +503,30 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_assistant: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             assistant_llm_settings.temperature,
             assistant_llm_settings.max_output_tokens,
-            assistant_llm_settings.top_k_filtering,
-            assistant_llm_settings.top_p_nucleus_sampling,
-            len(assistant_llm_settings.system_instruction),
+            assistant_llm_settings.top_k_filtering if assistant_llm_settings.top_k_filtering is not None else "None",
+            assistant_llm_settings.top_p_nucleus_sampling if assistant_llm_settings.top_p_nucleus_sampling is not None else "None",
+            len(assistant_llm_settings.system_instructions),
             assistant_llm_settings.response_format is not None,
         )
 
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=assistant_llm_settings.temperature,
             max_tokens=assistant_llm_settings.max_output_tokens,
             top_k=assistant_llm_settings.top_k_filtering,
-            system_instruction=assistant_llm_settings.system_instruction,
+            system_instructions=assistant_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
-        response = await self._client.messages.create(**kwargs)
+        response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
         return self._build_response(response)
 
     async def generate_content_stream_lite(
@@ -545,28 +537,30 @@ class AnthropicProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[ANTHROPIC] generate_content_stream_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             lite_llm_settings.temperature,
             lite_llm_settings.max_output_tokens,
-            lite_llm_settings.top_k_filtering,
-            lite_llm_settings.top_p_nucleus_sampling,
-            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
+            len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
 
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=lite_llm_settings.temperature,
             max_tokens=lite_llm_settings.max_output_tokens,
             top_k=lite_llm_settings.top_k_filtering,
-            system_instruction=lite_llm_settings.system_instruction,
+            system_instructions=lite_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
-        async for chunk in self._stream_text_only(kwargs):
+        async for chunk in self._stream_text_only(request.model_dump(mode="json", exclude_none=True)):
             yield chunk
 
     async def generate_content_lite(
@@ -577,26 +571,28 @@ class AnthropicProvider(LLMProvider):
     ) -> GenerateContentResponse:
         logger.info(
             "[ANTHROPIC] generate_content_lite: model=%s contents=%d "
-            "temperature=%.2f max_output_tokens=%d top_k=%d top_p=%.2f "
-            "system_instruction_len=%d response_format=%s",
+            "temperature=%.2f max_output_tokens=%d top_k=%s top_p=%s "
+            "system_instructions_len=%d response_format=%s",
             model,
             len(contents),
             lite_llm_settings.temperature,
             lite_llm_settings.max_output_tokens,
-            lite_llm_settings.top_k_filtering,
-            lite_llm_settings.top_p_nucleus_sampling,
-            len(lite_llm_settings.system_instruction),
+            lite_llm_settings.top_k_filtering if lite_llm_settings.top_k_filtering is not None else "None",
+            lite_llm_settings.top_p_nucleus_sampling if lite_llm_settings.top_p_nucleus_sampling is not None else "None",
+            len(lite_llm_settings.system_instructions),
             lite_llm_settings.response_format is not None,
         )
 
-        kwargs = self._build_kwargs(
+        request = self._build_kwargs(
             model=model,
             messages=_contents_to_anthropic(contents),
             temperature=lite_llm_settings.temperature,
             max_tokens=lite_llm_settings.max_output_tokens,
             top_k=lite_llm_settings.top_k_filtering,
-            system_instruction=lite_llm_settings.system_instruction,
+            system_instructions=lite_llm_settings.system_instructions,
+            anthropic_tools=None,
+            thinking_config=None,
         )
 
-        response = await self._client.messages.create(**kwargs)
+        response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
         return self._build_response(response)

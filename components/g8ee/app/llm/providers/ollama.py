@@ -2,9 +2,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-import httpx
 from ollama import AsyncClient, Message as OllamaMessage
-from ollama._client import BaseClient
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
@@ -22,27 +20,18 @@ from app.llm.llm_types import (
 )
 
 from ..provider import LLMProvider
-from ..utils import is_internal_endpoint, schema_to_dict
+from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
-class _InjectedAsyncClient(AsyncClient):
-    """
-    Subclass that overrides AsyncClient to properly inject an existing httpx client instance
-    rather than letting the SDK construct its own internal instance.
-    """
-    def __init__(self, httpx_client: httpx.AsyncClient, host: str | None = None, **kwargs):
-        # Pass a factory function that ignores kwargs and returns our instance
-        BaseClient.__init__(self, lambda **k: httpx_client, host, **kwargs)
-
 def _contents_to_messages(
     contents: list[Content],
-    system_instruction: str,
+    system_instructions: str,
 ) -> list[OllamaMessage]:
     messages = []
 
-    if system_instruction:
-        messages.append(OllamaMessage(role="system", content=system_instruction))
+    if system_instructions:
+        messages.append(OllamaMessage(role="system", content=system_instructions))
 
     for content in contents:
         role = "assistant" if content.role == "model" else content.role
@@ -92,47 +81,23 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
 
 
 class OllamaProvider(LLMProvider):
-    _TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=5.0)
+    def __init__(self, endpoint: str, api_key: str):
+        super().__init__()
 
-    def __init__(self, endpoint: str, api_key: str, ca_cert_path: str | None = None):
-        # Strip /v1 suffix if present - ollama SDK handles API paths internally
         cleaned_endpoint = endpoint.rstrip('/')
         if cleaned_endpoint.endswith('/v1'):
             cleaned_endpoint = cleaned_endpoint[:-3]
-        
-        # Ensure protocol prefix exists - Ollama SDK requires http:// or https://
+
         if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
             cleaned_endpoint = 'http://' + cleaned_endpoint
-        
-        self._original_endpoint = cleaned_endpoint
 
-        import ssl
+        self._client = AsyncClient(host=cleaned_endpoint)
+        logger.info("Ollama provider initialized: %s", cleaned_endpoint)
 
-        verify: ssl.SSLContext | bool
-        if is_internal_endpoint(endpoint):
-            if endpoint.startswith("http://"):
-                verify = False
-            elif ca_cert_path:
-                verify = ssl.create_default_context(cafile=ca_cert_path)
-            else:
-                verify = True
-        else:
-            verify = True
-
-        self._httpx_client = httpx.AsyncClient(
-            base_url=self._original_endpoint,
-            timeout=self._TIMEOUT,
-            verify=verify,
-        )
-        self._client = _InjectedAsyncClient(
-            httpx_client=self._httpx_client,
-            host=self._original_endpoint,
-        )
-        logger.info(f"Ollama provider initialized: {self._original_endpoint}")
-
-    async def close(self):
-        """Clean up the underlying httpx client."""
-        await self._httpx_client.aclose()
+    async def _close_resources(self):
+        """Clean up provider resources."""
+        if hasattr(self._client, 'close'):
+            await self._client.close()
         
     async def generate_content_stream_primary(
         self,
@@ -140,31 +105,25 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            options["stop"] = primary_llm_settings.stop_sequences
 
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": True, # enable thinking for primary
-        }
-        if ollama_tools:
-            kwargs["tools"] = ollama_tools
-
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": primary_llm_settings.top_p_nucleus_sampling,
+                "stop": primary_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=True,
+            tools=ollama_tools or None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -196,31 +155,25 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, primary_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if primary_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = primary_llm_settings.top_p_nucleus_sampling
-        if primary_llm_settings.stop_sequences:
-            options["stop"] = primary_llm_settings.stop_sequences
 
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": True,
-        }
-        if ollama_tools:
-            kwargs["tools"] = ollama_tools
-
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": primary_llm_settings.top_p_nucleus_sampling,
+                "stop": primary_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=True,
+            tools=ollama_tools or None,
+        )
         
         parts = []
         if getattr(response.message, "thinking", None):
@@ -255,32 +208,24 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            options["stop"] = assistant_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": False,
-        }
-        
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": assistant_llm_settings.top_p_nucleus_sampling,
+                "stop": assistant_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=False,
+            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -303,32 +248,24 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, assistant_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if assistant_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = assistant_llm_settings.top_p_nucleus_sampling
-        if assistant_llm_settings.stop_sequences:
-            options["stop"] = assistant_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": False,
-        }
-        
-        if assistant_llm_settings.response_format is not None:
-            rjs = assistant_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": assistant_llm_settings.top_p_nucleus_sampling,
+                "stop": assistant_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=False,
+            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
+        )
         
         parts = []
         if getattr(response.message, "content", None):
@@ -356,32 +293,24 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            options["stop"] = lite_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": True,
-            "think": False,
-        }
-        
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        stream = await self._client.chat(**kwargs)
+        stream = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": lite_llm_settings.top_p_nucleus_sampling,
+                "stop": lite_llm_settings.stop_sequences,
+            },
+            stream=True,
+            think=False,
+            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
+        )
         
         async for chunk in stream:
             msg = chunk.message
@@ -404,32 +333,24 @@ class OllamaProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
-        messages = _contents_to_messages(contents, lite_llm_settings.system_instruction)
+        messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        options = {
-            "temperature": effective_temperature,
-            "num_predict": effective_max_tokens,
-        }
-        if lite_llm_settings.top_p_nucleus_sampling is not None:
-            options["top_p"] = lite_llm_settings.top_p_nucleus_sampling
-        if lite_llm_settings.stop_sequences:
-            options["stop"] = lite_llm_settings.stop_sequences
-            
-        kwargs = {
-            "model": model,
-            "messages": messages,
-            "options": options,
-            "stream": False,
-            "think": False,
-        }
-        
-        if lite_llm_settings.response_format is not None:
-            rjs = lite_llm_settings.response_format.json_schema
-            kwargs["format"] = rjs.schema
 
-        response = await self._client.chat(**kwargs)
+        response = await self._client.chat(
+            model=model,
+            messages=messages,
+            options={
+                "temperature": effective_temperature,
+                "num_predict": effective_max_tokens,
+                "top_p": lite_llm_settings.top_p_nucleus_sampling,
+                "stop": lite_llm_settings.stop_sequences,
+            },
+            stream=False,
+            think=False,
+            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
+        )
         
         parts = []
         if getattr(response.message, "content", None):

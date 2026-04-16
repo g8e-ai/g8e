@@ -83,6 +83,7 @@ class AIToolService:
         investigation_service: InvestigationService,
         web_search_provider: WebSearchProvider | None,
         platform_settings: G8eePlatformSettings | None = None,
+        user_settings: G8eeUserSettings | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
     ):
@@ -90,6 +91,7 @@ class AIToolService:
         self.investigation_service = investigation_service
         self._web_search_provider: WebSearchProvider | None = web_search_provider
         self._platform_settings = platform_settings
+        self._user_settings = user_settings
 
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
@@ -753,7 +755,7 @@ class AIToolService:
                 "This may indicate a configuration error."
             )
 
-        cv = self._platform_settings.command_validation if self._platform_settings else None
+        cv = self._user_settings.command_validation if self._user_settings else None
         whitelisting_enabled = cv.enable_whitelisting if cv else False
         blacklisting_enabled = cv.enable_blacklisting if cv else False
 

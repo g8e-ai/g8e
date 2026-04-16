@@ -374,8 +374,8 @@ case "$LLM_PROVIDER" in
                 _err "--anthropic-key or --api-key is required for Anthropic"
                 exit 1
             fi
-            LLM_MODEL="${ARG_MODEL:-claude-opus-4-5}"
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-claude-haiku-4-5}"
+            LLM_MODEL="${ARG_MODEL:-claude-opus-4-6}"
+            LLM_ASST_MODEL="${ARG_ASST_MODEL:-claude-sonnet-4-6}"
         else
             if [[ -n "$_cur_anthropic_key" ]]; then
                 _info "An existing API key is set. Leave blank to keep it."
@@ -387,13 +387,13 @@ case "$LLM_PROVIDER" in
                 exit 1
             fi
 
-            printf "  Primary model [%s]: " "${_cur_model:-claude-opus-4-5}" >&2
+            printf "  Primary model [%s]: " "${_cur_model:-claude-opus-4-6}" >&2
             IFS= read -r _input
-            LLM_MODEL="${_input:-${_cur_model:-claude-opus-4-5}}"
+            LLM_MODEL="${_input:-${_cur_model:-claude-opus-4-6}}"
 
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-claude-haiku-4-5}" >&2
+            printf "  Assistant model [%s]: " "${_cur_asst_model:-claude-sonnet-4-6}" >&2
             IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-claude-haiku-4-5}}"
+            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-claude-sonnet-4-6}}"
         fi
 
         LLM_PROVIDER_VAL="anthropic"

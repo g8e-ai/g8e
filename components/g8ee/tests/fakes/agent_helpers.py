@@ -124,6 +124,7 @@ make_streaming_context = make_agent_streaming_context
 
 def make_g8e_agent(
     fn_handler=None,
+    approval_service=None,
 ) -> g8eEngine:
     """Build a g8eEngine suitable for unit tests."""
     if fn_handler is None:
@@ -134,6 +135,7 @@ def make_g8e_agent(
 
     return g8eEngine(
         tool_executor=fn_handler,
+        approval_service=approval_service,
     )
 
 

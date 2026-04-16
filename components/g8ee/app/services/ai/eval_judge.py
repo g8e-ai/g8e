@@ -33,9 +33,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettings
+from app.llm.llm_types import Content, Part, ResponseFormat, ResponseJsonSchema, Role, LiteLLMSettings
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
+from app.constants import LLM_DEFAULT_TEMPERATURE
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -97,40 +99,6 @@ _JUDGE_RESPONSE_SCHEMA = {
     "required": ["score", "reasoning"],
 }
 
-_JUDGE_PROMPT_TEMPLATE = """\
-You are an expert AI Agent Evaluator. Your task is to grade the performance of an AI Agent (the "Student") \
-based on a User Query, the Student's Response/Actions, and a set of Gold Standard Criteria.
-
-<user_query>
-{user_query}
-</user_query>
-
-<gold_standard_criteria>
-Expected Behavior: {expected_behavior}
-Required Concepts: {required_concepts}
-Expected Tools: {expected_tools}
-Forbidden Tools: {forbidden_tools}
-</gold_standard_criteria>
-
-<student_interaction>
-{student_interaction}
-</student_interaction>
-
-Grading Rubric (1-5):
-1: Fails completely. Uses forbidden tools or completely ignores the intent.
-2: Major issues. Misses required concepts or fails the primary intent.
-3: Functional but flawed. Meets intent but with minor inaccuracies or sub-optimal tool use.
-4: Good. Meets all criteria with clear, accurate responses.
-5: Exceptional. Perfect tool use, hits all concepts, and provides a clear, concise response.
-
-Response Format (JSON):
-{{
-  "score": integer (1-5),
-  "reasoning": "string explaining why this score was assigned"
-}}
-
-Output ONLY the JSON object."""
-
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
@@ -164,7 +132,7 @@ class EvalJudge:
         self._provider = provider
         self._settings = settings or EvalJudgeSettings(
             eval_judge_model=None,
-            eval_judge_temperature=0.0,
+            eval_judge_temperature=None,
             eval_judge_max_tokens=4096,
         )
         self._model = model or self._settings.model
@@ -189,19 +157,24 @@ class EvalJudge:
             EvalJudgeError: When the judge cannot produce a valid grade after
                 all retry attempts (infrastructure failure, not a low score).
         """
-        prompt = _JUDGE_PROMPT_TEMPLATE.format(
-            user_query=user_query,
-            expected_behavior=expected_behavior,
-            required_concepts=", ".join(required_concepts),
-            expected_tools=", ".join(expected_tools or []),
-            forbidden_tools=", ".join(forbidden_tools or []),
-            student_interaction=interaction_trace,
-        )
+        persona = get_agent_persona("eval_judge")
+        prompt_template = persona.get_system_prompt()
+        prompt = f"{prompt_template}\n\n<user_query>\n{user_query}\n</user_query>\n\n<gold_standard_criteria>\nExpected Behavior: {expected_behavior}\nRequired Concepts: {', '.join(required_concepts)}\nExpected Tools: {', '.join(expected_tools or [])}\nForbidden Tools: {', '.join(forbidden_tools or [])}\n</gold_standard_criteria>\n\n<student_interaction>\n{interaction_trace}\n</student_interaction>"
 
+        from app.models.model_configs import get_model_config
+
+        effective_temperature = self._settings.temperature if self._settings.temperature is not None else None
+        if effective_temperature is None:
+            model_config = get_model_config(self._model)
+            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        model_config = get_model_config(self._model)
         settings = LiteLLMSettings(
-            temperature=self._settings.temperature,
+            temperature=effective_temperature,
             max_output_tokens=self._settings.max_output_tokens,
-            system_instruction="",
+            top_p_nucleus_sampling=model_config.top_p,
+            top_k_filtering=model_config.top_k,
+            stop_sequences=model_config.stop_sequences,
+            system_instructions="",
             response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",

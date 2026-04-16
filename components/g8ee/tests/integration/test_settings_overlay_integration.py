@@ -20,7 +20,7 @@ from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
 )
 from app.models.settings import G8eePlatformSettings, PlatformSettingsDocument, UserSettingsDocument
-from app.constants.settings import GEMINI_3_1_PRO_PREVIEW, LLMProvider
+from app.constants.settings import GEMINI_3_1_PRO, LLMProvider
 
 @pytest.mark.asyncio
 class TestG8eeSettingsOverlayIntegration:

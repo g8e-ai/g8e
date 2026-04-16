@@ -62,8 +62,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 512M
     cap_drop:
       - ALL
     security_opt:
@@ -128,8 +132,12 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.0'
           memory: 2G
           pids: 50
+        reservations:
+          cpus: '0.25'
+          memory: 512M
     cap_drop:
       - ALL
     security_opt:
@@ -185,8 +193,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          pids: 30
+          cpus: '1.0'
+          memory: 1G
+          pids: 50
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     cap_add:
       - NET_BIND_SERVICE
     cap_drop:
@@ -205,15 +217,133 @@ services:
       
 
   # =============================================================================
-  # g8e node — always-on sidecar for tests
+  # Test Runners — per-component, lean, parallel-buildable
   # =============================================================================
 
-  # Unified test environment with Python, Node, and Go.
-  # Always running alongside core services. Run tests with: ./scripts/testing/run_tests.sh
+  # g8ee test runner (Python/pytest/pyright)
+  g8ee-test-runner:
+    build:
+      context: .
+      dockerfile: ./components/g8ee/Dockerfile.test
+      labels:
+        - "io.g8e.managed=true"
+    container_name: g8ee-test-runner
+    user: "1001:1001"
+    labels:
+      - "io.g8e.managed=true"
+    environment:
+      - HOME=/home/g8e
+      - G8E_DB_PATH=/data/g8e.db
+      - G8E_SSL_DIR=/g8es
+      - G8E_SSL_CERT_FILE=/g8es/ca.crt
+      - RUNNING_IN_DOCKER=1
+      - G8E_INTERNAL_AUTH_TOKEN
+      - G8E_SESSION_ENCRYPTION_KEY
+    volumes:
+      - ./components/g8ee:/app/components/g8ee
+      - ./shared:/app/shared
+      - ./scripts:/app/scripts
+      - g8es-ssl:/g8es:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+          pids: 100
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      g8e-network:
+        aliases:
+          - g8ee-test-runner
+
+  # g8ed test runner (Node.js/vitest)
+  g8ed-test-runner:
+    build:
+      context: .
+      dockerfile: ./components/g8ed/Dockerfile.test
+      labels:
+        - "io.g8e.managed=true"
+    container_name: g8ed-test-runner
+    user: "1001:1001"
+    ulimits:
+      nproc: 512
+    labels:
+      - "io.g8e.managed=true"
+    environment:
+      - HOME=/home/g8e
+      - NODE_ENV=test
+      - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
+      - G8E_SSL_DIR=/g8es
+      - RUNNING_IN_DOCKER=1
+      - G8E_INTERNAL_AUTH_TOKEN
+      - G8E_SESSION_ENCRYPTION_KEY
+    volumes:
+      - ./components/g8ed:/app/components/g8ed
+      - g8ed-test-node-modules:/app/components/g8ed/node_modules
+      - ./shared:/app/shared:ro
+      - ./scripts:/app/scripts
+      - g8es-ssl:/g8es:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+          pids: 512
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      g8e-network:
+        aliases:
+          - g8ed-test-runner
+
+  # g8eo test runner & operator builder (Go/gotestsum)
+  g8eo-test-runner:
+    build:
+      context: .
+      dockerfile: ./components/g8eo/Dockerfile.test
+      labels:
+        - "io.g8e.managed=true"
+    container_name: g8eo-test-runner
+    user: "1001:1001"
+    labels:
+      - "io.g8e.managed=true"
+    environment:
+      - HOME=/home/g8e
+      - G8E_SSL_DIR=/g8es
+      - G8E_SSL_CERT_FILE=/g8es/ca.crt
+      - RUNNING_IN_DOCKER=1
+      - G8E_INTERNAL_AUTH_TOKEN
+    volumes:
+      - ./components/g8eo:/app/components/g8eo
+      - ./shared:/app/shared:ro
+      - ./scripts:/app/scripts
+      - g8es-ssl:/g8es:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+          pids: 1024
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      g8e-network:
+        aliases:
+          - g8eo-test-runner
+
+  # =============================================================================
+  # g8e node — always-on sidecar for operator management and platform tooling
+  # =============================================================================
+
+  # Operator host, platform scripts, and security tooling.
+  # Test running has been moved to dedicated per-component test-runner containers.
   #
-  # Docker socket: required for docker exec into service containers during tests and
-  # for operator build/stream/deploy workflows. g8ep is internal-only (never
-  # public-facing). Runs as g8e (uid 1001).
+  # Docker socket: required for operator build/stream/deploy workflows.
+  # g8ep is internal-only (never public-facing). Runs as g8e (uid 1001).
   g8ep:
     build:
       context: .
@@ -237,10 +367,6 @@ services:
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY
     volumes:
-      - ./components/g8ee:/app/components/g8ee
-      - ./components/g8ed:/app/components/g8ed
-      - g8ed-node-modules:/app/components/g8ed/node_modules
-      - ./components/g8eo:/app/components/g8eo
       - ./components/g8ep/scripts:/app/components/g8ep/scripts
       - ./shared:/app/shared
       - ./scripts:/app/scripts
@@ -251,8 +377,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 4G
+          cpus: '2.0'
+          memory: 6G
           pids: 200
+        reservations:
+          cpus: '0.5'
+          memory: 1G
     cap_add:
       - NET_RAW
       - NET_ADMIN
@@ -274,8 +404,6 @@ services:
       retries: 3
       start_period: 5s
     depends_on:
-      g8ee:
-        condition: service_healthy
       g8ed:
         condition: service_healthy
 
@@ -299,6 +427,10 @@ volumes:
       - "io.g8e.managed=true"
   g8ed-node-modules:
     name: g8ed-node-modules
+    labels:
+      - "io.g8e.managed=true"
+  g8ed-test-node-modules:
+    name: g8ed-test-node-modules
     labels:
       - "io.g8e.managed=true"
   g8es-data:

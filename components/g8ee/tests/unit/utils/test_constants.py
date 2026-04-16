@@ -580,6 +580,9 @@ class TestOperatorToolNameMatchesSharedJSON:
     def test_g8e_web_search(self, status):
         assert status["g8e.tool.name"]["g8e.web.search"] == OperatorToolName.G8E_SEARCH_WEB
 
+    def test_get_command_constraints(self, status):
+        assert status["g8e.tool.name"]["get.command.constraints"] == OperatorToolName.GET_COMMAND_CONSTRAINTS
+
     def test_all_members_covered(self, status):
         json_keys = set(status["g8e.tool.name"].keys())
         enum_count = len(OperatorToolName)

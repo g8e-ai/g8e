@@ -26,7 +26,7 @@ persistent backing store, pod-restart safe).
 import logging
 from collections.abc import Callable
 
-
+from app.errors import ResourceNotFoundError
 from app.services.protocols import (
     EventServiceProtocol,
     InvestigationDataServiceProtocol,
@@ -92,7 +92,7 @@ class OperatorApprovalService:
         return self._pending_approvals
 
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
-        from app.errors import ExternalServiceError, ValidationError
+        from app.errors import ExternalServiceError, ValidationError, ResourceNotFoundError
 
         if not response.approval_id:
             raise ValidationError("approval_id must be provided", component="g8ee")
@@ -217,6 +217,8 @@ class OperatorApprovalService:
                     metadata=metadata,
                 )
                 logger.info("[%s] Recorded in operator activity_log", log_tag)
+            except ResourceNotFoundError:
+                logger.debug("[%s] Operator document not found (may be deleted during test cleanup)", log_tag)
             except Exception as e:
                 logger.error("[AUDIT-FAILURE] %s operator: %s", log_tag, e, exc_info=True)
 
@@ -227,6 +229,8 @@ class OperatorApprovalService:
                 metadata=metadata,
             )
             logger.info("[%s] Recorded in conversation_history", log_tag)
+        except ResourceNotFoundError:
+            logger.debug("[%s] Investigation document not found (may be deleted during test cleanup)", log_tag)
         except Exception as e:
             logger.warning("[AUDIT-FAILURE] %s investigation: %s", log_tag, e)
 
@@ -244,6 +248,7 @@ class OperatorApprovalService:
             risk_analysis=request.risk_analysis,
             target_systems=request.target_systems,
             task_id=request.task_id,
+            batch_id=request.batch_id,
         )
 
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
@@ -289,6 +294,7 @@ class OperatorApprovalService:
         risk_analysis: CommandRiskAnalysis | None,
         target_systems: list[TargetSystem],
         task_id: str | None,
+        batch_id: str | None = None,
     ) -> ApprovalResult:
         approval_id = generate_approval_id()
         try:
@@ -313,6 +319,7 @@ class OperatorApprovalService:
                 task_id=task_id,
                 risk_analysis=risk_analysis,
                 target_systems=target_systems or [],
+                batch_id=batch_id,
             )
 
             if approval_event.is_batch_execution:

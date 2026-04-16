@@ -71,10 +71,13 @@ export class LLMConfigData extends G8eBaseModel {
     static fields = {
         provider:                { type: F.string, required: true },
         assistant_provider:      { type: F.string, default: '' },
+        lite_provider:           { type: F.string, default: '' },
         default_primary_model:   { type: F.string, default: '' },
         default_assistant_model: { type: F.string, default: '' },
+        default_lite_model:      { type: F.string, default: '' },
         primary_models:          { type: F.array,  default: () => [] },
         assistant_models:        { type: F.array,  default: () => [] },
+        lite_models:             { type: F.array,  default: () => [] },
         provider_models:         { type: F.object, default: () => ({}) },
         timestamp:               { type: F.date,   default: () => now() },
     };

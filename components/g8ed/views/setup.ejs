@@ -87,7 +87,7 @@
                     </div>
                     <div class="setup-passkey-note">
                         <span class="material-symbols-outlined">fingerprint</span>
-                        <span>On the last step you'll register a passkey — Touch ID, Windows Hello, or a hardware security key.</span>
+                        <span>On the last step you'll register a passkey.</span>
                     </div>
                 </div>
             </div>
@@ -99,13 +99,60 @@
                 <div class="wizard-panel-header">
                     <span class="material-symbols-outlined wizard-panel-icon">key</span>
                     <div>
-                        <h2 class="wizard-panel-title">Enter Your AI Provider API Keys</h2>
+                        <h2 class="wizard-panel-title">Configure AI Providers and Models</h2>
                     </div>
                 </div>
                 <div class="setup-fields">
+                    <div class="setup-fields-row setup-fields-row-api-keys">
+                    
+                    <!-- Unified model selection -->
+                    <div class="setup-fields-model-selection">
+                        <div class="wizard-model-selection" id="wizard-model-selection">
+                        <div class="wizard-model-fields">
+                            <div class="setup-field">
+                                <label class="setup-label" for="primary_model">Primary Model</label>
+                                <div id="primary_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">model_training</span>
+                                        <span class="llm-model-dropdown__text">API Key Required</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="primary_model-menu"></div>
+                                </div>
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="assistant_model">Assistant Model</label>
+                                <div id="assistant_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">psychology</span>
+                                        <span class="llm-model-dropdown__text">API Key Required</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="assistant_model-menu"></div>
+                                </div>
+                            </div>
+                            <div class="setup-field">
+                                <label class="setup-label" for="lite_model">Lite Model</label>
+                                <div id="lite_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
+                                    <div class="llm-model-dropdown__selected">
+                                        <span class="llm-model-icon material-symbols-outlined">bolt</span>
+                                        <span class="llm-model-dropdown__text">API Key Required</span>
+                                        <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
+                                    </div>
+                                    <div class="llm-model-dropdown__menu" id="lite_model-menu"></div>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="setup-model-note">
+                            <span class="material-symbols-outlined">info</span>
+                            <span>Primary for heavy reasoning, Assistant for tools and lite reasoning, Lite for fast, simple operations. All API keys are encrypted at rest.</span>
+                        </div>
+                    </div>
 
-                    <!-- Gemini API Key -->
-                    <div class="wizard-provider-key-row" data-provider="gemini">
+                        <div class="setup-fields-api-keys">
+                            <!-- Gemini API Key -->
+                            <div class="wizard-provider-key-row" data-provider="gemini">
                         <div class="wizard-provider-key-header">
                             <span class="material-symbols-outlined wizard-provider-key-icon">auto_awesome</span>
                             <strong>Gemini</strong>
@@ -168,33 +215,9 @@
                         </div>
                         <div class="setup-field">
                             <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="http://192.168.1.100:11434" spellcheck="false" autocomplete="off">
-                            <div class="setup-field-desc">
-                                <span class="material-symbols-outlined setup-field-desc-icon">warning</span>
-                                Ollama only supports HTTP. Use https:// only if you have set up a custom reverse proxy with TLS.
-                            </div>
                         </div>
                     </div>
-
-                    <!-- Unified model selection -->
-                    <div class="wizard-model-selection" id="wizard-model-selection">
-                        <div class="wizard-model-selection-header">
-                            <span class="material-symbols-outlined">model_training</span>
-                            <span>Select your models from all configured providers</span>
-                        </div>
-                        <div class="wizard-model-fields">
-                            <div class="setup-field">
-                                <label class="setup-label" for="primary_model">Primary Model</label>
-                                <select id="primary_model" class="setup-select" disabled>
-                                    <option value="">Enter at least one API key above</option>
-                                </select>
-                            </div>
-                            <div class="setup-field">
-                                <label class="setup-label" for="assistant_model">Assistant Model</label>
-                                <select id="assistant_model" class="setup-select" disabled>
-                                    <option value="">Enter at least one API key above</option>
-                                </select>
-                            </div>
-                        </div>
+                    </div>
                     </div>
 
                 </div>

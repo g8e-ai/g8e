@@ -39,6 +39,31 @@ const __dirname = path.dirname(__filename);
 // Mock external dependencies
 import { vi } from 'vitest';
 
+// Module-level auth-sensitive limiters are imported directly by their route
+// files (passkey, auth_routes, operator_auth_routes, device_link_routes) to
+// preserve CodeQL dataflow. Override them here so the e2e test can control
+// rate-limit behaviour explicitly — most are pass-through; authRateLimiter
+// preserves the legacy stub that simulates a 429 after 5 POSTs to /register.
+const rateLimitState = vi.hoisted(() => ({ count: 0 }));
+vi.mock('@g8ed/middleware/rate-limit.js', async () => {
+    const actual = await vi.importActual('@g8ed/middleware/rate-limit.js');
+    return {
+        ...actual,
+        passkeyRateLimiter: (req, res, next) => next(),
+        operatorAuthRateLimiter: (req, res, next) => next(),
+        operatorAuthIpBackstopLimiter: (req, res, next) => next(),
+        deviceLinkRateLimiter: (req, res, next) => next(),
+        authRateLimiter: (req, res, next) => {
+            rateLimitState.count++;
+            const isRegister = (req.originalUrl || req.url || '').endsWith('/register');
+            if (rateLimitState.count > 5 && isRegister && req.method === 'POST') {
+                return res.status(429).json({ success: false, error: 'Too many requests' });
+            }
+            next();
+        }
+    };
+});
+
 // Mock WebAuthn for passkey testing
 vi.mock('@simplewebauthn/server', () => ({
     generateRegistrationOptions: vi.fn(() => ({
@@ -82,7 +107,6 @@ describe('Setup Flow End-to-End Tests', () => {
     let webSessionService;
     let testUsersCollection;
     let testSettingsCollection;
-    let rateLimitCount = 0;
 
     beforeAll(async () => {
         // Get real test services
@@ -105,7 +129,10 @@ describe('Setup Flow End-to-End Tests', () => {
         testUsersCollection = userService.collectionName;
         testSettingsCollection = settingsService.collectionName;
 
-        // Mock services and middleware dependencies
+        // Mock services and middleware dependencies.
+        // Auth-sensitive limiters (passkey, auth, operatorAuth*, deviceLink)
+        // are overridden at module-scope via vi.mock above. Remaining limiters
+        // below are the non-auth ones still plumbed through the factory.
         const mockRateLimiters = {
             settingsRateLimiter: (req, res, next) => next(),
             apiRateLimiter: (req, res, next) => next(),
@@ -113,26 +140,13 @@ describe('Setup Flow End-to-End Tests', () => {
             sseRateLimiter: (req, res, next) => next(),
             auditRateLimiter: (req, res, next) => next(),
             consoleRateLimiter: (req, res, next) => next(),
-            passkeyRateLimiter: (req, res, next) => next(),
             chatRateLimiter: (req, res, next) => next(),
-            authRateLimiter: (req, res, next) => {
-                rateLimitCount++;
-                // Check if it's a registration request and increment counter
-                const isRegister = (req.originalUrl || req.url || '').endsWith('/register');
-                if (rateLimitCount > 5 && isRegister && req.method === 'POST') {
-                    return res.status(429).json({ success: false, error: 'Too many requests' });
-                }
-                next();
-            },
-            // Device link rate limiters
-            deviceLinkRateLimiter: (req, res, next) => next(),
+            // Device link rate limiters (authenticated, non-brute-force)
             deviceLinkGenerateLimiter: (req, res, next) => next(),
             deviceLinkCreateRateLimiter: (req, res, next) => next(),
             deviceLinkListRateLimiter: (req, res, next) => next(),
             deviceLinkRevokeRateLimiter: (req, res, next) => next(),
-            // Operator rate limiters
-            operatorAuthIpBackstopLimiter: (req, res, next) => next(),
-            operatorAuthRateLimiter: (req, res, next) => next(),
+            // Operator refresh (non-auth)
             operatorRefreshRateLimiter: (req, res, next) => next()
         };
 
@@ -201,7 +215,8 @@ describe('Setup Flow End-to-End Tests', () => {
         // Setup cleanup tracking
         cleanup = new TestCleanupHelper(kvClient, cacheAside, {
             usersCollection: userService.collectionName,
-            settingsCollection: settingsService.collectionName
+            settingsCollection: settingsService.collectionName,
+            operatorsCollection: services.operatorService.collectionName
         });
     });
 
@@ -236,7 +251,7 @@ describe('Setup Flow End-to-End Tests', () => {
         // Ensure platform settings are in first run state
         await settingsService.savePlatformSettings({ setup_complete: false });
         
-        rateLimitCount = 0;
+        rateLimitState.count = 0;
     });
 
     afterEach(async () => {
@@ -517,7 +532,7 @@ describe('Setup Flow End-to-End Tests', () => {
             };
 
             const verifyResponse = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({
                     user_id: userId,
                     attestation_response: mockCredential
@@ -580,7 +595,7 @@ describe('Setup Flow End-to-End Tests', () => {
             };
 
             const verifyResponse = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({
                     user_id: userId,
                     attestation_response: mockCredential

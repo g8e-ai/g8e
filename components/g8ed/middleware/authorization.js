@@ -165,7 +165,7 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
         }
 
         const ip = req.ip?.replace(/^::ffff:/, '') || req.ip;
-        if ((ip === '127.0.0.1' || ip === '::1') && req.originalUrl.startsWith('/health')) {
+        if (process.env.NODE_ENV !== 'production' && (ip === '127.0.0.1' || ip === '::1') && req.originalUrl.startsWith('/health')) {
             return next();
         }
 

@@ -224,7 +224,6 @@ OPERATOR_TOOLS = frozenset({
     OperatorToolName.FETCH_FILE_HISTORY.value,
     OperatorToolName.RESTORE_FILE.value,
     OperatorToolName.FETCH_FILE_DIFF.value,
-    OperatorToolName.G8E_SEARCH_WEB.value,
 })
 
 class OperatorType(str, Enum):

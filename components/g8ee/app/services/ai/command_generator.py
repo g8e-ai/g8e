@@ -50,13 +50,9 @@ Configuration:
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
   LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
 
-Temperatures are fixed per Tribunal member and are sourced from shared/constants/agents.json:
-
-  Axiom    (pass 0, cycles) — 0.0  (fully deterministic, statistical probability and resource efficiency)
-  Concord  (pass 1, cycles) — 0.4  (moderate determinism with ethical flexibility)
-  Variance (pass 2, cycles) — 0.8  (high creativity and intentional unpredictability)
-
-  Verifier (arbitrator)      — 0.0  (deterministic evaluation)
+Temperatures are sourced from the model's default temperature configuration:
+  - Generation passes use the configured model's default_temperature
+  - Verifier uses the configured model's default_temperature
     """
 
 import asyncio
@@ -69,16 +65,11 @@ from app.models.http_context import G8eHttpContext
 from app.constants import (
     CommandGenerationOutcome,
     ComponentName,
-    LLMProvider as LLMProviderEnum,
+    FORBIDDEN_COMMAND_PATTERNS,
     TribunalFallbackReason,
     TribunalMember,
-    TRIBUNAL_MEMBER_TEMPERATURES,
     EventType,
     VerifierReason,
-    OPENAI_DEFAULT_MODEL,
-    OLLAMA_DEFAULT_MODEL,
-    ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
 )
 from app.llm.factory import get_llm_provider
 from app.llm.llm_types import Content, Part, Role, LiteLLMSettings
@@ -101,62 +92,54 @@ from app.models.agents.tribunal import (
 )
 from app.models.events import SessionEvent
 from app.services.infra.g8ed_event_service import EventService
+from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
 
 logger = logging.getLogger(__name__)
 
-_GENERATION_PROMPT_TEMPLATE = """\
-You are a shell command specialist. Given the user intent and system context below, \
-output ONLY the exact shell command string to run — no explanation, no markdown fences, \
-no extra text. The command must be syntactically correct and immediately executable.
 
-<example>
-Intent: list all running processes sorted by memory usage
-OS: linux
-Shell: bash
-Working directory: /home/user
-Original command: ps aux --sort=-%mem
-Output only the command string: ps aux --sort=-%mem | head -20
-</example>
+def _format_command_constraints_message(
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    whitelisted_commands: list[str] | None,
+    blacklisted_commands: list[dict[str, str]] | None,
+) -> str:
+    """Generate a message describing command constraints for Tribunal prompts."""
+    parts = []
+    
+    if whitelisting_enabled and whitelisted_commands:
+        parts.append(
+            f"COMMAND WHITELIST ACTIVE: Only these {len(whitelisted_commands)} commands are permitted. "
+            f"Your proposed command MUST exactly match one of these whitelisted patterns. "
+            f"Whitelisted commands: {', '.join(repr(c) for c in whitelisted_commands[:10])}"
+            f"{'...' if len(whitelisted_commands) > 10 else ''}."
+        )
+    
+    if blacklisting_enabled and blacklisted_commands:
+        parts.append(
+            f"COMMAND BLACKLIST ACTIVE: Commands matching these patterns are forbidden. "
+            f"Your proposed command MUST NOT match any blacklisted pattern. "
+            f"Blacklisted patterns: {', '.join(b.get('pattern', '') for b in blacklisted_commands[:10])}"
+            f"{'...' if len(blacklisted_commands) > 10 else ''}."
+        )
+    
+    if not whitelisting_enabled and not blacklisting_enabled:
+        parts.append("No whitelist or blacklist constraints are active.")
+    
+    return " ".join(parts)
 
-<intent>
-{intent}
-</intent>
 
-<system_context>
-OS: {os}
-Shell: {shell}
-Working directory: {working_directory}
-</system_context>
+def _format_forbidden_patterns_message() -> str:
+    """Generate a message listing all forbidden command patterns from FORBIDDEN_COMMAND_PATTERNS."""
+    # Extract unique base patterns (e.g., "sudo" from "sudo", "su " from "su ")
+    base_patterns = sorted(set(p.strip() for p in FORBIDDEN_COMMAND_PATTERNS))
+    pattern_list = ", ".join(f'"{p}"' for p in base_patterns)
+    return (
+        f"CRITICAL: NEVER add {pattern_list}, or any privilege escalation wrapper. "
+        f"The command runs as the user shown in system_context. If that user is root (uid=0), "
+        f"no elevation is needed. If a non-root user lacks permissions, the command should still "
+        f"be written WITHOUT these patterns — the platform handles privilege escalation externally."
+    )
 
-<original_command>
-{original_command}
-</original_command>
-
-Output only the command string:"""
-
-_VERIFIER_PROMPT_TEMPLATE = """\
-You are a strict shell command syntax verifier. Evaluate the candidate command \
-against the stated intent and operating system.
-
-Rules:
-- If the command is syntactically correct and fulfils the intent, respond with exactly: ok
-- If there is a syntax error, wrong quoting, wrong escaping, or a missing flag that \
-  would cause the command to fail, respond with the corrected command string only — \
-  no explanation, no markdown fences.
-
-<intent>
-{intent}
-</intent>
-
-<os>
-{os}
-</os>
-
-<candidate_command>
-{candidate_command}
-</candidate_command>
-
-Respond with exactly "ok" or the corrected command:"""
 
 _MAX_TOKENS_GENERATION = 256
 _MAX_TOKENS_VERIFIER = 256
@@ -229,9 +212,13 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
     return _TRIBUNAL_MEMBERS[pass_index % len(_TRIBUNAL_MEMBERS)]
 
 
-def _temperature_for_pass(pass_index: int) -> float:
-    """Return the canonical temperature for the member assigned to a given pass."""
-    return TRIBUNAL_MEMBER_TEMPERATURES[_member_for_pass(pass_index)]
+def _temperature_for_pass(pass_index: int, model: str) -> float:
+    """Return the model's default temperature for the given pass."""
+    from app.models.model_configs import get_model_config
+    from app.constants import LLM_DEFAULT_TEMPERATURE
+
+    model_config = get_model_config(model)
+    return model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
 
 
 def _normalise_command(raw: str) -> str:
@@ -307,9 +294,11 @@ async def _run_generation_pass(
     os_name: str,
     shell: str,
     working_directory: str,
+    user_context: str,
     pass_index: int,
     emitter: TribunalEmitter,
     pass_errors: list[str],
+    command_constraints_message: str,
 ) -> str | None:
     """Run one Tribunal generation pass and return the normalised candidate command.
 
@@ -317,18 +306,28 @@ async def _run_generation_pass(
     classify the failure mode (system vs. legitimate).
     """
     member = _member_for_pass(pass_index)
-    temperature = _temperature_for_pass(pass_index)
-    prompt = _GENERATION_PROMPT_TEMPLATE.format(
+    temperature = _temperature_for_pass(pass_index, model)
+    member_persona = get_tribunal_member(member.value)
+    prompt = member_persona.persona.format(
+        forbidden_patterns_message=_format_forbidden_patterns_message(),
+        command_constraints_message=command_constraints_message,
         intent=intent,
         os=os_name,
         shell=shell,
+        user_context=user_context,
         working_directory=working_directory,
         original_command=original_command,
     )
+    from app.models.model_configs import get_model_config
+    model_config = get_model_config(model)
     settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=_MAX_TOKENS_GENERATION,
-        system_instruction="",
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
+        system_instructions="",
+        response_format=None,
     )
     try:
         response = await provider.generate_content_lite(
@@ -371,7 +370,9 @@ async def _run_verifier(
     intent: str,
     candidate_command: str,
     os_name: str,
+    user_context: str,
     emitter: TribunalEmitter,
+    command_constraints_message: str,
 ) -> tuple[bool, str | None]:
     """Run the Tribunal verifier against the vote winner."""
     await emitter.emit(
@@ -379,15 +380,28 @@ async def _run_verifier(
         TribunalVerifierStartedPayload(candidate_command=candidate_command),
     )
 
-    prompt = _VERIFIER_PROMPT_TEMPLATE.format(
+    from app.models.model_configs import get_model_config
+    from app.constants import LLM_DEFAULT_TEMPERATURE
+
+    verifier_persona = get_agent_persona("verifier")
+    prompt = verifier_persona.get_system_prompt().format(
+        forbidden_patterns_message=_format_forbidden_patterns_message(),
+        command_constraints_message=command_constraints_message,
         intent=intent,
         os=os_name,
+        user_context=user_context,
         candidate_command=candidate_command,
     )
+    model_config = get_model_config(model)
+    temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
     settings = LiteLLMSettings(
-        temperature=0.0,
+        temperature=temperature,
         max_output_tokens=_MAX_TOKENS_VERIFIER,
-        system_instruction="",
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
+        system_instructions="",
+        response_format=None,
     )
     try:
         response = await provider.generate_content_lite(
@@ -458,8 +472,10 @@ async def _run_generation_stage(
     os_name: str,
     shell: str,
     working_directory: str,
+    user_context: str,
     num_passes: int,
     emitter: TribunalEmitter,
+    command_constraints_message: str,
 ) -> list[CandidateCommand]:
     """Stage 1: run N parallel generation passes and return successful candidates.
 
@@ -471,7 +487,8 @@ async def _run_generation_stage(
         _run_generation_pass(
             provider=provider, model=model, intent=intent, original_command=original_command,
             os_name=os_name, shell=shell, working_directory=working_directory,
-            pass_index=i, emitter=emitter, pass_errors=pass_errors,
+            user_context=user_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
+            command_constraints_message=command_constraints_message,
         )
         for i in range(num_passes)
     ]
@@ -551,8 +568,10 @@ async def _run_verification_stage(
     intent: str,
     vote_winner: str,
     os_name: str,
+    user_context: str,
     verifier_enabled: bool,
     emitter: TribunalEmitter,
+    command_constraints_message: str,
 ) -> tuple[str | None, CommandGenerationOutcome, bool, str | None]:
     """Stage 3: optionally verify the vote winner and determine outcome.
 
@@ -563,7 +582,9 @@ async def _run_verification_stage(
 
     verifier_passed, verifier_revision = await _run_verifier(
         provider=provider, model=model, intent=intent,
-        candidate_command=vote_winner, os_name=os_name, emitter=emitter,
+        candidate_command=vote_winner, os_name=os_name,
+        user_context=user_context, emitter=emitter,
+        command_constraints_message=command_constraints_message,
     )
     if verifier_passed:
         logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
@@ -615,14 +636,46 @@ async def generate_command(
     os_name: str,
     shell: str,
     working_directory: str,
+    user_context: str,
     g8ed_event_service: EventService,
     web_session_id: str,
     user_id: str,
     case_id: str,
     investigation_id: str,
     settings: G8eeUserSettings,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+    whitelisted_commands: list[str] | None = None,
+    blacklisted_commands: list[dict[str, str]] | None = None,
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to refine a command string."""
+    logger.info(
+        "[TRIBUNAL-ENTRY] generate_command called: command=%r intent_len=%d os=%s shell=%s",
+        original_command[:100], len(intent), os_name, shell,
+    )
+
+    command_constraints_message = _format_command_constraints_message(
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        whitelisted_commands=whitelisted_commands,
+        blacklisted_commands=blacklisted_commands,
+    )
+    logger.info(
+        "[TRIBUNAL-ENTRY] Command constraints: whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
+        whitelisting_enabled, blacklisting_enabled,
+        len(whitelisted_commands) if whitelisted_commands else 0,
+        len(blacklisted_commands) if blacklisted_commands else 0,
+    )
+    logger.info(
+        "[TRIBUNAL-ENTRY] Settings state: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_provider=%s assistant_model=%s eval_judge_model=%s",
+        settings.llm.llm_command_gen_enabled,
+        settings.llm.llm_command_gen_verifier,
+        settings.llm.llm_command_gen_passes,
+        settings.llm.assistant_provider,
+        settings.llm.assistant_model,
+        settings.eval_judge.model,
+    )
+
     g8e_context = G8eHttpContext(
         web_session_id=web_session_id,
         user_id=user_id,
@@ -633,7 +686,7 @@ async def generate_command(
     emitter = TribunalEmitter(g8ed_event_service, g8e_context)
 
     if not settings.llm.llm_command_gen_enabled:
-        logger.info("[TRIBUNAL] Disabled via LLM_COMMAND_GEN_ENABLED; using original command")
+        logger.warning("[TRIBUNAL] DISABLED via llm_command_gen_enabled=False; using original command without Tribunal")
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(reason=TribunalFallbackReason.DISABLED, original_command=original_command, final_command=original_command),
@@ -646,8 +699,9 @@ async def generate_command(
 
     try:
         model = _resolve_model(settings.llm)
+        logger.info("[TRIBUNAL] Model resolved: %s", model)
     except TribunalModelNotConfiguredError as exc:
-        logger.error("[TRIBUNAL] Model not configured: %s", exc)
+        logger.error("[TRIBUNAL] Model not configured: %s - assistant_model=%s primary_model=%s", exc, settings.llm.assistant_model, settings.llm.primary_model)
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(
@@ -663,8 +717,8 @@ async def generate_command(
     members = [_member_for_pass(i) for i in range(num_passes)]
 
     logger.info(
-        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d",
-        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent),
+        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d verifier_enabled=%s",
+        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent), settings.llm.llm_command_gen_verifier,
     )
 
     await emitter.emit(
@@ -680,7 +734,7 @@ async def generate_command(
     )
 
     try:
-        provider_ctx = get_llm_provider(settings.llm, is_assistant=True)
+        provider = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
         logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
         raise TribunalProviderUnavailableError(
@@ -689,29 +743,31 @@ async def generate_command(
             original_command=original_command,
         ) from exc
 
-    async with provider_ctx as provider:
-        candidates = await _run_generation_stage(
-            provider=provider, model=model, intent=intent,
-            original_command=original_command, os_name=os_name, shell=shell,
-            working_directory=working_directory, num_passes=num_passes,
-            emitter=emitter,
-        )
+    candidates = await _run_generation_stage(
+        provider=provider, model=model, intent=intent,
+        original_command=original_command, os_name=os_name, shell=shell,
+        working_directory=working_directory, user_context=user_context,
+        num_passes=num_passes, emitter=emitter,
+        command_constraints_message=command_constraints_message,
+    )
 
-        vote_winner, vote_score = await _run_voting_stage(
-            candidates=candidates, original_command=original_command,
-            emitter=emitter,
-        )
+    vote_winner, vote_score = await _run_voting_stage(
+        candidates=candidates, original_command=original_command,
+        emitter=emitter,
+    )
 
-        final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
-            provider=provider, model=model, intent=intent,
-            vote_winner=vote_winner, os_name=os_name,
-            verifier_enabled=settings.llm.llm_command_gen_verifier,
-            emitter=emitter,
-        )
+    final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
+        provider=provider, model=model, intent=intent,
+        vote_winner=vote_winner, os_name=os_name,
+        user_context=user_context,
+        verifier_enabled=settings.llm.llm_command_gen_verifier,
+        emitter=emitter,
+        command_constraints_message=command_constraints_message,
+    )
 
-        return await _build_and_emit_result(
-            original_command=original_command, final_command=final_command,
-            outcome=outcome, candidates=candidates, vote_winner=vote_winner,
-            vote_score=vote_score, verifier_passed=verifier_passed,
-            verifier_revision=verifier_revision, emitter=emitter,
-        )
+    return await _build_and_emit_result(
+        original_command=original_command, final_command=final_command,
+        outcome=outcome, candidates=candidates, vote_winner=vote_winner,
+        vote_score=vote_score, verifier_passed=verifier_passed,
+        verifier_revision=verifier_revision, emitter=emitter,
+    )

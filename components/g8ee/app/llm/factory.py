@@ -16,15 +16,23 @@ LLM Provider Factory
 
 One entry point:
 
-  get_llm_provider(settings, is_assistant=False) — constructs an LLMProvider from the given
-      LLMSettings. The provider type is settings.primary_provider by default, or
-      settings.assistant_provider when is_assistant=True. The model
-      is passed per-call to generate_content_stream_primary /
-      generate_content_assistant. Callers MUST use ``async with`` to
-      ensure the provider is closed::
+  get_llm_provider(settings, is_assistant=False) — returns a cached LLMProvider instance
+      based on the given LLMSettings. The provider type is settings.primary_provider by
+      default, or settings.assistant_provider when is_assistant=True. The model is passed
+      per-call to generate_content_stream_primary / generate_content_assistant.
 
-          async with get_llm_provider(settings.llm) as provider:
-              stream = provider.generate_content_stream_primary(model=..., ...)
+  Provider instances are cached and reused across calls to avoid repeated initialization.
+  The ``async with`` pattern is still supported for compatibility, but is optional for
+  cached providers (close() is a no-op for singletons). Use clear_provider_cache() on
+  shutdown to clean up resources::
+
+      async with get_llm_provider(settings.llm) as provider:
+          stream = provider.generate_content_stream_primary(model=..., ...)
+
+  Or simply (cached provider, no cleanup needed)::
+
+      provider = get_llm_provider(settings.llm)
+      stream = await provider.generate_content_stream_primary(model=..., ...)
 
 All Gemini-specific logic lives in app.llm.providers.gemini.
 """
@@ -44,6 +52,7 @@ logger = logging.getLogger(__name__)
 _settings: G8eePlatformSettings | None = None
 _llm_settings: LLMSettings | None = None
 _search_settings: SearchSettings | None = None
+_provider_cache: dict[str, LLMProviderBase] = {}
 
 
 def set_settings(settings: G8eePlatformSettings) -> None:
@@ -79,6 +88,38 @@ def get_search_settings() -> SearchSettings | None:
     return _search_settings
 
 
+def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
+    """Generate a cache key for provider instances based on configuration."""
+    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
+    provider_value = provider_type if isinstance(provider_type, str) else provider_type.value
+    key_parts = [provider_value]
+
+    if provider_value == LLMProvider.GEMINI.value:
+        key_parts.append(settings.gemini_api_key or "")
+    elif provider_value == LLMProvider.OPENAI.value:
+        key_parts.append(settings.openai_endpoint or "")
+        key_parts.append(settings.openai_api_key or "")
+    elif provider_value == LLMProvider.ANTHROPIC.value:
+        key_parts.append(settings.anthropic_endpoint or "")
+        key_parts.append(settings.anthropic_api_key or "")
+    elif provider_value == LLMProvider.OLLAMA.value:
+        key_parts.append(settings.ollama_endpoint or "")
+        key_parts.append(settings.ollama_api_key or "")
+
+    return "|".join(key_parts)
+
+
+async def clear_provider_cache() -> None:
+    """Close and clear all cached provider instances. Intended for shutdown/testing."""
+    global _provider_cache
+    for provider in _provider_cache.values():
+        try:
+            await provider.force_close()
+        except Exception as exc:
+            logger.debug("Error closing provider during cache clear: %s", exc)
+    _provider_cache.clear()
+
+
 def reset_settings() -> None:
     """Reset all settings singletons. Intended for use in tests only."""
     global _settings, _llm_settings, _search_settings
@@ -97,34 +138,38 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
       - Anthropic / OpenAI cloud APIs are public — the provider decides
         based on the endpoint whether to use the platform CA or the public
         CA bundle (certifi).
+
+    Provider instances are cached and reused to avoid repeated initialization.
     """
     from app.errors import ConfigurationError
 
-    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
+    cache_key = _get_provider_cache_key(settings, is_assistant)
+    if cache_key in _provider_cache:
+        return _provider_cache[cache_key]
 
-    platform_settings = get_settings()
-    ca_cert_path = platform_settings.ca_cert_path if platform_settings else None
+    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
 
     if provider_type == LLMProvider.OLLAMA:
         from .providers.ollama import OllamaProvider
-        return OllamaProvider(
+        provider = OllamaProvider(
             endpoint=settings.ollama_endpoint,
             api_key=settings.ollama_api_key,
-            ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.OPENAI:
-        return OpenAIProvider(
+        provider = OpenAIProvider(
             endpoint=settings.openai_endpoint,
             api_key=settings.openai_api_key,
-            ca_cert_path=ca_cert_path,
         )
     elif provider_type == LLMProvider.GEMINI:
-        return GeminiProvider(api_key=settings.gemini_api_key)
+        provider = GeminiProvider(api_key=settings.gemini_api_key)
     elif provider_type == LLMProvider.ANTHROPIC:
-        return AnthropicProvider(
+        provider = AnthropicProvider(
             endpoint=settings.anthropic_endpoint,
             api_key=settings.anthropic_api_key,
-            ca_cert_path=ca_cert_path,
         )
+    else:
+        raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
 
-    raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
+    provider._is_cached_singleton = True
+    _provider_cache[cache_key] = provider
+    return provider

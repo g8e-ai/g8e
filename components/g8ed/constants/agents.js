@@ -49,6 +49,19 @@ export const TriageIntent = Object.freeze({
 });
 
 /**
+ * Triage Request Posture
+ * Triage's read of the user's state for this turn. Downstream agents
+ * (Primary, Assistant) calibrate dissent and denial-memory behavior on
+ * this value. See components/g8ee/app/prompts_data/core/dissent.txt.
+ */
+export const TriageRequestPosture = Object.freeze({
+    NORMAL:      _AGENTS['triage.posture'].normal,
+    ESCALATED:   _AGENTS['triage.posture'].escalated,
+    ADVERSARIAL: _AGENTS['triage.posture'].adversarial,
+    CONFUSED:    _AGENTS['triage.posture'].confused,
+});
+
+/**
  * Tribunal Members
  * The three permanent members of the Tribunal.
  */
@@ -56,19 +69,6 @@ export const TribunalMember = Object.freeze({
     AXIOM:   _AGENTS['tribunal.members'].axiom,
     CONCORD: _AGENTS['tribunal.members'].concord,
     VARIANCE: _AGENTS['tribunal.members'].variance,
-});
-
-/**
- * Tribunal Temperatures
- * Canonical temperature values for each Tribunal member.
- * Axiom (0.0) - Fully deterministic
- * Concord (0.4) - Moderate determinism with ethical flexibility
- * Variance (0.8) - High creativity and intentional unpredictability
- */
-export const TribunalTemperatures = Object.freeze({
-    AXIOM:   _AGENTS['tribunal.temperatures'].axiom,
-    CONCORD: _AGENTS['tribunal.temperatures'].concord,
-    VARIANCE: _AGENTS['tribunal.temperatures'].variance,
 });
 
 /**
@@ -87,4 +87,10 @@ export const AgentMetadata = Object.freeze({
     AXIOM:            _AGENTS['agent.metadata'].axiom,
     CONCORD:          _AGENTS['agent.metadata'].concord,
     VARIANCE:         _AGENTS['agent.metadata'].variance,
+    MEMORY_GENERATOR: _AGENTS['agent.metadata'].memory_generator,
+    EVAL_JUDGE:       _AGENTS['agent.metadata'].eval_judge,
+    RESPONSE_ANALYZER: _AGENTS['agent.metadata'].response_analyzer,
+    RESPONSE_ANALYZER_COMMAND_RISK: _AGENTS['agent.metadata'].response_analyzer_command_risk,
+    RESPONSE_ANALYZER_ERROR: _AGENTS['agent.metadata'].response_analyzer_error,
+    RESPONSE_ANALYZER_FILE_RISK: _AGENTS['agent.metadata'].response_analyzer_file_risk,
 });

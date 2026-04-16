@@ -239,7 +239,7 @@ def build_bound_operator(
     )
 
 
-def build_operator_document(
+def build_minimal_operator_document(
     operator_id: str | None = None,
     user_id: str | None = None,
     status: OperatorStatus = OperatorStatus.BOUND,
@@ -250,7 +250,7 @@ def build_operator_document(
 
     Uses a non-root user (``test-user``) with no init_system or user_details.
     For evaluation and benchmark accuracy tests that need a realistic
-    production Operator context, use ``build_mock_operator_document`` instead.
+    production Operator context, use ``build_production_operator_document`` instead.
     """
     # Generate unique IDs if not provided
     if operator_id is None or user_id is None:
@@ -276,22 +276,27 @@ def build_operator_document(
     )
 
 
-def build_mock_operator_document(
-    operator_id: str = "op-eval-001",
+def build_production_operator_document(
+    operator_id: str | None = None,
     hostname: str = "eval-node-01",
     operator_type: OperatorType = OperatorType.SYSTEM,
 ) -> OperatorDocument:
-    """Build a mock OperatorDocument for evaluation and benchmark tests.
+    """Build a production-like OperatorDocument for evaluation and benchmark tests.
 
     Reflects a realistic production Operator environment where the binary
     was started with ``sudo ./g8eo`` — root user, systemd init, bare-metal
     Linux host.  This ensures accuracy tests exercise the agent's reasoning
     without colliding with the security layer that blocks ``sudo``.
     """
+    import uuid
+    if operator_id is None:
+        operator_id = f"test-op-{uuid.uuid4().hex[:8]}"
+    operator_session_id = f"test-sess-{uuid.uuid4().hex[:8]}"
+    user_id = f"test-user-{uuid.uuid4().hex[:8]}"
     return OperatorDocument(
         operator_id=operator_id,
-        operator_session_id="sess-eval-001",
-        user_id="user-eval-001",
+        operator_session_id=operator_session_id,
+        user_id=user_id,
         status=OperatorStatus.BOUND,
         current_hostname=hostname,
         operator_type=operator_type,

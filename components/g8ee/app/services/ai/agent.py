@@ -11,8 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.errors import ExternalServiceError, ValidationError
-from app.constants import ComponentName
+from app.errors import ValidationError
 
 """
 g8e Agent — orchestrates the ReAct streaming loop.
@@ -41,7 +40,9 @@ from collections.abc import AsyncGenerator
 
 import app.llm.llm_types as types
 from app.constants import (
+    AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
+    AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
     DEFAULT_FINISH_REASON,
@@ -57,6 +58,7 @@ from app.models.agent import (
     TurnResult,
 )
 from app.models.grounding import GroundingMetadata
+from app.models.operators import CommandApprovalRequest
 from app.services.ai.agent_tool_loop import (
     execute_turn_tool_calls,
     merge_grounding,
@@ -70,6 +72,8 @@ from app.services.ai.agent_turn import (
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
+from app.services.protocols import ApprovalServiceProtocol
+from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +93,11 @@ class g8eEngine:
         self,
         tool_executor: AIToolService,
         grounding_service: GroundingService | None = None,
+        approval_service: ApprovalServiceProtocol | None = None,
     ):
         self._tool_executor = tool_executor
         self._grounding_service = grounding_service or GroundingService()
+        self._approval_service = approval_service
         logger.info("g8eEngine initialized")
 
     @property
@@ -276,25 +282,46 @@ class g8eEngine:
         loop_turn = 0
         while True:
             loop_turn += 1
+            if loop_turn > AGENT_MAX_TOOL_TURNS:
+                if self._approval_service is None or context.g8e_context is None:
+                    logger.error(
+                        "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
+                        AGENT_MAX_TOOL_TURNS,
+                    )
+                    break
+
+                logger.warning(
+                    "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
+                    AGENT_MAX_TOOL_TURNS,
+                )
+                justification = (
+                    f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
+                    f"without completing its response. Approve to reset the turn counter "
+                    f"and allow the agent to continue; deny to stop the agent now."
+                )
+                approval_result = await self._approval_service.request_command_approval(
+                    CommandApprovalRequest(
+                        g8e_context=context.g8e_context,
+                        timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
+                        justification=justification,
+                        execution_id=generate_command_execution_id(),
+                        operator_id="",
+                        operator_session_id="",
+                        command=f"[agent] continue beyond {AGENT_MAX_TOOL_TURNS}-turn limit",
+                    )
+                )
+                if not approval_result.approved:
+                    logger.info(
+                        "[AGENT] Continuation denied (reason=%s); stopping tool loop",
+                        approval_result.reason,
+                    )
+                    final_finish_reason = "stopped_by_operator"
+                    break
+                logger.info("[AGENT] Continuation approved; resetting turn counter")
+                loop_turn = 1
             logger.info(
                 "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
                 loop_turn, len(contents), case_id, investigation_id,
-            )
-
-            logger.info(
-                "[AGENT] Loading model: model=%s temperature=%.2f max_output_tokens=%d "
-                "top_p=%.2f top_k=%d tools=%d system_instruction_len=%d "
-                "thinking_level=%s include_thoughts=%s tool_calling_mode=%s",
-                model_name,
-                generation_config.temperature,
-                generation_config.max_output_tokens,
-                generation_config.top_p_nucleus_sampling,
-                generation_config.top_k_filtering,
-                len(generation_config.tools) if generation_config.tools else 0,
-                len(generation_config.system_instruction),
-                generation_config.thinking_config.thinking_level if generation_config.thinking_config else None,
-                generation_config.thinking_config.include_thoughts if generation_config.thinking_config else False,
-                generation_config.tool_config.tool_calling_config.mode if generation_config.tool_config and generation_config.tool_config.tool_calling_config else None,
             )
 
             stream_response = llm_provider.generate_content_stream_primary(
@@ -302,9 +329,6 @@ class g8eEngine:
                 contents=contents,
                 primary_llm_settings=generation_config,
             )
-
-            if not stream_response:
-                raise ExternalServiceError("LLM provider returned None stream — provider contract violation", service_name="llm_provider", component=ComponentName.G8EE)
 
             turn_result_out: list[TurnResult] = []
             async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):

@@ -275,6 +275,7 @@ async def deliver_via_sse(
                     case_id=case_id,
                     user_id=user_id,
                 )
+                agent_streaming_context.response_text = ""
 
             elif chunk.type == StreamChunkFromModelType.CITATIONS:
                 agent_streaming_context.grounding_metadata = chunk.data.grounding_metadata

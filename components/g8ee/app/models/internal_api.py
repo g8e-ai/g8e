@@ -34,8 +34,10 @@ class ChatMessageRequest(G8eBaseModel):
     sentinel_mode: bool = Field(default=True, description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data")
     llm_primary_provider: str | None = Field(default=None, description="Primary LLM provider override for complex tasks - null uses server default")
     llm_assistant_provider: str | None = Field(default=None, description="Assistant LLM provider override for simple tasks - null uses server default")
+    llm_lite_provider: str | None = Field(default=None, description="Lite LLM provider override for quick tasks - null uses server default")
     llm_primary_model: str | None = Field(default=None, description="Primary LLM model override for complex tasks - null uses server default")
     llm_assistant_model: str | None = Field(default=None, description="Assistant LLM model override for simple tasks - null uses server default")
+    llm_lite_model: str | None = Field(default=None, description="Lite LLM model override for quick tasks - null uses server default")
 
 
 class ChatStartedResponse(G8eBaseModel):

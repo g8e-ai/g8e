@@ -380,11 +380,15 @@ class LoginSecurityService {
             });
 
             try {
-                await this._cache_aside.createDocument(Collections.LOGIN_AUDIT, auditId, auditLog);
+                const result = await this._cache_aside.createDocument(Collections.LOGIN_AUDIT, auditId, auditLog);
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
             } catch (err) {
                 logger.error('[LOGIN-SECURITY] Failed to write audit log', {
                     error: err.message,
-                    eventType
+                    eventType,
+                    auditId
                 });
             }
         } catch (error) {
@@ -431,11 +435,15 @@ class LoginSecurityService {
             });
 
             try {
-                await this._cache_aside.createDocument(Collections.AUTH_ADMIN_AUDIT, auditId, auditLog);
+                const result = await this._cache_aside.createDocument(Collections.AUTH_ADMIN_AUDIT, auditId, auditLog);
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
             } catch (err) {
                 logger.error('[LOGIN-SECURITY] Failed to write admin audit log', {
                     error: err.message,
-                    action: adminContext.action
+                    action: adminContext.action,
+                    auditId
                 });
             }
         } catch (error) {

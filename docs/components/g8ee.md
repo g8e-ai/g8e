@@ -2,7 +2,7 @@
 
 g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
 
-> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_control_plane.md](../architecture/ai_control_plane.md).
+> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_agents.md](../architecture/ai_agents.md).
 >
 > For deep-reference security documentation — internal auth token, Sentinel scrubbing patterns, LFAA vault encryption, operator binding, web/operator session security, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -24,12 +24,16 @@ ChatPipelineService
   │     ├── InvestigationDataService — (Data Layer) Pure CRUD for investigations
   │     ├── OperatorDataService      — (Data Layer) Pure CRUD for operators
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
-  ├── ChatTaskManager         — Task lifecycle and cancellation
+  ├── BackgroundTaskManager     — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates
   ├── MemoryGenerationService — Background memory updates from conversation
   ├── AttachmentService       — Attachment storage and retrieval
   └── EventService           — Internal SSE event delivery to g8ed
 ```
+
+> [!NOTE]
+> `ChatTaskManager` is a backward compatibility alias for `BackgroundTaskManager`.
+
 
 ### Component Relationships
 
@@ -126,7 +130,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 **Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
 - **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
 - **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
-- **SSL Verification:** Follows the standard SSL strategy — uses platform CA cert for internal endpoints, certifi bundle for external endpoints, disables verification for HTTP
+- **SSL Verification:** Uses the Ollama SDK's default SSL verification behavior
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
 ### AI Streaming Loop
@@ -144,6 +148,8 @@ stream_response
 ```
 
 Retry behaviour in `stream_response`: if the provider raises a retryable error and streaming has not yet started (`streaming_started=False`), the entire attempt is retried up to `AGENT_MAX_RETRIES` times with exponential backoff. Once any `TEXT` chunk has been yielded (`streaming_started=True`), errors are surfaced immediately — a partial response is never replayed.
+
+**Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
 
 **Invocation context lifecycle:** `stream_response` is an `async generator`. Python dispatches async-generator cleanup (`async_generator_athrow`) in a new `asyncio` task that runs in a different `Context` than the request that created the generator. Because `ContextVar.reset(token)` requires the token to be reset in the exact same `Context` it was set in, the invocation context lifecycle **must not** be owned by `stream_response`. It is owned by `run_with_sse` (a normal `async def` coroutine with a stable `Context`) via `start_invocation_context` before iteration and `reset_invocation_context` in `finally`. `stream_response` reads the already-set context value; it never holds a token.
 
@@ -173,21 +179,21 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 | `StreamChunkFromModelType` | SSE event published | Side effect |
 |-------------------|--------------------|--------------|
 | `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `LLMStreamingContext.response_text` |
-| `THINKING` | none | `LLMStreamingContext.set_thinking_started()` |
+| `THINKING` | none | `AgentStreamContext.set_thinking_started()` |
 | `THINKING_UPDATE` | none | — |
-| `THINKING_END` | none | `LLMStreamingContext.set_thinking_ended()` |
+| `THINKING_END` | none | `AgentStreamContext.set_thinking_ended()` |
 | `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
 | `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
-| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `LLMStreamingContext` |
-| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `LLMStreamingContext` |
+| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamContext` |
+| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
 | `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
 | `RETRY` | none | — |
 
 `deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `LLMStreamingContext` state.
+`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamContext` state.
 
-`LLMStreamingContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
+`AgentStreamContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
 
 ### Error Handling
 
@@ -267,7 +273,7 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_context.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
 
@@ -322,40 +328,27 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### Gemini Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3-flash` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
 
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gpt-5.4` | HIGH, MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.3-instant` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.4-mini` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.4-nano` | LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gpt-4o` | - | Yes | 128,000 | 4,096 |
-| `gpt-4o-mini` | - | Yes | 128,000 | 4,096 |
-| `gpt-4-turbo` | - | Yes | 128,000 | 4,096 |
-| `gpt-3.5-turbo` | - | Yes | 16,385 | 4,096 |
+| `gpt-5.4-mini` | LOW, MINIMAL | Yes | 200,000 | 8,192 |
+| `gpt-4o` | - | Yes | 128,000 | 8,192 |
 
 #### Ollama Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemma4-e4b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gemma4-e2b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gemma3-27b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-12b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-4b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-1b` | - | Yes | 32,768 | 8,192 |
-| `qwen3-coder-30b` | - | Yes | 256,000 | 8,192 |
-| `qwen3-1b7` | - | Yes | 32,768 | 8,192 |
-| `qwen2.5-14b` | - | Yes | 32,768 | 8,192 |
-| `qwen2.5-7b` | - | Yes | 32,768 | 8,192 |
-| `llama3:8b` | - | Yes | 8,192 | 4,096 |
-| `llama3:70b` | - | Yes | 8,192 | 4,096 |
-| `codellama:7b` | - | Yes | 8,192 | 4,096 |
-| `mistral:7b` | - | Yes | 8,192 | 4,096 |
+| `gemma4-26b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `nemotron-3-30b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `qwen3.5-122b` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
+| `glm-5.1` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
+| `llama-3.2-3b` | - | Yes | 32,768 | 8,192 |
+| `qwen3.5-2b` | - | Yes | 32,768 | 8,192 |
+| `llama3:8b` | - | Yes | 128,000 | 8,192 |
 
 ### Model Roles
 
@@ -485,7 +478,7 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 ### Multi-Operator Binding
 
-When multiple operators are bound, the AI must specify a `target_operator`. Resolution tries hostname match first, then exact operator ID, then list index. For batch operations, `target_operators` accepts a list (or `["all"]`) and g8ee requests a single unified approval covering all N target systems, then executes sequentially.
+When multiple operators are bound, the AI must specify a `target_operator`. Resolution tries hostname match first, then exact operator ID, then list index. For batch operations, `target_operators` accepts a list (or `["all"]`) and g8ee requests a single unified approval covering all N target systems, then fans out the command to every resolved operator in parallel (bounded by `command_validation.max_batch_concurrency`, default 10). Each per-operator execution gets its own `execution_id` and emits its own `OPERATOR_COMMAND_STARTED` / `COMPLETED` / `FAILED` events, all tagged with a shared `batch_id` for UI grouping and audit correlation. Partial failures are reported via `CommandExecutionResult.successful_count` / `failed_count` / `execution_results`; set `command_validation.batch_fail_fast=true` to cancel remaining siblings after the first failure.
 
 ### Cloud Operator Self-Discovery
 
@@ -975,9 +968,19 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `command_gen_passes` | `3` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
-Temperatures are fixed per Tribunal member and are not configurable. Values are sourced from shared/constants/agents.json (single source of truth across g8ee, g8ed, and g8eo): Axiom → 0.0, Concord → 0.4, Variance → 0.8.
+Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature` (resolved via `_temperature_for_pass` → `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Hardcoding per-member temperatures is incompatible with providers that require fixed temperatures (e.g. Gemini 3+ requires 1.0). Per-member diversity comes from the distinct Axiom/Concord/Variance personas in `shared/constants/agents.json`, not from sampling temperature.
 
 **Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
+
+**Forbidden patterns:** Tribunal prompts dynamically include the canonical `FORBIDDEN_COMMAND_PATTERNS` constant from `app.constants.settings.py`. This ensures that forbidden command patterns (e.g., `sudo`, `su `, `pkexec`, `doas`, etc.) are always reflected in Tribunal prompts without hardcoding. The `_format_forbidden_patterns_message()` helper generates this message dynamically.
+
+**Command constraints:** Tribunal prompts can include command whitelist/blacklist constraints when passed to `generate_command()`. These constraints are formatted by `_format_command_constraints_message()` and injected into prompts via the `{command_constraints_message}` placeholder. The `generate_command()` function accepts these optional parameters:
+- `whitelisting_enabled` (bool): Whether command whitelisting is active
+- `blacklisting_enabled` (bool): Whether command blacklisting is active
+- `whitelisted_commands` (list[str] | None): List of whitelisted command patterns
+- `blacklisted_commands` (list[dict[str, str]] | None): List of blacklisted command patterns with metadata
+
+The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_settings.command_validation` and passes them to `generate_command()`, ensuring Tribunal is aware of downstream command validation rules configured per-user.
 
 #### Security & Auth (`AuthSettings`, `CommandValidationSettings`)
 
@@ -985,8 +988,15 @@ Temperatures are fixed per Tribunal member and are not configurable. Values are 
 |-----|---------|---------|
 | `internal_auth_token` | — | Component-to-component auth (`X-Internal-Auth` header); required before g8ee accepts requests |
 | `g8e_api_key` | — | Optional API key for external client authentication |
-| `enable_command_whitelisting` | `false` | Restrict commands to an allowlist |
-| `enable_command_blacklisting` | `false` | Block commands matching a denylist |
+
+**Command Validation Settings** (per-user, in `G8eeUserSettings.command_validation`):
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `enable_whitelisting` | `false` | Restrict commands to an allowlist |
+| `enable_blacklisting` | `false` | Block commands matching a denylist |
+
+> **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
 #### Vertex AI Search (`VertexSearchSettings`)
 

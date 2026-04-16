@@ -1,7 +1,11 @@
 #!/bin/bash
-# g8e node g8e node
+# g8e Test Runner
 #
-# Runs tests in the g8ep container. Infrastructure must already be running (use build.sh).
+# Runs inside a dedicated test-runner container (g8ee-test-runner, g8ed-test-runner,
+# g8eo-test-runner). The ./g8e CLI handles container selection and docker exec.
+# This script is never run on the host.
+
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -15,27 +19,22 @@ GREEN=$'\033[0;32m'
 BLUE=$'\033[0;34m'
 YELLOW=$'\033[1;33m'
 CYAN=$'\033[0;36m'
-BOLD=$'\033[1m'
 NC=$'\033[0m'
 
 log_header() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  [g8ep] $1${NC}"
+    echo -e "${BLUE}  $1${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 log_ok() { echo -e "${GREEN}[OK]${NC} $1"; }
 log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-in_container() {
-    [[ -f /.dockerenv ]] || [[ "${RUNNING_IN_CONTAINER:-}" == "true" ]]
-}
-
 _footer() {
     local rc=$?
     [[ $rc -eq 0 ]] || return
     echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${GREEN}  [g8ep] run_tests.sh complete${NC}"
+    echo -e "${GREEN}  run_tests.sh complete${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 trap _footer EXIT
@@ -44,109 +43,37 @@ trap _footer EXIT
 # Parse arguments
 # =============================================================================
 
-COMPONENT="all"
+COMPONENT=""
 COVERAGE=false
 PYRIGHT=false
 E2E=false
-TEST_LLM_PROVIDER="${TEST_LLM_PROVIDER:-}"
-TEST_LLM_ASSISTANT_PROVIDER="${TEST_LLM_ASSISTANT_PROVIDER:-}"
-TEST_LLM_PRIMARY_MODEL="${TEST_LLM_PRIMARY_MODEL:-}"
-TEST_LLM_ASSISTANT_MODEL="${TEST_LLM_ASSISTANT_MODEL:-}"
-TEST_LLM_ENDPOINT_URL="${TEST_LLM_ENDPOINT_URL:-}"
-TEST_LLM_API_KEY="${TEST_LLM_API_KEY:-}"
-TEST_WEB_SEARCH_PROJECT_ID="${TEST_WEB_SEARCH_PROJECT_ID:-}"
-TEST_WEB_SEARCH_ENGINE_ID="${TEST_WEB_SEARCH_ENGINE_ID:-}"
-TEST_WEB_SEARCH_API_KEY="${TEST_WEB_SEARCH_API_KEY:-}"
-TEST_WEB_SEARCH_LOCATION="${TEST_WEB_SEARCH_LOCATION:-}"
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
-            echo "Usage: ./run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
+            echo "Usage: run_tests.sh <COMPONENT> [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: all, g8ee, g8ed, g8eo, security"
+            echo "Components: g8ee, g8ed, g8eo"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo ""
-            echo "LLM Options (enables ai_integration tests):"
-            echo "  -p, --llm-provider        Primary LLM provider (gemini, openai, anthropic, ollama)"
-            echo "  -ap, --assistant-provider Assistant LLM provider (gemini, openai, anthropic, ollama)"
-            echo "  -m, --primary-model       Primary model name"
-            echo "  -a, --assistant-model      Assistant model name"
-            echo "  -e, --llm-endpoint-url    API endpoint URL"
-            echo "  -k, --llm-api-key         API key"
-            echo ""
-            echo "Web Search Options (enables requires_web_search tests):"
-            echo "  --web-search-project-id   GCP project ID"
-            echo "  --web-search-engine-id    Google search engine ID"
-            echo "  --web-search-api-key      Google search API key"
-            echo "  --web-search-location     Vertex AI location (default: global)"
-            echo ""
+            echo "LLM/Web Search options are passed as environment variables by the ./g8e CLI."
             exit 0
             ;;
-        --coverage)
-            COVERAGE=true
-            shift
-            ;;
-        --pyright)
-            PYRIGHT=true
-            shift
-            ;;
-        --e2e)
-            E2E=true
-            shift
-            ;;
-        --llm-provider|-p)
-            TEST_LLM_PROVIDER="$2"; shift 2 ;;
-        --llm-provider=*)
-            TEST_LLM_PROVIDER="${1#*=}"; shift ;;
-        --assistant-provider|-ap)
-            TEST_LLM_ASSISTANT_PROVIDER="$2"; shift 2 ;;
-        --assistant-provider=*)
-            TEST_LLM_ASSISTANT_PROVIDER="${1#*=}"; shift ;;
-        --primary-model|-m)
-            TEST_LLM_PRIMARY_MODEL="$2"; shift 2 ;;
-        --primary-model=*)
-            TEST_LLM_PRIMARY_MODEL="${1#*=}"; shift ;;
-        --assistant-model|-a)
-            TEST_LLM_ASSISTANT_MODEL="$2"; shift 2 ;;
-        --assistant-model=*)
-            TEST_LLM_ASSISTANT_MODEL="${1#*=}"; shift ;;
-        --llm-endpoint-url|-e)
-            TEST_LLM_ENDPOINT_URL="$2"; shift 2 ;;
-        --llm-endpoint-url=*)
-            TEST_LLM_ENDPOINT_URL="${1#*=}"; shift ;;
-        --llm-api-key|-k)
-            TEST_LLM_API_KEY="$2"; shift 2 ;;
-        --llm-api-key=*)
-            TEST_LLM_API_KEY="${1#*=}"; shift ;;
-        --web-search-project-id)
-            TEST_WEB_SEARCH_PROJECT_ID="$2"; shift 2 ;;
-        --web-search-project-id=*)
-            TEST_WEB_SEARCH_PROJECT_ID="${1#*=}"; shift ;;
-        --web-search-engine-id)
-            TEST_WEB_SEARCH_ENGINE_ID="$2"; shift 2 ;;
-        --web-search-engine-id=*)
-            TEST_WEB_SEARCH_ENGINE_ID="${1#*=}"; shift ;;
-        --web-search-api-key)
-            TEST_WEB_SEARCH_API_KEY="$2"; shift 2 ;;
-        --web-search-api-key=*)
-            TEST_WEB_SEARCH_API_KEY="${1#*=}"; shift ;;
-        --web-search-location)
-            TEST_WEB_SEARCH_LOCATION="$2"; shift 2 ;;
-        --web-search-location=*)
-            TEST_WEB_SEARCH_LOCATION="${1#*=}"; shift ;;
+        --coverage) COVERAGE=true; shift ;;
+        --pyright)  PYRIGHT=true;  shift ;;
+        --e2e)      E2E=true;      shift ;;
         --)
             shift
             EXTRA_ARGS=("$@")
             break
             ;;
         *)
-            if [[ "$1" =~ ^(all|g8ee|g8ed|g8eo|security)$ ]]; then
+            if [[ "$1" =~ ^(g8ee|g8ed|g8eo)$ ]]; then
                 COMPONENT="$1"
             else
                 EXTRA_ARGS+=("$1")
@@ -156,11 +83,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ -z "$COMPONENT" ]]; then
+    log_err "No component specified. Usage: run_tests.sh <g8ee|g8ed|g8eo> [OPTIONS]"
+    exit 1
+fi
+
 # =============================================================================
 # Container Environment Setup
 # =============================================================================
-
-_settings_script=(/app/scripts/data/manage-g8es.py settings)
 
 _install_ca_cert() {
     local ca_cert="/g8es/ca.crt"
@@ -187,23 +117,16 @@ _load_platform_secrets() {
     fi
 }
 
-setup_container_environment() {
-    export NODE_ENV="test"
-    _install_ca_cert
-    _load_platform_secrets
-}
-
-verify_container_infrastructure() {
+_verify_g8es() {
     local ca_cert="/g8es/ca.crt"
     [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
     local curl_args=()
     if [[ -f "$ca_cert" ]]; then
         curl_args=("--cacert" "$ca_cert")
     else
-        curl_args=("-k")  # Fallback to insecure if CA not found
+        curl_args=("-k")
         log_warn "CA cert not found, using insecure connection"
     fi
-    
     if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
         log_err "g8es not accessible at https://g8es:9000/health"
         exit 1
@@ -211,29 +134,63 @@ verify_container_infrastructure() {
     log_ok "g8es connected"
 }
 
+_show_llm_config() {
+    if [[ -n "${TEST_LLM_PROVIDER:-}" ]]; then
+        echo ""
+        echo -e "${CYAN}  LLM Configuration${NC}"
+        echo -e "  Primary Provider:   ${TEST_LLM_PROVIDER}"
+        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
+        [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]      && echo -e "  Primary Model:      ${TEST_LLM_PRIMARY_MODEL}"
+        [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${TEST_LLM_ASSISTANT_MODEL}"
+        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${TEST_LLM_ENDPOINT_URL}"
+        [[ -n "${TEST_LLM_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
+        echo ""
+    else
+        echo ""
+        echo -e "  ${YELLOW}No LLM flags provided — ai_integration tests will be skipped.${NC}"
+        echo ""
+    fi
+}
+
+_show_web_search_config() {
+    if [[ -n "${TEST_WEB_SEARCH_PROJECT_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]; then
+        echo ""
+        echo -e "${CYAN}  Web Search Configuration${NC}"
+        echo -e "  Project ID:      ${TEST_WEB_SEARCH_PROJECT_ID}"
+        echo -e "  Engine ID:       ${TEST_WEB_SEARCH_ENGINE_ID}"
+        echo -e "  API Key:         (set)"
+        echo ""
+    else
+        echo ""
+        echo -e "  ${YELLOW}No web search flags — requires_web_search tests will be skipped.${NC}"
+        echo ""
+    fi
+}
+
 # =============================================================================
 # Component Runners
 # =============================================================================
 
 run_g8ee() {
-    log_header "Running g8ee tests on g8ep"
+    log_header "Running g8ee tests (g8ee-test-runner)"
     cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
+    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("-s" "--log-cli-level=INFO")
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
 run_e2e() {
-    log_header "Running E2E operator lifecycle tests on g8ep"
+    log_header "Running E2E operator lifecycle tests (g8ee-test-runner)"
     cd "$PROJECT_ROOT/components/g8ee"
     pytest -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }
 
 run_g8ed() {
-    log_header "Running g8ed tests on g8ep"
+    log_header "Running g8ed tests (g8ed-test-runner)"
     cd "$PROJECT_ROOT/components/g8ed"
     local cov_flag=""
     [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
@@ -241,14 +198,13 @@ run_g8ed() {
 }
 
 run_g8eo() {
-    log_header "Running g8eo tests on g8ep"
+    log_header "Running g8eo tests (g8eo-test-runner)"
     cd "$PROJECT_ROOT/components/g8eo"
     local test_target="./..."
     local pass_through_args=()
-    
+
     for arg in "${EXTRA_ARGS[@]}"; do
         if [[ "$arg" == ./* || "$arg" == */* ]]; then
-            # Ensure path starts with ./ for Go if it doesn't already
             if [[ "$arg" != ./* && "$arg" != /* ]]; then
                 test_target="./$arg"
             else
@@ -273,113 +229,28 @@ run_g8eo() {
     fi
 }
 
-run_component() {
+# =============================================================================
+# Main
+# =============================================================================
+
+export NODE_ENV="test"
+_install_ca_cert
+_load_platform_secrets
+_verify_g8es
+
+log_header "run_tests.sh ${COMPONENT} $*"
+
+if [[ "$COMPONENT" == "g8ee" ]]; then
+    _show_llm_config
+    _show_web_search_config
+fi
+
+if [[ "$E2E" == "true" && "$COMPONENT" == "g8ee" ]]; then
+    run_e2e
+else
     case "$COMPONENT" in
         g8ee) run_g8ee ;;
         g8ed) run_g8ed ;;
         g8eo) run_g8eo ;;
-        all) run_g8ee; run_g8ed; run_g8eo ;;
     esac
-}
-
-_show_llm_config() {
-    if [[ -n "${TEST_LLM_PROVIDER:-}" ]]; then
-        echo ""
-        echo -e "${CYAN}  LLM Configuration (from CLI flags)${NC}"
-        echo -e "  Primary Provider:   ${TEST_LLM_PROVIDER}"
-        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
-        [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]   && echo -e "  Primary Model:   ${TEST_LLM_PRIMARY_MODEL}"
-        [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]] && echo -e "  Assistant Model: ${TEST_LLM_ASSISTANT_MODEL}"
-        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]    && echo -e "  Endpoint:        ${TEST_LLM_ENDPOINT_URL}"
-        [[ -n "${TEST_LLM_API_KEY:-}" ]]         && echo -e "  API Key:         (set)"
-        echo ""
-    else
-        echo ""
-        echo -e "  ${YELLOW}No LLM flags provided — ai_integration tests will be skipped.${NC}"
-        echo -e "  ${YELLOW}Use -p/--llm-provider to enable real LLM tests.${NC}"
-        echo ""
-    fi
-}
-
-_show_web_search_config() {
-    if [[ -n "${TEST_WEB_SEARCH_PROJECT_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]] && [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]; then
-        echo ""
-        echo -e "${CYAN}  Web Search Configuration (from CLI flags)${NC}"
-        echo -e "  Project ID:      ${TEST_WEB_SEARCH_PROJECT_ID}"
-        echo -e "  Engine ID:       ${TEST_WEB_SEARCH_ENGINE_ID}"
-        echo -e "  API Key:         (set)"
-        [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]] && echo -e "  Location:        ${TEST_WEB_SEARCH_LOCATION}"
-        echo ""
-    else
-        echo ""
-        echo -e "  ${YELLOW}No web search flags provided — requires_web_search tests will be skipped.${NC}"
-        echo -e "  ${YELLOW}Use --web-search-* flags to enable real web search tests.${NC}"
-        echo ""
-    fi
-}
-
-# =============================================================================
-# Host-side launch
-# =============================================================================
-
-run_in_container() {
-    if ! docker ps --filter "name=^g8ep$" --filter "status=running" -q | grep -q .; then
-        log_warn "g8ep not running — starting it..."
-        docker compose up -d g8ep
-    fi
-    local exec_args=("$COMPONENT")
-    [[ "$COVERAGE" == "true" ]] && exec_args+=("--coverage")
-    [[ "$PYRIGHT" == "true" ]] && exec_args+=("--pyright")
-    [[ "$E2E" == "true" ]] && exec_args+=("--e2e")
-    [[ ${#EXTRA_ARGS[@]} -gt 0 ]] && exec_args+=("--" "${EXTRA_ARGS[@]}")
-
-    local env_args=(-e RUNNING_IN_CONTAINER=true)
-    [[ -n "$TEST_LLM_PROVIDER" ]]           && env_args+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
-    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && env_args+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && env_args+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && env_args+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && env_args+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
-    [[ -n "$TEST_LLM_API_KEY" ]]            && env_args+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
-
-    [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && env_args+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
-    [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && env_args+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
-    [[ -n "$TEST_WEB_SEARCH_API_KEY" ]]     && env_args+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
-    [[ -n "$TEST_WEB_SEARCH_LOCATION" ]]    && env_args+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
-
-    docker exec "${env_args[@]}" g8ep /app/scripts/testing/run_tests.sh "${exec_args[@]}"
-}
-
-# =============================================================================
-# Main Entry Point
-# =============================================================================
-
-if in_container; then
-    setup_container_environment
-    verify_container_infrastructure
-
-    [[ -n "$TEST_LLM_PROVIDER" ]]           && export TEST_LLM_PROVIDER
-    [[ -n "$TEST_LLM_ASSISTANT_PROVIDER" ]]  && export TEST_LLM_ASSISTANT_PROVIDER
-    [[ -n "$TEST_LLM_PRIMARY_MODEL" ]]      && export TEST_LLM_PRIMARY_MODEL
-    [[ -n "$TEST_LLM_ASSISTANT_MODEL" ]]    && export TEST_LLM_ASSISTANT_MODEL
-    [[ -n "$TEST_LLM_ENDPOINT_URL" ]]       && export TEST_LLM_ENDPOINT_URL
-    [[ -n "$TEST_LLM_API_KEY" ]]            && export TEST_LLM_API_KEY
-
-    [[ -n "$TEST_WEB_SEARCH_PROJECT_ID" ]] && export TEST_WEB_SEARCH_PROJECT_ID
-    [[ -n "$TEST_WEB_SEARCH_ENGINE_ID" ]]  && export TEST_WEB_SEARCH_ENGINE_ID
-    [[ -n "$TEST_WEB_SEARCH_API_KEY" ]]     && export TEST_WEB_SEARCH_API_KEY
-    [[ -n "$TEST_WEB_SEARCH_LOCATION" ]]    && export TEST_WEB_SEARCH_LOCATION
-
-    log_header "run_tests.sh $*"
-    
-    _show_llm_config
-    _show_web_search_config
-    if [[ "$E2E" == "true" ]]; then
-        run_e2e
-    else
-        run_component
-    fi
-else
-    # Host-side: ALWAYS launch in g8ep. 
-    # Direct execution on host is strictly forbidden for tests.
-    run_in_container
 fi
