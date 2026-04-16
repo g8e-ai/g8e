@@ -1057,6 +1057,10 @@ body[data-theme="light"] .setup-btn-secondary:hover:not(:disabled) {
 
 .setup-btn-secondary .material-symbols-outlined { font-size: 1.0625rem; }
 
+#wizard-next-btn {
+    margin-left: auto;
+}
+
 /* ============================================================================
    Animations
    ============================================================================ */

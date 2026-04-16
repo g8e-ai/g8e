@@ -9,7 +9,7 @@ Documentation for the g8e AI governance platform, organized by category.
 | Document | Description |
 |----------|-------------|
 | [developer.md](developer.md) | Quick start, infrastructure setup, SSL, governance-first code quality rules (g8eo/g8ee/g8ed), shared constants and models, project structure |
-| [testing.md](testing.md) | Comprehensive testing guide — shared principles, g8ep environment, CI workflows, and component-specific guidelines (g8eo, g8ed, g8ee) |
+| [testing.md](testing.md) | Comprehensive testing guide — shared principles, test-runner containers, CI workflows, and component-specific guidelines (g8eo, g8ed, g8ee) |
 | [glossary.md](glossary.md) | Essential terminology for understanding the g8e platform, organized alphabetically |
 | [docs-guidelines.md](docs-guidelines.md) | Documentation authoring standards — structure, style, formatting, file locations, ownership rules, and sync rules |
 
@@ -43,7 +43,7 @@ Technical reference for each platform component.
 | [components/g8ee.md](components/g8ee.md) | g8ee — AI engine providing LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
 | [components/g8ed.md](components/g8ed.md) | g8ed (g8e Dashboard) — authentication, session management, dashboard backend, operator lifecycle, SSE fan-out, and WebSocket proxy |
 | [components/g8es.md](components/g8es.md) | g8es (g8e Data Bus) — Operator binary in `--listen` mode; single source of truth for persistence (SQLite document store, KV store, SSE event buffer, and pub/sub broker) |
-| [components/g8ep.md](components/g8ep.md) | g8e node — always-on sidecar container for running all component tests (g8ee/g8ed/g8eo), security scans, and ephemeral SSH deployment |
+| [components/g8ep.md](components/g8ep.md) | g8e node — always-on sidecar container for operator management, security scans, and ephemeral SSH deployment |
 
 ---
 

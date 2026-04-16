@@ -251,6 +251,8 @@ services:
         - "io.g8e.managed=true"
     container_name: g8ed-test-runner
     user: "1001:1001"
+    ulimits:
+      nproc: 512
     labels:
       - "io.g8e.managed=true"
     environment:
@@ -271,7 +273,7 @@ services:
       resources:
         limits:
           memory: 2G
-          pids: 100
+          pids: 512
     networks:
       g8e-network:
         aliases:

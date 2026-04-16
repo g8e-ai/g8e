@@ -87,9 +87,8 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.OPENAI,
         options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4, label: 'GPT-5.4 (Flagship)' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_3_INSTANT, label: 'GPT-5.3 Instant' }),
-            Object.freeze({ value: OpenAIModel.GPT_4O, label: 'GPT-4o' }),
+            Object.freeze({ value: OpenAIModel.GPT_5_4, label: 'GPT-5.4' }),
+            Object.freeze({ value: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' }),
         ]),
         secret: false,
         placeholder: '',
@@ -103,9 +102,8 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.OPENAI,
         options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 mini' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 nano' }),
-            Object.freeze({ value: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o mini' }),
+            Object.freeze({ value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' }),
+            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
         ]),
         secret: false,
         placeholder: '',
@@ -119,8 +117,7 @@ export const USER_SETTINGS = Object.freeze([
         type: 'select',
         provider: LLMProvider.OPENAI,
         options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 nano' }),
-            Object.freeze({ value: OpenAIModel.GPT_4O_MINI, label: 'GPT-4o mini' }),
+            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
         ]),
         secret: false,
         placeholder: '',

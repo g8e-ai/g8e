@@ -58,7 +58,7 @@ def build_investigation_context_section(
         ("severity", InvestigationContextLabel.SEVERITY),
     ]
 
-    context_parts = [f"{label}: {getattr(investigation, field)}" 
+    context_parts = [f"{label.value}: {getattr(investigation, field)}" 
                      for field, label in fields 
                      if getattr(investigation, field)]
 

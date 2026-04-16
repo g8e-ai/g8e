@@ -44,6 +44,10 @@ function buildMenuElement(id) {
 const PROVIDER_MODELS = {
     gemini: {
         label: 'Gemini',
+        all: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
         primary: [
             { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
@@ -60,6 +64,10 @@ const PROVIDER_MODELS = {
 const MULTI_PROVIDER_MODELS = {
     gemini: {
         label: 'Gemini',
+        all: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
         primary: [
             { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
         ],
@@ -72,6 +80,10 @@ const MULTI_PROVIDER_MODELS = {
     },
     anthropic: {
         label: 'Anthropic',
+        all: [
+            { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+            { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+        ],
         primary: [
             { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
         ],

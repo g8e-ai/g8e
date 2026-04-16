@@ -8,7 +8,7 @@ The `g8e` script in the project root is the single entry point for all platform 
 
 **Location:** `g8e` (project root)
 
-The `g8e` script is the single entry point for managing every aspect of the g8e platform. It requires only Docker — no Go, Python, or any other toolchain on the host. Commands that operate on Docker services run directly on the host; commands that require the internal toolchain (`test`, `security`, `data`) are transparently forwarded into the g8ep container via `docker exec`.
+The `g8e` script is the single entry point for managing every aspect of the g8e platform. It requires only Docker — no Go, Python, or any other toolchain on the host. Commands that operate on Docker services run directly on the host; commands that require the internal toolchain (`security`, `data`) are transparently forwarded into the g8ep container via `docker exec`. Test commands route to dedicated test-runner containers.
 
 ### Bootstrap
 
@@ -300,7 +300,7 @@ Builds and runs the local g8e environment. Manages Docker Compose services in de
 
 **Location:** `scripts/testing/run_tests.sh`
 
-Runs tests for g8e components inside the `g8ep` Docker container. Infrastructure must already be running.
+Runs tests for g8e components in dedicated test-runner containers. Infrastructure must already be running.
 
 ### Usage
 
@@ -310,12 +310,12 @@ Runs tests for g8e components inside the `g8ep` Docker container. Infrastructure
 
 ### Components
 
-| Component | Test Framework | What It Tests |
-|-----------|---------------|--------------|
-| `g8ee` | pytest | g8ee Python service |
-| `g8ed` | vitest / npm test | g8ed Node.js service |
-| `g8eo` | `gotestsum` | g8eo Go binary |
-| `all` | All of the above | Full suite (not directly supported via ./g8e) |
+| Component | Test Framework | Test Runner Container | What It Tests |
+|-----------|---------------|----------------------|--------------|
+| `g8ee` | pytest | `g8ee-test-runner` | g8ee Python service |
+| `g8ed` | vitest / npm test | `g8ed-test-runner` | g8ed Node.js service |
+| `g8eo` | `gotestsum` | `g8eo-test-runner` | g8eo Go binary |
+| `all` | All of the above | All test runners | Full suite (not directly supported via ./g8e) |
 
 ### Options
 

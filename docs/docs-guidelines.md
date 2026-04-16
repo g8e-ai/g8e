@@ -51,7 +51,7 @@ docs/
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
 - Every new doc file must be added to `docs/index.md`.
-- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, g8ep — belongs exclusively in `testing.md`. Never duplicate these across the two files.
+- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, test-runner containers — belongs exclusively in `testing.md`. Never duplicate these across the two files.
 
 **Authoritative ownership — facts with a single home:**
 
@@ -65,11 +65,11 @@ docs/
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
 | Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
-| Testing principles, g8ep environment, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
+| Testing principles, test-runner containers, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
 | Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
 | AI agents cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
-| g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | `docs/testing.md` for how to run tests |
+| g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 
 ---

@@ -141,9 +141,10 @@ export const GeminiModel = Object.freeze({
  * Must match g8ee's constants/settings.py OPENAI_* constants exactly.
  */
 export const OpenAIModel = Object.freeze({
-    GPT_5_4_THINKING: _STATUS['llm.models']['openai']['gpt.5.4.thinking'],
-    GPT_5_4_INSTANT:  _STATUS['llm.models']['openai']['gpt.5.4.instant'],
-    GPT_5_4_MINI:     _STATUS['llm.models']['openai']['gpt.5.4.mini'],
+    GPT_5_4:         _STATUS['llm.models']['openai']['gpt.5.4'],
+    GPT_5_4_PRO:     _STATUS['llm.models']['openai']['gpt.5.4.pro'],
+    GPT_5_4_MINI:    _STATUS['llm.models']['openai']['gpt.5.4.mini'],
+    GPT_5_4_NANO:    _STATUS['llm.models']['openai']['gpt.5.4.nano'],
 });
 
 /**
@@ -173,11 +174,16 @@ export const OllamaModel = Object.freeze({
 
 export const PROVIDER_MODELS = Object.freeze({
     [LLMProvider.GEMINI]: {
+        all: [
+            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
+            { id: GeminiModel.FLASH, label: 'Gemini 3 Flash' },
+            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
+        ],
         primary: [
             { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
         ],
         assistant: [
-            { id: GeminiModel.FLASH, label: 'Gemini 3.1 Flash' },
+            { id: GeminiModel.FLASH, label: 'Gemini 3 Flash' },
         ],
         lite: [
             { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
@@ -187,6 +193,11 @@ export const PROVIDER_MODELS = Object.freeze({
         defaultLite: GeminiModel.FLASH_LITE,
     },
     [LLMProvider.ANTHROPIC]: {
+        all: [
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+        ],
         primary: [
             { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
         ],
@@ -201,20 +212,34 @@ export const PROVIDER_MODELS = Object.freeze({
         defaultLite: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
     },
     [LLMProvider.OPENAI]: {
+        all: [
+            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
+            { id: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' },
+            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+        ],
         primary: [
-            { id: OpenAIModel.GPT_5_4_THINKING, label: 'GPT-5.4 Thinking' },
+            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
         ],
         assistant: [
-            { id: OpenAIModel.GPT_5_4_INSTANT, label: 'GPT-5.4 Instant' },
-        ],
-        lite: [
             { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
         ],
-        defaultPrimary: OpenAIModel.GPT_5_4_THINKING,
-        defaultAssistant: OpenAIModel.GPT_5_4_INSTANT,
-        defaultLite: OpenAIModel.GPT_5_4_MINI,
+        lite: [
+            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+        ],
+        defaultPrimary: OpenAIModel.GPT_5_4,
+        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
+        defaultLite: OpenAIModel.GPT_5_4_NANO,
     },
     [LLMProvider.OLLAMA]: {
+        all: [
+            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
+            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
+            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
+            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B' },
+            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
+            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
+        ],
         primary: [
             { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
             { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
