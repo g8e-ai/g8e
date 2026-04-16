@@ -1,7 +1,7 @@
 # g8ed (g8ed) - Web frontend + single external entry point
 
 # -- Builder stage: install all deps (including native builds) --
-FROM node:22-alpine3.21 AS g8ed-builder
+FROM node:22-alpine3.23 AS g8ed-builder
 
 WORKDIR /app
 
@@ -17,18 +17,19 @@ RUN if [ -f package-lock.json ]; then \
 RUN npm prune --omit=dev
 
 # -- Final stage: minimal runtime image --
-FROM node:22-alpine3.21
+FROM node:22-alpine3.23
 
 RUN set -ex; \
     for i in 1 2 3 4 5; do \
         apk add --no-cache curl && break || \
         { echo "apk add failed, retrying in 5s... ($i/5)"; sleep 5; }; \
     done \
-    && curl -fsSL https://www.npmjs.com/install.sh | npm_install="11.12.1" sh \
     && addgroup -g 1001 g8e \
     && adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 
 WORKDIR /app
+
+ENV NODE_ENV=production
 
 COPY --from=g8ed-builder /app/node_modules ./node_modules
 

@@ -13,11 +13,11 @@
 
 import pytest
 from app.models.model_configs import get_model_config
-from app.constants import GEMINI_3_1_FLASH_LITE_PREVIEW, ThinkingLevel
+from app.constants import GEMINI_3_1_FLASH_LITE, ThinkingLevel
 
-def test_gemini_3_1_flash_lite_preview_config():
+def test_gemini_3_1_flash_lite_config():
     """Verify that gemini-3.1-flash-lite-preview is correctly registered and configured."""
-    config = get_model_config(GEMINI_3_1_FLASH_LITE_PREVIEW)
+    config = get_model_config(GEMINI_3_1_FLASH_LITE)
     
     assert config.name == "gemini-3.1-flash-lite-preview"
     assert config.supports_thinking is True
@@ -35,8 +35,8 @@ def test_gemini_3_1_flash_lite_preview_config():
     assert all(level in config.supported_thinking_levels for level in expected_levels)
     assert len(config.supported_thinking_levels) == len(expected_levels)
 
-def test_gemini_3_1_flash_lite_preview_in_registry():
+def test_gemini_3_1_flash_lite_in_registry():
     """Verify the model is present in the global registry."""
     from app.models.model_configs import get_available_models
     models = get_available_models()
-    assert GEMINI_3_1_FLASH_LITE_PREVIEW in models
+    assert GEMINI_3_1_FLASH_LITE in models

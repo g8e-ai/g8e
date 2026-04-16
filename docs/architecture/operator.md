@@ -271,9 +271,9 @@ All auth methods converge on a single HTTP POST to `/api/auth/operator`. The pla
 - `operator_session_id` — used as part of all subsequent pub/sub channel names
 - `operator_id` — stable identifier for this operator slot
 - Bootstrap config: `max_concurrent_tasks`, `max_memory_mb`, `heartbeat_interval_seconds`, feature flags
-- Per-operator mTLS client certificate and private key
+- `operator_cert` and `operator_cert_key` — currently returned as `null` (reserved for future mTLS certificate distribution)
 
-After bootstrap, the HTTP transport is rebuilt using the issued mTLS certificate. All subsequent connections — both HTTP and WebSocket — present this certificate. The API key is held only in process memory and never written to disk in any recoverable form. When the process exits, the key is gone.
+**Note:** The `operator_cert` and `operator_cert_key` fields are currently returned as `null` in the response. The mTLS certificate handling is managed through a separate mechanism. The API key is held only in process memory and never written to disk in any recoverable form. When the process exits, the key is gone.
 
 ### System Fingerprint
 
@@ -331,6 +331,8 @@ On subscription, an automatic heartbeat is sent immediately. Reconnection uses e
 | `g8e.v1.operator.mcp.resources.read` | Read an MCP resource |
 | `g8e.v1.operator.mcp.resources.result` | Return result from an MCP resource read |
 | `g8e.v1.operator.shutdown.requested` | Acknowledge shutdown |
+
+**Note:** The event `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched in the pubsub command handler. It is available for future use.
 
 ---
 

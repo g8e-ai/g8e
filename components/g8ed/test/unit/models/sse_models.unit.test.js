@@ -218,8 +218,10 @@ describe('LLMConfigData [UNIT - PURE LOGIC]', () => {
         expect(data.provider).toBe('gemini');
         expect(data.default_primary_model).toBe('');
         expect(data.default_assistant_model).toBe('');
+        expect(data.default_lite_model).toBe('');
         expect(data.primary_models).toEqual([]);
         expect(data.assistant_models).toEqual([]);
+        expect(data.lite_models).toEqual([]);
         expect(data.timestamp).toBeInstanceOf(Date);
     });
 
@@ -228,14 +230,18 @@ describe('LLMConfigData [UNIT - PURE LOGIC]', () => {
             provider: 'gemini',
             default_primary_model: 'gemini-2.5-pro',
             default_assistant_model: 'gemini-2.5-flash',
+            default_lite_model: 'gemini-2.5-flash',
             primary_models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
             assistant_models: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
+            lite_models: ['gemini-2.5-flash'],
         });
         expect(data.provider).toBe('gemini');
         expect(data.default_primary_model).toBe('gemini-2.5-pro');
         expect(data.default_assistant_model).toBe('gemini-2.5-flash');
+        expect(data.default_lite_model).toBe('gemini-2.5-flash');
         expect(data.primary_models).toEqual(['gemini-2.5-pro', 'gemini-2.5-flash']);
         expect(data.assistant_models).toEqual(['gemini-2.5-flash', 'gemini-2.5-flash-lite']);
+        expect(data.lite_models).toEqual(['gemini-2.5-flash']);
     });
 
     it('throws when provider is missing', () => {

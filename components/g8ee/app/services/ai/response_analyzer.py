@@ -16,9 +16,8 @@ import logging
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
-from app.constants.prompts import PromptFile
-from app.prompts_data.loader import load_prompt
 from app.llm import get_llm_provider, Role
+from app.models.base import G8eBaseModel
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
@@ -28,6 +27,7 @@ from app.models.tool_results import (
     FileOperationRiskContext,
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class AIResponseAnalyzer:
     async def _run_assistant_analysis(
         self,
         prompt: str,
-        response_model: type,
+        response_model: type[G8eBaseModel],
         assistant_model: str | None,
         settings: G8eeUserSettings,
         fallback_no_model,
@@ -59,31 +59,31 @@ class AIResponseAnalyzer:
             return fallback_no_model()
 
         try:
-            async with get_llm_provider(settings.llm, is_assistant=True) as client:
-                config = AIGenerationConfigBuilder.build_assistant_settings(
-                    model=assistant_model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                    response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
-                )
-                response = await client.generate_content_assistant(
-                    model=assistant_model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    assistant_llm_settings=config,
-                )
+            client = get_llm_provider(settings.llm, is_assistant=True)
+            config = AIGenerationConfigBuilder.build_assistant_settings(
+                model=assistant_model,
+                temperature=settings.llm.llm_temperature,
+                max_tokens=settings.llm.llm_max_tokens,
+                system_instructions=prompt,
+                response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
+            )
+            response = await client.generate_content_assistant(
+                model=assistant_model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                assistant_llm_settings=config,
+            )
 
-                response_text = response.text
-                if response_text is None:
-                    logger.error("%s: LLM returned no text content", log_context)
-                    return fallback_no_response()
-                analysis = response_model.model_validate_json(response_text)
+            response_text = response.text
+            if response_text is None:
+                logger.error("%s: LLM returned no text content", log_context)
+                return fallback_no_response()
+            analysis = response_model.model_validate_json(response_text)
 
-                if post_process:
-                    post_process(analysis)
+            if post_process:
+                post_process(analysis)
 
-                logger.info("%s completed", log_context)
-                return analysis
+            logger.info("%s completed", log_context)
+            return analysis
 
         except Exception as e:
             logger.error("%s failed: %s", log_context, e, exc_info=True)
@@ -100,8 +100,8 @@ class AIResponseAnalyzer:
         working_dir = context.working_directory
         resolved_settings = settings
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_COMMAND_RISK)
-        prompt = prompt_template.format(
+        command_risk_persona = get_agent_persona("response_analyzer_command_risk")
+        prompt = command_risk_persona.persona.format(
             command=command,
             justification=justification,
             working_dir=working_dir
@@ -152,8 +152,8 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
             )
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_ERROR_SUGGESTION)
-        prompt = prompt_template.format(
+        error_persona = get_agent_persona("response_analyzer_error")
+        prompt = error_persona.persona.format(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -222,8 +222,8 @@ class AIResponseAnalyzer:
 
         content_preview = content[:500] if content else "N/A"
 
-        prompt_template = load_prompt(PromptFile.ANALYSIS_FILE_RISK)
-        prompt = prompt_template.format(
+        file_risk_persona = get_agent_persona("response_analyzer_file_risk")
+        prompt = file_risk_persona.persona.format(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,

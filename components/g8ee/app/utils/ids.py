@@ -56,6 +56,11 @@ def generate_command_execution_id() -> str:
     return f"{EXECUTION_ID_PREFIX}_{_hex()}_{_ts()}"
 
 
+def generate_batch_id() -> str:
+    """Generate a unique batch ID correlating per-operator executions from a single approval."""
+    return f"batch_{_hex()}_{_ts()}"
+
+
 def generate_file_edit_execution_id() -> str:
     """Generate a unique execution ID for file edit operations."""
     return f"{FILE_EDIT_EXECUTION_ID_PREFIX}_{_hex()}_{_ts()}"

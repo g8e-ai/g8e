@@ -29,65 +29,15 @@ from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
+    TriageRequestPosture,
 )
 from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
+from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
-
-_TRIAGE_PROMPT_TEMPLATE = """\
-You are a routing and intent-analysis assistant. Your goal is to identify the user's TRUE intent and classify the complexity of their request.
-
-<definitions>
-# Intent Categories
-- information: The user is asking for an explanation, fact, or concept. No action required.
-- action: The user wants something DONE (execution, modification, deployment, debugging).
-- unknown: The intent is ambiguous or missing.
-
-# Complexity Levels
-- simple: A single, self-contained conversational or factual question.
-  - No code execution, no file operations, no system commands needed.
-  - No multi-step reasoning required.
-  - Can be answered confidently in one pass without tools.
-  - Examples: "What is a reverse proxy?", "How many MB in a GB?", "What does chmod 755 mean?"
-
-- complex: Anything that requires tools, commands, multi-step reasoning, or technical depth.
-  - Requires running commands or accessing a system.
-  - Requires reading, writing, or analysing files or logs.
-  - Involves debugging, root-cause analysis, or a sequence of steps.
-  - Involves configuring, deploying, or modifying infrastructure.
-  - The user wants something *done*, not just explained.
-</definitions>
-
-<instructions>
-1. Summarize the user's true intent: what is their end goal? What do they ultimately need?
-2. Classify the intent category as 'information', 'action', or 'unknown'.
-3. Rate your confidence in the intent classification as 'high' or 'low'.
-4. Classify the complexity as 'simple' or 'complex'.
-5. Rate your confidence in the complexity classification as 'high' or 'low'.
-6. If intent confidence is 'low', provide a concise follow-up question to clarify their ultimate goal.
-</instructions>
-
-<conversation_tail>
-{conversation_tail}
-</conversation_tail>
-
-<message>
-{message}
-</message>
-
-Respond ONLY with a JSON object following this structure:
-{{
-  "intent_summary": "string",
-  "intent": "information" | "action" | "unknown",
-  "intent_confidence": "high" | "low",
-  "complexity": "simple" | "complex",
-  "complexity_confidence": "high" | "low",
-  "follow_up_question": "string" | null
-}}
-"""
 
 
 class TriageAgent:
@@ -115,6 +65,8 @@ class TriageAgent:
                 intent=TriageIntentClassification.ACTION,
                 intent_confidence=TriageConfidence.HIGH,
                 intent_summary="User provided attachments for analysis.",
+                request_posture=TriageRequestPosture.NORMAL,
+                posture_confidence=TriageConfidence.LOW,
             )
 
         # Short-circuit: Empty message
@@ -127,55 +79,55 @@ class TriageAgent:
                 intent_confidence=TriageConfidence.LOW,
                 intent_summary="Empty message provided.",
                 follow_up_question="How can I help you today?",
+                request_posture=TriageRequestPosture.NORMAL,
+                posture_confidence=TriageConfidence.LOW,
             )
 
         try:
-            async with get_llm_provider(request.settings.llm, is_assistant=True) as provider:
-                model = request.model_override or request.settings.llm.assistant_model
+            provider = get_llm_provider(request.settings.llm, is_assistant=True)
+            model = request.model_override or request.settings.llm.assistant_model
 
-                if not model:
-                    logger.warning("[TRIAGE] No model available, defaulting to complex")
-                    return self._fallback_result("No model configured for triage.")
+            if not model:
+                logger.warning("[TRIAGE] No model available, defaulting to complex")
+                return self._fallback_result("No model configured for triage.")
 
-                conversation_tail = self._build_conversation_tail(request.conversation_history)
+            conversation_tail = self._build_conversation_tail(request.conversation_history)
 
-                prompt = _TRIAGE_PROMPT_TEMPLATE.format(
-                    conversation_tail=conversation_tail,
-                    message=request.message,
+            persona = get_agent_persona("triage")
+            prompt_template = persona.get_system_prompt()
+            prompt = f"{prompt_template}\n\n<conversation_tail>\n{conversation_tail}\n</conversation_tail>\n\n<message>\n{request.message}\n</message>"
+
+            config = AIGenerationConfigBuilder.build_lite_settings(
+                model=model,
+                temperature=None,
+                max_tokens=None,
+                system_instructions="",
+            )
+
+            response = await provider.generate_content_lite(
+                model=model,
+                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                lite_llm_settings=config,
+            )
+
+            if not response or not response.text:
+                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
+                return self._fallback_result("Could not determine intent (no model response).")
+
+            try:
+                result = self._parse_response(response.text)
+
+                logger.info(
+                    "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
+                    result.complexity,
+                    result.intent_confidence,
+                    model,
+                    result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
                 )
-
-                config = AIGenerationConfigBuilder.build_lite_settings(
-                    model=model,
-                    temperature=None,
-                    max_tokens=None,
-                    system_instruction="",
-                )
-
-                response = await provider.generate_content_lite(
-                    model=model,
-                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                    lite_llm_settings=config,
-                )
-
-                if not response or not response.text:
-                    logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
-                    return self._fallback_result("Could not determine intent (no model response).")
-
-                try:
-                    result = self._parse_response(response.text)
-
-                    logger.info(
-                        "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
-                        result.complexity,
-                        result.intent_confidence,
-                        model,
-                        result.intent_summary[:TRIAGE_LOG_TRUNCATION_LENGTH],
-                    )
-                    return result
-
-                except (ValueError, Exception) as e:
-                    logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
-                    return self._fallback_result("Could not parse intent summary from model response.")
+                return result
+            except (ValueError, Exception) as e:
+                logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
+                return self._fallback_result("Could not parse intent summary from model response.")
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")
@@ -206,6 +158,8 @@ class TriageAgent:
             intent=TriageIntentClassification.UNKNOWN,
             intent_confidence=TriageConfidence.LOW,
             intent_summary=summary,
+            request_posture=TriageRequestPosture.NORMAL,
+            posture_confidence=TriageConfidence.LOW,
         )
 
     def _parse_response(self, text: str) -> TriageResult:

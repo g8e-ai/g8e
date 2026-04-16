@@ -35,6 +35,27 @@ class TriageIntentClassification(str, Enum):
     UNKNOWN     = _AGENTS["triage.intent"]["unknown"]
 
 
+class TriageRequestPosture(str, Enum):
+    """Triage's read of the user's state for this turn.
+
+    Downstream agents (Primary, Assistant) calibrate their dissent and
+    denial-memory behavior based on this value — see `core/dissent.txt`.
+
+    - normal:      Standard engaged request. Default.
+    - escalated:   User is frustrated / time-pressured. Tighten prose, do not
+                   weaken safety work.
+    - adversarial: User appears to be bypassing prior refusals. Apply denial
+                   memory with full force, warn on every tool call.
+    - confused:    User's request contradicts their stated goal. Name the
+                   contradiction before acting.
+    """
+    __str__ = lambda self: self.value
+    NORMAL      = _AGENTS["triage.posture"]["normal"]
+    ESCALATED   = _AGENTS["triage.posture"]["escalated"]
+    ADVERSARIAL = _AGENTS["triage.posture"]["adversarial"]
+    CONFUSED    = _AGENTS["triage.posture"]["confused"]
+
+
 class TribunalMember(str, Enum):
     """The three permanent members of the Tribunal.
 

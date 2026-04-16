@@ -50,12 +50,12 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
         if (req.cookies?.['web_session_id']) {
             webSessionId = req.cookies['web_session_id'];
         }
-        // 2. x-session-id header (testing/internal)
-        else if (req.headers[WEB_SESSION_ID_HEADER]) {
+        // 2. x-session-id header (testing/internal - only enabled in non-production)
+        else if (process.env.NODE_ENV !== 'production' && req.headers[WEB_SESSION_ID_HEADER]) {
             webSessionId = req.headers[WEB_SESSION_ID_HEADER];
         }
-        // 3. Authorization Bearer token
-        else if (req.headers.authorization?.startsWith(BEARER_PREFIX)) {
+        // 3. Authorization Bearer token (testing/internal - only enabled in non-production)
+        else if (process.env.NODE_ENV !== 'production' && req.headers.authorization?.startsWith(BEARER_PREFIX)) {
             webSessionId = req.headers.authorization.substring(BEARER_PREFIX.length);
         }
 
@@ -326,7 +326,20 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
      * SECURITY: Only attaches fully authenticated WEB sessions
      */
     const optionalAuth = async (req, res, next) => {
-        const webSessionId = req.cookies?.['web_session_id'];
+        let webSessionId = null;
+
+        // 1. Secure cookie (production)
+        if (req.cookies?.['web_session_id']) {
+            webSessionId = req.cookies['web_session_id'];
+        }
+        // 2. x-session-id header (testing/internal - only enabled in non-production)
+        else if (process.env.NODE_ENV !== 'production' && req.headers[WEB_SESSION_ID_HEADER]) {
+            webSessionId = req.headers[WEB_SESSION_ID_HEADER];
+        }
+        // 3. Authorization Bearer token (testing/internal - only enabled in non-production)
+        else if (process.env.NODE_ENV !== 'production' && req.headers.authorization?.startsWith(BEARER_PREFIX)) {
+            webSessionId = req.headers.authorization.substring(BEARER_PREFIX.length);
+        }
 
         if (webSessionId) {
             try {
@@ -366,10 +379,10 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
             let boundOperators = [];
             
             // Resolve bound operators based on authentication method
-            if (req.webSessionId) {
+            if (req.webSessionId && typeof req.webSessionId === 'string' && req.webSessionId.length > 0) {
                 // Web session auth
                 boundOperators = await bindingService.resolveBoundOperators(req.webSessionId);
-            } else if (req.userId) {
+            } else if (req.userId && typeof req.userId === 'string' && req.userId.length > 0) {
                 // OAuth Client ID auth (no web session)
                 boundOperators = await bindingService.resolveBoundOperatorsForUser(req.userId);
             } else {

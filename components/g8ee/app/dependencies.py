@@ -48,7 +48,7 @@ from .services.ai.memory_generation_service import MemoryGenerationService
 from .services.ai.grounding.grounding_service import GroundingService
 from .services.ai.grounding.web_search_provider import WebSearchProvider
 from .services.ai.chat_pipeline import ChatPipelineService
-from .services.ai.chat_task_manager import ChatTaskManager
+from .services.ai.chat_task_manager import BackgroundTaskManager
 from .services.data.attachment_store_service import AttachmentService
 from .db.blob_service import BlobService
 from .services.protocols import ExecutionRegistryProtocol, SettingsServiceProtocol
@@ -198,7 +198,7 @@ async def get_g8eeweb_search_provider(request: Request) -> WebSearchProvider | N
     return getattr(request.app.state, "web_search_provider", None)
 
 
-async def get_g8ee_chat_task_manager(request: Request) -> ChatTaskManager:
+async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
     service = getattr(request.app.state, "chat_task_manager", None)
     if not service:
         logger.error("Chat Task Manager not found in app state - g8ee initialization may have failed")

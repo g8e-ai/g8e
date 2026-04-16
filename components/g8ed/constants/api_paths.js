@@ -157,6 +157,7 @@ const Passkey = {
     BASE:               BasePaths.AUTH_PASSKEY,
     REGISTER_CHALLENGE: 'register-challenge',
     REGISTER_VERIFY:    'register-verify',
+    REGISTER_VERIFY_SETUP: 'register-verify-setup',
     AUTH_CHALLENGE:     'auth-challenge',
     AUTH_VERIFY:        'auth-verify',
 };
@@ -335,6 +336,7 @@ export const AuthPaths = Object.freeze({
 export const PasskeyPaths = Object.freeze({
     REGISTER_CHALLENGE: `/${Passkey.REGISTER_CHALLENGE}`,
     REGISTER_VERIFY:    `/${Passkey.REGISTER_VERIFY}`,
+    REGISTER_VERIFY_SETUP: `/${Passkey.REGISTER_VERIFY_SETUP}`,
     AUTH_CHALLENGE:     `/${Passkey.AUTH_CHALLENGE}`,
     AUTH_VERIFY:        `/${Passkey.AUTH_VERIFY}`,
 });
@@ -525,6 +527,7 @@ export const apiPaths = {
     passkey: {
         registerChallenge: () => `${Passkey.BASE}/${Passkey.REGISTER_CHALLENGE}`,
         registerVerify:    () => `${Passkey.BASE}/${Passkey.REGISTER_VERIFY}`,
+        registerVerifySetup: () => `${Passkey.BASE}/${Passkey.REGISTER_VERIFY_SETUP}`,
         authChallenge:     () => `${Passkey.BASE}/${Passkey.AUTH_CHALLENGE}`,
         authVerify:        () => `${Passkey.BASE}/${Passkey.AUTH_VERIFY}`,
     },

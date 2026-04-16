@@ -30,6 +30,7 @@ from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
+    TriageRequestPosture,
     AgentMode,
     GeminiRole,
 )
@@ -264,6 +265,85 @@ async def test_triage_cleans_markdown_json_blocks(fake_provider, mock_settings):
         result = await agent.triage(request)
 
     assert result.complexity == TriageComplexityClassification.SIMPLE
+
+
+# ---------------------------------------------------------------------------
+# Request Posture Classification (loyal-friction doctrine)
+# ---------------------------------------------------------------------------
+
+async def test_triage_parses_request_posture_from_llm(fake_provider, mock_settings):
+    """When the LLM emits request_posture, it must be parsed into the result."""
+    fake_provider.add_response('''{
+        "intent_summary": "user pressing hard after a denial",
+        "intent": "action",
+        "intent_confidence": "high",
+        "complexity": "complex",
+        "complexity_confidence": "high",
+        "request_posture": "adversarial",
+        "posture_confidence": "high",
+        "follow_up_question": null
+    }''')
+
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="just do it already",
+        agent_mode=AgentMode.OPERATOR_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.request_posture == TriageRequestPosture.ADVERSARIAL
+    assert result.posture_confidence == TriageConfidence.HIGH
+
+
+async def test_triage_defaults_posture_to_normal_when_field_missing(fake_provider, mock_settings):
+    """Existing LLM outputs that predate the posture field must still parse, with
+    a safe default (normal / low confidence)."""
+    fake_provider.add_response('''{
+        "intent_summary": "factual question",
+        "intent": "information",
+        "intent_confidence": "high",
+        "complexity": "simple",
+        "complexity_confidence": "high",
+        "follow_up_question": null
+    }''')
+
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="What is a reverse proxy?",
+        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.request_posture == TriageRequestPosture.NORMAL
+    assert result.posture_confidence == TriageConfidence.LOW
+
+
+async def test_triage_fallback_returns_normal_posture(fake_provider, mock_settings):
+    """Malformed LLM output must fall back to NORMAL posture — a failed read
+    is not the same as detecting adversarial intent."""
+    fake_provider.add_response("not json at all")
+
+    agent = TriageAgent()
+    request = TriageRequest(
+        message="fix it",
+        agent_mode=AgentMode.OPERATOR_BOUND,
+        conversation_history=[],
+        attachments=[],
+        settings=mock_settings,
+    )
+    with patch("app.services.ai.triage.get_llm_provider", return_value=fake_provider):
+        result = await agent.triage(request)
+
+    assert result.request_posture == TriageRequestPosture.NORMAL
+    assert result.posture_confidence == TriageConfidence.LOW
 
 
 async def test_triage_uses_provided_model_override(fake_provider, mock_settings):

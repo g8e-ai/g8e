@@ -475,7 +475,7 @@ class EnrichedInvestigationContext(InvestigationModel):
         from app.constants import ComponentName
         
         return G8eHttpContext(
-            web_session_id=self.web_session_id or "",
+            web_session_id=self.web_session_id,
             user_id=self.user_id,
             organization_id=self.organization_id,
             case_id=self.case_id,

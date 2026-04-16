@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast, Any, TypedDict, Optional
 
 from app.services.ai.agent import g8eEngine
 from app.services.ai.chat_pipeline import ChatPipelineService
-from app.services.ai.chat_task_manager import ChatTaskManager
+from app.services.ai.chat_task_manager import BackgroundTaskManager, ChatTaskManager
 from app.services.ai.grounding import GroundingService, WebSearchProvider
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.request_builder import AIRequestBuilder
@@ -94,7 +94,7 @@ class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
     mcp_gateway_service: MCPGatewayService
     request_builder: AIRequestBuilder
     g8e_agent: g8eEngine
-    chat_task_manager: ChatTaskManager
+    chat_task_manager: BackgroundTaskManager
     chat_pipeline: ChatPipelineService
     memory_service: "MemoryDataServiceProtocol"
 
@@ -274,9 +274,10 @@ class ServiceFactory:
         g8e_agent = g8eEngine(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
+            approval_service=approval_service,
         )
 
-        chat_task_manager = ChatTaskManager()
+        chat_task_manager = BackgroundTaskManager()
 
         chat_pipeline = ChatPipelineService(
             g8ed_event_service=core_services['g8ed_event_service'],
@@ -345,6 +346,17 @@ class ServiceFactory:
         """Run lifecycle stop hooks (reverse order of start)."""
         import logging as _logging
         _logger = _logging.getLogger(__name__)
+
+        # First, await all background tasks to ensure they complete before cleanup
+        chat_task_manager = services.get('chat_task_manager')
+        if chat_task_manager is not None:
+            try:
+                _logger.info("Awaiting background task completion before service shutdown")
+                await chat_task_manager.wait_all(timeout=5.0)
+            except TimeoutError:
+                _logger.warning("Background tasks did not complete within 5s timeout, proceeding with shutdown")
+            except Exception as exc:
+                _logger.error("Error awaiting background tasks: %s", exc)
 
         heartbeat_service = services.get('heartbeat_service')
         if heartbeat_service is not None:

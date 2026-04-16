@@ -31,6 +31,18 @@
       "description": "Confidence in intent classification."
     },
     "intent_summary": { "type": "string", "description": "A concise summary of the user's goal." },
-    "follow_up_question": { "type": "string", "nullable": true, "description": "Clarifying question if intent is ambiguous." }
+    "follow_up_question": { "type": "string", "nullable": true, "description": "Clarifying question if intent is ambiguous." },
+    "request_posture": {
+      "type": "string",
+      "enum": ["normal", "escalated", "adversarial", "confused"],
+      "default": "normal",
+      "description": "Triage's read of the user's state. Downstream agents calibrate dissent and denial-memory on this value. 'adversarial' requires a link to prior denied content in the conversation history; a first-turn message cannot be adversarial."
+    },
+    "posture_confidence": {
+      "type": "string",
+      "enum": ["high", "low"],
+      "default": "low",
+      "description": "Confidence in the request_posture classification."
+    }
   }
 }

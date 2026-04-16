@@ -278,8 +278,10 @@ export const ChatSSEHandlersMixin = {
             sentinel_mode: this.sentinelModeManager.getSentinelMode(),
             llm_primary_provider: this.llmModelManager.getPrimaryProvider(),
             llm_assistant_provider: this.llmModelManager.getAssistantProvider(),
+            llm_lite_provider: this.llmModelManager.getLiteProvider(),
             llm_primary_model: this.llmModelManager.getPrimaryModel(),
             llm_assistant_model: this.llmModelManager.getAssistantModel(),
+            llm_lite_model: this.llmModelManager.getLiteModel(),
         };
 
         try {

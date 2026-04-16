@@ -70,6 +70,14 @@ class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration."""
     enable_whitelisting: bool = Field(False)
     enable_blacklisting: bool = Field(False)
+    max_batch_concurrency: int = Field(
+        10,
+        description="Maximum number of operators a single batched command may dispatch to concurrently.",
+    )
+    batch_fail_fast: bool = Field(
+        False,
+        description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
+    )
 
 class SearchSettings(G8eBaseModel):
     """Unified search configuration (Vertex AI and Google Search)."""
@@ -126,7 +134,7 @@ class EvalJudgeSettings(G8eBaseModel):
     )
 
     model: str | None = Field(None, alias="eval_judge_model")
-    temperature: float = Field(0.0, alias="eval_judge_temperature")
+    temperature: float | None = Field(None, alias="eval_judge_temperature")
     max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
 
 class LLMSettings(G8eBaseModel):
@@ -140,9 +148,11 @@ class LLMSettings(G8eBaseModel):
 
     primary_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_primary_provider", serialization_alias="llm_primary_provider", validation_alias="provider")
     assistant_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_assistant_provider", serialization_alias="llm_assistant_provider")
+    lite_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_lite_provider", serialization_alias="llm_lite_provider")
 
     primary_model: str | None = Field(None, alias="llm_model")
     assistant_model: str | None = Field(None, alias="llm_assistant_model")
+    lite_model: str | None = Field(None, alias="llm_lite_model")
 
     openai_endpoint: str | None = Field(OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(None)
@@ -239,6 +249,7 @@ class G8eeUserSettings(G8eBaseModel):
     llm: LLMSettings
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
+    command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
 
     @classmethod
     async def from_db(cls, settings_service: Any, user_id: str) -> "G8eeUserSettings":

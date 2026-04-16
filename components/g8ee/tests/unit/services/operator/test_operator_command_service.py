@@ -368,6 +368,73 @@ class TestExecuteCommandTargetSystems:
         assert "op-1" in resolved_ids
         assert "op-2" in resolved_ids
 
+    async def test_batch_fans_out_to_all_resolved_operators(self):
+        """Batch execution dispatches one message per operator and aggregates per-host results."""
+        from app.models.agent import OperatorCommandArgs
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.builder import build_command_service
+
+        approval_service = FakeApprovalService()
+        service = build_command_service(approval_service=approval_service)
+
+        op1 = self._make_operator("op-1", "sess-1", "host-1")
+        op2 = self._make_operator("op-2", "sess-2", "host-2")
+        op3 = self._make_operator("op-3", "sess-3", "host-3")
+        investigation = self._make_investigation([op1, op2, op3])
+        g8e_context = self._make_g8e_context()
+        args = OperatorCommandArgs(
+            command="uptime",
+            justification="batch health check",
+            target_operators=["all"],
+        )
+
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        # One approval covered the entire batch, with a single batch_id.
+        assert len(approval_service.command_approval_calls) == 1
+        req = approval_service.command_approval_calls[0]
+        assert req.batch_id is not None
+        assert {ts.operator_id for ts in req.target_systems} == {"op-1", "op-2", "op-3"}
+
+        # Result reflects batch execution across all three operators.
+        assert result.batch_execution is True
+        assert result.operators_used == 3
+        assert (result.successful_count + result.failed_count) == 3
+        # Aggregated output contains a section per host.
+        for hostname in ("host-1", "host-2", "host-3"):
+            assert hostname in (result.output or "")
+
+    async def test_target_operators_without_target_operator_does_not_raise(self):
+        """Providing only target_operators (no singular target_operator) must resolve cleanly."""
+        from app.models.agent import OperatorCommandArgs
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.builder import build_command_service
+
+        approval_service = FakeApprovalService()
+        service = build_command_service(approval_service=approval_service)
+
+        op1 = self._make_operator("op-1", "sess-1", "host-1")
+        op2 = self._make_operator("op-2", "sess-2", "host-2")
+        investigation = self._make_investigation([op1, op2])
+        g8e_context = self._make_g8e_context()
+        args = OperatorCommandArgs(
+            command="uname -a",
+            justification="multi-host",
+            target_operators=["op-1", "op-2"],
+        )
+
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        # Must not fall into OPERATOR_RESOLUTION_ERROR just because target_operator is empty.
+        from app.constants.status import CommandErrorType
+        assert result.error_type != CommandErrorType.OPERATOR_RESOLUTION_ERROR
+        assert result.batch_execution is True
+        assert result.operators_used == 2
+
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
         from app.models.agent import OperatorCommandArgs

@@ -51,9 +51,9 @@ pytestmark = [pytest.mark.unit]
 # =============================================================================
 
 @pytest.fixture
-def mock_platform_settings_disabled():
-    """Platform settings with both validations disabled."""
-    settings = MagicMock(spec=G8eePlatformSettings)
+def mock_user_settings_disabled():
+    """User settings with both validations disabled."""
+    settings = MagicMock(spec=G8eeUserSettings)
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=False,
         enable_blacklisting=False,
@@ -62,9 +62,9 @@ def mock_platform_settings_disabled():
 
 
 @pytest.fixture
-def mock_platform_settings_whitelist_only():
-    """Platform settings with whitelisting enabled only."""
-    settings = MagicMock(spec=G8eePlatformSettings)
+def mock_user_settings_whitelist_only():
+    """User settings with whitelisting enabled only."""
+    settings = MagicMock(spec=G8eeUserSettings)
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=True,
         enable_blacklisting=False,
@@ -73,9 +73,9 @@ def mock_platform_settings_whitelist_only():
 
 
 @pytest.fixture
-def mock_platform_settings_blacklist_only():
-    """Platform settings with blacklisting enabled only."""
-    settings = MagicMock(spec=G8eePlatformSettings)
+def mock_user_settings_blacklist_only():
+    """User settings with blacklisting enabled only."""
+    settings = MagicMock(spec=G8eeUserSettings)
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=False,
         enable_blacklisting=True,
@@ -84,9 +84,9 @@ def mock_platform_settings_blacklist_only():
 
 
 @pytest.fixture
-def mock_platform_settings_both():
-    """Platform settings with both validations enabled."""
-    settings = MagicMock(spec=G8eePlatformSettings)
+def mock_user_settings_both():
+    """User settings with both validations enabled."""
+    settings = MagicMock(spec=G8eeUserSettings)
     settings.command_validation = CommandValidationSettings(
         enable_whitelisting=True,
         enable_blacklisting=True,
@@ -164,7 +164,7 @@ def mock_investigation_service():
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_disabled(
-    mock_platform_settings_disabled,
+    mock_user_settings_disabled,
     mock_operator_command_service,
     mock_investigation_service,
     mock_g8e_context,
@@ -178,7 +178,8 @@ async def test_handle_get_command_constraints_both_disabled(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
         web_search_provider=None,
-        platform_settings=mock_platform_settings_disabled,
+        platform_settings=None,
+        user_settings=mock_user_settings_disabled,
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator,
     )
@@ -203,7 +204,7 @@ async def test_handle_get_command_constraints_both_disabled(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_whitelist_only(
-    mock_platform_settings_whitelist_only,
+    mock_user_settings_whitelist_only,
     mock_operator_command_service,
     mock_investigation_service,
     mock_g8e_context,
@@ -217,7 +218,8 @@ async def test_handle_get_command_constraints_whitelist_only(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
         web_search_provider=None,
-        platform_settings=mock_platform_settings_whitelist_only,
+        platform_settings=None,
+        user_settings=mock_user_settings_whitelist_only,
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator,
     )
@@ -242,7 +244,7 @@ async def test_handle_get_command_constraints_whitelist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_blacklist_only(
-    mock_platform_settings_blacklist_only,
+    mock_user_settings_blacklist_only,
     mock_operator_command_service,
     mock_investigation_service,
     mock_g8e_context,
@@ -256,7 +258,8 @@ async def test_handle_get_command_constraints_blacklist_only(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
         web_search_provider=None,
-        platform_settings=mock_platform_settings_blacklist_only,
+        platform_settings=None,
+        user_settings=mock_user_settings_blacklist_only,
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator,
     )
@@ -285,7 +288,7 @@ async def test_handle_get_command_constraints_blacklist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_enabled(
-    mock_platform_settings_both,
+    mock_user_settings_both,
     mock_operator_command_service,
     mock_investigation_service,
     mock_g8e_context,
@@ -299,7 +302,8 @@ async def test_handle_get_command_constraints_both_enabled(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
         web_search_provider=None,
-        platform_settings=mock_platform_settings_both,
+        platform_settings=None,
+        user_settings=mock_user_settings_both,
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator,
     )
@@ -480,7 +484,7 @@ def test_command_constraints_result_deserialization():
 # =============================================================================
 
 async def test_get_tools_includes_get_command_constraints(
-    mock_platform_settings_both,
+    mock_user_settings_both,
     mock_whitelist_validator,
     mock_blacklist_validator,
 ):
@@ -489,7 +493,8 @@ async def test_get_tools_includes_get_command_constraints(
         operator_command_service=MagicMock(),
         investigation_service=MagicMock(),
         web_search_provider=None,
-        platform_settings=mock_platform_settings_both,
+        platform_settings=None,
+        user_settings=mock_user_settings_both,
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator,
     )

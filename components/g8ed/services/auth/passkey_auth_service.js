@@ -58,19 +58,28 @@ export class PasskeyAuthService {
     async _getRpId(req) {
         const platformSettings = await this._settingsService.getPlatformSettings();
         const configRpId = platformSettings.passkey_rp_id || null;
+        
+        // Use configured RpId if available and valid
         if (configRpId && configRpId !== 'localhost') {
             logger.info('[PASSKEY] getRpId: using settings passkey_rp_id', { rpId: configRpId });
             return configRpId;
         }
-        const xForwardedHost = req?.get?.(HTTP_X_FORWARDED_HOST_HEADER);
-        if (xForwardedHost) {
-            const rpId = xForwardedHost.split(':')[0];
-            logger.info('[PASSKEY] getRpId: using x-forwarded-host', { xForwardedHost, rpId });
+        
+        // SECURITY: x-forwarded-host fallback removed as it can be spoofed.
+        // In non-production, we allow req.hostname or localhost.
+        if (process.env.NODE_ENV !== 'production') {
+            const rpId = req?.hostname || 'localhost';
+            logger.info('[PASSKEY] getRpId: using req.hostname (non-production)', { hostname: req?.hostname, rpId });
             return rpId;
         }
-        const rpId = req?.hostname || 'localhost';
-        logger.info('[PASSKEY] getRpId: using req.hostname', { hostname: req?.hostname, rpId });
-        return rpId;
+
+        // In production, require configured passkey_rp_id
+        if (!configRpId) {
+            logger.error('[PASSKEY] getRpId: No passkey_rp_id configured in production');
+            throw new Error('Passkey RP ID not configured');
+        }
+
+        return configRpId;
     }
 
     async _getOrigin(req) {

@@ -81,7 +81,8 @@ describe('Setup Integration Tests', () => {
         // Setup cleanup tracking
         cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService, {
             usersCollection: testUsersCollection,
-            settingsCollection: testSettingsCollection
+            settingsCollection: testSettingsCollection,
+            operatorsCollection: services.operatorService.collectionName
         });
     });
 

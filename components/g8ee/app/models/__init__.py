@@ -143,8 +143,8 @@ from .investigations import (
 )
 from .memory import InvestigationMemory, MemoryAnalysis
 from .model_configs import (
-    GEMINI_3_FLASH_PREVIEW,
-    GEMINI_3_PRO_PREVIEW,
+    GEMINI_3_FLASH,
+    GEMINI_3_1_PRO,
     MODEL_REGISTRY,
     LLMModelConfig,
     LLMModelRegistry,

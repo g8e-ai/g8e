@@ -74,17 +74,8 @@ def enriched_investigation():
         conversation_history=[msg]
     )
 
-def test_build_memory_analysis_system_instruction():
-    instruction = prompts.build_memory_analysis_system_instruction("Test Case")
-    assert "Test Case" in instruction
-    assert "investigation_summary" in instruction
-
-def test_build_memory_analysis_request():
-    request = prompts.build_memory_analysis_request()
-    assert "Analyze the conversation" in request
-
 def test_build_investigation_context_section_empty():
-    assert prompts.build_investigation_context_section(None) == ""  # type: ignore[arg-type]
+    assert prompts.build_investigation_context_section(None) == ""
 
 def test_build_investigation_context_section_full(enriched_investigation):
     section = prompts.build_investigation_context_section(enriched_investigation)
@@ -123,12 +114,99 @@ def test_build_modular_system_prompt_basic(mock_loader, operator_context, enrich
     
     assert f"Content of {PromptFile.CORE_IDENTITY}" in prompt
     assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
+    # Loyal-friction doctrine: loyalty + dissent must load right after safety
+    # for every Primary/Assistant system prompt. If these drop out, the agents
+    # revert to sycophantic behavior.
+    assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
+    assert f"Content of {PromptFile.CORE_DISSENT}" in prompt
     assert "Capabilities prompt" in prompt
     assert "<system_context>" in prompt
     assert "Hostname: test-host" in prompt
     assert "Naming Conventions: Standard naming" in prompt
     assert "custom_field: Custom value" in prompt
     assert "<investigation_context>" in prompt
+
+
+def test_build_modular_system_prompt_loyalty_and_dissent_order(mock_loader, operator_context):
+    """The doctrine sections must appear after safety and before mode prompts
+    so the agent reads them before any capability/tool guidance.
+    """
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+    )
+    safety_pos = prompt.index(f"Content of {PromptFile.CORE_SAFETY}")
+    loyalty_pos = prompt.index(f"Content of {PromptFile.CORE_LOYALTY}")
+    dissent_pos = prompt.index(f"Content of {PromptFile.CORE_DISSENT}")
+    capabilities_pos = prompt.index("Capabilities prompt")
+
+    assert safety_pos < loyalty_pos < dissent_pos < capabilities_pos, (
+        "Expected order: safety → loyalty → dissent → capabilities"
+    )
+
+
+def test_build_triage_context_section_none_returns_empty():
+    assert prompts.build_triage_context_section(None) == ""
+
+
+def test_build_triage_context_section_renders_posture_and_intent():
+    from app.constants import (
+        TriageComplexityClassification,
+        TriageConfidence,
+        TriageIntentClassification,
+        TriageRequestPosture,
+    )
+    from app.models.agents.triage import TriageResult
+
+    result = TriageResult(
+        complexity=TriageComplexityClassification.COMPLEX,
+        complexity_confidence=TriageConfidence.HIGH,
+        intent=TriageIntentClassification.ACTION,
+        intent_confidence=TriageConfidence.HIGH,
+        intent_summary="User wants to drop the users table",
+        request_posture=TriageRequestPosture.ADVERSARIAL,
+        posture_confidence=TriageConfidence.HIGH,
+    )
+    section = prompts.build_triage_context_section(result)
+    assert "<triage_context>" in section
+    assert "request_posture: adversarial" in section
+    assert "intent_summary: User wants to drop the users table" in section
+    assert section.endswith("</triage_context>\n")
+
+
+def test_build_modular_system_prompt_injects_triage_context(mock_loader, operator_context):
+    """When Triage supplies a posture, the modular prompt must include the
+    <triage_context> block so the dissent protocol can calibrate on it."""
+    from app.constants import (
+        TriageComplexityClassification,
+        TriageConfidence,
+        TriageIntentClassification,
+        TriageRequestPosture,
+    )
+    from app.models.agents.triage import TriageResult
+
+    triage_result = TriageResult(
+        complexity=TriageComplexityClassification.COMPLEX,
+        complexity_confidence=TriageConfidence.HIGH,
+        intent=TriageIntentClassification.ACTION,
+        intent_confidence=TriageConfidence.HIGH,
+        intent_summary="escalated request",
+        request_posture=TriageRequestPosture.ESCALATED,
+        posture_confidence=TriageConfidence.HIGH,
+    )
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        triage_result=triage_result,
+    )
+    assert "<triage_context>" in prompt
+    assert "request_posture: escalated" in prompt
 
 def test_build_modular_system_prompt_cloud_operator(mock_loader):
     cloud_context = OperatorContext(
@@ -144,7 +222,7 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
         system_context=cloud_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     assert "Operator Type: Cloud Operator for AWS" in prompt
@@ -163,7 +241,7 @@ def test_build_modular_system_prompt_g8ep_cloud_operator(mock_loader):
         system_context=g8ep_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
 
     assert "Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD" in prompt
@@ -182,7 +260,7 @@ def test_build_modular_system_prompt_cloud_operator_missing_subtype(mock_loader)
         system_context=no_subtype_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
 
     assert "Operator Type: Cloud Operator - Least-privilege intent-based access" in prompt
@@ -202,7 +280,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
         system_context=no_systemd_context,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     assert "WARNING: systemd is NOT available" in prompt
@@ -257,7 +335,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         system_context=[operator1, operator2, operator3],
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     # Should contain all three operators with proper tags
@@ -290,7 +368,7 @@ def test_build_modular_system_prompt_backward_compatibility(mock_loader, operato
         system_context=operator_context,  # Single context, not list
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     
     # Should work exactly like before - no operator tags for single operator
@@ -319,7 +397,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         system_context=system_operator,
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     # This test mainly ensures the function doesn't crash with mixed operators
     
@@ -329,7 +407,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         system_context=[system_operator, cloud_operator],
         user_memories=[],
         case_memories=[],
-        investigation=None  # type: ignore[arg-type]
+        investigation=None
     )
     # Should contain both operators
     assert "<operator index=\"0\">" in prompt

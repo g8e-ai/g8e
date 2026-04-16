@@ -27,6 +27,7 @@ import {
 import { DeviceLinkResponse, DeviceLinkListResponse, DeviceRegistrationResponse, SimpleSuccessResponse, ErrorResponse } from '../../models/response_models.js';
 import { AuthPaths, DeviceLinkPaths } from '../../constants/api_paths.js';
 import { extractClientIp } from '../../utils/request.js';
+import { deviceLinkRateLimiter } from '../../middleware/rate-limit.js';
 
 /**
  * @param {Object} options
@@ -41,12 +42,11 @@ export function createDeviceLinkRouter({
 }) {
     const { deviceLinkService } = services;
     const { requireAuth } = authMiddleware;
-    const { 
-        deviceLinkRateLimiter, 
-        deviceLinkGenerateLimiter, 
-        deviceLinkCreateRateLimiter, 
-        deviceLinkListRateLimiter, 
-        deviceLinkRevokeRateLimiter 
+    const {
+        deviceLinkGenerateLimiter,
+        deviceLinkCreateRateLimiter,
+        deviceLinkListRateLimiter,
+        deviceLinkRevokeRateLimiter
     } = rateLimiters;
 
     const authRouter = express.Router();

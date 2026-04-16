@@ -1,8 +1,10 @@
 # g8e node
 
-g8ep is the always-on sidecar container that serves as the unified test environment for the g8e platform — a hermetic container for running all component tests (g8ee/Python, g8ed/Node.js, g8eo/Go) locally and in CI.
+g8ep is the always-on sidecar container for operator management, platform scripts, and security tooling.
 
-It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-compose.yml`. Tests are never run directly on the host — all test execution goes through the g8ep.
+Test running is handled by dedicated per-component test-runner containers (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). g8ep retains supervisor for the operator process, Docker CLI, minimal Python for platform scripts, and the full suite of network troubleshooting tools.
+
+It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-compose.yml`.
 
 **Operator binary:** The `g8e.operator` binary lives at `/home/g8e/g8e.operator`. When the binary is not present, `fetch-key-and-run.sh` automatically downloads the platform-matching binary from the g8es blob store (`/blob/operator-binary/linux-{arch}`). g8es bakes and uploads binaries for all architectures on startup, so a fresh `./g8e platform setup` or `./g8e platform up` is sufficient. To compile a fresh binary manually, use `./g8e operator build`.
 
@@ -12,7 +14,7 @@ It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-com
 
 ```
 components/g8ep/
-├── Dockerfile                    # Container definition (ubuntu:24.04 base, Python 3.12, Node 22, Go 1.24.1)
+├── Dockerfile                    # Container definition (python:3.13-alpine base)
 ├── reports/                      # Scan output (gitignored, .gitkeep preserves dir)
 └── scripts/
     ├── entrypoint.sh             # Writes supervisor config, execs supervisord as PID 1
@@ -31,74 +33,64 @@ components/g8ep/
 
 ## Container Image
 
-**Base:** `ubuntu:24.04`
+**Base:** `python:3.13-alpine`
 
-**Runtimes installed at build time:**
+**Runtimes provided by base image:**
 
 | Runtime | Version |
 |---------|---------|
-| Python | 3.12 (`python3.12` APT package) |
-| Node.js | 22 (ARG `NODE_VERSION`, via NodeSource) |
-| Go | 1.24.1 (ARG `GO_VERSION`, auto-detected arch — supports `amd64` and `arm64`) |
-| AWS CLI | Not installed (official installer removed) |
+| Python | 3.13 (provided by `python:3.13-alpine` base image) |
 
-**Tools installed at build time:**
+> Node.js, Go, and component test dependencies have been moved to dedicated test-runner containers (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`).
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| **System Base** |||
-| bash | system | Shell environment |
-| ca-certificates | system | CA trust store |
-| gnupg | system | GPG for package verification |
-| jq | system | JSON processing |
-| make | system | Build automation |
-| openssl | system | SSL/TLS toolkit |
-| python3.12 | system | Python runtime (with dev, pip, venv) |
-| supervisor | system | Process supervisor — manages the operator as a service |
-| uuid-runtime | system | UUID generation |
-| **Network Tools** |||
-| curl | system | HTTP client |
-| dnsutils | system | DNS troubleshooting (dig, nslookup) |
-| iperf3 | system | Network bandwidth testing |
-| ipcalc | system | IP address calculator |
-| iproute2 | system | Network routing (ip, ss commands) |
-| iputils-ping | system | Ping utility |
-| iftop | system | Real-time network bandwidth monitor |
-| mtr | system | Network diagnostic (traceroute + ping) |
-| nethogs | system | Per-process network bandwidth monitor |
-| netcat-openbsd | system | Network debugging (nc) |
-| net-tools | system | Netstat, ifconfig legacy tools |
-| nmap | system | Network discovery and security scanning |
-| socat | system | Multipurpose socket relay |
-| tcpdump | system | Packet capture and analysis |
-| telnet | system | Remote terminal client |
-| traceroute | system | Route tracing utility |
-| whois | system | Domain registration lookup |
-| **Development** |||
-| gcc/g++ | system | C/C++ compiler (Go race detector, Python C extensions) |
-| git | system | Version control |
-| wget | system | HTTP/FTP download utility |
-| **System Utilities** |||
-| htop | system | Interactive process viewer |
-| lsof | system | List open files |
-| rsync | system | File synchronization |
-| ssh-client | system | SSH remote access client |
-| strace | system | System call tracer |
-| unzip/zip | system | Archive utilities |
-| **Development** |||
-| npm | 11.12.1 | Package manager (official install script) |
-| gotestsum | v1.12.1 | Structured Go test output (pinned) |
-| **Docker** |||
-| docker-ce-cli | latest | Docker client (daemon via host socket) |
-| docker-compose-plugin | latest | Docker Compose plugin |
-| **Go Tools** |||
+**Tools installed at build time (via `apk`):**
 
-**Application dependencies pre-installed at build time** (layer-cached):
-- Python: `components/g8ee/requirements.txt` → `pip install` into a venv at `/opt/venv` (required by PEP 668 on Ubuntu 24.04 — system-wide pip installs are blocked)
-- Node: `components/g8ed/package*.json` → `npm ci`
-- Go: `components/g8eo/go.mod` + `go.sum` + `vendor/` → vendored, no network download
+| Tool | Purpose |
+|------|----------|
+| **System Base** ||
+| bash | Shell environment |
+| ca-certificates | CA trust store |
+| gnupg | GPG for package verification |
+| jq | JSON processing |
+| openssl | SSL/TLS toolkit |
+| supervisor | Process supervisor — manages the operator as a service |
+| sudo | Privileged command execution for network tools |
+| uuidgen | UUID generation |
+| **Network Tools** ||
+| curl | HTTP client |
+| bind-tools | DNS troubleshooting (dig, nslookup, host) |
+| iperf3 | Network bandwidth testing |
+| ipcalc | IP address calculator |
+| iproute2 | Network routing (ip, ss commands) |
+| iputils | Ping utility |
+| iftop | Real-time network bandwidth monitor |
+| mtr | Network diagnostic (traceroute + ping) |
+| nethogs | Per-process network bandwidth monitor |
+| nmap-ncat | Network debugging (ncat) |
+| net-tools | Netstat, ifconfig legacy tools |
+| nmap | Network discovery and security scanning |
+| socat | Multipurpose socket relay |
+| tcpdump | Packet capture and analysis |
+| busybox-extras | Telnet and additional utilities |
+| traceroute | Route tracing utility |
+| whois | Domain registration lookup |
+| **System Utilities** ||
+| git | Version control |
+| wget | HTTP/FTP download utility |
+| htop | Interactive process viewer |
+| lsof | List open files |
+| rsync | File synchronization |
+| openssh-client | SSH remote access client |
+| strace | System call tracer |
+| unzip/zip | Archive utilities |
+| **Docker** ||
+| docker-cli | Docker client (daemon via host socket) |
+| docker-cli-compose | Docker Compose plugin |
 
-Component source directories are **volume-mounted** at runtime — code changes never require a rebuild.
+**Python dependencies** (installed via `pip` into the base image):
+- `requests`, `aiohttp` — for platform management scripts
+
+Component source directories are **volume-mounted** at runtime for scripts — code changes never require a rebuild.
 
 ---
 
@@ -114,10 +106,6 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 
 | Host path | Container path | Notes |
 |-----------|---------------|-------|
-| `./components/g8ee` | `/app/components/g8ee` | g8ee application source |
-| `./components/g8ed` | `/app/components/g8ed` | g8ed source |
-| (named volume) `g8ed-node-modules` | `/app/components/g8ed/node_modules` | Node modules isolated in a named volume |
-| `./components/g8eo` | `/app/components/g8eo` | g8eo source (operator) |
 | `./components/g8ep/scripts` | `/app/components/g8ep/scripts` | g8e node scripts |
 | `./shared` | `/app/shared` | Shared models and constants |
 | `./scripts` | `/app/scripts` | Platform scripts |
@@ -215,11 +203,19 @@ The operator re-authenticates and goes `ACTIVE` within seconds. The operation is
 
 ---
 
-## Running Tests
+## Test Runners
 
-The g8ep container runs `entrypoint.sh` on startup, writes the supervisor config, and execs `supervisord` as PID 1. Tests are executed via `docker exec` — the `g8e` bash script routes `test` commands into the g8ep and invokes `run_tests.sh` directly inside it.
+Test running is no longer handled by g8ep. Each component has a dedicated test-runner container:
 
-See [testing.md](../testing.md) for complete test execution documentation — g8ep environment details, all `./g8e test` commands, component-specific guides, and CI workflows.
+| Container | Image | Purpose |
+|-----------|-------|---------|
+| `g8ee-test-runner` | `python:3.13-slim` | g8ee pytest + pyright |
+| `g8ed-test-runner` | `node:22-alpine` | g8ed vitest |
+| `g8eo-test-runner` | `golang:1.24.1-alpine3.21` | g8eo tests + operator builds |
+
+The `./g8e test <component>` CLI command routes to the correct test-runner container. The `./g8e operator build` command now runs inside `g8eo-test-runner`.
+
+See [testing.md](../testing.md) for complete test execution documentation.
 
 ---
 
@@ -238,13 +234,19 @@ Source code changes never require a rebuild. Rebuild only when the image definit
 | Changed file | Action |
 |-------------|--------|
 | `components/g8ep/Dockerfile` | `./g8e platform rebuild g8ep` |
-| `components/g8ee/requirements.txt` | `./g8e platform rebuild g8ep` |
-| `components/g8ed/package*.json` | `./g8e platform rebuild g8ep` |
-| `components/g8eo/go.mod` / `go.sum` | `./g8e platform rebuild g8ep` |
+| `components/g8ee/Dockerfile.test` | `./g8e platform rebuild g8ee-test-runner` |
+| `components/g8ee/requirements.txt` | `./g8e platform rebuild g8ee-test-runner` |
+| `components/g8ed/Dockerfile.test` | `./g8e platform rebuild g8ed-test-runner` |
+| `components/g8ed/package*.json` | `./g8e platform rebuild g8ed-test-runner` |
+| `components/g8eo/Dockerfile.test` | `./g8e platform rebuild g8eo-test-runner` |
+| `components/g8eo/go.mod` / `go.sum` | `./g8e platform rebuild g8eo-test-runner` |
 
 ```bash
 # Rebuild g8ep image only
 ./g8e platform rebuild g8ep
+
+# Rebuild a specific test-runner
+./g8e platform rebuild g8ee-test-runner
 
 # Clean g8ep image (full removal)
 ./g8e platform clean --clean-g8ep

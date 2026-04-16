@@ -623,6 +623,10 @@ class ApprovalRequestBase(G8eBaseModel):
     execution_id: str = Field(description="Unique execution identifier for tracking")
     operator_session_id: str = Field(description="Operator session identifier")
     operator_id: str = Field(description="Operator identifier")
+    batch_id: str | None = Field(
+        default=None,
+        description="Correlates multiple per-operator executions dispatched from a single approval.",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -668,6 +672,10 @@ class ApprovalContext(G8eBaseModel):
     justification: str = Field(description="AI justification for the operation")
     user_id: str | None = Field(default=None)
     task_id: str | None = Field(default=None, description="AI task identifier for routing the approval response")
+    batch_id: str | None = Field(
+        default=None,
+        description="Batch correlation ID when the approval covers multiple operators.",
+    )
 
 
 class CommandApprovalEvent(ApprovalContext):
@@ -835,9 +843,11 @@ class CommandExecutingBroadcastEvent(G8eBaseModel):
     command: str
     execution_id: str | None = None
     operator_session_id: str | None = None
+    operator_id: str | None = None
     status: ExecutionStatus = ExecutionStatus.EXECUTING
     message: str | None = None
     approval_id: str | None = None
+    batch_id: str | None = None
     timestamp: datetime = Field(default_factory=now)
 
 
@@ -856,6 +866,7 @@ class CommandStatusBroadcastEvent(G8eBaseModel):
 class CommandResultBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_COMMAND_COMPLETED / OPERATOR_COMMAND_FAILED (direct execution result)."""
     execution_id: str
+    batch_id: str | None = None
     command: str | None = None
     status: ExecutionStatus
     output: str | None = None

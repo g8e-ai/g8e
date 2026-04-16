@@ -129,13 +129,15 @@ export class SettingsPage {
     _buildLlmSection(panel, settings) {
         const primaryProviderSetting = settings.find(s => s.key === 'llm_primary_provider');
         const assistantProviderSetting = settings.find(s => s.key === 'llm_assistant_provider');
+        const liteProviderSetting = settings.find(s => s.key === 'llm_lite_provider');
         const universalSettings = settings.filter(s => s.group === 'universal');
         const providerSpecificSettings = settings.filter(s => s.provider);
 
         const updateVisibility = () => {
             const primary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
             const assistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-            this._updateLlmVisibility(panel, primary, assistant);
+            const lite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
+            this._updateLlmVisibility(panel, primary, assistant, lite);
         };
 
         if (primaryProviderSetting) {
@@ -158,6 +160,16 @@ export class SettingsPage {
             }
         }
 
+        if (liteProviderSetting) {
+            const field = this._buildField(liteProviderSetting);
+            panel.appendChild(field);
+
+            const select = field.querySelector('select');
+            if (select) {
+                select.addEventListener('change', updateVisibility);
+            }
+        }
+
         const specificContainer = document.createElement('div');
         specificContainer.className = 'settings-llm-specific';
         providerSpecificSettings.forEach(s => {
@@ -166,7 +178,7 @@ export class SettingsPage {
             
             // For unified keys, ensure inputs only update their specific provider context in the dirty map
             // though actually we want one key to rule them all now.
-            if (s.key === 'llm_model' || s.key === 'llm_assistant_model') {
+            if (s.key === 'llm_model' || s.key === 'llm_assistant_model' || s.key === 'llm_lite_model') {
                 field.classList.add('llm-model-field');
             }
             specificContainer.appendChild(field);
@@ -191,15 +203,16 @@ export class SettingsPage {
 
         const currentPrimary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
         const currentAssistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-        this._updateLlmVisibility(panel, currentPrimary, currentAssistant);
+        const currentLite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
+        this._updateLlmVisibility(panel, currentPrimary, currentAssistant, currentLite);
     }
 
-    _updateLlmVisibility(panel, primaryProvider, assistantProvider) {
+    _updateLlmVisibility(panel, primaryProvider, assistantProvider, liteProvider) {
         const specificFields = panel.querySelectorAll('.settings-llm-specific .settings-field');
         specificFields.forEach(field => {
             const fieldProvider = field.getAttribute('data-provider');
-            // If the field belongs to either the primary or assistant provider, show it.
-            field.style.display = (fieldProvider === primaryProvider || fieldProvider === assistantProvider) ? 'block' : 'none';
+            // If the field belongs to either the primary, assistant, or lite provider, show it.
+            field.style.display = (fieldProvider === primaryProvider || fieldProvider === assistantProvider || fieldProvider === liteProvider) ? 'block' : 'none';
         });
     }
 

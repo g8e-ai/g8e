@@ -1,0 +1,54 @@
+# g8eo Test Runner & Operator Builder
+#
+# Lean Go container for running g8eo tests and building operator binaries.
+# Uses golang:alpine — the same base as the g8es production builder stage.
+# Source code is volume-mounted at runtime — never baked into the image.
+#
+# Usage (via ./g8e test g8eo):
+#   docker compose exec g8eo-test-runner /app/scripts/testing/run_tests.sh g8eo [OPTIONS]
+# Operator build (via ./g8e operator build):
+#   docker compose exec g8eo-test-runner make -C /app/components/g8eo build
+
+FROM golang:1.26-alpine3.23
+
+RUN set -ex; \
+    for i in 1 2 3; do \
+        apk add --no-cache \
+            bash \
+            curl \
+            ca-certificates \
+            openssl \
+            jq \
+            git \
+            make \
+            gcc \
+            musl-dev \
+        && break || \
+        { echo "apk add failed, retrying in 5s... ($i/3)"; sleep 5; }; \
+    done
+
+ENV GOPATH="/home/g8e/go"
+ENV GOBIN="/home/g8e/go/bin"
+ENV GOCACHE="/home/g8e/.cache/go"
+ENV PATH="/home/g8e/go/bin:${PATH}"
+
+WORKDIR /app
+
+RUN addgroup -g 1001 g8e \
+    && adduser -u 1001 -G g8e -D -s /bin/bash g8e
+
+COPY components/g8eo/go.mod components/g8eo/go.sum /app/components/g8eo/
+COPY components/g8eo/vendor/ /app/components/g8eo/vendor/
+COPY components/g8eo/tools/ /app/components/g8eo/tools/
+
+RUN cd /app/components/g8eo/tools \
+    && go build -mod=vendor -o /usr/local/bin/gotestsum gotest.tools/gotestsum
+
+# The gotestsum build above runs as root and populates GOPATH/GOCACHE under
+# /home/g8e. Hand ownership to the g8e user so the shared Go build cache is
+# writable at test time (otherwise `go test` fails with EACCES on cache files).
+RUN chown -R g8e:g8e /home/g8e
+
+USER g8e
+
+CMD ["sleep", "infinity"]

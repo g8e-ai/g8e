@@ -208,7 +208,7 @@ class TestEvalJudgeConstruction:
     def test_construction_with_default_settings(self):
         provider = MagicMock()
         judge = EvalJudge(provider=provider, model="some-model")
-        assert judge._settings.temperature == 0.0
+        assert judge._settings.temperature is None
         assert judge._settings.max_output_tokens == 4096
 
 

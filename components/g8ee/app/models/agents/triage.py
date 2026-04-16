@@ -17,6 +17,7 @@ from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
+    TriageRequestPosture,
 )
 from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
@@ -53,4 +54,16 @@ class TriageResult(G8eBaseModel):
     intent_summary: str = Field(description="A concise summary of the user's true intent / end goal.")
     follow_up_question: str | None = Field(
         default=None, description="A follow-up question if intent confidence is LOW."
+    )
+    request_posture: TriageRequestPosture = Field(
+        default=TriageRequestPosture.NORMAL,
+        description=(
+            "Triage's read of the user's state for this turn. Downstream agents "
+            "calibrate dissent and denial-memory behavior on this value. "
+            "Defaults to `normal` when the model omits the field or when triage falls back."
+        ),
+    )
+    posture_confidence: TriageConfidence = Field(
+        default=TriageConfidence.LOW,
+        description="Confidence in the request_posture classification.",
     )

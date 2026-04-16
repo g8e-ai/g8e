@@ -351,14 +351,12 @@ function mountRoutes(app, {
     // Auth Routes
     app.use(BasePaths.AUTH, createAuthRouter({ 
         services,
-        authMiddleware,
-        rateLimiters
+        authMiddleware
     }));
 
     app.use(BasePaths.AUTH_PASSKEY, createPasskeyRouter({ 
         services,
-        authMiddleware, 
-        rateLimiters
+        authMiddleware
     }));
 
     const deviceLinkRoutes = createDeviceLinkRouter({
@@ -376,8 +374,7 @@ function mountRoutes(app, {
     app.use('/', landingRouter);
 
     const setupRouterInstance = createSetupRouter({
-        services,
-        rateLimiters
+        services
     });
     app.use('/', setupRouterInstance);
 

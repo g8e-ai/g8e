@@ -24,7 +24,6 @@ describe('SetupRoutes Unit Tests', () => {
     let mockSettingsService;
     let mockSetupService;
     let mockPasskeyAuthService;
-    let mockRateLimiters;
 
     beforeEach(() => {
         mockSettingsService = {
@@ -49,18 +48,13 @@ describe('SetupRoutes Unit Tests', () => {
             generateRegistrationChallenge: vi.fn(),
             verifyRegistrationResponse: vi.fn()
         };
-        mockRateLimiters = {
-            passkeyRateLimiter: vi.fn((req, res, next) => next())
-        };
 
         const router = createSetupRouter({
             services: {
                 settingsService: mockSettingsService,
                 setupService: mockSetupService,
                 passkeyAuthService: mockPasskeyAuthService
-            },
-
-            rateLimiters: mockRateLimiters
+            }
         });
 
         app = express();
@@ -167,7 +161,7 @@ describe('SetupRoutes Unit Tests', () => {
     });
 
     describe('Route Structure and Dependencies', () => {
-        it('requires all dependencies', () => {
+        it('requires a services object', () => {
             expect(() => {
                 createSetupRouter({});
             }).toThrow();
@@ -176,30 +170,9 @@ describe('SetupRoutes Unit Tests', () => {
                 createSetupRouter({
                     services: {
                         settingsService: mockSettingsService,
-                        setupService: mockSetupService
-                    }
-                });
-            }).toThrow();
-
-            expect(() => {
-                createSetupRouter({
-                    services: {
-                        settingsService: mockSettingsService,
                         setupService: mockSetupService,
                         passkeyAuthService: mockPasskeyAuthService
                     }
-                });
-            }).toThrow();
-
-            expect(() => {
-                createSetupRouter({
-                    services: {
-                        settingsService: mockSettingsService,
-                        setupService: mockSetupService,
-                        passkeyAuthService: mockPasskeyAuthService
-                    },
-
-                    rateLimiters: mockRateLimiters
                 });
             }).not.toThrow();
         });
@@ -210,9 +183,7 @@ describe('SetupRoutes Unit Tests', () => {
                     settingsService: mockSettingsService,
                     setupService: mockSetupService,
                     passkeyAuthService: mockPasskeyAuthService
-                },
-
-                rateLimiters: mockRateLimiters
+                }
             });
 
             expect(router).toBeDefined();
@@ -227,9 +198,7 @@ describe('SetupRoutes Unit Tests', () => {
                     settingsService: mockSettingsService,
                     setupService: mockSetupService,
                     passkeyAuthService: mockPasskeyAuthService
-                },
-
-                rateLimiters: mockRateLimiters
+                }
             });
 
             const setupRoute = router.stack.find(
@@ -254,31 +223,11 @@ describe('SetupRoutes Unit Tests', () => {
                     settingsService: mockSettingsService,
                     setupService: mockSetupService,
                     passkeyAuthService: mockPasskeyAuthService
-                },
-
-                rateLimiters: mockRateLimiters
+                }
             });
             
             expect(() => {
                 middlewareApp.use('/test', router);
-            }).not.toThrow();
-        });
-
-        it('uses rate limiter middleware', () => {
-            const customRateLimiters = {
-                passkeyRateLimiter: vi.fn((req, res, next) => next())
-            };
-
-            expect(() => {
-                createSetupRouter({
-                    services: {
-                        settingsService: mockSettingsService,
-                        setupService: mockSetupService,
-                        passkeyAuthService: mockPasskeyAuthService
-                    },
-
-                    rateLimiters: customRateLimiters
-                });
             }).not.toThrow();
         });
     });

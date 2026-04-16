@@ -31,21 +31,27 @@ export class LlmModelManager {
 
         this.selectedPrimaryModel = '';
         this.selectedAssistantModel = '';
+        this.selectedLiteModel = '';
 
         this.providerModels = {};
 
         this.defaultPrimaryModel = '';
         this.defaultAssistantModel = '';
+        this.defaultLiteModel = '';
 
         this.primaryDropdown = null;
         this.assistantDropdown = null;
+        this.liteDropdown = null;
         this.primaryTextElement = null;
         this.assistantTextElement = null;
+        this.liteTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
+        this.liteMenuElement = null;
 
         this.primaryModelMap = new Map();
         this.assistantModelMap = new Map();
+        this.liteModelMap = new Map();
     }
 
     init() {
@@ -68,10 +74,13 @@ export class LlmModelManager {
     setupDOMElements() {
         this.primaryDropdown = document.getElementById('llm-primary-model-dropdown');
         this.assistantDropdown = document.getElementById('llm-assistant-model-dropdown');
+        this.liteDropdown = document.getElementById('llm-lite-model-dropdown');
         this.primaryTextElement = document.getElementById('llm-primary-model-text');
         this.assistantTextElement = document.getElementById('llm-assistant-model-text');
+        this.liteTextElement = document.getElementById('llm-lite-model-text');
         this.primaryMenuElement = document.getElementById('llm-primary-model-menu');
         this.assistantMenuElement = document.getElementById('llm-assistant-model-menu');
+        this.liteMenuElement = document.getElementById('llm-lite-model-menu');
     }
 
     setupEventListeners() {
@@ -113,6 +122,23 @@ export class LlmModelManager {
             });
         }
 
+        // Lite dropdown toggle
+        if (this.liteDropdown) {
+            this.liteDropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._toggleDropdown('lite');
+            });
+
+            this.liteDropdown.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this._toggleDropdown('lite');
+                } else if (e.key === 'Escape') {
+                    this._closeAllDropdowns();
+                }
+            });
+        }
+
         // Close dropdowns when clicking outside
         document.addEventListener('click', () => {
             this._closeAllDropdowns();
@@ -134,7 +160,7 @@ export class LlmModelManager {
     }
 
     _toggleDropdown(role) {
-        const dropdown = role === 'primary' ? this.primaryDropdown : this.assistantDropdown;
+        const dropdown = role === 'primary' ? this.primaryDropdown : role === 'assistant' ? this.assistantDropdown : this.liteDropdown;
         if (!dropdown) {
             return;
         }
@@ -154,6 +180,9 @@ export class LlmModelManager {
         if (this.assistantDropdown) {
             this.assistantDropdown.classList.remove('open');
         }
+        if (this.liteDropdown) {
+            this.liteDropdown.classList.remove('open');
+        }
     }
 
     handleConfigReceived(data) {
@@ -161,12 +190,16 @@ export class LlmModelManager {
 
         this.defaultPrimaryModel = data.default_primary_model || '';
         this.defaultAssistantModel = data.default_assistant_model || '';
+        this.defaultLiteModel = data.default_lite_model || '';
 
         if (!this.selectedPrimaryModel) {
             this.selectedPrimaryModel = this.defaultPrimaryModel;
         }
         if (!this.selectedAssistantModel) {
             this.selectedAssistantModel = this.defaultAssistantModel;
+        }
+        if (!this.selectedLiteModel) {
+            this.selectedLiteModel = this.defaultLiteModel;
         }
 
         this._populateDropdowns();
@@ -175,12 +208,13 @@ export class LlmModelManager {
     _populateDropdowns() {
         this._populateGrouped('primary', this.selectedPrimaryModel);
         this._populateGrouped('assistant', this.selectedAssistantModel);
+        this._populateGrouped('lite', this.selectedLiteModel);
     }
 
     _populateGrouped(role, selectedValue) {
-        const menuElement = role === 'primary' ? this.primaryMenuElement : this.assistantMenuElement;
-        const textElement = role === 'primary' ? this.primaryTextElement : this.assistantTextElement;
-        const modelMap = role === 'primary' ? this.primaryModelMap : this.assistantModelMap;
+        const menuElement = role === 'primary' ? this.primaryMenuElement : role === 'assistant' ? this.assistantMenuElement : this.liteMenuElement;
+        const textElement = role === 'primary' ? this.primaryTextElement : role === 'assistant' ? this.assistantTextElement : this.liteTextElement;
+        const modelMap = role === 'primary' ? this.primaryModelMap : role === 'assistant' ? this.assistantModelMap : this.liteModelMap;
 
         if (!menuElement) return;
         menuElement.innerHTML = '';
@@ -255,10 +289,15 @@ export class LlmModelManager {
             if (this.primaryTextElement) {
                 this.primaryTextElement.textContent = label;
             }
-        } else {
+        } else if (role === 'assistant') {
             this.selectedAssistantModel = modelId;
             if (this.assistantTextElement) {
                 this.assistantTextElement.textContent = label;
+            }
+        } else {
+            this.selectedLiteModel = modelId;
+            if (this.liteTextElement) {
+                this.liteTextElement.textContent = label;
             }
         }
 
@@ -270,7 +309,7 @@ export class LlmModelManager {
     }
 
     _updateSelectedState(role, selectedValue) {
-        const menuElement = role === 'primary' ? this.primaryMenuElement : this.assistantMenuElement;
+        const menuElement = role === 'primary' ? this.primaryMenuElement : role === 'assistant' ? this.assistantMenuElement : this.liteMenuElement;
         if (!menuElement) return;
 
         const options = menuElement.querySelectorAll('.llm-model-dropdown__option');
@@ -284,22 +323,25 @@ export class LlmModelManager {
     }
 
     _findProviderForModel(role, modelId) {
-        const modelMap = role === 'primary' ? this.primaryModelMap : this.assistantModelMap;
+        const modelMap = role === 'primary' ? this.primaryModelMap : role === 'assistant' ? this.assistantModelMap : this.liteModelMap;
         return modelMap.get(modelId) || '';
     }
 
     handleCaseSwitched(data) {
         const savedPrimary = data?.investigation?.llm_primary_model;
         const savedAssistant = data?.investigation?.llm_assistant_model;
+        const savedLite = data?.investigation?.llm_lite_model;
 
         this.selectedPrimaryModel = savedPrimary || this.defaultPrimaryModel;
         this.selectedAssistantModel = savedAssistant || this.defaultAssistantModel;
+        this.selectedLiteModel = savedLite || this.defaultLiteModel;
         this._syncDropdowns();
     }
 
     handleCaseCleared() {
         this.selectedPrimaryModel = this.defaultPrimaryModel;
         this.selectedAssistantModel = this.defaultAssistantModel;
+        this.selectedLiteModel = this.defaultLiteModel;
         this._syncDropdowns();
     }
 
@@ -324,15 +366,27 @@ export class LlmModelManager {
         return this._findProviderForModel('assistant', this.selectedAssistantModel);
     }
 
+    getLiteModel() {
+        return this.selectedLiteModel || '';
+    }
+
+    getLiteProvider() {
+        return this._findProviderForModel('lite', this.selectedLiteModel);
+    }
+
     destroy() {
         this.primaryDropdown = null;
         this.assistantDropdown = null;
+        this.liteDropdown = null;
         this.primaryTextElement = null;
         this.assistantTextElement = null;
+        this.liteTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
+        this.liteMenuElement = null;
         this.primaryModelMap.clear();
         this.assistantModelMap.clear();
+        this.liteModelMap.clear();
         this._eventListenersRegistered = false;
     }
 }

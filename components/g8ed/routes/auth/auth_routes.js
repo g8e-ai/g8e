@@ -25,17 +25,16 @@ import { ApiKeyError } from '../../constants/auth.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { SESSION_COOKIE_NAME, COOKIE_SAME_SITE } from '../../constants/session.js';
 import { AuthPaths } from '../../constants/api_paths.js';
+import { authRateLimiter } from '../../middleware/rate-limit.js';
 
 /**
  * @param {Object} options
  * @param {Object} options.services - Services object containing all platform services
  * @param {Object} options.authMiddleware - Auth middleware object
- * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createAuthRouter({ services, authMiddleware, rateLimiters }) {
+export function createAuthRouter({ services, authMiddleware }) {
     const { webSessionService, userService, loginSecurityService, setupService, passkeyAuthService } = services;
     const { requireAuth, requireAdmin } = authMiddleware;
-    const { authRateLimiter } = rateLimiters;
     const router = express.Router();
 
     router.get(AuthPaths.WEB_SESSION, requireAuth, (req, res) => {

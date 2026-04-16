@@ -6,7 +6,7 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — All tests run inside the **g8ep** container (a hermetic sidecar bundling Python, Node.js, and Go). The source code is volume-mounted, meaning local development and CI execution are perfectly identical. No "it works on my machine" excuses.
+- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical.
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. If a scenario is extremely difficult to test without a mock, you must define a shared test fixture in `shared/test-fixtures` and justify its necessity. Integration tests must use real services.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients under any circumstances.
@@ -27,7 +27,7 @@ We grade the AI's **tool call payloads** against strict boolean criteria. No LLM
 
 ```bash
 # Run all AI benchmarks
-./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m ai_benchmark
+./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_benchmark
 ```
 
 ### Subjective Evaluations (LLM-as-a-Judge)
@@ -38,21 +38,27 @@ For reasoning and concept application, we use an "LLM-as-a-Judge" pattern. The `
 - **Error separation**: System failures (invalid JSON, missing fields) raise an `EvalJudgeError`. A low score is a valid evaluation; a system error is a test failure.
 
 ```bash
-./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m ai_eval
+./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_eval
 ```
 
 ## Running Tests
 
-All tests are orchestrated via the `./g8e` CLI, which executes the test suite inside the `g8ep` container. **Never call `go test`, `pytest`, or `vitest` directly on your host machine.**
+All tests are orchestrated via the `./g8e` CLI, which routes each component to its dedicated test-runner container. **Never call `go test`, `pytest`, or `vitest` directly on your host machine.**
+
+| Command | Container | Framework |
+|---------|-----------|-----------|
+| `./g8e test g8ee` | `g8ee-test-runner` | pytest + pyright |
+| `./g8e test g8ed` | `g8ed-test-runner` | vitest |
+| `./g8e test g8eo` | `g8eo-test-runner` | go test |
 
 ```bash
 # Start the platform infrastructure first
 ./g8e platform start
 
-# Run all tests across all components
-./g8e test
+# Run a specific component
+./g8e test g8ee
 
-# Run a specific component with coverage
+# Run with coverage
 ./g8e test g8eo --coverage
 
 # Run g8ee with strict pyright type checking
@@ -87,7 +93,7 @@ The Node.js orchestration layer uses `vitest` for backend execution and `jsdom` 
 
 ### Python (g8ee)
 
-The Python execution engine runs `pytest` inside the `g8ep` container.
+The Python execution engine runs `pytest` inside the `g8ee-test-runner` container.
 
 - **Pyright Integration**: Type checking is enforced at test time. Running `./g8e test g8ee --pyright` runs strict pyright checks before `pytest`, failing immediately on type errors.
 - **Real APIs Only**: No patches or mocks on LLM clients. All tests use real provider API calls.
@@ -95,7 +101,7 @@ The Python execution engine runs `pytest` inside the `g8ep` container.
 
 ### Security Audits
 
-The `g8ep` container includes a comprehensive suite of security tools volume-mounted into `scripts/security/`. Tools are lazy-installed and execute against the running platform.
+The `g8ep` container includes a comprehensive suite of security scan scripts volume-mounted into `scripts/security/`. Tools are lazy-installed and execute against the running platform.
 
 ```bash
 # Run full mTLS and configuration audit (testssl.sh, Nuclei, Trivy, nmap)

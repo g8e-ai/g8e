@@ -511,6 +511,7 @@ def _extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
         kernel=os_details.kernel if os_details else None,
         os_version=os_details.version if os_details else None,
         username=user_details.username if user_details else None,
+        uid=user_details.uid if user_details else None,
         home_directory=user_details.home if user_details else None,
         shell=user_details.shell if user_details else None,
         working_directory=environment.pwd if environment else None,

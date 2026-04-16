@@ -25,7 +25,7 @@ import { mockUsers } from '@test/fixtures/users.fixture.js';
 
 export function createOperatorServiceMock() {
     return {
-        collectionName: 'operators',
+        collectionName: 'operators_test',
         getOperator: vi.fn().mockResolvedValue(mockOperators.unclaimed.forDB()),
         claimOperatorSlot: vi.fn().mockResolvedValue(true),
         createOperatorSlot: vi.fn().mockResolvedValue('new_operator_slot_id'),

@@ -16,8 +16,10 @@
 import logging
 
 from ..constants import CloudSubtype, EventType, ExecutionStatus, OperatorType, PromptFile, PromptSection
+from ..constants.prompts import InvestigationContextLabel
 from ..constants.message_sender import MessageSender
 from ..models.agent import OperatorContext
+from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
 from ..models.memory import InvestigationMemory
 from ..prompts_data.loader import load_mode_prompts, load_prompt
@@ -25,76 +27,51 @@ from ..prompts_data.loader import load_mode_prompts, load_prompt
 logger = logging.getLogger(__name__)
 
 
-def build_memory_analysis_system_instruction(case_title: str) -> str:
-    """Build the system instruction for AI memory analysis calls."""
-    return (
-        f"You are analyzing a technical support conversation for case: {case_title}. "
-        "Infer the user's preferences and technical background from the conversation turns. "
-        "Populate every output field — infer from available signal even if limited. "
-        "Do not include hostnames, IPs, or system-specific identifiers in investigation_summary."
-    )
-
-
-def build_memory_analysis_request() -> str:
-    """Build the closing user-role turn that triggers memory field population."""
-    return (
-        "Analyze the conversation above and populate the memory fields. "
-        "Return a JSON object with these fields:\n"
-        '- "investigation_summary": high-level summary (no hostnames/IPs)\n'
-        '- "communication_preferences": how the user prefers to communicate\n'
-        '- "technical_background": user\'s technical experience and skills\n'
-        '- "response_style": how they want information presented\n'
-        '- "problem_solving_approach": how they debug and investigate\n'
-        '- "interaction_style": meta-preferences about questions and context\n'
-        "All fields are optional but try to populate each one."
-    )
+def _format_operator_doc(op_doc, index: int) -> str:
+    """Format a single operator document for investigation context."""
+    sys_info = op_doc.system_info
+    op_id = op_doc.operator_id or f"operator_{index + 1}"
+    hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
+    
+    details = [
+        f"hostname={hostname}" if hostname else None,
+        f"os={sys_info.os}" if sys_info and sys_info.os else None,
+        f"arch={sys_info.architecture}" if sys_info and sys_info.architecture else None,
+        f"type={op_doc.operator_type}",
+        f"session={op_doc.operator_session_id[:12]}..." if op_doc.operator_session_id else None,
+    ]
+    
+    return f"  [{index + 1}] {op_id}: {', '.join(filter(None, details))}"
 
 
 def build_investigation_context_section(
-    investigation: EnrichedInvestigationContext
+    investigation: EnrichedInvestigationContext | None
 ) -> str:
     """Build investigation context with case details and conversation summary."""
     if not investigation:
         return ""
 
-    context_parts = []
+    fields = [
+        ("case_title", InvestigationContextLabel.CASE),
+        ("case_description", InvestigationContextLabel.DESCRIPTION),
+        ("status", InvestigationContextLabel.STATUS),
+        ("priority", InvestigationContextLabel.PRIORITY),
+        ("severity", InvestigationContextLabel.SEVERITY),
+    ]
 
-    if investigation.case_title:
-        context_parts.append(f"Case: {investigation.case_title}")
-
-    if investigation.case_description:
-        context_parts.append(f"Description: {investigation.case_description}")
-
-    if investigation.status:
-        context_parts.append(f"Status: {investigation.status}")
-
-    if investigation.priority:
-        context_parts.append(f"Priority: {investigation.priority}")
-
-    if investigation.severity:
-        context_parts.append(f"Severity: {investigation.severity}")
+    context_parts = [f"{label.value}: {getattr(investigation, field)}" 
+                     for field, label in fields 
+                     if getattr(investigation, field)]
 
     if investigation.conversation_history:
         context_parts.append("Conversation history is available via query_investigation_context.")
 
-    operator_docs = investigation.operator_documents
-    if operator_docs:
-        context_parts.append(f"Operators: {len(operator_docs)} bound")
-        for i, op_doc in enumerate(operator_docs):
-            sys_info = op_doc.system_info
-            op_details = []
-            op_id = op_doc.operator_id or f"operator_{i+1}"
-            hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
-            if hostname:
-                op_details.append(f"hostname={hostname}")
-            if sys_info and sys_info.os:
-                op_details.append(f"os={sys_info.os}")
-            if sys_info and sys_info.architecture:
-                op_details.append(f"arch={sys_info.architecture}")
-            op_details.append(f"type={op_doc.operator_type}")
-            if op_doc.operator_session_id:
-                op_details.append(f"session={op_doc.operator_session_id[:12]}...")
-            context_parts.append(f"  [{i+1}] {op_id}: {', '.join(op_details)}")
+    if investigation.operator_documents:
+        context_parts.append(f"Operators: {len(investigation.operator_documents)} bound")
+        context_parts.extend(
+            _format_operator_doc(op_doc, i) 
+            for i, op_doc in enumerate(investigation.operator_documents)
+        )
 
     if not context_parts:
         return ""
@@ -105,6 +82,29 @@ def build_investigation_context_section(
 def build_response_constraints_section() -> str:
     """Load response length constraints that guide AI to self-limit before SDK hard cutoff."""
     return load_prompt(PromptFile.SYSTEM_RESPONSE_CONSTRAINTS)
+
+
+def build_triage_context_section(triage_result: TriageResult | None) -> str:
+    """Build the triage_context block so downstream agents can read user posture.
+
+    Carries the Triage agent's `request_posture` read (normal / escalated /
+    adversarial / confused) into the system prompt. The dissent protocol in
+    core/dissent.txt consumes this tag to calibrate warnings and denial-memory.
+    """
+    if not triage_result or not triage_result.request_posture:
+        return ""
+
+    posture = triage_result.request_posture.value if hasattr(triage_result.request_posture, "value") else str(triage_result.request_posture)
+    intent_summary = (triage_result.intent_summary or "").strip()
+
+    lines = [
+        "<triage_context>",
+        f"request_posture: {posture}",
+    ]
+    if intent_summary:
+        lines.append(f"intent_summary: {intent_summary}")
+    lines.append("</triage_context>")
+    return "\n".join(lines) + "\n"
 
 
 def build_learned_context_section(
@@ -146,17 +146,26 @@ def build_modular_system_prompt(
     system_context: OperatorContext | list[OperatorContext] | None,
     user_memories: list[InvestigationMemory],
     case_memories: list[InvestigationMemory],
-    investigation: EnrichedInvestigationContext,
+    investigation: EnrichedInvestigationContext | None,
     g8e_web_search_available: bool = True,
+    triage_result: TriageResult | None = None,
 ) -> str:
     """
     Build system prompt using modular architecture.
-    
-    Structure:
-    1-4: Core (always loaded) - identity, safety, execution, tools
-    5: System context (injected from operator(s))
-    6: Organization context (injected from customer)
-      
+
+    Section order (loyal-friction doctrine):
+      1. identity   — who the agent is
+      2. safety     — absolute forbidden operations
+      3. loyalty    — kingdom-over-king doctrine
+      4. dissent    — warning protocol, denial memory, escalation response
+      5. capabilities / execution / tools (mode-dependent)
+      6. system_context (injected from operator(s))
+      7. sentinel_mode (if active)
+      8. triage_context (request_posture from Triage, if available)
+      9. investigation_context
+      10. response_constraints
+      11. learned_context (user + case memories)
+
     Args:
         operator_bound: Whether Operator is connected for command execution
         system_context: System-level context from Operator(s). Can be a single OperatorContext
@@ -164,7 +173,10 @@ def build_modular_system_prompt(
         user_memories: User preference memories
         case_memories: Case-specific memories
         investigation: Enriched investigation context model
-        
+        triage_result: Triage classification for this turn. When provided, its
+                       request_posture is injected as a triage_context tag that
+                       the dissent protocol reads at inference time.
+
     Returns:
         Complete system prompt string
     """
@@ -172,6 +184,8 @@ def build_modular_system_prompt(
 
     sections.append(load_prompt(PromptFile.CORE_IDENTITY))
     sections.append(load_prompt(PromptFile.CORE_SAFETY))
+    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
+    sections.append(load_prompt(PromptFile.CORE_DISSENT))
 
     # Determine if any operator is a cloud operator for mode selection
     is_cloud_operator = False
@@ -241,7 +255,8 @@ def build_modular_system_prompt(
             if ctx.hostname:
                 system_parts.append(f"Hostname: {ctx.hostname}")
             if ctx.username:
-                system_parts.append(f"User: {ctx.username}")
+                uid_suffix = f" (uid={ctx.uid})" if ctx.uid else ""
+                system_parts.append(f"User: {ctx.username}{uid_suffix}")
             if ctx.working_directory:
                 system_parts.append(f"Working Directory: {ctx.working_directory}")
 
@@ -257,7 +272,7 @@ def build_modular_system_prompt(
 
             excluded_keys = {
                 "operator_id", "operator_session_id",
-                "os", "hostname", "username", "working_directory",
+                "os", "hostname", "username", "uid", "working_directory",
                 "operator_type", "cloud_subtype",
                 "is_cloud_operator", "granted_intents",
                 "is_container", "container_runtime", "init_system",
@@ -278,6 +293,10 @@ def build_modular_system_prompt(
     if investigation and investigation.sentinel_mode is True:
         sections.append(load_prompt(PromptFile.SYSTEM_SENTINEL_MODE))
 
+    triage_section = build_triage_context_section(triage_result)
+    if triage_section:
+        sections.append(triage_section)
+
     if investigation:
         investigation_section = build_investigation_context_section(investigation)
         if investigation_section:
@@ -297,6 +316,8 @@ def build_modular_system_prompt(
     section_labels = [
         PromptSection.IDENTITY,
         PromptSection.SAFETY,
+        PromptSection.LOYALTY,
+        PromptSection.DISSENT,
     ]
     if mode_prompts.get(PromptSection.CAPABILITIES):
         section_labels.append(PromptSection.CAPABILITIES)
@@ -304,18 +325,19 @@ def build_modular_system_prompt(
         section_labels.append(PromptSection.EXECUTION)
     if include_tools_section:
         section_labels.append(PromptSection.TOOLS)
-    section_labels.append(PromptSection.DOCS)
     if system_context:
         section_labels.append(PromptSection.SYSTEM_CONTEXT)
     if investigation and investigation.sentinel_mode is True:
         section_labels.append(PromptSection.SENTINEL_MODE)
+    if triage_section:
+        section_labels.append(PromptSection.TRIAGE_CONTEXT)
     if investigation:
         section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
     section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)
     if user_memories or case_memories:
         section_labels.append(PromptSection.LEARNED_CONTEXT)
 
-    logger.info(
+    logger.debug(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections), len(full_prompt), operator_bound, ", ".join(section_labels)
     )

@@ -66,9 +66,10 @@ export class WebSessionService extends BaseSessionService {
                 : await this._cache_aside.kvZrange(userSessionsKey, 0, -1);
         } catch (error) {
             if (error.message?.includes('WRONGTYPE')) {
-                logger.warn('[WEB-SESSION-SERVICE] Corrupt web_sessions key (wrong type), deleting', {
+                logger.error('[WEB-SESSION-SERVICE] CRITICAL: Corrupt web_sessions key (wrong type), deleting', {
                     userId,
-                    error: error.message
+                    error: error.message,
+                    action: 'deleting_corrupt_key'
                 });
                 await this._cache_aside.kvDel(userSessionsKey);
                 return [];
@@ -87,9 +88,10 @@ export class WebSessionService extends BaseSessionService {
             await this._cache_aside.kvZadd(userSessionsKey, score, sessionId);
         } catch (error) {
             if (error.message?.includes('WRONGTYPE')) {
-                logger.warn('[WEB-SESSION-SERVICE] Corrupt web_sessions key during write, resetting', {
+                logger.error('[WEB-SESSION-SERVICE] CRITICAL: Corrupt web_sessions key during write, resetting', {
                     userId,
-                    error: error.message
+                    error: error.message,
+                    action: 'resetting_corrupt_key'
                 });
                 await this._cache_aside.kvDel(userSessionsKey);
                 await this._cache_aside.kvZadd(userSessionsKey, score, sessionId);

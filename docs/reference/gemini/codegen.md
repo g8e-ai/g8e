@@ -270,7 +270,7 @@ response = client.models.generate_content(
     model='gemini-3-flash-preview',
     contents='Explain quantum physics.',
     config=types.GenerateContentConfig(
-        system_instruction='You are a pirate',
+        system_instructions='You are a pirate',
     )
 )
 print(response.text)

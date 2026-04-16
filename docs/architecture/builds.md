@@ -30,7 +30,7 @@ Operator binaries for remote deployment (linux/amd64, linux/arm64, linux/386) ar
 | `g8es` | g8es | `components/g8es/Dockerfile` | Operator binary in `--listen` mode; platform DB + pub/sub + blob store (including operator binaries) |
 | `g8ee` | g8ee | `components/g8ee/Dockerfile` | Python/FastAPI AI backend |
 | `g8ed` | g8ed | `components/g8ed/Dockerfile` | Node.js web frontend; single external HTTPS entry point |
-| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Ubuntu sidecar; builds operator binary from source, runs tests, streams operators to remote hosts |
+| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Alpine sidecar; manages operator processes and streams operators to remote hosts. Does not contain a Go toolchain — the operator binary is built in `g8eo-test-runner` when `./g8e operator build` is invoked. |
 
 ---
 
@@ -57,8 +57,8 @@ All images build in parallel — no component has a build-time dependency on any
         g8ed      — reads TLS certs from g8es-data volume
 
 [3] g8ep starts independently (no depends_on):
-        → go build ./components/g8eo → /home/g8e/g8e.operator
-        → starts supervisord
+        → starts supervisord (no Go toolchain in image)
+        → operator binary is built on demand in g8eo-test-runner via ./g8e operator build
 ```
 
 ---
@@ -75,9 +75,9 @@ All component images have no build-time dependencies on each other and build in 
 
 **g8ee image build:** Uses a multi-stage Dockerfile based on Python 3.13-slim. It installs dependencies into a prefix in the builder stage to keep the final runtime image minimal.
 
-**g8ed image build:** Uses a multi-stage Dockerfile based on Node.js 22-alpine. It installs curl and npm in the final stage.
+**g8ed image build:** Uses a multi-stage Dockerfile based on Node.js 22-alpine. The builder stage runs `npm ci` and prunes dev dependencies. The final stage installs only curl (for healthchecks) — npm is not present in the runtime image.
 
-**g8ep image build:** Installs Go 1.24.1, Node.js 22, Python 3.12, and all test tooling. The operator binary is **not** built at image build time — it is compiled from the vendored source in `/app/components/g8eo` at container startup (or on demand via `./g8e operator build`) using the g8eo Makefile, so it always reflects the current source tree.
+**g8ep image build:** Based on `python:3.13-alpine`. Installs Python and network/security tooling (Docker CLI, supervisor, etc.). Go is **not** installed in g8ep. The operator binary is compiled on demand in the `g8eo-test-runner` container (Go 1.26-alpine3.23) via `./g8e operator build`, which uploads the fresh build to the g8es blob store.
 
 **Trigger:**
 ```bash
@@ -154,7 +154,7 @@ CMD ["node", "server.js"]
 
 g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser dashboard. It runs as non-root user `g8e` (UID 1001).
 
-g8ep mounts `/var/run/docker.sock` for test workflows and operator builds. g8ed manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via docker exec.
+g8ep mounts `/var/run/docker.sock` for operator builds and streaming. g8ed manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via docker exec.
 
 **Health check:** `curl -f -k https://localhost/health` — passes when connectivity to g8es is confirmed. External TLS health is checked via the same endpoint.
 
@@ -168,7 +168,7 @@ g8ep mounts `/var/run/docker.sock` for test workflows and operator builds. g8ed 
 1. Compiles the `g8e.operator` binary from source (`/app/components/g8eo`) using the g8eo Makefile, outputting to `/home/g8e/g8e.operator`. If `/g8es/ssl/ca.crt` is already present (g8es initialized), it is used to configure the operator's trust anchor.
 2. Starts `supervisord` as PID 1. The `[program:operator]` entry is registered with `autostart=true` — the operator process starts automatically when supervisord launches. g8ed controls it via Supervisor XML-RPC over the internal network (port 443) when a user launches a local operator session.
 
-**Why g8ep builds its own binary:** g8ep is the test runner for g8eo (`./g8e test g8eo`). Having Go installed and building from source using the g8eo Makefile ensures the binary used for local operator sessions always matches the current source, and that `go build` is verified as part of the development workflow. The `./g8e operator build` command can force a rebuild at any time. It runs as non-root user `g8e` (UID 1001) with `cap_drop: ALL` and `no-new-privileges: true`.
+**Why g8ep builds its own binary:** Having Go installed and building from source using the g8eo Makefile ensures the binary used for local operator sessions always matches the current source. The `./g8e operator build` command can force a rebuild at any time. It runs as non-root user `g8e` (UID 1001) with `cap_drop: ALL` and `no-new-privileges: true`.
 
 **Health check:** `pgrep -x supervisord`
 
@@ -190,11 +190,11 @@ The `build.sh` script (`scripts/core/build.sh`) manages the full lifecycle. It e
 
 ---
 
-### CI Workflow (`ci.yml`)
-Triggered on every push to `main` and pull requests to `main` or `dev`.
-1. **Platform Build:** Executes `./g8e platform build` to verify all components compile and start correctly.
-2. **Component Tests:** Runs `g8ee`, `g8ed`, and 'g8eo' test suites inside `g8ep`.
-3. **Multi-Arch Verification:** Explicitly builds the `g8e.operator` for `amd64`, `arm64`, and `386` architectures.
+### CI Workflow (`build-and-test.yml`)
+Triggered on every push to `main` and on pull requests to `main`.
+1. **Platform Setup:** Executes `./g8e platform setup` to build all images and start the full platform (g8es, g8ee, g8ed, g8ep) with health checks.
+2. **Test Runner Build:** Executes `./g8e platform rebuild test-runners` to build dedicated per-component test-runner containers.
+3. **Component Tests:** Runs `g8ee`, `g8ed`, and `g8eo` test suites via `./g8e test <component>` inside their respective test-runner containers.
 
 ---
 
@@ -249,7 +249,7 @@ When a user launches a local operator session from the dashboard, g8ed:
 
 The Operator process then starts inside g8ep with `--endpoint g8e.local`. It reads the API key from the `G8E_OPERATOR_API_KEY` environment variable (fetched from g8es platform_settings by `fetch-key-and-run.sh`). The CA certificate is loaded from the local SSL volume at `/g8es/ca.crt` — the operator discovers it automatically without a network fetch. From this point it is indistinguishable from any other operator — heartbeats flow through g8es pub/sub, commands are dispatched via the same channels.
 
-This is why g8ep mounts `/var/run/docker.sock` — for test workflows and operator builds. g8ed's `G8ENodeOperatorService` manages the g8ep operator via Supervisor XML-RPC over the internal network, which does not require Docker socket access.
+This is why g8ep mounts `/var/run/docker.sock` — for operator builds and streaming. g8ed's `G8ENodeOperatorService` manages the g8ep operator via Supervisor XML-RPC over the internal network, which does not require Docker socket access.
 
 ---
 

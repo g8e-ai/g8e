@@ -9,14 +9,14 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 **Core responsibilities:**
 - Single external entry point — all inbound traffic (browser HTTPS, Operator auth, Operator pub/sub) enters through g8ed
 - User authentication (passkey/FIDO2/WebAuthn) and session lifecycle
-- WebSession persistence and encryption via g8es KV
-- Operator binding, status tracking, and heartbeat relay
+- WebSession persistence and encryption via g8es KV (with durability in g8es document store)
+- Operator binding, status tracking, and heartbeat registration relay
 - Chat/AI streaming proxy to g8ee
 - WebSocket proxy — `/ws/pubsub` upgrade requests forwarded to g8es internally
 - Binary distribution of the g8e Operator (`g8e.operator`)
-- Device Link — secure pre-authorized Operator deployment
+- Device Link — secure multi-use Operator deployment and single-use claiming
 - Audit log, admin console, and platform settings
-- SSE fan-out to connected browser clients
+- SSE delivery of real-time events to browser clients (AI, Operator status, investigations)
 - MCP Gateway (Model Context Protocol) — bridging external AI tools to internal platform capabilities
 
 ---
@@ -63,7 +63,7 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 - g8ed is the single external entry point — browsers, Operators, and MCP clients all connect to g8ed on port 443
 - g8ed also owns the HTTP trust bootstrap on port 80 — plain HTTP delivers the workstation CA trust portal, the operator deployment script (`/g8e`), and then hands users off to HTTPS
 - g8ed is stateless between requests — all state lives in g8es
-- g8ee is the source of truth for heartbeat data; g8ed only relays SSE
+- g8ee is the source of truth for heartbeat data; g8ed relays events via SSE
 - Frontend never computes operator status — it consumes backend-provided values
 - Runtime configuration flows from g8es via `SettingsService.initialize()` after Phase 2 of `initialization.js` — zero `process.env` reads in g8ed production code
 - WebSocket pub/sub (`/ws/pubsub`) is proxied by g8ed to g8es on port 9001 — g8es has no external port bindings
@@ -75,20 +75,14 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 
 g8ed reads **zero** environment variables via `process.env` at runtime. Bootstrap transport URLs are defined as constants in `constants/http_client.js`. Bootstrap secrets (auth token, CA cert, session encryption key) are read from the **Shared SSL Volume** by `BootstrapService`. All other configuration flows through `SettingsService` from the g8es `settings` collection.
 
-The following `G8E_*` variables are consumed by `docker-compose.yml` to configure the container environment. They are **not** read by g8ed application code:
+The following variables are consumed by `docker-compose.yml` or standard container practices. They are **not** read by g8ed application code at runtime (except `NODE_ENV` for non-production logic):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `G8E_INTERNAL_HTTP_URL` | `https://g8es:9000` | g8es internal HTTP URL |
-| `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es:9001` | g8es internal pub/sub WebSocket URL |
-| `G8E_INTERNAL_AUTH_TOKEN` | - | Shared secret for g8es authentication (bootstrap secret) |
-| `G8E_SESSION_ENCRYPTION_KEY` | - | Key for encrypting session fields (bootstrap secret) |
+| `G8E_INTERNAL_HTTP_URL` | `https://g8es:9000` | g8es internal HTTP URL (mapped to constant) |
+| `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es:9001` | g8es internal pub/sub WebSocket URL (mapped to constant) |
+| `G8EE_URL` | `https://g8ee` | g8ee internal URL (mapped to constant/setting) |
 | `G8E_SSL_DIR` | `/g8es` | Directory containing platform certificates and secrets |
-| `G8EE_URL` | `https://g8ee` | g8ee internal URL |
-| `G8E_PORT` | `443` | Local port for the Express server |
-| `G8E_HTTPS_PORT` | `443` | Public HTTPS port |
-| `G8E_HTTP_PORT` | `80` | Public HTTP port (bootstrap) |
-| `G8E_INTERNAL_ORIGINS` | - | Comma-separated list of additional internal CORS origins |
 
 ### Settings Pipeline
 
@@ -188,7 +182,7 @@ The internal HTTP layer enforces:
 - `web_session_id` is **required** for all g8ee calls (via `X-G8E-WebSession-ID`)
 - `user_id` is **required** for all g8ee calls (via `X-G8E-User-ID`)
 - Bound operators are resolved via `requireOperatorBinding` middleware and carried in `req.boundOperators` for internal relay orchestration
-- `X-G8E-Case-ID` and `X-G8E-Investigation-ID` are always present — real IDs for existing cases, `__NEW_CASE__` sentinels for new cases
+- `X-G8E-Case-ID` and `X-G8E-Investigation-ID` are always present — real IDs for existing cases, `new-case-via-g8ed` sentinels for new cases
 - Bound operators are sent as a JSON array via `X-G8E-Bound-Operators` (operator_id, operator_session_id, status)
 
 #### New Case Protocol (`X-G8E-New-Case`)
@@ -200,8 +194,8 @@ request body has no case_id
     → g8eContext.case_id = null
     → buildG8eContextHeaders detects !context.case_id
     → sets X-G8E-New-Case: true
-    → sets X-G8E-Case-ID: __NEW_CASE__
-    → sets X-G8E-Investigation-ID: __NEW_CASE__
+    → sets X-G8E-Case-ID: new-case-via-g8ed
+    → sets X-G8E-Investigation-ID: new-case-via-g8ed
     → g8ee creates case + investigation inline
     → returns ChatStartedResponse with new case_id + investigation_id
 ```
@@ -352,10 +346,33 @@ Route handlers behind `requireAuth` must use these properties exclusively — ne
 | Scope | Limit |
 |-------|-------|
 | Auth endpoints | 20 requests / 5 min |
+| Passkey endpoints | 20 requests / 5 min |
 | Chat endpoints | 30 messages / min |
 | SSE connections | 30 attempts / 5 min (failed only) |
 | General API | 60 requests / min |
 | Global public API | 100 requests / min |
+
+#### Rate Limiter Wiring Pattern
+
+Most limiters are built inside `createRateLimiters()` in `middleware/rate-limit.js` and plumbed through `server.js` → `app_factory.js` into each route factory via the `rateLimiters` argument.
+
+**Exception — auth-sensitive limiters must be module-level exports.** Static-analysis tools (notably CodeQL's `js/missing-rate-limiting` query) cannot trace middleware through a factory → returned-object → destructured-param chain. Any limiter that protects a brute-forceable authentication surface must therefore be:
+
+1. Declared at module scope in `middleware/rate-limit.js` and exported directly (e.g. `export const passkeyRateLimiter = rateLimit({ ... })`).
+2. Imported directly by the route file (e.g. `import { passkeyRateLimiter } from '../../middleware/rate-limit.js'`) and applied to the relevant route(s) as middleware.
+
+Currently the following limiters follow this pattern and **must not** be re-introduced into the factory's declaration body:
+
+| Limiter | Protected surface |
+|---------|-------------------|
+| `passkeyRateLimiter` | `POST /api/auth/passkey/*` |
+| `authRateLimiter` | `POST /api/auth/register` |
+| `operatorAuthRateLimiter` + `operatorAuthIpBackstopLimiter` | `POST /api/auth/operator` |
+| `deviceLinkRateLimiter` | `POST /auth/link/:token/register` (public device register) |
+
+The `createRateLimiters()` factory still re-exports the same bindings in its returned object (via module closure) for back-compat with the middleware unit test suite; routes that rely on the limiter for security must not depend on that indirection. When adding a new auth-sensitive limiter, follow the same pattern.
+
+Tests that would otherwise exhaust the real limiter's window should use `vi.mock('@g8ed/middleware/rate-limit.js', ...)` with `vi.importActual` to pass-through the specific limiter(s) under test — see `test/unit/routes/auth/passkey_routes.unit.test.js` for the canonical example.
 
 ---
 
@@ -560,8 +577,8 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 | `terminated` | Yes | — | — | — | — |
 
 **Key rules:**
-- `available` is the default state — operator has never authenticated
-- `stale` is set by g8ee when a heartbeat has not been received within the stale threshold (60s); `offline` is a fully offline state
+- `available` is the default state — operator has been provisioned but never authenticated
+- `stale` is set by g8ee when a heartbeat has not been received within the stale threshold (60s)
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -575,10 +592,9 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 | Subservice | Responsibility |
 |------------|----------------|
-| `lifecycle` | Coordinator for operator operations. |
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login. |
-| `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration). |
-| `notifications` | SSE event broadcasting and user-level operator list updates. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login or on-demand via Device Link. |
+| `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration, Approvals). |
+| `notifications` | SSE event broadcasting to browser sessions (Operator list updates). |
 
 Route handlers and other services interact with these via the main `OperatorService` coordinator.
 

@@ -24,6 +24,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from app.constants import ThinkingLevel
+from app.models.base import G8eBaseModel
 
 
 @dataclass(frozen=True)
@@ -237,17 +238,35 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
     )
 
 
-@dataclass
-class ToolDeclaration:
+class ToolDeclaration(G8eBaseModel):
     name: str
     description: str
     parameters: Any
 
 
-@dataclass
-class ToolGroup:
-    tools: list[ToolDeclaration] = field(default_factory=list)
+class ToolGroup(G8eBaseModel):
+    tools: list[ToolDeclaration] = []
     google_search: bool = False
+
+    def flatten_for_llm(self) -> list:
+        """Convert ToolGroup to google.genai Tool format for LLM boundary."""
+        from app.llm.providers.gemini import genai_types
+
+        genai_tools = []
+        funcs = []
+        for tool in self.tools:
+            funcs.append({
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            })
+        if funcs:
+            genai_tools.append(genai_types.Tool(function_declarations=funcs))
+
+        if self.google_search:
+            genai_tools.append(genai_types.Tool(google_search=genai_types.GoogleSearch()))
+
+        return genai_tools
 
 
 @dataclass
@@ -342,20 +361,36 @@ class StreamChunkFromModel:
     thought_signature: ThoughtSignature | None = None
 
 
-@dataclass
-class ResponseJsonSchema:
-    schema: dict
+class ResponseJsonSchema(G8eBaseModel):
+    json_schema_dict: dict
     name: str = "response"
     strict: bool = False
 
+    def flatten_for_ollama(self) -> dict:
+        return self.json_schema_dict
 
-@dataclass
-class ResponseFormat:
+    def flatten_for_gemini(self) -> dict:
+        return self.json_schema_dict
+
+    def flatten_for_openai(self) -> dict:
+        return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
+
+
+class ResponseFormat(G8eBaseModel):
     json_schema: ResponseJsonSchema
 
     @classmethod
     def from_pydantic_schema(cls, json_schema: dict, name: str = "response") -> "ResponseFormat":
-        return cls(json_schema=ResponseJsonSchema(schema=json_schema, name=name))
+        return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
+
+    def flatten_for_ollama(self) -> dict:
+        return self.json_schema.flatten_for_ollama()
+
+    def flatten_for_gemini(self) -> dict:
+        return self.json_schema.flatten_for_gemini()
+
+    def flatten_for_openai(self) -> dict:
+        return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}
 
 
 @dataclass
@@ -371,7 +406,7 @@ class ToolConfig:
 
 @dataclass
 class ThinkingConfig:
-    thinking_level: ThinkingLevel | None = None
+    thinking_level: ThinkingLevel
     include_thoughts: bool = False
 
 
@@ -379,49 +414,49 @@ class ThinkingConfig:
 class PrimaryLLMSettings:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    response_modalities: list[str] = field(default_factory=list)
-    tools: list[ToolGroup] = field(default_factory=list)
-    system_instruction: str = ""
-    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
-    tool_config: ToolConfig = None
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
+    response_modalities: list[str]
+    tools: list[ToolGroup]
+    system_instructions: str
+    thinking_config: ThinkingConfig
+    tool_config: ToolConfig
 
 
 @dataclass
 class AssistantLLMSettings:
-    temperature: float | None = None
-    max_output_tokens: int | None = None
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    system_instruction: str = ""
-    response_format: ResponseFormat | None = None
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
+    system_instructions: str
+    response_format: ResponseFormat | None
 
 
 @dataclass
 class LiteLLMSettings:
-    temperature: float | None = None
-    max_output_tokens: int | None = None
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    system_instruction: str = ""
-    response_format: ResponseFormat | None = None
+    temperature: float
+    max_output_tokens: int
+    top_p_nucleus_sampling: float | None
+    top_k_filtering: int | None
+    stop_sequences: list[str] | None
+    system_instructions: str
+    response_format: ResponseFormat | None
 
 
 @dataclass
 class GenerateContentConfig:
     temperature: float
     max_output_tokens: int
-    top_p_nucleus_sampling: float = 1.0
-    top_k_filtering: int = 40
-    stop_sequences: list[str] = field(default_factory=list)
-    response_modalities: list[str] = field(default_factory=list)
+    system_instructions: str
+    top_p_nucleus_sampling: float | None = None
+    top_k_filtering: int | None = None
+    stop_sequences: list[str] | None = None
+    response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
     tools: list[ToolGroup] = field(default_factory=list)
-    system_instruction: str = ""
-    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
-    tool_config: ToolConfig | None = None
+    thinking_config: ThinkingConfig = field(default_factory=lambda: ThinkingConfig(thinking_level=None, include_thoughts=False))
+    tool_config: ToolConfig = field(default_factory=lambda: ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")))
     response_format: ResponseFormat | None = None
 

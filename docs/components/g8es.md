@@ -48,7 +48,7 @@ g8es is the Operator binary running in `--listen` mode. It is the platform's **s
     └─────────┘    └─────────┘        └─────────┘
 ```
 
-g8ed and g8ee both use HTTP for document store and KV operations, and WebSocket for pub/sub. The Operator (in normal mode) connects via WebSocket only for pub/sub.
+g8ed and g8ee both use HTTP for document store, KV operations, and blob storage, and WebSocket for pub/sub. The Operator (in normal mode) connects via WebSocket only for pub/sub.
 
 ## Transport Summary
 
@@ -57,8 +57,8 @@ g8ed and g8ee both use HTTP for document store and KV operations, and WebSocket 
 | **Document store** | HTTP | Request/response semantics; status codes carry errors natively |
 | **KV store** | HTTP | Stateless; each operation is independent |
 | **Blob store** | HTTP | Large binary data; streamed via standard HTTP |
-| **SSE event buffer** | HTTP | Row management via DELETE/GET; table-only for now |
-| **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling |
+| **SSE event buffer** | HTTP | Ring buffer for reconnection replay; per-session row management via DELETE/GET |
+| **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling. Supports HTTP publish. |
 | **Operator Binaries**| HTTP | Static binary distribution via `/binary/{os}/{arch}` |
 
 ## CLI
@@ -68,7 +68,7 @@ g8ed and g8ee both use HTTP for document store and KV operations, and WebSocket 
 g8e.operator --listen
 
 # With options
-g8e.operator --listen --wss-listen-port 9001 --http-listen-port 9000 -l debug
+g8e.operator --listen --wss-listen-port 443 --http-listen-port 443 -l debug
 ```
 
 ## TLS / Certificate Management
@@ -88,27 +88,16 @@ On first start, `CertStore.EnsureCerts` generates:
 |----------|----------------------|-----------|----------|
 | CA private key | `ca/ca.key` | ECDSA P-384 | — |
 | CA certificate | `ca/ca.crt` | ECDSA P-384, self-signed | 10 years (3650 days) |
-| CA cert (mirror) | `ca.crt` | — | — |
 | Server private key | `server.key` | ECDSA P-384 | — |
 | Server certificate | `server.crt` | Signed by platform CA | 90 days |
 | **Internal Auth Token** | `internal_auth_token` | 32-byte random hex | — |
 | **Session Encryption Key** | `session_encryption_key` | 32-byte random hex | — |
 
-The `ca.crt` mirror at the ssl root is what g8ed, g8ee, and field Operators consume.
-
-#### Bootstrap Secrets Handling
-
-The `internal_auth_token` and `session_encryption_key` are the critical bootstrap secrets.
-
-- **Authoritative Source**: The files in the SSL volume (`--ssl-dir`) are the absolute source of truth.
-- **Generation**: At startup, g8es ensures these exist. If missing, it generates 32-byte random hex values.
-- **DB Backup**: Stored in `settings/platform_settings` document. If SSL volume is wiped, g8es restores them from the DB.
-- **Enforcement**: All g8es HTTP and WebSocket routes (except `/health`) strictly require `X-Internal-Auth` header.
-- **Discovery**: g8ed and g8ee read these files from the shared volume at startup.
-
 The server certificate includes the following SANs:
 - **DNS:** `g8e.local`, `localhost`, `g8es`, `g8ee`, `g8ed`
 - **IP:** `127.0.0.1` plus any extra IPs passed to `EnsureCerts`
+
+The `ca.crt` mirror at the ssl root is what g8ed, g8ee, and field Operators consume.
 
 ### External Certificate Override
 
@@ -131,7 +120,7 @@ g8es:
       aliases:
         - g8es
   healthcheck:
-    test: ["CMD", "curl", "-f", "-k", "https://localhost:9000/health"]
+    test: ["CMD", "curl", "-f", "-k", "https://localhost:443/health"]
     interval: 10s
     timeout: 5s
     retries: 5
@@ -161,7 +150,7 @@ GET /binary/linux/386          → Stream linux/386 binary
 
 ```
 GET    /db/{collection}/{id}       → Get document
-PUT    /db/{collection}/{id}       → Set (create/replace) document
+PUT    /db/{collection}/{id}       → Set (create/replace) document (system fields `id`, `created_at`, `updated_at` are managed by g8es)
 PATCH  /db/{collection}/{id}       → Update (merge fields) document
 DELETE /db/{collection}/{id}       → Delete document
 POST   /db/{collection}/_query     → Query documents
@@ -176,7 +165,7 @@ Query body:
 }
 ```
 
-Supported filter ops: `==`, `!=`, `<`, `>`, `<=`, `>=`.
+Supported filter ops: `==`, `!=`, `<`, `>`, `<=`, `>=`. Filters use `json_extract` for deep matching in the `data` column.
 
 ### KV Store
 
@@ -191,9 +180,11 @@ POST   /kv/_scan              → Paginated key scan  {"pattern": "...", "cursor
 POST   /kv/_delete_pattern    → Delete by pattern   {"pattern": "cache:user:*"} → {"deleted": N}
 ```
 
-`ttl: 0` on `PUT /kv/{key}` means no expiration. Expired keys are cleaned up by a background goroutine every 30 seconds.
+`ttl: 0` on `PUT /kv/{key}` means no expiration. Expired keys are cleaned up by a background goroutine every 30 seconds, and are filtered out of `GET`, `_keys`, and `_scan` results.
 
 ### SSE Event Buffer
+
+g8es provides a per-session event ring buffer used for reconnection replay of audit events.
 
 ```
 DELETE /db/_sse_events         → Wipe all SSE events
@@ -226,38 +217,43 @@ POST /pubsub/publish  {"channel": "cmd:op1:sess1", "data": {...}}
 
 WebSocket (subscribe + publish):
 ```
-wss://g8es:9001/ws/pubsub?token={token}
+wss://g8es:443/ws/pubsub?token={token}
 
 → {"action": "subscribe",   "channel": "results:op1:sess1"}
 → {"action": "psubscribe",  "channel": "heartbeat:*"}
+→ {"action": "publish",     "channel": "cmd:op1:sess1", "data": {...}}
 ← {"type": "subscribed",    "channel": "results:op1:sess1"}
 ← {"type": "message",       "channel": "results:op1:sess1", "data": {...}}
+← {"type": "pmessage",      "channel": "heartbeat:op1", "pattern": "heartbeat:*", "data": {...}}
 ```
 
-Each subscriber has a 4096-message send buffer.
+Each subscriber has a 4096-message send buffer. Patterns support Redis-style globbing (`*`, `?`).
 
 ## Client Libraries
 
 ### g8ed (Node.js)
 
-g8ed uses three separate purpose-built clients in `components/g8ed/services/clients/`:
+g8ed uses purpose-built clients in `components/g8ed/services/clients/`:
 
 | Client | File | Transport | Scope |
 |--------|------|-----------|-------|
 | `G8esDocumentClient` | `g8es_document_client.js` | HTTP | Document store CRUD (`/db/...`) |
 | `KVCacheClient` | `g8es_kv_cache_client.js` | HTTP | KV store operations (`/kv/...`) |
 | `G8esPubSubClient` | `g8es_pubsub_client.js` | WebSocket | Pub/sub messaging (`/ws/pubsub`) |
+| `G8esHttpClient` | `g8es_http_client.js` | HTTP | Base client for HTTP operations |
 
 **Atomicity Warning:** Compound operations (e.g., `incr`, `hset`, `rpush`) are implemented as read-modify-write cycles over HTTP and are **not atomic**.
 
 ### g8ee (Python)
 
-g8ee uses two clients in `components/g8ee/app/clients/`:
+g8ee uses clients in `components/g8ee/app/clients/`:
 
 | Client | File | Transport | Scope |
 |--------|------|-----------|-------|
 | `DBClient` | `db_client.py` | HTTP | Document store CRUD |
-| `KVClient` | `kv_client.py` | HTTP + WS | KV and Pub/Sub |
+| `KVCacheClient` | `kv_cache_client.py` | HTTP | KV store operations |
+| `PubSubClient` | `pubsub_client.py` | WebSocket | Pub/sub messaging |
+| `BlobClient` | `blob_client.py` | HTTP | Blob store operations |
 
 ## SQLite Schema
 

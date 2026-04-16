@@ -30,144 +30,95 @@ from app.llm.llm_types import (
     PrimaryLLMSettings,
     AssistantLLMSettings,
     LiteLLMSettings,
+    ThinkingConfig,
+    ToolConfig,
+    ToolCallingConfig,
+    ResponseFormat,
+    ResponseJsonSchema,
 )
 
 
-PATCH_TARGET = "app.llm.providers.ollama.httpx.AsyncClient"
-INTERNAL_CA = "/g8es/ca.crt"
+PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
 
 pytestmark = [pytest.mark.unit]
 
 
-class TestOllamaProviderSSL:
-    """SSL verification strategy for Ollama provider."""
-
-    def test_external_endpoint_uses_default_verification(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="https://api.ollama.ai",
-                api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
-            )
-            mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is True
-
-    def test_internal_localhost_uses_platform_ca(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="https://localhost:11434",
-                api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
-            )
-            mock_client.assert_called_once()
-            import ssl
-            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
-
-    def test_internal_ip_uses_platform_ca(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="https://192.168.1.50:11434",
-                api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
-            )
-            mock_client.assert_called_once()
-            import ssl
-            assert isinstance(mock_client.call_args.kwargs.get("verify"), ssl.SSLContext)
-
-    def test_internal_http_disables_ssl(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="http://10.0.0.1:11434",
-                api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
-            )
-            mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is False
-
-    def test_internal_without_ca_falls_back_to_true(self):
-        with patch(PATCH_TARGET) as mock_client:
-            OllamaProvider(
-                endpoint="https://localhost:11434",
-                api_key="test-key",
-                ca_cert_path=None,
-            )
-            mock_client.assert_called_once()
-            assert mock_client.call_args.kwargs.get("verify") is True
-
-
 class TestOllamaProviderClose:
-    """Test that OllamaProvider properly closes its httpx client."""
+    """Test that OllamaProvider properly closes its SDK client."""
 
     @pytest.mark.asyncio
-    async def test_close_calls_aclose_on_client(self):
-        mock_httpx_client = AsyncMock()
-        with patch(PATCH_TARGET, return_value=mock_httpx_client):
+    async def test_close_calls_close_on_client(self):
+        mock_sdk_client = AsyncMock()
+        with patch(PATCH_TARGET, return_value=mock_sdk_client):
             provider = OllamaProvider(
                 endpoint="https://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             await provider.close()
-            mock_httpx_client.aclose.assert_called_once()
+            mock_sdk_client.close.assert_called_once()
 
 
 class TestOllamaProviderConstruction:
     """Test OllamaProvider construction and initialization."""
 
-    def test_constructor_creates_async_client(self):
+    def test_constructor_creates_sdk_client(self):
         mock_client = MagicMock()
         with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
             provider = OllamaProvider(
-                endpoint="https://localhost:11434",
+                endpoint="http://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=INTERNAL_CA,
             )
-            mock_ctor.assert_called_once()
-            assert provider._httpx_client is mock_client
-            assert provider._client is not None
+            mock_ctor.assert_called_once_with(host="http://localhost:11434")
+            assert provider._client is mock_client
 
     def test_constructor_strips_trailing_slash(self):
-        with patch(PATCH_TARGET):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
             provider = OllamaProvider(
-                endpoint="https://localhost:11434/",
+                endpoint="http://localhost:11434/",
                 api_key="test-key",
-                ca_cert_path=None,
             )
-            assert provider._original_endpoint == "https://localhost:11434"
+            mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
     def test_constructor_strips_v1_suffix(self):
-        with patch(PATCH_TARGET):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
             provider = OllamaProvider(
-                endpoint="https://localhost:11434/v1",
+                endpoint="http://localhost:11434/v1",
                 api_key="test-key",
-                ca_cert_path=None,
             )
-            assert provider._original_endpoint == "https://localhost:11434"
+            mock_ctor.assert_called_once_with(host="http://localhost:11434")
+
+    def test_constructor_adds_http_prefix(self):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
+            provider = OllamaProvider(
+                endpoint="localhost:11434",
+                api_key="test-key",
+            )
+            mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
     @pytest.mark.asyncio
     async def test_context_manager_support(self):
         """Test that OllamaProvider supports async context manager."""
-        mock_httpx_client = AsyncMock()
-        with patch(PATCH_TARGET, return_value=mock_httpx_client):
+        mock_sdk_client = AsyncMock()
+        with patch(PATCH_TARGET, return_value=mock_sdk_client):
             provider = OllamaProvider(
-                endpoint="https://localhost:11434",
+                endpoint="http://localhost:11434",
                 api_key="test-key",
-                ca_cert_path=None,
             )
             async with provider:
                 assert provider is not None
-            mock_httpx_client.aclose.assert_called_once()
+            mock_sdk_client.close.assert_called_once()
 
 
 class TestOllamaProviderGeneration:
-    """Test OllamaProvider generation methods with mocked httpx transport."""
+    """Test OllamaProvider generation methods with mocked SDK client."""
 
     @pytest.fixture
     def provider(self):
-        with patch("app.llm.providers.ollama._InjectedAsyncClient") as mock_client_cls:
-            mock_client = MagicMock()
-            mock_client_cls.return_value = mock_client
-            
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client):
             provider = OllamaProvider(
                 endpoint="http://localhost:11434",
                 api_key="test-key",
@@ -189,9 +140,16 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         response = await provider.generate_content_primary("llama3", contents, settings)
@@ -231,9 +189,16 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         chunks = []
@@ -261,9 +226,13 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = AssistantLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         response = await provider.generate_content_assistant("llama3", contents, settings)
@@ -286,9 +255,13 @@ class TestOllamaProviderGeneration:
         
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = LiteLLMSettings(
-            system_instruction="You are a helpful assistant",
+            system_instructions="You are a helpful assistant",
             temperature=0.7,
             max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         response = await provider.generate_content_lite("llama3", contents, settings)

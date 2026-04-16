@@ -37,10 +37,11 @@ from .llm_types import (
 )
 
 from .provider import LLMProvider
-from .factory import get_llm_provider
+from .factory import get_llm_provider, clear_provider_cache
 
 __all__ = [
     "Candidate",
+    "clear_provider_cache",
     "Content",
     "GenerateContentConfig",
     "GenerateContentResponse",

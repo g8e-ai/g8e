@@ -33,7 +33,12 @@ from app.constants import (
     LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
 )
-from app.llm.llm_types import PrimaryLLMSettings
+from app.llm.llm_types import (
+    PrimaryLLMSettings,
+    ThinkingConfig,
+    ToolConfig,
+    ToolCallingConfig,
+)
 from app.models.agent import AgentStreamContext
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
@@ -115,6 +120,14 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         generation_config=PrimaryLLMSettings(
             temperature=LLM_DEFAULT_TEMPERATURE,
             max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         ),
         streaming_context=streaming,
         agent_context=agent_ctx,

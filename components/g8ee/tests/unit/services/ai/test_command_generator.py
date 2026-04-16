@@ -21,7 +21,6 @@ from app.constants import (
     LLMProvider,
     TribunalFallbackReason,
     TribunalMember,
-    TRIBUNAL_MEMBER_TEMPERATURES,
     OLLAMA_DEFAULT_MODEL,
     OPENAI_DEFAULT_MODEL,
     ANTHROPIC_DEFAULT_MODEL,
@@ -29,6 +28,7 @@ from app.constants import (
     EventType,
 )
 from app.llm.llm_types import Content, Role
+from app.models.model_configs import LLMModelConfig
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.agents.tribunal import (
     TribunalFallbackPayload,
@@ -167,10 +167,12 @@ class TestRoleImportRegression:
             original_command="ls",
             os_name="linux",
             shell="bash",
-            working_directory="/tmp",
+            working_directory="/home/user",
+            user_context="user (uid=1000)",
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert result == "ls -la"
@@ -195,7 +197,9 @@ class TestRoleImportRegression:
             intent="list files",
             candidate_command="ls -la",
             os_name="linux",
+            user_context="user (uid=1000)",
             emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert passed is True
@@ -270,10 +274,12 @@ class TestPassErrorsCollection:
             original_command="ls",
             os_name="linux",
             shell="bash",
-            working_directory="/tmp",
+            working_directory="/home/user",
+            user_context="user (uid=1000)",
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert result is None
@@ -297,10 +303,12 @@ class TestPassErrorsCollection:
             original_command="ls",
             os_name="linux",
             shell="bash",
-            working_directory="/tmp",
+            working_directory="/home/user",
+            user_context="user (uid=1000)",
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert result is None
@@ -324,10 +332,12 @@ class TestPassErrorsCollection:
             original_command="ls",
             os_name="linux",
             shell="bash",
-            working_directory="/tmp",
+            working_directory="/home/user",
+            user_context="user (uid=1000)",
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert result == "ls -la"
@@ -369,6 +379,7 @@ class TestGenerateCommandOutcomes:
             os_name="linux",
             shell="bash",
             working_directory="/tmp",
+            user_context="root (uid=0)",
             g8ed_event_service=AsyncMock(),
             web_session_id="ws-1",
             user_id="user-1",
@@ -406,7 +417,8 @@ class TestGenerateCommandSystemError:
                     intent="list files",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -441,7 +453,8 @@ class TestGenerateCommandSystemError:
                     intent="list files",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -485,7 +498,8 @@ class TestGenerateCommandSystemError:
                 intent="list files",
                 os_name="linux",
                 shell="bash",
-                working_directory="/tmp",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=MagicMock(),
                 web_session_id="ws-1",
                 user_id="user-1",
@@ -532,7 +546,8 @@ class TestMixedErrorFallback:
                     intent="list files",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -586,7 +601,8 @@ class TestTribunalProviderUnavailableError:
                     intent="list files",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -623,7 +639,8 @@ class TestTribunalModelNotConfiguredError:
                     intent="list files",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -663,7 +680,9 @@ class TestTribunalVerifierFailedError:
                 intent="list files",
                 candidate_command="ls -la",
                 os_name="linux",
+                user_context="user (uid=1000)",
                 emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
         assert exc_info.value.reason == "empty_response"
@@ -687,7 +706,9 @@ class TestTribunalVerifierFailedError:
                 intent="list files",
                 candidate_command="ls -la",
                 os_name="linux",
+                user_context="user (uid=1000)",
                 emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
         assert exc_info.value.reason == "no_valid_revision"
@@ -709,7 +730,9 @@ class TestTribunalVerifierFailedError:
                 intent="list files",
                 candidate_command="ls -la",
                 os_name="linux",
+                user_context="user (uid=1000)",
                 emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
         assert exc_info.value.reason == "exception"
@@ -730,7 +753,9 @@ class TestRunGenerationStage:
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", intent="list files",
             original_command="ls", os_name="linux", shell="bash",
-            working_directory="/tmp", num_passes=3, emitter=emitter,
+            working_directory="/home/user", user_context="user (uid=1000)",
+            num_passes=3, emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert len(candidates) == 3
@@ -747,7 +772,9 @@ class TestRunGenerationStage:
             await _run_generation_stage(
                 provider=mock_provider, model="test-model", intent="list files",
                 original_command="ls", os_name="linux", shell="bash",
-                working_directory="/tmp", num_passes=3, emitter=emitter,
+                working_directory="/home/user", user_context="user (uid=1000)",
+                num_passes=3, emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
     @pytest.mark.asyncio
@@ -761,7 +788,9 @@ class TestRunGenerationStage:
             await _run_generation_stage(
                 provider=mock_provider, model="test-model", intent="list files",
                 original_command="ls", os_name="linux", shell="bash",
-                working_directory="/tmp", num_passes=2, emitter=emitter,
+                working_directory="/home/user", user_context="user (uid=1000)",
+                num_passes=2, emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
     @pytest.mark.asyncio
@@ -783,7 +812,9 @@ class TestRunGenerationStage:
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", intent="list files",
             original_command="ls", os_name="linux", shell="bash",
-            working_directory="/tmp", num_passes=3, emitter=emitter,
+            working_directory="/home/user", user_context="user (uid=1000)",
+            num_passes=3, emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert len(candidates) == 2
@@ -834,8 +865,9 @@ class TestRunVerificationStage:
     async def test_verifier_disabled_returns_consensus(self):
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=MagicMock(), model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", verifier_enabled=False,
-            emitter=TribunalEmitter(None, None),
+            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            verifier_enabled=False, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert final_cmd == "ls -la"
@@ -851,8 +883,9 @@ class TestRunVerificationStage:
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", verifier_enabled=True,
-            emitter=TribunalEmitter(None, None),
+            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert final_cmd == "ls -la"
@@ -868,8 +901,9 @@ class TestRunVerificationStage:
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", verifier_enabled=True,
-            emitter=TribunalEmitter(None, None),
+            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         assert final_cmd == "ls -la --color=auto"
@@ -886,8 +920,9 @@ class TestRunVerificationStage:
         with pytest.raises(TribunalVerifierFailedError):
             await _run_verification_stage(
                 provider=mock_provider, model="test-model", intent="list files",
-                vote_winner="ls -la", os_name="linux", verifier_enabled=True,
-                emitter=TribunalEmitter(None, None),
+                vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+                verifier_enabled=True, emitter=TribunalEmitter(None, None),
+                command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
 
@@ -983,6 +1018,7 @@ class TestGenerateCommandHappyPath:
                 os_name="linux",
                 shell="bash",
                 working_directory="/tmp",
+                user_context="root (uid=0)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-1",
                 user_id="user-happy-1",
@@ -1030,6 +1066,7 @@ class TestGenerateCommandHappyPath:
                 os_name="linux",
                 shell="bash",
                 working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-2",
                 user_id="user-happy-2",
@@ -1075,7 +1112,8 @@ class TestGenerateCommandHappyPath:
                 intent="find all TODO comments recursively with line numbers",
                 os_name="linux",
                 shell="bash",
-                working_directory="/project",
+                working_directory="/home/user/project",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-3",
                 user_id="user-happy-3",
@@ -1130,7 +1168,8 @@ class TestGenerateCommandHappyPath:
                 intent="show disk usage in human-readable format",
                 os_name="linux",
                 shell="bash",
-                working_directory="/",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-4",
                 user_id="user-happy-4",
@@ -1163,7 +1202,8 @@ class TestGenerateCommandHappyPath:
                 intent="show current user name",
                 os_name="linux",
                 shell="bash",
-                working_directory="/home",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-5",
                 user_id="user-happy-5",
@@ -1196,7 +1236,8 @@ class TestGenerateCommandHappyPath:
                 intent="show system uptime",
                 os_name="linux",
                 shell="bash",
-                working_directory="/",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-6",
                 user_id="user-happy-6",
@@ -1242,7 +1283,8 @@ class TestGenerateCommandHappyPath:
                 intent="list files in /tmp with details",
                 os_name="linux",
                 shell="bash",
-                working_directory="/tmp",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-7",
                 user_id="user-happy-7",
@@ -1283,7 +1325,8 @@ class TestGenerateCommandHappyPath:
                 intent="show the system hostname from /etc/hostname",
                 os_name="linux",
                 shell="bash",
-                working_directory="/",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-8",
                 user_id="user-happy-8",
@@ -1322,7 +1365,8 @@ class TestGenerateCommandHappyPath:
                 intent="list files",
                 os_name="linux",
                 shell="bash",
-                working_directory="/",
+                working_directory="/home/user",
+                user_context="user (uid=1000)",
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-9",
                 user_id="user-happy-9",
@@ -1418,7 +1462,8 @@ class TestGenerateCommandVerifierFailure:
                     intent="list files with details",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-1",
                     user_id="user-vf-1",
@@ -1472,7 +1517,8 @@ class TestGenerateCommandVerifierFailure:
                     intent="list files with details",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-2",
                     user_id="user-vf-2",
@@ -1517,7 +1563,8 @@ class TestGenerateCommandVerifierFailure:
                     intent="list files with details",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/tmp",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-3",
                     user_id="user-vf-3",
@@ -1565,7 +1612,8 @@ class TestGenerateCommandVerifierFailure:
                     intent="show system hostname",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-4",
                     user_id="user-vf-4",
@@ -1600,7 +1648,8 @@ class TestGenerateCommandVerifierFailure:
                     intent="show current user",
                     os_name="linux",
                     shell="bash",
-                    working_directory="/home",
+                    working_directory="/home/user",
+                    user_context="user (uid=1000)",
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-5",
                     user_id="user-vf-5",
@@ -1634,8 +1683,9 @@ class TestMaxTokensConstants:
         await _run_generation_pass(
             provider=mock_provider, model="test-model", intent="list files",
             original_command="ls", os_name="linux", shell="bash",
-            working_directory="/tmp", pass_index=0, emitter=emitter,
-            pass_errors=[],
+            working_directory="/home/user", user_context="user (uid=1000)",
+            pass_index=0, emitter=emitter, pass_errors=[],
+            command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
         call_kwargs = mock_provider.generate_content_lite.call_args
@@ -1644,21 +1694,35 @@ class TestMaxTokensConstants:
 
     @pytest.mark.asyncio
     async def test_verifier_uses_max_tokens_and_zero_temperature(self):
+        from unittest.mock import patch
         mock_response = MagicMock()
         mock_response.text = "ok"
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
-        await _run_verifier(
-            provider=mock_provider, model="test-model", intent="list files",
-            candidate_command="ls -la", os_name="linux", emitter=emitter,
-        )
+        # Mock get_model_config to return a config with default_temperature=0.0 for verifier
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_config = LLMModelConfig(
+                name="test-model",
+                default_temperature=0.0,
+                max_output_tokens=_MAX_TOKENS_VERIFIER,
+                top_p=1.0,
+                top_k=None,
+                stop_sequences=None,
+            )
+            mock_get_config.return_value = mock_config
 
-        call_kwargs = mock_provider.generate_content_lite.call_args
-        settings = call_kwargs.kwargs.get("lite_llm_settings")
-        assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
-        assert settings.temperature == 0.0
+            await _run_verifier(
+                provider=mock_provider, model="test-model", intent="list files",
+                candidate_command="ls -la", os_name="linux", user_context="user (uid=1000)",
+                emitter=emitter, command_constraints_message="No whitelist or blacklist constraints are active.",
+            )
+
+            call_kwargs = mock_provider.generate_content_lite.call_args
+            settings = call_kwargs.kwargs.get("lite_llm_settings")
+            assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
+            assert settings.temperature == 0.0
 
 
 class TestTribunalMemberCycling:
@@ -1673,16 +1737,33 @@ class TestTribunalMemberCycling:
         assert _member_for_pass(4) == TribunalMember.CONCORD
         assert _member_for_pass(5) == TribunalMember.VARIANCE
 
-    def test_temperature_for_pass_returns_canonical_values(self):
-        """_temperature_for_pass returns canonical temperatures for each member."""
-        assert _temperature_for_pass(0) == 0.0  # AXIOM
-        assert _temperature_for_pass(1) == 0.4  # CONCORD
-        assert _temperature_for_pass(2) == 0.8  # VARIANCE
-        assert _temperature_for_pass(3) == 0.0  # AXIOM (cycles)
-        assert _temperature_for_pass(4) == 0.4  # CONCORD (cycles)
+    def test_temperature_for_pass_uses_model_config(self):
+        """_temperature_for_pass uses model config default temperature."""
+        from unittest.mock import patch
+        from app.constants import LLM_DEFAULT_TEMPERATURE
 
-    def test_temperatures_match_shared_constants(self):
-        """Temperature values match the canonical TRIBUNAL_MEMBER_TEMPERATURES dict."""
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.AXIOM] == 0.0
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.CONCORD] == 0.4
-        assert TRIBUNAL_MEMBER_TEMPERATURES[TribunalMember.VARIANCE] == 0.8
+        # Mock get_model_config to return a config with a specific temperature
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_config = LLMModelConfig(name="test-model", default_temperature=0.7)
+            mock_get_config.return_value = mock_config
+
+            # Test that all passes return the model's default temperature
+            temp_0 = _temperature_for_pass(0, "test-model")
+            temp_1 = _temperature_for_pass(1, "test-model")
+            temp_2 = _temperature_for_pass(2, "test-model")
+            assert temp_0 == 0.7
+            assert temp_1 == 0.7
+            assert temp_2 == 0.7
+
+        # Test fallback to LLM_DEFAULT_TEMPERATURE when model_config is None
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_get_config.return_value = None
+            temp = _temperature_for_pass(0, "test-model")
+            assert temp == LLM_DEFAULT_TEMPERATURE
+
+        # Test fallback when default_temperature is None
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_config = LLMModelConfig(name="test-model", default_temperature=None)
+            mock_get_config.return_value = mock_config
+            temp = _temperature_for_pass(0, "test-model")
+            assert temp == LLM_DEFAULT_TEMPERATURE

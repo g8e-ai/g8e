@@ -30,9 +30,13 @@ from app.llm.llm_types import (
     LiteLLMSettings,
     Part,
     PrimaryLLMSettings,
+    ResponseFormat,
+    ResponseJsonSchema,
     ThinkingConfig,
     ThoughtSignature,
     ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
     ToolResponse,
     ToolDeclaration,
     ToolGroup,
@@ -52,7 +56,7 @@ def _make_provider():
 
 
 class TestBuildKwargs:
-    """_build_kwargs enforces Anthropic's parameter constraints."""
+    """_build_kwargs enforces Anthropic's parameter constraints and returns a typed model."""
 
     def _build(self, **overrides):
         provider = _make_provider()
@@ -61,48 +65,52 @@ class TestBuildKwargs:
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
             "temperature": 0.4,
             "max_tokens": 8192,
+            "top_k": None,
+            "system_instructions": "",
+            "anthropic_tools": None,
+            "thinking_config": None,
         }
         defaults.update(overrides)
         return provider._build_kwargs(**defaults)
 
     def test_never_sends_top_p(self):
         """Anthropic: temperature and top_p are mutually exclusive. We never send top_p."""
-        kwargs = self._build(temperature=0.7)
-        assert "top_p" not in kwargs
-        assert kwargs["temperature"] == 0.7
+        request = self._build(temperature=0.7)
+        assert "top_p" not in request.model_dump(mode="json", exclude_none=True)
+        assert request.temperature == 0.7
 
     def test_temperature_defaults_when_none(self):
-        kwargs = self._build(temperature=None)
-        assert kwargs["temperature"] == LLM_DEFAULT_TEMPERATURE
+        request = self._build(temperature=None)
+        assert request.temperature == LLM_DEFAULT_TEMPERATURE
 
     def test_max_tokens_defaults_when_none(self):
-        kwargs = self._build(max_tokens=None)
-        assert kwargs["max_tokens"] == LLM_DEFAULT_MAX_OUTPUT_TOKENS
+        request = self._build(max_tokens=None)
+        assert request.max_tokens == LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
     def test_top_k_included_when_provided(self):
-        kwargs = self._build(top_k=40)
-        assert kwargs["top_k"] == 40
+        request = self._build(top_k=40)
+        assert request.top_k == 40
 
     def test_top_k_omitted_when_none(self):
-        kwargs = self._build(top_k=None)
-        assert "top_k" not in kwargs
+        request = self._build(top_k=None)
+        assert request.top_k is None
 
-    def test_system_instruction_included(self):
-        kwargs = self._build(system_instruction="be helpful")
-        assert kwargs["system"] == "be helpful"
+    def test_system_instructions_included(self):
+        request = self._build(system_instructions="be helpful")
+        assert request.system == "be helpful"
 
-    def test_system_instruction_omitted_when_empty(self):
-        kwargs = self._build(system_instruction="")
-        assert "system" not in kwargs
+    def test_system_instructions_omitted_when_empty(self):
+        request = self._build(system_instructions="")
+        assert request.system is None
 
     def test_tools_included(self):
         tools = [{"name": "run_command", "description": "exec", "input_schema": {}}]
-        kwargs = self._build(anthropic_tools=tools)
-        assert kwargs["tools"] == tools
+        request = self._build(anthropic_tools=tools)
+        assert request.tools == tools
 
     def test_tools_omitted_when_none(self):
-        kwargs = self._build(anthropic_tools=None)
-        assert "tools" not in kwargs
+        request = self._build(anthropic_tools=None)
+        assert request.tools is None
 
 
 class TestBuildKwargsThinkingMode:
@@ -115,6 +123,9 @@ class TestBuildKwargsThinkingMode:
             "messages": [],
             "temperature": 0.7,
             "max_tokens": 20000,
+            "top_k": None,
+            "system_instructions": "",
+            "anthropic_tools": None,
             "thinking_config": ThinkingConfig(
                 thinking_level=ThinkingLevel.HIGH,
                 include_thoughts=True,
@@ -124,42 +135,44 @@ class TestBuildKwargsThinkingMode:
         return provider._build_kwargs(**defaults)
 
     def test_thinking_forces_temperature_1(self):
-        kwargs = self._build()
-        assert kwargs["temperature"] == 1.0
+        request = self._build()
+        assert request.temperature == 1.0
 
     def test_thinking_never_sends_top_p(self):
-        kwargs = self._build()
-        assert "top_p" not in kwargs
+        request = self._build()
+        assert "top_p" not in request.model_dump(mode="json", exclude_none=True)
 
     def test_thinking_never_sends_top_k(self):
         """top_k must not be sent when thinking is enabled."""
-        kwargs = self._build(top_k=40)
-        assert "top_k" not in kwargs
+        request = self._build(top_k=40)
+        assert request.top_k is None
 
     def test_thinking_sets_budget(self):
-        kwargs = self._build(max_tokens=20000)
-        assert kwargs["thinking"]["type"] == "enabled"
-        assert kwargs["thinking"]["budget_tokens"] == 10000
+        request = self._build(max_tokens=20000)
+        assert request.thinking["type"] == "enabled"
+        assert request.thinking["budget_tokens"] == 10000
 
     def test_thinking_overrides_user_temperature(self):
         """Even if user sets temperature=0.2, thinking forces 1.0."""
-        kwargs = self._build(temperature=0.2)
-        assert kwargs["temperature"] == 1.0
+        request = self._build(temperature=0.2)
+        assert request.temperature == 1.0
 
     def test_disabled_thinking_uses_normal_sampling(self):
         """ThinkingConfig with thinking_level=None behaves like no thinking."""
         provider = _make_provider()
-        kwargs = provider._build_kwargs(
+        request = provider._build_kwargs(
             model="claude-sonnet-4-20250514",
             messages=[],
             temperature=0.5,
             max_tokens=8192,
             top_k=40,
+            system_instructions="",
+            anthropic_tools=None,
             thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
         )
-        assert kwargs["temperature"] == 0.5
-        assert kwargs["top_k"] == 40
-        assert "thinking" not in kwargs
+        assert request.temperature == 0.5
+        assert request.top_k == 40
+        assert request.thinking is None
 
 
 class TestBuildUsage:
@@ -398,7 +411,12 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=4096,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
-            system_instruction="test",
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="test",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
         result = await provider.generate_content_primary(
@@ -429,7 +447,9 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
-            system_instruction="analyze",
+            stop_sequences=[],
+            system_instructions="analyze",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
 
         await provider.generate_content_assistant(
@@ -457,7 +477,9 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=1024,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
-            system_instruction="triage",
+            stop_sequences=[],
+            system_instructions="triage",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
 
         await provider.generate_content_lite(
@@ -486,11 +508,15 @@ class TestPublicMethodsDelegateCorrectly:
             max_output_tokens=20000,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
-            system_instruction="think",
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="think",
             thinking_config=ThinkingConfig(
                 thinking_level=ThinkingLevel.HIGH,
                 include_thoughts=True,
             ),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
         await provider.generate_content_primary(
@@ -540,6 +566,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         chunks = []
@@ -574,6 +605,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         with pytest.raises(Exception, match="Network error"):
@@ -621,6 +657,11 @@ class TestStreamCompletionVerification:
         settings = AssistantLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            system_instructions="",
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
         
         chunks = []
@@ -668,6 +709,14 @@ class TestStreamCompletionVerification:
         settings = PrimaryLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         chunks = []
@@ -702,6 +751,14 @@ class TestStreamCompletionVerification:
         settings = PrimaryLLMSettings(
             temperature=0.5,
             max_output_tokens=2048,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            system_instructions="",
+            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
         with pytest.raises(Exception, match="Network error"):

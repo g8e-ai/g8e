@@ -106,9 +106,9 @@ The platform handles two critical secrets that are required for component-to-com
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
 **1. Authoritative Source (The Volume)**
-The `g8es-ssl` volume (mounted at `/g8es/ssl`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
-- `internal_auth_token` is stored at `/g8es/ssl/internal_auth_token`.
-- `session_encryption_key` is stored at `/g8es/ssl/session_encryption_key`.
+The `g8es-ssl` volume (mounted at `/g8es`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
+- `internal_auth_token` is stored at `/g8es/internal_auth_token`.
+- `session_encryption_key` is stored at `/g8es/session_encryption_key`.
 
 **2. Generation and Persistence**
 On the first platform start, **g8es** (g8eo in `--listen` mode) checks if these secrets exist on the volume. If they are missing, g8es generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
@@ -140,7 +140,8 @@ All `X-G8E-*` identity headers are **injected by g8ed from the verified server-s
 | `X-G8E-Investigation-ID` | Active investigation correlation |
 | `X-G8E-Task-ID` | Active task correlation |
 | `X-G8E-Bound-Operators` | JSON array of all operators bound to the session |
-| `X-G8E-Request-ID` | Per-request tracing identifier |
+| `X-G8E-Request-ID` | Execution tracking identifier |
+| `X-G8E-New-Case` | Boolean signal for inline resource creation |
 | `X-G8E-Source-Component` | Source component name (validated against `ComponentName` enum) |
 
 ---
@@ -255,11 +256,11 @@ Sessions are a critical security boundary — both web user sessions and Operato
 
 ### `requireAuth` Middleware
 
-`requireAuth` (`middleware/authentication.js`) is the single session validation point. It extracts the session ID from, in priority order: `web_session_id` HttpOnly cookie, `X-Session-Id` header, `Authorization: Bearer` header. After validation it attaches `req.webSessionId`, `req.session`, and `req.userId`. Route handlers must use these exclusively — never re-extract the session ID or call `validateSession()` again.
+`requireAuth` (`middleware/authentication.js`) is the single session validation point. It extracts the session ID from the `web_session_id` HttpOnly cookie. In non-production environments, it also accepts `X-G8E-WebSession-ID` or `Authorization: Bearer` as fallbacks for testing. After validation it attaches `req.webSessionId`, `req.session`, and `req.userId`. Route handlers must use these exclusively — never re-extract the session ID or call `validateSession()` again.
 
 ### `requireFirstRun` Middleware
 
-`requireFirstRun` (`middleware/authentication.js`) guards the unauthenticated setup-flow registration endpoints. It calls `getSetupService().isFirstRun()` on every request. If users already exist it calls `next('route')`, causing Express to skip the setup-flow handler and fall through to the `requireAuth` handler registered on the same path (the add-passkey flow). This dual-handler pattern means the same endpoint serves two distinct flows without any branching inside the handler body — and without exposing an unauthenticated code path once the platform is initialized. If `isFirstRun()` throws, the request is rejected with 500 rather than silently passing through.
+`requireFirstRun` (`middleware/authentication.js`) guards the unauthenticated setup-flow registration endpoints. It checks `platform_settings.setup_complete` on every request. If setup is already complete, it calls `next('route')`, causing Express to skip the setup-flow handler and fall through to the `requireAuth` handler registered on the same path (the add-passkey flow). This dual-handler pattern means the same endpoint serves two distinct flows without any branching inside the handler body — and without exposing an unauthenticated code path once the platform is initialized. If the settings check fails, the request is rejected with 500.
 
 ### HTTP Security Headers
 
@@ -596,13 +597,13 @@ Large LLM proposes command via ReAct loop
   ▼
 Tribunal — N concurrent generation passes (default: 3)
   Each pass: same intent + operator OS/shell/working_directory context
-  Temperature: Member-specific  Model: LLM_ASSISTANT_MODEL (default: gemma4:e4b)
+  Temperature: model default (via get_model_config)  Model: LLM_ASSISTANT_MODEL (default: gemma4:e4b)
   │
   ▼
 Weighted majority vote — earlier passes weighted higher (weight 1/(i+1))
   │
   ▼
-SLM Verifier (same model, temperature: 0.0)
+SLM Verifier (same model, temperature: model default)
   Returns exactly "ok" — or a corrected command string
   │
   ▼
@@ -613,12 +614,40 @@ Final command presented to human for approval
 
 ### Command Allowlist and Denylist
 
-Two optional operator-level controls are available as additional constraints — **disabled by default**, enabled via `ENABLE_COMMAND_WHITELISTING` and `ENABLE_COMMAND_BLACKLISTING` in `platform_settings`.
+Two optional operator-level controls are available as additional constraints — **disabled by default**, configured via user settings.
 
-- **Allowlist (`config/whitelist.json`)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
-- **Denylist (`config/blacklist.json`)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
+- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
+- **Denylist (blacklist)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
 
-When the denylist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+When the blacklist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+
+#### Configuration
+
+Command validation is configured per-user via the `command_validation` field in user settings:
+
+```json
+{
+  "user_id": "...",
+  "settings": {
+    "command_validation": {
+      "enable_whitelisting": false,
+      "enable_blacklisting": false
+    },
+    "llm": { ... },
+    "search": { ... },
+    "eval_judge": { ... }
+  }
+}
+```
+
+- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted
+- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked
+
+Users can configure these settings through:
+1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist
+2. **API** — Update user settings via the `/api/settings/user` endpoint
+
+The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist and blacklist state for Tribunal awareness during command generation.
 
 ---
 

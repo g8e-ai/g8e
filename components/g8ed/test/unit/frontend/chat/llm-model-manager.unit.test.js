@@ -44,11 +44,18 @@ function buildMenuElement(id) {
 const PROVIDER_MODELS = {
     gemini: {
         label: 'Gemini',
+        all: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
         primary: [
             { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
         ],
         assistant: [
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
+        lite: [
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
         ],
     },
@@ -57,19 +64,33 @@ const PROVIDER_MODELS = {
 const MULTI_PROVIDER_MODELS = {
     gemini: {
         label: 'Gemini',
+        all: [
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
         primary: [
             { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
         ],
         assistant: [
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
         ],
+        lite: [
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+        ],
     },
     anthropic: {
         label: 'Anthropic',
+        all: [
+            { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+            { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+        ],
         primary: [
             { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
         ],
         assistant: [
+            { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+        ],
+        lite: [
             { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
         ],
     },
@@ -80,6 +101,7 @@ function emitConfig(eventBus, overrides = {}) {
         provider_models: PROVIDER_MODELS,
         default_primary_model: 'gemini-3.1-pro-preview',
         default_assistant_model: 'gemini-3-flash-preview',
+        default_lite_model: 'gemini-3-flash-preview',
         ...overrides,
     });
 }
@@ -89,28 +111,37 @@ describe('LlmModelManager [UNIT]', () => {
     let manager;
     let primaryDropdown;
     let assistantDropdown;
+    let liteDropdown;
     let primaryText;
     let assistantText;
+    let liteText;
     let primaryMenu;
     let assistantMenu;
+    let liteMenu;
 
     beforeEach(() => {
         eventBus = new MockEventBus();
         primaryDropdown = buildDropdownElement('llm-primary-model-dropdown');
         assistantDropdown = buildDropdownElement('llm-assistant-model-dropdown');
+        liteDropdown = buildDropdownElement('llm-lite-model-dropdown');
         primaryText = buildTextElement('llm-primary-model-text');
         assistantText = buildTextElement('llm-assistant-model-text');
+        liteText = buildTextElement('llm-lite-model-text');
         primaryMenu = buildMenuElement('llm-primary-model-menu');
         assistantMenu = buildMenuElement('llm-assistant-model-menu');
+        liteMenu = buildMenuElement('llm-lite-model-menu');
 
         global.document = {
             getElementById: (id) => {
                 if (id === 'llm-primary-model-dropdown') return primaryDropdown;
                 if (id === 'llm-assistant-model-dropdown') return assistantDropdown;
+                if (id === 'llm-lite-model-dropdown') return liteDropdown;
                 if (id === 'llm-primary-model-text') return primaryText;
                 if (id === 'llm-assistant-model-text') return assistantText;
+                if (id === 'llm-lite-model-text') return liteText;
                 if (id === 'llm-primary-model-menu') return primaryMenu;
                 if (id === 'llm-assistant-model-menu') return assistantMenu;
+                if (id === 'llm-lite-model-menu') return liteMenu;
                 return null;
             },
             createElement: (tag) => new MockElement(tag),
@@ -155,26 +186,31 @@ describe('LlmModelManager [UNIT]', () => {
 
             expect(manager.defaultPrimaryModel).toBe('gemini-3.1-pro-preview');
             expect(manager.defaultAssistantModel).toBe('gemini-3-flash-preview');
+            expect(manager.defaultLiteModel).toBe('gemini-3-flash-preview');
         });
 
         it('defaults to empty string when defaults are missing', () => {
             emitConfig(eventBus, {
                 default_primary_model: undefined,
                 default_assistant_model: undefined,
+                default_lite_model: undefined,
             });
 
             expect(manager.defaultPrimaryModel).toBe('');
             expect(manager.defaultAssistantModel).toBe('');
+            expect(manager.defaultLiteModel).toBe('');
         });
 
         it('sets selected models to defaults when unset', () => {
             manager.selectedPrimaryModel = '';
             manager.selectedAssistantModel = '';
+            manager.selectedLiteModel = '';
 
             emitConfig(eventBus);
 
             expect(manager.selectedPrimaryModel).toBe('gemini-3.1-pro-preview');
             expect(manager.selectedAssistantModel).toBe('gemini-3-flash-preview');
+            expect(manager.selectedLiteModel).toBe('gemini-3-flash-preview');
         });
 
         it('preserves selected models when already set', () => {

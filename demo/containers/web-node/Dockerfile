@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 LABEL description="Web Node - Nginx + Flask App for Fleet Demo"
 

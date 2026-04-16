@@ -199,6 +199,9 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("=== g8ee SHUTDOWN INITIATED ===")
 
+        from app.llm import clear_provider_cache
+        await clear_provider_cache()
+
         await ServiceFactory.stop_services(services)
 
         await _close_client(getattr(app.state, "pubsub_client", None), "PubSub client")

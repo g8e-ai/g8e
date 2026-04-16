@@ -204,6 +204,19 @@ async def orchestrate_tool_execution(
             original_command = typed_args.command
             intent = typed_args.justification
 
+            logger.info(
+                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: command=%r intent_len=%d target_operator=%s",
+                original_command[:100], len(intent), typed_args.target_operator,
+            )
+            logger.info(
+                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                request_settings.llm.llm_command_gen_enabled,
+                request_settings.llm.llm_command_gen_verifier,
+                request_settings.llm.llm_command_gen_passes,
+                request_settings.llm.assistant_model,
+                request_settings.eval_judge.model,
+            )
+
             op_context = extract_operator_context_by_target(
                 investigation,
                 typed_args.target_operator,
@@ -213,6 +226,32 @@ async def orchestrate_tool_execution(
             working_directory = (
                 op_context.working_directory if op_context else None
             ) or DEFAULT_WORKING_DIRECTORY
+            username = op_context.username if op_context else None
+            uid = op_context.uid if op_context else None
+            user_context = f"{username} (uid={uid})" if username and uid else (username or "unknown")
+
+            logger.info("[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s user=%s", os_name, shell, working_directory, user_context)
+
+            # Fetch command constraints for Tribunal
+            whitelisting_enabled = False
+            blacklisting_enabled = False
+            whitelisted_commands: list[str] = []
+            blacklisted_commands: list[dict[str, str]] = []
+            
+            cv = tool_executor._user_settings
+            if cv:
+                whitelisting_enabled = cv.enable_whitelisting if cv else False
+                blacklisting_enabled = cv.enable_blacklisting if cv else False
+                if whitelisting_enabled:
+                    whitelisted_commands = sorted(tool_executor._whitelist_validator.all_commands)
+                if blacklisting_enabled:
+                    blacklisted_commands = tool_executor._blacklist_validator.get_forbidden_commands()
+
+            logger.info(
+                "[TRIBUNAL-INVOKE] Command constraints: whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
+                whitelisting_enabled, blacklisting_enabled,
+                len(whitelisted_commands), len(blacklisted_commands),
+            )
 
             try:
                 gen_result = await generate_command(
@@ -221,16 +260,28 @@ async def orchestrate_tool_execution(
                     os_name=os_name,
                     shell=shell,
                     working_directory=working_directory,
+                    user_context=user_context,
                     g8ed_event_service=g8ed_event_service,
                     web_session_id=g8e_context.web_session_id,
                     user_id=g8e_context.user_id,
                     case_id=g8e_context.case_id,
                     investigation_id=investigation.id,
                     settings=request_settings,
+                    whitelisting_enabled=whitelisting_enabled,
+                    blacklisting_enabled=blacklisting_enabled,
+                    whitelisted_commands=whitelisted_commands,
+                    blacklisted_commands=blacklisted_commands,
+                )
+                logger.info(
+                    "[TRIBUNAL-RESULT] generate_command completed: original=%r final=%r outcome=%s refined=%s",
+                    gen_result.original_command[:80] if gen_result else None,
+                    gen_result.final_command[:80] if gen_result else None,
+                    gen_result.outcome if gen_result else None,
+                    gen_result.final_command != gen_result.original_command if gen_result else None,
                 )
             except TribunalSystemError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal system error — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal system error — halting command execution: %s",
                     exc.pass_errors,
                 )
                 return _tribunal_error_result(
@@ -240,7 +291,7 @@ async def orchestrate_tool_execution(
                 )
             except TribunalProviderUnavailableError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal provider unavailable — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal provider unavailable — halting command execution: %s",
                     exc.error,
                 )
                 await g8ed_event_service.publish_investigation_event(
@@ -263,7 +314,7 @@ async def orchestrate_tool_execution(
                 )
             except TribunalGenerationFailedError as exc:
                 logger.error(
-                    "[CMD_GEN] Tribunal generation failed — halting command execution: %s",
+                    "[TRIBUNAL-ERROR] Tribunal generation failed — halting command execution: %s",
                     exc.pass_errors,
                 )
                 return _tribunal_error_result(

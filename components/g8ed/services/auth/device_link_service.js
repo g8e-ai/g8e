@@ -247,6 +247,9 @@ class DeviceLinkService {
         };
 
         const linkTtl = await this._cache_aside.kvTtl(KVKey.deviceLink(token));
+        if (linkTtl === -2) {
+            return { success: false, error: DeviceLinkError.LINK_NOT_FOUND };
+        }
         const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
         await this._cache_aside.kvSetJson(KVKey.deviceLink(token), linkData.forKV(), remainingTtl);
 
@@ -307,6 +310,8 @@ class DeviceLinkService {
         }
 
         // Uses check — incr/decr are read-modify-write over HTTP and not atomic.
+        // SECURITY: We use kvIncr but then check against max_uses. 
+        // If max_uses is exceeded, we decrement and fail.
         const usesKey = KVKey.deviceLinkUses(token);
         const newUsesCount = await this._cache_aside.kvIncr(usesKey);
 

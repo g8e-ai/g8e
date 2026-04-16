@@ -56,7 +56,7 @@ from .agent import g8eEngine
 from ..investigation.investigation_service import extract_all_operators_context, InvestigationService
 from ..investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
-from .chat_task_manager import ChatTaskManager
+from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from app.models.agents.triage import TriageRequest
@@ -194,12 +194,14 @@ class ChatPipelineService:
         max_tokens = request_settings.llm.llm_max_tokens
 
         logger.info(
-            "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) model=%s",
+            "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) posture=%s (conf=%s) model=%s",
             triage_result.complexity,
             triage_result.complexity_confidence,
             triage_result.intent_summary,
             triage_result.intent_confidence,
-            model_to_use
+            triage_result.request_posture,
+            triage_result.posture_confidence,
+            model_to_use,
         )
 
         attachment_filenames = [att.filename for att in attachments] if attachments else []
@@ -239,6 +241,7 @@ class ChatPipelineService:
             case_memories=case_memories,
             investigation=investigation,
             g8e_web_search_available=self.g8e_agent.g8e_web_search_available,
+            triage_result=triage_result,
         )
 
         generation_config = self.request_builder.get_generation_config(
@@ -346,7 +349,7 @@ class ChatPipelineService:
         llm_assistant_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
-        _task_manager: ChatTaskManager,
+        _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
     ) -> None:
@@ -444,88 +447,88 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": llm_assistant_provider})})
 
-        async with get_llm_provider(resolved_settings.llm) as llm_provider:
-            logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
+        llm_provider = get_llm_provider(resolved_settings.llm)
+        logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
 
-            logger.info("[SSE-CHAT] About to call _prepare_chat_context")
-            ctx = await self._prepare_chat_context(
-                message=message,
-                g8e_context=g8e_context,
-                request_settings=resolved_settings,
-                attachments=attachments,
-                sentinel_mode=sentinel_mode,
-                llm_primary_model=llm_primary_model,
-                llm_assistant_model=llm_assistant_model,
+        logger.info("[SSE-CHAT] About to call _prepare_chat_context")
+        ctx = await self._prepare_chat_context(
+            message=message,
+            g8e_context=g8e_context,
+            request_settings=resolved_settings,
+            attachments=attachments,
+            sentinel_mode=sentinel_mode,
+            llm_primary_model=llm_primary_model,
+            llm_assistant_model=llm_assistant_model,
+        )
+        logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
+
+        logger.info(
+            "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
+            ctx.model_to_use, ctx.agent_mode, len(ctx.contents), ctx.max_tokens
+        )
+
+        if ctx.triage_result and ctx.triage_result.follow_up_question and (
+            ctx.triage_result.complexity_confidence == TriageConfidence.LOW or
+            ctx.triage_result.intent_confidence == TriageConfidence.LOW
+        ):
+            follow_up = ctx.triage_result.follow_up_question
+            logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
+
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
+                event_type=EventType.LLM_CHAT_ITERATION_STARTED,
+                payload=ChatProcessingStartedPayload(agent_mode=ctx.agent_mode),
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
             )
-            logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
+                event_type=EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                payload=ChatResponseChunkPayload(content=follow_up),
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
+            )
+
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
+                event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+                payload=ChatResponseCompletePayload(
+                    content=follow_up,
+                    finish_reason="stop",
+                ),
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
+            )
+            ctx.response_text = follow_up
+        elif ctx.model_to_use and ctx.generation_config:
+            logger.info("[SSE-CHAT] Running full agent execution")
+            await self.g8e_agent.run_with_sse(
+                contents=ctx.contents,
+                generation_config=ctx.generation_config,
+                model_name=ctx.model_to_use,
+                agent_streaming_context=ctx,
+                context=ctx,
+                g8ed_event_service=self.g8ed_event_service,
+                llm_provider=llm_provider,
+            )
+            logger.info("[SSE-CHAT] Agent execution completed")
+
+        if ctx.token_usage:
             logger.info(
-                "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
-                ctx.model_to_use, ctx.agent_mode, len(ctx.contents), ctx.max_tokens
+                "[TOKEN_USAGE] SSE-CHAT final: %s", ctx.token_usage
             )
 
-            if ctx.triage_result and ctx.triage_result.follow_up_question and (
-                ctx.triage_result.complexity_confidence == TriageConfidence.LOW or
-                ctx.triage_result.intent_confidence == TriageConfidence.LOW
-            ):
-                follow_up = ctx.triage_result.follow_up_question
-                logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
+        await self._persist_ai_response(
+            g8e_context=g8e_context,
+            ctx=ctx,
+            user_settings=user_settings,
+        )
 
-                await self.g8ed_event_service.publish_investigation_event(
-                    investigation_id=g8e_context.investigation_id,
-                    event_type=EventType.LLM_CHAT_ITERATION_STARTED,
-                    payload=ChatProcessingStartedPayload(agent_mode=ctx.agent_mode),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
-                )
-
-                await self.g8ed_event_service.publish_investigation_event(
-                    investigation_id=g8e_context.investigation_id,
-                    event_type=EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    payload=ChatResponseChunkPayload(content=follow_up),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
-                )
-
-                await self.g8ed_event_service.publish_investigation_event(
-                    investigation_id=g8e_context.investigation_id,
-                    event_type=EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-                    payload=ChatResponseCompletePayload(
-                        content=follow_up,
-                        finish_reason="stop",
-                    ),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
-                )
-                ctx.response_text = follow_up
-            elif ctx.model_to_use and ctx.generation_config:
-                logger.info("[SSE-CHAT] Running full agent execution")
-                await self.g8e_agent.run_with_sse(
-                    contents=ctx.contents,
-                    generation_config=ctx.generation_config,
-                    model_name=ctx.model_to_use,
-                    agent_streaming_context=ctx,
-                    context=ctx,
-                    g8ed_event_service=self.g8ed_event_service,
-                    llm_provider=llm_provider,
-                )
-                logger.info("[SSE-CHAT] Agent execution completed")
-
-            if ctx.token_usage:
-                logger.info(
-                    "[TOKEN_USAGE] SSE-CHAT final: %s", ctx.token_usage
-                )
-
-            await self._persist_ai_response(
-                g8e_context=g8e_context,
-                ctx=ctx,
-                user_settings=user_settings,
-            )
-
-            logger.info(
-                "[SSE-CHAT] Completed: %d chars",
-                len(ctx.response_text)
-            )
+        logger.info(
+            "[SSE-CHAT] Completed: %d chars",
+            len(ctx.response_text)
+        )

@@ -170,7 +170,7 @@ describe('MarkdownRenderer [FRONTEND - jsdom]', () => {
 
         it('renders paragraph with markdown-paragraph class', () => {
             const html = renderer.parseMarkdown('plain text paragraph');
-            expect(html).toContain('<p class="markdown-paragraph">');
+            expect(html).toContain('<div class="markdown-paragraph">');
         });
     });
 
@@ -275,7 +275,7 @@ describe('MarkdownRenderer [FRONTEND - jsdom]', () => {
 
         it('entity-escapes raw inline HTML when html option is false (no live event handlers)', () => {
             const html = renderer.parseMarkdown('<div onclick="alert(1)">x</div>');
-            expect(html).not.toContain('<div');
+            expect(html).not.toContain('<div onclick');
             expect(html).toContain('&lt;div');
         });
 

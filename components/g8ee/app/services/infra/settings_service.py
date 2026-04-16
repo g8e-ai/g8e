@@ -83,7 +83,7 @@ class SettingsService:
         This replaces legacy configuration with platform defaults and
         secure bootstrap service for secrets from g8es volume.
         """
-        settings = G8eePlatformSettings(port=443)  # type: ignore[arg-type]
+        settings = G8eePlatformSettings(port=443)
         
         # Load secrets from bootstrap service
         internal_token = self._bootstrap.load_internal_auth_token()
@@ -129,24 +129,7 @@ class SettingsService:
         
         LLM provider configuration is user-specific only.
         """
-        llm = user_settings.llm
-        
-        # Validate providers
-        if llm.primary_provider:
-            try:
-                LLMProvider(llm.primary_provider)
-            except ValueError:
-                self._logger.warning(f"Invalid primary LLM provider in settings: {llm.primary_provider}. Falling back to default.")
-                llm.primary_provider = LLMProvider.OLLAMA
-
-        if llm.assistant_provider:
-            try:
-                LLMProvider(llm.assistant_provider)
-            except ValueError:
-                self._logger.warning(f"Invalid assistant LLM provider in settings: {llm.assistant_provider}. Falling back to default.")
-                llm.assistant_provider = LLMProvider.OLLAMA
-        
-        return llm
+        return user_settings.llm
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
         """Load platform settings from g8es via CacheAsideService."""

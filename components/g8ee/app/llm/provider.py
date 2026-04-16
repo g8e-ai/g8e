@@ -34,6 +34,9 @@ from app.llm.llm_types import (
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
+    def __init__(self):
+        self._is_cached_singleton = False
+
     @abstractmethod
     async def generate_content_stream_primary(
         self,
@@ -95,14 +98,27 @@ class LLMProvider(ABC):
         ...
 
     async def close(self):
-        """Clean up provider resources (e.g., close HTTP clients)."""
+        """Clean up provider resources (e.g., close HTTP clients).
+
+        For cached singleton providers, this is a no-op to allow reuse.
+        Use force_close() to actually close a cached provider.
+        """
+        if not self._is_cached_singleton:
+            await self._close_resources()
+
+    async def _close_resources(self):
+        """Internal method to actually close resources. Override in subclasses."""
         pass
+
+    async def force_close(self):
+        """Force close provider resources even if it's a cached singleton."""
+        await self._close_resources()
 
     async def __aenter__(self):
         """Async context manager entry."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit - ensures cleanup."""
+        """Async context manager exit - ensures cleanup for non-cached providers."""
         await self.close()
         return False
