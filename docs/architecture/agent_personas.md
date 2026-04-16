@@ -21,27 +21,30 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Model Tier**: Primary
 - **Purpose**: Routes user messages based on complexity and intent
 - **Migration Status**: Complete
-- **Usage**: `get_agent_persona("triage")`
+- **Usage**: `get_agent_persona("triage")` in `triage.py`
+- **Prompt Source**: `shared/constants/agents.json` (`triage`)
 
 ### 2. Primary AI
 - **Role**: Reasoner
 - **Model Tier**: Primary
 - **Purpose**: Main reasoning AI for complex tasks
-- **Current Prompt Location**: `components/g8ee/app/llm/prompts.py` + `prompts_data/` files (modular system)
+- **Prompt Source**: Modular system in `components/g8ee/app/prompts_data/`
 - **Migration Status**: TODO - Uses modular prompt system, not yet centralized
 
 ### 3. Assistant AI
 - **Role**: Responder
 - **Model Tier**: Assistant
 - **Purpose**: Fast-path AI for simple tasks
-- **Current Prompt Location**: Same as Primary (uses modular system)
+- **Prompt Source**: Modular system in `components/g8ee/app/prompts_data/`
 - **Migration Status**: TODO - Uses modular prompt system, not yet centralized
 
 ### 4. Tribunal
 - **Role**: Arbitrator
 - **Model Tier**: Assistant
 - **Purpose**: Syntactic refinement and validation for shell commands
-- **Migration Status**: Not applicable - Delegates to Tribunal members
+- **Migration Status**: Complete
+- **Usage**: `get_agent_persona("tribunal")` in `command_generator.py` (base template)
+- **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
 ### 5. Verifier
 - **Role**: Validator
@@ -92,6 +95,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Purpose**: Analyzes conversation history to extract user preferences and investigation summaries
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("memory_generator")` in `memory_generation_service.py`
+- **Prompt Source**: `shared/constants/agents.json` (`memory_generator`)
 
 ### 11. Eval Judge
 - **Role**: Evaluator
@@ -99,13 +103,15 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Purpose**: Evaluates AI agent performance against gold standard criteria
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("eval_judge")` in `eval_judge.py`
+- **Prompt Source**: `shared/constants/agents.json` (`eval_judge`)
 
 ### 12. Response Analyzer
 - **Role**: Defender
 - **Model Tier**: Assistant
 - **Purpose**: Defensive analysis of AI responses (command risk, error analysis, file operation risk)
 - **Migration Status**: Complete - Uses sub-agent pattern
-- **Usage**: See Sub-Agent Pattern below
+- **Usage**: `get_agent_persona("response_analyzer_command_risk")`, etc. in `response_analyzer.py`
+- **Prompt Source**: `shared/constants/agents.json` (`response_analyzer`, `response_analyzer_command_risk`, `response_analyzer_error`, `response_analyzer_file_risk`)
 
 ## Persona Loader Utility
 
@@ -117,13 +123,14 @@ from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_membe
 # Retrieve an agent's persona
 persona = get_agent_persona("triage")
 
-# Get the system prompt
+# Get the system prompt (falls back to identity/purpose if persona is TODO)
 system_prompt = persona.get_system_prompt()
 
 # Access metadata
 print(persona.display_name)  # "Triage"
 print(persona.role)          # "classifier"
 print(persona.temperature)   # None
+print(persona.tools)         # ["run_commands_with_operator", ...]
 
 # For Tribunal members specifically
 member_persona = get_tribunal_member("axiom")
@@ -148,7 +155,7 @@ Some agents delegate to specialized sub-agents for different analysis types. The
 ```python
 from app.utils.agent_persona_loader import get_agent_persona
 
-# Load specific sub-agent for command risk analysis
+# Load specific sub-agent for command risk analysis in response_analyzer.py
 command_risk_persona = get_agent_persona("response_analyzer_command_risk")
 prompt = command_risk_persona.persona.format(
     command=command,

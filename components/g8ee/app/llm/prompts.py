@@ -16,6 +16,7 @@
 import logging
 
 from ..constants import CloudSubtype, EventType, ExecutionStatus, OperatorType, PromptFile, PromptSection
+from ..constants.prompts import InvestigationContextLabel
 from ..constants.message_sender import MessageSender
 from ..models.agent import OperatorContext
 from ..models.investigations import EnrichedInvestigationContext
@@ -25,6 +26,23 @@ from ..prompts_data.loader import load_mode_prompts, load_prompt
 logger = logging.getLogger(__name__)
 
 
+def _format_operator_doc(op_doc, index: int) -> str:
+    """Format a single operator document for investigation context."""
+    sys_info = op_doc.system_info
+    op_id = op_doc.operator_id or f"operator_{index + 1}"
+    hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
+    
+    details = [
+        f"hostname={hostname}" if hostname else None,
+        f"os={sys_info.os}" if sys_info and sys_info.os else None,
+        f"arch={sys_info.architecture}" if sys_info and sys_info.architecture else None,
+        f"type={op_doc.operator_type}",
+        f"session={op_doc.operator_session_id[:12]}..." if op_doc.operator_session_id else None,
+    ]
+    
+    return f"  [{index + 1}] {op_id}: {', '.join(filter(None, details))}"
+
+
 def build_investigation_context_section(
     investigation: EnrichedInvestigationContext | None
 ) -> str:
@@ -32,44 +50,27 @@ def build_investigation_context_section(
     if not investigation:
         return ""
 
-    context_parts = []
+    fields = [
+        ("case_title", InvestigationContextLabel.CASE),
+        ("case_description", InvestigationContextLabel.DESCRIPTION),
+        ("status", InvestigationContextLabel.STATUS),
+        ("priority", InvestigationContextLabel.PRIORITY),
+        ("severity", InvestigationContextLabel.SEVERITY),
+    ]
 
-    if investigation.case_title:
-        context_parts.append(f"Case: {investigation.case_title}")
-
-    if investigation.case_description:
-        context_parts.append(f"Description: {investigation.case_description}")
-
-    if investigation.status:
-        context_parts.append(f"Status: {investigation.status}")
-
-    if investigation.priority:
-        context_parts.append(f"Priority: {investigation.priority}")
-
-    if investigation.severity:
-        context_parts.append(f"Severity: {investigation.severity}")
+    context_parts = [f"{label}: {getattr(investigation, field)}" 
+                     for field, label in fields 
+                     if getattr(investigation, field)]
 
     if investigation.conversation_history:
         context_parts.append("Conversation history is available via query_investigation_context.")
 
-    operator_docs = investigation.operator_documents
-    if operator_docs:
-        context_parts.append(f"Operators: {len(operator_docs)} bound")
-        for i, op_doc in enumerate(operator_docs):
-            sys_info = op_doc.system_info
-            op_details = []
-            op_id = op_doc.operator_id or f"operator_{i+1}"
-            hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
-            if hostname:
-                op_details.append(f"hostname={hostname}")
-            if sys_info and sys_info.os:
-                op_details.append(f"os={sys_info.os}")
-            if sys_info and sys_info.architecture:
-                op_details.append(f"arch={sys_info.architecture}")
-            op_details.append(f"type={op_doc.operator_type}")
-            if op_doc.operator_session_id:
-                op_details.append(f"session={op_doc.operator_session_id[:12]}...")
-            context_parts.append(f"  [{i+1}] {op_id}: {', '.join(op_details)}")
+    if investigation.operator_documents:
+        context_parts.append(f"Operators: {len(investigation.operator_documents)} bound")
+        context_parts.extend(
+            _format_operator_doc(op_doc, i) 
+            for i, op_doc in enumerate(investigation.operator_documents)
+        )
 
     if not context_parts:
         return ""

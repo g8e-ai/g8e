@@ -261,14 +261,13 @@ OPENAI_GPT_4O_MINI              = "gpt-4o-mini"
 OPENAI_GPT_5_3_INSTANT          = "gpt-5.3-instant"
 OPENAI_GPT_5_4                  = "gpt-5.4"
 OPENAI_GPT_5_4_NANO             = "gpt-5.4-nano"
-OPENAI_GPT_5_4_THINKING         = "gpt-5.4-thinking"
-OPENAI_GPT_5_4_INSTANT          = "gpt-5.4-instant"
+OPENAI_GPT_5_4_PRO              = "gpt-5.4-pro"
 OPENAI_GPT_5_4_MINI             = "gpt-5.4-mini"
 
 # Anthropic models
-ANTHROPIC_CLAUDE_OPUS_4_6       = "claude-opus-4.6"
-ANTHROPIC_CLAUDE_SONNET_4_6     = "claude-sonnet-4.6"
-ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4.5"
+ANTHROPIC_CLAUDE_OPUS_4_6       = "claude-opus-4-6"
+ANTHROPIC_CLAUDE_SONNET_4_6     = "claude-sonnet-4-6"
+ANTHROPIC_CLAUDE_HAIKU_4_5      = "claude-haiku-4-5"
 
 GEMINI_3_1_PRO                  = "gemini-3.1-pro-preview"
 GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
@@ -283,12 +282,12 @@ GEMMA4                        = "gemma4"
 GEMMA4_E2B                    = "gemma4-e2b"
 GEMMA4_E4B                    = "gemma4-e4b"
 
-OLLAMA_QWEN3_5_122B             = "qwen3.5-122b"
-OLLAMA_GLM_5_1                 = "glm-5.1"
-OLLAMA_GEMMA4_26B              = "gemma4-26b"
-OLLAMA_NEMOTRON_3_30B          = "nemotron-3-30b"
-OLLAMA_LLAMA_3_2_3B            = "llama-3.2-3b"
-OLLAMA_QWEN3_5_2B              = "qwen3.5-2b"
+OLLAMA_QWEN3_5_122B             = "qwen3.5:122b"
+OLLAMA_GLM_5_1                 = "glm-5.1:cloud"
+OLLAMA_GEMMA4_26B              = "gemma4:26b"
+OLLAMA_NEMOTRON_3_30B          = "nemotron-3-nano:30b"
+OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
+OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 OLLAMA_CODELLAMA_7B            = "codellama-7b"
 OLLAMA_LLAMA3_70B              = "llama3-70b"
 OLLAMA_LLAMA3_8B               = "llama3-8b"
@@ -300,7 +299,7 @@ QWEN25_7B                     = "qwen25-7b"
 QWEN25_14B                    = "qwen25-14b"
 
 # Provider default models
-OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4_THINKING
+OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4
 OLLAMA_DEFAULT_MODEL            = OLLAMA_QWEN3_5_122B
 ANTHROPIC_DEFAULT_MODEL        = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL            = GEMINI_3_FLASH

@@ -31,6 +31,14 @@ class PromptSection(str, Enum):
     RESPONSE_CONSTRAINTS = "response_constraints"
     LEARNED_CONTEXT = "learned_context"
 
+
+class InvestigationContextLabel(str, Enum):
+    CASE = "Case"
+    DESCRIPTION = "Description"
+    STATUS = "Status"
+    PRIORITY = "Priority"
+    SEVERITY = "Severity"
+
 class PromptFile(str, Enum):
     # Core
     CORE_IDENTITY = "core/identity.txt"

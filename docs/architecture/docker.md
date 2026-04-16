@@ -23,9 +23,10 @@ AI backend. Python/FastAPI.
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** none (`cap_drop: ALL`)
 - **Writable volumes:** `g8ee-data:/data` only
-- **Config/shared mounts:** `./shared:ro`, `g8es-ssl:/g8es:ro`
-- **Internal Auth:** Receives `INTERNAL_AUTH_TOKEN` via environment during bootstrap; discovers authoritative token from g8es/SSL volume at runtime.
-- **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls
+- **Config/shared mounts:** `./shared:/app/shared:ro`, `g8es-ssl:/g8es:ro`
+- **Internal Auth:** Receives `G8E_INTERNAL_AUTH_TOKEN` via environment during bootstrap; discovers authoritative token from g8es/SSL volume at runtime.
+- **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`)
+- **Healthcheck:** `curl -f -k https://localhost/health` (internal port 443)
 
 ### g8ed (`g8ed`)
 
@@ -35,9 +36,10 @@ Web frontend and single external entry point. Node.js.
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** none (`cap_drop: ALL`)
 - **Writable volumes:** `g8ed-data:/data`
-- **Config/shared mounts:** `./shared:ro`, `g8es-ssl:/g8es:ro`, `./docs:ro`, `./README.md:ro`, `./components/g8ed/views:ro`, `./components/g8ed/public:ro`
-- **Internal Auth:** Discovers authoritative token from g8es/SSL volume (`g8es-ssl:/g8es:ro`) at runtime. No `G8E_INTERNAL_AUTH_TOKEN` environment variable.
-- **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls, read-only root filesystem
+- **Config/shared mounts:** `./shared:/shared:ro`, `g8es-ssl:/g8es:ro`, `./docs:/docs:ro`, `./README.md:/readme/README.md:ro`, and specific file mounts from `./components/g8ed/` to `/app/` for hot-reload support.
+- **Internal Auth:** Discovers authoritative token from g8es/SSL volume (`g8es-ssl:/g8es:ro`) at runtime.
+- **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`), read-only root filesystem
+- **Healthcheck:** `curl -f -k https://localhost/health` (internal port 443)
 
 ### g8es (`g8es`)
 
@@ -48,22 +50,35 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Capabilities:** `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Writable volumes:** `g8es-data:/data`, `g8es-ssl:/ssl`
 - **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
-- **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL` (no `no-new-privileges` or `sysctls` directives in compose)
+- **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
+- **Healthcheck:** `curl -f -k https://localhost:9000/health`
 
-### g8e node
+### g8e node (`g8ep`)
 
-Unified test environment with Python, Node, and Go. Always running alongside core services.
+Unified management sidecar with Python and network tools. Always running alongside core services.
 
 - **User:** `g8e` (uid 1001, gid 1001)
 - **Base image:** `ubuntu:24.04`
-- **Read-only filesystem:** no — test and build workflows write to `/app/components` and Go build cache
-- **Bind mounts:** `components/g8ee/`, `components/g8ed/`, `components/g8eo/`, `components/g8ep/scripts/`, `shared/`, `scripts/` — the full repo root is not mounted
+- **Read-only filesystem:** no
+- **Bind mounts:** `components/g8ep/scripts/`, `shared/`, `scripts/`
 - **Capabilities:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`
-- **Security:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`, `no-new-privileges: true` (no `sysctls` directives in compose)
+- **Security:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`, `no-new-privileges: true`
 - **Docker socket:** see [Docker Socket Threat Model](#docker-socket-threat-model) below
-- **Go toolchain:** `GOPATH`, `GOBIN`, and `GOCACHE` are all set under `/home/g8e/` so the Go build cache and installed binaries are owned by `g8e` from the start. `gotestsum` is installed as `g8e` (after `USER g8e`) so no root-owned cache files are created.
-- **Notable env vars:** `RUNNING_IN_DOCKER=1`, `HOME=/home/g8e` signals to test and tool scripts that they are executing inside the container
+- **Notable env vars:** `RUNNING_IN_DOCKER=1`, `HOME=/home/g8e` signals to platform scripts that they are executing inside the container
+- **Healthcheck:** `pgrep -x supervisord`
+
+## Test Runners
+
+g8e uses dedicated per-component test runner containers that are lean and parallel-buildable. These are defined in `docker-compose.yml` but are generally managed by the `./g8e test` command.
+
+| Service | Component | Purpose |
+|---------|-----------|---------|
+| `g8ee-test-runner` | g8ee | Python/pytest/pyright unit and integration tests. |
+| `g8ed-test-runner` | g8ed | Node.js/vitest unit and integration tests. |
+| `g8eo-test-runner` | g8eo | Go/gotestsum tests and operator binary builder. |
+
+These runners share the same user (uid 1001) as production services and mount the relevant component source for fast test cycles.
 
 ## Non-Root Users
 
@@ -95,7 +110,8 @@ USER g8e
 **Ubuntu (g8ep) — `ubuntu:24.04` base:**
 ```dockerfile
 RUN groupadd -g 1001 g8e && \
-    useradd -u 1001 -g g8e -m -s /bin/bash g8e
+    useradd -u 1001 -g g8e -m -s /bin/bash g8e && \
+    usermod -aG docker g8e 2>/dev/null || true
 USER g8e
 ```
 
@@ -124,11 +140,11 @@ The backend network (`g8e-network`) uses a standard bridge driver:
 
 - **Bridge network:** All services communicate over the `g8e-network` bridge. The network is not marked `internal: true` — external routing is not blocked at the Docker network level.
 - **Gateway:** g8ed is the only service with published host ports (443, 80), making it the single external entry point by design.
-- **Sysctls:** Hardened kernel parameters (`accept_redirects=0`, `send_redirects=0`) are applied to g8ee and g8ed. g8es and g8e node do not have `sysctls` directives.
+- **Sysctls:** Hardened kernel parameters (`accept_redirects=0`, `send_redirects=0`) are applied to g8ee and g8ed. g8es and g8ep do not have `sysctls` directives.
 
 ### `no-new-privileges`
 
-Applied to g8ee, g8ed, and g8e node:
+Applied to g8ee, g8ed, and g8ep:
 
 ```yaml
 security_opt:
@@ -142,7 +158,7 @@ Not applied to:
 
 ### Capability Dropping
 
-g8ee, g8ed, and g8e node drop all capabilities:
+g8ee and g8ed drop all capabilities:
 
 ```yaml
 cap_drop:
@@ -166,21 +182,21 @@ tmpfs:
 
 Applied to: **g8ee**, **g8ed**, **g8es**
 
-Not applied to: **g8ep** (build and test workflows require writes throughout the container).
+Not applied to: **g8ep** and test runners.
 
 ## Docker Socket Threat Model
 
-One service mounts `/var/run/docker.sock`: g8e node.
+One service mounts `/var/run/docker.sock`: g8ep.
 
 **The threat:** The Docker socket is equivalent to root on the host. A process with socket access can start privileged containers, read host filesystem paths, and escape the container isolation boundary.
 
-**Why g8e node needs it:**
+**Why g8ep needs it:**
 
-g8ep uses `docker exec` to run test suites and operator workflows against live service containers. It is a dev/test tool, never public-facing.
+g8ep manages operator build and deployment workflows. It is a management tool, never public-facing.
 
-Mitigation: g8e node runs as uid 1001 (not root). The `group_add: ${DOCKER_GID}` directive adds the host docker group to the container user, granting socket access without requiring root.
+Mitigation: g8ep runs as uid 1001 (not root). The `group_add: ${DOCKER_GID}` directive adds the host docker group to the container user, granting socket access without requiring root.
 
-**How g8ed manages the g8e node operator (without the socket):**
+**How g8ed manages the g8ep operator (without the socket):**
 
 g8ed's `G8ENodeOperatorService` manages operator processes inside the g8ep container via Supervisor XML-RPC over the internal network — it does not use `docker exec` or mount the Docker socket. The XML-RPC interaction is:
 
@@ -200,21 +216,20 @@ Volumes are categorized by write requirement:
 | `g8ed-data:/data` | read-write | g8ed |
 | `g8es-data:/data` | read-write | g8es |
 | `g8es-ssl:/ssl` | read-write | g8es |
-| `g8ed-node-modules:/app/components/g8ed/node_modules` | read-write | g8e node |
-| `./components/g8ee:/app/components/g8ee` | read-write | g8e node |
-| `./components/g8ed:/app/components/g8ed` | read-write | g8e node |
-| `./components/g8eo:/app/components/g8eo` | read-write | g8e node |
-| `./components/g8ep/scripts:/app/components/g8ep/scripts` | read-write | g8e node |
-| `./scripts:/app/scripts` | read-write | g8e node |
-| `./components/g8ep/reports:/reports` | read-write | g8e node |
-| `./shared:/app/shared` | read-only | g8ee |
-| `./shared:/app/shared` | read-write | g8e node |
-| `./shared:/shared` | read-only | g8ed |
+| `g8ed-node-modules:/app/node_modules` | read-write | g8ed |
+| `g8ed-test-node-modules:/app/components/g8ed/node_modules` | read-write | g8ed-test-runner |
+| `./components/g8ee:/app/components/g8ee` | read-write | g8ee-test-runner |
+| `./components/g8ed:/app/components/g8ed` | read-write | g8ed-test-runner |
+| `./components/g8eo:/app/components/g8eo` | read-write | g8eo-test-runner |
+| `./components/g8ep/scripts:/app/components/g8ep/scripts` | read-write | g8ep |
+| `./scripts:/app/scripts` | read-write | g8ep, test-runners |
+| `./shared:/app/shared` | read-only | g8ee, g8ee-test-runner |
+| `./shared:/shared` | read-only | g8ed, g8ed-test-runner, g8eo-test-runner |
 | `./components/g8ed/views:/app/views` | read-only | g8ed |
-| `g8es-ssl:/g8es` | read-only | g8ee, g8ed, g8e node |
+| `g8es-ssl:/g8es` | read-only | g8ee, g8ed, g8ep, test-runners |
 | `./docs:/docs` | read-only | g8ed |
 | `./README.md:/readme/README.md` | read-only | g8ed |
-| `/var/run/docker.sock` | read-write | g8e node |
+| `/var/run/docker.sock` | read-write | g8ep |
 
 **Development additions:**
 Development mode is handled via the `./g8e` CLI and by passing specific environment variables or Docker Compose profiles.

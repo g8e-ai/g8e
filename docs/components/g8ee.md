@@ -24,12 +24,16 @@ ChatPipelineService
   │     ├── InvestigationDataService — (Data Layer) Pure CRUD for investigations
   │     ├── OperatorDataService      — (Data Layer) Pure CRUD for operators
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
-  ├── ChatTaskManager         — Task lifecycle and cancellation
+  ├── BackgroundTaskManager     — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates
   ├── MemoryGenerationService — Background memory updates from conversation
   ├── AttachmentService       — Attachment storage and retrieval
   └── EventService           — Internal SSE event delivery to g8ed
 ```
+
+> [!NOTE]
+> `ChatTaskManager` is a backward compatibility alias for `BackgroundTaskManager`.
+
 
 ### Component Relationships
 
@@ -173,21 +177,21 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 | `StreamChunkFromModelType` | SSE event published | Side effect |
 |-------------------|--------------------|--------------|
 | `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `LLMStreamingContext.response_text` |
-| `THINKING` | none | `LLMStreamingContext.set_thinking_started()` |
+| `THINKING` | none | `AgentStreamContext.set_thinking_started()` |
 | `THINKING_UPDATE` | none | — |
-| `THINKING_END` | none | `LLMStreamingContext.set_thinking_ended()` |
+| `THINKING_END` | none | `AgentStreamContext.set_thinking_ended()` |
 | `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
 | `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
-| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `LLMStreamingContext` |
-| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `LLMStreamingContext` |
+| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamContext` |
+| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
 | `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
 | `RETRY` | none | — |
 
 `deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `LLMStreamingContext` state.
+`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamContext` state.
 
-`LLMStreamingContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
+`AgentStreamContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
 
 ### Error Handling
 
@@ -267,7 +271,7 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_context.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
 
@@ -322,40 +326,27 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### Gemini Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3-flash` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
 
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gpt-5.4` | HIGH, MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.3-instant` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.4-mini` | MEDIUM, LOW | Yes | 200,000 | 8,192 |
-| `gpt-5.4-nano` | LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gpt-4o` | - | Yes | 128,000 | 4,096 |
-| `gpt-4o-mini` | - | Yes | 128,000 | 4,096 |
-| `gpt-4-turbo` | - | Yes | 128,000 | 4,096 |
-| `gpt-3.5-turbo` | - | Yes | 16,385 | 4,096 |
+| `gpt-5.4-mini` | LOW, MINIMAL | Yes | 200,000 | 8,192 |
+| `gpt-4o` | - | Yes | 128,000 | 8,192 |
 
 #### Ollama Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemma4-e4b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gemma4-e2b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `gemma3-27b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-12b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-4b` | - | Yes | 128,000 | 8,192 |
-| `gemma3-1b` | - | Yes | 32,768 | 8,192 |
-| `qwen3-coder-30b` | - | Yes | 256,000 | 8,192 |
-| `qwen3-1b7` | - | Yes | 32,768 | 8,192 |
-| `qwen2.5-14b` | - | Yes | 32,768 | 8,192 |
-| `qwen2.5-7b` | - | Yes | 32,768 | 8,192 |
-| `llama3:8b` | - | Yes | 8,192 | 4,096 |
-| `llama3:70b` | - | Yes | 8,192 | 4,096 |
-| `codellama:7b` | - | Yes | 8,192 | 4,096 |
-| `mistral:7b` | - | Yes | 8,192 | 4,096 |
+| `gemma4-26b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `nemotron-3-30b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
+| `qwen3.5-122b` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
+| `glm-5.1` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
+| `llama-3.2-3b` | - | Yes | 32,768 | 8,192 |
+| `qwen3.5-2b` | - | Yes | 32,768 | 8,192 |
+| `llama3:8b` | - | Yes | 128,000 | 8,192 |
 
 ### Model Roles
 

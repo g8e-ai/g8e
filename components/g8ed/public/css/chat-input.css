@@ -322,13 +322,13 @@
 .llm-model-dropdown__selected {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     background: rgba(var(--accent-blue-rgb), 0.06);
     border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 0.25rem;
     cursor: pointer;
     transition: all 0.2s ease;
+    gap: 0.5rem;
 }
 
 .llm-model-dropdown:hover .llm-model-dropdown__selected {

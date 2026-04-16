@@ -16,11 +16,13 @@ body {
 .setup-page {
     flex: 1;
     overflow-y: auto;
+    justify-items: center;
 }
 
 .setup-container {
-    max-width: 680px;
-    margin: 1rem auto 1rem auto;
+    max-width: 720px;
+    margin: 1rem ;
+    position: relative;
 }
 
 /* ============================================================================
@@ -39,7 +41,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    gap: 1rem;
     list-style: none;
     padding: 0;
 }
@@ -124,7 +126,7 @@ body {
     width: 3rem;
     background: var(--border-color);
     flex-shrink: 0;
-    margin-bottom: 1.375rem;
+    margin-bottom: 1.125rem;
     transition: background 0.2s;
 }
 
@@ -191,7 +193,7 @@ body[data-theme="light"] .wizard-step.done .wizard-step-label { color: var(--acc
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    padding: 1.25rem;
+    padding: 1rem;
 }
 
 .wizard-panel.active {
@@ -364,31 +366,6 @@ body[data-theme="light"] .setup-label { color: var(--text-primary); }
 body[data-theme="light"] .setup-label-link { color: var(--accent-blue); }
 body[data-theme="light"] .setup-label-link:hover { color: var(--accent-blue-dark); }
 
-.setup-field-desc {
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    line-height: 1.45;
-}
-
-.setup-field-desc a,
-.setup-field-desc code {
-    color: var(--accent-blue);
-    text-decoration: none;
-    font-family: var(--font-mono);
-    font-size: 0.8em;
-}
-
-.setup-field-desc a:hover { text-decoration: underline; }
-
-.setup-field-desc-icon {
-    font-size: 0.875rem;
-    vertical-align: middle;
-}
-
-body[data-theme="light"] .setup-field-desc { color: var(--text-dim); }
-body[data-theme="light"] .setup-field-desc a,
-body[data-theme="light"] .setup-field-desc code { color: var(--accent-blue); }
-
 /* Inputs */
 .setup-input {
     width: 100%;
@@ -469,26 +446,26 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
 
 .llm-model-dropdown.custom-dropdown {
     position: relative;
-    min-width: 180px;
-    max-width: 250px;
+    width: 100%;
 }
 
 .setup-model-dropdown {
     width: 100%;
-    min-width: auto;
-    max-width: none;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .llm-model-dropdown__selected {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
     padding: 0.5625rem 0.875rem;
     background: rgba(var(--accent-blue-rgb), 0.06);
     border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
+    min-width: 0;
+    gap: 1rem;
 }
 
 .llm-model-dropdown.disabled .llm-model-dropdown__selected {
@@ -509,9 +486,9 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
 
 .llm-model-dropdown__text {
     flex: 1;
-    font-size: 0.875rem;
+    font-size: 0.7rem;
     font-family: var(--font-mono);
-    color: var(--text-secondary);
+    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -533,17 +510,17 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
 
 .llm-model-icon {
     font-size: 1.125rem;
-    color: var(--text-tertiary);
+    color: var(--accent-blue);
     user-select: none;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* Drop UP menu */
+/* Drop down menu */
 .llm-model-dropdown__menu {
     position: absolute;
-    bottom: calc(100% + 4px);
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
     max-height: 350px;
@@ -551,10 +528,11 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
     background: var(--bg-secondary);
     border: 1px solid rgba(var(--text-rgb), 0.2);
     border-radius: 6px;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 1000;
     display: none;
     padding: 4px;
+    min-width: 0;
 }
 
 .llm-model-dropdown.open .llm-model-dropdown__menu {
@@ -581,7 +559,7 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
 /* Model options */
 .llm-model-dropdown__option {
     padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-family: var(--font-mono);
     color: var(--text-primary);
     cursor: pointer;
@@ -663,9 +641,55 @@ body[data-theme="light"] .setup-passkey-note {
 
 body[data-theme="light"] .setup-passkey-note .material-symbols-outlined { color: var(--accent-blue); }
 
+/* Model recommendation note */
+.setup-model-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    background: rgba(var(--accent-blue-rgb), 0.04);
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.15);
+    border-radius: 6px;
+    font-size: 0.7875rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+    margin-top: 0.5rem;
+}
+
+.setup-model-note .material-symbols-outlined {
+    font-size: 1rem;
+    color: var(--accent-blue);
+    flex-shrink: 0;
+    margin-top: 0.0625rem;
+}
+
+body[data-theme="light"] .setup-model-note {
+    background: rgba(var(--accent-blue-rgb), 0.03);
+    border-color: rgba(var(--accent-blue-rgb), 0.12);
+    color: var(--text-dim);
+}
+
+body[data-theme="light"] .setup-model-note .material-symbols-outlined { color: var(--accent-blue); }
+
 /* ============================================================================
    Provider key rows (multi-provider setup)
    ============================================================================ */
+
+.setup-fields-row-api-keys {
+    display: flex;
+    flex-direction: column;
+}
+
+.setup-fields-api-keys {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+
+.setup-fields-model-selection {
+    display: flex;
+    flex-direction: column;
+}
 
 .wizard-provider-key-row {
     background: rgba(var(--accent-blue-rgb), 0.02);
@@ -723,12 +747,14 @@ body[data-theme="light"] .wizard-provider-key-row.has-value {
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--accent-green);
-    opacity: 0;
-    transition: opacity 0.2s;
+    visibility: hidden;
+    transition: visibility 0.2s;
+    width: 70px;
+    text-align: right;
 }
 
 .wizard-provider-key-row.has-value .wizard-provider-key-status {
-    opacity: 1;
+    visibility: visible;
 }
 
 /* Unified model selection */
@@ -736,7 +762,7 @@ body[data-theme="light"] .wizard-provider-key-row.has-value {
     background: rgba(var(--accent-blue-rgb), 0.04);
     border: 1px solid rgba(var(--accent-blue-rgb), 0.15);
     border-radius: 8px;
-    padding: 1.25rem;
+    padding: 1rem;
     opacity: 0.5;
     transition: opacity 0.2s, border-color 0.2s;
 }
@@ -751,25 +777,15 @@ body[data-theme="light"] .wizard-model-selection {
     border-color: rgba(var(--accent-blue-rgb), 0.12);
 }
 
-.wizard-model-selection-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--text-dim);
-    margin-bottom: 1rem;
-}
-
-.wizard-model-selection-header .material-symbols-outlined {
-    font-size: 1.125rem;
-    color: var(--accent-blue);
-}
-
 .wizard-model-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
+    min-width: 0;
+}
+
+.wizard-model-fields > .setup-field {
+    min-width: 0;
 }
 
 /* Advanced model customization */
@@ -1066,6 +1082,8 @@ body[data-theme="light"] .setup-btn-secondary:hover:not(:disabled) {
     .wizard-advanced-fields { grid-template-columns: 1fr; }
     .wizard-model-fields { grid-template-columns: 1fr; }
     .setup-fields-row { grid-template-columns: 1fr; }
+
+    .setup-fields-row-api-keys { grid-template-columns: 1fr; }
 
     .setup-title { font-size: 1.5rem; }
 

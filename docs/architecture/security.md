@@ -106,9 +106,9 @@ The platform handles two critical secrets that are required for component-to-com
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
 **1. Authoritative Source (The Volume)**
-The `g8es-ssl` volume (mounted at `/g8es/ssl`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
-- `internal_auth_token` is stored at `/g8es/ssl/internal_auth_token`.
-- `session_encryption_key` is stored at `/g8es/ssl/session_encryption_key`.
+The `g8es-ssl` volume (mounted at `/g8es`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
+- `internal_auth_token` is stored at `/g8es/internal_auth_token`.
+- `session_encryption_key` is stored at `/g8es/session_encryption_key`.
 
 **2. Generation and Persistence**
 On the first platform start, **g8es** (g8eo in `--listen` mode) checks if these secrets exist on the volume. If they are missing, g8es generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
@@ -140,7 +140,8 @@ All `X-G8E-*` identity headers are **injected by g8ed from the verified server-s
 | `X-G8E-Investigation-ID` | Active investigation correlation |
 | `X-G8E-Task-ID` | Active task correlation |
 | `X-G8E-Bound-Operators` | JSON array of all operators bound to the session |
-| `X-G8E-Request-ID` | Per-request tracing identifier |
+| `X-G8E-Request-ID` | Execution tracking identifier |
+| `X-G8E-New-Case` | Boolean signal for inline resource creation |
 | `X-G8E-Source-Component` | Source component name (validated against `ComponentName` enum) |
 
 ---
@@ -255,11 +256,11 @@ Sessions are a critical security boundary — both web user sessions and Operato
 
 ### `requireAuth` Middleware
 
-`requireAuth` (`middleware/authentication.js`) is the single session validation point. It extracts the session ID from, in priority order: `web_session_id` HttpOnly cookie, `X-Session-Id` header, `Authorization: Bearer` header. After validation it attaches `req.webSessionId`, `req.session`, and `req.userId`. Route handlers must use these exclusively — never re-extract the session ID or call `validateSession()` again.
+`requireAuth` (`middleware/authentication.js`) is the single session validation point. It extracts the session ID from the `web_session_id` HttpOnly cookie. In non-production environments, it also accepts `X-G8E-WebSession-ID` or `Authorization: Bearer` as fallbacks for testing. After validation it attaches `req.webSessionId`, `req.session`, and `req.userId`. Route handlers must use these exclusively — never re-extract the session ID or call `validateSession()` again.
 
 ### `requireFirstRun` Middleware
 
-`requireFirstRun` (`middleware/authentication.js`) guards the unauthenticated setup-flow registration endpoints. It calls `getSetupService().isFirstRun()` on every request. If users already exist it calls `next('route')`, causing Express to skip the setup-flow handler and fall through to the `requireAuth` handler registered on the same path (the add-passkey flow). This dual-handler pattern means the same endpoint serves two distinct flows without any branching inside the handler body — and without exposing an unauthenticated code path once the platform is initialized. If `isFirstRun()` throws, the request is rejected with 500 rather than silently passing through.
+`requireFirstRun` (`middleware/authentication.js`) guards the unauthenticated setup-flow registration endpoints. It checks `platform_settings.setup_complete` on every request. If setup is already complete, it calls `next('route')`, causing Express to skip the setup-flow handler and fall through to the `requireAuth` handler registered on the same path (the add-passkey flow). This dual-handler pattern means the same endpoint serves two distinct flows without any branching inside the handler body — and without exposing an unauthenticated code path once the platform is initialized. If the settings check fails, the request is rejected with 500.
 
 ### HTTP Security Headers
 

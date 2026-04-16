@@ -66,11 +66,11 @@ flowchart TD
 ```
 
 1. **Context assembly** — `InvestigationService` resolves the investigation, enriches it with bound operator metadata, retrieved memory, and triage classification.
-2. **LLM Proposer call** — The **High Reasoning AI** (Primary model) performs deep logical pathfinding using high thinking levels.
-3. **Tool execution** — Tool calls are dispatched sequentially through `AIToolService`. 
-4. **Tribunal Refinement** — Operator commands pass through a **Voting Swarm** and **Final Verifier** for syntactic precision before approval.
-5. **SSE delivery** — Chunks are translated and forwarded to the browser via g8ed in real time.
-6. **Persistence** — Results are saved to g8es via authenticated HTTP calls (`X-Internal-Auth`); background memory update tasks are fired.
+2. **LLM Proposer call** — The **High Reasoning AI** (Primary model) or **Assistant AI** performs the turn based on triage complexity.
+3. **Tool execution** — Tool calls are dispatched sequentially through `execute_turn_tool_calls` in `agent_tool_loop.py`. 
+4. **Tribunal Refinement** — `run_commands_with_operator` tool calls pass through the Tribunal (Voting Swarm + Verifier) in `agent_tool_loop.py` before execution.
+5. **SSE delivery** — Chunks are translated via `deliver_via_sse` and forwarded to the browser via g8ed in real time.
+6. **Persistence** — Results are saved to g8es via `_persist_ai_response` in `chat_pipeline.py`; background memory update tasks are fired.
 
 All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in g8es (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with g8es are strictly authenticated via the `X-Internal-Auth` shared secret.
 
@@ -84,11 +84,11 @@ All state-changing operator actions require explicit user approval. The platform
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times (default 3) with configurable per-attempt delays (100ms, 200ms, 300ms) to handle propagation lag.
 
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the AI proceeds without it.
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`.
 
-**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
+**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators` from `G8eHttpContext`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
 
-**Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, public IP, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields (type, subtype, intents).
+**Step 4 — operator context extraction:** `extract_all_operators_context` (which uses `_extract_single_operator_context`) maps `OperatorDocument` records to a list of typed `OperatorContext` objects — OS, hostname, architecture, CPU, memory, public IP, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields (type, subtype, intents).
 
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records from the cache.
@@ -104,37 +104,40 @@ The resulting `EnrichedInvestigationContext` carries:
 
 ## Dynamic System Prompts
 
-`build_modular_system_prompt` (`components/g8ee/app/llm/prompts.py`) assembles the system prompt from independently loaded sections each turn. The composition varies based on workflow and runtime state.
+`build_modular_system_prompt` (`components/g8ee/app/llm/prompts.py`) assembles the system prompt from independently loaded sections each turn. The composition varies based on `AgentMode` (resolved in `load_mode_prompts`) and runtime state.
 
-### Fixed Sections (always included)
+### Core Sections (always included)
 
 | Section | File | Description |
 |---|---|---|
 | `identity` | `prompts_data/core/identity.txt` | AI persona, role, core directives |
 | `safety` | `prompts_data/core/safety.txt` | Hard safety constraints, approval requirements |
-| `response_constraints` | `prompts_data/system/response_constraints.txt` | Response length limits, formatting guidance |
 
 ### Mode Sections (loaded by `load_mode_prompts`)
 
-Mode is determined by two flags: `operator_bound` (bool) and `is_cloud_operator` (bool). Three mode directories exist:
+`AgentMode` is determined by `operator_bound` and `is_cloud_operator`. `load_mode_prompts` (in `prompts_data/loader.py`) loads sections from `AGENT_MODE_PROMPT_FILES`:
 
-| Mode | Directory | Loaded When |
-|---|---|---|
-| Operator bound (standard) | `prompts_data/modes/operator_bound/` | Operator connected, not cloud type |
-| Cloud operator bound | `prompts_data/modes/cloud_operator_bound/` | Operator connected, cloud type. g8ep subtypes receive a specialized prompt for direct system access. |
-| Not bound | `prompts_data/modes/operator_not_bound/` | No operator connected |
+| Mode | Loaded When |
+|---|---|
+| `OPERATOR_BOUND` | Standard operator connected |
+| `CLOUD_OPERATOR_BOUND` | Cloud operator connected (AWS/GCP/Azure/g8ep) |
+| `OPERATOR_NOT_BOUND` | No operator connected (advisor mode) |
 
-Each mode directory provides up to three sections: `capabilities`, `execution`, and `tools`. The `tools` section is only included when `operator_bound` is true or `search_web` is available.
+When `OPERATOR_NOT_BOUND` and `g8e_web_search_available` is false, it loads `_no_search` variants of capabilities and execution prompts.
+
+Each mode provides sections: `capabilities`, `execution`, and `tools`. The `tools` section is included if `operator_bound` or `g8e_web_search_available` is true.
 
 ### Dynamic Sections (runtime-injected)
 
-**`<system_context>`** — built inline in `build_modular_system_prompt` from the `OperatorContext`. Includes operator type, OS, hostname, username, working directory, architecture, network, disk, memory, and container/init-system details. Cloud operators additionally emit `granted_intents`. Container environments emit a `systemd` unavailability warning when the init system is not systemd.
+**`<system_context>`** — built inline in `build_modular_system_prompt`. In multi-operator scenarios, each operator is wrapped in `<operator index="N">` tags. Includes operator type (System vs Cloud), OS, hostname, username (with UID), working directory, container/init-system status, and any extra model fields from `OperatorContext`. Cloud operators include `granted_intents`.
 
-**`sentinel_mode`** — `prompts_data/system/sentinel_mode.txt` is appended when `investigation.sentinel_mode is True`. Sentinel mode instructs the AI to scrub PII and secrets before any data leaves the Operator.
+**`sentinel_mode`** — `prompts_data/system/sentinel_mode.txt` is appended when `investigation.sentinel_mode is True`.
 
-**`<investigation_context>`** — built by `build_investigation_context_section`; injects case title, description, status, priority, severity, message counts, command execution stats, latest user request, and per-operator details (hostname, OS, arch, type, session ID prefix).
+**`<investigation_context>`** — built by `build_investigation_context_section`; injects case title, description, status, priority, severity, and a summary of bound operators (id, hostname, os, arch, type, session prefix).
 
-**`<learned_context>`** — built by `build_learned_context_section` from `user_memories` and `case_memories`; injects communication preferences, technical background, response style, problem-solving approach, interaction style (from user-scoped memories) and investigation summaries (from case-scoped memories).
+**`response_constraints`** — `prompts_data/system/response_constraints.txt` is appended to guide AI self-limiting.
+
+**`<learned_context>`** — built by `build_learned_context_section` from `user_memories` and `case_memories`; injects preferences (communication, technical, style, approach, interaction) and previous investigation summaries.
 
 ### Section Order
 
@@ -145,11 +148,10 @@ Each mode directory provides up to three sections: `capabilities`, `execution`, 
 4. modes/<mode>/execution.txt
 5. modes/<mode>/tools.txt          (conditional)
 6. <system_context>                (when operator present)
-7. docs                            (always included)
-8. system/sentinel_mode.txt        (when sentinel_mode=True)
-9. <investigation_context>         (always when investigation present)
-10. system/response_constraints.txt
-11. <learned_context>              (when memories exist)
+7. system/sentinel_mode.txt        (when sentinel_mode=True)
+8. <investigation_context>         (when investigation present)
+9. system/response_constraints.txt
+10. <learned_context>              (when memories exist)
 ```
 
 ---
@@ -169,11 +171,11 @@ Each mode directory provides up to three sections: `capabilities`, `execution`, 
 
 ### Update Lifecycle
 
-1. After the AI response is persisted to DB, `_persist_ai_response` (`chat_pipeline.py`) fires `_background_memory_update` as an `asyncio.create_task` — non-blocking, does not delay the SSE response.
+1. After the AI response is persisted to DB, `_persist_ai_response` (`chat_pipeline.py`) calls `MemoryGenerationService.update_memory_from_conversation`.
 2. `MemoryGenerationService.update_memory_from_conversation` fetches or creates the `InvestigationMemory` document, then calls `_ai_update_memory`.
-3. `_ai_update_memory` takes the last 20 messages (skipping thinking messages), sends them with `build_memory_analysis_system_instruction` as the system prompt and `build_memory_analysis_request` as the closing user turn. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
+3. `_ai_update_memory` takes the conversation history, sends it with the memory analysis persona from `agents.json`. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
 4. Non-null fields from the AI response overwrite the existing memory fields; existing values are preserved when the AI returns null.
-5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to g8es KV via authenticated HTTP).
+5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to g8es KV).
 
 ### Injection on the Next Turn
 
@@ -181,7 +183,7 @@ Each mode directory provides up to three sections: `capabilities`, `execution`, 
 - `get_user_memories(user_id)` — all memories for the user
 - `get_case_memories(case_id, user_id)` — all memories for the case (excluding `NEW_CASE_ID`)
 
-User memories contribute preference fields (communication, technical background, response style, etc.). Case memories contribute `investigation_summary`. Both are injected into the system prompt inside `<learned_context>` tags.
+User memories contribute preference fields. Case memories contribute `investigation_summary`. Both are injected into the system prompt inside `<learned_context>` tags.
 
 ---
 
@@ -199,7 +201,7 @@ After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sen
 
 ### Command Execution Audit
 
-When the AI proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal, then dispatches an approval request to the user via g8ed SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the AI's ReAct loop as a function response.
+When the AI proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal in `agent_tool_loop.py`, then dispatches an approval request to the user via g8ed SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the AI's ReAct loop as a function response. `OperatorLFAAService` handles direct terminal execution audits (`OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED`).
 
 ---
 
@@ -224,10 +226,12 @@ sequenceDiagram
 
     G8ee_Pipeline->>CtxMgr: get_investigation_context(investigation_id)
     CtxMgr->>CtxMgr: _attach_memory_context
-    CtxMgr->>CtxMgr: get_enriched_investigation_context (operators + memory)
     CtxMgr-->>G8ee_Pipeline: EnrichedInvestigationContext
 
-    G8ee_Pipeline->>Triage: triage_message(message, AI_mode)
+    G8ee_Pipeline->>CtxMgr: get_enriched_investigation_context (operator docs)
+    CtxMgr-->>G8ee_Pipeline: EnrichedInvestigationContext
+
+    G8ee_Pipeline->>Triage: triage(request)
     Triage-->>G8ee_Pipeline: TriageResult
 
     G8ee_Pipeline->>G8ee_Pipeline: persist user message to DB
@@ -235,27 +239,27 @@ sequenceDiagram
     G8ee_Pipeline->>Prompt: build_modular_system_prompt(...)
     Prompt-->>G8ee_Pipeline: system_instructions
 
-    G8ee_Pipeline->>G8ee_Pipeline: build_contents_from_history
-    G8ee_Pipeline->>AI: run_with_sse(contents, config, model, ...)
+    G8ee_Pipeline->>AI: run_with_sse(...)
 
     loop ReAct loop
-        AI->>Provider: generate_content_stream(model, contents, config)
+        AI->>Provider: generate_content_stream(...)
         Provider-->>AI: StreamChunkFromModel stream
         AI->>AI: process_provider_turn (thinking state machine)
 
         opt Tool calls present
-            AI->>Tools: execute_turn_tool_calls
+            AI->>AgentToolLoop: execute_turn_tool_calls
+            AgentToolLoop->>AgentToolLoop: orchestrate_tool_execution
             opt run_commands tool
-                Tools->>Tribunal: generate_command (N passes + verifier)
-                Tribunal-->>Tools: CommandGenerationResult
-                end
-                Tools->>g8ed: approval request SSE event
-                G8ed->>Browser: g8e.v1.operator.command.approval.requested
-                Browser->>g8ed: approve
-                G8ed->>G8eo: pub/sub command dispatch
-                G8eo-->>G8ee_Pipeline: command result
+                AgentToolLoop->>Tribunal: generate_command (N passes + verifier)
+                Tribunal-->>AgentToolLoop: CommandGenerationResult
             end
-            Tools-->>AI: ToolCallResponse list
+            AgentToolLoop->>Tools: execute_tool_call
+            Tools->>g8ed: approval request SSE event
+            G8ed->>Browser: g8e.v1.operator.command.approval.requested
+            Browser->>g8ed: approve
+            G8ed->>G8eo: pub/sub command dispatch
+            G8eo-->>G8ee_Pipeline: command result
+            AgentToolLoop-->>AI: ToolCallResponse list
             AI->>AI: append model + tool responses to contents
         end
     end
@@ -263,9 +267,8 @@ sequenceDiagram
     AI->>g8ed: g8e.v1.ai.llm.chat.iteration.text.completed (via EventService)
     G8ed->>Browser: SSE stream
 
-    G8ee_Pipeline->>G8ee_Pipeline: persist AI response to DB
-    G8ee_Pipeline->>G8ee_Pipeline: asyncio.create_task(_background_memory_update)
-    G8ee_Pipeline->>G8eo: LFAA audit (user + AI messages)
+    G8ee_Pipeline->>G8ee_Pipeline: _persist_ai_response
+    G8ee_Pipeline->>MemoryGen: update_memory_from_conversation
 ```
 
 ---
@@ -450,18 +453,19 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIToolService` | `components/g8ee/app/services/ai/tool_service.py` | Tool registration, declaration building, tool call dispatch |
 | `MemoryGenerationService` | `components/g8ee/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update |
 | `MemoryDataService` | `components/g8ee/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
-| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification |
-| `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly |
-| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` |
-| `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — Tribunal gate for `run_commands`; returns `ToolResult` |
-| `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation |
-| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier |
-| `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push |
-| `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts |
-| `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction |
-| `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction |
-| `EvalJudge` | `components/g8ee/app/services/ai/eval_judge.py` | AI AI Accuracy Evaluation Judge — grades AI performance against gold standard |
-| `BenchmarkJudge` | `components/g8ee/app/services/ai/benchmark_judge.py` | Deterministic AI Benchmark Judge — regex-matches tool call payloads for binary pass/fail grading with Tribunal delta tracking |
+| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification. Persona loaded from `agents.json`. |
+| `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. |
+| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult`. |
+| `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
+| `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
+| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier. Persona templates in `agents.json`. |
+| `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push. |
+| `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts. |
+| `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction. |
+| `AIResponseAnalyzer` | `components/g8ee/app/services/ai/response_analyzer.py` | Post-generation response classification and metadata extraction (risk, error, file safety). |
+| `EvalJudge` | `components/g8ee/app/services/ai/eval_judge.py` | AI Accuracy Evaluation Judge — grades AI performance against gold standard using persona in `agents.json`. |
+| `BenchmarkJudge` | `components/g8ee/app/services/ai/benchmark_judge.py` | Deterministic AI Benchmark Judge — regex-matches tool call payloads for binary pass/fail grading with Tribunal delta tracking. |
+| `OperatorLFAAService` | `components/g8ee/app/services/operator/lfaa_service.py` | LFAA audit event publishing for direct operator terminal commands. |
 
 ---
 
@@ -566,13 +570,11 @@ Function prompt files are used as `FunctionDeclaration.description` values passe
 
 ### Memory Analysis Prompts
 
-Memory prompts are built inline in `components/g8ee/app/llm/prompts.py`:
-- `build_memory_analysis_system_instruction(case_title)` — system role, instructs the model to infer user preferences; explicitly excludes hostnames, IPs, and system identifiers from `investigation_summary`
-- `build_memory_analysis_request()` — closing user-role turn that triggers field population; returns a `MemoryAnalysis` JSON object validated against the Pydantic schema
+Memory analysis uses the `memory_generator` persona defined in `shared/constants/agents.json`. The AI is instructed to distill conversation patterns into structured fields (summary, communication, technical, style, approach, interaction).
 
 ### Triage Prompt
 
-`_TRIAGE_PROMPT_TEMPLATE` in `components/g8ee/app/services/ai/triage.py` — a structured JSON classifier. Inlined, not file-backed. Takes `{conversation_tail}` and `{message}` substitutions. Returns a JSON object with `complexity` (simple/complex), `intent` (information/action/unknown), confidence ratings, and an optional `follow_up_question`.
+Triage uses the `triage` persona defined in `shared/constants/agents.json`. It classifies messages by complexity (simple/complex) and intent (information/action/unknown). The prompt is loaded via `get_agent_persona("triage")` in `triage.py`.
 
 ---
 
@@ -827,7 +829,7 @@ The provider abstraction lives in `components/g8ee/app/llm/provider.py` (`LLMPro
 - **SDK:** `anthropic`
 - **Provider value:** `anthropic`
 - **Key:** `ANTHROPIC_API_KEY`
-- **Recommended models:** `claude-opus-4-5` (primary), `claude-haiku-4-5` (assistant)
+- **Recommended models:** `claude-opus-4-6` (primary), `claude-sonnet-4-6` (assistant), `claude-haiku-4-5` (lite)
 - **Message translation:** `_contents_to_anthropic` maps `model` role → `assistant`, `user` role → `user`. Thinking parts emit `{"type": "thinking", "thinking": ..., "signature": ...}`. Tool calls emit `tool_use` blocks; tool responses emit `tool_result` blocks.
 - **System prompt:** Passed as a top-level `system` parameter, not embedded in the messages array.
 

@@ -29,11 +29,12 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 - Automatic backups before modifications
 
 ### Heartbeat Telemetry
-- Sends system metrics at a configurable interval (default: 30 seconds; overridable by `--heartbeat-interval` flag or bootstrap config)
+- Sends system metrics at a configurable interval (default: 60 seconds; overridable by `--heartbeat-interval` flag or bootstrap config)
 - Includes hostname, CPU, memory, disk, network, OS details, uptime
 
 ### Data Storage
 - Four independent local stores: Scrubbed Vault, Raw Vault, Audit Vault, and Ledger — see [architecture/storage.md](../architecture/storage.md) for full details
+- Data is stored in the `.g8e/` directory within the working directory
 - Only Sentinel-scrubbed metadata is transmitted to the platform; raw output never leaves the Operator
 
 ---
@@ -53,6 +54,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 │                  │                │    + output scrubbing)     │
 │                  │                │  - Scrubbed/raw vault      │
 │                  │                │  - Audit vault + ledger    │
+│                  │                │  - History handler         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼ WebSocket (mTLS)
@@ -89,13 +91,12 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 | Method | Use Case | How It Works |
 |--------|----------|--------------|
 | **API Key** | Traditional | Pass `--key` or set `G8E_OPERATOR_API_KEY` |
-| **Device Link (single)** | One-off deployment | Pre-authorized token, no browser approval |
-| **Device Link (multi)** | Mass deployment | Configurable `max_uses` (1-10,000), expiry (1min-7days) |
+| **Device Link** | Deployment | Auth via `--device-token` or `G8E_DEVICE_TOKEN`; returns session ID |
 
 ### Session Naming
 
 - All session ID fields use `snake_case` in JSON/API payloads (`operator_session_id`)
-- Channel pattern: `{resource}:{operator_id}:{operator_session_id}`
+- Channel pattern: `operator:{operator_id}:{operator_session_id}`
 - Canonical channel listing and wire format: [components/g8es.md — Channel Naming Convention](g8es.md#channel-naming-convention)
 
 ### Multi-Operator Binding
@@ -137,6 +138,13 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 | 5 | Config error | No |
 | 6 | Storage error | No |
 | 7 | TLS cert failure | No |
+| 8 | Shutdown requested | No |
+| 9 | Resource not found | No |
+| 10 | Already exists | No |
+| 11 | Timeout | Yes |
+| 12 | Operation cancelled | No |
+| 13 | Not implemented | No |
+| 14 | Busy / Locked | Yes |
 
 ---
 
@@ -168,20 +176,20 @@ g8ee returns result to AI
 
 ### Heartbeat Flow
 
-g8eo calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to g8es pub/sub. From there, g8ee and g8ed handle persistence and SSE fan-out — see [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow.
+g8eo calls `buildHeartbeat()` at the configured interval (default 60 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to g8es pub/sub. From there, g8ee and g8ed handle persistence and SSE fan-out — see [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow.
 
 ---
 
 ## Storage
 
-g8eo maintains four independent local stores on the Operator machine. All are SQLite-based (WAL mode) except the Ledger, which is a Git repository.
+g8eo maintains four independent local stores on the Operator machine. All are SQLite-based (WAL mode) except the Ledger, which is a Git repository. All data resides in the `.g8e/` directory within the working directory.
 
 | Store | Path | Purpose |
 |---|---|---|
-| Scrubbed Vault | `{workdir}/.g8e/local_state.db` | Sentinel-scrubbed command output and file diffs; AI reads from here |
-| Raw Vault | `{workdir}/.g8e/raw_vault.db` | Unscrubbed full output; never transmitted to the platform |
-| Audit Vault | `{workdir}/.g8e/data/g8e.db` | LFAA structured event timeline; sensitive fields encrypted at rest; **Head/Tail truncation** for outputs >100KB |
-| Ledger | `{workdir}/.g8e/data/ledger` | Git-backed cryptographic version history for all Operator-modified files |
+| Scrubbed Vault | `.g8e/local_state.db` | Sentinel-scrubbed command output and file diffs; AI reads from here |
+| Raw Vault | `.g8e/raw_vault.db` | Unscrubbed full output; never transmitted to the platform |
+| Audit Vault | `.g8e/data/g8e.db` | LFAA structured event timeline; sensitive fields encrypted at rest; **Head/Tail truncation** for outputs >100KB |
+| Ledger | `.g8e/data/ledger` | Git-backed cryptographic version history for all Operator-modified files |
 
 Local storage is enabled by default (`-s`). Disabled with `-s=false` (full output sent to cloud instead). The Ledger requires a functional `git` binary; disabled via `--no-git`.
 
@@ -224,10 +232,12 @@ In this mode, the Operator acts as **g8es** (`g8es`), the platform's central bac
 - **Ports**:
   - `443` (WSS/HTTPS): Unified port for all incoming traffic.
 - **Endpoints**:
+  - `/health` — Service health and readiness
   - `/db/` — Document Store (SQLite)
   - `/kv/` — Key-Value Store with TTL support
   - `/blob/` — High-performance binary blob storage
   - `/ws/pubsub` — WebSocket broker
+  - `/pubsub/publish` — HTTP bridge for publishing events
   - `/binary/` — Operator binary distribution point
 - **Authentication**: Serves as the authenticator for all internal platform traffic using a shared secret (`X-Internal-Auth`).
 - **Usage**:
@@ -250,12 +260,24 @@ g8e.operator --openclaw \
 
 > For comprehensive MCP architecture, provider-agnostic design, and translation layer patterns, see [architecture/mcp.md](../architecture/mcp.md).
 
-The Operator supports the **Model Context Protocol (MCP)** as a native satellite. This is implemented through a **protocol translator layer** (`services/mcp/translator.go`) that maps MCP tool names to internal g8e event types—demonstrating the platform's provider-agnostic design where external protocols translate to a unified event system.
+The Operator supports the **Model Context Protocol (MCP)** as a native satellite. This is implemented through a **protocol translator layer** (`services/mcp/translator.go`) that maps MCP tool names to internal g8e event types.
 
-- **Request Handling**: Interprets MCP `tools/call` requests and maps them to internal actions (e.g., command execution).
+| MCP Tool Name | internal g8e Event Type |
+|---------------|-------------------------|
+| `run_commands_with_operator` | `operator:command:requested` |
+| `file_create_on_operator` | `operator:file_edit:requested` |
+| `file_write_on_operator` | `operator:file_edit:requested` |
+| `file_read_on_operator` | `operator:file_edit:requested` |
+| `file_update_on_operator` | `operator:file_edit:requested` |
+| `check_port_status` | `operator:port_check:requested` |
+| `list_files_and_directories_with_detailed_metadata` | `operator:fs_list:requested` |
+| `fetch_file_history` | `operator:fetch_file_history:requested` |
+| `fetch_file_diff` | `operator:fetch_file_diff:requested` |
+
+- **Request Handling**: Interprets MCP `tools/call` requests and maps them to internal actions.
 - **Result Wrapping**: Wraps execution results in MCP `CallToolResult` format before transmitting back to the platform.
 - **Security**: MCP payloads are subject to the same Sentinel pre-execution analysis and output scrubbing as native events.
-- **Enabled by Default**: MCP support is integrated into the standard outbound mode; no special flags are required to enable interpreting MCP payloads from the platform.
+- **Enabled by Default**: MCP support is integrated into the standard outbound mode.
 
 ---
 
@@ -265,28 +287,34 @@ The Operator supports the **Model Context Protocol (MCP)** as a native satellite
 
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
-| `-k` | `G8E_OPERATOR_API_KEY` | — | API key for auth |
-| `-S` | `G8E_OPERATOR_SESSION_ID` | — | Pre-authorized session |
-| `-D` | `G8E_DEVICE_TOKEN` | — | Device link token |
-| `-e` | `G8E_OPERATOR_ENDPOINT` | g8e.local | Operator endpoint |
-| `-s` | — | true | Local storage mode — store output locally instead of cloud |
-| `-l` | `G8E_LOG_LEVEL` | info | Log level |
-| `-G` | — | false | Disable Ledger (git-backed file versioning) |
-| `--heartbeat-interval` | — | 30s | Heartbeat interval (e.g. `60s`, `2m`); overrides the 30s default when set |
+| `-k` / `--key` | `G8E_OPERATOR_API_KEY` | — | API key for auth |
+| `-S` / `--operator_session` | `G8E_OPERATOR_SESSION_ID` | — | Pre-authorized session ID |
+| `-D` / `--device-token` | `G8E_DEVICE_TOKEN` | — | Device link token |
+| `-e` / `--endpoint` | `G8E_OPERATOR_ENDPOINT` | g8e.local | Operator endpoint |
+| `--ca-url` | — | — | Override URL for hub CA certificate fetch |
+| `--wss-port` | — | 443 | WSS port to dial on g8es for pub/sub |
+| `--http-port` | — | 443 | HTTPS port to dial for auth/bootstrap |
+| `-s` / `--local-storage` | — | true | Local storage mode — store output locally instead of cloud |
+| `-l` / `--log` | `G8E_LOG_LEVEL` | info | Log level |
+| `-G` / `--no-git` | — | false | Disable Ledger (git-backed file versioning) |
+| `--heartbeat-interval` | — | 60s | Heartbeat interval (e.g. `60s`, `2m`); overrides the 60s default |
 | `--working-dir` | — | launch dir | Working directory for commands and data storage |
-| `-c` / `--cloud` | — | true | Cloud Operator mode — unlocks cloud CLI tools and switches AI to cloud-specific reasoning. Use with `--provider` to specify the cloud. Always set on g8ep. |
-| `-p` / `--provider` | — | — | Cloud provider: `aws`, `gcp`, `azure`. Required for Cloud Operator for AWS intent-based permissions. g8ep always passes `--provider aws`. |
+| `-c` / `--cloud` | — | true | Cloud Operator mode — unlocks cloud CLI tools. Always set on g8ep. |
+| `-p` / `--provider` | — | — | Cloud provider: `aws`, `gcp`, `azure`. Required for Cloud Operator. |
+| `-v` / `--version` | — | — | Show version |
 
 ### Listen Mode
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--listen` | false | Enable listen mode |
-| `--wss-listen-port` | 443 | WSS/HTTPS port for all connections |
+| `--wss-listen-port` | 443 | WSS/TLS port for operator pub/sub connections |
+| `--http-listen-port` | 443 | HTTPS port for internal g8ee/g8ed traffic |
 | `--data-dir` | `.g8e/data` in working directory | SQLite data directory |
-| `--binary-dir` | `.g8e/bin` in working directory | Legacy flag — operator binaries are now served from the blob store |
-| `--tls-cert` | — | TLS certificate path |
-| `--tls-key` | — | TLS key path |
+| `--ssl-dir` | `data-dir/ssl` | Directory for TLS certificates |
+| `--binary-dir` | `.g8e/bin` in working directory | Directory containing operator binaries to serve |
+| `--tls-cert` | — | Path to TLS certificate file |
+| `--tls-key` | — | Path to TLS private key file |
 
 ### Vault Management
 

@@ -41,9 +41,7 @@ from app.constants import (
     OLLAMA_QWEN3_5_122B,
     OLLAMA_QWEN3_5_2B,
     OPENAI_DEFAULT_MODEL,
-    OPENAI_GPT_5_4_INSTANT,
     OPENAI_GPT_5_4_MINI,
-    OPENAI_GPT_5_4_THINKING,
     ThinkingLevel,
 )
 from app.models.base import G8eBaseModel
@@ -234,30 +232,6 @@ ANTHROPIC_DEFAULT_CONFIG = LLMModelConfig(
 )
 
 # OpenAI models
-OPENAI_GPT_5_4_THINKING_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_5_4_THINKING,
-    supported_thinking_levels=[ThinkingLevel.HIGH, ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=200_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
-OPENAI_GPT_5_4_INSTANT_CONFIG = LLMModelConfig(
-    name=OPENAI_GPT_5_4_INSTANT,
-    supported_thinking_levels=[ThinkingLevel.MEDIUM, ThinkingLevel.LOW],
-    supports_thinking=True,
-    supports_tools=True,
-    context_window_input=200_000,
-    context_window_output=8_192,
-    top_k=40,
-    top_p=1.0,
-    max_output_tokens=8_192,
-)
-
 OPENAI_GPT_5_4_MINI_CONFIG = LLMModelConfig(
     name=OPENAI_GPT_5_4_MINI,
     supported_thinking_levels=[ThinkingLevel.LOW, ThinkingLevel.MINIMAL],
@@ -369,8 +343,6 @@ MODEL_REGISTRY = LLMModelRegistry(configs=[
     ANTHROPIC_CLAUDE_SONNET_4_6_CONFIG,
     ANTHROPIC_CLAUDE_HAIKU_4_5_CONFIG,
     ANTHROPIC_DEFAULT_CONFIG,
-    OPENAI_GPT_5_4_THINKING_CONFIG,
-    OPENAI_GPT_5_4_INSTANT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OLLAMA_QWEN3_5_122B_CONFIG,

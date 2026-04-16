@@ -31,18 +31,19 @@ Running `./g8e` with no arguments or `--help` runs `g8e.operator do --help` insi
 Manages the Docker Compose services. All subcommands run on the host.
 
 ```bash
-./g8e platform build                    # Build all images and start the platform
-./g8e platform setup                     # Full first-time setup: no-cache build of all images, start platform
+./g8e platform build                    # Build images and restart services (alias: 'platform rebuild')
+./g8e platform setup                    # Full first-time setup: build all images, start platform
 ./g8e platform settings                 # Show effective platform settings (requires platform running)
 ./g8e platform update                   # Pull latest changes (with confirmation) and rebuild
-./g8e platform status                   # Show container status and versions
-./g8e platform start                    # Start the platform
-./g8e platform stop                     # Stop all containers (data preserved)
-./g8e platform restart                  # Restart all containers (no rebuild)
-./g8e platform rebuild                  # No-cache rebuild of all services + restart
+./g8e platform status                   # Show container status and component versions
+./g8e platform start                    # Start all platform services
+./g8e platform stop                     # Stop all platform services
+./g8e platform restart                  # Restart all platform services (no rebuild)
+./g8e platform rebuild                  # Rebuild images and restart services
 ./g8e platform rebuild g8ed             # Rebuild a single service: g8es | g8ee | g8ed | g8ep
-./g8e platform wipe                     # Wipe all data volumes and restart fresh
-./g8e platform clean                    # Full Docker cleanup: containers, images, volumes, networks (this project only)
+./g8e platform reset                    # Wipe ALL data volumes and rebuild from scratch (destructive)
+./g8e platform wipe                     # Clear app data from the database (preserves platform settings, SSL, LLM)
+./g8e platform clean                    # Remove all managed Docker resources (containers, images, volumes, cache)
 ./g8e platform logs [service]           # Tail service logs with filtering options
 ```
 
@@ -51,22 +52,23 @@ Manages the Docker Compose services. All subcommands run on the host.
 | `setup` | `scripts/core/build.sh setup` | Full first-time setup: no-cache build of all images, start platform |
 | `settings` | `scripts/data/manage-g8es.py settings show` (inside g8ep) | Displays effective non-secret platform settings from the live internal API |
 | `update` | `scripts/core/build.sh rebuild` | Pulls latest from `origin/main` with confirmation, then rebuilds |
-| `status` | `scripts/core/build.sh status` | |
+| `status` | `scripts/core/build.sh status` | Show container status and component versions |
 | `start` | `scripts/core/build.sh up` | |
 | `stop` | `scripts/core/build.sh down` | |
 | `restart` | `scripts/core/build.sh restart` | |
 | `rebuild` | `scripts/core/build.sh rebuild` | Alias: `build`. Accepts optional component names: `g8es g8ee g8ed g8ep` |
 | `reset` | `scripts/core/build.sh reset` | Wipe ALL data volumes and rebuild from scratch (destructive) |
 | `wipe` | `scripts/core/build.sh wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
-| `clean` | `scripts/core/build.sh clean` | Remove all managed resources scoped to this project |
+| `clean` | `scripts/core/build.sh clean` | Remove all managed Docker resources (containers, images, volumes, cache) |
 | `logs` | `scripts/core/logs.sh` | Supports filtering by level, pattern, time; follows or tail |
 
 #### operator
 Manages the Operator binary build and deployment.
 
 ```bash
-./g8e operator init                          # Build the operator binary inside g8ep (first time)
-./g8e operator build                         # Rebuild the operator binary inside g8ep
+./g8e operator init                          # Build the operator binary inside g8eo-test-runner
+./g8e operator build                         # Rebuild the operator binary inside g8eo-test-runner
+./g8e operator build-all                     # Build all operator architectures with compression (for distribution)
 ./g8e operator deploy <user@host>            # Copy operator to remote host via scp
 ./g8e operator stream <host...>              # Stream-inject operator to one or more remote hosts
 ./g8e operator ssh-config                    # Configure ~/.ssh/config for high-concurrency streaming
@@ -75,26 +77,25 @@ Manages the Operator binary build and deployment.
 
 | Subcommand | Delegates to | Notes |
 |------------|-------------|-------|
-| `init` | `docker exec g8ep go build ...` | Builds operator binary natively inside running g8ep |
-| `build` | `docker exec g8ep go build ...` | Explicit rebuild of operator binary inside g8ep |
+| `init` | `docker exec g8eo-test-runner ...` | Builds operator binary natively inside g8eo-test-runner |
+| `build` | `scripts/core/build.sh operator-build` | Rebuild of operator binary inside g8eo-test-runner |
+| `build-all` | `scripts/core/build.sh operator-build-all` | Build all operator architectures with compression |
 | `deploy` | `scp` + optional `ssh` | Supports `--arch`, `--dest`, `--endpoint`, `--device-token`, `--key`, `--no-git` |
 | `stream` | `docker exec g8ep /home/g8e/g8e.operator stream` | Zero local disk footprint. Supports `--arch`, `--hosts`, `--concurrency`, `--timeout`, `--endpoint`, `--device-token`, `--key`, `--no-git`, `--ssh-config` |
 | `ssh-config` | `scripts/tools/setup-ssh.sh` | Configures multiplexing. Supports `--print`, `--force` |
 | `reauth` | Internal API | Requires `--user-id <id>` or `--email <email>` |
 
 #### test
-Runs tests for platform components. Runs inside g8ep.
+Runs tests for platform components in dedicated test-runner containers.
 
 ```bash
-./g8e test                          # Run all component test suites
-./g8e test g8ee                      # AI engine (Python/pytest)
+./g8e test g8ee                     # AI engine (Python/pytest)
 ./g8e test g8ed                     # Dashboard (Node/Vitest)
-./g8e test g8eo                      # Operator (Go)
-./g8e test security                 # Security scanning
-./g8e test g8ee --coverage           # Generate coverage report
-./g8e test g8ee --llm openai         # Run with a specific LLM provider
-./g8e test g8ee --m <model>          # Override the LLM model for the run
-./g8e test g8eo -- TestFoo           # Pass extra args to the underlying test runner
+./g8e test g8eo                     # Operator (Go)
+./g8e test g8ee --coverage          # Generate coverage report
+./g8e test g8ee --llm-provider gemini # Run with a specific LLM provider
+./g8e test g8ee --primary-model <m> # Override the LLM model for the run
+./g8e test g8eo -- TestFoo          # Pass extra args to the underlying test runner
 ```
 
 #### security
@@ -108,7 +109,6 @@ Security validation and certificate management. Runs inside g8ep.
 ./g8e security certs status         # Show certificate status and expiry
 ./g8e security certs trust          # Install CA into host OS store (host-side)
 ./g8e security mtls-test            # Run mTLS connectivity tests
-./g8e security scan-licenses        # Scan all dependency licenses
 ./g8e security passkeys             # Manage user passkey credentials
 ./g8e security rotate-internal-token # Rotate the X-Internal-Auth shared secret across all components
 ```
@@ -177,6 +177,18 @@ AWS credentials configuration for AI tools. Runs on the host.
 
 ```bash
 ./g8e aws setup                              # Mount AWS credentials directory into g8ep
+```
+
+#### demo
+Manage the broken-fleet demo. Runs on the host.
+
+```bash
+./g8e demo up                       # Build and start demo nodes
+./g8e demo down                     # Stop all nodes
+./g8e demo status                   # Show container status
+./g8e demo clean                    # Remove everything (containers, images, volumes)
+./g8e demo logs                     # Follow all container logs
+./g8e demo dashboard                # Print dashboard URL
 ```
 
 ---
@@ -266,16 +278,21 @@ Builds and runs the local g8e environment. Manages Docker Compose services in de
 ./scripts/core/build.sh <command> [options]
 ```
 
-### Commands
+### Subcommands
 
 | Command | Description |
 |---------|-------------|
 | `status` | Show container status and component versions |
-| `up [component...]` | Start managed services without building. Default: `g8es g8ee g8ed g8ep`. Auto-builds the operator binary inside g8ep if absent. |
+| `up [component...]` | Start managed services without building. Default: `g8es g8ee g8ed g8ep`. |
 | `down` | Stop managed containers (`g8es`, `g8ee`, `g8ed`, `g8ep`) |
-| `rebuild [component...]` | No-cache rebuild + restart. Default: `g8es g8ee g8ed` |
-| `wipe` | Remove data volumes for `g8es`, `g8ee`, `g8ed`, `g8ep` and restart. Auto-builds operator binary after restart. |
-| `clean` | Remove all managed Docker resources (containers, images, volumes) |
+| `restart` | Restart all containers (no rebuild) |
+| `rebuild [component...]` | Rebuild images and restart services. Default: `g8es g8ee g8ed g8ep` |
+| `reset` | Wipe DB data volumes + rebuild images from scratch (destructive) |
+| `wipe` | Clear app data from the database (preserves platform settings, SSL, LLM) |
+| `clean` | Remove all managed Docker resources (containers, images, volumes, cache) |
+| `setup` | Full first-time setup: build all images, start platform |
+| `operator-build` | Build linux/amd64 operator binary inside g8eo-test-runner |
+| `operator-build-all` | Build all operator architectures with compression |
 
 ---
 
@@ -297,18 +314,16 @@ Runs tests for g8e components inside the `g8ep` Docker container. Infrastructure
 |-----------|---------------|--------------|
 | `g8ee` | pytest | g8ee Python service |
 | `g8ed` | vitest / npm test | g8ed Node.js service |
-| 'g8eo' | `gotestsum` | g8eo Go binary |
-| `security` | `security-validate.sh` | Operator binary security |
-| `all` | All of the above | Full suite (default) |
+| `g8eo` | `gotestsum` | g8eo Go binary |
+| `all` | All of the above | Full suite (not directly supported via ./g8e) |
 
 ### Options
 
 | Option | Description |
 |--------|-------------|
-| `--coverage` | Generate coverage reports (HTML + JSON + terminal) |
-| `--llm PROVIDER` | Override LLM provider: `openai`, `anthropic`, `gemini` |
-| `--m MODEL` | Override LLM model name only |
-| `-v` | Verbose output for g8eo (`go test -v`) |
+| `--coverage` | Generate coverage reports |
+| `--pyright` | Run pyright strict gate (g8ee only) |
+| `--e2e` | Run E2E operator lifecycle tests (g8ee only) |
 
 ---
 
@@ -470,23 +485,15 @@ Manage FIDO2/WebAuthn passkey credentials via the g8ed internal HTTP API.
 
 ### Internal Token Rotation
 
-Rotate the internal auth token across all components. Uses `manage-g8es.py settings rotate-token` internally.
+Rotate the internal auth token across all components.
 
 ```bash
 ./g8e security rotate-internal-token
 ```
 
-### License Scanning (`scan-licenses.sh`)
-**Location:** `scripts/security/scan-licenses.sh`
+---
 
-Scans dependencies for commercial distribution compatibility.
-
-```bash
-./g8e security scan-licenses
-./g8e security scan-licenses --report        # Write CSV reports
-```
-
-### Windows CA Trust (`trust-ca.ps1`)
+### mTLS Verification (`mtls-test.sh`)
 **Location:** `scripts/security/trust-ca.ps1`
 
 One-shot PowerShell script for Windows users. Removes any previously installed g8e CA cert, fetches the new one from the platform via SSH, and installs it into `LocalMachine\Root` — all in one step.

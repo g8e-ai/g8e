@@ -174,13 +174,13 @@ export const OllamaModel = Object.freeze({
 export const PROVIDER_MODELS = Object.freeze({
     [LLMProvider.GEMINI]: {
         primary: [
-            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro (Frontier Reasoning)' },
+            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
         ],
         assistant: [
-            { id: GeminiModel.FLASH, label: 'Gemini 3.1 Flash (Balanced)' },
+            { id: GeminiModel.FLASH, label: 'Gemini 3.1 Flash' },
         ],
         lite: [
-            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite (Utility)' },
+            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
         ],
         defaultPrimary: GeminiModel.PRO,
         defaultAssistant: GeminiModel.FLASH,
@@ -188,13 +188,13 @@ export const PROVIDER_MODELS = Object.freeze({
     },
     [LLMProvider.ANTHROPIC]: {
         primary: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6 (Frontier Reasoning)' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
         ],
         assistant: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6 (Balanced)' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
         ],
         lite: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5 (Utility)' },
+            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
         ],
         defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
         defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
@@ -202,13 +202,13 @@ export const PROVIDER_MODELS = Object.freeze({
     },
     [LLMProvider.OPENAI]: {
         primary: [
-            { id: OpenAIModel.GPT_5_4_THINKING, label: 'GPT-5.4 Thinking (Frontier Reasoning)' },
+            { id: OpenAIModel.GPT_5_4_THINKING, label: 'GPT-5.4 Thinking' },
         ],
         assistant: [
-            { id: OpenAIModel.GPT_5_4_INSTANT, label: 'GPT-5.4 Instant (Balanced)' },
+            { id: OpenAIModel.GPT_5_4_INSTANT, label: 'GPT-5.4 Instant' },
         ],
         lite: [
-            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini (Utility)' },
+            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
         ],
         defaultPrimary: OpenAIModel.GPT_5_4_THINKING,
         defaultAssistant: OpenAIModel.GPT_5_4_INSTANT,
@@ -216,16 +216,16 @@ export const PROVIDER_MODELS = Object.freeze({
     },
     [LLMProvider.OLLAMA]: {
         primary: [
-            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B (Frontier Reasoning)' },
-            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 (Frontier Reasoning)' },
+            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
+            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
         ],
         assistant: [
-            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B (Balanced)' },
-            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B (Balanced)' },
+            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
+            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B' },
         ],
         lite: [
-            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B (Utility)' },
-            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B (Utility)' },
+            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
+            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
         ],
         defaultPrimary: OllamaModel.QWEN3_5_122B,
         defaultAssistant: OllamaModel.GEMMA4_26B,

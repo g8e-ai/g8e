@@ -93,15 +93,15 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             </div>
             <div id="wizard-model-selection">
                 <div id="primary_model" class="llm-model-dropdown disabled" aria-expanded="false">
-                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                    <span class="llm-model-dropdown__text">Enter at least one API key</span>
                 </div>
                 <div id="primary_model-menu" class="llm-model-dropdown__menu"></div>
                 <div id="assistant_model" class="llm-model-dropdown disabled" aria-expanded="false">
-                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                    <span class="llm-model-dropdown__text">Enter at least one API key</span>
                 </div>
                 <div id="assistant_model-menu" class="llm-model-dropdown__menu"></div>
                 <div id="lite_model" class="llm-model-dropdown disabled" aria-expanded="false">
-                    <span class="llm-model-dropdown__text">Enter at least one API key above</span>
+                    <span class="llm-model-dropdown__text">Enter at least one API key</span>
                 </div>
                 <div id="lite_model-menu" class="llm-model-dropdown__menu"></div>
             </div>
@@ -564,7 +564,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const primaryMenu = document.getElementById('primary_model-menu');
             const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
             expect(primaryMenu.children.length).toBeGreaterThan(0);
-            expect(primaryText.textContent).not.toBe('Enter at least one API key above');
+            expect(primaryText.textContent).not.toBe('Enter at least one API key');
         });
 
         it('populates models from multiple active providers', () => {

@@ -5,32 +5,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
 CONTAINER="g8ep"
 
+# Test-runner container names
+TR_G8EE="g8ee-test-runner"
+TR_G8ED="g8ed-test-runner"
+TR_G8EO="g8eo-test-runner"
+
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
 }
 
-_g8ep_running() {
-    docker ps --filter "name=^${CONTAINER}$" --filter "status=running" -q 2>/dev/null | grep -q .
+_container_running() {
+    docker ps --filter "name=^${1}$" --filter "status=running" -q 2>/dev/null | grep -q .
 }
 
-_g8ep_exists() {
-    docker ps -a --filter "name=^${CONTAINER}$" -q 2>/dev/null | grep -q .
+_container_exists() {
+    docker ps -a --filter "name=^${1}$" -q 2>/dev/null | grep -q .
 }
 
-_ensure_g8ep() {
-    local _cmd="${1:-}"
-    if ! _g8ep_running; then
-        if ! _g8ep_exists; then
-            [[ -n "$_cmd" ]] && echo "[g8e] Running: ./g8e $_cmd"
-            echo "[g8e] g8ep is the sandboxed environment used to run this command."
-            echo "[g8e] First run — building g8ep image (requires Docker)..."
+_g8ep_running() { _container_running "$CONTAINER"; }
+_g8ep_exists() { _container_exists "$CONTAINER"; }
+
+_ensure_container() {
+    local name="$1" cmd="${2:-}"
+    if ! _container_running "$name"; then
+        if ! _container_exists "$name"; then
+            [[ -n "$cmd" ]] && echo "[g8e] Running: ./g8e $cmd"
+            echo "[g8e] ${name} is not built — building image (requires Docker)..."
             echo ""
-            $COMPOSE build g8ep
+            $COMPOSE build "$name"
             echo ""
         fi
-        $COMPOSE up -d --wait g8ep
+        $COMPOSE up -d --wait "$name"
     fi
 }
+
+_ensure_g8ep() { _ensure_container "$CONTAINER" "${1:-}"; }
 
 _exec_in_pod() {
     _ensure_g8ep "$TOP${SUB:+ $SUB}"
@@ -38,6 +47,25 @@ _exec_in_pod() {
         exec docker exec -it "$CONTAINER" "$@"
     else
         exec docker exec -i "$CONTAINER" "$@"
+    fi
+}
+
+_test_runner_for() {
+    case "$1" in
+        g8ee) echo "$TR_G8EE" ;;
+        g8ed) echo "$TR_G8ED" ;;
+        g8eo) echo "$TR_G8EO" ;;
+        *)    echo "" ;;
+    esac
+}
+
+_exec_in_test_runner() {
+    local runner="$1"; shift
+    _ensure_container "$runner" "$TOP${SUB:+ $SUB}"
+    if [ -t 0 ] && [ -t 1 ]; then
+        exec docker exec -it "$runner" "$@"
+    else
+        exec docker exec -i "$runner" "$@"
     fi
 }
 
@@ -72,10 +100,10 @@ _help() {
     echo "    reauth                        Kill and relaunch the g8ep operator for a user"
     echo "    (run: ./g8e operator --help for full option details)"
     echo ""
-    echo "  test [suite] [options]        Run test suites inside g8ep"
-    echo "    g8ee                           Python/pytest tests"
-    echo "    g8ed                          TypeScript/vitest tests"
-    echo "    g8eo                           Go tests"
+    echo "  test [suite] [options]        Run component tests in dedicated test-runner containers"
+    echo "    g8ee                           Python/pytest tests (g8ee-test-runner)"
+    echo "    g8ed                          TypeScript/vitest tests (g8ed-test-runner)"
+    echo "    g8eo                           Go tests (g8eo-test-runner)"
     echo "    LLM flags (enables ai_integration tests):"
     echo "      -p, --llm-provider          gemini | openai | anthropic | ollama"
     echo "      -m, --primary-model         Primary model name"
@@ -323,9 +351,9 @@ case "$TOP" in
 
             init)
                 _banner "operator init"
-                _ensure_g8ep "operator init"
+                _ensure_container "$TR_G8EO" "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
-                docker exec g8ep bash -c "
+                docker exec "$TR_G8EO" bash -c "
                     set -e
                     cd /app/components/g8eo
                     mkdir -p certs
@@ -334,7 +362,7 @@ case "$TOP" in
                         -trimpath -buildvcs=false \\
                         -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
                         -o /home/g8e/g8e.operator .
-                    echo '[g8ep] Built: /home/g8e/g8e.operator'
+                    echo '[g8eo-test-runner] Built: /home/g8e/g8e.operator'
                 "
                 echo ""
                 echo "Operator binary built."
@@ -452,10 +480,44 @@ case "$TOP" in
         esac ;;
 
     # ------------------------------------------------------------------
-    # test — runs inside g8ep
+    # test — routes to per-component test-runner containers
     # ------------------------------------------------------------------
     test)
-        _exec_in_pod /app/scripts/testing/run_tests.sh "${@:2}" ;;
+        _TEST_COMPONENT="${2:-}"
+        if [[ -z "$_TEST_COMPONENT" ]]; then
+            echo "[g8e] Usage: ./g8e test <g8ee|g8ed|g8eo> [OPTIONS] [-- EXTRA_ARGS]" >&2
+            exit 1
+        fi
+        _TEST_RUNNER="$(_test_runner_for "$_TEST_COMPONENT")"
+        if [[ -z "$_TEST_RUNNER" ]]; then
+            echo "[g8e] Unknown test component: '$_TEST_COMPONENT'" >&2
+            echo "  Valid: g8ee, g8ed, g8eo" >&2
+            exit 1
+        fi
+
+        _TEST_ENV_ARGS=()
+        _TEST_PASSTHROUGH=("${@:2}")
+
+        # Forward LLM env vars into the container when set
+        [[ -n "${TEST_LLM_PROVIDER:-}" ]]              && _TEST_ENV_ARGS+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
+        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]]     && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
+        [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
+        [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
+        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]           && _TEST_ENV_ARGS+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
+        [[ -n "${TEST_LLM_API_KEY:-}" ]]                && _TEST_ENV_ARGS+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
+        [[ -n "${TEST_LLM_ASSISTANT_ENDPOINT_URL:-}" ]] && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_ENDPOINT_URL=$TEST_LLM_ASSISTANT_ENDPOINT_URL")
+        [[ -n "${TEST_LLM_ASSISTANT_API_KEY:-}" ]]      && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_API_KEY=$TEST_LLM_ASSISTANT_API_KEY")
+        [[ -n "${TEST_WEB_SEARCH_PROJECT_ID:-}" ]]      && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
+        [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]]       && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
+        [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]         && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
+        [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
+
+        _ensure_container "$_TEST_RUNNER" "test $_TEST_COMPONENT"
+        if [ -t 0 ] && [ -t 1 ]; then
+            exec docker exec -it "${_TEST_ENV_ARGS[@]}" "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+        else
+            exec docker exec -i "${_TEST_ENV_ARGS[@]}" "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+        fi ;;
 
     # ------------------------------------------------------------------
     # security — runs inside g8ep

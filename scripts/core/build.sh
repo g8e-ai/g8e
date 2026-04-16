@@ -37,7 +37,7 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
+MANAGED_SERVICES=(g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner)
 
 _service_volume() {
     case "$1" in
@@ -68,8 +68,8 @@ Commands:
   wipe                            Clear app data from the database (all collections except platform settings)
                                   g8es stays up; preserves: platform settings, SSL certs, auth token
   clean                           Nuke all managed Docker resources (containers, images,
-                                  volumes, networks), dangling images, orphaned networks,
-                                  and all build cache layers (docker builder prune -f)
+                                  volumes, networks), dangling images, and orphaned networks.
+                                  (Build cache is preserved for faster rebuilds)
   setup                           Full first-time setup: no-cache build of all images, start platform
   operator-build                  Build linux/amd64 operator binary inside g8ep (no compression)
   operator-build-all              Build all operator architectures with compression (for distribution)
@@ -142,6 +142,14 @@ _ensure_g8ep() {
     if ! _is_running "g8ep"; then
         echo "g8ep container is not running — starting it..."
         docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8ep
+        _wait_for_container g8ep 30
+    fi
+}
+
+_ensure_g8eo_test_runner() {
+    if ! _is_running "g8eo-test-runner"; then
+        echo "g8eo-test-runner container is not running — starting it..."
+        docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8eo-test-runner
     fi
 }
 
@@ -340,6 +348,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     _wait_healthy g8es     60  1
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_healthy g8ep    30  2
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Restart complete."
@@ -368,19 +377,14 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     _preflight
 
-    echo "Rebuilding all images (no cache)..."
-    docker compose build --no-cache --pull=false --parallel g8es g8ee g8ed g8ep
-
-    echo "Starting g8es (compiles and publishes operator binaries)..."
-    docker compose up -d --force-recreate g8es
-    _wait_healthy g8es 300 2
-
-    echo "Starting remaining services..."
-    docker compose up -d --force-recreate g8ee g8ed g8ep
+    echo "Building and starting all services..."
+    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner
     echo ""
     echo "Waiting for services..."
+    _wait_healthy g8es     300 2
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_healthy g8ep    30  2
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -419,6 +423,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "Waiting for services..."
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_healthy g8ep    30  2
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Wipe complete. Platform settings, SSL certs, and auth token preserved."
@@ -476,8 +481,9 @@ if [[ "$COMMAND" == "clean" ]]; then
     docker network prune -f 2>/dev/null || true
 
     # 8. Prune dangling build cache layers (preserves base image cache)
-    echo "Pruning dangling build cache..."
-    docker builder prune -f 2>/dev/null || true
+    # Removing this to prevent wiping the ubuntu apt-get cache layers
+    # echo "Pruning dangling build cache..."
+    # docker builder prune -f 2>/dev/null || true
 
     echo ""
     echo "Done."
@@ -502,6 +508,7 @@ if [[ "$COMMAND" == "up" ]]; then
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ep  && _wait_healthy g8ep    30  2
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -524,19 +531,14 @@ if [[ "$COMMAND" == "setup" ]]; then
     docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
     docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
 
-    echo "Building all images (no cache)..."
-    docker compose build --no-cache --pull=false --parallel g8es g8ee g8ed g8ep
-
-    echo "Starting g8es (compiles and publishes operator binaries)..."
-    docker compose up -d --force-recreate g8es
-    _wait_healthy g8es 300 2
-
-    echo "Starting remaining services..."
-    docker compose up -d --force-recreate g8ee g8ed g8ep
+    echo "Building and starting all services..."
+    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner
     echo ""
     echo "Waiting for services..."
+    _wait_healthy g8es     300 2
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_healthy g8ep    30  2
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -552,36 +554,20 @@ fi
 
 if [[ "$COMMAND" == "rebuild" ]]; then
     if [[ ${#REBUILD_COMPONENTS[@]} -eq 0 ]]; then
-        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep)
+        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep g8ee-test-runner g8ed-test-runner g8eo-test-runner)
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
     docker compose rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
 
-    echo "Rebuilding (with cache): ${REBUILD_COMPONENTS[*]}..."
-    docker compose build --pull=false --parallel "${REBUILD_COMPONENTS[@]}"
-
-    NEEDS_G8E_DATA_FIRST=false
-    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es; then
-        NEEDS_G8E_DATA_FIRST=true
-    fi
-
-    if [[ "$NEEDS_G8E_DATA_FIRST" == "true" ]]; then
-        echo "Starting g8es (compiles and publishes operator binaries)..."
-        docker compose up -d --force-recreate g8es
-        _wait_healthy g8es 300 2
-    fi
-
-    STARTABLE=($(printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -v '^g8es$'))
-    if [[ ${#STARTABLE[@]} -gt 0 ]]; then
-        echo ""
-        echo "Restarting: ${STARTABLE[*]}..."
-        docker compose up -d --force-recreate "${STARTABLE[@]}"
-        echo ""
-        echo "Waiting for services..."
-        printf '%s\n' "${STARTABLE[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
-        printf '%s\n' "${STARTABLE[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
-    fi
+    echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
+    docker compose up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    echo ""
+    echo "Waiting for services..."
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ep && _wait_healthy g8ep    30  2
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -596,9 +582,9 @@ fi
 # ─── operator-build ─────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build" ]]; then
-    _ensure_g8ep
+    _ensure_g8eo_test_runner
     echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
-    docker exec g8ep bash -c "cd /app/components/g8eo && make build"
+    docker exec g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
     echo ""
     echo "Operator binary built and uploaded to g8es blob store."
     exit 0
@@ -607,9 +593,9 @@ fi
 # ─── operator-build-all ─────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
-    _ensure_g8ep
+    _ensure_g8eo_test_runner
     echo "Building all operator architectures and uploading to g8es blob store..."
-    docker exec g8ep bash -c "cd /app/components/g8eo && make build-all"
+    docker exec g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
     echo ""
     echo "All operator binaries built and uploaded to g8es blob store."
     exit 0

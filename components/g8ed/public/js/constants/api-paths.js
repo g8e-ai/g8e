@@ -67,6 +67,7 @@ const Seg = {
         PASSKEY:        'passkey',
         REGISTER_CHALLENGE: 'register-challenge',
         REGISTER_VERIFY:    'register-verify',
+        REGISTER_VERIFY_SETUP: 'register-verify-setup',
         AUTH_CHALLENGE:     'auth-challenge',
         AUTH_VERIFY:        'auth-verify',
     },
@@ -163,6 +164,7 @@ export const ApiPaths = {
         passkey: {
             registerChallenge: () => `${BASE.AUTH_PASSKEY}/${Seg.auth.REGISTER_CHALLENGE}`,
             registerVerify:    () => `${BASE.AUTH_PASSKEY}/${Seg.auth.REGISTER_VERIFY}`,
+            registerVerifySetup: () => `${BASE.AUTH_PASSKEY}/${Seg.auth.REGISTER_VERIFY_SETUP}`,
             authChallenge:     () => `${BASE.AUTH_PASSKEY}/${Seg.auth.AUTH_CHALLENGE}`,
             authVerify:        () => `${BASE.AUTH_PASSKEY}/${Seg.auth.AUTH_VERIFY}`,
         },
