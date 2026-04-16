@@ -1,0 +1,41 @@
+# g8ee Test Runner
+#
+# Lean Python container for running g8ee pytest + pyright.
+# Source code is volume-mounted at runtime — never baked into the image.
+#
+# Usage (via ./g8e test g8ee):
+#   docker compose exec g8ee-test-runner /app/scripts/testing/run_tests.sh g8ee [OPTIONS]
+
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app/components/g8ee
+
+RUN set -ex; \
+    for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            curl \
+            ca-certificates \
+            openssl \
+            jq \
+        && break || \
+        { echo "apt-get install failed, retrying in 5s... ($i/3)"; sleep 5; }; \
+    done \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 1001 g8e \
+    && useradd -u 1001 -g g8e -m -s /bin/bash g8e
+
+COPY components/g8ee/requirements.txt /app/components/g8ee/requirements.txt
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+RUN mkdir -p /data && chown -R g8e:g8e /data
+
+USER g8e
+
+CMD ["sleep", "infinity"]

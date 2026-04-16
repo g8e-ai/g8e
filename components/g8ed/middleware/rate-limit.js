@@ -62,6 +62,35 @@ function extractApiKeyForRateLimit(req) {
 }
 
 /**
+ * Rate limiter for passkey auth endpoints
+ *
+ * Declared at module scope (and exported directly) so static analysis tools
+ * such as CodeQL's `js/missing-rate-limiting` query can trace it to the
+ * `express-rate-limit` call site. Route files should import this constant
+ * directly rather than receiving it through the `createRateLimiters` factory,
+ * to preserve that dataflow.
+ */
+export const passkeyRateLimiter = rateLimit({
+    windowMs: PasskeyRateLimit.WINDOW_MS,
+    max: PasskeyRateLimit.MAX,
+    message: {
+        success: false,
+        error: RateLimitError.AUTH
+    },
+    standardHeaders: true,
+    handler: (req, res) => {
+        logger.warn('[RATE-LIMIT] Passkey rate limit exceeded', {
+            ip: req.ip,
+            path: req.path,
+            userAgent: req.headers['user-agent']
+        });
+        res.status(429).json(new ErrorResponse({
+            error: RateLimitError.AUTH
+        }).forWire());
+    }
+});
+
+/**
  * Rate limiting Middleware Factory
  * Protects against brute force and DoS attacks
  * 
@@ -518,29 +547,6 @@ export function createRateLimiters({ config = {} } = {}) {
             });
             res.status(429).json(new ErrorResponse({
                 error: RateLimitError.SETTINGS_WAIT
-            }).forWire());
-        }
-    });
-
-    /**
-     * Rate limiter for passkey auth endpoints
-     */
-    const passkeyRateLimiter = rateLimit({
-        windowMs: PasskeyRateLimit.WINDOW_MS,
-        max: PasskeyRateLimit.MAX,
-        message: {
-            success: false,
-            error: RateLimitError.AUTH
-        },
-        standardHeaders: true,
-        handler: (req, res) => {
-            logger.warn('[RATE-LIMIT] Passkey rate limit exceeded', {
-                ip: req.ip,
-                path: req.path,
-                userAgent: req.headers['user-agent']
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.AUTH
             }).forWire());
         }
     });

@@ -346,10 +346,22 @@ Route handlers behind `requireAuth` must use these properties exclusively — ne
 | Scope | Limit |
 |-------|-------|
 | Auth endpoints | 20 requests / 5 min |
+| Passkey endpoints | 20 requests / 5 min |
 | Chat endpoints | 30 messages / min |
 | SSE connections | 30 attempts / 5 min (failed only) |
 | General API | 60 requests / min |
 | Global public API | 100 requests / min |
+
+#### Rate Limiter Wiring Pattern
+
+Most limiters are built inside `createRateLimiters()` in `middleware/rate-limit.js` and plumbed through `server.js` → `app_factory.js` into each route factory via the `rateLimiters` argument.
+
+**Exception — auth-sensitive limiters must be module-level exports.** Static-analysis tools (notably CodeQL's `js/missing-rate-limiting` query) cannot trace middleware through a factory → returned-object → destructured-param chain. Any limiter that protects a brute-forceable authentication surface must therefore be:
+
+1. Declared at module scope in `middleware/rate-limit.js` and exported directly (e.g. `export const passkeyRateLimiter = rateLimit({ ... })`).
+2. Imported directly by the route file (`import { passkeyRateLimiter } from '../../middleware/rate-limit.js'`) and applied via `router.use(...)` at the top of the router factory.
+
+The `createRateLimiters()` factory may still re-export the same binding in its returned object for back-compat with existing tests, but routes that rely on the limiter for security must not depend on that indirection. When adding a new auth-sensitive limiter, follow the `passkeyRateLimiter` pattern.
 
 ---
 

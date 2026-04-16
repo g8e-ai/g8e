@@ -20,11 +20,9 @@ import { SetupPaths } from '../../constants/api_paths.js';
 /**
  * @param {Object} options
  * @param {Object} options.services - Services object containing all platform services
- * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createSetupRouter({ services, rateLimiters }) {
+export function createSetupRouter({ services }) {
     const { settingsService, setupService, passkeyAuthService } = services;
-    const { passkeyRateLimiter } = rateLimiters;
     const router = express.Router();
 
     router.get(SetupPaths.WIZARD, async (req, res, next) => {

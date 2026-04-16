@@ -15,6 +15,7 @@
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { PasskeyPaths } from '../../constants/api_paths.js';
+import { passkeyRateLimiter } from '../../middleware/rate-limit.js';
 import { PasskeyAuthChallengeRequest, PasskeyAuthVerifyRequest, AttestationResponseJSON, PasskeyRegisterVerifyRequest, PasskeyRegisterChallengeRequest } from '../../models/request_models.js';
 import { 
     AuthenticationError, 
@@ -31,13 +32,17 @@ import { ApiKeyError } from '../../constants/auth.js';
  * @param {Object} options
  * @param {Object} options.services - Services object containing all platform services
  * @param {Object} options.authMiddleware - Auth middleware object
- * @param {Object} options.rateLimiters - Rate limiter objects
  */
-export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) {
+export function createPasskeyRouter({ services, authMiddleware }) {
     const { passkeyAuthService, userService, postLoginService, setupService } = services;
     const { requireAuth, requireFirstRun } = authMiddleware;
-    const { passkeyRateLimiter } = rateLimiters;
     const router = express.Router();
+
+    // Rate-limit every passkey endpoint (brute-force / DoS protection).
+    // Imported at module scope from `../../middleware/rate-limit.js` so that
+    // static analysis can trace the middleware back to the `express-rate-limit`
+    // call site.
+    router.use(passkeyRateLimiter);
 
     // ---------------------------------------------------------------------------
     // POST /register-challenge
@@ -47,7 +52,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
     //   SECURITY: Requires authenticated session. Setup flow gets challenge atomically via /api/setup/user.
     // ---------------------------------------------------------------------------
 
-    router.post(PasskeyPaths.REGISTER_CHALLENGE, passkeyRateLimiter, requireAuth, async (req, res, next) => {
+    router.post(PasskeyPaths.REGISTER_CHALLENGE, requireAuth, async (req, res, next) => {
         try {
             const challengeReq = PasskeyRegisterChallengeRequest.parse(req.body);
 
@@ -80,7 +85,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
 
     // Setup flow: Only allowed if first-run setup is active
     // SECURITY: Use a separate path for setup registration
-    router.post('/register-verify-setup', passkeyRateLimiter, requireFirstRun, async (req, res, next) => {
+    router.post('/register-verify-setup', requireFirstRun, async (req, res, next) => {
         try {
             const verifyReq = PasskeyRegisterVerifyRequest.parse(req.body);
             const user = await userService.getUser(verifyReq.user_id);
@@ -120,7 +125,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
 
     // Post-setup flow: First passkey registration for a new user (no session yet)
     // SECURITY: Only allow this if the user has NO passkeys yet.
-    router.post('/register-verify-initial', passkeyRateLimiter, async (req, res, next) => {
+    router.post('/register-verify-initial', async (req, res, next) => {
         try {
             const verifyReq = PasskeyRegisterVerifyRequest.parse(req.body);
             const user = await userService.getUser(verifyReq.user_id);
@@ -158,7 +163,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
     });
 
     // Post-setup flow: Requires authenticated session to add additional passkeys
-    router.post(PasskeyPaths.REGISTER_VERIFY, passkeyRateLimiter, requireAuth, async (req, res, next) => {
+    router.post(PasskeyPaths.REGISTER_VERIFY, requireAuth, async (req, res, next) => {
         try {
             const verifyReq = PasskeyRegisterVerifyRequest.parse(req.body);
 
@@ -191,7 +196,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
         }
     });
 
-    router.post(PasskeyPaths.AUTH_CHALLENGE, passkeyRateLimiter, async (req, res, next) => {
+    router.post(PasskeyPaths.AUTH_CHALLENGE, async (req, res, next) => {
         try {
             let challengeReq;
             try {
@@ -226,7 +231,7 @@ export function createPasskeyRouter({ services, authMiddleware, rateLimiters }) 
         }
     });
 
-    router.post(PasskeyPaths.AUTH_VERIFY, passkeyRateLimiter, async (req, res, next) => {
+    router.post(PasskeyPaths.AUTH_VERIFY, async (req, res, next) => {
         try {
             let verifyReq;
             try {
