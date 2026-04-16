@@ -149,6 +149,8 @@ stream_response
 
 Retry behaviour in `stream_response`: if the provider raises a retryable error and streaming has not yet started (`streaming_started=False`), the entire attempt is retried up to `AGENT_MAX_RETRIES` times with exponential backoff. Once any `TEXT` chunk has been yielded (`streaming_started=True`), errors are surfaced immediately — a partial response is never replayed.
 
+**Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
+
 **Invocation context lifecycle:** `stream_response` is an `async generator`. Python dispatches async-generator cleanup (`async_generator_athrow`) in a new `asyncio` task that runs in a different `Context` than the request that created the generator. Because `ContextVar.reset(token)` requires the token to be reset in the exact same `Context` it was set in, the invocation context lifecycle **must not** be owned by `stream_response`. It is owned by `run_with_sse` (a normal `async def` coroutine with a stable `Context`) via `start_invocation_context` before iteration and `reset_invocation_context` in `finally`. `stream_response` reads the already-set context value; it never holds a token.
 
 `_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to g8ed for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
@@ -966,7 +968,7 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `command_gen_passes` | `3` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
-Temperatures are fixed per Tribunal member and are not configurable. Values are sourced from shared/constants/agents.json (single source of truth across g8ee, g8ed, and g8eo): Axiom → 0.0, Concord → 0.4, Variance → 0.8.
+Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature` (resolved via `_temperature_for_pass` → `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Hardcoding per-member temperatures is incompatible with providers that require fixed temperatures (e.g. Gemini 3+ requires 1.0). Per-member diversity comes from the distinct Axiom/Concord/Variance personas in `shared/constants/agents.json`, not from sampling temperature.
 
 **Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
 

@@ -351,8 +351,7 @@ function mountRoutes(app, {
     // Auth Routes
     app.use(BasePaths.AUTH, createAuthRouter({ 
         services,
-        authMiddleware,
-        rateLimiters
+        authMiddleware
     }));
 
     app.use(BasePaths.AUTH_PASSKEY, createPasskeyRouter({ 

@@ -8,7 +8,7 @@ The g8e platform uses multiple AI agents across the stack, each with a specific 
 
 All agent definitions are centralized in `shared/constants/agents.json`. This file contains:
 
-- **Metadata**: id, display_name, icon, description, role, model_tier, temperature, tools
+- **Metadata**: id, display_name, icon, description, role, model_tier, temperature (advisory — runtime uses model default), tools
 - **Identity**: Who the agent is
 - **Purpose**: What the agent does
 - **Autonomy**: How much independence the agent has (fully_autonomous, human_approved)
@@ -50,7 +50,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ### 5. Verifier
 - **Role**: Validator / Final Judgment
 - **Model Tier**: Assistant
-- **Temperature**: 0.0 (deterministic)
+- **Temperature**: `null` — uses the configured model's `default_temperature`. Convergent behavior is enforced by the persona voice and the strict `ok`/corrected-command wire contract, not by a hardcoded temperature (some providers, e.g. Gemini 3+, reject non-default temperatures).
 - **Purpose**: The last voice before the command reaches user approval. Produces one of two verdicts in a strict wire contract: the literal string `ok` when the Tribunal winner is correct as-is, or a single corrected command string when a specific nameable flaw requires revision. Defaults to confirming; revises only on concrete errors, never on general unease.
 - **Migration Status**: Complete (voice sharpened; `ok`/corrected-command wire contract preserved for `_run_verifier` in `command_generator.py`)
 - **Usage**: `get_agent_persona("verifier")` in `command_generator.py`
@@ -58,7 +58,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ### 6. Title Generator
 - **Role**: Summarizer
 - **Model Tier**: Assistant
-- **Temperature**: 0.7
+- **Temperature**: `null` — uses the configured model's `default_temperature`.
 - **Purpose**: Generates concise case titles
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("title_generator")` in `title_generator.py`
@@ -66,7 +66,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ### 7. Axiom (Tribunal Member)
 - **Role**: Tribunal Member — The Minimalist
 - **Model Tier**: Assistant
-- **Temperature**: 0.0 (deterministic)
+- **Temperature**: `null` — uses the model default. Minimalist character comes from the persona, not a numeric temperature.
 - **Purpose**: Proposes the simplest command that correctly accomplishes the intent. Complexity is a liability; every extra flag or pipe is a surface for bugs or misreading. Does not add defensive flags — that is Concord's and Variance's job.
 - **Pass Assignment**: Pass 0 in voting swarm
 - **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
@@ -75,7 +75,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ### 8. Concord (Tribunal Member)
 - **Role**: Tribunal Member — The Archivist
 - **Model Tier**: Assistant
-- **Temperature**: 0.4
+- **Temperature**: `null` — uses the model default. Archivist character comes from the persona.
 - **Purpose**: Proposes the command that reads cleanest in an audit log six months later. Optimizes for institutional memory and retrospective legibility: explicit flags, absolute paths, named resources over wildcards, optional trailing comments. Distinct from Variance — Concord assumes the reader is careless, not that the writer is compromised.
 - **Pass Assignment**: Pass 1 in voting swarm
 - **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
@@ -84,7 +84,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ### 9. Variance (Tribunal Member)
 - **Role**: Tribunal Member — The Adversary
 - **Model Tier**: Assistant
-- **Temperature**: 0.8
+- **Temperature**: `null` — uses the model default. Adversarial character comes from the persona.
 - **Purpose**: Proposes the command as if an attacker had authored it and the user had not noticed. Simulates adversarial origin per-command: compromised terminal, pasted snippet, social engineering. Defensive additions must do real work — no security theater. Couples directly to Triage's `adversarial` `request_posture` signal.
 - **Pass Assignment**: Pass 2 in voting swarm
 - **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)

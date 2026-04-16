@@ -61,14 +61,25 @@ function extractApiKeyForRateLimit(req) {
     return apiKey.substring(0, 16);
 }
 
+// ---------------------------------------------------------------------------
+// Auth-sensitive rate limiters — module-scope exports
+//
+// These limiters protect brute-forceable authentication surfaces (passkey,
+// user register, operator auth, device link register). They are declared at
+// module scope and exported directly so that static analysis tools such as
+// CodeQL's `js/missing-rate-limiting` query can trace them to the
+// `express-rate-limit` call site. Route files must import these constants
+// directly rather than receiving them through the `createRateLimiters`
+// factory, to preserve that dataflow.
+//
+// The `createRateLimiters` factory below still re-exports the same bindings
+// in its returned object (via closure scope) for back-compat with existing
+// middleware unit tests and with non-auth routes that continue to receive
+// their limiters via the factory.
+// ---------------------------------------------------------------------------
+
 /**
  * Rate limiter for passkey auth endpoints
- *
- * Declared at module scope (and exported directly) so static analysis tools
- * such as CodeQL's `js/missing-rate-limiting` query can trace it to the
- * `express-rate-limit` call site. Route files should import this constant
- * directly rather than receiving it through the `createRateLimiters` factory,
- * to preserve that dataflow.
  */
 export const passkeyRateLimiter = rateLimit({
     windowMs: PasskeyRateLimit.WINDOW_MS,
@@ -86,6 +97,107 @@ export const passkeyRateLimiter = rateLimit({
         });
         res.status(429).json(new ErrorResponse({
             error: RateLimitError.AUTH
+        }).forWire());
+    }
+});
+
+/**
+ * Rate limiter for authentication endpoints (user registration)
+ */
+export const authRateLimiter = rateLimit({
+    windowMs: UserAuthRateLimit.WINDOW_MS,
+    max: UserAuthRateLimit.MAX,
+    message: {
+        success: false,
+        error: RateLimitError.AUTH
+    },
+    standardHeaders: true,
+    handler: (req, res) => {
+        logger.warn('[RATE-LIMIT] Auth rate limit exceeded', {
+            ip: req.ip,
+            path: req.path,
+            userAgent: req.headers['user-agent']
+        });
+        res.status(429).json(new ErrorResponse({
+            error: RateLimitError.AUTH
+        }).forWire());
+    }
+});
+
+/**
+ * Rate limiter for Operator authentication (POST /api/auth/operator)
+ */
+export const operatorAuthRateLimiter = rateLimit({
+    windowMs: AuthRateLimit.WINDOW_MS,
+    max: AuthRateLimit.MAX_PER_KEY,
+    keyGenerator: (req) => {
+        const apiKeyPrefix = extractApiKeyForRateLimit(req);
+        // Use API key prefix if available, otherwise fall back to IP
+        return apiKeyPrefix ? `apikey:${apiKeyPrefix}` : `ip:${req.ip}`;
+    },
+    message: {
+        success: false,
+        error: RateLimitError.AUTH_OPERATOR
+    },
+    standardHeaders: true,
+    // IP is intentional fallback, not primary key - disable IPv6 validation
+    validate: { keyGeneratorIpFallback: false },
+    handler: (req, res) => {
+        const apiKeyPrefix = extractApiKeyForRateLimit(req);
+        logger.warn('[RATE-LIMIT] Operator auth rate limit exceeded', {
+            ip: req.ip,
+            keyType: apiKeyPrefix ? 'api_key' : 'ip',
+            apiKeyPrefix: apiKeyPrefix ? apiKeyPrefix.substring(0, 12) + '...' : null,
+            path: req.path,
+            userAgent: req.headers['user-agent']
+        });
+        res.status(429).json(new ErrorResponse({
+            error: RateLimitError.AUTH_OPERATOR
+        }).forWire());
+    }
+});
+
+/**
+ * Additional IP-based rate limiter for Operator auth as a global backstop
+ */
+export const operatorAuthIpBackstopLimiter = rateLimit({
+    windowMs: AuthRateLimit.WINDOW_MS,
+    max: AuthRateLimit.MAX_PER_IP,
+    message: {
+        success: false,
+        error: RateLimitError.AUTH_IP
+    },
+    standardHeaders: true,
+    handler: (req, res) => {
+        logger.error('[RATE-LIMIT] Operator auth IP backstop limit exceeded - possible attack', {
+            ip: req.ip,
+            path: req.path,
+            userAgent: req.headers['user-agent']
+        });
+        res.status(429).json(new ErrorResponse({
+            error: RateLimitError.AUTH_IP
+        }).forWire());
+    }
+});
+
+/**
+ * Rate limiter for device link register endpoint (public)
+ */
+export const deviceLinkRateLimiter = rateLimit({
+    windowMs: DeviceLinkRateLimit.WINDOW_MS,
+    max: DeviceLinkRateLimit.MAX,
+    message: {
+        success: false,
+        error: RateLimitError.DEVICE_LINK
+    },
+    standardHeaders: true,
+    handler: (req, res) => {
+        logger.warn('[RATE-LIMIT] Device link register rate limit exceeded', {
+            ip: req.ip,
+            path: req.path
+        });
+        res.status(429).json(new ErrorResponse({
+            error: RateLimitError.DEVICE_LINK_REGISTER
         }).forWire());
     }
 });
@@ -121,30 +233,6 @@ export function createRateLimiters({ config = {} } = {}) {
             });
             res.status(429).json(new ErrorResponse({
                 error: RateLimitError.GENERIC
-            }).forWire());
-        }
-    });
-
-    /**
-     * Rate limiter for authentication endpoints
-     * Balanced limits to prevent brute force while allowing legitimate retries
-     */
-    const authRateLimiter = rateLimit({
-        windowMs: UserAuthRateLimit.WINDOW_MS,
-        max: UserAuthRateLimit.MAX,
-        message: {
-            success: false,
-            error: RateLimitError.AUTH
-        },
-        standardHeaders: true,
-        handler: (req, res) => {
-            logger.warn('[RATE-LIMIT] Auth rate limit exceeded', {
-                ip: req.ip,
-                path: req.path,
-                userAgent: req.headers['user-agent']
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.AUTH
             }).forWire());
         }
     });
@@ -270,62 +358,6 @@ export function createRateLimiters({ config = {} } = {}) {
     });
 
     /**
-     * Rate limiter for Operator authentication (POST /api/auth/operator)
-     */
-    const operatorAuthRateLimiter = rateLimit({
-        windowMs: AuthRateLimit.WINDOW_MS,
-        max: AuthRateLimit.MAX_PER_KEY,
-        keyGenerator: (req) => {
-            const apiKeyPrefix = extractApiKeyForRateLimit(req);
-            // Use API key prefix if available, otherwise fall back to IP
-            return apiKeyPrefix ? `apikey:${apiKeyPrefix}` : `ip:${req.ip}`;
-        },
-        message: {
-            success: false,
-            error: RateLimitError.AUTH_OPERATOR
-        },
-        standardHeaders: true,
-        // IP is intentional fallback, not primary key - disable IPv6 validation
-        validate: { keyGeneratorIpFallback: false },
-        handler: (req, res) => {
-            const apiKeyPrefix = extractApiKeyForRateLimit(req);
-            logger.warn('[RATE-LIMIT] Operator auth rate limit exceeded', {
-                ip: req.ip,
-                keyType: apiKeyPrefix ? 'api_key' : 'ip',
-                apiKeyPrefix: apiKeyPrefix ? apiKeyPrefix.substring(0, 12) + '...' : null,
-                path: req.path,
-                userAgent: req.headers['user-agent']
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.AUTH_OPERATOR
-            }).forWire());
-        }
-    });
-
-    /**
-     * Additional IP-based rate limiter for Operator auth as a global backstop
-     */
-    const operatorAuthIpBackstopLimiter = rateLimit({
-        windowMs: AuthRateLimit.WINDOW_MS,
-        max: AuthRateLimit.MAX_PER_IP,
-        message: {
-            success: false,
-            error: RateLimitError.AUTH_IP
-        },
-        standardHeaders: true,
-        handler: (req, res) => {
-            logger.error('[RATE-LIMIT] Operator auth IP backstop limit exceeded - possible attack', {
-                ip: req.ip,
-                path: req.path,
-                userAgent: req.headers['user-agent']
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.AUTH_IP
-            }).forWire());
-        }
-    });
-
-    /**
      * Rate limiter for Audit Log page and API endpoints
      */
     const auditRateLimiter = rateLimit({
@@ -399,28 +431,6 @@ export function createRateLimiters({ config = {} } = {}) {
             });
             res.status(429).json(new ErrorResponse({
                 error: RateLimitError.RATE_EXCEEDED_WAIT
-            }).forWire());
-        }
-    });
-
-    /**
-     * Rate limiter for device link register endpoint (public)
-     */
-    const deviceLinkRateLimiter = rateLimit({
-        windowMs: DeviceLinkRateLimit.WINDOW_MS,
-        max: DeviceLinkRateLimit.MAX,
-        message: {
-            success: false,
-            error: RateLimitError.DEVICE_LINK
-        },
-        standardHeaders: true,
-        handler: (req, res) => {
-            logger.warn('[RATE-LIMIT] Device link register rate limit exceeded', {
-                ip: req.ip,
-                path: req.path
-            });
-            res.status(429).json(new ErrorResponse({
-                error: RateLimitError.DEVICE_LINK_REGISTER
             }).forWire());
         }
     });

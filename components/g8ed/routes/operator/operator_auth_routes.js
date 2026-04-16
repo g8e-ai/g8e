@@ -18,6 +18,7 @@ import { OperatorAuthError, AuthError, BEARER_PREFIX } from '../../constants/aut
 import { ErrorResponse, OperatorAuthResponse, OperatorSessionRefreshResponse } from '../../models/response_models.js';
 import { AuthPaths } from '../../constants/api_paths.js';
 import { ApiKeyError } from '../../constants/auth.js';
+import { operatorAuthRateLimiter, operatorAuthIpBackstopLimiter } from '../../middleware/rate-limit.js';
 
 /**
  * @param {Object} options
@@ -28,7 +29,7 @@ import { ApiKeyError } from '../../constants/auth.js';
 export function createOperatorAuthRouter({ services, rateLimiters, requestTimestampMiddleware }) {
     const { operatorAuthService, operatorSessionService } = services;
     const { requireRequestTimestamp } = requestTimestampMiddleware;
-    const { operatorAuthIpBackstopLimiter, operatorAuthRateLimiter, operatorRefreshRateLimiter } = rateLimiters;
+    const { operatorRefreshRateLimiter } = rateLimiters;
     const router = express.Router();
 
     router.post(AuthPaths.OPERATOR_AUTH, operatorAuthIpBackstopLimiter, operatorAuthRateLimiter, requireRequestTimestamp(), async (req, res) => {

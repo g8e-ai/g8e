@@ -12,9 +12,7 @@
 // limitations under the License.
 
 import express from 'express';
-import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
-import { ErrorResponse, PlatformSetupConfigResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { SetupPaths } from '../../constants/api_paths.js';
 
 /**
@@ -22,7 +20,7 @@ import { SetupPaths } from '../../constants/api_paths.js';
  * @param {Object} options.services - Services object containing all platform services
  */
 export function createSetupRouter({ services }) {
-    const { settingsService, setupService, passkeyAuthService } = services;
+    const { setupService } = services;
     const router = express.Router();
 
     router.get(SetupPaths.WIZARD, async (req, res, next) => {

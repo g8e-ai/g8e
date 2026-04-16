@@ -40,6 +40,7 @@ from collections.abc import AsyncGenerator
 
 import app.llm.llm_types as types
 from app.constants import (
+    AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
     AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
@@ -57,6 +58,7 @@ from app.models.agent import (
     TurnResult,
 )
 from app.models.grounding import GroundingMetadata
+from app.models.operators import CommandApprovalRequest
 from app.services.ai.agent_tool_loop import (
     execute_turn_tool_calls,
     merge_grounding,
@@ -70,6 +72,8 @@ from app.services.ai.agent_turn import (
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
+from app.services.protocols import ApprovalServiceProtocol
+from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +93,11 @@ class g8eEngine:
         self,
         tool_executor: AIToolService,
         grounding_service: GroundingService | None = None,
+        approval_service: ApprovalServiceProtocol | None = None,
     ):
         self._tool_executor = tool_executor
         self._grounding_service = grounding_service or GroundingService()
+        self._approval_service = approval_service
         logger.info("g8eEngine initialized")
 
     @property
@@ -277,11 +283,42 @@ class g8eEngine:
         while True:
             loop_turn += 1
             if loop_turn > AGENT_MAX_TOOL_TURNS:
-                logger.error(
-                    "[AGENT] Tool loop exceeded max turns (%d), aborting to prevent infinite loop",
+                if self._approval_service is None or context.g8e_context is None:
+                    logger.error(
+                        "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
+                        AGENT_MAX_TOOL_TURNS,
+                    )
+                    break
+
+                logger.warning(
+                    "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
                     AGENT_MAX_TOOL_TURNS,
                 )
-                break
+                justification = (
+                    f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
+                    f"without completing its response. Approve to reset the turn counter "
+                    f"and allow the agent to continue; deny to stop the agent now."
+                )
+                approval_result = await self._approval_service.request_command_approval(
+                    CommandApprovalRequest(
+                        g8e_context=context.g8e_context,
+                        timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
+                        justification=justification,
+                        execution_id=generate_command_execution_id(),
+                        operator_id="",
+                        operator_session_id="",
+                        command=f"[agent] continue beyond {AGENT_MAX_TOOL_TURNS}-turn limit",
+                    )
+                )
+                if not approval_result.approved:
+                    logger.info(
+                        "[AGENT] Continuation denied (reason=%s); stopping tool loop",
+                        approval_result.reason,
+                    )
+                    final_finish_reason = "stopped_by_operator"
+                    break
+                logger.info("[AGENT] Continuation approved; resetting turn counter")
+                loop_turn = 1
             logger.info(
                 "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
                 loop_turn, len(contents), case_id, investigation_id,

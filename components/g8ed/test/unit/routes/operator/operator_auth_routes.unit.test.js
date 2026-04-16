@@ -14,6 +14,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+
+// Pass-through the module-level operator auth limiters so this suite's
+// request volume does not exhaust the real limiter windows.
+vi.mock('@g8ed/middleware/rate-limit.js', async () => {
+    const actual = await vi.importActual('@g8ed/middleware/rate-limit.js');
+    return {
+        ...actual,
+        operatorAuthRateLimiter: (req, res, next) => next(),
+        operatorAuthIpBackstopLimiter: (req, res, next) => next()
+    };
+});
+
 import { createOperatorAuthRouter } from '@g8ed/routes/operator/operator_auth_routes.js';
 import { AuthPaths } from '@g8ed/constants/api_paths.js';
 import { OperatorAuthError, AuthError, ApiKeyError } from '@g8ed/constants/auth.js';
@@ -34,8 +46,6 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             refreshSession: vi.fn()
         };
         mockRateLimiters = {
-            operatorAuthIpBackstopLimiter: vi.fn((req, res, next) => next()),
-            operatorAuthRateLimiter: vi.fn((req, res, next) => next()),
             operatorRefreshRateLimiter: vi.fn((req, res, next) => next())
         };
         mockRequestTimestampMiddleware = {

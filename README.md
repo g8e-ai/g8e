@@ -71,9 +71,9 @@ You describe what you want in natural language. The AI fans out across your boun
 
 The Tribunal is a heterogeneous multi-model consensus pipeline that refines every proposed command before human review:
 
-1. **Parallel Generation** — Three independent AI passes at varying temperatures (0.5, 0.7, 1.2) produce candidate commands for the same intent. Diversity is the point.
+1. **Parallel Generation** — Three independent AI passes — Axiom (The Minimalist), Concord (The Archivist), Variance (The Adversary) — each propose a candidate command for the same intent. Diversity comes from the distinct personas, not from per-pass temperature overrides (all passes use the configured model's default temperature, which many providers, e.g. Gemini 3+, require to be fixed at 1.0).
 2. **Weighted Vote** — Candidates are normalized, grouped, and scored by position-decay weighting. The strongest consensus wins.
-3. **Verification** — A separate zero-temperature model evaluates the winner against the original intent and either confirms or revises it.
+3. **Verification** — A separate convergent verifier persona evaluates the winner against the original intent and either confirms it (`ok`) or emits a minimal revision.
 4. **Human Approval** — The refined command halts. You see exactly what will run, on which system, and why. You approve or deny.
 5. **Execution** — The Operator executes locally, records the full output to an encrypted local vault, scrubs the output through Sentinel, and returns only the sanitized result to the AI for its next reasoning step.
 
@@ -83,9 +83,9 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that refines ever
    ▼
   g8ee (AI Engine) ── investigates ── reasons ── proposes command
    │
-   ├── Tribunal Pass 0 (temp 0.5) ──┐
-   ├── Tribunal Pass 1 (temp 0.7) ──┼── Weighted Vote ── Verifier (temp 0.0)
-   └── Tribunal Pass 2 (temp 1.2) ──┘         │
+   ├── Tribunal Pass 0 · Axiom     ──┐
+   ├── Tribunal Pass 1 · Concord   ──┼── Weighted Vote ── Verifier
+   └── Tribunal Pass 2 · Variance  ──┘         │
                                                ▼
                                     ┌─── Your Approval ───┐
                                     │  "df -h /var/log"   │

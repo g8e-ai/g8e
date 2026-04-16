@@ -127,6 +127,7 @@ from app.constants.prompts import (
     PromptSection,
 )
 from app.constants.settings import (
+    AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
     AGENT_MAX_TOOL_TURNS,
     AGENT_RETRYABLE_ERROR_SUBSTRINGS,

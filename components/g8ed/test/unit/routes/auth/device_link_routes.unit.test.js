@@ -14,6 +14,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
+
+// Pass-through the module-level deviceLinkRateLimiter (public device register)
+// so this suite's request volume does not exhaust the real limiter.
+vi.mock('@g8ed/middleware/rate-limit.js', async () => {
+    const actual = await vi.importActual('@g8ed/middleware/rate-limit.js');
+    return {
+        ...actual,
+        deviceLinkRateLimiter: (req, res, next) => next()
+    };
+});
+
 import { createDeviceLinkRouter } from '@g8ed/routes/auth/device_link_routes.js';
 import { AuthPaths, DeviceLinkPaths } from '@g8ed/constants/api_paths.js';
 import { ApiKeyError, DeviceLinkError, WEB_SESSION_ID_HEADER } from '@g8ed/constants/auth.js';
@@ -44,7 +55,6 @@ describe('DeviceLinkRoutes Unit Tests', () => {
 
         const noopLimiter = (req, res, next) => next();
         mockRateLimiters = {
-            deviceLinkRateLimiter: noopLimiter,
             deviceLinkGenerateLimiter: noopLimiter,
             deviceLinkCreateRateLimiter: noopLimiter,
             deviceLinkListRateLimiter: noopLimiter,

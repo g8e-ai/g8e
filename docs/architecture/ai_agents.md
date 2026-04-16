@@ -483,7 +483,7 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `description` | `string` | One-line functional summary |
 | `role` | `string` | Functional role (`classifier`, `reasoner`, `responder`, `arbitrator`, `validator`, `summarizer`, `tribunal_member`) |
 | `model_tier` | `string` | LLM tier used at runtime (`primary` = high-reasoning model, `assistant` = fast/lightweight model) |
-| `temperature` | `number \| null` | Fixed temperature value, or `null` for user-configurable |
+| `temperature` | `number \| null` | Advisory only. Runtime uses the model's `default_temperature`; this field documents the persona's intended sampling character when the model allows it. `null` means no preference. |
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |
@@ -497,11 +497,11 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | **Primary** | reasoner | primary | null (configurable) | full tool set | human_approved |
 | **Assistant** | responder | assistant | null (configurable) | full tool set | human_approved |
 | **Tribunal** | arbitrator | assistant | null (composite) | none | fully_autonomous |
-| **Verifier** | validator | assistant | 0.0 | none | fully_autonomous |
-| **Title Generator** | summarizer | assistant | 0.7 | none | fully_autonomous |
-| **Axiom** | tribunal_member | assistant | 0.0 | none | fully_autonomous |
-| **Concord** | tribunal_member | assistant | 0.4 | none | fully_autonomous |
-| **Variance** | tribunal_member | assistant | 0.8 | none | fully_autonomous |
+| **Verifier** | validator | assistant | null (model default) | none | fully_autonomous |
+| **Title Generator** | summarizer | assistant | null (model default) | none | fully_autonomous |
+| **Axiom** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
+| **Concord** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
+| **Variance** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
 
 ### Contract Tests
 
@@ -690,9 +690,9 @@ flowchart TD
     
     subgraph Gen [Stochastic Voting Swarm]
         direction LR
-        P1[Axiom<br/>Pass 0 - Temp 0.5]
-        P2[Concord<br/>Pass 1 - Temp 0.7]
-        P3[Variance<br/>Pass 2 - Temp 1.2]
+        P1[Axiom<br/>Pass 0 - The Minimalist]
+        P2[Concord<br/>Pass 1 - The Archivist]
+        P3[Variance<br/>Pass 2 - The Adversary]
     end
     
     Gen --> Vote[Weighted Majority Vote]
@@ -702,7 +702,7 @@ flowchart TD
     Winner -- Yes --> VerifierEnabled{Is Verifier Enabled?}
     
     VerifierEnabled -- No --> OutVote[Final: Vote Winner]
-    VerifierEnabled -- Yes --> Verify[Final Verifier SLM<br/>Temp 0.0]
+    VerifierEnabled -- Yes --> Verify[Final Verifier SLM]
     
     Verify --> Review{Verdict}
     Review -- OK --> OutVote
@@ -715,20 +715,21 @@ flowchart TD
 #### 1. The Proposer (Primary AI)
 - **Role**: Heavy lifting, generating initial complex code or architectural plans.
 - **Thinking Level**: Set to high for deep logical exploration.
-- **Temperature**: Governed by platform defaults (typically 1.0) to allow optimal pathfinding.
+- **Temperature**: Governed by the configured model's default temperature (e.g. Gemini 3 requires 1.0). Not overridden per-agent.
 
 #### 2. The Voting Swarm (Validators / Skeptics)
-- **Role**: Inducing sampling diversity to catch hallucinations and edge cases.
+- **Role**: Inducing candidate diversity to catch hallucinations and edge cases.
 - **Thinking Level**: Set to lowest supported (minimal/low) to save compute/latency while relying on aggregate accuracy.
-- **Temperature**: Spanned across the swarm to induce diversity, sourced from shared/constants/AIs.json:
-    - **Axiom** (Pass 0): 0.5 (Fully deterministic, statistical probability and resource efficiency)
-    - **Concord** (Pass 1): 0.7 (Moderate determinism with ethical flexibility)
-    - **Variance** (Pass 2): 1.2 (High creativity and intentional unpredictability)
+- **Temperature**: Every pass uses the configured model's `default_temperature` (resolved via `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Per-pass temperature spreads are **not** hardcoded — some providers (e.g. Gemini 3+) require a fixed temperature of 1.0, so forcing per-member values would break them.
+- **Diversity Source**: Distinct personas, not distinct temperatures. Each pass loads a different Tribunal member persona from `shared/constants/agents.json`:
+    - **Axiom** (Pass 0) — The Minimalist. Optimizes for simplicity.
+    - **Concord** (Pass 1) — The Archivist. Optimizes for audit-log legibility.
+    - **Variance** (Pass 2) — The Adversary. Optimizes for adversarial robustness.
 
 #### 3. The Final Verifier (Consensus Orchestrator)
 - **Role**: Deterministic arbitration and final verdict formatting.
 - **Thinking Level**: Set to low or off to avoid overthinking penalties.
-- **Temperature**: Strictly **0.0** (greedy decoding) for absolute reliability.
+- **Temperature**: The configured model's `default_temperature`. The Verifier's convergent behavior is enforced through its persona (`get_agent_persona("verifier")`) and the strict `ok`/corrected-command wire contract — not by forcing a numeric temperature that many providers reject.
 
 #### Configuration
 
@@ -742,7 +743,7 @@ flowchart TD
 
 **Stage 1 — Generation (`_run_generation_stage` / `_run_generation_pass`)**
 
-`LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member (Axiom, Concord, or Variance) with its specific temperature. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
+`LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member persona (Axiom, Concord, or Variance) via `_member_for_pass`. All passes use the configured model's `default_temperature` (resolved through `_temperature_for_pass` → `get_model_config`); diversity comes from the member personas, not per-pass temperature overrides. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
 
 Raw output is normalised by `_normalise_command`: strips surrounding whitespace, trailing newlines, and any ` ```bash `, ` ```shell `, ` ```sh `, or ` ``` ` fences. Each pass emits a `TRIBUNAL_VOTING_PASS_COMPLETED` SSE event carrying the `pass_index`, the normalised candidate (or `None`), and a `success` flag.
 

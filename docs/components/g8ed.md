@@ -359,9 +359,20 @@ Most limiters are built inside `createRateLimiters()` in `middleware/rate-limit.
 **Exception — auth-sensitive limiters must be module-level exports.** Static-analysis tools (notably CodeQL's `js/missing-rate-limiting` query) cannot trace middleware through a factory → returned-object → destructured-param chain. Any limiter that protects a brute-forceable authentication surface must therefore be:
 
 1. Declared at module scope in `middleware/rate-limit.js` and exported directly (e.g. `export const passkeyRateLimiter = rateLimit({ ... })`).
-2. Imported directly by the route file (`import { passkeyRateLimiter } from '../../middleware/rate-limit.js'`) and applied via `router.use(...)` at the top of the router factory.
+2. Imported directly by the route file (e.g. `import { passkeyRateLimiter } from '../../middleware/rate-limit.js'`) and applied to the relevant route(s) as middleware.
 
-The `createRateLimiters()` factory may still re-export the same binding in its returned object for back-compat with existing tests, but routes that rely on the limiter for security must not depend on that indirection. When adding a new auth-sensitive limiter, follow the `passkeyRateLimiter` pattern.
+Currently the following limiters follow this pattern and **must not** be re-introduced into the factory's declaration body:
+
+| Limiter | Protected surface |
+|---------|-------------------|
+| `passkeyRateLimiter` | `POST /api/auth/passkey/*` |
+| `authRateLimiter` | `POST /api/auth/register` |
+| `operatorAuthRateLimiter` + `operatorAuthIpBackstopLimiter` | `POST /api/auth/operator` |
+| `deviceLinkRateLimiter` | `POST /auth/link/:token/register` (public device register) |
+
+The `createRateLimiters()` factory still re-exports the same bindings in its returned object (via module closure) for back-compat with the middleware unit test suite; routes that rely on the limiter for security must not depend on that indirection. When adding a new auth-sensitive limiter, follow the same pattern.
+
+Tests that would otherwise exhaust the real limiter's window should use `vi.mock('@g8ed/middleware/rate-limit.js', ...)` with `vi.importActual` to pass-through the specific limiter(s) under test — see `test/unit/routes/auth/passkey_routes.unit.test.js` for the canonical example.
 
 ---
 

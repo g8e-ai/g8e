@@ -43,15 +43,16 @@ class TestGetAgentPersona:
         axiom = get_tribunal_member("axiom")
         assert axiom.agent_id == "axiom"
         assert axiom.display_name == "Axiom"
-        assert axiom.temperature == 0.0
+        # Temperature is advisory-only; runtime uses model default_temperature.
+        assert axiom.temperature is None
 
         concord = get_tribunal_member("concord")
         assert concord.agent_id == "concord"
-        assert concord.temperature == 0.4
+        assert concord.temperature is None
 
         variance = get_tribunal_member("variance")
         assert variance.agent_id == "variance"
-        assert variance.temperature == 0.8
+        assert variance.temperature is None
 
     def test_get_invalid_agent_raises_keyerror(self):
         """Test that requesting an invalid agent ID raises KeyError."""
@@ -84,11 +85,6 @@ class TestGetAgentPersona:
         """Test temperature handling for agents with null temperature."""
         persona = get_agent_persona("triage")
         assert persona.temperature is None
-
-    def test_temperature_handling_numeric(self):
-        """Test temperature handling for agents with numeric temperature."""
-        persona = get_agent_persona("verifier")
-        assert persona.temperature == 0.0
 
     def test_tools_is_list(self):
         """Test that tools field is always a list."""
@@ -158,17 +154,17 @@ class TestSharpenedTribunalPersonas:
     def test_axiom_is_the_minimalist(self):
         axiom = get_tribunal_member("axiom")
         assert "Minimalist" in axiom.persona
-        assert axiom.temperature == 0.0
+        assert axiom.temperature is None
 
     def test_concord_is_the_archivist(self):
         concord = get_tribunal_member("concord")
         assert "Archivist" in concord.persona
-        assert concord.temperature == 0.4
+        assert concord.temperature is None
 
     def test_variance_is_the_adversary(self):
         variance = get_tribunal_member("variance")
         assert "Adversary" in variance.persona
-        assert variance.temperature == 0.8
+        assert variance.temperature is None
         # Variance is the only member that should reference the adversarial
         # request_posture signal — that coupling is part of the design.
         assert "adversarial" in variance.persona.lower()

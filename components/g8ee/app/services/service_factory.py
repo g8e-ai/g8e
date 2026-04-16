@@ -274,6 +274,7 @@ class ServiceFactory:
         g8e_agent = g8eEngine(
             tool_executor=tool_executor,
             grounding_service=grounding_service,
+            approval_service=approval_service,
         )
 
         chat_task_manager = BackgroundTaskManager()
