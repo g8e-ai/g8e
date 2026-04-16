@@ -248,6 +248,7 @@ class OperatorApprovalService:
             risk_analysis=request.risk_analysis,
             target_systems=request.target_systems,
             task_id=request.task_id,
+            batch_id=request.batch_id,
         )
 
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
@@ -293,6 +294,7 @@ class OperatorApprovalService:
         risk_analysis: CommandRiskAnalysis | None,
         target_systems: list[TargetSystem],
         task_id: str | None,
+        batch_id: str | None = None,
     ) -> ApprovalResult:
         approval_id = generate_approval_id()
         try:
@@ -317,6 +319,7 @@ class OperatorApprovalService:
                 task_id=task_id,
                 risk_analysis=risk_analysis,
                 target_systems=target_systems or [],
+                batch_id=batch_id,
             )
 
             if approval_event.is_batch_execution:

@@ -463,7 +463,7 @@ The ability to restore files to any previous state using the Ledger's git histor
 
 ## Unified Approval
 
-The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee executes the command on each Operator sequentially after approval.
+The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee fans out the command to each Operator in parallel (bounded by `command_validation.max_batch_concurrency`), with all per-operator executions correlated back to the approval via a shared `batch_id`.
 
 ---
 

@@ -70,6 +70,14 @@ class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration."""
     enable_whitelisting: bool = Field(False)
     enable_blacklisting: bool = Field(False)
+    max_batch_concurrency: int = Field(
+        10,
+        description="Maximum number of operators a single batched command may dispatch to concurrently.",
+    )
+    batch_fail_fast: bool = Field(
+        False,
+        description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
+    )
 
 class SearchSettings(G8eBaseModel):
     """Unified search configuration (Vertex AI and Google Search)."""

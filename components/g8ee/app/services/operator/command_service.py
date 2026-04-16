@@ -31,10 +31,13 @@ from app.models.command_payloads import (
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
+    BatchOperatorExecutionResult,
     CommandApprovalRequest,
+    OperatorDocument,
     TargetSystem,
     DirectCommandResult,
 )
+from app.models.tool_results import CommandInternalResult
 from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
@@ -78,8 +81,9 @@ from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.services.mcp.adapter import build_tool_call_request
-from app.utils.ids import generate_command_execution_id
+from app.utils.ids import generate_batch_id, generate_command_execution_id
 from app.errors import ValidationError, BusinessLogicError
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -237,40 +241,40 @@ class OperatorCommandService:
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
     ) -> CommandExecutionResult:
-        """Orchestrate command execution: risk analysis -> approval -> dispatch."""
+        """Orchestrate command execution: resolve -> validate -> approve -> fan-out dispatch.
+
+        Single-operator runs and multi-operator ("batch") runs share the same pipeline:
+        one command validation, one risk analysis, one approval, then N parallel per-operator
+        dispatches correlated by a batch_id. For N==1 the return shape matches legacy behavior.
+        """
         command = args.command.strip()
         justification = args.justification.strip()
-        
+
         logger.info("[COMMAND] Starting execution: %s", command)
 
-        # 1. Resolve operator
+        # 1. Resolve target operator(s) — unified path for singular and batch.
+        operator_documents = investigation.operator_documents if investigation else []
         try:
-            operator_documents = investigation.operator_documents if investigation else []
-            resolved_operator = self._execution_service.resolve_target_operator(
-                operator_documents=operator_documents,
-                target_operator=args.target_operator or ""
-            )
+            target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
-            return CommandExecutionResult(success=False, error=str(e), error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR)
+            return CommandExecutionResult(
+                success=False, error=str(e), error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+            )
 
-        operator_id = resolved_operator.operator_id
-        operator_session_id = resolved_operator.operator_session_id
-        if not operator_session_id:
-            return CommandExecutionResult(success=False, error="Operator session not found", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
+        # All resolved operators must have a live session.
+        missing_session = [op for op in target_operator_docs if not op.operator_session_id]
+        if missing_session:
+            return CommandExecutionResult(
+                success=False,
+                error="Operator session not found for: "
+                      + ", ".join(op.operator_id or "<unknown>" for op in missing_session),
+                error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
+            )
 
-        # Resolve target_systems for the approval UI
-        if args.target_operators:
-            try:
-                target_operator_docs = self._execution_service.resolve_multiple_operators(
-                    operator_documents, args.target_operators
-                )
-            except (ValidationError, BusinessLogicError):
-                target_operator_docs = [resolved_operator]
-        else:
-            target_operator_docs = [resolved_operator]
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
+        is_batch = len(target_operator_docs) > 1
 
-        # 2. Command validation (whitelist/blacklist enforcement)
+        # 2. Command validation (whitelist/blacklist enforcement) — once for the whole batch.
         cv = self._settings.command_validation
         if cv.enable_whitelisting:
             whitelist_result = self._execution_service.whitelist_validator.validate_command(command)
@@ -296,15 +300,22 @@ class OperatorCommandService:
                     rule=blacklist_result.rule,
                 )
 
-        execution_id = generate_command_execution_id()
+        # Primary operator is the first resolved — used for approval identity fields.
+        primary = target_operator_docs[0]
+        primary_operator_id = primary.operator_id or ""
+        primary_session_id = primary.operator_session_id or ""
+        batch_id = generate_batch_id() if is_batch else None
+        approval_execution_id = generate_command_execution_id()
 
-        # Notify preparing (UI status update)
+        # 3. Notify preparing (one event for the approval card).
         await self.g8ed_event_service.publish_command_event(
             EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
             self._CommandExecutingBroadcastEvent(
                 command=command,
-                execution_id=execution_id,
-                operator_session_id=operator_session_id,
+                execution_id=approval_execution_id,
+                operator_session_id=primary_session_id,
+                operator_id=primary_operator_id,
+                batch_id=batch_id,
             ),
             g8e_context,
             task_id=AITaskId.COMMAND,
@@ -317,19 +328,20 @@ class OperatorCommandService:
             settings=request_settings,
         )
 
-        # 3. Approval gate
+        # 4. Approval gate — a single approval covers the whole batch.
         approval_result = await self._approval_service.request_command_approval(
             CommandApprovalRequest(
                 g8e_context=g8e_context,
                 timeout_seconds=args.timeout_seconds,
                 justification=justification,
-                execution_id=execution_id,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
+                execution_id=approval_execution_id,
+                operator_id=primary_operator_id,
+                operator_session_id=primary_session_id,
                 command=command,
                 risk_analysis=risk_analysis,
                 task_id=AITaskId.COMMAND,
                 target_systems=target_systems,
+                batch_id=batch_id,
             )
         )
 
@@ -338,90 +350,228 @@ class OperatorCommandService:
                 success=False,
                 error=approval_result.reason or "Command denied by user",
                 error_type=CommandErrorType.APPROVAL_DENIED if not approval_result.feedback else CommandErrorType.USER_FEEDBACK,
-                approval_id=approval_result.approval_id
+                approval_id=approval_result.approval_id,
             )
 
-        # 4. Dispatch
-        mcp_payload = build_tool_call_request(
-            tool_name="run_commands_with_operator",
-            arguments={
-                "execution_id": execution_id,
-                "command": command,
-                "justification": justification,
-                "timeout_seconds": args.timeout_seconds,
-            },
-            request_id=execution_id,
+        # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
+        max_concurrency = max(1, getattr(cv, "max_batch_concurrency", 10))
+        fail_fast = bool(getattr(cv, "batch_fail_fast", False))
+        semaphore = asyncio.Semaphore(max_concurrency)
+        cancel_event = asyncio.Event()
+
+        async def _dispatch(op: OperatorDocument) -> BatchOperatorExecutionResult:
+            exec_id = generate_command_execution_id()
+            op_id = op.operator_id or ""
+            op_session_id = op.operator_session_id or ""
+            hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
+
+            if cancel_event.is_set():
+                return BatchOperatorExecutionResult(
+                    hostname=hostname, operator_id=op_id, execution_id=exec_id,
+                    success=False, error="Cancelled by fail-fast",
+                )
+
+            async with semaphore:
+                if cancel_event.is_set():
+                    return BatchOperatorExecutionResult(
+                        hostname=hostname, operator_id=op_id, execution_id=exec_id,
+                        success=False, error="Cancelled by fail-fast",
+                    )
+
+                mcp_payload = build_tool_call_request(
+                    tool_name="run_commands_with_operator",
+                    arguments={
+                        "execution_id": exec_id,
+                        "command": command,
+                        "justification": justification,
+                        "timeout_seconds": args.timeout_seconds,
+                    },
+                    request_id=exec_id,
+                )
+                g8e_message = G8eMessage(
+                    id=exec_id,
+                    source_component=ComponentName.G8EE,
+                    event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                    case_id=g8e_context.case_id,
+                    task_id=AITaskId.COMMAND,
+                    investigation_id=g8e_context.investigation_id,
+                    web_session_id=g8e_context.web_session_id,
+                    operator_session_id=op_session_id,
+                    operator_id=op_id,
+                    payload=mcp_payload,
+                )
+
+                await self.g8ed_event_service.publish_command_event(
+                    EventType.OPERATOR_COMMAND_STARTED,
+                    self._CommandExecutingBroadcastEvent(
+                        command=command,
+                        execution_id=exec_id,
+                        operator_session_id=op_session_id,
+                        operator_id=op_id,
+                        approval_id=approval_result.approval_id,
+                        batch_id=batch_id,
+                    ),
+                    g8e_context,
+                    task_id=AITaskId.COMMAND,
+                )
+
+                try:
+                    internal_result = await self._execution_service.execute(
+                        g8e_message=g8e_message,
+                        g8e_context=g8e_context,
+                        timeout_seconds=args.timeout_seconds,
+                    )
+                except Exception as e:  # noqa: BLE001 — isolate per-operator failure
+                    logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
+                    if fail_fast:
+                        cancel_event.set()
+                    return BatchOperatorExecutionResult(
+                        hostname=hostname, operator_id=op_id, execution_id=exec_id,
+                        success=False, error=str(e),
+                    )
+
+                completion_event_type = (
+                    EventType.OPERATOR_COMMAND_COMPLETED
+                    if internal_result.status == ExecutionStatus.COMPLETED
+                    else EventType.OPERATOR_COMMAND_FAILED
+                )
+                await self.g8ed_event_service.publish_command_event(
+                    completion_event_type,
+                    self._CommandResultBroadcastEvent(
+                        execution_id=exec_id,
+                        command=command,
+                        status=internal_result.status,
+                        output=internal_result.output,
+                        error=internal_result.error,
+                        stderr=internal_result.stderr,
+                        exit_code=internal_result.exit_code,
+                        execution_time_seconds=internal_result.execution_time_seconds,
+                        operator_id=op_id,
+                        operator_session_id=op_session_id,
+                        hostname=hostname,
+                        approval_id=approval_result.approval_id,
+                        batch_id=batch_id,
+                    ),
+                    g8e_context,
+                    task_id=AITaskId.COMMAND,
+                )
+
+                succeeded = internal_result.status == ExecutionStatus.COMPLETED
+                if not succeeded and fail_fast:
+                    cancel_event.set()
+                return BatchOperatorExecutionResult(
+                    hostname=hostname,
+                    operator_id=op_id,
+                    execution_id=exec_id,
+                    success=succeeded,
+                    result=internal_result,
+                    error=internal_result.error if not succeeded else None,
+                )
+
+        logger.info("[COMMAND] Dispatching to %d operator(s) (batch_id=%s)", len(target_operator_docs), batch_id)
+        per_operator_results: list[BatchOperatorExecutionResult] = await asyncio.gather(
+            *[_dispatch(op) for op in target_operator_docs]
         )
 
-        g8e_message = G8eMessage(
-            id=execution_id,
-            source_component=ComponentName.G8EE,
-            event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
-            case_id=g8e_context.case_id,
-            task_id=AITaskId.COMMAND,
-            investigation_id=g8e_context.investigation_id,
-            web_session_id=g8e_context.web_session_id,
-            operator_session_id=operator_session_id,
-            operator_id=operator_id,
-            payload=mcp_payload,
+        return self._assemble_result(
+            command=command,
+            justification=justification,
+            per_operator_results=per_operator_results,
+            approval_id=approval_result.approval_id,
+            is_batch=is_batch,
         )
 
-        # Notify start
-        await self.g8ed_event_service.publish_command_event(
-            EventType.OPERATOR_COMMAND_STARTED,
-            self._CommandExecutingBroadcastEvent(
-                command=command,
-                execution_id=execution_id,
-                operator_session_id=operator_session_id,
-                approval_id=approval_result.approval_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.COMMAND,
-        )
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        logger.info("[COMMAND] Executing: %s", command)
-        internal_result = await self._execution_service.execute(
-            g8e_message=g8e_message,
-            g8e_context=g8e_context,
-            timeout_seconds=args.timeout_seconds,
-        )
-        logger.info("[COMMAND] Execution finished: status=%s", internal_result.status)
+    def _resolve_targets(
+        self,
+        operator_documents: list[OperatorDocument],
+        args: OperatorCommandArgs,
+    ) -> list[OperatorDocument]:
+        """Unified resolution for singular (`target_operator`) and batch (`target_operators`)."""
+        if args.target_operators:
+            return self._execution_service.resolve_multiple_operators(
+                operator_documents, args.target_operators
+            )
+        return [self._execution_service.resolve_target_operator(
+            operator_documents=operator_documents,
+            target_operator=args.target_operator or "",
+        )]
 
-        # Notify completion/failure
-        completion_event_type = (
-            EventType.OPERATOR_COMMAND_COMPLETED 
-            if internal_result.status == ExecutionStatus.COMPLETED 
-            else EventType.OPERATOR_COMMAND_FAILED
-        )
-        
-        await self.g8ed_event_service.publish_command_event(
-            completion_event_type,
-            self._CommandResultBroadcastEvent(
-                execution_id=execution_id,
-                command=command,
-                status=internal_result.status,
-                output=internal_result.output,
-                error=internal_result.error,
-                stderr=internal_result.stderr,
-                exit_code=internal_result.exit_code,
-                execution_time_seconds=internal_result.execution_time_seconds,
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                approval_id=approval_result.approval_id,
-            ),
-            g8e_context,
-            task_id=AITaskId.COMMAND,
-        )
+    def _assemble_result(
+        self,
+        *,
+        command: str,
+        justification: str,
+        per_operator_results: list[BatchOperatorExecutionResult],
+        approval_id: str | None,
+        is_batch: bool,
+    ) -> CommandExecutionResult:
+        """Collapse per-operator results into a single CommandExecutionResult.
+
+        For N==1 we preserve legacy field population (output/stderr/exit_code at top level)
+        so downstream consumers keep working. For N>1 we additionally populate batch fields
+        and a combined output with per-host headers so the agent can reason about divergence.
+        """
+        successful = [r for r in per_operator_results if r.success]
+        failed = [r for r in per_operator_results if not r.success]
+        internal_results: list[CommandInternalResult] = [r.result for r in per_operator_results if r.result is not None]
+
+        if not is_batch:
+            only = per_operator_results[0]
+            res = only.result
+            return CommandExecutionResult(
+                success=only.success,
+                command_executed=command,
+                justification=justification,
+                output=res.output if res else None,
+                stderr=res.stderr if res else None,
+                exit_code=res.exit_code if res else None,
+                execution_status=res.status if res else None,
+                execution_result=res,
+                execution_id=only.execution_id,
+                approval_id=approval_id,
+                error=only.error,
+            )
+
+        # Batch: aggregate outputs with host headers for the agent.
+        def _section(r: BatchOperatorExecutionResult) -> str:
+            header = f"===== {r.hostname} ({r.operator_id}) ====="
+            if r.result is not None:
+                body_parts = []
+                if r.result.output:
+                    body_parts.append(r.result.output)
+                if r.result.stderr:
+                    body_parts.append(f"[stderr]\n{r.result.stderr}")
+                status = f"[status={r.result.status} exit_code={r.result.exit_code}]"
+                body_parts.append(status)
+                return header + "\n" + "\n".join(body_parts)
+            return header + f"\n[error] {r.error or 'unknown failure'}"
+
+        combined_output = "\n\n".join(_section(r) for r in per_operator_results)
+        all_succeeded = not failed
+        aggregate_error: str | None = None
+        if failed:
+            aggregate_error = (
+                f"{len(failed)}/{len(per_operator_results)} operator(s) failed: "
+                + ", ".join(f"{r.hostname}={r.error or 'failed'}" for r in failed)
+            )
 
         return CommandExecutionResult(
-            success=internal_result.status == ExecutionStatus.COMPLETED,
+            success=all_succeeded,
             command_executed=command,
             justification=justification,
-            output=internal_result.output,
-            stderr=internal_result.stderr,
-            exit_code=internal_result.exit_code,
-            execution_status=internal_result.status,
-            execution_result=internal_result,
+            output=combined_output,
+            execution_status=ExecutionStatus.COMPLETED if all_succeeded else ExecutionStatus.FAILED,
+            batch_execution=True,
+            operators_used=len(per_operator_results),
+            successful_count=len(successful),
+            failed_count=len(failed),
+            execution_results=internal_results or None,
+            approval_id=approval_id,
+            error=aggregate_error,
         )
 
     async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult:
