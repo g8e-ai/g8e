@@ -146,7 +146,7 @@ _ensure_g8ep() {
     if ! _is_running "g8ep"; then
         echo "g8ep container is not running — starting it..."
         docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8ep
-        _wait_for_container g8ep 30
+        _wait_healthy g8ep 30 1
     fi
 }
 

@@ -1,6 +1,6 @@
 # g8e Developer Guide
 
-g8e is an open-source, self-hosted, air-gapped capable AI governance platform with zero cloud dependencies. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
+g8e is an open-source, self-hosted AI governance platform designed for offline operation: with a local LLM provider (Ollama or any OpenAI-compatible endpoint) it runs with zero cloud dependencies at runtime. Building the container images currently still requires outbound access to Docker Hub, PyPI, npmjs, and the Alpine/Debian package mirrors — see [`docs/architecture/air-gap.md`](architecture/air-gap.md) for the deployment path and current vendoring status. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
 
 ---
 

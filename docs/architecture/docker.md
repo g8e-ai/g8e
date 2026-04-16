@@ -59,7 +59,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 Unified management sidecar with Python and network tools. Always running alongside core services.
 
 - **User:** `g8e` (uid 1001, gid 1001)
-- **Base image:** `ubuntu:24.04`
+- **Base image:** `python:3.13-alpine`
 - **Read-only filesystem:** no
 - **Bind mounts:** `components/g8ep/scripts/`, `shared/`, `scripts/`
 - **Capabilities:** `cap_add: NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID`, `cap_drop: ALL`
@@ -105,18 +105,19 @@ RUN groupadd -g 1001 g8e && \
 USER g8e
 ```
 
-**Alpine (g8ed, g8es) — `node:22-alpine3.21` / `alpine:3.21` base:**
+**Alpine (g8ed, g8es) — `node:22-alpine3.23` / `alpine:3.23` base:**
 ```dockerfile
 RUN addgroup -g 1001 g8e && \
     adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 USER g8e
 ```
 
-**Ubuntu (g8ep) — `ubuntu:24.04` base:**
+**Alpine (g8ep) — `python:3.13-alpine` base:**
 ```dockerfile
-RUN groupadd -g 1001 g8e && \
-    useradd -u 1001 -g g8e -m -s /bin/bash g8e && \
-    usermod -aG docker g8e 2>/dev/null || true
+RUN addgroup -g 1001 g8e && \
+    adduser -u 1001 -G g8e -D -s /bin/bash g8e && \
+    addgroup docker 2>/dev/null || true && \
+    addgroup g8e docker 2>/dev/null || true
 USER g8e
 ```
 

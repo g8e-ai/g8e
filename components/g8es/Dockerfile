@@ -8,9 +8,9 @@
 #           All 3 compressed binaries are baked into the image and uploaded
 #           to the g8es blob store on container startup.
 
-ARG GO_VERSION=1.24.1
+ARG GO_VERSION=1.26
 
-FROM golang:${GO_VERSION}-alpine3.21 AS g8es-builder
+FROM golang:${GO_VERSION}-alpine3.23 AS g8es-builder
 
 RUN apk add --no-cache upx
 
@@ -33,7 +33,7 @@ RUN for arch in amd64 arm64 386; do \
         upx --best --lzma /out/linux-$arch/g8e.operator; \
     done
 
-FROM alpine:3.21
+FROM alpine:3.23
 
 RUN set -ex; \
     for i in 1 2 3 4 5; do \

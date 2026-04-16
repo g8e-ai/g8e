@@ -496,9 +496,47 @@ case "$TOP" in
         fi
 
         _TEST_ENV_ARGS=()
-        _TEST_PASSTHROUGH=("${@:2}")
+        _TEST_PASSTHROUGH=()
+        _args=("${@:3}")
+        _require_value() {
+            # $1: flag name for error message; reads _args from outer scope
+            if [[ ${#_args[@]} -lt 2 || "${_args[1]}" == -* || "${_args[1]}" == "--" ]]; then
+                echo "[g8e] $1 requires a value" >&2
+                exit 1
+            fi
+        }
+        while [[ ${#_args[@]} -gt 0 ]]; do
+            case "${_args[0]}" in
+                -p|--llm-provider)
+                    _require_value "-p/--llm-provider"
+                    export TEST_LLM_PROVIDER="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -m|--primary-model)
+                    _require_value "-m/--primary-model"
+                    export TEST_LLM_PRIMARY_MODEL="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -a|--assistant-model)
+                    _require_value "-a/--assistant-model"
+                    export TEST_LLM_ASSISTANT_MODEL="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -e|--llm-endpoint-url)
+                    _require_value "-e/--llm-endpoint-url"
+                    export TEST_LLM_ENDPOINT_URL="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -k|--llm-api-key)
+                    _require_value "-k/--llm-api-key"
+                    export TEST_LLM_API_KEY="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                --)
+                    _TEST_PASSTHROUGH+=("${_args[@]}")
+                    break ;;
+                *)
+                    _TEST_PASSTHROUGH+=("${_args[0]}")
+                    _args=("${_args[@]:1}") ;;
+            esac
+        done
+        _TEST_PASSTHROUGH=("$_TEST_COMPONENT" "${_TEST_PASSTHROUGH[@]}")
 
-        # Forward LLM env vars into the container when set
         [[ -n "${TEST_LLM_PROVIDER:-}" ]]              && _TEST_ENV_ARGS+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
         [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]]     && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")

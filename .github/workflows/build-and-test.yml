@@ -10,7 +10,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,12 +19,21 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build platform
-        run: ./g8e platform build
+        run: ./g8e platform setup
+
+      - name: Build test runners
+        run: ./g8e platform rebuild-test-runners
 
       - name: Test g8ee
+        run: >-
+          ./g8e test g8ee
+          -p gemini
+          -k "$GEMINI_API_KEY"
+          -m gemini-3.1-pro-preview-customtools
+          -a gemini-3-flash-preview
+          -- tests
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: ./g8e test g8ee -p gemini -k $GEMINI_API_KEY -m gemini-3.1-pro-preview-customtools -a gemini-3-flash-preview -- tests
 
       - name: Test g8ed
         run: ./g8e test g8ed

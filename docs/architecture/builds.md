@@ -30,7 +30,7 @@ Operator binaries for remote deployment (linux/amd64, linux/arm64, linux/386) ar
 | `g8es` | g8es | `components/g8es/Dockerfile` | Operator binary in `--listen` mode; platform DB + pub/sub + blob store (including operator binaries) |
 | `g8ee` | g8ee | `components/g8ee/Dockerfile` | Python/FastAPI AI backend |
 | `g8ed` | g8ed | `components/g8ed/Dockerfile` | Node.js web frontend; single external HTTPS entry point |
-| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Ubuntu sidecar; builds operator binary from source, manages operator processes, streams operators to remote hosts |
+| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Alpine sidecar; manages operator processes and streams operators to remote hosts. Does not contain a Go toolchain — the operator binary is built in `g8eo-test-runner` when `./g8e operator build` is invoked. |
 
 ---
 
@@ -57,8 +57,8 @@ All images build in parallel — no component has a build-time dependency on any
         g8ed      — reads TLS certs from g8es-data volume
 
 [3] g8ep starts independently (no depends_on):
-        → go build ./components/g8eo → /home/g8e/g8e.operator
-        → starts supervisord
+        → starts supervisord (no Go toolchain in image)
+        → operator binary is built on demand in g8eo-test-runner via ./g8e operator build
 ```
 
 ---
@@ -75,9 +75,9 @@ All component images have no build-time dependencies on each other and build in 
 
 **g8ee image build:** Uses a multi-stage Dockerfile based on Python 3.13-slim. It installs dependencies into a prefix in the builder stage to keep the final runtime image minimal.
 
-**g8ed image build:** Uses a multi-stage Dockerfile based on Node.js 22-alpine. It installs curl and npm in the final stage.
+**g8ed image build:** Uses a multi-stage Dockerfile based on Node.js 22-alpine. The builder stage runs `npm ci` and prunes dev dependencies. The final stage installs only curl (for healthchecks) — npm is not present in the runtime image.
 
-**g8ep image build:** Installs Go 1.24.1, Python 3.13, and network/security tooling. The operator binary is **not** built at image build time — it is compiled from the vendored source in `/app/components/g8eo` at container startup (or on demand via `./g8e operator build`) using the g8eo Makefile, so it always reflects the current source tree.
+**g8ep image build:** Based on `python:3.13-alpine`. Installs Python and network/security tooling (Docker CLI, supervisor, etc.). Go is **not** installed in g8ep. The operator binary is compiled on demand in the `g8eo-test-runner` container (Go 1.26-alpine3.23) via `./g8e operator build`, which uploads the fresh build to the g8es blob store.
 
 **Trigger:**
 ```bash
@@ -190,11 +190,11 @@ The `build.sh` script (`scripts/core/build.sh`) manages the full lifecycle. It e
 
 ---
 
-### CI Workflow (`ci.yml`)
-Triggered on every push to `main` and pull requests to `main` or `dev`.
-1. **Platform Build:** Executes `./g8e platform build` to verify all components compile and start correctly.
-2. **Component Tests:** Runs `g8ee`, `g8ed`, and 'g8eo' test suites in dedicated test-runner containers.
-3. **Multi-Arch Verification:** Explicitly builds the `g8e.operator` for `amd64`, `arm64`, and `386` architectures.
+### CI Workflow (`build-and-test.yml`)
+Triggered on every push to `main` and on pull requests to `main`.
+1. **Platform Setup:** Executes `./g8e platform setup` to build all images and start the full platform (g8es, g8ee, g8ed, g8ep) with health checks.
+2. **Test Runner Build:** Executes `./g8e platform rebuild-test-runners` to build dedicated per-component test-runner containers.
+3. **Component Tests:** Runs `g8ee`, `g8ed`, and `g8eo` test suites via `./g8e test <component>` inside their respective test-runner containers.
 
 ---
 

@@ -1,6 +1,6 @@
 module github.com/g8e-ai/g8e/components/g8eo
 
-go 1.24.0
+go 1.26
 
 require (
 	github.com/gorilla/websocket v1.5.3
