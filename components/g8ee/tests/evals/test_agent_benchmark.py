@@ -58,13 +58,14 @@ from app.models.agents.tribunal import TribunalSessionCompletedPayload
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
+from app.services.operator.approval_service import PendingApproval
 from tests.fakes.fake_event_service import FakeEventService
 from tests.evals.shared import (
     BenchmarkTestResult,
     load_and_validate_benchmark_set,
     seed_operator_if_bound,
 )
-from tests.integration.conftest import auto_approve_pending
+from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +249,18 @@ async def test_agent_benchmark(
         real_event_service = chat_pipeline.g8ed_event_service
         chat_pipeline.g8ed_event_service = fake_event_service
 
+        approval_service = all_services['approval_service']
+
+        def _auto_approve_callback(approval_id: str, pending: PendingApproval):
+            pending.resolve(
+                approved=True,
+                reason="Auto-approved by benchmark test",
+                responded_at=now(),
+            )
+            logger.info("[AUTO-APPROVE] Approved %s", approval_id)
+
+        approval_service.set_on_approval_requested(_auto_approve_callback)
+
         user_settings = test_user_settings
         logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
         logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
@@ -271,10 +284,7 @@ async def test_agent_benchmark(
             )
         finally:
             chat_pipeline.g8ed_event_service = real_event_service
-
-        # Approve any pending approvals from fake operators
-        approval_service = all_services['approval_service']
-        await auto_approve_pending(approval_service)
+            approval_service.set_on_approval_requested(None)
 
         captured_tribunal = _extract_tribunal_from_events(fake_event_service.published)
         captured_tool_calls = _extract_tool_calls_from_events(fake_event_service.published)

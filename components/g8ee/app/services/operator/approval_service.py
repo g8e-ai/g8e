@@ -26,7 +26,7 @@ persistent backing store, pod-restart safe).
 import logging
 from collections.abc import Callable
 
-
+from app.errors import ResourceNotFoundError
 from app.services.protocols import (
     EventServiceProtocol,
     InvestigationDataServiceProtocol,

@@ -402,16 +402,20 @@ class GeminiProvider(LLMProvider):
                 len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0,
             )
             
-            return genai_types.GenerateContentConfig(
-                temperature=settings.temperature,
-                max_output_tokens=settings.max_output_tokens,
-                top_p=settings.top_p_nucleus_sampling,
-                top_k=settings.top_k_filtering,
-                system_instruction=settings.system_instructions,
-                thinking_config=thinking_config,
-                tools=genai_tools,
-                tool_config=tool_config,
-            )
+            config_kwargs = {
+                "temperature": settings.temperature,
+                "max_output_tokens": settings.max_output_tokens,
+                "system_instruction": settings.system_instructions,
+                "thinking_config": thinking_config,
+                "tools": genai_tools,
+                "tool_config": tool_config,
+            }
+            if settings.top_p_nucleus_sampling is not None:
+                config_kwargs["top_p"] = settings.top_p_nucleus_sampling
+            if settings.top_k_filtering is not None:
+                config_kwargs["top_k"] = settings.top_k_filtering
+            
+            return genai_types.GenerateContentConfig(**config_kwargs)
         else:
             logger.info(
                 "[GEMINI] Building config: model=%s temperature=%.2f max_output_tokens=%d "
@@ -424,14 +428,18 @@ class GeminiProvider(LLMProvider):
                 settings.response_format is not None,
             )
             
-            return genai_types.GenerateContentConfig(
-                temperature=settings.temperature,
-                max_output_tokens=settings.max_output_tokens,
-                top_p=settings.top_p_nucleus_sampling,
-                top_k=settings.top_k_filtering,
-                response_mime_type="application/json" if settings.response_format else None,
-                response_json_schema=settings.response_format.flatten_for_gemini() if settings.response_format else None,
-            )
+            config_kwargs = {
+                "temperature": settings.temperature,
+                "max_output_tokens": settings.max_output_tokens,
+                "response_mime_type": "application/json" if settings.response_format else None,
+                "response_json_schema": settings.response_format.flatten_for_gemini() if settings.response_format else None,
+            }
+            if settings.top_p_nucleus_sampling is not None:
+                config_kwargs["top_p"] = settings.top_p_nucleus_sampling
+            if settings.top_k_filtering is not None:
+                config_kwargs["top_k"] = settings.top_k_filtering
+            
+            return genai_types.GenerateContentConfig(**config_kwargs)
 
     @staticmethod
     def _sdk_chunk_to_stream_from_model_chunks(chunk) -> list[StreamChunkFromModel]:

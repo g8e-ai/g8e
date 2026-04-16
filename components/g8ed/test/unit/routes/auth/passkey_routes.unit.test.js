@@ -165,7 +165,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(true);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse
@@ -184,7 +184,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(true);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse
@@ -203,7 +203,7 @@ describe('PasskeyRoutes Unit Tests', () => {
             mockSetupService.isFirstRun.mockResolvedValue(false);
 
             const res = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-initial')
                 .send({ 
                     user_id: 'test-user-id',
                     attestation_response: attestationResponse

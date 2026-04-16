@@ -839,7 +839,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             setupPage._onProviderKeyChange();
             // Manually set selected models to test provider derivation
             setupPage._selectedModels.primary = AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6;
-            setupPage._selectedModels.assistant = AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5;
+            setupPage._selectedModels.assistant = AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6;
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.ANTHROPIC);
             expect(settings.llm_assistant_provider).toBe(LLMProvider.ANTHROPIC);
@@ -848,10 +848,12 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('derives correct provider for Ollama models', () => {
             document.getElementById('ollama_url').value = 'test';
             setupPage._onProviderKeyChange();
-            // Manually set selected model to test provider derivation
-            setupPage._selectedModels.primary = OllamaModel.GEMMA4_E4B;
+            // Manually set selected models to test provider derivation
+            setupPage._selectedModels.primary = OllamaModel.QWEN3_5_122B;
+            setupPage._selectedModels.assistant = OllamaModel.GEMMA4_26B;
             const settings = setupPage._collectUserSettings();
             expect(settings.llm_primary_provider).toBe(LLMProvider.OLLAMA);
+            expect(settings.llm_assistant_provider).toBe(LLMProvider.OLLAMA);
         });
 
         it('collects Ollama endpoint with /v1 suffix', () => {

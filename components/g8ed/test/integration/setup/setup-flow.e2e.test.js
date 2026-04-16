@@ -518,7 +518,7 @@ describe('Setup Flow End-to-End Tests', () => {
             };
 
             const verifyResponse = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({
                     user_id: userId,
                     attestation_response: mockCredential
@@ -581,7 +581,7 @@ describe('Setup Flow End-to-End Tests', () => {
             };
 
             const verifyResponse = await request(app)
-                .post('/api/auth/passkey/register-verify')
+                .post('/api/auth/passkey/register-verify-setup')
                 .send({
                     user_id: userId,
                     attestation_response: mockCredential

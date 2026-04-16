@@ -117,7 +117,37 @@ class OpenAIProvider(LLMProvider):
         if hasattr(self._client, 'close'):
             await self._client.close()
         logger.info("OpenAI provider closed")
-    
+
+    @staticmethod
+    def _build_openai_kwargs(
+        model: str,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+        top_p: float | None,
+        stop: list[str] | None,
+        tools: list[dict] | None = None,
+        response_format: dict | None = None,
+        stream: bool = False,
+    ) -> dict:
+        """Build OpenAI API kwargs, omitting None values."""
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": stream,
+        }
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if stop:
+            kwargs["stop"] = stop
+        if tools:
+            kwargs["tools"] = tools
+        if response_format:
+            kwargs["response_format"] = response_format
+        return kwargs
+
 
     async def generate_content_stream_primary(
         self,
@@ -134,7 +164,7 @@ class OpenAIProvider(LLMProvider):
         if openai_tools:
             # Some endpoints hang on streaming when tools are present.
             # Use non-streaming and yield the response as chunks.
-            response = await self._client.chat.completions.create(
+            kwargs = self._build_openai_kwargs(
                 model=model,
                 messages=messages,
                 temperature=effective_temperature,
@@ -144,6 +174,7 @@ class OpenAIProvider(LLMProvider):
                 tools=openai_tools,
                 stream=False,
             )
+            response = await self._client.chat.completions.create(**kwargs)
             choice = response.choices[0] if response.choices else None
             finish_reason = choice.finish_reason if choice else None
 
@@ -175,7 +206,7 @@ class OpenAIProvider(LLMProvider):
                 )
             yield StreamChunkFromModel(finish_reason=finish_reason or "stop", usage_metadata=usage)
         else:
-            stream = await self._client.chat.completions.create(
+            kwargs = self._build_openai_kwargs(
                 model=model,
                 messages=messages,
                 temperature=effective_temperature,
@@ -185,6 +216,7 @@ class OpenAIProvider(LLMProvider):
                 tools=openai_tools,
                 stream=True,
             )
+            stream = await self._client.chat.completions.create(**kwargs)
 
             async for chunk in stream:
                 delta = chunk.choices[0].delta if chunk.choices else None
@@ -214,7 +246,7 @@ class OpenAIProvider(LLMProvider):
         effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response = await self._client.chat.completions.create(
+        kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
             temperature=effective_temperature,
@@ -222,7 +254,9 @@ class OpenAIProvider(LLMProvider):
             top_p=primary_llm_settings.top_p_nucleus_sampling,
             stop=primary_llm_settings.stop_sequences,
             tools=openai_tools,
+            stream=False,
         )
+        response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -273,7 +307,7 @@ class OpenAIProvider(LLMProvider):
 
         response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
 
-        stream = await self._client.chat.completions.create(
+        kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
             temperature=effective_temperature,
@@ -283,6 +317,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -307,7 +342,7 @@ class OpenAIProvider(LLMProvider):
 
         response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
 
-        response = await self._client.chat.completions.create(
+        kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
             temperature=effective_temperature,
@@ -315,7 +350,9 @@ class OpenAIProvider(LLMProvider):
             top_p=assistant_llm_settings.top_p_nucleus_sampling,
             stop=assistant_llm_settings.stop_sequences,
             response_format=response_format,
+            stream=False,
         )
+        response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
         choice = response.choices[0] if response.choices else None
@@ -353,7 +390,7 @@ class OpenAIProvider(LLMProvider):
 
         response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
 
-        stream = await self._client.chat.completions.create(
+        kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
             temperature=effective_temperature,
@@ -363,6 +400,7 @@ class OpenAIProvider(LLMProvider):
             response_format=response_format,
             stream=True,
         )
+        stream = await self._client.chat.completions.create(**kwargs)
 
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -387,7 +425,7 @@ class OpenAIProvider(LLMProvider):
 
         response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
 
-        response = await self._client.chat.completions.create(
+        kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
             temperature=effective_temperature,
@@ -395,7 +433,9 @@ class OpenAIProvider(LLMProvider):
             top_p=lite_llm_settings.top_p_nucleus_sampling,
             stop=lite_llm_settings.stop_sequences,
             response_format=response_format,
+            stream=False,
         )
+        response = await self._client.chat.completions.create(**kwargs)
 
         parts = []
         choice = response.choices[0] if response.choices else None
