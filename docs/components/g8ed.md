@@ -675,7 +675,7 @@ When a command targets multiple operators, g8ed shows a **unified approval dialo
 1. g8ee sends approval request with `target_systems` array and `is_batch_execution=True`
 2. g8ed displays a single approval UI listing all impacted hostnames
 3. User clicks "Approve for N Systems" — single POST to `/api/operator/approval/respond`
-4. g8ee executes the command on each operator sequentially
+4. g8ee fans out the command to each operator in parallel (bounded by `command_validation.max_batch_concurrency`), correlating per-operator events by a shared `batch_id`
 
 ### Anchored Operator Terminal
 

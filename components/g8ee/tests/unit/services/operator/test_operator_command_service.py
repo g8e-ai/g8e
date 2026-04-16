@@ -402,6 +402,9 @@ class TestExecuteCommandTargetSystems:
         assert result.batch_execution is True
         assert result.operators_used == 3
         assert (result.successful_count + result.failed_count) == 3
+        # batch_id must be surfaced on the result and match the approval's batch_id
+        # so agents can correlate follow-up actions back to the original batch.
+        assert result.batch_id == req.batch_id
         # Aggregated output contains a section per host.
         for hostname in ("host-1", "host-2", "host-3"):
             assert hostname in (result.output or "")

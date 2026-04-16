@@ -161,7 +161,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             ]
             raise ValidationError(
                 f"Multiple operators ({len(operator_documents)}) are bound to this session. "
-                f"You MUST specify target_operator parameter.\n"
+                f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
+                f"or target_operators (list of hosts for batch execution under one approval).\n"
                 f"Available operators:\n" + "\n".join(available),
                 component="g8ee",
             )

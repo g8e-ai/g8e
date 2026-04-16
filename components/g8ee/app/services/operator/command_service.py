@@ -37,10 +37,10 @@ from app.models.operators import (
     TargetSystem,
     DirectCommandResult,
 )
-from app.models.tool_results import CommandInternalResult
 from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
+    CommandInternalResult,
     CommandExecutionResult,
     FetchFileHistoryToolResult,
     FetchFileDiffToolResult,
@@ -354,8 +354,8 @@ class OperatorCommandService:
             )
 
         # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
-        max_concurrency = max(1, getattr(cv, "max_batch_concurrency", 10))
-        fail_fast = bool(getattr(cv, "batch_fail_fast", False))
+        max_concurrency = cv.max_batch_concurrency
+        fail_fast = cv.batch_fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 
@@ -479,6 +479,7 @@ class OperatorCommandService:
             per_operator_results=per_operator_results,
             approval_id=approval_result.approval_id,
             is_batch=is_batch,
+            batch_id=batch_id,
         )
 
     # ------------------------------------------------------------------
@@ -508,6 +509,7 @@ class OperatorCommandService:
         per_operator_results: list[BatchOperatorExecutionResult],
         approval_id: str | None,
         is_batch: bool,
+        batch_id: str | None,
     ) -> CommandExecutionResult:
         """Collapse per-operator results into a single CommandExecutionResult.
 
@@ -533,6 +535,7 @@ class OperatorCommandService:
                 execution_result=res,
                 execution_id=only.execution_id,
                 approval_id=approval_id,
+                batch_id=batch_id,
                 error=only.error,
             )
 
@@ -571,6 +574,7 @@ class OperatorCommandService:
             failed_count=len(failed),
             execution_results=internal_results or None,
             approval_id=approval_id,
+            batch_id=batch_id,
             error=aggregate_error,
         )
 
