@@ -54,7 +54,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
     it('returns user-specific settings flattened from nested structure', async () => {
         const userId = 'user-abc';
         const nestedSettings = {
-            llm: { primary_provider: LLMProvider.OPENAI, primary_model: OpenAIModel.GPT_4O },
+            llm: { primary_provider: LLMProvider.OPENAI, primary_model: OpenAIModel.GPT_5_4 },
             search: {},
             eval_judge: {},
         };
@@ -68,7 +68,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
 
         const result = await settingsService.getUserSettings(userId);
         expect(result.llm_primary_provider).toBe(LLMProvider.OPENAI);
-        expect(result.llm_model).toBe(OpenAIModel.GPT_4O);
+        expect(result.llm_model).toBe(OpenAIModel.GPT_5_4);
     });
 
     it('persists settings in nested structure with user_id', async () => {

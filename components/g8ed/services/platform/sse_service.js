@@ -406,8 +406,10 @@ class SSEService {
             const primaryOpts = SSEService._getModelOptionsForProvider(provider, 'llm_model');
             const assistantOpts = SSEService._getModelOptionsForProvider(provider, 'llm_assistant_model');
             const liteOpts = SSEService._getModelOptionsForProvider(provider, 'llm_lite_model');
+            const allOpts = [...new Set([...primaryOpts, ...assistantOpts, ...liteOpts])];
             result[provider] = {
                 label: SSEService._PROVIDER_LABELS[provider] || provider,
+                all: allOpts,
                 primary: primaryOpts,
                 assistant: assistantOpts,
                 lite: liteOpts,

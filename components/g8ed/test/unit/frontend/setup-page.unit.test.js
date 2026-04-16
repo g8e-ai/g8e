@@ -959,7 +959,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -988,7 +988,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -1022,7 +1022,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -1064,7 +1064,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -1109,7 +1109,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -1118,7 +1118,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             await new Promise(resolve => setTimeout(resolve, 100));
             
             const log = serviceClient.getRequestLog();
-            const verifyCall = log.find(call => call.path === ApiPaths.auth.passkey.registerVerify());
+            const verifyCall = log.find(call => call.path === ApiPaths.auth.passkey.registerVerifySetup());
             expect(verifyCall).toBeDefined();
             expect(verifyCall.body.user_id).toBe('user_123');
             expect(verifyCall.body.attestation_response).toBeDefined();
@@ -1151,7 +1151,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({ session: 'session_123' })
             });
@@ -1211,7 +1211,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 },
                 getClientExtensionResults: () => ({})
             });
-            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerify(), {
+            serviceClient.setResponse(ComponentName.G8ED, ApiPaths.auth.passkey.registerVerifySetup(), {
                 ok: true,
                 json: async () => ({})
             });
