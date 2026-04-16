@@ -361,6 +361,7 @@ class OperatorApprovalService:
                     justification=justification,
                     requested_at=approval_event.requested_at,
                     is_batch_execution=approval_event.is_batch_execution,
+                    batch_id=batch_id,
                 ),
                 g8e_context=g8e_context,
                 log_tag="APPROVAL",

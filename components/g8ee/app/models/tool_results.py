@@ -431,6 +431,10 @@ class CommandExecutionResult(G8eBaseModel):
     feedback_reason: str | None = Field(default=None)
     execution_id: str | None = Field(default=None)
     approval_id: str | None = Field(default=None)
+    batch_id: str | None = Field(
+        default=None,
+        description="Batch correlation ID when this result represents a multi-operator fan-out; matches the batch_id on per-operator events.",
+    )
     available_operators: int | None = Field(default=None)
     blocked_pattern: str | None = Field(default=None)
     blocked_command: str | None = Field(default=None)

@@ -72,6 +72,8 @@ class CommandValidationSettings(G8eBaseModel):
     enable_blacklisting: bool = Field(False)
     max_batch_concurrency: int = Field(
         10,
+        ge=1,
+        le=64,
         description="Maximum number of operators a single batched command may dispatch to concurrently.",
     )
     batch_fail_fast: bool = Field(
