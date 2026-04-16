@@ -82,7 +82,7 @@ These runners share the same user (uid 1001) as production services and mount th
 
 **Lifecycle Management:**
 - Test-runners are excluded from default platform lifecycle commands (`up`, `rebuild`, `setup`, `reset`)
-- Build test-runners explicitly via `./g8e platform rebuild-test-runners`
+- Build test-runners explicitly via `./g8e platform rebuild test-runners`
 - Run tests via `./g8e test <component>` which uses the appropriate test-runner container
 
 ## Non-Root Users

@@ -29,8 +29,9 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.8",
     "@vitest/ui": "^4.0.8",
-    "dompurify": "^3.3.2",
+    "dompurify": "^3.4.0",
     "eventsource": "^4.1.0",
+    "vite": "^8.0.5",
     "highlight.js": "^11.11.1",
     "jsdom": "^26.0.0",
     "license-checker": "^25.0.1",

@@ -19,6 +19,7 @@ from ..constants import CloudSubtype, EventType, ExecutionStatus, OperatorType, 
 from ..constants.prompts import InvestigationContextLabel
 from ..constants.message_sender import MessageSender
 from ..models.agent import OperatorContext
+from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
 from ..models.memory import InvestigationMemory
 from ..prompts_data.loader import load_mode_prompts, load_prompt
@@ -83,6 +84,29 @@ def build_response_constraints_section() -> str:
     return load_prompt(PromptFile.SYSTEM_RESPONSE_CONSTRAINTS)
 
 
+def build_triage_context_section(triage_result: TriageResult | None) -> str:
+    """Build the triage_context block so downstream agents can read user posture.
+
+    Carries the Triage agent's `request_posture` read (normal / escalated /
+    adversarial / confused) into the system prompt. The dissent protocol in
+    core/dissent.txt consumes this tag to calibrate warnings and denial-memory.
+    """
+    if not triage_result or not triage_result.request_posture:
+        return ""
+
+    posture = triage_result.request_posture.value if hasattr(triage_result.request_posture, "value") else str(triage_result.request_posture)
+    intent_summary = (triage_result.intent_summary or "").strip()
+
+    lines = [
+        "<triage_context>",
+        f"request_posture: {posture}",
+    ]
+    if intent_summary:
+        lines.append(f"intent_summary: {intent_summary}")
+    lines.append("</triage_context>")
+    return "\n".join(lines) + "\n"
+
+
 def build_learned_context_section(
     user_memories: list[InvestigationMemory],
     case_memories: list[InvestigationMemory]
@@ -124,15 +148,24 @@ def build_modular_system_prompt(
     case_memories: list[InvestigationMemory],
     investigation: EnrichedInvestigationContext | None,
     g8e_web_search_available: bool = True,
+    triage_result: TriageResult | None = None,
 ) -> str:
     """
     Build system prompt using modular architecture.
-    
-    Structure:
-    1-4: Core (always loaded) - identity, safety, execution, tools
-    5: System context (injected from operator(s))
-    6: Organization context (injected from customer)
-      
+
+    Section order (loyal-friction doctrine):
+      1. identity   — who the agent is
+      2. safety     — absolute forbidden operations
+      3. loyalty    — kingdom-over-king doctrine
+      4. dissent    — warning protocol, denial memory, escalation response
+      5. capabilities / execution / tools (mode-dependent)
+      6. system_context (injected from operator(s))
+      7. sentinel_mode (if active)
+      8. triage_context (request_posture from Triage, if available)
+      9. investigation_context
+      10. response_constraints
+      11. learned_context (user + case memories)
+
     Args:
         operator_bound: Whether Operator is connected for command execution
         system_context: System-level context from Operator(s). Can be a single OperatorContext
@@ -140,7 +173,10 @@ def build_modular_system_prompt(
         user_memories: User preference memories
         case_memories: Case-specific memories
         investigation: Enriched investigation context model
-        
+        triage_result: Triage classification for this turn. When provided, its
+                       request_posture is injected as a triage_context tag that
+                       the dissent protocol reads at inference time.
+
     Returns:
         Complete system prompt string
     """
@@ -148,6 +184,8 @@ def build_modular_system_prompt(
 
     sections.append(load_prompt(PromptFile.CORE_IDENTITY))
     sections.append(load_prompt(PromptFile.CORE_SAFETY))
+    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
+    sections.append(load_prompt(PromptFile.CORE_DISSENT))
 
     # Determine if any operator is a cloud operator for mode selection
     is_cloud_operator = False
@@ -255,6 +293,10 @@ def build_modular_system_prompt(
     if investigation and investigation.sentinel_mode is True:
         sections.append(load_prompt(PromptFile.SYSTEM_SENTINEL_MODE))
 
+    triage_section = build_triage_context_section(triage_result)
+    if triage_section:
+        sections.append(triage_section)
+
     if investigation:
         investigation_section = build_investigation_context_section(investigation)
         if investigation_section:
@@ -274,6 +316,8 @@ def build_modular_system_prompt(
     section_labels = [
         PromptSection.IDENTITY,
         PromptSection.SAFETY,
+        PromptSection.LOYALTY,
+        PromptSection.DISSENT,
     ]
     if mode_prompts.get(PromptSection.CAPABILITIES):
         section_labels.append(PromptSection.CAPABILITIES)
@@ -281,11 +325,12 @@ def build_modular_system_prompt(
         section_labels.append(PromptSection.EXECUTION)
     if include_tools_section:
         section_labels.append(PromptSection.TOOLS)
-    section_labels.append(PromptSection.DOCS)
     if system_context:
         section_labels.append(PromptSection.SYSTEM_CONTEXT)
     if investigation and investigation.sentinel_mode is True:
         section_labels.append(PromptSection.SENTINEL_MODE)
+    if triage_section:
+        section_labels.append(PromptSection.TRIAGE_CONTEXT)
     if investigation:
         section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
     section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)

@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, AgentMetadata, TribunalMember } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, AgentMetadata, TribunalMember } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -50,6 +50,21 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
         it('UNKNOWN constant matches JSON', () => {
             expect(TriageIntent.UNKNOWN).toBe(_AGENTS['triage.intent'].unknown);
+        });
+    });
+
+    describe('TriageRequestPosture constants', () => {
+        it('NORMAL constant matches JSON', () => {
+            expect(TriageRequestPosture.NORMAL).toBe(_AGENTS['triage.posture'].normal);
+        });
+        it('ESCALATED constant matches JSON', () => {
+            expect(TriageRequestPosture.ESCALATED).toBe(_AGENTS['triage.posture'].escalated);
+        });
+        it('ADVERSARIAL constant matches JSON', () => {
+            expect(TriageRequestPosture.ADVERSARIAL).toBe(_AGENTS['triage.posture'].adversarial);
+        });
+        it('CONFUSED constant matches JSON', () => {
+            expect(TriageRequestPosture.CONFUSED).toBe(_AGENTS['triage.posture'].confused);
         });
     });
 

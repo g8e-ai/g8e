@@ -540,6 +540,8 @@ components/g8ee/app/prompts_data/
   core/
     identity.txt              — AI persona and role
     safety.txt                — hard safety constraints and approval rules
+    loyalty.txt               — kingdom-over-king doctrine (loyal-friction principles)
+    dissent.txt               — warning protocol, denial memory, escalation response
   system/
     response_constraints.txt  — response length and formatting guidance
     sentinel_mode.txt         — PII/secret scrubbing instructions
@@ -574,7 +576,22 @@ Memory analysis uses the `memory_generator` persona defined in `shared/constants
 
 ### Triage Prompt
 
-Triage uses the `triage` persona defined in `shared/constants/agents.json`. It classifies messages by complexity (simple/complex) and intent (information/action/unknown). The prompt is loaded via `get_agent_persona("triage")` in `triage.py`.
+Triage uses the `triage` persona defined in `shared/constants/agents.json`. It is the gatekeeper: it classifies every user message by three axes and emits a structured JSON result the downstream pipeline reads.
+
+- **complexity**: `simple` | `complex` — routes to Assistant vs Primary model tier.
+- **intent**: `information` | `action` | `unknown` — shapes tool selection and follow-up behavior.
+- **request_posture**: `normal` | `escalated` | `adversarial` | `confused` — calibrates how the responding agent applies the dissent and denial-memory protocols.
+
+`request_posture` is the loyal-friction signal. A `normal` message gets default behavior; an `escalated` message tightens prose without weakening safety work; an `adversarial` message (which requires prior context — first-turn messages cannot be adversarial) triggers full denial-memory; a `confused` message requires naming the contradiction before acting. The posture is injected as a `<triage_context>` tag in the Primary/Assistant system prompt by `build_triage_context_section` in `components/g8ee/app/llm/prompts.py`. The prompt is loaded via `get_agent_persona("triage")` in `triage.py`.
+
+### Loyalty Doctrine & Dissent Protocol
+
+Every Primary/Assistant system prompt loads two core doctrine files immediately after `core/safety.txt`:
+
+1. **`core/loyalty.txt`** — four principles of loyal friction: *kingdom over king*, *frustration is data*, *memory of refusal*, *dissent is visible*. These define when and how the agent pushes back.
+2. **`core/dissent.txt`** — the operational protocol: when to emit a one-sentence `<warning>` block before a tool call, how to handle denial memory across turns, how to adjust behavior per posture (`escalated` / `adversarial` / `confused`), and the shape of explicit disagreement with the user.
+
+Together they replace sycophantic compliance with guarded service: the agent remains the user's guard — executing within the user's authority — while keeping the user's long-term outcome as the north star.
 
 ---
 

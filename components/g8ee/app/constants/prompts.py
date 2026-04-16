@@ -21,12 +21,15 @@ class AgentMode(str, Enum):
 class PromptSection(str, Enum):
     IDENTITY = "identity"
     SAFETY = "safety"
+    LOYALTY = "loyalty"
+    DISSENT = "dissent"
     CAPABILITIES = "capabilities"
     EXECUTION = "execution"
     TOOLS = "tools"
     DOCS = "docs"
     SYSTEM_CONTEXT = "system_context"
     SENTINEL_MODE = "sentinel_mode"
+    TRIAGE_CONTEXT = "triage_context"
     INVESTIGATION_CONTEXT = "investigation_context"
     RESPONSE_CONSTRAINTS = "response_constraints"
     LEARNED_CONTEXT = "learned_context"
@@ -43,6 +46,8 @@ class PromptFile(str, Enum):
     # Core
     CORE_IDENTITY = "core/identity.txt"
     CORE_SAFETY = "core/safety.txt"
+    CORE_LOYALTY = "core/loyalty.txt"
+    CORE_DISSENT = "core/dissent.txt"
     
     # System
     SYSTEM_RESPONSE_CONSTRAINTS = "system/response_constraints.txt"

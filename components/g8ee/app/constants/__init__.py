@@ -32,6 +32,7 @@ from app.constants.agents import (
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
+    TriageRequestPosture,
     TribunalMember,
 )
 from app.constants.channels import (

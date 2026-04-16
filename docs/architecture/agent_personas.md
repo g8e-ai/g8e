@@ -17,12 +17,13 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ## Current Agents
 
 ### 1. Triage
-- **Role**: Classifier
+- **Role**: Classifier / Gatekeeper
 - **Model Tier**: Primary
-- **Purpose**: Routes user messages based on complexity and intent
+- **Purpose**: Routes user messages by **complexity**, **intent**, and **request_posture** (`normal` / `escalated` / `adversarial` / `confused`). Posture is the loyal-friction signal the responding agent uses to calibrate dissent and denial-memory behavior.
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("triage")` in `triage.py`
 - **Prompt Source**: `shared/constants/agents.json` (`triage`)
+- **Note**: `adversarial` requires prior-turn context (a first-turn message cannot be adversarial). See `core/dissent.txt` for how downstream agents consume the posture tag.
 
 ### 2. Primary AI
 - **Role**: Reasoner
@@ -47,11 +48,11 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
 ### 5. Verifier
-- **Role**: Validator
+- **Role**: Validator / Final Judgment
 - **Model Tier**: Assistant
 - **Temperature**: 0.0 (deterministic)
-- **Purpose**: Deterministic command verification
-- **Migration Status**: Complete
+- **Purpose**: The last voice before the command reaches user approval. Produces one of two verdicts in a strict wire contract: the literal string `ok` when the Tribunal winner is correct as-is, or a single corrected command string when a specific nameable flaw requires revision. Defaults to confirming; revises only on concrete errors, never on general unease.
+- **Migration Status**: Complete (voice sharpened; `ok`/corrected-command wire contract preserved for `_run_verifier` in `command_generator.py`)
 - **Usage**: `get_agent_persona("verifier")` in `command_generator.py`
 
 ### 6. Title Generator
@@ -63,30 +64,30 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Usage**: `get_agent_persona("title_generator")` in `title_generator.py`
 
 ### 7. Axiom (Tribunal Member)
-- **Role**: Tribunal Member
+- **Role**: Tribunal Member — The Minimalist
 - **Model Tier**: Assistant
 - **Temperature**: 0.0 (deterministic)
-- **Purpose**: The Optimizer - statistical probability and resource efficiency
+- **Purpose**: Proposes the simplest command that correctly accomplishes the intent. Complexity is a liability; every extra flag or pipe is a surface for bugs or misreading. Does not add defensive flags — that is Concord's and Variance's job.
 - **Pass Assignment**: Pass 0 in voting swarm
-- **Migration Status**: Complete
+- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
 - **Usage**: `get_tribunal_member("axiom")` in `command_generator.py`
 
 ### 8. Concord (Tribunal Member)
-- **Role**: Tribunal Member
+- **Role**: Tribunal Member — The Archivist
 - **Model Tier**: Assistant
 - **Temperature**: 0.4
-- **Purpose**: The Ethicist - harm minimization and ethical integrity
+- **Purpose**: Proposes the command that reads cleanest in an audit log six months later. Optimizes for institutional memory and retrospective legibility: explicit flags, absolute paths, named resources over wildcards, optional trailing comments. Distinct from Variance — Concord assumes the reader is careless, not that the writer is compromised.
 - **Pass Assignment**: Pass 1 in voting swarm
-- **Migration Status**: Complete
+- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
 - **Usage**: `get_tribunal_member("concord")` in `command_generator.py`
 
 ### 9. Variance (Tribunal Member)
-- **Role**: Tribunal Member
+- **Role**: Tribunal Member — The Adversary
 - **Model Tier**: Assistant
 - **Temperature**: 0.8
-- **Purpose**: The Catalyst - edge case hunting through adversarial simulation
+- **Purpose**: Proposes the command as if an attacker had authored it and the user had not noticed. Simulates adversarial origin per-command: compromised terminal, pasted snippet, social engineering. Defensive additions must do real work — no security theater. Couples directly to Triage's `adversarial` `request_posture` signal.
 - **Pass Assignment**: Pass 2 in voting swarm
-- **Migration Status**: Complete
+- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
 - **Usage**: `get_tribunal_member("variance")` in `command_generator.py`
 
 ### 10. Memory Generator
@@ -224,11 +225,24 @@ For agents using the modular system (Primary/Assistant), prompts are split acros
 
 - `core/identity.txt` - Role, platform, operating principles
 - `core/safety.txt` - Architecture, execution posture, forbidden operations
+- `core/loyalty.txt` - Loyal-friction doctrine: kingdom over king, frustration is data, memory of refusal, dissent is visible
+- `core/dissent.txt` - Warning protocol, denial memory, posture-based escalation response, the right to disagree
 - `modes/operator_bound/` - Capabilities, execution, tools (when operator is bound)
 - `modes/operator_not_bound/` - Capabilities, execution, tools (when operator is not bound)
 - `modes/cloud_operator_bound/` - Cloud-specific variants
 - `system/` - Response constraints, sentinel mode
 - `tools/` - Individual tool descriptions
+
+## Loyal-Friction Doctrine
+
+The platform's stance against RLHF-induced sycophancy lives in four pieces that cooperate at inference time:
+
+1. **`core/loyalty.txt`** — Principles. The agent's loyalty is to the user's long-term outcome, not their immediate instruction. Frustration is data, not authorization to skip safety work. Denied requests are remembered across turns. Dissent is visible, not hedged.
+2. **`core/dissent.txt`** — Protocol. How to emit a single-sentence `<warning>` before a tool call; how to handle denial memory ("earlier we declined X; this is related because Y — decide fresh"); how to adjust behavior when `request_posture` is `escalated` / `adversarial` / `confused`; how to shape explicit disagreement ("I don't think this will get you what you're after").
+3. **Triage's `request_posture`** — Upstream read of the user's state (`normal` / `escalated` / `adversarial` / `confused`). Injected as `<triage_context>` into the Primary/Assistant system prompt. `adversarial` requires prior-turn context; first-turn messages cannot be adversarial.
+4. **The Tribunal's three sharpened voices** — Axiom (Minimalist), Concord (Archivist), Variance (Adversary) produce three ideologically distinct candidate commands. Variance specifically couples to `adversarial` posture. The Verifier converges on one final command with a terse `ok`-or-corrected-command verdict.
+
+The design goal is **loyal friction**: the agent visibly cares about the user's outcome and, because it cares, refuses to let the user hurt themselves — while still executing what the user commands within their authority, with the warning logged alongside the execution.
 
 **Note**: The `analysis/` directory (command_risk.txt, error_analysis.txt, file_risk.txt) was previously used by Response Analyzer but has been migrated to the persona system as sub-agents. These files can be removed once migration is confirmed stable.
 

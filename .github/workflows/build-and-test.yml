@@ -21,9 +21,6 @@ jobs:
       - name: Build platform
         run: ./g8e platform setup
 
-      - name: Build test runners
-        run: ./g8e platform rebuild-test-runners
-
       - name: Test g8ee
         run: >-
           ./g8e test g8ee

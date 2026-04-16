@@ -49,6 +49,19 @@ export const TriageIntent = Object.freeze({
 });
 
 /**
+ * Triage Request Posture
+ * Triage's read of the user's state for this turn. Downstream agents
+ * (Primary, Assistant) calibrate dissent and denial-memory behavior on
+ * this value. See components/g8ee/app/prompts_data/core/dissent.txt.
+ */
+export const TriageRequestPosture = Object.freeze({
+    NORMAL:      _AGENTS['triage.posture'].normal,
+    ESCALATED:   _AGENTS['triage.posture'].escalated,
+    ADVERSARIAL: _AGENTS['triage.posture'].adversarial,
+    CONFUSED:    _AGENTS['triage.posture'].confused,
+});
+
+/**
  * Tribunal Members
  * The three permanent members of the Tribunal.
  */

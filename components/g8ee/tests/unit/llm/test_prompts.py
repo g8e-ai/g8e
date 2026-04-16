@@ -114,12 +114,99 @@ def test_build_modular_system_prompt_basic(mock_loader, operator_context, enrich
     
     assert f"Content of {PromptFile.CORE_IDENTITY}" in prompt
     assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
+    # Loyal-friction doctrine: loyalty + dissent must load right after safety
+    # for every Primary/Assistant system prompt. If these drop out, the agents
+    # revert to sycophantic behavior.
+    assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
+    assert f"Content of {PromptFile.CORE_DISSENT}" in prompt
     assert "Capabilities prompt" in prompt
     assert "<system_context>" in prompt
     assert "Hostname: test-host" in prompt
     assert "Naming Conventions: Standard naming" in prompt
     assert "custom_field: Custom value" in prompt
     assert "<investigation_context>" in prompt
+
+
+def test_build_modular_system_prompt_loyalty_and_dissent_order(mock_loader, operator_context):
+    """The doctrine sections must appear after safety and before mode prompts
+    so the agent reads them before any capability/tool guidance.
+    """
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+    )
+    safety_pos = prompt.index(f"Content of {PromptFile.CORE_SAFETY}")
+    loyalty_pos = prompt.index(f"Content of {PromptFile.CORE_LOYALTY}")
+    dissent_pos = prompt.index(f"Content of {PromptFile.CORE_DISSENT}")
+    capabilities_pos = prompt.index("Capabilities prompt")
+
+    assert safety_pos < loyalty_pos < dissent_pos < capabilities_pos, (
+        "Expected order: safety → loyalty → dissent → capabilities"
+    )
+
+
+def test_build_triage_context_section_none_returns_empty():
+    assert prompts.build_triage_context_section(None) == ""
+
+
+def test_build_triage_context_section_renders_posture_and_intent():
+    from app.constants import (
+        TriageComplexityClassification,
+        TriageConfidence,
+        TriageIntentClassification,
+        TriageRequestPosture,
+    )
+    from app.models.agents.triage import TriageResult
+
+    result = TriageResult(
+        complexity=TriageComplexityClassification.COMPLEX,
+        complexity_confidence=TriageConfidence.HIGH,
+        intent=TriageIntentClassification.ACTION,
+        intent_confidence=TriageConfidence.HIGH,
+        intent_summary="User wants to drop the users table",
+        request_posture=TriageRequestPosture.ADVERSARIAL,
+        posture_confidence=TriageConfidence.HIGH,
+    )
+    section = prompts.build_triage_context_section(result)
+    assert "<triage_context>" in section
+    assert "request_posture: adversarial" in section
+    assert "intent_summary: User wants to drop the users table" in section
+    assert section.endswith("</triage_context>\n")
+
+
+def test_build_modular_system_prompt_injects_triage_context(mock_loader, operator_context):
+    """When Triage supplies a posture, the modular prompt must include the
+    <triage_context> block so the dissent protocol can calibrate on it."""
+    from app.constants import (
+        TriageComplexityClassification,
+        TriageConfidence,
+        TriageIntentClassification,
+        TriageRequestPosture,
+    )
+    from app.models.agents.triage import TriageResult
+
+    triage_result = TriageResult(
+        complexity=TriageComplexityClassification.COMPLEX,
+        complexity_confidence=TriageConfidence.HIGH,
+        intent=TriageIntentClassification.ACTION,
+        intent_confidence=TriageConfidence.HIGH,
+        intent_summary="escalated request",
+        request_posture=TriageRequestPosture.ESCALATED,
+        posture_confidence=TriageConfidence.HIGH,
+    )
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        triage_result=triage_result,
+    )
+    assert "<triage_context>" in prompt
+    assert "request_posture: escalated" in prompt
 
 def test_build_modular_system_prompt_cloud_operator(mock_loader):
     cloud_context = OperatorContext(

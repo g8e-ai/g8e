@@ -29,7 +29,8 @@ class TestGetAgentPersona:
         persona = get_agent_persona("triage")
         assert persona.agent_id == "triage"
         assert persona.display_name == "Triage"
-        assert persona.icon == "filter"
+        # "scan-eye" reflects Triage's sharpened role as gatekeeper / posture reader.
+        assert persona.icon == "scan-eye"
         assert persona.role == "classifier"
         assert persona.model_tier == "primary"
         assert persona.tools == []
@@ -63,7 +64,10 @@ class TestGetAgentPersona:
         """Test get_system_prompt returns persona when defined."""
         persona = get_agent_persona("triage")
         system_prompt = persona.get_system_prompt()
-        assert "You are a routing and intent-analysis assistant" in system_prompt
+        # The new Triage persona positions itself as the gatekeeper and must
+        # emit the request_posture field for downstream dissent calibration.
+        assert "You are Triage, the gatekeeper of g8e" in system_prompt
+        assert "request_posture" in system_prompt
         assert persona.persona in system_prompt
 
     def test_get_system_prompt_with_todo_persona(self):
@@ -94,6 +98,80 @@ class TestGetAgentPersona:
         primary = get_agent_persona("primary")
         assert isinstance(primary.tools, list)
         assert len(primary.tools) > 0
+
+
+class TestPipelineTemplateContract:
+    """Tribunal members and Verifier personas are consumed by command_generator
+    as str.format() templates. If anyone removes the placeholders during a
+    persona rewrite, the formatted prompt silently loses the user's intent,
+    os/shell context, or the candidate command — a hard-to-debug correctness
+    regression. These tests pin the contract explicitly.
+    """
+
+    def test_tribunal_member_personas_accept_generation_kwargs(self):
+        """All three Tribunal members must format cleanly with the exact kwargs
+        command_generator._run_generation_pass supplies."""
+        kwargs = dict(
+            forbidden_patterns_message="FORBIDDEN",
+            command_constraints_message="CONSTRAINTS",
+            intent="list processes",
+            os="linux",
+            shell="bash",
+            user_context="root (uid=0)",
+            working_directory="/home/user",
+            original_command="ps aux",
+        )
+        for member_id in ("axiom", "concord", "variance"):
+            persona = get_tribunal_member(member_id)
+            formatted = persona.persona.format(**kwargs)
+            # Every substituted value must appear in the formatted prompt —
+            # this catches silent placeholder drift.
+            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash", "ps aux"):
+                assert needle in formatted, f"{member_id} persona dropped '{needle}'"
+
+    def test_verifier_persona_accepts_verifier_kwargs_and_enforces_ok_contract(self):
+        """Verifier persona must format with the caller's kwargs AND carry the
+        terse 'ok / corrected-command' output contract that the pipeline parses."""
+        persona = get_agent_persona("verifier")
+        formatted = persona.get_system_prompt().format(
+            forbidden_patterns_message="FORBIDDEN",
+            command_constraints_message="CONSTRAINTS",
+            intent="list files",
+            os="linux",
+            user_context="root (uid=0)",
+            candidate_command="ls -la",
+        )
+        for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
+            assert needle in formatted
+        # The pipeline parses `response.text.strip().lower() == "ok"` — the
+        # persona must tell the model that contract, or revisions will read as
+        # verdict labels that the parser can't match.
+        assert "`ok`" in formatted
+        assert "corrected command" in formatted
+
+
+class TestSharpenedTribunalPersonas:
+    """Guard rails for the sharpened Axiom / Concord / Variance voices. Each
+    member must have a distinct worldview so the Tribunal's disagreement is
+    ideological, not just statistical."""
+
+    def test_axiom_is_the_minimalist(self):
+        axiom = get_tribunal_member("axiom")
+        assert "Minimalist" in axiom.persona
+        assert axiom.temperature == 0.0
+
+    def test_concord_is_the_archivist(self):
+        concord = get_tribunal_member("concord")
+        assert "Archivist" in concord.persona
+        assert concord.temperature == 0.4
+
+    def test_variance_is_the_adversary(self):
+        variance = get_tribunal_member("variance")
+        assert "Adversary" in variance.persona
+        assert variance.temperature == 0.8
+        # Variance is the only member that should reference the adversarial
+        # request_posture signal — that coupling is part of the design.
+        assert "adversarial" in variance.persona.lower()
 
 
 class TestListAllAgents:

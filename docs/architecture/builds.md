@@ -193,7 +193,7 @@ The `build.sh` script (`scripts/core/build.sh`) manages the full lifecycle. It e
 ### CI Workflow (`build-and-test.yml`)
 Triggered on every push to `main` and on pull requests to `main`.
 1. **Platform Setup:** Executes `./g8e platform setup` to build all images and start the full platform (g8es, g8ee, g8ed, g8ep) with health checks.
-2. **Test Runner Build:** Executes `./g8e platform rebuild-test-runners` to build dedicated per-component test-runner containers.
+2. **Test Runner Build:** Executes `./g8e platform rebuild test-runners` to build dedicated per-component test-runner containers.
 3. **Component Tests:** Runs `g8ee`, `g8ed`, and `g8eo` test suites via `./g8e test <component>` inside their respective test-runner containers.
 
 ---

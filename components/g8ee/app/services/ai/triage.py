@@ -29,6 +29,7 @@ from app.constants import (
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
+    TriageRequestPosture,
 )
 from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
@@ -64,6 +65,8 @@ class TriageAgent:
                 intent=TriageIntentClassification.ACTION,
                 intent_confidence=TriageConfidence.HIGH,
                 intent_summary="User provided attachments for analysis.",
+                request_posture=TriageRequestPosture.NORMAL,
+                posture_confidence=TriageConfidence.LOW,
             )
 
         # Short-circuit: Empty message
@@ -76,6 +79,8 @@ class TriageAgent:
                 intent_confidence=TriageConfidence.LOW,
                 intent_summary="Empty message provided.",
                 follow_up_question="How can I help you today?",
+                request_posture=TriageRequestPosture.NORMAL,
+                posture_confidence=TriageConfidence.LOW,
             )
 
         try:
@@ -153,6 +158,8 @@ class TriageAgent:
             intent=TriageIntentClassification.UNKNOWN,
             intent_confidence=TriageConfidence.LOW,
             intent_summary=summary,
+            request_posture=TriageRequestPosture.NORMAL,
+            posture_confidence=TriageConfidence.LOW,
         )
 
     def _parse_response(self, text: str) -> TriageResult:

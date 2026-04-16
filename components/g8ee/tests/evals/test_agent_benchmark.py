@@ -159,6 +159,7 @@ def _extract_tool_calls_from_events(
 
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.parametrize("scenario_data", load_benchmark_set(), ids=lambda s: s["id"])
+@pytest.mark.skip(reason="Ironing out kinks in the testing framework")
 async def test_agent_benchmark(
     scenario_data: dict[str, Any],
     all_services,

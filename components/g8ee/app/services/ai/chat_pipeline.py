@@ -194,12 +194,14 @@ class ChatPipelineService:
         max_tokens = request_settings.llm.llm_max_tokens
 
         logger.info(
-            "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) model=%s",
+            "[CHAT] Triage: complexity=%s (conf=%s) intent=%s (conf=%s) posture=%s (conf=%s) model=%s",
             triage_result.complexity,
             triage_result.complexity_confidence,
             triage_result.intent_summary,
             triage_result.intent_confidence,
-            model_to_use
+            triage_result.request_posture,
+            triage_result.posture_confidence,
+            model_to_use,
         )
 
         attachment_filenames = [att.filename for att in attachments] if attachments else []
@@ -239,6 +241,7 @@ class ChatPipelineService:
             case_memories=case_memories,
             investigation=investigation,
             g8e_web_search_available=self.g8e_agent.g8e_web_search_available,
+            triage_result=triage_result,
         )
 
         generation_config = self.request_builder.get_generation_config(
