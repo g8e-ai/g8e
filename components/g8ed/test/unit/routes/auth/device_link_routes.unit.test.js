@@ -221,7 +221,9 @@ describe('DeviceLinkRoutes Unit Tests', () => {
                 });
 
             expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
             expect(res.body.operator_session_id).toBe('op-sess-id');
+            expect(res.body.operator_id).toBe('op-id');
             expect(mockDeviceLinkService.registerDevice).toHaveBeenCalledWith(
                 'dlk_12345678901234567890123456789012',
                 expect.objectContaining({

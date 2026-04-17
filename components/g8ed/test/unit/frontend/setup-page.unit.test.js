@@ -15,7 +15,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
-import { LLMProvider, AnthropicModel, OllamaModel } from '@g8ed/public/js/constants/ai-constants.js';
+import {
+    LLMProvider,
+    AnthropicModel,
+    OllamaModel,
+    PROVIDER_MODELS,
+} from '@g8ed/constants/ai.js';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
 import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 
@@ -46,8 +51,15 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             create: vi.fn()
         };
 
-        // Set up DOM structure for the setup wizard (multi-provider layout)
+        // Set up DOM structure for the setup wizard (multi-provider layout).
+        // The llm-catalog script tag mirrors what setup.ejs injects in production,
+        // providing the canonical LLM provider catalog to setup-page.js.
+        const catalogJson = JSON.stringify({
+            providers: LLMProvider,
+            providerModels: PROVIDER_MODELS,
+        }).replace(/</g, '\\u003c');
         document.body.innerHTML = `
+            <script id="llm-catalog" type="application/json">${catalogJson}</script>
             <div id="setup-status" class="setup-status">
                 <span id="setup-status-icon" class="material-symbols-outlined"></span>
                 <span id="setup-status-msg"></span>
@@ -113,6 +125,10 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 <input id="search_api_key" type="password" />
                 <input id="google_project_id" type="text" />
                 <input id="vertex_ai_search_app_id" type="text" />
+                <label id="use-gemini-key-wrap" class="setup-field-hidden" for="use_gemini_api_key">
+                    <input id="use_gemini_api_key" type="checkbox" />
+                    <span>Use Gemini API Key</span>
+                </label>
             </div>
             <div id="wizard-summary"></div>
             <button id="finish-btn">Finish</button>
@@ -458,6 +474,34 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
+        it('returns true for step 2 with bare Ollama host:port', () => {
+            document.getElementById('ollama_url').value = '192.168.1.100:11434';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(true);
+        });
+
+        it('rejects Ollama host with /v1 path', () => {
+            document.getElementById('ollama_url').value = 'http://localhost:11434/v1';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+            const text = document.getElementById('setup-status-msg');
+            expect(text.textContent).toContain('host:port');
+        });
+
+        it('rejects Ollama host missing port', () => {
+            document.getElementById('ollama_url').value = 'localhost';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+        });
+
+        it('rejects https Ollama URL', () => {
+            document.getElementById('ollama_url').value = 'https://localhost:11434';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+            const text = document.getElementById('setup-status-msg');
+            expect(text.textContent).toBe('Ollama only supports HTTP, not HTTPS');
+        });
+
         it('returns true for step 3', () => {
             expect(setupPage._validateStep(3)).toBe(true);
         });
@@ -565,6 +609,17 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
             expect(primaryMenu.children.length).toBeGreaterThan(0);
             expect(primaryText.textContent).not.toBe('Enter at least one API key');
+        });
+
+        it('auto-selects the first available model when providers active but nothing selected', () => {
+            document.getElementById('primary_model').querySelector('.llm-model-dropdown__text').textContent = 'API Key Required';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._selectedModels.primary = '';
+            setupPage._updateModelDropdowns();
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            expect(primaryText.textContent).not.toBe('Enter at least one API key');
+            expect(primaryText.textContent).not.toBe('Select a Model');
+            expect(setupPage._selectedModels.primary).toBeTruthy();
         });
 
         it('populates models from multiple active providers', () => {
@@ -732,6 +787,83 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
     });
 
+    describe('Use Gemini API Key checkbox', () => {
+        beforeEach(() => {
+            setupPage = new SetupPage();
+            setupPage._initSearchProvider();
+            setupPage._initUseGeminiKeyCheckbox();
+        });
+
+        it('is hidden when no gemini key is entered', () => {
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(true);
+        });
+
+        it('is hidden when search provider is not google', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            setupPage._updateUseGeminiKeyVisibility();
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(true);
+        });
+
+        it('is shown when gemini key is entered and google is selected', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(false);
+        });
+
+        it('populates search_api_key with gemini key when checked', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+
+            expect(document.getElementById('search_api_key').value).toBe('AIzaTESTKEY');
+        });
+
+        it('clears search_api_key when unchecked', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event('change'));
+
+            expect(document.getElementById('search_api_key').value).toBe('');
+        });
+
+        it('unchecks the checkbox when it becomes hidden', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+
+            document.getElementById('search_provider').value = '';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            expect(checkbox.checked).toBe(false);
+        });
+
+        it('handles missing checkbox gracefully', () => {
+            document.getElementById('use_gemini_api_key').remove();
+            expect(() => setupPage._initUseGeminiKeyCheckbox()).not.toThrow();
+            expect(() => setupPage._updateUseGeminiKeyVisibility()).not.toThrow();
+        });
+    });
+
     describe('_renderSummary', () => {
         beforeEach(() => {
             setupPage = new SetupPage();
@@ -856,11 +988,11 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.llm_assistant_provider).toBe(LLMProvider.OLLAMA);
         });
 
-        it('collects Ollama endpoint with /v1 suffix', () => {
-            document.getElementById('ollama_url').value = 'http://localhost:11434';
+        it('collects Ollama host as-is (backend normalizes to a URL)', () => {
+            document.getElementById('ollama_url').value = '192.168.1.100:11434';
             setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
-            expect(settings.ollama_endpoint).toBe('http://localhost:11434/v1');
+            expect(settings.ollama_endpoint).toBe('192.168.1.100:11434');
         });
 
         it('collects Google search settings', () => {

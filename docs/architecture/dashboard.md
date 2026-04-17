@@ -27,53 +27,70 @@ Terminal visibility is controlled by the event bus: `PLATFORM_TERMINAL_OPENED` /
 
 ## Setup Wizard
 
-`SetupPage` (`setup-page.js`) handles first-run configuration. It is served at `/setup` and is completely separate from the authenticated dashboard.
+`SetupPage` (`public/js/components/setup-page.js`) handles first-run configuration. It is served at `GET /setup` by `routes/auth/setup_routes.js` (which redirects to `/` when any user already exists) and is completely separate from the authenticated dashboard.
 
 ### Steps
 
-| Step | `data-panel` | `data-step` label | Content |
+| Step | `data-panel` / `data-step` | Label | Content |
 |---|---|---|---|
-| 1 | 1 | Account | Full name (optional) + email address fields; passkey note |
-| 2 | 2 | AI Provider | Provider card selection + API key; providers: Gemini, Anthropic, OpenAI, Ollama (Remote) |
-| 3 | 3 | Web Search | Search provider selection (Google/None) + API key field |
-| 4 | 4 | Finish | Summary table + passkey registration |
+| 1 | 1 | Account | Full name (optional) + email address; passkey note |
+| 2 | 2 | AI Providers | Any combination of Gemini / Anthropic / OpenAI / Ollama keys, plus Primary / Assistant / Lite model dropdowns |
+| 3 | 3 | Web Search | Search provider (Google or None) + project / app / API key fields |
+| 4 | 4 | Finish | Summary + passkey registration button |
 
-Navigation between steps is managed by `_goToStep(step)`. Forward navigation validates the current step first (`_validateStep`); back navigation skips validation. Steps are marked `active` (current) or `done` (completed) via CSS classes on `.wizard-step` elements. A `Back` / `Next` nav bar (`#wizard-nav`) is shown only for steps 1–3; both buttons are hidden on step 4.
+Navigation is managed by `_goToStep(step)`. Forward navigation validates the current step via `_validateStep`; back navigation skips validation. Steps are marked `active` (current) or `done` (completed) via CSS classes on `.wizard-step` elements. The `Back` / `Next` bar (`#wizard-nav`) is shown for steps 1–3 and hidden on step 4. Pressing Enter on an input or select on steps 2–3 advances to the next step.
 
-Pressing Enter while focused on an input or select on steps 1–3 advances to the next step.
-
-### Step Validation
+### Step Validation (`_validateStep`)
 
 | Step | Validation rule |
 |---|---|
 | 1 | Email is required and must match `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` |
-| 2 | A provider must be selected; if the provider requires an API key that field must not be empty |
+| 2 | At least one provider key/URL must be present, and Primary, Assistant, and Lite models must all be selected. If an Ollama URL is entered it must be `host:port` form — HTTPS and any path (e.g. `/v1`) are rejected |
+| 3 | No validation (Web Search is optional) |
+| 4 | No validation (passkey registration happens in the Finish handler) |
 
-### AI Provider Selection
+### AI Provider UI
 
-Provider cards (`.wizard-provider-card`) each contain a radio input. Gemini is the first-render default selection for a fresh setup. Selecting a card calls `_selectProvider(provider)`, which activates the matching card, shows the provider's config panel (`#config-<provider>`), and hides all others. The Next button on step 2 is shown only when the step is ready (`_isProviderStepReady`): true for cloud providers only when an API key value is present, and true for Ollama when an endpoint is provided.
+Step 2 renders one `.wizard-provider-key-row[data-provider="<provider>"]` per supported provider, each holding its own API-key (or URL) input. The user may configure any subset of providers; there is no single "selected provider". As keys are typed, `_onProviderKeyChange` runs `_updateProviderStates` (which toggles the `has-value` class and "Configured" status label on each row) and `_updateModelDropdowns` (which rebuilds the three model menus over the union of configured providers). The Next button appears only when `_isProviderStepReady()` is true — at least one provider key is present and all three model roles are selected.
 
-### Preflight
+### LLM Provider Catalog (Single Source of Truth)
 
-On `init()`, `_loadPreflight()` calls `GET /api/setup/config` to pre-fill existing configuration (hostname radio and provider card) so re-running setup reflects the current environment state. This may override the initial Gemini default when an existing provider is already configured.
+`components/g8ed/constants/ai.js` is the canonical catalog of `LLMProvider` values and `PROVIDER_MODELS` (model id/label per provider per tier). It is consumed:
+
+- **Server-side** by `SSEService._getModelOptionsForProvider` (pushes the `LLM_CONFIG_RECEIVED` event to the authenticated chat UI).
+- **Browser-side** at `/setup` by injecting the catalog as a JSON script tag into `views/setup.ejs`:
+
+  ```ejs
+  <script id="llm-catalog" type="application/json"><%- JSON.stringify(llmCatalog) %></script>
+  ```
+
+  `routes/auth/setup_routes.js` passes `llmCatalog = { providers: LLMProvider, providerModels: PROVIDER_MODELS }` to the render call. `setup-page.js` parses this element at module init via `_readCatalog()` and uses the result to build the model dropdowns. No browser-side duplicate of the catalog exists — adding or renaming a model requires editing only `constants/ai.js`.
+
+Model role dropdowns are custom `.llm-model-dropdown` elements (not native `<select>`). Each role (`primary`, `assistant`, `lite`) renders one `.llm-model-dropdown__category` header per configured provider followed by one `.llm-model-dropdown__option` per model, plus a trailing `Custom…` option that prompts for a free-form model id. Selection is tracked in `_selectedModels = { primary, assistant, lite }`.
 
 ### Finish
 
-The Finish button (`#finish-btn`) on step 4:
-1. `POST /api/setup/config` — saves the collected settings to g8es.
-2. `POST /api/auth/register` — creates the admin account (email + optional name)
-3. Calls `navigator.credentials.create` for passkey registration (WebAuthn challenge/verify round-trip)
-4. On success, redirects to `/chat`
+The Finish button (`#finish-btn`) on step 4 runs a single atomic flow:
 
-Settings collected by `_collectSettings()`:
+1. `POST /api/auth/register` with `{ email, name, settings }` — creates the admin user and returns `{ user_id, challenge_options }` (a WebAuthn registration challenge). The platform is blocked from accepting additional `register` calls once any user exists.
+2. `navigator.credentials.create({ publicKey: options })` — prompts the browser for passkey registration.
+3. `POST /api/auth/passkey/register-verify-setup` with `{ user_id, attestation_response }` — verifies the attestation, persists the credential, and returns a `session` (session cookie is set server-side).
+4. On success, redirects to `/chat`.
 
-| Field | Source |
+There is no separate "save platform settings" endpoint: settings are collected by `_collectUserSettings()` and submitted inline with `register`.
+
+### Settings Payload (`_collectUserSettings`)
+
+The flat-keyed payload written to the user settings document (structured into the nested Pydantic shape by `g8ed/models/settings_model.js` before storage):
+
+| Key | Source |
 |---|---|
-| `provider` | Provider card selection |
-| `gemini_primary_model` / `anthropic_primary_model` / `openai_primary_model` / `ollama_primary_model` | Primary model select for chosen provider |
-| `gemini_assistant_model` / `anthropic_assistant_model` / `openai_assistant_model` / `ollama_assistant_model` | Assistant model select |
-| `gemini_api_key` / `anthropic_api_key` / `openai_api_key` | Provider-specific key input |
-| `ollama_url` | User-supplied for Ollama |
+| `llm_primary_provider` / `llm_assistant_provider` / `llm_lite_provider` | Derived from the selected model id via `_modelToProvider` (falls back to the first active provider for `Custom…`) |
+| `llm_model` / `llm_assistant_model` / `llm_lite_model` | Selected model id (or the custom label when `Custom…` is chosen) |
+| `gemini_api_key` / `anthropic_api_key` / `openai_api_key` | Provider key inputs (omitted if empty) |
+| `openai_endpoint` | Set to `https://api.openai.com/v1` when an OpenAI key is present |
+| `ollama_endpoint` | `host:port` from the Ollama field |
+| `vertex_search_api_key` / `vertex_search_project_id` / `vertex_search_engine_id` / `vertex_search_enabled` | Step 3 Web Search fields (only emitted when the provider is Google) |
 
 ---
 

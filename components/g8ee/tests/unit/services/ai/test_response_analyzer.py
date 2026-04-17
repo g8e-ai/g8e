@@ -82,6 +82,58 @@ async def test_analyze_command_risk_success(analyzer, fake_provider, mock_settin
 
 
 @pytest.mark.asyncio
+async def test_analyze_command_risk_accepts_bare_enum_value(analyzer, fake_provider, mock_settings):
+    """Small local models (e.g. gemma4:e2b) sometimes ignore the JSON-schema
+    format hint and return a bare enum value like 'LOW' instead of
+    {"risk_level": "LOW"}. For single-required-field schemas the response is
+    unambiguous and must be coerced, not dropped to the HIGH fallback.
+    """
+    fake_provider.add_response("LOW")
+
+    with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
+        result = await analyzer.analyze_command_risk(
+            "ls -la /tmp",
+            "List /tmp",
+            CommandRiskContext(),
+            mock_settings,
+        )
+
+    assert result.risk_level == RiskLevel.LOW
+
+
+@pytest.mark.asyncio
+async def test_analyze_command_risk_accepts_fenced_json(analyzer, fake_provider, mock_settings):
+    """Some models wrap JSON in ```json ... ``` fences. Strip and parse."""
+    fake_provider.add_response('```json\n{"risk_level": "MEDIUM"}\n```')
+
+    with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
+        result = await analyzer.analyze_command_risk(
+            "systemctl restart nginx",
+            "Restart nginx",
+            CommandRiskContext(),
+            mock_settings,
+        )
+
+    assert result.risk_level == RiskLevel.MEDIUM
+
+
+@pytest.mark.asyncio
+async def test_analyze_command_risk_accepts_json_after_preamble(analyzer, fake_provider, mock_settings):
+    """Models sometimes prefix prose before the JSON object. Extract and parse."""
+    fake_provider.add_response('Here is my classification:\n{"risk_level": "HIGH"}\nThanks.')
+
+    with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
+        result = await analyzer.analyze_command_risk(
+            "rm -rf /var/data",
+            "Wipe",
+            CommandRiskContext(),
+            mock_settings,
+        )
+
+    assert result.risk_level == RiskLevel.HIGH
+
+
+@pytest.mark.asyncio
 async def test_analyze_command_risk_fallback_on_empty_response(analyzer, fake_provider, mock_settings):
     # Queue a response with no text parts
     response = GenerateContentResponse(candidates=[Candidate(content=Content(role="model", parts=[]), finish_reason="STOP")])

@@ -48,6 +48,8 @@ from app.constants.settings import (
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata, FileEditMetadata, ConversationMessageMetadata
 from app.models.operators import (
+    AgentContinueApprovalEvent,
+    AgentContinueApprovalRequest,
     ApprovalResult,
     ApprovalType,
     CommandApprovalEvent,
@@ -280,6 +282,154 @@ class OperatorApprovalService:
             all_intents=request.all_intents,
             operation_context=request.operation_context or "",
         )
+
+    async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult:
+        """Request operator approval to continue the agent past its tool-turn budget.
+
+        This is agent-scoped rather than operator-scoped: there is no operator
+        binding, no command, no file, and no intent. The UI renders a dedicated
+        continuation prompt and the approval response resumes the agent loop by
+        resetting its turn counter.
+        """
+        approval_id = generate_approval_id()
+        g8e_context = request.g8e_context
+        try:
+            logger.info(
+                "[AGENT_CONTINUE_APPROVAL] Requesting continuation approval: "
+                "turn_limit=%d turns_completed=%d approval_id=%s execution_id=%s "
+                "case_id=%s investigation_id=%s user_id=%s task_id=%s",
+                request.turn_limit,
+                request.turns_completed,
+                approval_id,
+                request.execution_id,
+                g8e_context.case_id,
+                g8e_context.investigation_id,
+                g8e_context.user_id,
+                request.task_id,
+            )
+
+            approval_event = AgentContinueApprovalEvent(
+                approval_id=approval_id,
+                execution_id=request.execution_id,
+                justification=request.justification,
+                timeout_seconds=request.timeout_seconds,
+                user_id=g8e_context.user_id,
+                task_id=request.task_id,
+                turn_limit=request.turn_limit,
+                turns_completed=request.turns_completed,
+            )
+
+            try:
+                await self.g8ed_event_service.publish(
+                    SessionEvent(
+                        event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
+                        payload=approval_event,
+                        web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        case_id=g8e_context.case_id,
+                        investigation_id=g8e_context.investigation_id,
+                        task_id=request.task_id,
+                    )
+                )
+                logger.info("[AGENT_CONTINUE_APPROVAL] Published to g8ed")
+            except Exception as publish_error:
+                error_msg = f"Failed to publish agent continuation approval request to g8ed: {publish_error}"
+                logger.error("[AGENT_CONTINUE_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                return ApprovalResult(
+                    approved=False,
+                    reason=error_msg,
+                    error=True,
+                    error_type=ApprovalErrorType.APPROVAL_PUBLISH_FAILURE,
+                    approval_id=approval_id,
+                )
+
+            await self._audit(
+                operator_id=None,
+                event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
+                metadata=ApprovalMetadata(
+                    execution_id=request.execution_id,
+                    approval_id=approval_id,
+                    justification=request.justification,
+                    requested_at=approval_event.requested_at,
+                ),
+                g8e_context=g8e_context,
+                log_tag="AGENT_CONTINUE_APPROVAL",
+            )
+
+            pending = PendingApproval(
+                approval_id=approval_id,
+                approval_type=ApprovalType.AGENT_CONTINUE,
+                requested_at=now(),
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
+                user_id=g8e_context.user_id,
+                operator_id=None,
+                operator_session_id=None,
+            )
+            self._register_pending(approval_id, pending)
+            logger.info("[AGENT_CONTINUE_APPROVAL] Stored pending (key=%s); awaiting user response", approval_id)
+
+            await pending.wait()
+            self._pending_approvals.pop(approval_id, None)
+            logger.info("[AGENT_CONTINUE_APPROVAL] Response received: approved=%s", pending.approved)
+
+            if pending.feedback:
+                await self._audit(
+                    operator_id=None,
+                    event_type=EventType.AI_AGENT_CONTINUE_APPROVAL_REJECTED,
+                    metadata=ApprovalMetadata(
+                        execution_id=request.execution_id,
+                        approval_id=approval_id,
+                        feedback_reason=pending.reason,
+                        responded_at=pending.responded_at or now(),
+                    ),
+                    g8e_context=g8e_context,
+                    log_tag="AGENT_CONTINUE_APPROVAL",
+                )
+                return ApprovalResult(
+                    approved=False,
+                    feedback=True,
+                    reason=pending.reason or "User provided additional context via chat message",
+                    approval_id=approval_id,
+                )
+
+            await self._audit(
+                operator_id=None,
+                event_type=(
+                    EventType.AI_AGENT_CONTINUE_APPROVAL_GRANTED
+                    if pending.approved
+                    else EventType.AI_AGENT_CONTINUE_APPROVAL_REJECTED
+                ),
+                metadata=ApprovalMetadata(
+                    execution_id=request.execution_id,
+                    approval_id=approval_id,
+                    approved=pending.approved,
+                    reason=pending.reason,
+                    responded_at=now(),
+                ),
+                g8e_context=g8e_context,
+                log_tag="AGENT_CONTINUE_APPROVAL",
+            )
+
+            return ApprovalResult(
+                approved=pending.approved or False,
+                reason=pending.reason,
+                approval_id=approval_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "[AGENT_CONTINUE_APPROVAL-EXCEPTION] Failed to request agent continuation approval: %s",
+                e,
+                exc_info=True,
+            )
+            return ApprovalResult(
+                approved=False,
+                reason=f"Agent continuation approval request failed: {e}",
+                error=True,
+                error_type=ApprovalErrorType.APPROVAL_EXCEPTION,
+                approval_id=approval_id,
+            )
 
     async def _request_command_approval(
         self,

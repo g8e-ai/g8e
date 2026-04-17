@@ -24,14 +24,14 @@ Separation of Concerns:
 
 import logging
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
 import app.llm.llm_types as types
 from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
 )
-from app.models.model_configs import get_model_config, thinking_level_for_config
+from app.models.model_configs import clamp_thinking_level, get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -100,26 +100,53 @@ class AIGenerationConfigBuilder:
         return tool_names
 
     @staticmethod
-    def _build_thinking_config(model_name: str) -> types.ThinkingConfig:
+    def _build_thinking_config(
+        model_name: str,
+        desired_level: ThinkingLevel = ThinkingLevel.HIGH,
+        include_thoughts: bool = True,
+    ) -> types.ThinkingConfig:
         """Build ThinkingConfig based on model capabilities.
 
-        The High Reasoning Agent (The Proposer) uses the highest supported thinking
-        level to perform complex architectural planning and deep logical exploration.
+        The caller declares a desired ThinkingLevel; we clamp it to the
+        closest level the bound model actually supports. When the model has
+        no thinking capability the clamp returns ThinkingLevel.OFF and
+        include_thoughts is forced False.
+
+        Default desired_level is HIGH so primary/tool-capable model calls
+        continue to opt into the highest reasoning tier the model exposes,
+        matching previous behavior for the High Reasoning Agent.
         """
         config = get_model_config(model_name) if model_name else None
-
-        if config and config.supports_thinking and config.supported_thinking_levels:
-            thinking_level = thinking_level_for_config(config)
-            logger.info(f"[CONFIG] ThinkingConfig: thinking_level={thinking_level}, include_thoughts=True (model={config.name})")
+        if config is None:
+            logger.info("[CONFIG] ThinkingConfig: disabled (no model bound)")
             return types.ThinkingConfig(
-                thinking_level=thinking_level,
-                include_thoughts=True,
+                thinking_level=ThinkingLevel.OFF,
+                include_thoughts=False,
             )
 
-        logger.info(f"[CONFIG] ThinkingConfig: disabled (model={config.name if config else 'None'} does not support thinking)")
+        clamped = clamp_thinking_level(desired_level, config)
+        if clamped is ThinkingLevel.OFF:
+            logger.info(
+                f"[CONFIG] ThinkingConfig: disabled "
+                f"(model={config.name} has no supported thinking levels)"
+            )
+            return types.ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF,
+                include_thoughts=False,
+            )
+
+        if clamped is not desired_level:
+            logger.info(
+                f"[CONFIG] ThinkingConfig: clamped desired={desired_level} -> {clamped} "
+                f"(model={config.name})"
+            )
+        logger.info(
+            f"[CONFIG] ThinkingConfig: thinking_level={clamped}, "
+            f"include_thoughts={include_thoughts} (model={config.name})"
+        )
         return types.ThinkingConfig(
-            thinking_level=None,
-            include_thoughts=False,
+            thinking_level=clamped,
+            include_thoughts=include_thoughts,
         )
 
     @staticmethod
@@ -272,7 +299,7 @@ class AIGenerationConfigBuilder:
         Thinking is explicitly disabled — these calls expect concise, parseable
         text output and must never emit thought tokens.
         """
-        no_thinking = types.ThinkingConfig(thinking_level=None, include_thoughts=False)
+        no_thinking = types.ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)
         model_config = get_model_config(model)
 
         effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, _ = (

@@ -20,6 +20,20 @@
 
 import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
 
+// All models for each provider are available at every tier; the user decides
+// which model serves primary / assistant / lite.
+const OPENAI_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: OpenAIModel.GPT_5_4,       label: 'GPT-5.4' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_PRO,   label: 'GPT-5.4 Pro' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_MINI,  label: 'GPT-5.4 Mini' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_NANO,  label: 'GPT-5.4 Nano' }),
+]);
+const ANTHROPIC_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,   label: 'Claude Opus 4.6' }),
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,  label: 'Claude Haiku 4.5' }),
+]);
+
 // ---------------------------------------------------------------------------
 // USER_SETTINGS — user-configurable settings shown and saved via the UI
 // ---------------------------------------------------------------------------
@@ -86,13 +100,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Main model used for investigations and AI reasoning.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4, label: 'GPT-5.4' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -101,13 +112,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Lightweight model for assistant tasks and command generation.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4_MINI,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_lite_model',
@@ -116,12 +124,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Ultra-lightweight model for quick tasks.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4_NANO,
+        default: ''
     }),
     Object.freeze({
         key: 'openai_endpoint',
@@ -152,12 +158,12 @@ export const USER_SETTINGS = Object.freeze([
     Object.freeze({
         key: 'ollama_endpoint',
         section: 'llm',
-        label: 'Ollama Endpoint URL',
-        description: 'API endpoint for Ollama (e.g. https://your-ollama-host:11434/v1).',
+        label: 'Ollama Host',
+        description: 'Host and port of your Ollama server (e.g. 192.168.1.100:11434). Do not include a scheme or path.',
         type: 'text',
         provider: LLMProvider.OLLAMA,
         secret: false,
-        placeholder: 'https://your-ollama-host:11434/v1',
+        placeholder: '192.168.1.100:11434',
         default: '',
     }),
     Object.freeze({
@@ -197,14 +203,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Main model used for investigations and AI reasoning.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -213,13 +215,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Lightweight model for assistant tasks and command generation.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_lite_model',
@@ -228,12 +227,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Ultra-lightweight model for quick tasks.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        default: ''
     }),
     Object.freeze({
         key: 'anthropic_endpoint',
@@ -604,13 +601,24 @@ export function validateUserSettings(updates) {
 }
 
 /**
- * Validates platform settings updates against PLATFORM_SETTINGS schema
+ * Validates platform settings updates against PLATFORM_SETTINGS schema.
+ *
+ * `writeOnce` keys (e.g. `internal_auth_token`, `session_encryption_key`) are
+ * bootstrap secrets owned by g8eo's SecretManager and the SSL volume. Once set
+ * to a non-empty value they cannot be overwritten via this path — any such
+ * attempt is recorded in `skipped` and excluded from `valid`. This prevents
+ * UI writes from silently diverging from the volume-authoritative value, which
+ * would then be clobbered on the next g8eo restart.
+ *
  * @param {Object} updates - Settings updates to validate
- * @returns {Object} - { valid: Object, invalid: Array, errors: Array }
+ * @param {Object} [existingSettings] - Current persisted settings, used to
+ *   enforce the writeOnce guard. Pass `{}` when no document exists yet.
+ * @returns {Object} - { valid: Object, invalid: Array, skipped: Array, errors: Array }
  */
-export function validatePlatformSettings(updates) {
+export function validatePlatformSettings(updates, existingSettings = {}) {
     const valid = {};
     const invalid = [];
+    const skipped = [];
     const errors = [];
 
     for (const [key, value] of Object.entries(updates)) {
@@ -621,10 +629,19 @@ export function validatePlatformSettings(updates) {
             continue;
         }
 
+        if (field.writeOnce) {
+            const existing = existingSettings?.[key];
+            if (existing !== undefined && existing !== null && existing !== '') {
+                skipped.push(key);
+                errors.push(`${key} is writeOnce and already set; refusing overwrite`);
+                continue;
+            }
+        }
+
         valid[key] = value;
     }
 
-    return { valid, invalid, errors };
+    return { valid, invalid, skipped, errors };
 }
 
 // ---------------------------------------------------------------------------

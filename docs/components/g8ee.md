@@ -241,7 +241,7 @@ Activated when at least one g8eo Operator has `status=bound`.
 
 - **Full tool suite** — command execution, file operations, directory listing, port checks, web search (if configured).
 - **Human-in-the-loop** — all state-changing operations require explicit user approval before execution.
-- **Thinking** — enabled for models that declare `supports_thinking=True`; uses the highest supported thinking level from the model's config.
+- **Thinking** — enabled for models whose `supported_thinking_levels` list contains at least one non-`OFF` level; the request builder asks for the highest level the model exposes and the per-provider translator clamps to exactly what goes on the wire. See [architecture/thinking_levels.md](../architecture/thinking_levels.md) for the full vocabulary and translator contract.
 - **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provide direct system access and bypass the intent system.
 - **Multi-operator** — multiple operators may be bound simultaneously; the AI selects the target per command using `target_operator` (hostname, operator ID, or index). Batch operations use `target_operators` for unified single-approval execution across N systems.
 
@@ -304,12 +304,14 @@ All LLM model configurations are defined in `components/g8ee/app/models/model_co
 
 - **Supported models** across all providers (Anthropic, Gemini, OpenAI, Ollama)
 - **Model capabilities and constraints** (context window, thinking support, tool support, output limits)
-- **Supported thinking levels** for each model (MINIMAL, LOW, MEDIUM, HIGH)
+- **Supported thinking levels** for each model (`OFF`, `MINIMAL`, `LOW`, `MEDIUM`, `HIGH`)
 
 The `LLMModelConfig` class defines the schema for each model:
 - `name`: Model identifier string
-- `supported_thinking_levels`: List of `ThinkingLevel` values the model supports
-- `supports_thinking`: Boolean indicating if the model supports thinking features
+- `supported_thinking_levels`: The single source of truth for thinking capability. An empty list means the model cannot think at all. A list containing `OFF` means thinking is opt-in; a list omitting `OFF` means the model is always-on reasoning and callers must supply one of the listed non-`OFF` levels. See [architecture/thinking_levels.md](../architecture/thinking_levels.md).
+- `supports_thinking`: Derived read-only property — `True` iff `supported_thinking_levels` is non-empty. Do not set this field directly; change the levels list instead.
+- `thinking_budgets`: Optional per-level `dict[ThinkingLevel, int]` used by Anthropic to override the default token-budget table when a model benefits from non-default values (Opus uses this to opt into a 32_000-token HIGH budget).
+- `thinking_dialect`: Ollama-only. Selects the wire encoding for reasoning toggling (`NONE` omits the `think` kwarg; `NATIVE_TOGGLE` sends `think=True`/`False`). Cloud providers ignore this field.
 - `supports_tools`: Boolean indicating if the model supports function calling
 - `context_window_input`: Maximum input tokens
 - `context_window_output`: Maximum output tokens (max_tokens)
@@ -812,32 +814,21 @@ For services that push many event types (operator status, heartbeat, AI progress
 
 ## Prompt System
 
+Full prompt-system reference — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions — lives in [docs/architecture/prompts.md](../architecture/prompts.md). This section covers only the g8ee-specific integration points.
+
 ### Mode-Aware Prompts
 
-System prompts are assembled from discrete files in `app/prompts_data/`, organized by mode and concern:
-
-```
-prompts_data/
-  core/                     — Shared identity and safety constraints
-  modes/
-    operator_bound/         — Full execution capability prompts
-    operator_not_bound/     — Advisory mode prompts
-    cloud_operator_bound/   — AWS Cloud Operator prompts
-  tools/                — Per-tool descriptions
-  system/                   — Response constraints, sentinel mode
-```
-
-Each mode directory contains `capabilities.txt`, `execution.txt`, and `tools.txt`. The `operator_not_bound/` directory additionally contains `capabilities_no_search.txt` and `execution_no_search.txt` — loaded automatically by `load_mode_prompts` when `search_web_available=False`.
+`load_mode_prompts(operator_bound, is_cloud_operator, g8e_web_search_available)` in `app/prompts_data/loader.py` resolves the active `AgentMode` and returns the three mode-specific section files (`capabilities`, `execution`, `tools`). For `OPERATOR_NOT_BOUND` with `g8e_web_search_available=False`, the loader swaps `capabilities.txt` and `execution.txt` for their `_no_search` variants and `build_modular_system_prompt` suppresses the tools section entirely.
 
 ### Prompt Assembly
 
-`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` assembles the full system prompt by combining loaded prompt files with injected runtime context (operator system info, organization context, investigation state, learned memories). It is the only entry point for building system prompts — callers must not assemble prompt strings directly.
+`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` is the only entry point for building system prompts — callers must not assemble prompt strings directly. The full section order is documented in `docs/architecture/prompts.md`.
 
 ### Prompt Constants
 
-All prompt file paths, agent modes, and section labels are defined in `shared/constants/prompts.json` — the authoritative source. g8ee loads this file and populates three enums in `app/constants/prompts.py`: `AgentMode`, `PromptSection`, and `PromptFile`.
+`PromptFile`, `AgentMode`, and `PromptSection` enums in `app/constants/prompts.py` are the authoritative source for prompt file paths and section labels. A sibling `shared/constants/prompts.json` is loaded into `_PROMPTS` by `app/constants/shared.py` but is currently unused at runtime — the Python enums are hardcoded.
 
-**Rule:** Never hardcode prompt file paths or section label strings in application code. Always use the enums from `app/constants/prompts.py`. All new prompt files must have a corresponding `PromptFile` entry added to `shared/constants/prompts.json` before use.
+**Rule:** Never hardcode prompt file paths or section label strings in application code. Always use the enums from `app/constants/prompts.py`. All new prompt files must have a corresponding `PromptFile` entry.
 
 ---
 
@@ -942,7 +933,7 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `llm_provider` | `ollama` | The active LLM provider (`ollama`, `openai`, `anthropic`, `gemini`) |
 | `ollama_model` | `gemma4:e4b` | The model name for Ollama |
 | `ollama_assistant_model` | `gemma4:e4b` | The assistant model name for Ollama |
-| `ollama_endpoint` | `http://host.docker.internal:11434` | The Ollama API endpoint |
+| `ollama_endpoint` | `host.docker.internal:11434` | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
 | `openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `openai_api_key` | - | OpenAI API key |
 | `anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |
@@ -1009,6 +1000,70 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 | `vertex_search_api_key` | — | GCP API key restricted to Discovery Engine API; can be shared with `gemini_api_key` |
 
 `VertexSearchSettings.is_configured` requires `enabled=True` and all three of `project_id`, `engine_id`, `api_key` non-empty. Only when configured is `WebSearchProvider` constructed and `search_web` registered.
+
+---
+
+## AI Evaluation Reporting
+
+g8ee implements a unified metrics collection framework for AI evaluation tests across three dimensions: accuracy, safety, and privacy.
+
+### Dimensions
+
+| Dimension | Purpose | Test Suites |
+|-----------|---------|-------------|
+| **Accuracy** | Measures the AI's ability to correctly answer questions and execute tasks | `agent_accuracy`, `gemini_accuracy`, `ollama_accuracy` |
+| **Safety** | Evaluates refusal behavior for harmful or inappropriate requests | `agent_benchmark` (security_refusal category) |
+| **Privacy** | Verifies Sentinel PII redaction across three egress layers | `agent_privacy` |
+
+### Metrics Framework
+
+The unified metrics collector (`tests/evals/conftest.py::unified_metrics_collector`) aggregates all eval results into a single report with:
+
+- **EvalRow** - Single evaluation result with dimension, suite, scenario_id, category, passed, score, latency_ms, error, and details
+- **DimensionSummary** - Per-dimension statistics (total, passed, failed, pass_pct, avg_score, per_category breakdown)
+- **FullReport** - Complete report with all rows, summaries, metadata (started_at, finished_at, llm_config)
+
+### Artifact Persistence
+
+At test session end, the collector persists three artifacts to `components/g8ee/reports/evals/<timestamp>_<run_id>/`:
+
+- **report.txt** - Human-readable ASCII table with per-dimension sections and aggregate footer
+- **results.csv** - Machine-readable CSV with one row per scenario
+- **summary.json** - Structured JSON with metrics and scenario rows
+
+A symlink at `components/g8ee/reports/evals/latest/` always points to the most recent run.
+
+### Privacy Evaluation Details
+
+The privacy dimension performs three-layer Sentinel verification:
+
+- **L1 (g8es persistence)** - Checks if user messages are scrubbed before storage in g8es (report-only, expected FAIL due to upstream bug)
+- **L2 (LLM egress)** - Verifies PII is scrubbed before sending to the LLM provider (strict assert)
+- **L3 (AI response)** - Ensures the AI response does not echo leaked PII (strict assert)
+
+Privacy scenarios cover all Sentinel patterns: email, SSN, credit card, phone, JWT, GitHub token, GCP API key, AWS access key, Slack token, URL with credentials, connection string, private key, IBAN, bearer token, and password config.
+
+### Running Eval Suites
+
+Run specific eval suites using pytest markers:
+
+```bash
+# Accuracy evals
+/home/bob/g8e/g8e test g8ee -m agent_eval tests/evals/
+
+# Benchmark evals
+/home/bob/g8e/g8e test g8ee -m agent_benchmark tests/evals/
+
+# Privacy evals
+/home/bob/g8e/g8e test g8ee -m agent_privacy tests/evals/
+
+# All evals
+/home/bob/g8e/g8e test g8ee -m "agent_eval or agent_benchmark or agent_privacy" tests/evals/
+```
+
+### Known Issues
+
+- **L1 privacy failure** - g8es persistence is not scrubbed before storage. This is a known upstream bug requiring Sentinel scrubbing in the g8es-write path (`chat_pipeline._run_chat_impl`). Once fixed, flip the privacy eval L1 check to strict assert.
 
 ---
 

@@ -50,9 +50,19 @@ Configuration:
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
   LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
 
-Temperatures are sourced from the model's default temperature configuration:
-  - Generation passes use the configured model's default_temperature
-  - Verifier uses the configured model's default_temperature
+Temperature resolution precedence (persona-driven, not per-pass):
+  1. The agent persona's `temperature` field (when explicitly set in
+     shared/constants/agents.json). Lets a specific persona override.
+  2. The model's `default_temperature` (from app/models/model_configs.py).
+     For Gemini 3 family this is 1.0 per Google's own guidance ("strongly
+     recommend keeping temperature at its default value").
+  3. LLM_DEFAULT_TEMPERATURE as a last-resort global default.
+
+Per-pass temperature variation was intentionally removed: the Tribunal's
+behavioral diversity comes from the ideological voice of each persona
+(Axiom minimalist, Concord archivist, Variance adversary), not from
+numerical temperature skew. The Verifier likewise runs at the persona
+or model default.
     """
 
 import asyncio
@@ -212,13 +222,27 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
     return _TRIBUNAL_MEMBERS[pass_index % len(_TRIBUNAL_MEMBERS)]
 
 
-def _temperature_for_pass(pass_index: int, model: str) -> float:
-    """Return the model's default temperature for the given pass."""
+def _resolve_temperature(persona_temperature: float | None, model: str) -> float:
+    """Resolve temperature for a Tribunal or Verifier call.
+
+    Precedence: persona override > model default > global default.
+
+    The persona is the preferred control surface. Runtime behavioral
+    differences between Axiom / Concord / Variance / Verifier are carried
+    by their prompt language, not by forcing different temperatures. A
+    persona may still set an explicit numeric temperature when it has a
+    concrete reason to; in practice all Tribunal personas leave this null
+    and fall through to the model default (1.0 for Gemini 3).
+    """
     from app.models.model_configs import get_model_config
     from app.constants import LLM_DEFAULT_TEMPERATURE
 
+    if persona_temperature is not None:
+        return persona_temperature
     model_config = get_model_config(model)
-    return model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+    if model_config and model_config.default_temperature is not None:
+        return model_config.default_temperature
+    return LLM_DEFAULT_TEMPERATURE
 
 
 def _normalise_command(raw: str) -> str:
@@ -306,8 +330,8 @@ async def _run_generation_pass(
     classify the failure mode (system vs. legitimate).
     """
     member = _member_for_pass(pass_index)
-    temperature = _temperature_for_pass(pass_index, model)
     member_persona = get_tribunal_member(member.value)
+    temperature = _resolve_temperature(member_persona.temperature, model)
     prompt = member_persona.persona.format(
         forbidden_patterns_message=_format_forbidden_patterns_message(),
         command_constraints_message=command_constraints_message,
@@ -330,26 +354,42 @@ async def _run_generation_pass(
         response_format=None,
     )
     try:
+        from app.errors import OllamaEmptyResponseError
+
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
-        if not response or not response.text:
-            error_msg = f"Pass {pass_index} ({member.value}) returned empty response"
-            pass_errors.append(error_msg)
-            logger.warning("[TRIBUNAL] %s", error_msg)
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-                TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False),
+        if not response.text or not response.text.strip():
+            raise OllamaEmptyResponseError(
+                f"Provider returned empty response text",
+                model=model,
+                channel="lite",
+                done_reason="stop",
+                prompt_eval_count=None,
+                eval_count=None,
+                num_ctx=None,
+                num_predict=None,
+                thinking_len=0,
+                tool_calls_count=0,
+                ctx_overflow_suspected=False,
             )
-            return None
         candidate = _normalise_command(response.text)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=candidate, success=True),
         )
         return candidate
+    except OllamaEmptyResponseError as exc:
+        error_msg = f"Pass {pass_index} ({member.value}) returned empty response: {exc}"
+        pass_errors.append(error_msg)
+        logger.warning("[TRIBUNAL] %s", error_msg)
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False),
+        )
+        return None
     except Exception as exc:
         error_msg = str(exc)
         pass_errors.append(error_msg)
@@ -381,7 +421,6 @@ async def _run_verifier(
     )
 
     from app.models.model_configs import get_model_config
-    from app.constants import LLM_DEFAULT_TEMPERATURE
 
     verifier_persona = get_agent_persona("verifier")
     prompt = verifier_persona.get_system_prompt().format(
@@ -393,7 +432,7 @@ async def _run_verifier(
         candidate_command=candidate_command,
     )
     model_config = get_model_config(model)
-    temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+    temperature = _resolve_temperature(verifier_persona.temperature, model)
     settings = LiteLLMSettings(
         temperature=temperature,
         max_output_tokens=_MAX_TOKENS_VERIFIER,
@@ -404,23 +443,27 @@ async def _run_verifier(
         response_format=None,
     )
     try:
+        from app.errors import OllamaEmptyResponseError
+
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
-        if not response or not response.text:
-            logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate")
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-                TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.EMPTY_RESPONSE),
+        if not response.text or not response.text.strip():
+            raise OllamaEmptyResponseError(
+                f"Verifier returned empty response text",
+                model=model,
+                channel="lite",
+                done_reason="stop",
+                prompt_eval_count=None,
+                eval_count=None,
+                num_ctx=None,
+                num_predict=None,
+                thinking_len=0,
+                tool_calls_count=0,
+                ctx_overflow_suspected=False,
             )
-            raise TribunalVerifierFailedError(
-                reason="empty_response",
-                error="Verifier returned empty response",
-                original_command=candidate_command,
-            )
-
         answer = response.text.strip()
         if answer.lower() == "ok":
             await emitter.emit(
@@ -452,6 +495,18 @@ async def _run_verifier(
     except TribunalVerifierFailedError:
         raise
     except Exception as exc:
+        from app.errors import OllamaEmptyResponseError
+        if isinstance(exc, OllamaEmptyResponseError):
+            logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate: %s", exc)
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
+                TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.EMPTY_RESPONSE),
+            )
+            raise TribunalVerifierFailedError(
+                reason="empty_response",
+                error=f"Verifier returned empty response: {exc}",
+                original_command=candidate_command,
+            ) from exc
         logger.error("[TRIBUNAL] Verifier failed with exception; cannot verify candidate: %s", exc)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,

@@ -125,6 +125,14 @@ export async function initializeSettingsService() {
         throw new Error('Internal auth token not found in g8es volume. Platform bootstrap failed.');
     }
 
+    // Tamper-evidence: confirm the token read from the volume matches the
+    // SHA-256 digest g8eo SecretManager recorded in bootstrap_digest.json at
+    // write time. This is the only cryptographic link g8ed has to the
+    // DB-authoritative value; without it, a divergent volume file would
+    // surface as an opaque 401 during the first downstream API call instead
+    // of a clear startup abort.
+    bootstrapService.verifyAgainstManifest('internal_auth_token', internalAuthToken);
+
     if (isHttps && !caCertPath) {
         logger.error('[G8ED-INIT] CA certificate not found for HTTPS connection to g8es');
         throw new Error('CA certificate not found for HTTPS connection to g8es');

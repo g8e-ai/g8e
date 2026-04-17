@@ -23,7 +23,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from app.constants import ThinkingLevel
+from app.constants import (
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+    LLM_DEFAULT_TEMPERATURE,
+    ThinkingLevel,
+)
 from app.models.base import G8eBaseModel
 
 
@@ -401,49 +405,87 @@ class ToolCallingConfig:
 
 @dataclass
 class ToolConfig:
-    tool_calling_config: ToolCallingConfig
+    tool_calling_config: ToolCallingConfig = field(default_factory=ToolCallingConfig)
 
 
 @dataclass
 class ThinkingConfig:
-    thinking_level: ThinkingLevel
+    """Canonical thinking/reasoning effort request.
+
+    thinking_level is always a ThinkingLevel (never None). ThinkingLevel.OFF
+    means "do not enable thinking for this call" — providers translate OFF
+    to the appropriate per-provider omission (no thinking_config key for
+    Gemini, no thinking dict for Anthropic, think=False for Ollama, no
+    reasoning key for OpenAI).
+    """
+    thinking_level: ThinkingLevel = ThinkingLevel.OFF
     include_thoughts: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return self.thinking_level is not ThinkingLevel.OFF
+
+
+# Module-level defaults reused by every *LLMSettings dataclass. Declaring
+# them once avoids drift between sibling structs.
+_DEFAULT_RESPONSE_MODALITIES: tuple[str, ...] = ("TEXT",)
 
 
 @dataclass
 class PrimaryLLMSettings:
-    temperature: float
-    max_output_tokens: int
-    top_p_nucleus_sampling: float | None
-    top_k_filtering: int | None
-    stop_sequences: list[str] | None
-    response_modalities: list[str]
-    tools: list[ToolGroup]
-    system_instructions: str
-    thinking_config: ThinkingConfig
-    tool_config: ToolConfig
+    """Primary-agent generation settings.
+
+    Only ``system_instructions`` (the prompt text) and ``tools`` (the function
+    surface) are typically case-specific; everything else has a neutral
+    default so callers in tests, benchmarks, and probes can construct a valid
+    object without restating the same boilerplate at every site. The defaults
+    map to the same values the production ``AIGenerationConfigBuilder``
+    applies when platform settings omit overrides.
+    """
+    temperature: float = LLM_DEFAULT_TEMPERATURE
+    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    top_p_nucleus_sampling: float | None = None
+    top_k_filtering: int | None = None
+    stop_sequences: list[str] | None = None
+    response_modalities: list[str] = field(default_factory=lambda: list(_DEFAULT_RESPONSE_MODALITIES))
+    tools: list[ToolGroup] = field(default_factory=list)
+    system_instructions: str = ""
+    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
+    tool_config: ToolConfig = field(default_factory=ToolConfig)
 
 
 @dataclass
 class AssistantLLMSettings:
-    temperature: float
-    max_output_tokens: int
-    top_p_nucleus_sampling: float | None
-    top_k_filtering: int | None
-    stop_sequences: list[str] | None
-    system_instructions: str
-    response_format: ResponseFormat | None
+    """Assistant-tier generation settings (lighter than primary, no tools).
+
+    Used for triage, intent classification, and other structured-output
+    helpers. See PrimaryLLMSettings for the rationale behind per-field
+    defaults.
+    """
+    temperature: float = LLM_DEFAULT_TEMPERATURE
+    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    top_p_nucleus_sampling: float | None = None
+    top_k_filtering: int | None = None
+    stop_sequences: list[str] | None = None
+    system_instructions: str = ""
+    response_format: ResponseFormat | None = None
 
 
 @dataclass
 class LiteLLMSettings:
-    temperature: float
-    max_output_tokens: int
-    top_p_nucleus_sampling: float | None
-    top_k_filtering: int | None
-    stop_sequences: list[str] | None
-    system_instructions: str
-    response_format: ResponseFormat | None
+    """Lite-tier generation settings (smallest model, no tools, no thinking).
+
+    Used for title generation, memory summarisation, and similar one-shot
+    helpers. See PrimaryLLMSettings for the rationale behind per-field
+    defaults.
+    """
+    temperature: float = LLM_DEFAULT_TEMPERATURE
+    max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    top_p_nucleus_sampling: float | None = None
+    top_k_filtering: int | None = None
+    stop_sequences: list[str] | None = None
+    system_instructions: str = ""
+    response_format: ResponseFormat | None = None
 
 
 @dataclass
@@ -456,7 +498,7 @@ class GenerateContentConfig:
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
     tools: list[ToolGroup] = field(default_factory=list)
-    thinking_config: ThinkingConfig = field(default_factory=lambda: ThinkingConfig(thinking_level=None, include_thoughts=False))
+    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
     tool_config: ToolConfig = field(default_factory=lambda: ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")))
     response_format: ResponseFormat | None = None
 

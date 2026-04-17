@@ -45,19 +45,12 @@ func publishLFAATypedResponseTo(
 		return
 	}
 
-	isMCP := msg.EventType == constants.Event.Operator.MCP.ToolsCall ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesRead ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesList
-
-	if isMCP {
+	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, payload)
 		if err != nil {
 			logger.Error("Failed to wrap result for MCP", "error", err)
 		} else {
 			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			if msg.EventType == constants.Event.Operator.MCP.ResourcesRead || msg.EventType == constants.Event.Operator.MCP.ResourcesList {
-				resultMsg.EventType = constants.Event.Operator.MCP.ResourcesResult
-			}
 			resultMsg.Payload = mcpRaw
 		}
 	}
@@ -107,19 +100,12 @@ func publishLFAAErrorTo(
 		return
 	}
 
-	isMCP := msg.EventType == constants.Event.Operator.MCP.ToolsCall ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesRead ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesList
-
-	if isMCP {
+	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, &payload)
 		if err != nil {
 			logger.Error("Failed to wrap error for MCP", "error", err)
 		} else {
 			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			if msg.EventType == constants.Event.Operator.MCP.ResourcesRead || msg.EventType == constants.Event.Operator.MCP.ResourcesList {
-				resultMsg.EventType = constants.Event.Operator.MCP.ResourcesResult
-			}
 			resultMsg.Payload = mcpRaw
 		}
 	}
@@ -160,19 +146,12 @@ func publishLFAAResponseTo(
 		return
 	}
 
-	isMCP := msg.EventType == constants.Event.Operator.MCP.ToolsCall ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesRead ||
-		msg.EventType == constants.Event.Operator.MCP.ResourcesList
-
-	if isMCP {
+	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, responseJSON)
 		if err != nil {
 			logger.Error("Failed to wrap result for MCP", "error", err)
 		} else {
 			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			if msg.EventType == constants.Event.Operator.MCP.ResourcesRead || msg.EventType == constants.Event.Operator.MCP.ResourcesList {
-				resultMsg.EventType = constants.Event.Operator.MCP.ResourcesResult
-			}
 			resultMsg.Payload = mcpRaw
 		}
 	}

@@ -13,7 +13,17 @@
 
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
+
+/**
+ * Filename of the tamper-evidence manifest written by g8eo SecretManager
+ * alongside the bootstrap secrets on the SSL volume. Consumers verify that
+ * the SHA-256 of each secret they loaded from disk matches the digest
+ * recorded in this manifest. Must stay in sync with
+ * components/g8eo/services/listen/secret_manager.go::BootstrapDigestManifestFile.
+ */
+export const BOOTSTRAP_DIGEST_MANIFEST_FILE = 'bootstrap_digest.json';
 
 /**
  * Bootstrap Service for g8ed
@@ -170,6 +180,77 @@ class BootstrapService {
         this._cachedToken = null;
         this._cachedKey = null;
         this._cachedCaPath = null;
+    }
+
+    /**
+     * Verify the SHA-256 digests of secrets loaded from the g8es volume
+     * against the tamper-evidence manifest written by g8eo SecretManager.
+     *
+     * This closes the silent bootstrap-secret coupling: g8ed otherwise
+     * trusts whatever value is on disk, with no cryptographic link back to
+     * the DB-authoritative value that SecretManager wrote. A mismatch
+     * means the volume file has drifted (partial write, corruption,
+     * concurrent writer, manual edit) and authenticating with it would
+     * produce confusing downstream 401s instead of a clear startup abort.
+     *
+     * Behaviour:
+     *   - Manifest missing: log a warning and return. g8eo always writes
+     *     it during InitPlatformSettings, so absence usually means a
+     *     legacy volume or a deployment where g8eo has not yet been
+     *     upgraded. We do not want to hard-fail g8ed bootstrap in that
+     *     transitional window; the next g8eo boot will create it.
+     *   - Manifest present, entry present, digest mismatch: throw.
+     *   - Manifest present but no entry for the secret: log and return
+     *     (older manifest schema or secret not yet tracked).
+     *
+     * @param {string} secretName - logical name ("internal_auth_token" | "session_encryption_key")
+     * @param {string} value - the value loaded from the volume (already trimmed)
+     * @throws {Error} when manifest exists, contains an entry for secretName, and digests disagree.
+     */
+    verifyAgainstManifest(secretName, value) {
+        if (!value) return;
+
+        const manifestPath = path.join(this.volumePath, BOOTSTRAP_DIGEST_MANIFEST_FILE);
+        if (!fs.existsSync(manifestPath)) {
+            logger.warn('[BOOTSTRAP-SERVICE] Bootstrap digest manifest missing; skipping verification', {
+                path: manifestPath,
+                secret: secretName
+            });
+            return;
+        }
+
+        let manifest;
+        try {
+            manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+        } catch (err) {
+            throw new Error(
+                `Bootstrap digest manifest at ${manifestPath} is unreadable or malformed: ${err.message}. ` +
+                `Refusing to start with an unverified ${secretName}.`
+            );
+        }
+
+        const entry = manifest?.secrets?.[secretName];
+        if (!entry || !entry.sha256) {
+            logger.warn('[BOOTSTRAP-SERVICE] Bootstrap digest manifest has no entry for secret', {
+                secret: secretName,
+                manifestVersion: manifest?.version
+            });
+            return;
+        }
+
+        const actual = crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+        if (actual !== entry.sha256) {
+            throw new Error(
+                `Bootstrap secret ${secretName} failed tamper-evidence check: ` +
+                `volume SHA-256 ${actual} does not match manifest digest ${entry.sha256}. ` +
+                `The on-disk secret has drifted from the DB-authoritative value. ` +
+                `Refusing to start to avoid authenticating with a divergent secret.`
+            );
+        }
+
+        logger.info('[BOOTSTRAP-SERVICE] Bootstrap secret verified against digest manifest', {
+            secret: secretName
+        });
     }
 
     /**

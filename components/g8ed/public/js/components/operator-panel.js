@@ -292,7 +292,7 @@ export class OperatorPanel {
 
         // Pagination state
         this.currentPage = 1;
-        this.operatorsPerPage = 10;
+        this.operatorsPerPage = 20;
 
         // Download overlay stack state
         this.downloadMenuStack = [];

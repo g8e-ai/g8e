@@ -102,12 +102,14 @@ type operatorRestoreFileEvents struct {
 }
 
 // operatorMcpEvents mirrors shared/constants/events.json g8e.mcp.*
+//
+// Roles:
+//   - ToolsCall: inbound request; dispatched by PubSubCommandService.handleCommand.
+//   - ToolsResult: outbound-only; set by the result publishers to wrap
+//     execution payloads before emitting back to g8ed.
 type operatorMcpEvents struct {
-	ToolsCall       string
-	ToolsResult     string
-	ResourcesList   string
-	ResourcesRead   string
-	ResourcesResult string
+	ToolsCall   string
+	ToolsResult string
 }
 
 // operatorFetchFileDiffEvents mirrors shared/constants/events.json g8e.fetch.file.diff.*
@@ -131,9 +133,7 @@ type operatorEvents struct {
 	HeartbeatRequested   string
 	Ping                 string
 	Stale                string
-	StateChange          string
 	ListUpdated          string
-	StatusUpdated        string
 	APIKeyRefreshed      string
 	ContextChange        string
 	ShutdownRequested    string
@@ -167,9 +167,7 @@ var Event = events{
 		HeartbeatRequested:   "g8e.v1.operator.heartbeat.requested",
 		Ping:                 "g8e.v1.operator.network.ping.requested",
 		Stale:                "g8e.v1.operator.heartbeat.missed",
-		StateChange:          "g8e.v1.operator.status.updated",
 		ListUpdated:          "g8e.v1.operator.panel.list.updated",
-		StatusUpdated:        "g8e.v1.operator.status.updated",
 		APIKeyRefreshed:      "g8e.v1.operator.api.key.refreshed",
 		ContextChange:        "g8e.v1.operator.bound",
 		ShutdownRequested:    "g8e.v1.operator.shutdown.requested",
@@ -252,11 +250,8 @@ var Event = events{
 			DirectCmdResult: "g8e.v1.operator.audit.direct.command.result.recorded",
 		},
 		MCP: operatorMcpEvents{
-			ToolsCall:       "g8e.v1.operator.mcp.tools.call",
-			ToolsResult:     "g8e.v1.operator.mcp.tools.result",
-			ResourcesList:   "g8e.v1.operator.mcp.resources.list",
-			ResourcesRead:   "g8e.v1.operator.mcp.resources.read",
-			ResourcesResult: "g8e.v1.operator.mcp.resources.result",
+			ToolsCall:   "g8e.v1.operator.mcp.tools.call",
+			ToolsResult: "g8e.v1.operator.mcp.tools.result",
 		},
 	},
 }

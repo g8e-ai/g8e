@@ -906,11 +906,16 @@ func TestPubSubCommandService_PublishLFAAError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// publishFetchLogsError — via HistoryService
+// publishFetchLogsFailure — via HistoryService
+//
+// The fetch-logs failure path publishes a FetchLogsResultPayload-shaped
+// message (not an LFAAErrorPayload) because the g8ee side expects that
+// typed payload on this event type. This test pins the shape + the
+// FetchLogs.Failed routing.
 // ---------------------------------------------------------------------------
 
-func TestPubSubCommandService_PublishFetchLogsError(t *testing.T) {
-	t.Run("publishes fetch logs error", func(t *testing.T) {
+func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
+	t.Run("publishes fetch logs failure", func(t *testing.T) {
 		f := newPubsubFixture(t)
 
 		msg := PubSubCommandMessage{
@@ -921,12 +926,13 @@ func TestPubSubCommandService_PublishFetchLogsError(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 		}
 
-		f.Svc.history.publishFetchLogsError(context.Background(), msg, "exec-123", "execution not found")
+		f.Svc.history.publishFetchLogsFailure(context.Background(), msg, "exec-123", "execution not found")
 
 		published := f.DB.LastPublished()
-		require.NotNil(t, published, "expected fetch logs error to be published")
+		require.NotNil(t, published, "expected fetch logs failure to be published")
 		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
 		assert.Contains(t, string(published.Data), "execution not found")
+		assert.Contains(t, string(published.Data), "exec-123")
 	})
 }
 

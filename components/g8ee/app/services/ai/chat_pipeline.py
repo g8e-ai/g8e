@@ -32,8 +32,10 @@ import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
+    AITaskId,
     NEW_CASE_ID,
     EventType,
+    LLMProvider,
     TriageComplexityClassification,
     TriageConfidence,
     AgentMode,
@@ -277,6 +279,7 @@ class ChatPipelineService:
             user_id=g8e_context.user_id,
             g8e_context=g8e_context,
             web_session_id=g8e_context.web_session_id,
+            task_id=AITaskId.CHAT.value,
             agent_mode=agent_mode,
             request_settings=request_settings,
             operator_bound=operator_bound,
@@ -438,14 +441,16 @@ class ChatPipelineService:
             len(attachments) if attachments else 0
         )
 
-        # Apply provider overrides if provided
+        # Coerce the raw HTTP string to LLMProvider explicitly —
+        # model_copy(update=...) skips validation and would leave a bare
+        # str in the enum-typed field.
         resolved_settings = user_settings
         if llm_primary_provider:
             logger.info("[SSE-CHAT] Applying primary_provider override: %s", llm_primary_provider)
-            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": llm_primary_provider})})
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"primary_provider": LLMProvider(llm_primary_provider)})})
         if llm_assistant_provider:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
-            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": llm_assistant_provider})})
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
 
         llm_provider = get_llm_provider(resolved_settings.llm)
         logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)

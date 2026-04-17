@@ -130,7 +130,6 @@ class EvalJudgeSettings(G8eBaseModel):
     """Evaluation judge configuration for grading agent performance."""
     model_config = ConfigDict(
         populate_by_name=True,
-        use_enum_values=True,
         extra="ignore",
         coerce_numbers_from_str=True,
     )
@@ -140,10 +139,15 @@ class EvalJudgeSettings(G8eBaseModel):
     max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
 
 class LLMSettings(G8eBaseModel):
-    """LLM provider configuration."""
+    """LLM provider configuration.
+
+    Enum fields (primary_provider, assistant_provider, lite_provider) stay
+    as ``LLMProvider`` enum instances inside the application boundary — the
+    G8eBaseModel contract. Wire/DB serialization runs through
+    ``flatten_for_*`` which uses ``mode="json"`` and emits string values.
+    """
     model_config = ConfigDict(
         populate_by_name=True,
-        use_enum_values=True,
         extra="ignore",
         coerce_numbers_from_str=True,
     )

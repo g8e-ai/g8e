@@ -12,6 +12,6 @@ Write content to a file, completely replacing existing content.
 </optional>
 </parameters>
 
-<caution>
-Replaces the ENTIRE file. For surgical edits, use file_update_on_operator instead.
-</caution>
+<scope>
+Replaces the ENTIRE file. For surgical find-and-replace edits, `file_update_on_operator` is the authorized tool.
+</scope>

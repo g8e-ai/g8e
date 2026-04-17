@@ -487,21 +487,23 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |
-| `autonomy` | `string` | Autonomy level (`fully_autonomous` = no human approval needed, `human_approved` = requires explicit user consent for state-changing actions) |
+| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role, blending its identity, purpose, and persona. Free-form string, not an enum; the platform's actual governance (human approval for state-changing operator actions) is enforced structurally, not via this field. |
 
 ### AI Registry
 
-| AI | Role | Model Tier | Temp | Tools | Autonomy |
-|---|---|---|---|---|---|
-| **Triage** | classifier | primary | null (configurable) | none | fully_autonomous |
-| **Primary** | reasoner | primary | null (configurable) | full tool set | human_approved |
-| **Assistant** | responder | assistant | null (configurable) | full tool set | human_approved |
-| **Tribunal** | arbitrator | assistant | null (composite) | none | fully_autonomous |
-| **Verifier** | validator | assistant | null (model default) | none | fully_autonomous |
-| **Title Generator** | summarizer | assistant | null (model default) | none | fully_autonomous |
-| **Axiom** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
-| **Concord** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
-| **Variance** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
+| AI | Role | Model Tier | Temp | Tools |
+|---|---|---|---|---|
+| **Triage** | classifier | primary | null (configurable) | none |
+| **Primary** | reasoner | primary | null (configurable) | full tool set |
+| **Assistant** | responder | assistant | null (configurable) | full tool set |
+| **Tribunal** | arbitrator | assistant | null (composite) | none |
+| **Verifier** | validator | assistant | null (model default) | none |
+| **Title Generator** | summarizer | assistant | null (model default) | none |
+| **Axiom** | tribunal_member | assistant | null (model default) | none |
+| **Concord** | tribunal_member | assistant | null (model default) | none |
+| **Variance** | tribunal_member | assistant | null (model default) | none |
+
+Each agent's `autonomy` field is a per-agent empowering directive; see `shared/constants/agents.json`. Governance (human approval for state-changing operator actions) is enforced structurally by the platform, not by this field.
 
 ### Contract Tests
 
@@ -540,7 +542,7 @@ components/g8ee/app/prompts_data/
   core/
     identity.txt              — AI persona and role
     safety.txt                — hard safety constraints and approval rules
-    loyalty.txt               — kingdom-over-king doctrine (loyal-friction principles)
+    loyalty.txt               — mission-over-moment doctrine (loyal-friction principles)
     dissent.txt               — warning protocol, denial memory, escalation response
   system/
     response_constraints.txt  — response length and formatting guidance
@@ -558,14 +560,10 @@ components/g8ee/app/prompts_data/
     list_files_and_directories_with_detailed_metadata.txt
     check_port_status.txt
     g8e_web_search.txt
-    read_file_content.txt
     grant_intent_permission.txt
     revoke_intent_permission.txt
-    fetch_execution_output.txt
-    fetch_session_history.txt
     fetch_file_history.txt
     fetch_file_diff.txt
-    restore_file.txt
 ```
 
 Function prompt files are used as `FunctionDeclaration.description` values passed directly to the LLM in the tool schema.
@@ -588,7 +586,7 @@ Triage uses the `triage` persona defined in `shared/constants/agents.json`. It i
 
 Every Primary/Assistant system prompt loads two core doctrine files immediately after `core/safety.txt`:
 
-1. **`core/loyalty.txt`** — four principles of loyal friction: *kingdom over king*, *frustration is data*, *memory of refusal*, *dissent is visible*. These define when and how the agent pushes back.
+1. **`core/loyalty.txt`** — four principles of loyal friction: *mission over moment*, *frustration is data*, *memory of refusal*, *dissent is visible*. These define when and how the agent pushes back.
 2. **`core/dissent.txt`** — the operational protocol: when to emit a one-sentence `<warning>` block before a tool call, how to handle denial memory across turns, how to adjust behavior per posture (`escalated` / `adversarial` / `confused`), and the shape of explicit disagreement with the user.
 
 Together they replace sycophantic compliance with guarded service: the agent remains the user's guard — executing within the user's authority — while keeping the user's long-term outcome as the north star.
@@ -597,27 +595,38 @@ Together they replace sycophantic compliance with guarded service: the agent rem
 
 ## Tools
 
-`AIToolService` (`components/g8ee/app/services/ai/tool_service.py`) registers all tools at construction time. Each tool is a pair of `(FunctionDeclaration, executor)` stored in `_tool_declarations` and `_tool_executors` dicts keyed by `OperatorToolName`.
+`AIToolService` (`components/g8ee/app/services/ai/tool_service.py`) registers all tools at construction time, driven by the single declarative registry in `components/g8ee/app/services/ai/tool_registry.py`. Each tool is a pair of `(FunctionDeclaration, executor)` stored in `_tool_declarations` and `_tool_executors` dicts keyed by `OperatorToolName`.
+
+### Tool Registry (`tool_registry.py`)
+
+`TOOL_SPECS` is a tuple of `ToolSpec` entries. Each spec declares, in one place, everything the platform needs to know about a tool:
+
+- `name` — the `OperatorToolName` enum value
+- `scope` — `UNIVERSAL` or `OPERATOR_GATED` (the latter gates the bound-operator auth check in `execute_tool_call` and Tribunal routing in `agent_tool_loop`)
+- `agent_modes` — the set of `AgentMode` values in which the tool is advertised to the LLM
+- `builder_attr` / `handler_attr` — method names on `AIToolService` that build the declaration and dispatch execution
+- `requires_web_search` — conditional registration gate (used only by `g8e_web_search`)
+
+`OPERATOR_TOOLS` and `AI_UNIVERSAL_TOOLS` are **derived** from `TOOL_SPECS` (they are no longer hand-maintained in `status.py`). `AIToolService.__init__`, `get_tools`, and the per-tool handler dispatch table are all populated by iterating `TOOL_SPECS`, so adding a new tool means adding exactly one `ToolSpec` entry plus the corresponding `_build_*` and `_handle_*` methods.
 
 ### Tool Dispatch Mechanism
 
 Tool execution uses a dispatch table pattern:
-- `_tool_handlers` (dict[str, Callable]) built by `_build_tool_handlers()` maps tool names to handler coroutines
+- `_tool_handlers` (dict[str, Callable]) is populated in `__init__` from `spec.handler_attr` for each registered tool
 - Each tool has a `_handle_*` method with uniform signature: `(self, tool_args, investigation, g8e_context, request_settings) -> ToolResult`
 - Handler lookup: `self._tool_handlers.get(tool_name)`
-- This replaces the previous long if/elif chain for better maintainability
 
-`OPERATOR_TOOLS` is a `frozenset` constant in `components/g8ee/app/constants/status.py` containing all operator tool values, imported by both `tool_service.py` and `agent_tool_loop.py`.
+At startup, `AIToolService._assert_tool_registry_invariants()` enforces that every `OPERATOR_TOOLS` / required `AI_UNIVERSAL_TOOLS` entry has a registered `ToolDeclaration` and that no registered declaration is unclassified — a safety net against module-level monkeypatching and future refactors.
 
-Tool declarations are served to the LLM via `get_tools(AI_mode, model_name)`. Models that do not support tools (checked via `get_model_config`) receive an empty list.
+Tool declarations are served to the LLM via `get_tools(AI_mode, model_name)`, which filters `TOOL_SPECS` by `agent_mode in spec.agent_modes`. Models that do not support tools (checked via `get_model_config`) receive an empty list.
 
 ### Tool Set by Workflow
 
-**`OPERATOR_NOT_BOUND`** — `query_investigation_context` + `search_web` (when `VERTEX_SEARCH_ENABLED` is set and credentials are present).
+**`OPERATOR_NOT_BOUND`** — universal tools only: `query_investigation_context`, `get_command_constraints`, and `g8e_web_search` (when `VERTEX_SEARCH_ENABLED` is set and credentials are present).
 
-**`OPERATOR_BOUND`** — all operator tools plus `query_investigation_context` and `search_web` when configured.
+**`OPERATOR_BOUND`** — universal tools plus all operator-gated tools.
 
-**`CLOUD_OPERATOR_BOUND`** — all operator tools plus `query_investigation_context` and `search_web` when configured.
+**`CLOUD_OPERATOR_BOUND`** — universal tools plus all operator-gated tools.
 
 ### Tool Reference
 
@@ -637,11 +646,7 @@ Tool declarations are served to the LLM via `get_tools(AI_mode, model_name)`. Mo
 | `g8e_web_search` | Search | Web search via Vertex AI Search — available in both bound and unbound workflows when configured |
 | `query_investigation_context` | General | Query investigation state (conversation history, status, history trail, operator actions) — universal tool available in all workflows |
 
-Additional tools in `OPERATOR_TOOLS` (registered but less commonly used):
-- `read_file_content` — Read file content (alternative to file_read_on_operator)
-- `fetch_execution_output` — Fetch output of a previously executed command
-- `fetch_session_history` — Fetch session history
-- `restore_file` — Restore a file to a previous version
+The `OperatorToolName` enum also defines values that are **not** currently exposed as AI tool declarations (`read_file_content`, `fetch_execution_output`, `fetch_session_history`, `restore_file`). These values exist because they are wire-protocol identifiers used by g8eo LFAA pub/sub events and UI display metadata; they are deliberately excluded from `OPERATOR_TOOLS` and have no corresponding `ToolDeclaration`. If a future change wires one of them into `AIToolService`, it must be added to `OPERATOR_TOOLS` at the same time — the startup assertion in `_assert_tool_registry_invariants()` will fail otherwise.
 
 ### `search_web` Tool
 
@@ -913,7 +918,7 @@ Examples:
 ./g8e llm setup --provider openai --api-key sk-... --model gpt-4o --asst-model gpt-4o-mini
 
 # Ollama (remote)
-./g8e llm setup --provider ollama --endpoint https://your-ollama-host:11434/v1 --model gemma4:e4b --asst-model gemma4:e4b
+./g8e llm setup --provider ollama --endpoint your-ollama-host:11434 --model gemma4:e4b --asst-model gemma4:e4b
 
 # vLLM (self-hosted)
 ./g8e llm setup --provider vllm --endpoint https://your-host:443/v1 --model your-model

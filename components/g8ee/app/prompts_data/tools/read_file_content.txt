@@ -1,4 +1,4 @@
-Read text file contents. Preferred over `cat` — no shell process.
+Authorized reader for text file contents. Bypasses the shell, enforces size limits, and applies Sentinel scrubbing.
 
 <parameters>
 - path: REQUIRED — absolute or relative to operator working directory

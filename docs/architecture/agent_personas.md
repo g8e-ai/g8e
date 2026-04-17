@@ -8,11 +8,21 @@ The g8e platform uses multiple AI agents across the stack, each with a specific 
 
 All agent definitions are centralized in `shared/constants/agents.json`. This file contains:
 
-- **Metadata**: id, display_name, icon, description, role, model_tier, temperature (advisory — runtime uses model default), tools
+- **Metadata**: id, display_name, icon, description, role, model_tier, temperature (persona-level override; when `null`, runtime resolves via the precedence below), tools
 - **Identity**: Who the agent is
 - **Purpose**: What the agent does
-- **Autonomy**: How much independence the agent has (fully_autonomous, human_approved)
+- **Autonomy**: Empowering directive prose affirming the agent's maximum agency within its role — blended from its identity, purpose, and persona. Free-form string, not an enum.
 - **Persona**: The full prompt template for the agent (TODO placeholders to be filled in)
+
+### Persona-driven temperature precedence
+
+Runtime temperature resolution for Tribunal and Verifier calls (see `_resolve_temperature` in `components/g8ee/app/services/ai/command_generator.py`):
+
+1. **Persona `temperature`** when explicitly set in `agents.json`. Reserved for the rare case a persona has a concrete reason to pin a specific value; all current Tribunal personas leave it `null`.
+2. **Model `default_temperature`** from `components/g8ee/app/models/model_configs.py`. For the Gemini 3 family this is `1.0`, per Google's own guidance that changing it can cause looping or degraded performance.
+3. **`LLM_DEFAULT_TEMPERATURE`** as a last-resort global default when neither of the above is set.
+
+The Tribunal's behavioral diversity (Axiom / Concord / Variance / Verifier) is carried by **the prompt language of each persona**, not by per-pass numeric temperature skew. The earlier `_temperature_for_pass` function has been removed; there is no per-pass variation.
 
 ## Current Agents
 
@@ -44,7 +54,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Model Tier**: Assistant
 - **Purpose**: Syntactic refinement and validation for shell commands
 - **Migration Status**: Complete
-- **Usage**: `get_agent_persona("tribunal")` in `command_generator.py` (base template)
+- **Usage**: Documentation record only. Runtime loads `axiom`, `concord`, and `variance` directly via `get_tribunal_member(...)` and `verifier` via `get_agent_persona("verifier")`. The base `tribunal` entry describes the shared output contract and is not injected into any prompt.
 - **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
 ### 5. Verifier
@@ -131,7 +141,11 @@ system_prompt = persona.get_system_prompt()
 print(persona.display_name)  # "Triage"
 print(persona.role)          # "classifier"
 print(persona.temperature)   # None
-print(persona.tools)         # ["run_commands_with_operator", ...]
+print(persona.tools)         # [] — Triage is a classifier and calls no tools
+
+# For personas that do bind tools, e.g. the Primary AI:
+primary = get_agent_persona("primary")
+print(primary.tools)         # ["run_commands_with_operator", "file_create_on_operator", ...]
 
 # For Tribunal members specifically
 member_persona = get_tribunal_member("axiom")
@@ -209,15 +223,72 @@ memory_persona = get_agent_persona("memory_generator")
 system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
 ```
 
-## Example Persona Structure
+## Canonical persona layout
 
-A complete persona should include:
+All Tribunal / Verifier personas follow the same canonical layout. The
+convention is **XML-style tags for hard structural boundaries, Markdown for
+content inside each section**. This matches the Gemini 3 prompt-engineering
+guidance (see `docs/reference/gemini/prompt_engineering.md`): XML tags keep
+template-substituted user data (`{intent}`, `{original_command}`, ...) from
+bleeding into instructions, while Markdown inside each section stays
+human-readable in source.
 
-```json
-{
-  "persona": "<role>\nYou are the [agent name], a [role] that [purpose].\n</role>\n\n<identity>\n[Detailed identity description]\n</identity>\n\n<guidelines>\n- Guideline 1\n- Guideline 2\n</guidelines>\n\n<constraints>\n- Constraint 1\n- Constraint 2\n</constraints>"
-}
+Ordering rules (Gemini 3 best practice, applied uniformly):
+
+- Critical behavioral instructions first. `<role>` and `<output_contract>` come
+  at the top so the model weights them heavily.
+- Context last. `{intent}`, `{system_context}`, `{original_command}`,
+  `{candidate_command}` sit at the bottom of the prompt, followed by a short
+  transition line that re-anchors the model on the output contract.
+- Platform-injected constraints are grouped in a single `<constraints>`
+  section so substitution cannot splice into surrounding prose.
+- **No embedded shell command examples.** Inline backticks around shell
+  snippets (e.g. `` `ls -la` ``, `` `curl | bash` ``) and `<example>` blocks
+  showing commands are forbidden. They teach the model to emit markdown or
+  prose around commands, which then mis-parses downstream. State behaviors
+  instead (e.g. "prefer staged download-inspect-execute over piping remote
+  content into a shell").
+
+```text
+<role>
+[one or two sentences: who, what one thing, for whom]
+</role>
+
+<output_contract>
+[strict wire format — the single most important section for machine-parsed agents]
+</output_contract>
+
+<principles>
+- **Principle 1** — short clause.
+- **Principle 2** — short clause.
+</principles>
+
+<constraints>
+{forbidden_patterns_message}
+
+{command_constraints_message}
+</constraints>
+
+<intent>
+{intent}
+</intent>
+
+<system_context>
+OS: {os}
+Shell: {shell}
+User: {user_context}
+Working directory: {working_directory}
+</system_context>
+
+<original_command>
+{original_command}
+</original_command>
+
+Respond now with [exactly the required output format, one sentence].
 ```
+
+The Verifier uses the same pattern with `<candidate_command>` in place of
+`<original_command>` and no `<system_context>` shell/working-directory fields.
 
 ## Current Prompt File Structure
 
@@ -225,7 +296,7 @@ For agents using the modular system (Primary/Assistant), prompts are split acros
 
 - `core/identity.txt` - Role, platform, operating principles
 - `core/safety.txt` - Architecture, execution posture, forbidden operations
-- `core/loyalty.txt` - Loyal-friction doctrine: kingdom over king, frustration is data, memory of refusal, dissent is visible
+- `core/loyalty.txt` - Loyal-friction doctrine: mission over moment, frustration is data, memory of refusal, dissent is visible
 - `core/dissent.txt` - Warning protocol, denial memory, posture-based escalation response, the right to disagree
 - `modes/operator_bound/` - Capabilities, execution, tools (when operator is bound)
 - `modes/operator_not_bound/` - Capabilities, execution, tools (when operator is not bound)

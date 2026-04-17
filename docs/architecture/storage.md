@@ -177,17 +177,18 @@ There is no Redis, no Memcached. The pub/sub broker is entirely in-memory — no
 
 ### Platform Initialization
 
-g8es is the authoritative security generator for the platform. During database schema initialization, `ListenDBService.initPlatformSettings()` creates the `settings/platform_settings` document with cryptographically secure secrets:
+g8es is the authoritative security generator for the platform. Schema initialization in `ListenDBService.initSchema()` delegates to `SecretManager.InitPlatformSettings()` (`components/g8eo/services/listen/secret_manager.go`), which ensures two cryptographically secure secrets exist:
 
 - `internal_auth_token` — 32-byte hex token for service-to-service authentication
 - `session_encryption_key` — 32-byte hex key for session field encryption
 
 **Authoritative Source (The Volume):**
 The platform treats the shared SSL volume (`g8es-ssl`) as the absolute source of truth for these bootstrap secrets.
-- At startup, g8es ensures these secret files exist on the volume.
-- If a file is missing, g8es generates a new random 32-byte hex value and writes it to the volume.
-- These secrets are **never stored in the database**. g8ed and g8ee read them directly from the volume at startup.
-- This ensures that platform identity and session encryption are decoupled from the database lifecycle, surviving full database resets as long as the SSL volume is preserved.
+- At startup, `SecretManager` reads `internal_auth_token` and `session_encryption_key` from files in the SSL volume.
+- If a file is missing, it generates a new random 32-byte hex value and writes it to the volume.
+- The resolved values are then mirrored into the `settings/platform_settings` document (inside the `settings` map) and pre-warmed into the `g8e:cache:doc:settings:platform_settings` KV cache key (1h TTL). If the file-on-volume value diverges from the DB value on a subsequent boot, the file value wins and the DB/cache are rewritten.
+- g8ed and g8ee read the secrets directly from the volume files at startup — the DB copy exists so that the authoritative settings document always has a complete view of platform configuration, and so that cache-aside reads of `platform_settings` include these fields.
+- Because the volume is authoritative, platform identity and session encryption survive full database resets as long as the SSL volume is preserved.
 
 ### SQLite Configuration
 
@@ -212,7 +213,7 @@ WAL mode enables concurrent readers with a single writer, which is critical for 
 
 ### g8es SQLite Schema
 
-Single database at `/data/g8e.db`. Canonical schema in `components/g8es/schema.sql`. The inline `listenSchema` in `components/g8eo/services/listen/listen_db.go` contains `documents`, `kv_store`, `sse_events`, and `blobs`.
+Single database at `/data/g8e.db`. Canonical schema is `components/g8eo/services/listen/schema.sql`, embedded into `listen_db.go` at compile time via `//go:embed schema.sql` and applied by `ListenDBService.initSchema`. Tables: `documents`, `kv_store`, `sse_events`, and `blobs`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS documents (
@@ -260,9 +261,9 @@ CREATE INDEX IF NOT EXISTS idx_blobs_namespace ON blobs(namespace);
 CREATE INDEX IF NOT EXISTS idx_blobs_expires   ON blobs(expires_at);
 ```
 
-**`PUT /db/{collection}/{id}` upsert behavior:** auto-sets `created_at` (if absent) and `updated_at`; injects `id` into the stored JSON; strips `id`, `created_at`, and `updated_at` from the input before storing in `data` to avoid duplication. `PATCH` returns the merged document.
+**`PUT /db/{collection}/{id}` upsert behavior:** strips `id`, `created_at`, and `updated_at` from the request body before writing (they are tracked in dedicated columns, not inside `data`). `created_at` is set on initial insert and preserved on subsequent upserts; `updated_at` is refreshed on every write. On read, the outer `Document` wire format re-attaches `id`, `created_at`, and `updated_at` alongside the stored `data` map. `PATCH` merges incoming fields into the existing document (a field set to JSON `null` deletes that key) and returns the merged document.
 
-**KV TTL expiry:** expired keys are filtered at read time and purged by a background goroutine every 30 seconds. `ttl: 0` on `PUT /kv/{key}` means no expiration.
+**KV TTL expiry:** expired keys are filtered at read time and purged by `ListenDBService.RunTTLCleanup`, a background goroutine that sweeps expired `kv_store` rows and expired `blobs` rows every 30 seconds. `ttl: 0` on `PUT /kv/{key}` means no expiration.
 
 **Blob Store limits:** binary blobs have a hard limit of 15 MB at the transport layer. Optional TTL can be set via `X-Blob-TTL` header.
 
@@ -288,19 +289,22 @@ All components (g8ed, g8ee, g8eo) resolve configuration values using a strictly 
 **Collection:** `settings`
 **ID:** `platform_settings`
 
-This collection stores the authoritative source for platform-wide configuration. It is created by g8es on first boot and can be updated via the g8ed Settings UI. Unlike other settings, the core bootstrap secrets (`internal_auth_token`, `session_encryption_key`) are **not** stored here; they live exclusively in the SSL volume.
+This collection stores the authoritative source for platform-wide configuration. It is created by g8es on first boot and can be updated via the g8ed Settings UI. The bootstrap secrets (`internal_auth_token`, `session_encryption_key`) are also mirrored into this document's `settings` map by `SecretManager`, but the SSL volume files remain the authoritative source — see [Platform Initialization](#platform-initialization).
+
+**Bootstrap secret write protection:** `PLATFORM_SETTINGS` in `components/g8ed/models/settings_model.js` marks `internal_auth_token` and `session_encryption_key` as `writeOnce`. Once set to a non-empty value in the document, the g8ed Settings API (`savePlatformSettings` / `validatePlatformSettings`) refuses to overwrite them — such updates are recorded in the response's `skipped` array and never reach the DB. This prevents UI writes from silently diverging from the volume-authoritative value, which would otherwise be clobbered on the next g8eo boot by `SecretManager`.
 
 | Field | Type | Description |
 |---|---|---|
-| `settings` | object | Flattened map of all platform-wide settings (LLM config, URLs, etc.). |
+| `settings` | object | Map of all platform-wide settings (LLM config, URLs, mirrored bootstrap secrets, etc.). |
+| `created_at` | string | ISO 8601 creation timestamp. |
 | `updated_at` | string | ISO 8601 last-update timestamp. |
 
 ### Configuration Seeding
 
 On the first start of a new deployment, the platform performs an automatic **seed** operation:
-1. g8es generates `internal_auth_token` and `session_encryption_key` on the SSL volume if they don't exist.
-2. g8ed reads all `G8E_*` environment variables and writes them into the `settings` field of the `platform_settings` document in the `settings` collection.
-3. Subsequent boots use the persisted DB values, even if the environment variables are removed. Core secrets are always read from the volume.
+1. g8es (`SecretManager.InitPlatformSettings`) generates `internal_auth_token` and `session_encryption_key` on the SSL volume if they don't exist, creates the `settings/platform_settings` document with those secrets in its `settings` map, and pre-warms the KV cache.
+2. g8ed reads all `G8E_*` environment variables and merges them into the `settings` map of the `platform_settings` document.
+3. Subsequent boots use the persisted DB values, even if the environment variables are removed. Bootstrap secrets are always re-read from the volume files and synchronized back into the DB if they have drifted.
 
 ---
 
@@ -326,13 +330,12 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `operator_usage` | g8ed | Operator usage metrics — last\_used, command\_count |
 | `cases` | g8ed/g8ee | Support case records — title, status, owner, investigation list |
 | `investigations` | g8ee | AI investigation context — managed by `InvestigationDataService` (Data Layer) |
-| `tasks` | g8ee | Task records linked to investigations |
+| `tasks` | g8ed/g8ee | Task records linked to investigations |
 | `memories` | g8ee | AI memory entries — managed by `MemoryDataService` (Data Layer) |
 | `settings` | g8ed/g8ee | Platform-wide configuration document (`platform_settings` document) and User-specific application preferences (`user_settings_{user_id}` documents) |
 | `bound_sessions` | g8ed | Operator–web session binding records — one document per web session |
-| `pending_commands` | g8ee | Tracked commands awaiting results from operators |
-| `external-services` | g8ee | External service integration configs (g8ee-internal; not in shared constants) |
-| `orgs` | g8ee | Organization alias used internally by g8ee (shared constant name is `organizations`) |
+| `console_audit` | g8ed | Console / admin action audit trail |
+| `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID. Challenges are single-use nonces consumed on read during verification (see `PasskeyAuthService._consumeChallenge`), so rows are always deleted after verification regardless of outcome. |
 
 ### Session Documents
 
@@ -347,7 +350,7 @@ Session documents are stored in both the document store (durability) and the KV 
 | `user_id` | string | Owner user ID |
 | `user_data` | object | Full user object snapshot at login time |
 | `organization_id` | string | User's org ID |
-| `api_key` | string | AES-256-GCM encrypted |
+| `api_key` | string | Encrypted per-user API key (AES-256-GCM using `session_encryption_key`) |
 | `user_agent` | string | Browser user-agent string |
 | `login_method` | string | Authentication method used |
 | `client_ip` | string | IP at session creation |
@@ -366,29 +369,41 @@ Session documents are stored in both the document store (durability) and the KV 
 | Field | Type | Description |
 |---|---|---|
 | `session_type` | string | Always `operator` |
-| `operator_id` | string | AES-256-GCM encrypted |
+| `operator_id` | string | Encrypted operator ID (AES-256-GCM using `session_encryption_key`) |
 
 ### Operator Document
 
-Stored in the `operators` collection. g8ed writes lifecycle/auth fields; g8ee writes heartbeat data.
+Stored in the `operators` collection. Canonical shape is defined in `shared/models/operator_document.json`. g8ed is the sole authority — it creates, owns, and persists this document; g8ee reads it via the g8ed HTTP API (cache-aside from g8es). g8eo supplies runtime identity and telemetry that g8ed merges in.
 
-| Field | Type | Writer | Description |
+| Group | Field | Writer | Description |
 |---|---|---|---|
-| `id` | string | g8ed | UUID, primary key |
-| `operator_type` | string | g8ed | `system` or `cloud` |
-| `cloud_subtype` | string | g8ed | `aws`, `gcp`, `azure` (cloud operators only) |
-| `status` | string | g8ed/g8ee | `available`, `active`, `bound`, `offline`, `stale`, `stopped`, `unavailable`, `terminated` |
-| `user_id` | string | g8ed | Owning user ID |
-| `operator_api_key` | string | g8ed | Hashed API key |
-| `hostname` | string | g8eo | System hostname from bootstrap |
-| `system_info` | object | g8eo | Static system metadata: OS, arch, public/private IP |
-| `last_heartbeat` | string | g8ee | Timestamp of most recent heartbeat |
-| `heartbeat_history` | array | g8ee | Rolling buffer of last 10 heartbeats |
-| `latest_heartbeat_snapshot` | object | g8ee | Most recent metrics: CPU, memory, disk, network |
-| `operator_session_id` | string | g8ed | Active session ID |
-| `is_g8ep` | boolean | g8ed | Set on g8ep sidecar operators |
-| `created_at` | string | g8ed | ISO 8601 creation timestamp |
-| `updated_at` | string | g8ed/g8ee | ISO 8601 last-update timestamp |
+| Identity | `operator_id` | g8ed | UUID v4; also the primary key of the document |
+| Identity | `user_id` | g8ed | Owning user ID |
+| Identity | `organization_id` | g8ed | Owning org ID (equal to `user_id` for single-user orgs) |
+| Identity | `component` | g8ed | Component type (default `g8eo`) |
+| Identity | `name` | g8ed | Human-readable operator name |
+| Session | `operator_session_id` | g8ed | Active operator session ID; cleared on termination |
+| Session | `web_session_id` | g8ed | Bound web session ID; set on bind, cleared on unbind |
+| Session | `api_key` | g8ed | Platform API key (hashed) used by this operator |
+| Session | `operator_api_key` | g8ed | Per-operator API key provisioned in the slot |
+| Session | `operator_api_key_created_at`, `operator_api_key_updated_at` | g8ed | Key rotation timestamps |
+| Certificate | `operator_cert`, `operator_cert_serial`, `operator_cert_not_before`, `operator_cert_not_after`, `operator_cert_created_at` | g8ed | Per-operator mTLS certificate and metadata |
+| Lifecycle | `status` | g8ed/g8ee | One of `available`, `unavailable`, `offline`, `bound`, `stale`, `active`, `stopped`, `terminated` |
+| Lifecycle | `created_at`, `updated_at` | g8ed/g8ee | ISO 8601 timestamps |
+| Lifecycle | `started_at`, `terminated_at`, `first_deployed` | g8ed | Process / slot lifecycle timestamps |
+| Lifecycle | `last_heartbeat` | g8ed/g8ee | Timestamp of the most recent heartbeat |
+| Slot | `slot_number`, `is_slot`, `claimed`, `slot_cost`, `consumed_by_operator_id` | g8ed | Slot provisioning state |
+| Slot | `operator_type` | g8ed | `system` or `cloud` |
+| Slot | `cloud_subtype` | g8ed | `aws`, `gcp`, `azure` (cloud operators only) |
+| Slot | `is_g8ep` | g8ed | `true` when this slot is the platform-managed g8ep operator |
+| Investigation | `case_id`, `investigation_id`, `task_id` | g8ed/g8ee | Active investigation context |
+| Host | `system_info` | g8eo | Full system metadata (shape defined in `shared/models/wire/system_info.json`) |
+| Host | `system_fingerprint`, `fingerprint_details` | g8ed | Denormalized fingerprint for SQLite-indexable queries |
+| Runtime | `runtime_config` | g8eo | CLI flags / env overrides active at bootstrap (cloud mode, local storage, no-git, log level, ports) |
+| Telemetry | `latest_heartbeat_snapshot` | g8ee | Most recent metrics snapshot: CPU, memory, disk, network latency, uptime |
+| Termination | `error_message`, `termination_reason`, `stop_reason`, `shutdown_reason` | g8ed | Captured on termination events |
+| Cloud | `granted_intents` | g8ed | Granted cloud intent objects with `name`, `granted_at`, `expires_at` |
+| History | `history_trail` | g8ed | Chronological array of lifecycle events (`created`, `bound`, `heartbeat.received`, `status.changed`, `reset`, `terminated`, …) |
 
 ---
 
@@ -398,7 +413,7 @@ The KV store is used for ephemeral, time-bounded state. Every key has an optiona
 
 ### Key Naming
 
-All keys follow the canonical `g8e:{domain}:{...segments}` schema. The `v1` prefix (`CACHE_PREFIX`) allows atomic namespace invalidation by bumping the version. **Never construct key strings manually — always use `KVKey` builders** from `components/g8ed/constants/kv_keys.js` (g8ed) or `components/g8ee/app/constants.py` (g8ee).
+All keys follow the canonical `g8e:{domain}:{...segments}` schema. The `v1` prefix (`CACHE_PREFIX`) allows atomic namespace invalidation by bumping the version. **Never construct key strings manually — always use `KVKey` builders** from `components/g8ed/constants/kv_keys.js` (g8ed) or `components/g8ee/app/constants/kv_keys.py` (g8ee).
 
 Keys fall into two categories: **ephemeral-only** (KV is the sole store; no document store counterpart) and **cache-aside** (KV is a read cache; document store is authoritative).
 
@@ -406,7 +421,7 @@ Keys fall into two categories: **ephemeral-only** (KV is the sole store; no docu
 
 | Key Pattern | Builder | Owner | Contents | TTL |
 |---|---|---|---|---|
-| `g8e:investigation:{inv_id}:attachment:{att_id}` | `KVKey.attachment(invId, attId)` | g8ed | Attachment metadata record (`AttachmentRecord`) — `object_key`, `filename`, `content_type`, `file_size`, `user_id`. | 1h |
+| `g8e:investigation:{inv_id}:attachment:{att_id}` | `KVKey.attachment(invId, attId)` | g8ed | Attachment metadata record (`AttachmentRecord`) — `attachment_id`, `investigation_id`, `user_id`, `filename`, `original_filename`, `content_type`, `file_size`, `object_key`, `stored_at`. | 1h |
 | `g8e:investigation:{inv_id}:attachment.index` | `KVKey.attachmentIndex(invId)` | g8ed | Attachment index list for an investigation | 1h |
 | `g8e:user:{id}:web_sessions` | `KVKey.userWebSessions(userId)` | g8ed | Sorted set of active web session IDs | Session TTL (8h) |
 | `g8e:user:{id}:memories` | `KVKey.userMemories(userId)` | g8ee | Set of memory IDs for a user | None |
@@ -423,7 +438,6 @@ Keys fall into two categories: **ephemeral-only** (KV is the sole store; no docu
 | `g8e:auth:login:{identifier}:failed` | `KVKey.loginFailed(identifier)` | g8ed | Failed login attempt counter | Short-lived |
 | `g8e:auth:login:{identifier}:lock` | `KVKey.loginLock(identifier)` | g8ed | Account lockout flag | Short-lived |
 | `g8e:auth:login:ip:{ip}:accounts` | `KVKey.loginIpAccounts(ip)` | g8ed | Account identifiers seen from a source IP | Short-lived |
-| `g8e:auth:passkey:challenge:{user_id}` | `KVKey.passkeyChallenge(userId)` | g8ed | Pending WebAuthn passkey challenge bytes | 5 min |
 | `g8e:auth:passkey:pending:{token}` | `KVKey.passkeyPendingRegistration(token)` | g8ed | Pending passkey registration state | 5 min |
 | `g8e:execution:{execution_id}:pending.cmd` | `KVKey.pendingCmd(executionId)` | g8ee | Pending command tracking state | Short-lived |
 | `g8e:session:operator:{operator_session_id}:bind` | `KVKey.sessionBindOperators(id)` | g8ed | Operator session → bound web session ID | Session TTL |
@@ -662,15 +676,22 @@ g8eo **always writes to the scrubbed vault**. The raw vault write is conditional
 
 When `VaultMode` is absent from the payload, g8eo defaults to `"raw"`.
 
-The conversion happens at the pub/sub boundary in `_execute_command_internal`:
+At the Python application layer, `sentinel_mode` is a `bool` on
+`InvestigationModel` and on the chat/MCP request models. At the pub/sub wire
+boundary it is serialized into `CommandPayload.sentinel_mode` as a `str | None`
+holding one of the `VaultMode` values (`"raw"` or `"scrubbed"`) — see
+`components/g8ee/app/models/command_payloads.py`.
 
-```python
-if sentinel_mode is True:
-    wire_sentinel_mode = VaultMode.SCRUBBED
-elif sentinel_mode is False:
-    wire_sentinel_mode = VaultMode.RAW
-else:
-    wire_sentinel_mode
+g8eo is the defaulting authority: when `CommandPayload.sentinel_mode` is
+absent or empty on the wire, `CommandService.HandleExecutionRequest`
+(`components/g8eo/services/pubsub/command_service.go`) falls back to
+`constants.Status.VaultMode.Raw`:
+
+```go
+vaultMode := p.SentinelMode
+if vaultMode == "" {
+    vaultMode = constants.Status.VaultMode.Raw
+}
 ```
 
 | `sentinel_mode` (Python) | `VaultMode` (wire) | AI reads from |
@@ -727,8 +748,6 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (g8ed). Collections a
 | `settings` | `CACHE_TTL_DEFAULT` | `CacheTTL.SETTINGS` |
 | `operators` | `CACHE_TTL_MEDIUM` | `CacheTTL.OPERATOR` |
 | `memories` | `CACHE_TTL_MEDIUM` | — |
-| `pending_commands` | `PENDING_CMD_TTL_SECONDS` | — |
-| `orgs` (g8ee-internal alias) | `CACHE_TTL_ORGS` | — |
 
 ### Implementation Locations
 

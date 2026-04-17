@@ -191,9 +191,6 @@ export const EventType = Object.freeze({
 
     OPERATOR_MCP_TOOLS_CALL:    _EVENTS['operator']['mcp']['tools']['call'],
     OPERATOR_MCP_TOOLS_RESULT:  _EVENTS['operator']['mcp']['tools']['result'],
-    OPERATOR_MCP_RESOURCES_LIST: _EVENTS['operator']['mcp']['resources']['list'],
-    OPERATOR_MCP_RESOURCES_READ:  _EVENTS['operator']['mcp']['resources']['read'],
-    OPERATOR_MCP_RESOURCES_RESULT: _EVENTS['operator']['mcp']['resources']['result'],
 
     LLM_CONFIG_REQUESTED: _EVENTS['ai']['llm']['config']['requested'],
     LLM_CONFIG_RECEIVED:  _EVENTS['ai']['llm']['config']['received'],
@@ -235,6 +232,10 @@ export const EventType = Object.freeze({
     LLM_CHAT_ITERATION_STREAM_DELTA_RECEIVED: _EVENTS['ai']['llm']['chat']['iteration']['stream']['delta']['received'],
     LLM_CHAT_ITERATION_STREAM_COMPLETED:      _EVENTS['ai']['llm']['chat']['iteration']['stream']['completed'],
     LLM_CHAT_ITERATION_STREAM_FAILED:         _EVENTS['ai']['llm']['chat']['iteration']['stream']['failed'],
+
+    AI_AGENT_CONTINUE_APPROVAL_REQUESTED: _EVENTS['ai']['agent']['continue']['approval']['requested'],
+    AI_AGENT_CONTINUE_APPROVAL_GRANTED:   _EVENTS['ai']['agent']['continue']['approval']['granted'],
+    AI_AGENT_CONTINUE_APPROVAL_REJECTED:  _EVENTS['ai']['agent']['continue']['approval']['rejected'],
 
     TRIBUNAL_SESSION_STARTED:           _EVENTS['ai']['tribunal']['session']['started'],
     TRIBUNAL_SESSION_COMPLETED:         _EVENTS['ai']['tribunal']['session']['completed'],

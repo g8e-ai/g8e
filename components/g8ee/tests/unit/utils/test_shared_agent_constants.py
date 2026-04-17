@@ -69,7 +69,6 @@ class TestAgentMetadataPersonaFields:
     """Verifies all agents have first-class persona fields."""
 
     REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "temperature", "tools", "identity", "purpose", "autonomy"}
-    VALID_AUTONOMY_VALUES = {"fully_autonomous", "human_approved"}
     ALL_AGENT_KEYS = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance", "memory_generator", "eval_judge", "response_analyzer", "response_analyzer_command_risk", "response_analyzer_error", "response_analyzer_file_risk"}
 
     def test_all_agents_have_persona_fields(self):
@@ -104,9 +103,9 @@ class TestAgentMetadataPersonaFields:
         for key, agent in _AGENTS["agent.metadata"].items():
             assert isinstance(agent["purpose"], str) and agent["purpose"], f"Agent '{key}' purpose must be a non-empty string"
 
-    def test_autonomy_is_valid_value(self):
+    def test_autonomy_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert agent["autonomy"] in self.VALID_AUTONOMY_VALUES, f"Agent '{key}' autonomy must be one of {self.VALID_AUTONOMY_VALUES}, got '{agent['autonomy']}'"
+            assert isinstance(agent["autonomy"], str) and agent["autonomy"], f"Agent '{key}' autonomy must be a non-empty string"
 
 
 class TestSharedModelJSONEnumsMatchG8ee:

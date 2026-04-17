@@ -75,28 +75,30 @@ describe('OperatorLayoutMixin [UNIT - jsdom]', () => {
         });
 
         describe('Mouse resizing', () => {
-            it('starts dragging on mousedown and updates width on mousemove', () => {
+            it('starts dragging on mousedown + mousemove past threshold and updates width', () => {
                 ctx._initPanelResize();
 
-                // Trigger mousedown
-                const mouseDownEvent = new MouseEvent('mousedown', { clientX: 100 });
-                divider.dispatchEvent(mouseDownEvent);
+                // Mousedown alone should NOT enter dragging state (click vs drag discrimination).
+                divider.dispatchEvent(new MouseEvent('mousedown', { clientX: 100 }));
+                expect(divider.classList.contains('dragging')).toBe(false);
 
+                // Small movement under threshold (4px) still should not promote to drag.
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX: 102 }));
+                expect(divider.classList.contains('dragging')).toBe(false);
+
+                // Movement beyond threshold promotes to drag and applies the resize.
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX: 150 }));
                 expect(divider.classList.contains('dragging')).toBe(true);
                 expect(document.body.style.cursor).toBe('col-resize');
-
-                // Trigger mousemove (drag 50px to the right)
-                const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 150 });
-                document.dispatchEvent(mouseMoveEvent);
-
                 expect(panelContainer.style.width).toBe('350px');
             });
 
             it('stops dragging on mouseup', () => {
                 ctx._initPanelResize();
 
-                // Start dragging
+                // Start dragging (requires movement past threshold).
                 divider.dispatchEvent(new MouseEvent('mousedown', { clientX: 100 }));
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX: 150 }));
                 expect(divider.classList.contains('dragging')).toBe(true);
 
                 // Stop dragging
@@ -106,9 +108,37 @@ describe('OperatorLayoutMixin [UNIT - jsdom]', () => {
                 expect(document.body.style.cursor).toBe('');
 
                 // Further moves should not change width
-                const mouseMoveEvent = new MouseEvent('mousemove', { clientX: 200 });
-                document.dispatchEvent(mouseMoveEvent);
-                expect(panelContainer.style.width).toBe('300px'); // It was 300px initially
+                const widthAfterDrag = panelContainer.style.width;
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX: 400 }));
+                expect(panelContainer.style.width).toBe(widthAfterDrag);
+            });
+
+            it('treats mousedown + mouseup with no drag as a click that toggles collapsed state', () => {
+                ctx._initPanelResize();
+
+                // Click (no movement) -> collapse.
+                divider.dispatchEvent(new MouseEvent('mousedown', { clientX: 100 }));
+                document.dispatchEvent(new MouseEvent('mouseup'));
+                expect(panelContainer.classList.contains('collapsed')).toBe(true);
+                expect(divider.classList.contains('collapsed')).toBe(true);
+                expect(divider.classList.contains('dragging')).toBe(false);
+
+                // Click again -> expand (restored width written inline).
+                divider.dispatchEvent(new MouseEvent('mousedown', { clientX: 100 }));
+                document.dispatchEvent(new MouseEvent('mouseup'));
+                expect(panelContainer.classList.contains('collapsed')).toBe(false);
+                expect(divider.classList.contains('collapsed')).toBe(false);
+                expect(panelContainer.style.width).toMatch(/px$/);
+            });
+
+            it('does not collapse when pointer moves past threshold (drag, not click)', () => {
+                ctx._initPanelResize();
+
+                divider.dispatchEvent(new MouseEvent('mousedown', { clientX: 100 }));
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX: 160 }));
+                document.dispatchEvent(new MouseEvent('mouseup'));
+
+                expect(panelContainer.classList.contains('collapsed')).toBe(false);
             });
 
             it('does not start dragging if mobile-drawer-mode class is present', () => {
@@ -143,40 +173,52 @@ describe('OperatorLayoutMixin [UNIT - jsdom]', () => {
         });
 
         describe('Touch resizing', () => {
-            it('starts dragging on touchstart and updates width on touchmove', () => {
+            it('starts dragging on touchstart + touchmove past threshold and updates width', () => {
                 ctx._initPanelResize();
 
-                // Trigger touchstart
-                const touchStartEvent = new TouchEvent('touchstart', {
+                // Touchstart alone should not enter dragging state.
+                divider.dispatchEvent(new TouchEvent('touchstart', {
                     touches: [{ clientX: 100 }]
-                });
-                divider.dispatchEvent(touchStartEvent);
+                }));
+                expect(divider.classList.contains('dragging')).toBe(false);
+
+                // Touchmove past threshold promotes to drag.
+                document.dispatchEvent(new TouchEvent('touchmove', {
+                    touches: [{ clientX: 150 }]
+                }));
 
                 expect(divider.classList.contains('dragging')).toBe(true);
-
-                // Trigger touchmove (drag 50px to the right)
-                const touchMoveEvent = new TouchEvent('touchmove', {
-                    touches: [{ clientX: 150 }]
-                });
-                document.dispatchEvent(touchMoveEvent);
-
                 expect(panelContainer.style.width).toBe('350px');
             });
 
             it('stops dragging on touchend', () => {
                 ctx._initPanelResize();
 
-                // Start dragging
-                const touchStartEvent = new TouchEvent('touchstart', {
+                // Start dragging (touchstart + touchmove past threshold).
+                divider.dispatchEvent(new TouchEvent('touchstart', {
                     touches: [{ clientX: 100 }]
-                });
-                divider.dispatchEvent(touchStartEvent);
+                }));
+                document.dispatchEvent(new TouchEvent('touchmove', {
+                    touches: [{ clientX: 150 }]
+                }));
                 expect(divider.classList.contains('dragging')).toBe(true);
 
                 // Stop dragging
                 document.dispatchEvent(new TouchEvent('touchend'));
 
                 expect(divider.classList.contains('dragging')).toBe(false);
+            });
+
+            it('treats tap (touchstart + touchend with no movement) as a click toggling collapsed', () => {
+                ctx._initPanelResize();
+
+                divider.dispatchEvent(new TouchEvent('touchstart', {
+                    touches: [{ clientX: 100 }]
+                }));
+                document.dispatchEvent(new TouchEvent('touchend'));
+
+                expect(panelContainer.classList.contains('collapsed')).toBe(true);
+                expect(divider.classList.contains('collapsed')).toBe(true);
             });
 
             it('does not start dragging on touchstart if mobile-drawer-mode class is present', () => {

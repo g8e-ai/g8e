@@ -653,6 +653,21 @@ class IntentApprovalRequest(ApprovalRequestBase):
     operation_context: str | None = Field(default=None, description="Context for the operation")
 
 
+class AgentContinueApprovalRequest(ApprovalRequestBase):
+    """Typed request for agent turn-limit continuation approval.
+
+    Emitted when the agent ReAct loop hits the tool-turn budget and asks the
+    operator whether to reset the counter and continue, or stop the agent.
+    No operator binding is required; operator_session_id/operator_id default
+    to empty strings because the approval is agent-scoped, not tool-scoped.
+    """
+    turn_limit: int = Field(description="Tool-turn budget that triggered the approval")
+    turns_completed: int = Field(description="Number of tool-use turns executed when the budget was reached")
+    task_id: str | None = Field(default=None, description="AI task identifier for SSE routing")
+    operator_session_id: str = Field(default="", description="Operator session identifier (unused for agent-scoped approvals)")
+    operator_id: str = Field(default="", description="Operator identifier (unused for agent-scoped approvals)")
+
+
 class BatchOperatorExecutionResult(G8eBaseModel):
     """Result of executing a command on a single operator within a batch execution."""
     hostname: str = Field(description="Operator hostname")
@@ -688,6 +703,12 @@ class CommandApprovalEvent(ApprovalContext):
     def is_batch_execution(self) -> bool:
         """True if targeting multiple systems."""
         return len(self.target_systems) > 1
+
+
+class AgentContinueApprovalEvent(ApprovalContext):
+    """Event payload published to g8ed when agent continuation approval is requested."""
+    turn_limit: int = Field(description="Tool-turn budget that triggered the approval")
+    turns_completed: int = Field(description="Number of tool-use turns executed when the budget was reached")
 
 
 class FileEditApprovalEvent(ApprovalContext):

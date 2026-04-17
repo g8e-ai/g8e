@@ -384,7 +384,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	cfg, err := LoadListen(0, 0, "", "", "", "", "")
+	cfg, err := LoadListen(0, 0, "", "", "", "")
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
@@ -392,9 +392,7 @@ func TestLoadListen_Defaults(t *testing.T) {
 	assert.Equal(t, 443, cfg.Listen.WSSPort)
 	assert.Equal(t, 443, cfg.Listen.HTTPPort)
 	assert.Equal(t, filepath.Join(cwd, ".g8e", "data"), cfg.Listen.DataDir)
-	assert.Equal(t, filepath.Join(cwd, ".g8e", "bin"), cfg.Listen.BinaryDir)
 	assert.True(t, filepath.IsAbs(cfg.Listen.DataDir))
-	assert.True(t, filepath.IsAbs(cfg.Listen.BinaryDir))
 	assert.Equal(t, "g8eo-listen", cfg.ComponentName)
 }
 
@@ -404,7 +402,6 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 		8080,
 		"/var/data",
 		"",
-		"/opt/bin",
 		"/etc/certs/tls.crt",
 		"/etc/certs/tls.key",
 	)
@@ -413,7 +410,6 @@ func TestLoadListen_ExplicitValues(t *testing.T) {
 	assert.Equal(t, 9443, cfg.Listen.WSSPort)
 	assert.Equal(t, 8080, cfg.Listen.HTTPPort)
 	assert.Equal(t, "/var/data", cfg.Listen.DataDir)
-	assert.Equal(t, "/opt/bin", cfg.Listen.BinaryDir)
 	assert.Equal(t, "/etc/certs/tls.crt", cfg.Listen.TLSCertPath)
 	assert.Equal(t, "/etc/certs/tls.key", cfg.Listen.TLSKeyPath)
 }
@@ -422,7 +418,7 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 	t.Run("only wss port overridden", func(t *testing.T) {
 		cwd, err := os.Getwd()
 		require.NoError(t, err)
-		cfg, err := LoadListen(443, 0, "", "", "", "", "")
+		cfg, err := LoadListen(443, 0, "", "", "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 443, cfg.Listen.WSSPort)
 		assert.Equal(t, 443, cfg.Listen.HTTPPort)
@@ -430,17 +426,14 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 	})
 
 	t.Run("only data dir overridden", func(t *testing.T) {
-		cwd, err := os.Getwd()
-		require.NoError(t, err)
-		cfg, err := LoadListen(0, 0, "/custom/data", "", "", "", "")
+		cfg, err := LoadListen(0, 0, "/custom/data", "", "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 443, cfg.Listen.WSSPort)
 		assert.Equal(t, "/custom/data", cfg.Listen.DataDir)
-		assert.Equal(t, filepath.Join(cwd, ".g8e", "bin"), cfg.Listen.BinaryDir)
 	})
 
 	t.Run("no operator fields set", func(t *testing.T) {
-		cfg, err := LoadListen(0, 0, "", "", "", "", "")
+		cfg, err := LoadListen(0, 0, "", "", "", "")
 		require.NoError(t, err)
 		assert.Empty(t, cfg.APIKey)
 		assert.Empty(t, cfg.Endpoint)
@@ -449,7 +442,7 @@ func TestLoadListen_PartialDefaults(t *testing.T) {
 }
 
 func TestLoadListen_SucceedsWithAllDefaults(t *testing.T) {
-	_, err := LoadListen(0, 0, "", "", "", "", "")
+	_, err := LoadListen(0, 0, "", "", "", "")
 	require.NoError(t, err)
 }
 

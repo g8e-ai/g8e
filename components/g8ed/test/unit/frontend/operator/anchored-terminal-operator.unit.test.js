@@ -167,6 +167,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
                 EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
                 EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED,
                 EventType.OPERATOR_INTENT_APPROVAL_REQUESTED,
+                EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED,
             ];
             
             for (const approvalEvent of approvalEvents) {
@@ -175,6 +176,26 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             }
             
             expect(ctx.handleApprovalRequest).toHaveBeenCalledTimes(approvalEvents.length);
+        });
+
+        it('routes AI_AGENT_CONTINUE_APPROVAL_REQUESTED payload to handleApprovalRequest', () => {
+            const ctx = createMixinContext();
+            ctx.handleApprovalRequest = vi.fn();
+
+            ctx.bindEventBusListeners();
+
+            const testData = {
+                approval_id: 'apr_agent_continue_1',
+                turn_limit: 25,
+                turns_completed: 25,
+                task_id: 'ai.agent.continue',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                justification: 'Agent hit 25-turn budget',
+            };
+            ctx.eventBus.emit(EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED, testData);
+
+            expect(ctx.handleApprovalRequest).toHaveBeenCalledWith(testData);
         });
 
         it('binds all command execution event listeners', () => {

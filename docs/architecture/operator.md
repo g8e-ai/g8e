@@ -182,7 +182,6 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--http-listen-port` | `443` | TLS/HTTPS port for internal g8ee/g8ed traffic and CA distribution |
 | `--data-dir` | `.g8e/data` in working dir | SQLite database and SSL certificate directory |
 | `--ssl-dir` | `data-dir/ssl` | Directory for TLS certificates (override with --ssl-dir) |
-| `--binary-dir` | `.g8e/bin` in working dir | Legacy flag — operator binaries are now served from the blob store |
 | `--tls-cert` | | TLS certificate path (generated automatically if absent) |
 | `--tls-key` | | TLS private key path (generated automatically if absent) |
 
@@ -218,7 +217,7 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--key` | | API key for remote operators |
 | `--no-git` | | Disable ledger on remote operators |
 | `--ssh-config` | `~/.ssh/config` | SSH config file path |
-| `--binary-dir` | `/app/components/g8eo/build` | Directory containing arch-specific operator builds |
+| `--binary-dir` | `/home/g8e` | Directory containing the operator binary (falls back to `<binary-dir>/linux-<arch>/g8e.operator` if not found directly) |
 
 ---
 
@@ -271,9 +270,9 @@ All auth methods converge on a single HTTP POST to `/api/auth/operator`. The pla
 - `operator_session_id` — used as part of all subsequent pub/sub channel names
 - `operator_id` — stable identifier for this operator slot
 - Bootstrap config: `max_concurrent_tasks`, `max_memory_mb`, `heartbeat_interval_seconds`, feature flags
-- `operator_cert` and `operator_cert_key` — currently returned as `null` (reserved for future mTLS certificate distribution)
+- `operator_cert` and `operator_cert_key` — per-operator mTLS client certificate (PEM) and private key issued by the platform CA
 
-**Note:** The `operator_cert` and `operator_cert_key` fields are currently returned as `null` in the response. The mTLS certificate handling is managed through a separate mechanism. The API key is held only in process memory and never written to disk in any recoverable form. When the process exits, the key is gone.
+Once the bootstrap response is received, the Operator parses `operator_cert` + `operator_cert_key` with `tls.X509KeyPair` and rebuilds its HTTP transport with a TLS 1.3 client config that presents the per-operator certificate on every subsequent connection. If the pair fails to parse, the Operator logs a warning and continues with the embedded CA-trusted transport (no per-operator client cert). The API key is held only in process memory and never written to disk in any recoverable form. When the process exits, the key is gone.
 
 ### System Fingerprint
 
@@ -325,14 +324,10 @@ On subscription, an automatic heartbeat is sent immediately. Reconnection uses e
 | `g8e.v1.operator.audit.ai.recorded` | Record AI message to audit log |
 | `g8e.v1.operator.audit.direct.command.recorded` | Record a direct terminal command to audit log |
 | `g8e.v1.operator.audit.direct.command.result.recorded` | Record the result of a direct terminal command |
-| `g8e.v1.operator.mcp.tools.call` | Call an MCP (Model Context Protocol) tool |
-| `g8e.v1.operator.mcp.tools.result` | Return result from an MCP tool call |
-| `g8e.v1.operator.mcp.resources.list` | List available MCP resources |
-| `g8e.v1.operator.mcp.resources.read` | Read an MCP resource |
-| `g8e.v1.operator.mcp.resources.result` | Return result from an MCP resource read |
+| `g8e.v1.operator.mcp.tools.call` | Call an MCP (Model Context Protocol) tool — translated to one of the inbound events above, then dispatched |
 | `g8e.v1.operator.shutdown.requested` | Acknowledge shutdown |
 
-**Note:** The event `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched in the pubsub command handler. It is available for future use.
+**Note:** Only `g8e.v1.operator.mcp.tools.call` is accepted as an inbound MCP event. `mcp.tools.result` is outbound-only; the operator emits it to wrap execution payloads before they return to g8ed. `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched.
 
 ---
 

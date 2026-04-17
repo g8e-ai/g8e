@@ -79,8 +79,10 @@ from app.llm.llm_types import (
 )
 from app.models.base import G8eBaseModel, Field, field_serializer, field_validator
 from app.models.model_configs import get_model_config
+from app.llm.thinking import translate_for_gemini
 
 from ..provider import LLMProvider
+from ._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -348,22 +350,32 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider closed")
 
     @staticmethod
-    def _build_thinking_config_gemini3(tc, genai_types):
-        """Build ThinkingConfig for Gemini 3 models.
+    def _build_thinking_config_gemini3(tc, model: str, genai_types):
+        """Build google.genai ThinkingConfig from canonical ThinkingConfig.
 
-        Uses thinking_level (high/medium/low/minimal) and include_thoughts.
-
-        Returns None when the config carries no Gemini-3-relevant fields,
-        meaning no thinking_config key will be sent in the request.
+        Delegates the ThinkingLevel -> wire value mapping to
+        translate_for_gemini so it stays consistent across providers.
+        Returns a tuple ``(sdk_thinking_config, translation)`` so the caller
+        can log the clamped (post-translation) values rather than the raw
+        requested level — which would be misleading when the model's
+        supported_thinking_levels force a clamp (e.g. HIGH -> MEDIUM).
+        ``sdk_thinking_config`` is None when thinking is OFF and no thoughts
+        are requested, which signals the caller to omit the key entirely.
         """
         if not tc:
-            return None
-        if tc.thinking_level is None and not tc.include_thoughts:
-            return None
-        return genai_types.ThinkingConfig(
-            thinking_level=tc.thinking_level,
+            return None, None
+        cfg = get_model_config(model)
+        translation = translate_for_gemini(
+            tc.thinking_level,
+            cfg,
             include_thoughts=tc.include_thoughts,
         )
+        if not translation.enabled and not translation.include_thoughts:
+            return None, translation
+        return genai_types.ThinkingConfig(
+            thinking_level=translation.thinking_level,
+            include_thoughts=translation.include_thoughts,
+        ), translation
 
     @staticmethod
     def _build_genai_config(
@@ -373,8 +385,10 @@ class GeminiProvider(LLMProvider):
     ):
         """Build a genai_types.GenerateContentConfig from LLM settings."""
         if isinstance(settings, PrimaryLLMSettings):
-            thinking_config = GeminiProvider._build_thinking_config_gemini3(settings.thinking_config, genai_types)
-            
+            thinking_config, thinking_translation = GeminiProvider._build_thinking_config_gemini3(
+                settings.thinking_config, model, genai_types
+            )
+
             tool_config = None
             if settings.tool_config and settings.tool_config.tool_calling_config:
                 fc_cfg = settings.tool_config.tool_calling_config
@@ -384,7 +398,14 @@ class GeminiProvider(LLMProvider):
                         allowed_function_names=fc_cfg.allowed_tool_names,
                     )
                 )
-            
+
+            # Log the clamped (post-translation) thinking level — which is what
+            # actually goes out on the wire — rather than the raw requested
+            # value, so debug traces match what Gemini sees.
+            logged_thinking_level = (
+                thinking_translation.thinking_level if thinking_translation and thinking_translation.enabled else None
+            )
+            logged_include_thoughts = bool(thinking_translation and thinking_translation.include_thoughts)
             logger.debug(
                 "[GEMINI] Building config: model=%s temperature=%.2f max_output_tokens=%d "
                 "top_p=%s top_k=%s system_instructions_len=%d tools_count=%d "
@@ -396,8 +417,8 @@ class GeminiProvider(LLMProvider):
                 settings.top_k_filtering if settings.top_k_filtering is not None else "None",
                 len(settings.system_instructions),
                 len(genai_tools) if genai_tools else 0,
-                settings.thinking_config.thinking_level if settings.thinking_config else None,
-                settings.thinking_config.include_thoughts if settings.thinking_config else False,
+                logged_thinking_level,
+                logged_include_thoughts,
                 fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None,
                 len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0,
             )
@@ -601,8 +622,21 @@ class GeminiProvider(LLMProvider):
                 genai_tools.extend(tool_group.flatten_for_llm())
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
-        async for chunk in self._stream_with_retry(model, genai_contents, gen_config):
-            yield chunk
+        try:
+            async for chunk in self._stream_with_retry(model, genai_contents, gen_config):
+                yield chunk
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="gemini",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
 
     async def generate_content_primary(
         self,
@@ -617,7 +651,20 @@ class GeminiProvider(LLMProvider):
                 genai_tools.extend(tool_group.flatten_for_llm())
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
-        return await self._generate_with_retry(model, genai_contents, gen_config)
+        try:
+            return await self._generate_with_retry(model, genai_contents, gen_config)
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="gemini",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
 
     async def generate_content_stream_assistant(
         self,

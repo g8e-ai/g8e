@@ -113,6 +113,44 @@ describe('SettingsService [UNIT]', () => {
             expect(result.saved).toContain('https_port');
             expect(result.saved).not.toContain('llm_primary_provider');
         });
+
+        it('refuses to overwrite writeOnce bootstrap secrets already set in DB', async () => {
+            // Simulate g8eo SecretManager having bootstrapped secrets.
+            await cacheAside.updateDocument(Collections.SETTINGS, SETTINGS_DOC_ID, {
+                settings: {
+                    internal_auth_token:    'bootstrapped-token',
+                    session_encryption_key: 'bootstrapped-key',
+                },
+            });
+
+            const result = await service.savePlatformSettings({
+                internal_auth_token:    'malicious-ui-token',
+                session_encryption_key: 'malicious-ui-key',
+                https_port:             '444',
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.saved).toEqual(['https_port']);
+            expect(result.skipped).toEqual(
+                expect.arrayContaining(['internal_auth_token', 'session_encryption_key'])
+            );
+
+            // Bootstrap secrets must be untouched; only https_port advanced.
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, SETTINGS_DOC_ID);
+            expect(doc.settings.internal_auth_token).toBe('bootstrapped-token');
+            expect(doc.settings.session_encryption_key).toBe('bootstrapped-key');
+            expect(doc.settings.https_port).toBe('444');
+        });
+
+        it('allows writeOnce keys on first write when DB is empty', async () => {
+            const result = await service.savePlatformSettings({
+                internal_auth_token: 'first-write-token',
+            });
+            expect(result.saved).toContain('internal_auth_token');
+            expect(result.skipped).toEqual([]);
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, SETTINGS_DOC_ID);
+            expect(doc.settings.internal_auth_token).toBe('first-write-token');
+        });
     });
 
     describe('updateUserSettings', () => {

@@ -24,7 +24,11 @@
  *   1. POST /api/auth/passkey/auth-challenge      — generate and store challenge (email lookup)
  *   2. POST /api/auth/passkey/auth-verify         — verify assertion, update counter, return user
  *
- * Challenge storage: g8es KV with TTL (PASSKEY_CHALLENGE_TTL_SECONDS).
+ * Challenge storage: `passkey_challenges` document collection. Challenges are
+ *   single-use nonces consumed on read during verification (see
+ *   `_consumeChallenge`), so rows do not leak on failed or abandoned flows.
+ *   The PASSKEY_CHALLENGE_TTL_SECONDS value is applied to the cache-aside
+ *   entry; the underlying document is deleted explicitly.
  * Credential storage: user document passkey_credentials array (write-through cache).
  */
 
@@ -101,6 +105,34 @@ export class PasskeyAuthService {
         return platformSettings.passkey_rp_name || 'g8e';
     }
 
+    /**
+     * Fetch the stored challenge for `userId` and delete it in the same step.
+     *
+     * WebAuthn challenges are single-use cryptographic nonces. Consuming on
+     * read guarantees that a challenge row is never left behind when
+     * verification fails (e.g. the user closes the browser prompt mid-flow),
+     * which would otherwise leak rows into the `passkey_challenges` collection
+     * since document writes here have no TTL sweeper. Deletion is best-effort:
+     * a delete failure does not fail the verification, but is logged so
+     * operators can detect storage regressions.
+     *
+     * @param {string} userId
+     * @returns {Promise<string | null>} the stored challenge, or null if absent
+     */
+    async _consumeChallenge(userId) {
+        const doc = await this._cache_aside.getDocument(Collections.PASSKEY_CHALLENGES, userId);
+        const challenge = doc?.challenge || null;
+        try {
+            await this._cache_aside.deleteDocument(Collections.PASSKEY_CHALLENGES, userId);
+        } catch (err) {
+            logger.warn('[PASSKEY] Failed to delete consumed challenge (non-fatal)', {
+                userId,
+                error: err?.message,
+            });
+        }
+        return challenge;
+    }
+
     // -------------------------------------------------------------------------
     // Registration — challenge
     // -------------------------------------------------------------------------
@@ -146,8 +178,13 @@ export class PasskeyAuthService {
     async verifyRegistration(req, user, attestationResponse) {
         const rpId     = await this._getRpId(req);
         const origin   = await this._getOrigin(req);
-        const doc = await this._cache_aside.getDocument(Collections.PASSKEY_CHALLENGES, user.id);
-        const challenge = doc?.challenge;
+
+        // Consume-on-read: WebAuthn challenges are single-use nonces. Delete the
+        // stored challenge as soon as we fetch it, regardless of verification
+        // outcome. This prevents leaked rows when verification fails (e.g. the
+        // user cancels the browser prompt after fetch). Any retry must call the
+        // register-challenge endpoint again to mint a fresh nonce.
+        const challenge = await this._consumeChallenge(user.id);
 
         if (!challenge) {
             logger.warn('[PASSKEY] Registration verify: challenge expired or missing', { userId: user.id });
@@ -172,8 +209,6 @@ export class PasskeyAuthService {
             logger.warn('[PASSKEY] Registration not verified', { userId: user.id });
             return { verified: false, error: 'Registration not verified.' };
         }
-
-        await this._cache_aside.deleteDocument(Collections.PASSKEY_CHALLENGES, user.id);
 
         const { credential } = verification.registrationInfo;
 
@@ -293,8 +328,9 @@ export class PasskeyAuthService {
 
         const rpId     = await this._getRpId(req);
         const origin   = await this._getOrigin(req);
-        const doc = await this._cache_aside.getDocument(Collections.PASSKEY_CHALLENGES, user.id);
-        const challenge = doc?.challenge;
+
+        // Consume-on-read (see verifyRegistration for rationale).
+        const challenge = await this._consumeChallenge(user.id);
 
         if (!challenge) {
             logger.warn('[PASSKEY] Auth verify: challenge expired or missing', { userId: user.id });
@@ -336,8 +372,6 @@ export class PasskeyAuthService {
             logger.warn('[PASSKEY] Authentication not verified', { userId: user.id });
             return { verified: false, error: 'Authentication not verified.' };
         }
-
-        await this._cache_aside.deleteDocument(Collections.PASSKEY_CHALLENGES, user.id);
 
         const { authenticationInfo } = verification;
         const updatedCredentials = (user.passkey_credentials || []).map(c => {

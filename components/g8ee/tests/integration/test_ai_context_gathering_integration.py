@@ -47,11 +47,13 @@ All tests use real g8es and cache services — no mocks allowed per testing guid
 """
 
 import asyncio
+import logging
 import pytest
 from datetime import datetime, timezone, UTC
 import uuid
 
 from app.constants import (
+    CloudSubtype,
     ComponentName,
     EventType,
     OperatorStatus,
@@ -268,10 +270,11 @@ class TestInvestigationContextResolution:
         )
         
         # Test (call without user_id for case-based lookup)
-        result = await service.get_investigation_context(
-            case_id=created_investigation.case_id
-            # Note: no user_id provided
-        )
+        with caplog.at_level(logging.WARNING):
+            result = await service.get_investigation_context(
+                case_id=created_investigation.case_id
+                # Note: no user_id provided
+            )
         
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
@@ -730,7 +733,7 @@ class TestOperatorEnrichment:
         cloud_operator = build_production_operator_document(
             operator_type=OperatorType.CLOUD,
         )
-        cloud_operator.cloud_subtype = "aws"
+        cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
         
         investigation = create_investigation_data()
@@ -1133,7 +1136,7 @@ class TestAIContextExtraction:
             hostname="aws-instance",
             operator_type=OperatorType.CLOUD,
         )
-        cloud_operator.cloud_subtype = "aws"
+        cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
         
         investigation = EnrichedInvestigationContext(

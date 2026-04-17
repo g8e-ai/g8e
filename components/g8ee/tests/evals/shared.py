@@ -42,6 +42,7 @@ class AccuracyTestResult:
     response_text: str = ""
     execution_time_ms: float = 0.0
     error: str | None = None
+    dimension: str = "accuracy"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +53,7 @@ class AccuracyTestResult:
             "response_text": self.response_text[:500],
             "execution_time_ms": self.execution_time_ms,
             "error": self.error,
+            "dimension": self.dimension,
         }
 
 
@@ -72,6 +74,9 @@ class BenchmarkTestResult:
     tribunal_outcome: str | None = None
     tribunal_improved: bool | None = None
     tribunal_pre_score: bool | None = None
+    agent_continue_approvals: int = 0
+    approvals_by_type: dict[str, int] | None = None
+    dimension: str = "accuracy"
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -84,6 +89,9 @@ class BenchmarkTestResult:
             "failures": self.failures or [],
             "execution_time_ms": self.execution_time_ms,
             "error": self.error,
+            "agent_continue_approvals": self.agent_continue_approvals,
+            "approvals_by_type": self.approvals_by_type or {},
+            "dimension": self.dimension,
         }
         if self.tribunal_outcome is not None:
             result["tribunal_original_command"] = self.tribunal_original_command

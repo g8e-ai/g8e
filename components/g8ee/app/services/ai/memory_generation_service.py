@@ -17,6 +17,7 @@ import re
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider, Role
+from app.llm.structured import parse_structured_response
 from app.utils.agent_persona_loader import get_agent_persona
 from app.models.settings import G8eeUserSettings
 from app.models.investigations import ConversationHistoryMessage, InvestigationModel
@@ -136,20 +137,22 @@ class MemoryGenerationService:
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
-        response = await provider.generate_content_assistant(
-            model=assistant_model,
-            contents=contents,
-            assistant_llm_settings=config,
-        )
+        try:
+            from app.errors import OllamaEmptyResponseError
 
-        if not response or not response.text:
+            response = await provider.generate_content_assistant(
+                model=assistant_model,
+                contents=contents,
+                assistant_llm_settings=config,
+            )
+            ai_analysis = self._parse_memory_analysis(response.text)
+        except OllamaEmptyResponseError as exc:
             logger.warning(
-                "AI response was empty during memory update for %s, skipping preference update",
+                "AI response was empty during memory update for %s, skipping preference update: %s",
                 memory.investigation_id,
+                exc,
             )
             return
-
-        ai_analysis = self._parse_memory_analysis(response.text)
 
         if not any([
             ai_analysis.investigation_summary,
@@ -280,30 +283,22 @@ class MemoryGenerationService:
         """Parse AI response into MemoryAnalysis with multiple fallback strategies.
 
         Strategy:
-        1. Try direct JSON parsing
-        2. Try extracting JSON from markdown code blocks
-        3. Try extracting key-value pairs from plain text
-        4. Fallback: store raw text in investigation_summary
+        1. Delegate JSON recovery (direct, fenced, substring, truncated) to
+           the shared structured-response parser. Bare-value coercion is
+           disabled because MemoryAnalysis has zero required fields.
+        2. Fallback: extract key-value pairs from plain text/markdown.
+        3. Final fallback: store raw text in investigation_summary.
         """
         text = text.strip()
         if not text:
             return MemoryAnalysis()
 
-        # Strategy 1: Direct JSON parsing
         try:
-            return MemoryAnalysis.model_validate_json(text)
+            return parse_structured_response(text, MemoryAnalysis, allow_bare_value=False)
         except Exception:
             pass
 
-        # Strategy 2: Extract JSON from markdown
-        json_block = self._extract_json_from_markdown(text)
-        if json_block:
-            try:
-                return MemoryAnalysis.model_validate_json(json_block)
-            except Exception:
-                pass
-
-        # Strategy 3: Extract key-value pairs from text
+        # Key-value text fallback
         kv_pairs = self._extract_key_value_pairs(text)
         if kv_pairs:
             mapped = MemoryAnalysis()

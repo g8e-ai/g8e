@@ -692,10 +692,16 @@ class TestMaxTurnLimitApproval:
             ):
                 chunks.append(chunk)
 
-        assert len(approval_service.command_approval_calls) == 1
-        req = approval_service.command_approval_calls[0]
-        assert "25" not in req.command or "2-turn" in req.command or "limit" in req.command
+        assert len(approval_service.agent_continue_approval_calls) == 1
+        req = approval_service.agent_continue_approval_calls[0]
+        assert req.turn_limit == 2
+        assert req.turns_completed == 2
+        assert req.task_id == "ai.agent.continue"
         assert "turns" in req.justification
+        assert req.operator_id == ""
+        assert req.operator_session_id == ""
+        # No command_approval_calls: continuation uses dedicated approval type
+        assert len(approval_service.command_approval_calls) == 0
         assert provider.generate_content_stream_primary.call_count == 2
 
     async def test_continues_when_approval_granted(self):
@@ -744,7 +750,8 @@ class TestMaxTurnLimitApproval:
 
         # With limit=2, approval is requested after turn 2, granted; counter resets
         # to 1, so we need another approval after turn 4, etc. We exercised >= 2 approvals.
-        assert len(approval_service.command_approval_calls) >= 2
+        assert len(approval_service.agent_continue_approval_calls) >= 2
+        assert len(approval_service.command_approval_calls) == 0
 
     async def test_no_approval_service_falls_back_to_abort(self):
         provider = self._make_tool_calling_provider()

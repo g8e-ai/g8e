@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -588,46 +587,6 @@ func TestHandleKV(t *testing.T) {
 	})
 }
 
-func TestHandleBinary(t *testing.T) {
-	h, _ := setupTestHTTPHandler(t)
-
-	// Create dummy binary
-	binDir := filepath.Join(t.TempDir(), "linux", "amd64")
-	err := os.MkdirAll(binDir, 0755)
-	require.NoError(t, err)
-	binPath := filepath.Join(binDir, "g8e.operator")
-	err = os.WriteFile(binPath, []byte("binary-content"), 0644)
-	require.NoError(t, err)
-
-	h.cfg.Listen.BinaryDir = filepath.Dir(filepath.Dir(binDir))
-
-	t.Logf("Binary path created: %s", binPath)
-	t.Logf("BinaryDir in cfg: %s", h.cfg.Listen.BinaryDir)
-
-	t.Run("Valid binary", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/binary/linux/amd64", nil)
-		rr := httptest.NewRecorder()
-		h.handleBinary(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "binary-content", rr.Body.String())
-		assert.Equal(t, "application/octet-stream", rr.Header().Get(constants.HeaderContentType))
-	})
-
-	t.Run("Not found", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/binary/darwin/arm64", nil)
-		rr := httptest.NewRecorder()
-		h.handleBinary(rr, req)
-		assert.Equal(t, http.StatusNotFound, rr.Code)
-	})
-
-	t.Run("Traversal attempt", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/binary/../amd64", nil)
-		rr := httptest.NewRecorder()
-		h.handleBinary(rr, req)
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-}
-
 func TestHandleBlob(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
@@ -705,16 +664,6 @@ func TestHandleBlob(t *testing.T) {
 		rr := httptest.NewRecorder()
 		h.handleBlob(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-	})
-
-	t.Run("Binary directory creation error", func(t *testing.T) {
-		// Mock config with unwritable directory
-		h.cfg.Listen.BinaryDir = "/root/unwritable"
-		req := httptest.NewRequest(http.MethodGet, "/binary/linux/amd64", nil)
-		rr := httptest.NewRecorder()
-		h.handleBinary(rr, req)
-		// It might return 500 if it tries to MkdirAll and fails
-		assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	})
 
 	t.Run("Blob PUT empty body", func(t *testing.T) {

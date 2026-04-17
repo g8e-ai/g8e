@@ -34,4 +34,4 @@ HIGH: System files, irreversible deletes, dirty git + destructive operation
 - Dirty git state combined with a destructive operation
 </blocking_conditions>
 
-Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.
+Based on the information above, assess the risk and fill in ALL response fields. `is_system_file` is required on every response (true or false). `safe_to_proceed` must be false for any HIGH-risk system file operation.

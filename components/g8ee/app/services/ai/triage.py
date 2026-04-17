@@ -19,9 +19,9 @@ assistant model before committing to the full main LLM.
 """
 
 import logging
-import re
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
+from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
     TRIAGE_EMPTY_CONVERSATION,
@@ -45,7 +45,6 @@ class TriageAgent:
 
     def __init__(self):
         """Initialize the triage agent."""
-        self._json_fence_re = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
     async def triage(self, request: TriageRequest) -> TriageResult:
         """Perform the triage operation using the configured LLM provider.
@@ -104,18 +103,20 @@ class TriageAgent:
                 system_instructions="",
             )
 
-            response = await provider.generate_content_lite(
-                model=model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                lite_llm_settings=config,
-            )
+            try:
+                from app.errors import OllamaEmptyResponseError
 
-            if not response or not response.text:
-                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
+                response = await provider.generate_content_lite(
+                    model=model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    lite_llm_settings=config,
+                )
+                result = self._parse_response(response.text)
+            except OllamaEmptyResponseError as exc:
+                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex: %s", exc)
                 return self._fallback_result("Could not determine intent (no model response).")
 
             try:
-                result = self._parse_response(response.text)
 
                 logger.info(
                     "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",
@@ -166,40 +167,4 @@ class TriageAgent:
         """Parse the LLM response text into a TriageResult, with robust JSON extraction."""
         if not text:
             raise ValueError("Empty response text")
-
-        # 1. Try markdown fence extraction
-        fence_match = self._json_fence_re.search(text)
-        if fence_match:
-            try:
-                return TriageResult.model_validate_json(fence_match.group(1).strip())
-            except Exception:
-                pass
-
-        # 2. Try raw parse of stripped text
-        stripped = text.strip()
-        try:
-            return TriageResult.model_validate_json(stripped)
-        except Exception:
-            pass
-
-        # 3. Try finding first { and last }
-        start = stripped.find("{")
-        end = stripped.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                return TriageResult.model_validate_json(stripped[start : end + 1])
-            except Exception:
-                pass
-
-        # 4. Final attempt: partial JSON recovery (common with Gemini/thinking)
-        # If it starts with { but doesn't end with }, try appending braces
-        if start != -1 and end == -1:
-            potential_json = stripped[start:]
-            for suffix in ["}", "]}", "}}", "}}]", "]}"]:
-                try:
-                    return TriageResult.model_validate_json(potential_json + suffix)
-                except Exception:
-                    continue
-
-        # If all else fails, re-raise the last error from a direct parse attempt
-        return TriageResult.model_validate_json(stripped)
+        return parse_structured_response(text, TriageResult, allow_bare_value=False)

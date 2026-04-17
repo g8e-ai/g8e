@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/httpclient"
 	system "github.com/g8e-ai/g8e/components/g8eo/services/system"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -150,7 +151,7 @@ func TestRequestHTTPAuth_Failure(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := AuthServicesResponse{
 			Success: false,
-			Error:   "invalid api key",
+			Error:   json.RawMessage(`"invalid api key"`),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
@@ -357,7 +358,11 @@ func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
 	assert.Equal(t, "sess-partial", cfg.OperatorSessionId)
 }
 
-func TestApplyBootstrapConfig_InvalidCertIgnored(t *testing.T) {
+func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
+	// Regression: an unparseable per-operator mTLS cert must be a fatal
+	// cert-trust failure rather than a warn-and-continue. The operator's
+	// security contract requires mTLS on every outbound connection once a
+	// cert has been issued.
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -372,8 +377,10 @@ func TestApplyBootstrapConfig_InvalidCertIgnored(t *testing.T) {
 	}
 
 	err = svc.ApplyBootstrapConfig(bootCfg)
-	require.NoError(t, err)
-	assert.Equal(t, "op-badcert", cfg.OperatorID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cert trust failure",
+		"error message must contain 'cert trust failure' so ExitCodeFromError maps it to ExitCertTrustFailure")
+	assert.Equal(t, constants.ExitCertTrustFailure, constants.ExitCodeFromError(err))
 }
 
 func TestAuthServicesResponse_JSONParsing(t *testing.T) {
@@ -403,7 +410,7 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 		assert.Equal(t, 30, resp.Config.HeartbeatIntervalSeconds)
 	})
 
-	t.Run("error response", func(t *testing.T) {
+	t.Run("error response (bare string)", func(t *testing.T) {
 		jsonData := `{"success": false, "error": "invalid api key"}`
 
 		var resp AuthServicesResponse
@@ -411,7 +418,19 @@ func TestAuthServicesResponse_JSONParsing(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.False(t, resp.Success)
-		assert.Equal(t, "invalid api key", resp.Error)
+		assert.Equal(t, "invalid api key", httpclient.ExtractErrorMessage(resp.Error))
+	})
+
+	t.Run("error response (g8ed error envelope object)", func(t *testing.T) {
+		// Regression: the server actually returns the object envelope.
+		jsonData := `{"success": false, "error": {"code": "G8E-1800", "message": "already registered", "category": "auth"}}`
+
+		var resp AuthServicesResponse
+		err := json.Unmarshal([]byte(jsonData), &resp)
+
+		require.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.Equal(t, "G8E-1800: already registered", httpclient.ExtractErrorMessage(resp.Error))
 	})
 
 	t.Run("cert fields present", func(t *testing.T) {

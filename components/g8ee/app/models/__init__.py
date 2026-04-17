@@ -152,6 +152,7 @@ from .model_configs import (
     get_model_config,
 )
 from .operators import (
+    AgentContinueApprovalRequest,
     ApprovalContext,
     ApprovalRequestBase,
     ApprovalResult,
@@ -236,3 +237,4 @@ ApprovalRequestBase.model_rebuild()
 CommandApprovalRequest.model_rebuild()
 FileEditApprovalRequest.model_rebuild()
 IntentApprovalRequest.model_rebuild()
+AgentContinueApprovalRequest.model_rebuild()

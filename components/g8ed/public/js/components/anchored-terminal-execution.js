@@ -202,6 +202,7 @@ export class TerminalExecutionMixin {
         const justification = data.justification;
         const isFileEdit = data.file_path && data.operation;
         const isIntent = data.intent_name && data.intent_question;
+        const isAgentContinue = typeof data.turn_limit === 'number';
         const targetSystems = data.target_systems;
         const isBatchExecution = data.is_batch_execution && targetSystems && targetSystems.length > 1;
 
@@ -226,7 +227,13 @@ export class TerminalExecutionMixin {
             iconModifier = 'approval-compact__icon--medium';
         }
 
-        if (isFileEdit) {
+        if (isAgentContinue) {
+            headerText = 'Agent Turn Limit';
+            commandDisplay = `Agent reached ${data.turn_limit} tool-use turns. Continue?`;
+            cardModifier = 'approval-compact--agent-continue';
+            icon = 'hourglass_empty';
+            iconModifier = '';
+        } else if (isFileEdit) {
             headerText = 'File Edit';
             commandDisplay = `${data.operation}: ${data.file_path}`;
             cardModifier = 'approval-compact--file';
@@ -243,9 +250,13 @@ export class TerminalExecutionMixin {
         }
 
         const systemsHtml = isBatchExecution ? this._buildTargetSystemsHtml(targetSystems) : '';
-        const approveButtonText = isBatchExecution ? `Approve for ${targetSystems.length} Systems` : 'Approve';
+        const approveButtonText = isAgentContinue
+            ? 'Continue'
+            : (isBatchExecution ? `Approve for ${targetSystems.length} Systems` : 'Approve');
 
-        const riskBadgeHtml = (!isFileEdit && !isIntent) ? this._buildRiskBadgeHtml(data.risk_analysis) : '';
+        const riskBadgeHtml = (!isFileEdit && !isIntent && !isAgentContinue)
+            ? this._buildRiskBadgeHtml(data.risk_analysis)
+            : '';
 
         await templateLoader.renderTo(approval, 'approval-card', {
             cardModifier,
@@ -253,7 +264,7 @@ export class TerminalExecutionMixin {
             iconModifier,
             headerText,
             riskBadgeHtml,
-            promptHtml: isFileEdit ? '' : '<span class="approval-compact__prompt">$</span>',
+            promptHtml: (isFileEdit || isAgentContinue) ? '' : '<span class="approval-compact__prompt">$</span>',
             commandDisplay,
             systemsHtml,
             justification: justification || 'No justification provided',
@@ -297,17 +308,21 @@ export class TerminalExecutionMixin {
                 task_id: approvalData.task_id,
             });
 
+            const isAgentContinue = typeof approvalData.turn_limit === 'number';
+
             if (approvalEl) {
                 const actionsDiv = approvalEl.querySelector('.approval-compact__actions');
                 if (actionsDiv) {
                     await templateLoader.renderTo(actionsDiv, 'approval-status', {
                         statusClass: approved ? 'approved' : 'denied',
                         statusIcon: approved ? 'check' : 'close',
-                        statusText: approved ? 'Approved' : 'Denied'
+                        statusText: approved
+                            ? (isAgentContinue ? 'Continuing' : 'Approved')
+                            : (isAgentContinue ? 'Stopped' : 'Denied')
                     });
                 }
 
-                if (approved) {
+                if (approved && !isAgentContinue) {
                     const resultsContainer = this._createResultsContainer(approvalId, approvalEl);
                     this._pendingExecutingIndicator = await this._showExecutingIndicatorInContainer(
                         resultsContainer,
@@ -468,20 +483,19 @@ export class TerminalExecutionMixin {
         }
 
         const hostnameHtml = hostname
-            ? `<span class="anchored-terminal__result-hostname"><span class="material-symbols-outlined icon-12">computer</span>${hostname}</span>`
+            ? `<span class="anchored-terminal__result-hostname"><span class="material-symbols-outlined icon-12">computer</span>${escapeHtml(hostname)}</span>`
             : '';
 
         await templateLoader.renderTo(entry, 'command-result', {
             statusClass,
             statusIcon,
-            hostnameHtml: hostnameHtml || '',
+            hostnameHtml,
             command: escapeHtml(command),
             displayTime,
             outputContent: escapeHtml(outputContent),
             exitCodeHtml: exitCode !== undefined
                 ? `<div class="anchored-terminal__result-exit anchored-terminal__result-exit--${exitCode === 0 ? 'success' : 'error'}">Exit code: ${exitCode}</div>`
                 : '',
-            hostnameHtml_raw: hostnameHtml // for trusted rendering
         });
 
         body.appendChild(entry);

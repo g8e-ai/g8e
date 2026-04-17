@@ -189,16 +189,12 @@ describe('LlmModelManager [UNIT]', () => {
             expect(manager.defaultLiteModel).toBe('gemini-3-flash-preview');
         });
 
-        it('defaults to empty string when defaults are missing', () => {
-            emitConfig(eventBus, {
+        it('throws when no model defaults are configured', () => {
+            expect(() => emitConfig(eventBus, {
                 default_primary_model: undefined,
                 default_assistant_model: undefined,
                 default_lite_model: undefined,
-            });
-
-            expect(manager.defaultPrimaryModel).toBe('');
-            expect(manager.defaultAssistantModel).toBe('');
-            expect(manager.defaultLiteModel).toBe('');
+            })).toThrow(/No .* model configured in settings/);
         });
 
         it('sets selected models to defaults when unset', () => {

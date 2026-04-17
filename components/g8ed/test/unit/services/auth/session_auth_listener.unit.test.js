@@ -52,7 +52,9 @@ describe('SessionAuthListener', () => {
         };
 
         mockPubSubClient = {
-            duplicate: vi.fn().mockResolvedValue(mockSubscriber)
+            // duplicate() is synchronous on G8esPubSubClient — it returns a fresh
+            // client instance, NOT a Promise. The listener relies on that contract.
+            duplicate: vi.fn().mockReturnValue(mockSubscriber)
         };
 
         mockOperatorSessionService = {
@@ -173,14 +175,26 @@ describe('SessionAuthListener', () => {
             expect(mockSubscriber.terminate).toHaveBeenCalled();
         });
 
-        it('should handle setup errors gracefully', async () => {
-            mockPubSubClient.duplicate.mockRejectedValue(new Error('Connection failed'));
-            
-            listener.listen(mockG8eContext);
+        it('should handle setup errors gracefully when subscribe throws', async () => {
+            mockSubscriber.subscribe.mockImplementation(() => {
+                throw new Error('Connection failed');
+            });
+
+            // Must not throw out of listen() — errors are logged and cleanup runs.
+            expect(() => listener.listen(mockG8eContext)).not.toThrow();
             await vi.runAllTimersAsync();
 
-            // Should not crash, just log error
-            expect(mockSubscriber.subscribe).not.toHaveBeenCalled();
+            expect(mockSubscriber.terminate).toHaveBeenCalled();
+        });
+
+        it('should tolerate duplicate() throwing synchronously', async () => {
+            mockPubSubClient.duplicate.mockImplementation(() => {
+                throw new Error('duplicate failed');
+            });
+
+            // The listener is called fire-and-forget from the HTTP handler — it
+            // MUST NOT propagate synchronous errors back to the request path.
+            expect(() => listener.listen(mockG8eContext)).not.toThrow();
         });
     });
 });

@@ -153,8 +153,17 @@ class FsReadResultPayload(G8eBaseModel):
 
 
 class FetchLogsResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed."""
-    execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
+    """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed.
+
+    ``execution_id`` is optional because failed fetches that originate from a
+    malformed request (missing/empty ``execution_id`` in the inbound payload)
+    may surface errors without an execution_id to echo back. Success paths
+    always populate it. This mirrors the other LFAA error payloads
+    (``FetchHistoryResultPayload``, ``RestoreFileResultPayload``,
+    ``FetchFileHistoryResultPayload``) which carry ``success``/``error`` and
+    no required execution_id field.
+    """
+    execution_id: str | None = Field(default=None, description="Execution identifier whose logs were fetched")
     command: str = Field(default="", description="Original command string")
     exit_code: int | None = Field(None)
     duration_ms: int | None = Field(default=None, description="Original execution duration in milliseconds")

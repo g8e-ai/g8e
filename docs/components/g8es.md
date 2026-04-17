@@ -59,7 +59,7 @@ g8ed and g8ee both use HTTP for document store, KV operations, and blob storage,
 | **Blob store** | HTTP | Large binary data; streamed via standard HTTP |
 | **SSE event buffer** | HTTP | Ring buffer for reconnection replay; per-session row management via DELETE/GET |
 | **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling. Supports HTTP publish. |
-| **Operator Binaries**| HTTP | Static binary distribution via `/binary/{os}/{arch}` |
+| **Operator Binaries**| HTTP | Served from the blob store under namespace `operator-binary` (`GET /blob/operator-binary/linux-{arch}`) |
 
 ## CLI
 
@@ -138,12 +138,12 @@ GET /health
 
 ### Operator Binary Distribution
 
-Operator binaries are served directly from the filesystem in g8es.
+Operator binaries are stored in the blob store under namespace `operator-binary` and streamed on demand. The g8es container bakes cross-compiled binaries for each supported architecture at image build time and uploads them to the blob store on startup.
 
 ```
-GET /binary/linux/amd64        → Stream linux/amd64 binary
-GET /binary/linux/arm64        → Stream linux/arm64 binary
-GET /binary/linux/386          → Stream linux/386 binary
+GET /blob/operator-binary/linux-amd64  → Stream linux/amd64 binary
+GET /blob/operator-binary/linux-arm64  → Stream linux/arm64 binary
+GET /blob/operator-binary/linux-386    → Stream linux/386 binary
 ```
 
 ### Document Store

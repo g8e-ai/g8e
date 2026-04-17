@@ -51,13 +51,13 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 	var flrp models.FetchLogsRequestPayload
 	if err := json.Unmarshal(msg.Payload, &flrp); err != nil {
 		hs.logger.Error("Failed to decode fetch logs payload", "error", err)
-		hs.publishFetchLogsError(ctx, msg, "", "invalid request payload")
+		hs.publishFetchLogsFailure(ctx, msg, "", "invalid request payload")
 		return
 	}
 	executionID := flrp.ExecutionID
 	if executionID == "" {
 		hs.logger.Warn("Fetch logs request without execution_id")
-		hs.publishFetchLogsError(ctx, msg, "", "missing execution_id in request")
+		hs.publishFetchLogsFailure(ctx, msg, "", "missing execution_id in request")
 		return
 	}
 
@@ -87,13 +87,13 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 	record, err := hs.rawVault.GetRawExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from raw vault", "error", err)
-		hs.publishFetchLogsError(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
+		hs.publishFetchLogsFailure(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in raw vault", "execution_id", executionID)
-		hs.publishFetchLogsError(ctx, msg, executionID, "execution not found in raw vault")
+		hs.publishFetchLogsFailure(ctx, msg, executionID, "execution not found in raw vault")
 		return
 	}
 
@@ -103,20 +103,20 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
 		hs.logger.Warn("Scrubbed vault not available for fetch logs request")
-		hs.publishFetchLogsError(ctx, msg, executionID, "scrubbed vault is not enabled on this operator")
+		hs.publishFetchLogsFailure(ctx, msg, executionID, "scrubbed vault is not enabled on this operator")
 		return
 	}
 
 	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from scrubbed vault", "error", err)
-		hs.publishFetchLogsError(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
+		hs.publishFetchLogsFailure(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in scrubbed vault", "execution_id", executionID)
-		hs.publishFetchLogsError(ctx, msg, executionID, "execution not found in scrubbed vault")
+		hs.publishFetchLogsFailure(ctx, msg, executionID, "execution not found in scrubbed vault")
 		return
 	}
 
@@ -124,20 +124,21 @@ func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg 
 }
 
 func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg PubSubCommandMessage, record *storage.RawExecutionRecord) {
-	hs.publishFetchLogsPayload(ctx, msg, models.FetchLogsResultPayload{
-		ExecutionID:       record.ID,
-		Command:           record.Command,
-		ExitCode:          record.ExitCode,
-		DurationMs:        record.DurationMs,
-		Stdout:            string(record.StdoutCompressed),
-		Stderr:            string(record.StderrCompressed),
-		StdoutSize:        record.StdoutSize,
-		StderrSize:        record.StderrSize,
-		Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
-		OperatorID:        hs.config.OperatorID,
-		OperatorSessionID: hs.config.OperatorSessionId,
-		SentinelMode:      constants.Status.VaultMode.Raw,
-	})
+	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
+		models.FetchLogsResultPayload{
+			ExecutionID:       record.ID,
+			Command:           record.Command,
+			ExitCode:          record.ExitCode,
+			DurationMs:        record.DurationMs,
+			Stdout:            string(record.StdoutCompressed),
+			Stderr:            string(record.StderrCompressed),
+			StdoutSize:        record.StdoutSize,
+			StderrSize:        record.StderrSize,
+			Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
+			OperatorID:        hs.config.OperatorID,
+			OperatorSessionID: hs.config.OperatorSessionId,
+			SentinelMode:      constants.Status.VaultMode.Raw,
+		})
 	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
 		"execution_id", record.ID,
 		"stdout_size", record.StdoutSize,
@@ -145,81 +146,45 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 }
 
 func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSubCommandMessage, record *storage.ExecutionRecord) {
-	hs.publishFetchLogsPayload(ctx, msg, models.FetchLogsResultPayload{
-		ExecutionID:       record.ID,
-		Command:           record.Command,
-		ExitCode:          record.ExitCode,
-		DurationMs:        record.DurationMs,
-		Stdout:            string(record.StdoutCompressed),
-		Stderr:            string(record.StderrCompressed),
-		StdoutSize:        record.StdoutSize,
-		StderrSize:        record.StderrSize,
-		Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
-		OperatorID:        hs.config.OperatorID,
-		OperatorSessionID: hs.config.OperatorSessionId,
-		SentinelMode:      constants.Status.VaultMode.Scrubbed,
-	})
+	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
+		models.FetchLogsResultPayload{
+			ExecutionID:       record.ID,
+			Command:           record.Command,
+			ExitCode:          record.ExitCode,
+			DurationMs:        record.DurationMs,
+			Stdout:            string(record.StdoutCompressed),
+			Stderr:            string(record.StderrCompressed),
+			StdoutSize:        record.StdoutSize,
+			StderrSize:        record.StderrSize,
+			Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
+			OperatorID:        hs.config.OperatorID,
+			OperatorSessionID: hs.config.OperatorSessionId,
+			SentinelMode:      constants.Status.VaultMode.Scrubbed,
+		})
 	hs.logger.Info("Fetch logs result transmitted",
 		"execution_id", record.ID,
 		"stdout_size", record.StdoutSize,
 		"stderr_size", record.StderrSize)
 }
 
-func (hs *HistoryService) publishFetchLogsPayload(ctx context.Context, msg PubSubCommandMessage, payload models.FetchLogsResultPayload) {
-	resultMsg, err := models.NewG8eMessage(
-		msg.ID, constants.Event.Operator.FetchLogs.Completed, msg.CaseID,
-		hs.config.OperatorID, hs.config.OperatorSessionId, hs.config.SystemFingerprint, payload,
-	)
-	if err != nil {
-		hs.logger.Error("Failed to build fetch logs result message", "error", err)
-		return
-	}
-	resultMsg.TaskID = msg.TaskID
-	resultMsg.InvestigationID = msg.InvestigationID
-	resultMsg.OperatorSessionID = msg.OperatorSessionID
-
-	data, err := resultMsg.Marshal()
-	if err != nil {
-		hs.logger.Error("Failed to marshal fetch logs result", "error", err)
-		return
-	}
-
-	channelName := constants.ResultsChannel(hs.config.OperatorID, hs.config.OperatorSessionId)
-	if err := hs.client.Publish(ctx, channelName, data); err != nil {
-		hs.logger.Error("Failed to publish fetch logs result", "error", err)
-	}
-}
-
-func (hs *HistoryService) publishFetchLogsError(ctx context.Context, msg PubSubCommandMessage, executionID, errorMsg string) {
-	payload := models.FetchLogsResultPayload{
+// publishFetchLogsFailure publishes a FetchLogs.Failed result with a fetch-logs
+// specific payload. We do NOT use publishLFAAErrorTo here because the g8ee side
+// expects a FetchLogsResultPayload-shaped message on this event type, not an
+// LFAAErrorPayload. The shape carries the (possibly empty) execution_id so
+// callers can correlate the error to their request. Wire-level MCP wrapping is
+// handled centrally via publishLFAAResponseTo.
+func (hs *HistoryService) publishFetchLogsFailure(ctx context.Context, msg PubSubCommandMessage, executionID, errorMsg string) {
+	payload, err := json.Marshal(models.FetchLogsResultPayload{
 		ExecutionID:       executionID,
 		Error:             errorMsg,
 		OperatorID:        hs.config.OperatorID,
 		OperatorSessionID: hs.config.OperatorSessionId,
-	}
-
-	resultMsg, err := models.NewG8eMessage(
-		msg.ID, constants.Event.Operator.FetchLogs.Failed, msg.CaseID,
-		hs.config.OperatorID, hs.config.OperatorSessionId, hs.config.SystemFingerprint, payload,
-	)
+	})
 	if err != nil {
-		hs.logger.Error("Failed to build fetch logs error message", "error", err)
+		hs.logger.Error("Failed to marshal fetch logs failure payload", "error", err)
 		return
 	}
-	resultMsg.TaskID = msg.TaskID
-	resultMsg.InvestigationID = msg.InvestigationID
-	resultMsg.OperatorSessionID = msg.OperatorSessionID
-
-	data, err := resultMsg.Marshal()
-	if err != nil {
-		hs.logger.Error("Failed to marshal fetch logs error", "error", err)
-		return
-	}
-
-	channelName := constants.ResultsChannel(hs.config.OperatorID, hs.config.OperatorSessionId)
-	if err := hs.client.Publish(ctx, channelName, data); err != nil {
-		hs.logger.Error("Failed to publish fetch logs error", "error", err)
-	}
+	publishLFAAResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, payload)
 }
 
 // HandleFetchHistoryRequest processes a fetch history request.
