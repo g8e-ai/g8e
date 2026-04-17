@@ -276,10 +276,21 @@ export class LlmModelManager {
             if (textElement) {
                 textElement.textContent = 'No models';
             }
-        } else if (!selectedValue && firstOption) {
-            // Select first available model if none selected
-            const provider = this._findProviderForModel(role, firstOption.id);
-            this._selectModel(role, firstOption.id, provider, firstOption.label || firstOption.id);
+            throw new Error(`[LlmModelManager] No ${role} models available from any configured provider`);
+        }
+
+        if (!selectedValue) {
+            if (textElement) {
+                textElement.textContent = 'Not configured';
+            }
+            throw new Error(`[LlmModelManager] No ${role} model configured in settings`);
+        }
+
+        if (!modelMap.has(selectedValue)) {
+            if (textElement) {
+                textElement.textContent = 'Invalid model';
+            }
+            throw new Error(`[LlmModelManager] Configured ${role} model '${selectedValue}' is not a valid ${role}-tier model for any configured provider`);
         }
     }
 

@@ -20,6 +20,20 @@
 
 import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
 
+// All models for each provider are available at every tier; the user decides
+// which model serves primary / assistant / lite.
+const OPENAI_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: OpenAIModel.GPT_5_4,       label: 'GPT-5.4' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_PRO,   label: 'GPT-5.4 Pro' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_MINI,  label: 'GPT-5.4 Mini' }),
+    Object.freeze({ value: OpenAIModel.GPT_5_4_NANO,  label: 'GPT-5.4 Nano' }),
+]);
+const ANTHROPIC_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,   label: 'Claude Opus 4.6' }),
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
+    Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,  label: 'Claude Haiku 4.5' }),
+]);
+
 // ---------------------------------------------------------------------------
 // USER_SETTINGS — user-configurable settings shown and saved via the UI
 // ---------------------------------------------------------------------------
@@ -86,13 +100,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Main model used for investigations and AI reasoning.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4, label: 'GPT-5.4' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -101,13 +112,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Lightweight model for assistant tasks and command generation.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' }),
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4_MINI,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_lite_model',
@@ -116,12 +124,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Ultra-lightweight model for quick tasks.',
         type: 'select',
         provider: LLMProvider.OPENAI,
-        options: Object.freeze([
-            Object.freeze({ value: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' }),
-        ]),
+        options: OPENAI_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: OpenAIModel.GPT_5_4_NANO,
+        default: ''
     }),
     Object.freeze({
         key: 'openai_endpoint',
@@ -197,14 +203,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Main model used for investigations and AI reasoning.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_assistant_model',
@@ -213,13 +215,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Lightweight model for assistant tasks and command generation.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        default: ''
     }),
     Object.freeze({
         key: 'llm_lite_model',
@@ -228,12 +227,10 @@ export const USER_SETTINGS = Object.freeze([
         description: 'Ultra-lightweight model for quick tasks.',
         type: 'select',
         provider: LLMProvider.ANTHROPIC,
-        options: Object.freeze([
-            Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' }),
-        ]),
+        options: ANTHROPIC_MODEL_OPTIONS,
         secret: false,
         placeholder: '',
-        default: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+        default: ''
     }),
     Object.freeze({
         key: 'anthropic_endpoint',

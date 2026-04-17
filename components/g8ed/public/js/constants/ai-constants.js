@@ -53,84 +53,35 @@ export const OllamaModel = Object.freeze({
     QWEN3_5_2B:      'qwen3.5:2b',
 });
 
+// Every model is available at every tier for every provider. The user picks
+// which model serves each role; we do not gate availability by tier.
+const _tierAll = (models) => ({ all: models, primary: models, assistant: models, lite: models });
+
 export const PROVIDER_MODELS = Object.freeze({
-    [LLMProvider.GEMINI]: {
-        all: [
-            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
-            { id: GeminiModel.FLASH, label: 'Gemini 3 Flash' },
-            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
-        ],
-        primary: [
-            { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
-        ],
-        assistant: [
-            { id: GeminiModel.FLASH, label: 'Gemini 3 Flash' },
-        ],
-        lite: [
-            { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
-        ],
-        defaultPrimary: GeminiModel.PRO,
-        defaultAssistant: GeminiModel.FLASH,
-        defaultLite: GeminiModel.FLASH_LITE,
-    },
-    [LLMProvider.ANTHROPIC]: {
-        all: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
-        ],
-        primary: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
-        ],
-        assistant: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
-        ],
-        lite: [
-            { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
-        ],
-        defaultPrimary: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,
-        defaultAssistant: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
-        defaultLite: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
-    },
-    [LLMProvider.OPENAI]: {
-        all: [
-            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
-            { id: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' },
-            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
-        ],
-        primary: [
-            { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
-        ],
-        assistant: [
-            { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
-        ],
-        lite: [
-            { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
-        ],
-        defaultPrimary: OpenAIModel.GPT_5_4,
-        defaultAssistant: OpenAIModel.GPT_5_4_MINI,
-        defaultLite: OpenAIModel.GPT_5_4_NANO,
-    },
-    [LLMProvider.OLLAMA]: (() => {
-        const allOllamaModels = [
-            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
-            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 Cloud' },
-            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
-            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
-            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
-            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
-            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
-            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
-        ];
-        return {
-            all: allOllamaModels,
-            primary: allOllamaModels,
-            assistant: allOllamaModels,
-            lite: allOllamaModels,
-            defaultPrimary: OllamaModel.QWEN3_5_122B,
-            defaultAssistant: OllamaModel.GEMMA4_26B,
-            defaultLite: OllamaModel.LLAMA_3_2_3B,
-        };
-    })(),
+    [LLMProvider.GEMINI]: _tierAll([
+        { id: GeminiModel.PRO, label: 'Gemini 3.1 Pro' },
+        { id: GeminiModel.FLASH, label: 'Gemini 3 Flash' },
+        { id: GeminiModel.FLASH_LITE, label: 'Gemini 3.1 Flash Lite' },
+    ]),
+    [LLMProvider.ANTHROPIC]: _tierAll([
+        { id: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6, label: 'Claude Opus 4.6' },
+        { id: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' },
+        { id: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5, label: 'Claude Haiku 4.5' },
+    ]),
+    [LLMProvider.OPENAI]: _tierAll([
+        { id: OpenAIModel.GPT_5_4, label: 'GPT-5.4' },
+        { id: OpenAIModel.GPT_5_4_PRO, label: 'GPT-5.4 Pro' },
+        { id: OpenAIModel.GPT_5_4_MINI, label: 'GPT-5.4 Mini' },
+        { id: OpenAIModel.GPT_5_4_NANO, label: 'GPT-5.4 Nano' },
+    ]),
+    [LLMProvider.OLLAMA]: _tierAll([
+        { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
+        { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 Cloud' },
+        { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
+        { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
+        { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
+        { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
+        { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
+        { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
+    ]),
 });

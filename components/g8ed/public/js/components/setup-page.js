@@ -350,10 +350,6 @@ export class SetupPage {
             return;
         }
 
-        let firstPrimaryDefault = null;
-        let firstAssistantDefault = null;
-        let firstLiteDefault = null;
-
         roles.forEach(role => {
             const dropdown = document.getElementById(`${role}_model`);
             const menu = document.getElementById(`${role}_model-menu`);
@@ -392,10 +388,6 @@ export class SetupPage {
                         if (text) text.textContent = model.label;
                     }
 
-                    if (role === 'primary' && !firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
-                    if (role === 'assistant' && !firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
-                    if (role === 'lite' && !firstLiteDefault) firstLiteDefault = config.defaultLite;
-
                     option.addEventListener('click', (e) => {
                         e.stopPropagation();
                         this._selectModel(role, model.id, model.label);
@@ -426,11 +418,6 @@ export class SetupPage {
             if (menu.children.length === 0) {
                 if (text) text.textContent = 'No models available';
                 this._selectedModels[role] = '';
-            } else if (!prevValue) {
-                const defaultModel = role === 'primary' ? firstPrimaryDefault : role === 'assistant' ? firstAssistantDefault : firstLiteDefault;
-                if (defaultModel) {
-                    this._selectModel(role, defaultModel, this._findModelLabel(role, defaultModel));
-                }
             }
         });
     }
