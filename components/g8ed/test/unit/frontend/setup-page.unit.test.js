@@ -113,6 +113,10 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
                 <input id="search_api_key" type="password" />
                 <input id="google_project_id" type="text" />
                 <input id="vertex_ai_search_app_id" type="text" />
+                <label id="use-gemini-key-wrap" class="setup-field-hidden" for="use_gemini_api_key">
+                    <input id="use_gemini_api_key" type="checkbox" />
+                    <span>Use Gemini API Key</span>
+                </label>
             </div>
             <div id="wizard-summary"></div>
             <button id="finish-btn">Finish</button>
@@ -567,6 +571,17 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(primaryText.textContent).not.toBe('Enter at least one API key');
         });
 
+        it('auto-selects the first available model when providers active but nothing selected', () => {
+            document.getElementById('primary_model').querySelector('.llm-model-dropdown__text').textContent = 'API Key Required';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._selectedModels.primary = '';
+            setupPage._updateModelDropdowns();
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            expect(primaryText.textContent).not.toBe('Enter at least one API key');
+            expect(primaryText.textContent).not.toBe('Select a Model');
+            expect(setupPage._selectedModels.primary).toBeTruthy();
+        });
+
         it('populates models from multiple active providers', () => {
             document.getElementById('gemini_api_key').value = 'key1';
             document.getElementById('openai_api_key').value = 'key2';
@@ -729,6 +744,83 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('handles missing search provider select gracefully', () => {
             document.getElementById('search_provider').remove();
             expect(() => setupPage._initSearchProvider()).not.toThrow();
+        });
+    });
+
+    describe('Use Gemini API Key checkbox', () => {
+        beforeEach(() => {
+            setupPage = new SetupPage();
+            setupPage._initSearchProvider();
+            setupPage._initUseGeminiKeyCheckbox();
+        });
+
+        it('is hidden when no gemini key is entered', () => {
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(true);
+        });
+
+        it('is hidden when search provider is not google', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            setupPage._updateUseGeminiKeyVisibility();
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(true);
+        });
+
+        it('is shown when gemini key is entered and google is selected', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+            const wrap = document.getElementById('use-gemini-key-wrap');
+            expect(wrap.classList.contains('setup-field-hidden')).toBe(false);
+        });
+
+        it('populates search_api_key with gemini key when checked', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+
+            expect(document.getElementById('search_api_key').value).toBe('AIzaTESTKEY');
+        });
+
+        it('clears search_api_key when unchecked', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event('change'));
+
+            expect(document.getElementById('search_api_key').value).toBe('');
+        });
+
+        it('unchecks the checkbox when it becomes hidden', () => {
+            document.getElementById('gemini_api_key').value = 'AIzaTESTKEY';
+            document.getElementById('search_provider').value = 'google';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            const checkbox = document.getElementById('use_gemini_api_key');
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change'));
+
+            document.getElementById('search_provider').value = '';
+            document.getElementById('search_provider').dispatchEvent(new Event('change'));
+
+            expect(checkbox.checked).toBe(false);
+        });
+
+        it('handles missing checkbox gracefully', () => {
+            document.getElementById('use_gemini_api_key').remove();
+            expect(() => setupPage._initUseGeminiKeyCheckbox()).not.toThrow();
+            expect(() => setupPage._updateUseGeminiKeyVisibility()).not.toThrow();
         });
     });
 

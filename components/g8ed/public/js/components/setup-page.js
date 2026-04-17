@@ -95,6 +95,7 @@ export class SetupPage {
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
+        this._initUseGeminiKeyCheckbox();
         this._initModelDropdowns();
         this._updateProviderStates();
         this._updateNav();
@@ -139,6 +140,10 @@ export class SetupPage {
 
         this._updateNav();
         this._clearStatus();
+
+        if (step === 3) {
+            this._updateUseGeminiKeyVisibility();
+        }
 
         if (step === LAST_STEP) {
             this._renderSummary();
@@ -359,8 +364,31 @@ export class SetupPage {
             
             dropdown.classList.remove('disabled');
             menu.innerHTML = '';
-            
-            const prevValue = this._selectedModels[role];
+
+            let prevValue = this._selectedModels[role];
+            if (prevValue && prevValue !== 'custom') {
+                const stillAvailable = active.some(p => {
+                    const cfg = PROVIDER_MODELS[p];
+                    return cfg && (cfg.all || []).some(m => m.id === prevValue);
+                });
+                if (!stillAvailable) {
+                    prevValue = '';
+                    this._selectedModels[role] = '';
+                }
+            }
+            if (!prevValue) {
+                for (const provider of active) {
+                    const cfg = PROVIDER_MODELS[provider];
+                    const roleModels = cfg?.[role] || cfg?.all || [];
+                    if (roleModels.length > 0) {
+                        prevValue = roleModels[0].id;
+                        this._selectedModels[role] = prevValue;
+                        if (text) text.textContent = roleModels[0].label;
+                        break;
+                    }
+                }
+            }
+            if (text && !prevValue) text.textContent = 'Select a Model';
             
             for (const provider of active) {
                 const config = PROVIDER_MODELS[provider];
@@ -502,7 +530,42 @@ export class SetupPage {
             this._searchProvider = select.value;
             const googleConfig = document.getElementById('search-config-google');
             if (googleConfig) googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            this._updateUseGeminiKeyVisibility();
         });
+    }
+
+    // ---------------------------------------------------------------------------
+    // "Use Gemini API Key" checkbox
+    // ---------------------------------------------------------------------------
+
+    _initUseGeminiKeyCheckbox() {
+        const checkbox = document.getElementById('use_gemini_api_key');
+        if (!checkbox) return;
+        checkbox.addEventListener('change', () => {
+            const searchKeyEl = document.getElementById('search_api_key');
+            const geminiKeyEl = document.getElementById('gemini_api_key');
+            if (!searchKeyEl) return;
+            if (checkbox.checked) {
+                searchKeyEl.value = geminiKeyEl?.value.trim() || '';
+            } else {
+                searchKeyEl.value = '';
+            }
+            searchKeyEl.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+
+    _updateUseGeminiKeyVisibility() {
+        const wrap = document.getElementById('use-gemini-key-wrap');
+        const checkbox = document.getElementById('use_gemini_api_key');
+        const geminiKeyEl = document.getElementById('gemini_api_key');
+        if (!wrap || !checkbox) return;
+
+        const hasGeminiKey = !!(geminiKeyEl && geminiKeyEl.value.trim());
+        const showCheckbox = hasGeminiKey && this._searchProvider === 'google';
+        wrap.classList.toggle('setup-field-hidden', !showCheckbox);
+        if (!showCheckbox && checkbox.checked) {
+            checkbox.checked = false;
+        }
     }
 
     // ---------------------------------------------------------------------------

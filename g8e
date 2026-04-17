@@ -104,6 +104,7 @@ _help() {
     echo "    g8ee                           Python/pytest tests (g8ee-test-runner)"
     echo "    g8ed                          TypeScript/vitest tests (g8ed-test-runner)"
     echo "    g8eo                           Go tests (g8eo-test-runner)"
+    echo "    -j, --parallel [N|auto]     Run pytest in parallel via pytest-xdist (g8ee only)"
     echo "    LLM flags (enables ai_integration tests):"
     echo "      -p, --llm-provider          gemini | openai | anthropic | ollama"
     echo "      -m, --primary-model         Primary model name"
@@ -527,6 +528,15 @@ case "$TOP" in
                     _require_value "-k/--llm-api-key"
                     export TEST_LLM_API_KEY="${_args[1]}"
                     _args=("${_args[@]:2}") ;;
+                -j|--parallel)
+                    # Optional value: accept "auto" or a positive integer; otherwise default to "auto".
+                    if [[ ${#_args[@]} -ge 2 && ( "${_args[1]}" == "auto" || "${_args[1]}" =~ ^[0-9]+$ ) ]]; then
+                        _TEST_PASSTHROUGH+=("--parallel" "${_args[1]}")
+                        _args=("${_args[@]:2}")
+                    else
+                        _TEST_PASSTHROUGH+=("--parallel" "auto")
+                        _args=("${_args[@]:1}")
+                    fi ;;
                 --)
                     _TEST_PASSTHROUGH+=("${_args[@]}")
                     break ;;

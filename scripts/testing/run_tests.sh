@@ -47,6 +47,7 @@ COMPONENT=""
 COVERAGE=false
 PYRIGHT=false
 E2E=false
+PARALLEL=""
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +61,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
+            echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
             echo "LLM/Web Search options are passed as environment variables by the ./g8e CLI."
             exit 0
@@ -67,6 +69,14 @@ while [[ $# -gt 0 ]]; do
         --coverage) COVERAGE=true; shift ;;
         --pyright)  PYRIGHT=true;  shift ;;
         --e2e)      E2E=true;      shift ;;
+        -j|--parallel)
+            if [[ $# -lt 2 || "$2" == -* || "$2" == "--" ]]; then
+                PARALLEL="auto"
+                shift
+            else
+                PARALLEL="$2"
+                shift 2
+            fi ;;
         --)
             shift
             EXTRA_ARGS=("$@")
@@ -180,6 +190,16 @@ run_g8ee() {
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
     [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("-s" "--log-cli-level=INFO")
+    if [[ -n "$PARALLEL" ]]; then
+        # -s (capture=no) is incompatible with xdist; drop it when parallelising.
+        local filtered=()
+        for a in "${cov_args[@]}"; do
+            [[ "$a" == "-s" ]] && continue
+            filtered+=("$a")
+        done
+        cov_args=("${filtered[@]}" "-n" "$PARALLEL")
+        log_ok "pytest parallelism: -n $PARALLEL"
+    fi
     pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
