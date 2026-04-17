@@ -11,11 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Multi-Operator Batches:** `batch_id` correlation is now surfaced end-to-end — on `CommandExecutionResult`, approval metadata, and conversation message metadata — so agents and the dashboard can tie per-operator events and follow-up actions back to a single batched approval.
+- **Task Tracking:** Task ID and TDTS tracking added for better correlation and debugging.
+- **Setup Page:** Users can now reuse Gemini API key for Vertex AI search in the setup page.
 
 ### Changed
 - **Batch Concurrency Safety:** `command_validation.max_batch_concurrency` is now bounded (1–64) at the model layer, preventing misconfigurations that could fan out to an unbounded number of operators.
 - **Operator Selection Errors:** Multi-operator validation errors now clearly describe both single-host (`target_operator`) and batch (`target_operators`) targeting options.
 - **Documentation:** `g8ed` docs updated to describe parallel batch fan-out with bounded concurrency and shared `batch_id` correlation.
+- **Agent Autonomy Language:** Updated autonomy-related language to use more empowering terminology across prompts and documentation.
+- **Prompt Engineering:** Cleaned up anti-patterns from prompts, synchronized verbiage, and refactored thinking support to handle multiple definitions.
+- **Capability Handling:** Improved capability handling and thinking levels for agents.
+- **Operator Panel:** Added collapse functionality and increased pagination to 20 operators per page.
+
+### Fixed
+- **Ollama Provider:** Fixed model selection, `num_ctx` configuration, error handling, and thinking parameter handling. Improved context window handling from Ollama responses.
+- **Gemini Models:** Fixed Gemini 3 Flash model name in configuration.
+- **Model Selection:** Fixed model selection dropdowns and UI collapsing issues across the dashboard.
+- **Test Infrastructure:** Improved g8ee test fixes, added test parallelism support, and fixed various integration and unit tests.
 
 ---
 
