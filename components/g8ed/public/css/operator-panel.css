@@ -643,7 +643,7 @@
   gap: 4px;
   flex: 1 1 50%;
   min-height: 120px;
-  overflow-y: auto;
+  overflow-y: scroll;
 }
 
 .operator-list-item {
