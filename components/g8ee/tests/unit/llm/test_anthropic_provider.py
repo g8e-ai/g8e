@@ -209,14 +209,11 @@ class TestBuildKwargsThinkingMode:
 
     def test_thinking_output_reserve_sourced_from_model_config(self):
         """Uplift uses the model's per-config thinking_output_reserve, not a
-        module-level constant. Mutating the reserve on a specific config must
-        change the uplifted max_tokens for that model only."""
-        from app.models.model_configs import get_model_config
+        module-level constant. Installing a scoped override on a specific
+        model config must change the uplifted max_tokens for that model only."""
+        from app.models.model_configs import MODEL_REGISTRY
 
-        sonnet_config = get_model_config(ANTHROPIC_CLAUDE_SONNET_4_6)
-        original_reserve = sonnet_config.thinking_output_reserve
-        sonnet_config.thinking_output_reserve = 2_048
-        try:
+        with MODEL_REGISTRY.override(ANTHROPIC_CLAUDE_SONNET_4_6, thinking_output_reserve=2_048):
             request = self._build(
                 model=ANTHROPIC_CLAUDE_SONNET_4_6,
                 max_tokens=1_000,
@@ -225,8 +222,6 @@ class TestBuildKwargsThinkingMode:
             # max_tokens must uplift to exactly budget + 2048.
             assert request.thinking["budget_tokens"] == 16_384
             assert request.max_tokens == 16_384 + 2_048
-        finally:
-            sonnet_config.thinking_output_reserve = original_reserve
 
     def test_thinking_haiku_minimal_uses_default_budget(self):
         """Haiku supports MINIMAL with no per-model override → default table."""

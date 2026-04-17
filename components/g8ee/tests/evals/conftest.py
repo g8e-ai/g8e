@@ -203,6 +203,25 @@ def benchmark_results_collector(request):
         print(f"AGGREGATE: {passed}/{total} scenarios passed ({pct:.1f}%)")
         print("-" * 80)
 
+        continue_results = [
+            r for r in collector.results if r.get("agent_continue_approvals", 0) > 0
+        ]
+        if continue_results:
+            print()
+            print("AGENT_CONTINUE APPROVALS (scenarios that exceeded AGENT_MAX_TOOL_TURNS):")
+            total_continues = sum(r["agent_continue_approvals"] for r in continue_results)
+            print(
+                f"  {len(continue_results)}/{total} scenarios required continuation "
+                f"(total AGENT_CONTINUE approvals={total_continues})"
+            )
+            for r in continue_results:
+                print(
+                    f"    {r['scenario_id']}: "
+                    f"agent_continue={r['agent_continue_approvals']} "
+                    f"all_approvals={r.get('approvals_by_type') or {}}"
+                )
+            print("-" * 80)
+
         tribunal_results = [r for r in collector.results if r.get("tribunal_outcome")]
         if tribunal_results:
             print()

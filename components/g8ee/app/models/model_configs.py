@@ -36,7 +36,11 @@ Provider-specific behavior (e.g. thought signatures, response_format)
 lives in the respective provider adapter under app/llm/providers/.
 """
 
-from pydantic import Field
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
+
+from pydantic import ConfigDict, Field, PrivateAttr
 
 from app.constants import (
     ANTHROPIC_CLAUDE_HAIKU_4_5,
@@ -67,7 +71,19 @@ from app.models.base import G8eBaseModel
 
 
 class LLMModelConfig(G8eBaseModel):
-    """Configuration for an LLM model including capability constraints."""
+    """Configuration for an LLM model including capability constraints.
+
+    Frozen. Use ``MODEL_REGISTRY.override(name, **updates)`` to install a
+    scoped, modified variant for tests or capability probes — never mutate
+    a registered config in place. Mutation would leak across the whole
+    process (MODEL_REGISTRY is a module-level singleton).
+    """
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+        frozen=True,
+    )
 
     name: str
     supported_thinking_levels: list[ThinkingLevel] = Field(default_factory=list)
@@ -453,24 +469,73 @@ UNKNOWN_MODEL_CONFIG = LLMModelConfig(
 
 
 class LLMModelRegistry(G8eBaseModel):
-    """Registry of all known LLM model configurations."""
+    """Registry of all known LLM model configurations.
+
+    Registered configs are immutable. Tests and capability probes that
+    need to adjust a config's fields for a scope must use ``override()``,
+    which installs a scoped modified copy via a private overrides map
+    instead of mutating the registered instance.
+    """
 
     configs: list[LLMModelConfig] = Field(default_factory=list)
+    _overrides: dict[str, LLMModelConfig] = PrivateAttr(default_factory=dict)
 
     def get(self, model_name: str | None) -> LLMModelConfig:
         """Return the config for a model, or the shared UNKNOWN_MODEL_CONFIG.
 
-        Unknown-model fallback assumes no thinking capability; operators that
-        need thinking on custom models must register a proper config. Returning
-        the shared constant (rather than a fresh object) preserves identity so
-        callers can safely compare, cache, or monkeypatch registry entries.
+        Scoped overrides (installed via ``override()``) take precedence over
+        registered configs. Unknown-model fallback assumes no thinking
+        capability; operators that need thinking on custom models must
+        register a proper config. Returning the shared constant (rather than
+        a fresh object) preserves identity so callers can safely compare
+        or cache registry entries.
         """
         if not model_name:
             return UNKNOWN_MODEL_CONFIG
+        override = self._overrides.get(model_name)
+        if override is not None:
+            return override
         for config in self.configs:
             if config.name == model_name:
                 return config
         return UNKNOWN_MODEL_CONFIG
+
+    @contextmanager
+    def override(self, model_name: str, **updates: Any) -> Iterator[LLMModelConfig]:
+        """Install a scoped override on a registered model config.
+
+        Builds a modified copy of the registered config via ``model_copy``
+        and stores it in the private overrides map for the duration of the
+        context. On exit the override is removed, restoring the original.
+
+        Fails loudly if ``model_name`` is not registered — fabricating an
+        ad-hoc config would bypass registration-time validation (e.g. the
+        Ollama ``thinking_dialect`` check).
+
+        Not safe against re-entry on the same ``model_name`` within a
+        single process. The registry is a process-wide singleton; callers
+        must not nest overrides for the same model.
+        """
+        base = next((cfg for cfg in self.configs if cfg.name == model_name), None)
+        if base is None:
+            registered = ", ".join(sorted(cfg.name for cfg in self.configs))
+            raise LookupError(
+                f"Cannot override unregistered model {model_name!r}. "
+                f"Register it in app/models/model_configs.py (with an "
+                f"explicit ThinkingDialect for Ollama models) before "
+                f"installing an override. Registered models: {registered}"
+            )
+        if model_name in self._overrides:
+            raise RuntimeError(
+                f"Nested override for model {model_name!r} is not supported; "
+                "a previous override is still active."
+            )
+        modified = base.model_copy(update=updates)
+        self._overrides[model_name] = modified
+        try:
+            yield modified
+        finally:
+            self._overrides.pop(model_name, None)
 
     def available_models(self) -> list[str]:
         """Return list of all registered model names."""

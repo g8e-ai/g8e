@@ -446,8 +446,8 @@ def test_operator_not_bound_prompt_requires_acknowledgement(g8e_web_search_avail
     # offering any command. This is the directive that keeps the mode
     # internally consistent and what scenario_01 validates.
     assert "No Operator is currently bound" in prompt
-    assert "MUST acknowledge the limitation before anything else" in prompt
-    assert "Never skip the not-bound acknowledgement" in prompt
+    assert "acknowledge the bind-state limitation before anything else" in prompt
+    assert "Never skip the bind-state acknowledgement" in prompt
 
 
 def test_operator_not_bound_prompt_does_not_contradict_capabilities():

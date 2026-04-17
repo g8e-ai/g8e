@@ -55,17 +55,16 @@ from app.services.ai.benchmark_judge import (
 from app.models.events import SessionEvent
 from app.models.g8ed_client import ChatToolCallPayload
 from app.models.agents.tribunal import TribunalSessionCompletedPayload
-from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
-from app.services.operator.approval_service import PendingApproval
+from app.models.operators import ApprovalType
 from tests.fakes.fake_event_service import FakeEventService
 from tests.evals.shared import (
     BenchmarkTestResult,
     load_and_validate_benchmark_set,
     seed_operator_if_bound,
 )
-from app.utils.timestamp import now
+from tests.integration.conftest import auto_approve_inline_callback
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +72,16 @@ def load_benchmark_set() -> list[dict[str, Any]]:
     return load_and_validate_benchmark_set(PATHS["g8ee"]["evals"]["benchmark_path"])
 
 
+# 600s per scenario: multi-step investigations can run up to AGENT_MAX_TOOL_TURNS
+# (25) before requesting an AGENT_CONTINUE approval; at real LLM latencies plus a
+# post-continue continuation this exceeds the 180s we used before the continue
+# mechanism existed. AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS is itself 600s.
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.ai_integration,
     pytest.mark.agent_benchmark,
     pytest.mark.slow,
-    pytest.mark.timeout(180),
+    pytest.mark.timeout(600),
 ]
 
 
@@ -159,7 +162,6 @@ def _extract_tool_calls_from_events(
 
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.parametrize("scenario_data", load_benchmark_set(), ids=lambda s: s["id"])
-@pytest.mark.skip(reason="Ironing out kinks in the testing framework")
 async def test_agent_benchmark(
     scenario_data: dict[str, Any],
     all_services,
@@ -251,17 +253,6 @@ async def test_agent_benchmark(
         chat_pipeline.g8ed_event_service = fake_event_service
 
         approval_service = all_services['approval_service']
-
-        def _auto_approve_callback(approval_id: str, pending: PendingApproval):
-            pending.resolve(
-                approved=True,
-                reason="Auto-approved by benchmark test",
-                responded_at=now(),
-            )
-            logger.info("[AUTO-APPROVE] Approved %s", approval_id)
-
-        approval_service.set_on_approval_requested(_auto_approve_callback)
-
         user_settings = test_user_settings
         logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
         logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
@@ -269,23 +260,28 @@ async def test_agent_benchmark(
 
         logger.info("[BENCH] Running scenario %s", scenario.id)
 
+        # Inline approval auto-approver handles every approval type uniformly,
+        # including AGENT_CONTINUE requests emitted when the agent exceeds
+        # AGENT_MAX_TOOL_TURNS. The post-hoc auto_approve_pending helper used
+        # by other eval tests would deadlock here because chat_pipeline.run_chat
+        # itself blocks on PendingApproval.wait() mid-invocation.
         try:
-            await chat_pipeline.run_chat(
-                message=scenario.user_query,
-                g8e_context=g8e_context,
-                attachments=[],
-                sentinel_mode=False,
-                llm_primary_provider=None,
-                llm_assistant_provider=None,
-                llm_primary_model=llm_settings.primary_model,
-                llm_assistant_model=llm_settings.assistant_model,
-                _task_manager=task_manager,
-                user_settings=user_settings,
-                _track_task=False,
-            )
+            with auto_approve_inline_callback(approval_service) as approval_tracker:
+                await chat_pipeline.run_chat(
+                    message=scenario.user_query,
+                    g8e_context=g8e_context,
+                    attachments=[],
+                    sentinel_mode=False,
+                    llm_primary_provider=None,
+                    llm_assistant_provider=None,
+                    llm_primary_model=llm_settings.primary_model,
+                    llm_assistant_model=llm_settings.assistant_model,
+                    _task_manager=task_manager,
+                    user_settings=user_settings,
+                    _track_task=False,
+                )
         finally:
             chat_pipeline.g8ed_event_service = real_event_service
-            approval_service.set_on_approval_requested(None)
 
         captured_tribunal = _extract_tribunal_from_events(fake_event_service.published)
         captured_tool_calls = _extract_tool_calls_from_events(fake_event_service.published)
@@ -337,6 +333,11 @@ async def test_agent_benchmark(
             result_data.tribunal_improved = grade.tribunal_improved
             result_data.tribunal_pre_score = grade.tribunal_pre_score
 
+        result_data.agent_continue_approvals = approval_tracker.count(ApprovalType.AGENT_CONTINUE)
+        result_data.approvals_by_type = {
+            atype.value: count for atype, count in approval_tracker.counts.items()
+        }
+
         end_time = datetime.now(timezone.utc)
         result_data.execution_time_ms = (end_time - start_time).total_seconds() * 1000
 
@@ -347,6 +348,13 @@ async def test_agent_benchmark(
         logger.info("[BENCH_RESULT] %s %s", status, scenario.id)
         logger.info("[BENCH_RESULT] Matchers: %d/%d", grade.matchers_passed, grade.matchers_total)
         logger.info("[BENCH_RESULT] Execution Time: %.1fms", result_data.execution_time_ms)
+        if result_data.agent_continue_approvals:
+            logger.info(
+                "[BENCH_RESULT] AGENT_CONTINUE approvals: %d (total approvals=%d, by_type=%s)",
+                result_data.agent_continue_approvals,
+                approval_tracker.total,
+                result_data.approvals_by_type,
+            )
         if grade.failures:
             for f in grade.failures:
                 logger.info("[BENCH_RESULT] FAILURE: %s", f[:200])

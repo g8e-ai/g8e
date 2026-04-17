@@ -90,8 +90,8 @@ def get_search_settings() -> SearchSettings | None:
 
 def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
     """Generate a cache key for provider instances based on configuration."""
-    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
-    provider_value = provider_type if isinstance(provider_type, str) else provider_type.value
+    provider_type: LLMProvider = settings.assistant_provider if is_assistant else settings.primary_provider
+    provider_value = provider_type.value
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:

@@ -31,9 +31,12 @@ and avoid code duplication.
 
 import asyncio
 import logging
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 
 import pytest
 import pytest_asyncio
+from app.models.operators import ApprovalType, PendingApproval
 from app.services.service_factory import ServiceFactory
 from app.utils.timestamp import now
 from tests.integration.cleanup import IntegrationCleanupTracker
@@ -45,7 +48,11 @@ async def auto_approve_pending(approval_service) -> None:
     """Simple helper to approve all pending approvals.
 
     Used in integration tests with fake operators to prevent infinite loops
-    when commands are dispatched.
+    when commands are dispatched. This is a *post-hoc* helper: it drains
+    pending approvals only after the code path returns. For tests that can
+    block mid-run on ``PendingApproval.wait()`` (e.g. the benchmark agent
+    hitting ``AGENT_MAX_TOOL_TURNS`` and requesting an ``AGENT_CONTINUE``
+    approval), use ``auto_approve_inline_callback`` instead.
     """
     pending = approval_service.get_pending_approvals()
     for approval_id, pending_approval in pending.items():
@@ -55,6 +62,73 @@ async def auto_approve_pending(approval_service) -> None:
             responded_at=now(),
         )
         logger.info("[AUTO-APPROVE] Approved %s", approval_id)
+
+
+@dataclass
+class ApprovalCallbackTracker:
+    """Per-type counters for auto-approved approvals.
+
+    Populated by ``auto_approve_inline_callback`` whenever the approval
+    service registers a pending approval. Lets tests assert that specific
+    approval flows (in particular ``AGENT_CONTINUE``) were exercised.
+    """
+    approved: bool = True
+    reason: str = "Auto-approved by integration test runner"
+    counts: dict[ApprovalType, int] = field(default_factory=dict)
+    total: int = 0
+
+    def record(self, approval_type: ApprovalType) -> None:
+        self.counts[approval_type] = self.counts.get(approval_type, 0) + 1
+        self.total += 1
+
+    def count(self, approval_type: ApprovalType) -> int:
+        return self.counts.get(approval_type, 0)
+
+
+@contextmanager
+def auto_approve_inline_callback(
+    approval_service,
+    *,
+    approved: bool = True,
+    reason: str = "Auto-approved by integration test runner",
+):
+    """Register an inline callback that resolves approvals as they are created.
+
+    Unlike ``auto_approve_pending`` which runs post-hoc, this callback fires
+    synchronously from ``OperatorApprovalService._register_pending`` for every
+    approval type (``COMMAND``, ``FILE_EDIT``, ``INTENT``, ``AGENT_CONTINUE``).
+    That is required for long-running eval flows where ``chat_pipeline.run_chat``
+    itself blocks on ``PendingApproval.wait()`` mid-invocation -- most notably
+    the benchmark suite, whose multi-step scenarios can hit
+    ``AGENT_MAX_TOOL_TURNS`` and emit an ``AGENT_CONTINUE`` approval request
+    that must be answered before the agent loop can finish.
+
+    Yields an ``ApprovalCallbackTracker`` so tests can assert which approval
+    types fired (e.g. ``tracker.count(ApprovalType.AGENT_CONTINUE) >= 1``).
+    Restores the previous callback on exit.
+    """
+    tracker = ApprovalCallbackTracker(approved=approved, reason=reason)
+    previous = getattr(approval_service, "_on_approval_requested", None)
+
+    def _callback(approval_id: str, pending: PendingApproval) -> None:
+        tracker.record(pending.approval_type)
+        pending.resolve(
+            approved=tracker.approved,
+            reason=tracker.reason,
+            responded_at=now(),
+        )
+        logger.info(
+            "[AUTO-APPROVE] Inline-resolved %s (type=%s approved=%s)",
+            approval_id,
+            pending.approval_type.value,
+            tracker.approved,
+        )
+
+    approval_service.set_on_approval_requested(_callback)
+    try:
+        yield tracker
+    finally:
+        approval_service.set_on_approval_requested(previous)
 
 
 async def approve_via_http(

@@ -40,6 +40,7 @@ markers = [
     "agent_benchmark: Deterministic agent benchmark tests grading tool call payloads with BenchmarkJudge",
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",
+    "operator_wire: Integration tests that publish tool-call events directly to a live g8ep operator via PubSub (no AI, no approval gate)",
 ]
 
 # Output and logging

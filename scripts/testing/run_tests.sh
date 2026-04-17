@@ -189,7 +189,7 @@ run_g8ee() {
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("-s" "--log-cli-level=INFO")
+    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("--log-cli-level=INFO")
     if [[ -n "$PARALLEL" ]]; then
         # -s (capture=no) is incompatible with xdist; drop it when parallelising.
         local filtered=()

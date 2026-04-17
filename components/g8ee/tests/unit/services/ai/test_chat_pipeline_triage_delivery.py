@@ -253,3 +253,72 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     # Verify task was tracked and untracked
     mock_task_manager.track.assert_called_once_with("inv-1", asyncio.current_task())
     mock_task_manager.untrack.assert_called_once_with("inv-1")
+
+
+async def test_run_chat_impl_coerces_provider_override_to_enum():
+    """Regression: provider overrides must land as LLMProvider enum instances.
+
+    model_copy(update=...) bypasses Pydantic validation, so a raw HTTP
+    string would silently end up in an enum-typed field. This test pins
+    the coercion at the override site by inspecting the LLMSettings
+    passed to get_llm_provider.
+    """
+    from app.constants import LLMProvider
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _make_pipeline()
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
+    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+
+    captured: dict = {}
+
+    def _capture(llm_settings):
+        captured["llm"] = llm_settings
+        return MagicMock()
+
+    user_settings = G8eeUserSettings(llm=LLMSettings())
+    with patch("app.services.ai.chat_pipeline.get_llm_provider", side_effect=_capture):
+        await svc._run_chat_impl(
+            message="hello",
+            g8e_context=g8e_ctx,
+            attachments=[],
+            sentinel_mode=True,
+            llm_primary_provider="openai",
+            llm_assistant_provider="anthropic",
+            llm_primary_model="main-model",
+            llm_assistant_model="assistant-model",
+            user_settings=user_settings,
+        )
+
+    resolved_llm: LLMSettings = captured["llm"]
+    assert isinstance(resolved_llm.primary_provider, LLMProvider)
+    assert resolved_llm.primary_provider is LLMProvider.OPENAI
+    assert isinstance(resolved_llm.assistant_provider, LLMProvider)
+    assert resolved_llm.assistant_provider is LLMProvider.ANTHROPIC
+
+
+async def test_run_chat_impl_rejects_unknown_provider_override():
+    """An unknown provider override surfaces as a ValueError — not a
+    silent bad-value in an enum-typed field."""
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _make_pipeline()
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
+    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+
+    user_settings = G8eeUserSettings(llm=LLMSettings())
+    with patch("app.services.ai.chat_pipeline.get_llm_provider"):
+        with pytest.raises(ValueError):
+            await svc._run_chat_impl(
+                message="hello",
+                g8e_context=g8e_ctx,
+                attachments=[],
+                sentinel_mode=True,
+                llm_primary_provider="not-a-real-provider",
+                llm_assistant_provider=None,
+                llm_primary_model="main-model",
+                llm_assistant_model="assistant-model",
+                user_settings=user_settings,
+            )
