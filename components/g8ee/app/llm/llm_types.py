@@ -406,8 +406,20 @@ class ToolConfig:
 
 @dataclass
 class ThinkingConfig:
-    thinking_level: ThinkingLevel
+    """Canonical thinking/reasoning effort request.
+
+    thinking_level is always a ThinkingLevel (never None). ThinkingLevel.OFF
+    means "do not enable thinking for this call" — providers translate OFF
+    to the appropriate per-provider omission (no thinking_config key for
+    Gemini, no thinking dict for Anthropic, think=False for Ollama, no
+    reasoning key for OpenAI).
+    """
+    thinking_level: ThinkingLevel = ThinkingLevel.OFF
     include_thoughts: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return self.thinking_level is not ThinkingLevel.OFF
 
 
 @dataclass
@@ -456,7 +468,7 @@ class GenerateContentConfig:
     stop_sequences: list[str] | None = None
     response_modalities: list[str] = field(default_factory=lambda: ["TEXT"])
     tools: list[ToolGroup] = field(default_factory=list)
-    thinking_config: ThinkingConfig = field(default_factory=lambda: ThinkingConfig(thinking_level=None, include_thoughts=False))
+    thinking_config: ThinkingConfig = field(default_factory=ThinkingConfig)
     tool_config: ToolConfig = field(default_factory=lambda: ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")))
     response_format: ResponseFormat | None = None
 

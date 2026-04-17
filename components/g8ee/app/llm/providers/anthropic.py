@@ -20,6 +20,8 @@ from collections.abc import AsyncGenerator
 import anthropic
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.llm.thinking import translate_for_anthropic
+from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -221,16 +223,26 @@ class AnthropicProvider(LLMProvider):
         effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        thinking_enabled = (
-            thinking_config is not None
-            and thinking_config.thinking_level is not None
-        )
+        # Translate the canonical ThinkingConfig to Anthropic's extended-thinking
+        # wire shape. The translator enforces per-level budgets (from the model
+        # config's thinking_budgets map or the default table) and signals whether
+        # the call must switch into thinking mode (temp=1, no top_k).
+        if thinking_config is not None:
+            translation = translate_for_anthropic(
+                thinking_config.thinking_level,
+                get_model_config(model),
+            )
+        else:
+            translation = None
+
+        thinking_enabled = translation is not None and translation.enabled
 
         if thinking_enabled:
             effective_temperature = 1.0
+            budget = min(translation.budget_tokens, max(effective_max_tokens - 1, 1))
             thinking_config_dict = {
                 "type": "enabled",
-                "budget_tokens": effective_max_tokens // 2,
+                "budget_tokens": budget,
             }
             effective_top_k = None
         else:

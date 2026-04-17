@@ -182,7 +182,6 @@ Because `--cloud` defaults to `true`, every Operator starts as a Cloud Operator 
 | `--http-listen-port` | `443` | TLS/HTTPS port for internal g8ee/g8ed traffic and CA distribution |
 | `--data-dir` | `.g8e/data` in working dir | SQLite database and SSL certificate directory |
 | `--ssl-dir` | `data-dir/ssl` | Directory for TLS certificates (override with --ssl-dir) |
-| `--binary-dir` | `.g8e/bin` in working dir | Legacy flag — operator binaries are now served from the blob store |
 | `--tls-cert` | | TLS certificate path (generated automatically if absent) |
 | `--tls-key` | | TLS private key path (generated automatically if absent) |
 
@@ -328,7 +327,7 @@ On subscription, an automatic heartbeat is sent immediately. Reconnection uses e
 | `g8e.v1.operator.mcp.tools.call` | Call an MCP (Model Context Protocol) tool — translated to one of the inbound events above, then dispatched |
 | `g8e.v1.operator.shutdown.requested` | Acknowledge shutdown |
 
-**Note:** Only `g8e.v1.operator.mcp.tools.call` is accepted as an inbound MCP event. The related events `mcp.tools.result`, `mcp.resources.list`, `mcp.resources.read`, and `mcp.resources.result` are defined in the event constants for outbound responses (and future use) but are not dispatched by the pub/sub command handler. Similarly, `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched.
+**Note:** Only `g8e.v1.operator.mcp.tools.call` is accepted as an inbound MCP event. `mcp.tools.result` is outbound-only; the operator emits it to wrap execution payloads before they return to g8ed. `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched.
 
 ---
 

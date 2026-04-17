@@ -25,11 +25,51 @@ class LLMProvider(str, Enum):
 
 
 class ThinkingLevel(str, Enum):
+    """Canonical internal vocabulary for model "thinking" / "reasoning" effort.
+
+    Each provider maps these to its native concept at the LLM boundary
+    (see app/llm/thinking.py):
+      - Gemini:    direct enum (low/medium/high/minimal)
+      - OpenAI:    reasoning.effort (minimal/low/medium/high)
+      - Anthropic: thinking.budget_tokens (per-level token table)
+      - Ollama:    think=True/False plus optional dialect-specific hints
+
+    OFF is a first-class value meaning "thinking is disabled for this call".
+    Use OFF rather than None so the schema and intent agree.
+
+    Membership of a level in LLMModelConfig.supported_thinking_levels is the
+    single source of truth for what a model accepts. An empty list means the
+    model has no notion of thinking at all.
+    """
     __str__ = lambda self: self.value
-    HIGH    = "high"
-    MEDIUM  = "medium"
-    LOW     = "low"
+    OFF     = "off"
     MINIMAL = "minimal"
+    LOW     = "low"
+    MEDIUM  = "medium"
+    HIGH    = "high"
+
+
+# Ascending priority (cheap -> expensive). OFF is excluded; it is not an
+# "intensity" value but the absence of thinking. Lookup helpers in
+# app/models/model_configs.py rely on this ordering.
+THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
+    ThinkingLevel.MINIMAL,
+    ThinkingLevel.LOW,
+    ThinkingLevel.MEDIUM,
+    ThinkingLevel.HIGH,
+)
+
+
+class ThinkingDialect(str, Enum):
+    """Wire dialect a self-hosted (Ollama) model expects for reasoning toggling.
+
+    Cloud providers (Gemini/OpenAI/Anthropic) do not need this — their
+    translation is fixed. Ollama hosts a heterogeneous zoo of model families
+    where the same internal ThinkingLevel maps to different on-the-wire knobs.
+    """
+    __str__ = lambda self: self.value
+    NONE          = "none"           # Model has no reasoning mode (Llama, Gemma, ...)
+    NATIVE_TOGGLE = "native_toggle"  # Ollama `think=True/False` flag (Qwen3, GLM, Nemotron, ...)
 
 class TimestampErrorCode(str, Enum):
     __str__ = lambda self: self.value

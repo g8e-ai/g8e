@@ -114,10 +114,19 @@ The `g8es-ssl` volume is the authoritative source used by runtime consumers. It 
 On every g8es startup, `SecretManager.InitPlatformSettings` reconciles the volume files with the `platform_settings` document in g8es:
 - If the `platform_settings` document does not exist and files are missing, g8es generates cryptographically secure 32-byte hex values, creates the document with both secrets, and writes the files.
 - If the document already exists, any file value (when present) takes precedence and is written back into the document; otherwise the document value is used to (re)populate the file.
+- After each successful write, g8es re-reads both files and aborts startup if their contents no longer match the DB document (`verifyDBMatchesFile`), closing the window where a partial write or concurrent writer could leave the two authorities silently disagreeing.
+- g8es then writes a tamper-evidence manifest at `/ssl/bootstrap_digest.json` (`writeDigestManifest`) containing the SHA-256 digest of each secret alongside a manifest version and UTC timestamp. The file is written atomically (`.tmp` + rename) with `0600` permissions.
 - The `platform_settings` cache-aside KV entry is warmed after any write so that the first authenticated request does not race the cold cache.
 
-**3. Automatic Discovery**
-g8ed and g8ee discover these tokens by reading the files from the shared volume at startup via their `BootstrapService` (`components/g8ed/services/platform/bootstrap_service.js`, `components/g8ee/app/services/platform/bootstrap_service.py`). Neither component reads the bootstrap secrets from the database.
+**3. Automatic Discovery and Verification**
+g8ed and g8ee discover these tokens by reading the files from the shared volume at startup via their `BootstrapService` (`components/g8ed/services/platform/bootstrap_service.js`, `components/g8ee/app/services/infra/bootstrap_service.py`). Neither component reads the bootstrap secrets from the database.
+
+Before authenticating with a loaded secret, each consumer calls `verifyAgainstManifest` (g8ed) / `verify_against_manifest` (g8ee), which:
+- Reads `bootstrap_digest.json` from the same volume;
+- Computes SHA-256 of the value it just loaded;
+- Aborts startup with a `BootstrapSecretTamperError` if the digest disagrees with the manifest entry for that secret.
+
+A missing manifest is treated as a transitional warning (not an error) so that upgrade ordering is not a footgun; once a g8eo with manifest support has booted, every subsequent consumer start is fully verified. This closes the silent coupling between `SecretManager` (sole writer) and the consumer `BootstrapService`s (sole readers): a divergent volume file now surfaces as a clear startup abort instead of an opaque 401 during the first downstream API call.
 
 **4. Dual-Location Persistence**
 These secrets live in two places: the SSL volume files (read by g8ed/g8ee) and the `platform_settings` document (written and kept in sync by g8es). The volume file is the boot-time source of truth; the DB copy exists to make the secrets visible to the platform settings view and to survive restarts where only the DB is inspected. A full database wipe is still non-destructive to identity because the next g8es startup will repopulate the document from the surviving volume files.

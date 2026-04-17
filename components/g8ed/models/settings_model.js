@@ -601,13 +601,24 @@ export function validateUserSettings(updates) {
 }
 
 /**
- * Validates platform settings updates against PLATFORM_SETTINGS schema
+ * Validates platform settings updates against PLATFORM_SETTINGS schema.
+ *
+ * `writeOnce` keys (e.g. `internal_auth_token`, `session_encryption_key`) are
+ * bootstrap secrets owned by g8eo's SecretManager and the SSL volume. Once set
+ * to a non-empty value they cannot be overwritten via this path — any such
+ * attempt is recorded in `skipped` and excluded from `valid`. This prevents
+ * UI writes from silently diverging from the volume-authoritative value, which
+ * would then be clobbered on the next g8eo restart.
+ *
  * @param {Object} updates - Settings updates to validate
- * @returns {Object} - { valid: Object, invalid: Array, errors: Array }
+ * @param {Object} [existingSettings] - Current persisted settings, used to
+ *   enforce the writeOnce guard. Pass `{}` when no document exists yet.
+ * @returns {Object} - { valid: Object, invalid: Array, skipped: Array, errors: Array }
  */
-export function validatePlatformSettings(updates) {
+export function validatePlatformSettings(updates, existingSettings = {}) {
     const valid = {};
     const invalid = [];
+    const skipped = [];
     const errors = [];
 
     for (const [key, value] of Object.entries(updates)) {
@@ -618,10 +629,19 @@ export function validatePlatformSettings(updates) {
             continue;
         }
 
+        if (field.writeOnce) {
+            const existing = existingSettings?.[key];
+            if (existing !== undefined && existing !== null && existing !== '') {
+                skipped.push(key);
+                errors.push(`${key} is writeOnce and already set; refusing overwrite`);
+                continue;
+            }
+        }
+
         valid[key] = value;
     }
 
-    return { valid, invalid, errors };
+    return { valid, invalid, skipped, errors };
 }
 
 // ---------------------------------------------------------------------------

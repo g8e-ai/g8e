@@ -184,15 +184,22 @@ class SettingsService {
         const existingDoc = await this._cache_aside.getDocument(this.collectionName, SETTINGS_DOC_ID);
         const existingSettings = (existingDoc && existingDoc.settings) ? existingDoc.settings : {};
         
-        // Validate at model level
-        const validation = validatePlatformSettings(updates);
+        // Validate at model level. Pass existingSettings so writeOnce guards
+        // (internal_auth_token, session_encryption_key) can reject overwrites
+        // of values already bootstrapped by g8eo's SecretManager.
+        const validation = validatePlatformSettings(updates, existingSettings);
         if (validation.invalid.length > 0) {
-            logger.warn('[SETTINGS-SERVICE] Invalid platform settings', { 
-                invalid: validation.invalid, 
-                errors: validation.errors 
+            logger.warn('[SETTINGS-SERVICE] Invalid platform settings', {
+                invalid: validation.invalid,
+                errors: validation.errors
             });
         }
-        
+        if (validation.skipped && validation.skipped.length > 0) {
+            logger.warn('[SETTINGS-SERVICE] Refusing overwrite of writeOnce platform settings', {
+                skipped: validation.skipped,
+            });
+        }
+
         const newSettings = { ...existingSettings, ...validation.valid };
         logger.info('[SETTINGS-SERVICE] Saving platform settings', { 
             keys: Object.keys(newSettings),
@@ -217,7 +224,11 @@ class SettingsService {
             throw new Error(result?.error || 'Failed to save platform settings');
         }
 
-        return { success: true, saved: Object.keys(validation.valid) };
+        return {
+            success: true,
+            saved: Object.keys(validation.valid),
+            skipped: validation.skipped || [],
+        };
     }
 
     /**

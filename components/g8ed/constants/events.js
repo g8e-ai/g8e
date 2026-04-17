@@ -191,9 +191,6 @@ export const EventType = Object.freeze({
 
     OPERATOR_MCP_TOOLS_CALL:    _EVENTS['operator']['mcp']['tools']['call'],
     OPERATOR_MCP_TOOLS_RESULT:  _EVENTS['operator']['mcp']['tools']['result'],
-    OPERATOR_MCP_RESOURCES_LIST: _EVENTS['operator']['mcp']['resources']['list'],
-    OPERATOR_MCP_RESOURCES_READ:  _EVENTS['operator']['mcp']['resources']['read'],
-    OPERATOR_MCP_RESOURCES_RESULT: _EVENTS['operator']['mcp']['resources']['result'],
 
     LLM_CONFIG_REQUESTED: _EVENTS['ai']['llm']['config']['requested'],
     LLM_CONFIG_RECEIVED:  _EVENTS['ai']['llm']['config']['received'],

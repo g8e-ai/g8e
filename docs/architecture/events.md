@@ -365,9 +365,6 @@ The protocol defines five top-level domains. Total event count: **241**.
 |------------|-------------|
 | `g8e.v1.operator.mcp.tools.call` | MCP tool call dispatched |
 | `g8e.v1.operator.mcp.tools.result` | MCP tool call result received |
-| `g8e.v1.operator.mcp.resources.list` | MCP resource list requested |
-| `g8e.v1.operator.mcp.resources.read` | MCP resource read requested |
-| `g8e.v1.operator.mcp.resources.result` | MCP resource result received |
 
 ---
 

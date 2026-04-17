@@ -358,7 +358,11 @@ func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
 	assert.Equal(t, "sess-partial", cfg.OperatorSessionId)
 }
 
-func TestApplyBootstrapConfig_InvalidCertIgnored(t *testing.T) {
+func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
+	// Regression: an unparseable per-operator mTLS cert must be a fatal
+	// cert-trust failure rather than a warn-and-continue. The operator's
+	// security contract requires mTLS on every outbound connection once a
+	// cert has been issued.
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -373,8 +377,10 @@ func TestApplyBootstrapConfig_InvalidCertIgnored(t *testing.T) {
 	}
 
 	err = svc.ApplyBootstrapConfig(bootCfg)
-	require.NoError(t, err)
-	assert.Equal(t, "op-badcert", cfg.OperatorID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cert trust failure",
+		"error message must contain 'cert trust failure' so ExitCodeFromError maps it to ExitCertTrustFailure")
+	assert.Equal(t, constants.ExitCertTrustFailure, constants.ExitCodeFromError(err))
 }
 
 func TestAuthServicesResponse_JSONParsing(t *testing.T) {

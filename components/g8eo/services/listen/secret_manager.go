@@ -15,6 +15,7 @@ package listen
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -174,16 +175,143 @@ func (m *SecretManager) InitPlatformSettings() error {
 	}
 
 	if internalAuthToken != "" {
-		if err := os.WriteFile(tokenPath, []byte(internalAuthToken), 0600); err != nil {
-			m.logger.Error("[SecretManager] Failed to write internal_auth_token to file", "path", tokenPath, "error", err)
+		if err := m.writeSecretFile(tokenPath, internalAuthToken, "internal_auth_token"); err != nil {
+			return err
 		}
 	}
 	if sessionEncryptionKey != "" {
-		if err := os.WriteFile(sessionKeyPath, []byte(sessionEncryptionKey), 0600); err != nil {
-			m.logger.Error("[SecretManager] Failed to write session_encryption_key to file", "path", sessionKeyPath, "error", err)
+		if err := m.writeSecretFile(sessionKeyPath, sessionEncryptionKey, "session_encryption_key"); err != nil {
+			return err
 		}
 	}
 
+	if err := m.verifyDBMatchesFile(tokenPath, "internal_auth_token"); err != nil {
+		return err
+	}
+	if err := m.verifyDBMatchesFile(sessionKeyPath, "session_encryption_key"); err != nil {
+		return err
+	}
+
+	if err := m.writeDigestManifest(map[string]string{
+		"internal_auth_token":    internalAuthToken,
+		"session_encryption_key": sessionEncryptionKey,
+	}, now); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// BootstrapDigestManifestFile is the filename of the tamper-evidence manifest
+// written alongside bootstrap secrets on the SSL volume. Consumers
+// (g8ed/g8ee BootstrapService) verify the SHA-256 of each secret they read
+// from the volume matches the digest recorded here by g8eo at write time.
+const BootstrapDigestManifestFile = "bootstrap_digest.json"
+
+// bootstrapDigestManifest is the on-disk schema for bootstrap_digest.json.
+// Consumers on startup compute SHA-256 of each secret they load from the
+// volume and compare to the digest recorded here. Divergence means the
+// volume file has drifted from the DB-authoritative value SecretManager
+// wrote, which must abort startup rather than authenticate with a silently
+// incorrect secret.
+type bootstrapDigestManifest struct {
+	Version   int                           `json:"version"`
+	UpdatedAt string                        `json:"updated_at"`
+	Secrets   map[string]bootstrapDigestRef `json:"secrets"`
+}
+
+type bootstrapDigestRef struct {
+	SHA256 string `json:"sha256"`
+}
+
+// writeDigestManifest writes the bootstrap digest manifest atomically. Empty
+// secret values are skipped (they were never written to disk either). A
+// failure here is fatal: without the manifest, consumers cannot detect
+// volume-vs-DB drift on their next startup, which is the whole point of the
+// manifest.
+func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.Time) error {
+	manifest := bootstrapDigestManifest{
+		Version:   1,
+		UpdatedAt: now.UTC().Format(time.RFC3339Nano),
+		Secrets:   make(map[string]bootstrapDigestRef, len(secrets)),
+	}
+	for name, value := range secrets {
+		if value == "" {
+			continue
+		}
+		sum := sha256.Sum256([]byte(value))
+		manifest.Secrets[name] = bootstrapDigestRef{SHA256: hex.EncodeToString(sum[:])}
+	}
+
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal bootstrap digest manifest: %w", err)
+	}
+
+	finalPath := filepath.Join(m.sslDir, BootstrapDigestManifestFile)
+	tmpPath := finalPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
+			"path", tmpPath, "error", err)
+		return fmt.Errorf("write bootstrap digest manifest %s: %w", tmpPath, err)
+	}
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		_ = os.Remove(tmpPath)
+		m.logger.Error("[SecretManager] Failed to rename bootstrap digest manifest",
+			"from", tmpPath, "to", finalPath, "error", err)
+		return fmt.Errorf("rename bootstrap digest manifest to %s: %w", finalPath, err)
+	}
+	m.logger.Info("[SecretManager] Bootstrap digest manifest written",
+		"path", finalPath, "secrets", len(manifest.Secrets))
+	return nil
+}
+
+// writeSecretFile atomically persists a bootstrap secret to the SSL volume and fails
+// hard on any I/O error. The file is the source of truth read by g8ed and g8ee
+// BootstrapService on startup; a silent write failure would leave the DB and volume
+// out of sync and cause confusing auth failures on the next restart.
+func (m *SecretManager) writeSecretFile(path, value, name string) error {
+	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
+		m.logger.Error("[SecretManager] Failed to write bootstrap secret to volume",
+			"name", name, "path", path, "error", err)
+		return fmt.Errorf("write bootstrap secret %s to %s: %w", name, path, err)
+	}
+	return nil
+}
+
+// verifyDBMatchesFile re-reads the on-disk secret and compares it (via SHA-256 digest
+// for log safety) to the value stored in the platform_settings document. Divergence
+// indicates a coding error in InitPlatformSettings or a concurrent writer and must
+// abort startup rather than let the two authorities drift.
+func (m *SecretManager) verifyDBMatchesFile(path, name string) error {
+	fileBytes, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read bootstrap secret %s from %s for verification: %w", name, path, err)
+	}
+	fileValue := strings.TrimSpace(string(fileBytes))
+
+	var dataJSON string
+	err = m.db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON)
+	if err != nil {
+		return fmt.Errorf("read platform_settings for %s verification: %w", name, err)
+	}
+	var settings models.SettingsDocument
+	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
+		return fmt.Errorf("unmarshal platform_settings for %s verification: %w", name, err)
+	}
+	dbValue, _ := settings.Settings[name].(string)
+
+	if fileValue != dbValue {
+		fileDigest := sha256.Sum256([]byte(fileValue))
+		dbDigest := sha256.Sum256([]byte(dbValue))
+		m.logger.Error("[SecretManager] Bootstrap secret divergence between volume and DB",
+			"name", name,
+			"file_sha256", hex.EncodeToString(fileDigest[:]),
+			"db_sha256", hex.EncodeToString(dbDigest[:]))
+		return fmt.Errorf("bootstrap secret %s differs between volume file and platform_settings DB", name)
+	}
 	return nil
 }
 

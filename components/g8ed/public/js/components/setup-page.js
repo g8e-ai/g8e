@@ -11,24 +11,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { LLMProvider, PROVIDER_MODELS } from '../constants/ai-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
 const LAST_STEP = 4;
 
+/**
+ * LLM provider catalog is server-injected as a JSON script tag in setup.ejs
+ * (sourced from components/g8ed/constants/ai.js — the single source of truth).
+ * Reading it from the DOM avoids duplicating the catalog in a browser-side module.
+ */
+function _readCatalog() {
+    const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
+    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    try {
+        return JSON.parse(el.textContent);
+    } catch {
+        return { providers: {}, providerModels: {} };
+    }
+}
+
+const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+
+// Wire-protocol provider identifiers are stable canonical strings
+// (see shared/constants/status.json and components/g8ed/constants/ai.js).
 const PROVIDER_KEY_FIELDS = {
-    [LLMProvider.GEMINI]:    'gemini_api_key',
-    [LLMProvider.ANTHROPIC]: 'anthropic_api_key',
-    [LLMProvider.OPENAI]:    'openai_api_key',
-    [LLMProvider.OLLAMA]:    'ollama_url',
+    gemini:    'gemini_api_key',
+    anthropic: 'anthropic_api_key',
+    openai:    'openai_api_key',
+    ollama:    'ollama_url',
 };
 
 const PROVIDER_LABELS = {
-    [LLMProvider.GEMINI]:    'Gemini',
-    [LLMProvider.ANTHROPIC]: 'Anthropic',
-    [LLMProvider.OPENAI]:    'OpenAI',
-    [LLMProvider.OLLAMA]:    'Ollama',
+    gemini:    'Gemini',
+    anthropic: 'Anthropic',
+    openai:    'OpenAI',
+    ollama:    'Ollama',
 };
 
 function _modelToProvider(modelValue) {

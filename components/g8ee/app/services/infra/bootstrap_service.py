@@ -13,9 +13,23 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+# Filename of the tamper-evidence manifest written by g8eo SecretManager
+# alongside bootstrap secrets on the SSL volume. Must stay in sync with
+# components/g8eo/services/listen/secret_manager.go::BootstrapDigestManifestFile.
+BOOTSTRAP_DIGEST_MANIFEST_FILE = "bootstrap_digest.json"
+
+
+class BootstrapSecretTamperError(RuntimeError):
+    """Raised when a bootstrap secret loaded from the volume does not match
+    the SHA-256 digest recorded by g8eo SecretManager in the tamper-evidence
+    manifest. Callers must treat this as a hard startup error; authenticating
+    with a drifted secret would only surface as a confusing 401 later."""
 
 
 @runtime_checkable
@@ -36,6 +50,14 @@ class BootstrapServiceProtocol(Protocol):
 
     def is_available(self) -> bool:
         """Check if bootstrap data is available."""
+        ...
+
+    def verify_against_manifest(self, secret_name: str, value: str | None) -> None:
+        """Verify a loaded secret's SHA-256 matches the digest g8eo recorded.
+
+        Raises BootstrapSecretTamperError on divergence. No-op when the
+        manifest is absent or lacks an entry for the given secret.
+        """
         ...
 
 
@@ -126,3 +148,69 @@ class BootstrapService:
         self._cached_token = None
         self._cached_key = None
         self._cached_ca_path = None
+
+    def verify_against_manifest(self, secret_name: str, value: str | None) -> None:
+        """Verify a loaded secret's SHA-256 matches the digest g8eo recorded.
+
+        Closes the silent bootstrap-secret coupling: without this, g8ee
+        trusts whatever value the volume contains and any drift from the
+        DB-authoritative value written by g8eo surfaces only as an opaque
+        401 on the first downstream API call.
+
+        Behaviour:
+          * manifest missing -> log warning, return (transitional window
+            before a g8eo with manifest support has booted);
+          * manifest present, entry present, digest mismatch -> raise
+            :class:`BootstrapSecretTamperError`;
+          * manifest present, no entry for ``secret_name`` -> log warning,
+            return.
+
+        Args:
+            secret_name: logical secret name
+                (``internal_auth_token`` or ``session_encryption_key``).
+            value: value loaded from the volume (already stripped).
+
+        Raises:
+            BootstrapSecretTamperError: when the manifest has an entry for
+                ``secret_name`` but its digest does not match ``value``.
+        """
+        if not value:
+            return
+
+        manifest_path = Path(self._volume_path) / BOOTSTRAP_DIGEST_MANIFEST_FILE
+        if not manifest_path.exists():
+            self._logger.warning(
+                "Bootstrap digest manifest missing; skipping verification for %s (path=%s)",
+                secret_name,
+                manifest_path,
+            )
+            return
+
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (OSError, ValueError) as err:
+            raise BootstrapSecretTamperError(
+                f"Bootstrap digest manifest at {manifest_path} is unreadable or malformed: {err}. "
+                f"Refusing to start with an unverified {secret_name}."
+            ) from err
+
+        entry = (manifest.get("secrets") or {}).get(secret_name) if isinstance(manifest, dict) else None
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        if not expected:
+            self._logger.warning(
+                "Bootstrap digest manifest has no entry for %s (manifest_version=%s)",
+                secret_name,
+                (manifest.get("version") if isinstance(manifest, dict) else None),
+            )
+            return
+
+        actual = hashlib.sha256(value.encode("utf-8")).hexdigest()
+        if actual != expected:
+            raise BootstrapSecretTamperError(
+                f"Bootstrap secret {secret_name} failed tamper-evidence check: "
+                f"volume SHA-256 {actual} does not match manifest digest {expected}. "
+                f"The on-disk secret has drifted from the DB-authoritative value. "
+                f"Refusing to start to avoid authenticating with a divergent secret."
+            )
+
+        self._logger.info("Bootstrap secret %s verified against digest manifest", secret_name)

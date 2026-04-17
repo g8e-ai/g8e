@@ -330,11 +330,16 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 
 	if bootstrapConfig.OperatorCert != "" && bootstrapConfig.OperatorCertKey != "" {
 		if err := bs.rebuildTransportWithOperatorCert(bootstrapConfig.OperatorCert, bootstrapConfig.OperatorCertKey); err != nil {
-			bs.logger.Warn("Failed to apply per-operator cert to transport, continuing with embedded cert",
+			// Per-operator mTLS is a hard security requirement once the platform
+			// issues a cert; silently falling back to the embedded cert would
+			// violate the "mTLS on every connection" contract documented in
+			// docs/architecture/operator.md. Surface this as a cert trust
+			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
+			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
 				"error", err)
-		} else {
-			bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate")
+			return fmt.Errorf("cert trust failure: per-operator mTLS cert invalid: %w", err)
 		}
+		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate")
 	}
 
 	return nil

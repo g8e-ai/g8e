@@ -79,6 +79,7 @@ from app.llm.llm_types import (
 )
 from app.models.base import G8eBaseModel, Field, field_serializer, field_validator
 from app.models.model_configs import get_model_config
+from app.llm.thinking import translate_for_gemini
 
 from ..provider import LLMProvider
 
@@ -348,21 +349,27 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider closed")
 
     @staticmethod
-    def _build_thinking_config_gemini3(tc, genai_types):
-        """Build ThinkingConfig for Gemini 3 models.
+    def _build_thinking_config_gemini3(tc, model: str, genai_types):
+        """Build google.genai ThinkingConfig from canonical ThinkingConfig.
 
-        Uses thinking_level (high/medium/low/minimal) and include_thoughts.
-
-        Returns None when the config carries no Gemini-3-relevant fields,
-        meaning no thinking_config key will be sent in the request.
+        Delegates the ThinkingLevel -> wire value mapping to
+        translate_for_gemini so it stays consistent across providers.
+        Returns None when thinking is OFF and no thoughts are requested,
+        which signals the caller to omit thinking_config entirely.
         """
         if not tc:
             return None
-        if tc.thinking_level is None and not tc.include_thoughts:
+        cfg = get_model_config(model)
+        translation = translate_for_gemini(
+            tc.thinking_level,
+            cfg,
+            include_thoughts=tc.include_thoughts,
+        )
+        if not translation.enabled and not translation.include_thoughts:
             return None
         return genai_types.ThinkingConfig(
-            thinking_level=tc.thinking_level,
-            include_thoughts=tc.include_thoughts,
+            thinking_level=translation.thinking_level,
+            include_thoughts=translation.include_thoughts,
         )
 
     @staticmethod
@@ -373,7 +380,7 @@ class GeminiProvider(LLMProvider):
     ):
         """Build a genai_types.GenerateContentConfig from LLM settings."""
         if isinstance(settings, PrimaryLLMSettings):
-            thinking_config = GeminiProvider._build_thinking_config_gemini3(settings.thinking_config, genai_types)
+            thinking_config = GeminiProvider._build_thinking_config_gemini3(settings.thinking_config, model, genai_types)
             
             tool_config = None
             if settings.tool_config and settings.tool_config.tool_calling_config:

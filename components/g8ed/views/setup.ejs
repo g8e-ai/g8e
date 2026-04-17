@@ -317,6 +317,7 @@
 
     <%- include('partials/footer-public') %>
 
+    <script id="llm-catalog" type="application/json"><%- JSON.stringify(llmCatalog).replace(/</g, '\u003c') %></script>
     <script type="module" src="/js/components/hamburger-menu.js"></script>
     <script type="module" src="/js/components/setup-page.js"></script>
 </body>

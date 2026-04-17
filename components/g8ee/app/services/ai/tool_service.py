@@ -23,8 +23,13 @@ from app.constants.status import (
     CommandErrorType,
     ComponentName,
     FileOperation,
-    OPERATOR_TOOLS,
     OperatorToolName,
+)
+from app.services.ai.tool_registry import (
+    AI_UNIVERSAL_TOOLS,
+    OPERATOR_TOOLS,
+    TOOL_SPECS,
+    ToolScope,
 )
 from app.constants.prompts import AgentMode, PromptFile
 from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
@@ -106,53 +111,57 @@ class AIToolService:
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
-        self._tool_handlers: dict[str, Callable] = self._build_tool_handlers()
+        self._tool_handlers: dict[str, Callable] = {}
 
-        (self._tool_declarations[OperatorToolName.RUN_COMMANDS],
-         self._tool_executors[OperatorToolName.RUN_COMMANDS]) = self._build_run_operator_commands_tool()
+        for spec in TOOL_SPECS:
+            if spec.requires_web_search and self.web_search_provider is None:
+                logger.info(
+                    "[TOOLS] %s disabled (VERTEX_SEARCH_ENABLED not set or credentials missing)",
+                    spec.name.value,
+                )
+                continue
+            builder: Callable[[], tuple[types.ToolDeclaration, Callable[..., ToolResult]]] = getattr(self, spec.builder_attr)
+            declaration, executor = builder()
+            self._tool_declarations[spec.name] = declaration
+            self._tool_executors[spec.name] = executor
+            self._tool_handlers[spec.name] = getattr(self, spec.handler_attr)
+            if spec.requires_web_search:
+                logger.info("[TOOLS] %s enabled (Vertex AI Search configured)", spec.name.value)
 
-        (self._tool_declarations[OperatorToolName.FILE_CREATE],
-         self._tool_executors[OperatorToolName.FILE_CREATE]) = self._build_file_create_tool()
+        self._assert_tool_registry_invariants()
 
-        (self._tool_declarations[OperatorToolName.FILE_WRITE],
-         self._tool_executors[OperatorToolName.FILE_WRITE]) = self._build_file_write_tool()
+    def _assert_tool_registry_invariants(self) -> None:
+        """Enforce alignment between OPERATOR_TOOLS, AI_UNIVERSAL_TOOLS, and registered declarations.
 
-        (self._tool_declarations[OperatorToolName.FILE_READ],
-         self._tool_executors[OperatorToolName.FILE_READ]) = self._build_file_read_tool()
-
-        (self._tool_declarations[OperatorToolName.FILE_UPDATE],
-         self._tool_executors[OperatorToolName.FILE_UPDATE]) = self._build_file_update_tool()
-
-        if self.web_search_provider is not None:
-            (self._tool_declarations[OperatorToolName.G8E_SEARCH_WEB],
-             self._tool_executors[OperatorToolName.G8E_SEARCH_WEB]) = self._build_search_web_tool()
-            logger.info("[TOOLS] g8e_web_search enabled (Vertex AI Search configured)")
-        else:
-            logger.info("[TOOLS] g8e_web_search disabled (VERTEX_SEARCH_ENABLED not set or credentials missing)")
-
-        (self._tool_declarations[OperatorToolName.CHECK_PORT],
-         self._tool_executors[OperatorToolName.CHECK_PORT]) = self._build_port_check_tool()
-
-        (self._tool_declarations[OperatorToolName.LIST_FILES],
-         self._tool_executors[OperatorToolName.LIST_FILES]) = self._build_list_directory_tool()
-
-        (self._tool_declarations[OperatorToolName.GRANT_INTENT],
-         self._tool_executors[OperatorToolName.GRANT_INTENT]) = self._build_grant_intent_permission_tool()
-
-        (self._tool_declarations[OperatorToolName.REVOKE_INTENT],
-         self._tool_executors[OperatorToolName.REVOKE_INTENT]) = self._build_revoke_intent_permission_tool()
-
-        (self._tool_declarations[OperatorToolName.FETCH_FILE_HISTORY],
-         self._tool_executors[OperatorToolName.FETCH_FILE_HISTORY]) = self._build_fetch_file_history_tool()
-
-        (self._tool_declarations[OperatorToolName.FETCH_FILE_DIFF],
-         self._tool_executors[OperatorToolName.FETCH_FILE_DIFF]) = self._build_fetch_file_diff_tool()
-
-        (self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
-         self._tool_executors[OperatorToolName.QUERY_INVESTIGATION_CONTEXT]) = self._build_query_investigation_context_tool()
-
-        (self._tool_declarations[OperatorToolName.GET_COMMAND_CONSTRAINTS],
-         self._tool_executors[OperatorToolName.GET_COMMAND_CONSTRAINTS]) = self._build_get_command_constraints_tool()
+        Every OPERATOR_TOOLS member must have a ToolDeclaration (otherwise it is a dead
+        approval-gate entry). Every registered declaration must be classified as either
+        operator-gated or universal; unclassified declarations indicate a future bug where
+        the auth guard in execute_tool_call silently skips a bound-operator check.
+        """
+        declared = {
+            name.value if isinstance(name, OperatorToolName) else str(name)
+            for name in self._tool_declarations.keys()
+        }
+        missing_operator = OPERATOR_TOOLS - declared
+        if missing_operator:
+            raise ConfigurationError(
+                f"OPERATOR_TOOLS contains tools with no ToolDeclaration: {sorted(missing_operator)}. "
+                f"Either register a declaration in AIToolService.__init__ or remove the entry from OPERATOR_TOOLS."
+            )
+        classified = OPERATOR_TOOLS | AI_UNIVERSAL_TOOLS
+        # G8E_SEARCH_WEB is conditionally registered; exclude it from the universal-required check.
+        required_universal = AI_UNIVERSAL_TOOLS - {OperatorToolName.G8E_SEARCH_WEB.value}
+        missing_universal = required_universal - declared
+        if missing_universal:
+            raise ConfigurationError(
+                f"AI_UNIVERSAL_TOOLS contains tools with no ToolDeclaration: {sorted(missing_universal)}."
+            )
+        unclassified = declared - classified
+        if unclassified:
+            raise ConfigurationError(
+                f"Registered tool declarations are not classified as OPERATOR_TOOLS or AI_UNIVERSAL_TOOLS: "
+                f"{sorted(unclassified)}. Add each tool to the appropriate frozenset in app/constants/status.py."
+            )
 
     def start_invocation_context(
         self,
@@ -189,13 +198,13 @@ class AIToolService:
         agent_mode: AgentMode,
         model_to_use: str | None
     ) -> list[types.ToolGroup]:
-        """Build tool declarations based on Operator workflow.
+        """Build tool declarations for the given AgentMode, driven by TOOL_SPECS.
 
-        - OPERATOR_NOT_BOUND: query_investigation_context + g8e_web_search (when configured)
-        - OPERATOR_BOUND: All tool declarations (query_investigation_context + g8e_web_search when configured + operator tools)
-        - CLOUD_OPERATOR_BOUND: All tool declarations (query_investigation_context + g8e_web_search when configured + operator tools)
+        A tool is exposed iff ``agent_mode in spec.agent_modes`` and the tool is
+        currently registered (``g8e_web_search`` is only registered when a
+        ``WebSearchProvider`` was injected). Ordering follows ``TOOL_SPECS``.
 
-        Returns empty list if the model does not support tools.
+        Returns an empty list if the model does not support tools.
         """
         if model_to_use:
             config = get_model_config(model_to_use)
@@ -203,46 +212,16 @@ class AIToolService:
                 logger.info("[TOOLS] Model %s does not support tools, skipping tool declarations", model_to_use)
                 return []
 
-        g8e_web_search_available = OperatorToolName.G8E_SEARCH_WEB in self._tool_declarations
         resolved_workflow = agent_mode or AgentMode.OPERATOR_NOT_BOUND
 
-        universal_declarations = [
-            self._tool_declarations[OperatorToolName.QUERY_INVESTIGATION_CONTEXT],
-            self._tool_declarations[OperatorToolName.GET_COMMAND_CONSTRAINTS],
+        tools = [
+            self._tool_declarations[spec.name]
+            for spec in TOOL_SPECS
+            if resolved_workflow in spec.agent_modes and spec.name in self._tool_declarations
         ]
-
-        if resolved_workflow == AgentMode.OPERATOR_NOT_BOUND:
-            if not g8e_web_search_available:
-                logger.info("[TOOLS] OPERATOR_NOT_BOUND: only query_investigation_context available (g8e_web_search not configured)")
-                return [
-                    types.ToolGroup(tools=universal_declarations)
-                ]
-            return [
-                types.ToolGroup(
-                    tools=universal_declarations + [
-                        self._tool_declarations[OperatorToolName.G8E_SEARCH_WEB],
-                    ]
-                )
-            ]
-
-        operator_declarations = [
-            self._tool_declarations[OperatorToolName.RUN_COMMANDS],
-            self._tool_declarations[OperatorToolName.FILE_CREATE],
-            self._tool_declarations[OperatorToolName.FILE_WRITE],
-            self._tool_declarations[OperatorToolName.FILE_READ],
-            self._tool_declarations[OperatorToolName.FILE_UPDATE],
-            self._tool_declarations[OperatorToolName.LIST_FILES],
-            self._tool_declarations[OperatorToolName.FETCH_FILE_HISTORY],
-            self._tool_declarations[OperatorToolName.FETCH_FILE_DIFF],
-            self._tool_declarations[OperatorToolName.GRANT_INTENT],
-            self._tool_declarations[OperatorToolName.REVOKE_INTENT],
-            self._tool_declarations[OperatorToolName.CHECK_PORT],
-        ]
-        if g8e_web_search_available:
-            operator_declarations.insert(0, self._tool_declarations[OperatorToolName.G8E_SEARCH_WEB])
-        return [
-            types.ToolGroup(tools=universal_declarations + operator_declarations)
-        ]
+        if not tools:
+            return []
+        return [types.ToolGroup(tools=tools)]
 
     def _build_run_operator_commands_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
         """Register tool metadata and executor for Operator command execution."""
@@ -443,25 +422,6 @@ class AIToolService:
         )
 
         return declaration, get_command_constraints
-
-    def _build_tool_handlers(self) -> dict[str, Callable]:
-        """Build dispatch table mapping tool names to handler coroutines."""
-        return {
-            OperatorToolName.RUN_COMMANDS: self._handle_run_commands,
-            OperatorToolName.FILE_CREATE: self._handle_file_create,
-            OperatorToolName.FILE_WRITE: self._handle_file_write,
-            OperatorToolName.FILE_READ: self._handle_file_read,
-            OperatorToolName.FILE_UPDATE: self._handle_file_update,
-            OperatorToolName.FETCH_FILE_HISTORY: self._handle_fetch_file_history,
-            OperatorToolName.FETCH_FILE_DIFF: self._handle_fetch_file_diff,
-            OperatorToolName.G8E_SEARCH_WEB: self._handle_search_web,
-            OperatorToolName.CHECK_PORT: self._handle_port_check,
-            OperatorToolName.LIST_FILES: self._handle_list_files,
-            OperatorToolName.GRANT_INTENT: self._handle_grant_intent,
-            OperatorToolName.REVOKE_INTENT: self._handle_revoke_intent,
-            OperatorToolName.QUERY_INVESTIGATION_CONTEXT: self._handle_query_investigation_context,
-            OperatorToolName.GET_COMMAND_CONSTRAINTS: self._handle_get_command_constraints,
-        }
 
     async def _handle_run_commands(
         self,

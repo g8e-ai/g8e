@@ -296,7 +296,7 @@ For agents using the modular system (Primary/Assistant), prompts are split acros
 
 - `core/identity.txt` - Role, platform, operating principles
 - `core/safety.txt` - Architecture, execution posture, forbidden operations
-- `core/loyalty.txt` - Loyal-friction doctrine: kingdom over king, frustration is data, memory of refusal, dissent is visible
+- `core/loyalty.txt` - Loyal-friction doctrine: mission over moment, frustration is data, memory of refusal, dissent is visible
 - `core/dissent.txt` - Warning protocol, denial memory, posture-based escalation response, the right to disagree
 - `modes/operator_bound/` - Capabilities, execution, tools (when operator is bound)
 - `modes/operator_not_bound/` - Capabilities, execution, tools (when operator is not bound)

@@ -196,10 +196,20 @@ class OperatorCommandService:
         )
 
         async def _on_g8eo_result(envelope: G8eoResultEnvelope) -> None:
+            # The transport-level correlation key is envelope.id, which g8eo echoes
+            # verbatim from the outbound g8e_message.id (see publishLFAATypedResponseTo
+            # in components/g8eo/services/pubsub/publish_helpers.go). Some typed
+            # payloads also carry an execution_id field that mirrors the same id; for
+            # LFAA payloads (FetchFileHistoryResultPayload, FetchHistoryResultPayload,
+            # RestoreFileResultPayload, FetchFileDiffResultPayload) that field is
+            # absent. We prefer payload.execution_id when set to preserve legacy
+            # behaviour for command results and status updates, and fall back to
+            # envelope.id so LFAA results actually complete their waiter instead of
+            # timing out at 60 s.
             payload = envelope.payload
             if payload is None:
                 return
-            execution_id = getattr(payload, "execution_id", None)
+            execution_id = getattr(payload, "execution_id", None) or envelope.id
             if not execution_id:
                 return
             execution_registry.complete(execution_id, envelope)

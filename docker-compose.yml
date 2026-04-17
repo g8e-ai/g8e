@@ -283,6 +283,7 @@ services:
       - ./components/g8ed:/app/components/g8ed
       - g8ed-test-node-modules:/app/components/g8ed/node_modules
       - ./shared:/app/shared:ro
+      - ./docs:/app/docs:ro
       - ./scripts:/app/scripts
       - g8es-ssl:/g8es:ro
     deploy:

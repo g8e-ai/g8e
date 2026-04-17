@@ -255,6 +255,38 @@ describe('PasskeyAuthService [UNIT]', () => {
             expect(result.error).toMatch(/expired/);
         });
 
+        it('deletes challenge even when verification fails (consume-on-read)', async () => {
+            const user = makeUserDoc();
+            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
+            verifyRegistrationResponse.mockResolvedValueOnce({
+                verified: false,
+                registrationInfo: null,
+            });
+
+            const result = await service.verifyRegistration(makeReq(), user, {});
+
+            expect(result.verified).toBe(false);
+            // Challenge row must be purged even though verification failed,
+            // otherwise the row leaks until overwritten by a subsequent
+            // register-challenge call.
+            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
+                Collections.PASSKEY_CHALLENGES, user.id
+            );
+        });
+
+        it('deletes challenge even when verifyRegistrationResponse throws', async () => {
+            const user = makeUserDoc();
+            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
+            verifyRegistrationResponse.mockRejectedValueOnce(new Error('bad attestation'));
+
+            const result = await service.verifyRegistration(makeReq(), user, {});
+
+            expect(result.verified).toBe(false);
+            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
+                Collections.PASSKEY_CHALLENGES, user.id
+            );
+        });
+
         it('saves new credential and marks user as PASSKEY provider on success', async () => {
             const user = makeUserDoc();
             services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
@@ -312,6 +344,34 @@ describe('PasskeyAuthService [UNIT]', () => {
             const result = await service.verifyAuthentication(makeReq(), makeUserDoc({ passkey_credentials: [] }), { id: 'unknown' });
             expect(result.verified).toBe(false);
             expect(result.error).toMatch(/not recognized/);
+        });
+
+        it('deletes challenge even when verification fails (consume-on-read)', async () => {
+            const cred = makePasskeyCredential({ id: 'my-id' });
+            const user = makeUserDoc({ passkey_credentials: [cred] });
+            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
+            verifyAuthenticationResponse.mockResolvedValueOnce({ verified: false });
+
+            const result = await service.verifyAuthentication(makeReq(), user, { id: 'my-id' });
+
+            expect(result.verified).toBe(false);
+            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
+                Collections.PASSKEY_CHALLENGES, user.id
+            );
+        });
+
+        it('deletes challenge even when verifyAuthenticationResponse throws', async () => {
+            const cred = makePasskeyCredential({ id: 'my-id' });
+            const user = makeUserDoc({ passkey_credentials: [cred] });
+            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
+            verifyAuthenticationResponse.mockRejectedValueOnce(new Error('bad assertion'));
+
+            const result = await service.verifyAuthentication(makeReq(), user, { id: 'my-id' });
+
+            expect(result.verified).toBe(false);
+            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
+                Collections.PASSKEY_CHALLENGES, user.id
+            );
         });
 
         it('updates counter and last_used_at on success', async () => {

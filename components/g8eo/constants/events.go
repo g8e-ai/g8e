@@ -102,12 +102,14 @@ type operatorRestoreFileEvents struct {
 }
 
 // operatorMcpEvents mirrors shared/constants/events.json g8e.mcp.*
+//
+// Roles:
+//   - ToolsCall: inbound request; dispatched by PubSubCommandService.handleCommand.
+//   - ToolsResult: outbound-only; set by the result publishers to wrap
+//     execution payloads before emitting back to g8ed.
 type operatorMcpEvents struct {
-	ToolsCall       string
-	ToolsResult     string
-	ResourcesList   string
-	ResourcesRead   string
-	ResourcesResult string
+	ToolsCall   string
+	ToolsResult string
 }
 
 // operatorFetchFileDiffEvents mirrors shared/constants/events.json g8e.fetch.file.diff.*
@@ -248,11 +250,8 @@ var Event = events{
 			DirectCmdResult: "g8e.v1.operator.audit.direct.command.result.recorded",
 		},
 		MCP: operatorMcpEvents{
-			ToolsCall:       "g8e.v1.operator.mcp.tools.call",
-			ToolsResult:     "g8e.v1.operator.mcp.tools.result",
-			ResourcesList:   "g8e.v1.operator.mcp.resources.list",
-			ResourcesRead:   "g8e.v1.operator.mcp.resources.read",
-			ResourcesResult: "g8e.v1.operator.mcp.resources.result",
+			ToolsCall:   "g8e.v1.operator.mcp.tools.call",
+			ToolsResult: "g8e.v1.operator.mcp.tools.result",
 		},
 	},
 }

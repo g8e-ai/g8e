@@ -252,11 +252,6 @@
       "tools": {
         "call":   "g8e.v1.operator.mcp.tools.call",
         "result": "g8e.v1.operator.mcp.tools.result"
-      },
-      "resources": {
-        "list":   "g8e.v1.operator.mcp.resources.list",
-        "read":   "g8e.v1.operator.mcp.resources.read",
-        "result": "g8e.v1.operator.mcp.resources.result"
       }
     }
   },

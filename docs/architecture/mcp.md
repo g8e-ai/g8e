@@ -331,8 +331,6 @@ func MCPToolNameToEventType(toolName string) string {
 **Translation Functions:**
 
 - `TranslateToolCallToCommand()` - Converts MCP `tools/call` JSON-RPC to internal `G8eMessage`
-- `TranslateResourceReadToCommand()` - Converts MCP `resources/read` to internal event
-- `TranslateResourceListToCommand()` - Converts MCP `resources/list` to internal event
 - `TranslateResultToMCP()` - Converts internal g8e payload to MCP JSON-RPC response
 - `WrapResult()` - Convenience wrapper for result translation
 
@@ -496,9 +494,6 @@ MCP events are integrated into the g8e event system via dedicated event types un
 |------------|---------|
 | `g8e.v1.operator.mcp.tools.call` | MCP tool call request from external client |
 | `g8e.v1.operator.mcp.tools.result` | MCP tool call result returned to external client |
-| `g8e.v1.operator.mcp.resources.list` | MCP resource list request |
-| `g8e.v1.operator.mcp.resources.read` | MCP resource read request |
-| `g8e.v1.operator.mcp.resources.result` | MCP resource operation result |
 
 ### Event Flow
 

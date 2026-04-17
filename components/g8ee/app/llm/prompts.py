@@ -156,7 +156,7 @@ def build_modular_system_prompt(
     Section order (loyal-friction doctrine):
       1. identity   — who the agent is
       2. safety     — absolute forbidden operations
-      3. loyalty    — kingdom-over-king doctrine
+      3. loyalty    — mission-over-moment doctrine
       4. dissent    — warning protocol, denial memory, escalation response
       5. capabilities / execution / tools (mode-dependent)
       6. system_context (injected from operator(s))

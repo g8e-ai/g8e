@@ -73,7 +73,6 @@ type ListenConfig struct {
 	HTTPPort    int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
 	DataDir     string // Root directory for SQLite database (default: .g8e/data in working directory)
 	SSLDir      string // Directory for TLS certificates (default: DataDir/ssl; override with --ssl-dir)
-	BinaryDir   string // Directory containing platform binaries to serve (default: .g8e/bin in working directory)
 	TLSCertPath string // Path to an externally-managed TLS certificate (optional; auto-generated when empty)
 	TLSKeyPath  string // Path to an externally-managed TLS private key (optional; auto-generated when empty)
 }
@@ -181,20 +180,13 @@ type Config struct {
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPath, tlsKeyPath string) (*Config, error) {
+func LoadListen(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPath string) (*Config, error) {
 	if dataDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil, fmt.Errorf("failed to determine working directory: %w", err)
 		}
 		dataDir = filepath.Join(cwd, ".g8e", "data")
-	}
-	if binaryDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine working directory: %w", err)
-		}
-		binaryDir = filepath.Join(cwd, ".g8e", "bin")
 	}
 	if wssPort == 0 {
 		wssPort = 443
@@ -211,7 +203,6 @@ func LoadListen(wssPort, httpPort int, dataDir, sslDir, binaryDir, tlsCertPath, 
 			HTTPPort:    httpPort,
 			DataDir:     dataDir,
 			SSLDir:      sslDir,
-			BinaryDir:   binaryDir,
 			TLSCertPath: tlsCertPath,
 			TLSKeyPath:  tlsKeyPath,
 		},

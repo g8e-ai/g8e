@@ -81,12 +81,8 @@ class PromptFile(str, Enum):
     TOOL_LIST_FILES = "tools/list_files_and_directories_with_detailed_metadata.txt"
     TOOL_GRANT_INTENT = "tools/grant_intent_permission.txt"
     TOOL_REVOKE_INTENT = "tools/revoke_intent_permission.txt"
-    TOOL_FETCH_EXECUTION_OUTPUT = "tools/fetch_execution_output.txt"
-    TOOL_FETCH_SESSION_HISTORY = "tools/fetch_session_history.txt"
     TOOL_FETCH_FILE_HISTORY = "tools/fetch_file_history.txt"
-    TOOL_RESTORE_FILE = "tools/restore_file.txt"
     TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
-    TOOL_READ_FILE_CONTENT = "tools/read_file_content.txt"
     TOOL_QUERY_INVESTIGATION_CONTEXT = "tools/query_investigation_context.txt"
     TOOL_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
 

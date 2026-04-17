@@ -25,9 +25,9 @@ from dataclasses import dataclass, field
 
 from app.constants.status import (
     CommandErrorType,
-    OPERATOR_TOOLS,
     OperatorToolName,
 )
+from app.services.ai.tool_registry import OPERATOR_TOOLS
 from app.constants.settings import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,

@@ -434,3 +434,132 @@ class TestParseG8eoPayloadMCPReconstruction:
         assert isinstance(result, ExecutionResultsPayload)
         assert result.status == ExecutionStatus.FAILED
         assert "Tool execution failed" in result.stderr
+
+
+class TestOnG8eoResultCorrelation:
+    """Regression coverage for _on_g8eo_result's correlation-key derivation.
+
+    The ``_on_g8eo_result`` closure subscribed in ``OperatorCommandService.build``
+    is the choke point that completes the execution-registry waiter. It must use
+    ``envelope.id`` (the outbound ``g8e_message.id`` echoed by g8eo) when the
+    typed payload does not expose an ``execution_id`` field — otherwise every
+    LFAA-style tool (fetch_file_history, fetch_file_diff, fetch_history,
+    restore_file) silently times out at 60s in production.
+    """
+
+    async def test_lfaa_payload_without_execution_id_completes_registry(self):
+        """FetchFileHistoryResultPayload has no execution_id; envelope.id must gate completion."""
+        from tests.fakes.fake_execution_registry import FakeExecutionRegistry
+        from tests.fakes.builder import build_command_service
+
+        registry = FakeExecutionRegistry()
+        svc = build_command_service(execution_registry=registry)
+
+        # The outbound request's g8e_message.id is what g8eo echoes back.
+        outbound_id = "exec-history-42"
+        registry.allocate(outbound_id)
+
+        # Raw pub/sub payload as it arrives on the results channel: top-level
+        # `id` is the echoed outbound id; payload has NO execution_id field.
+        raw = {
+            "id": outbound_id,
+            "event_type": EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED,
+            "case_id": "case-1",
+            "investigation_id": "inv-1",
+            "task_id": "fetch_file_history",
+            "payload": {
+                "success": True,
+                "file_path": "/etc/hosts",
+                "history": [],
+            },
+        }
+
+        await svc._pubsub_service._handle_pubsub_result_message(
+            "op-1", "sess-1", raw
+        )
+
+        # The waiter must complete within a tight budget — if the fix regressed
+        # this would block for the full 60s execution-registry timeout.
+        completed = await registry.wait(outbound_id, timeout=0.5)
+        assert completed, (
+            "LFAA payload without execution_id failed to complete registry; "
+            "_on_g8eo_result likely regressed to dropping the envelope"
+        )
+        assert outbound_id in registry.complete_calls
+
+        envelope = registry.get_result(outbound_id)
+        assert envelope is not None
+        # Prove the envelope.id fallback is what gated the completion (not a
+        # spurious payload.execution_id that snuck in).
+        assert envelope.id == outbound_id
+        assert getattr(envelope.payload, "execution_id", None) is None
+
+    async def test_restore_file_payload_without_execution_id_completes_registry(self):
+        """RestoreFileResultPayload also lacks execution_id; same correlation path applies."""
+        from tests.fakes.fake_execution_registry import FakeExecutionRegistry
+        from tests.fakes.builder import build_command_service
+
+        registry = FakeExecutionRegistry()
+        svc = build_command_service(execution_registry=registry)
+
+        outbound_id = "exec-restore-7"
+        registry.allocate(outbound_id)
+
+        raw = {
+            "id": outbound_id,
+            "event_type": EventType.OPERATOR_FILE_RESTORE_COMPLETED,
+            "case_id": "case-1",
+            "investigation_id": "inv-1",
+            "task_id": "restore_file",
+            "payload": {
+                "success": True,
+                "file_path": "/etc/hosts",
+                "commit_hash": "deadbeef",
+            },
+        }
+
+        await svc._pubsub_service._handle_pubsub_result_message(
+            "op-1", "sess-1", raw
+        )
+
+        assert await registry.wait(outbound_id, timeout=0.5)
+        assert outbound_id in registry.complete_calls
+
+    async def test_command_payload_with_execution_id_still_wins(self):
+        """When payload.execution_id is present it MUST take precedence over envelope.id.
+
+        Pins the legacy command-result contract so the LFAA fallback does not
+        accidentally shadow cases where g8eo stamps a different execution_id
+        onto the payload (e.g. batch command fan-out).
+        """
+        from tests.fakes.fake_execution_registry import FakeExecutionRegistry
+        from tests.fakes.builder import build_command_service
+
+        registry = FakeExecutionRegistry()
+        svc = build_command_service(execution_registry=registry)
+
+        envelope_id = "envelope-outer-id"
+        payload_exec_id = "payload-inner-id"
+        registry.allocate(payload_exec_id)
+
+        raw = {
+            "id": envelope_id,
+            "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
+            "case_id": "case-1",
+            "investigation_id": "inv-1",
+            "task_id": "command",
+            "payload": {
+                "execution_id": payload_exec_id,
+                "status": ExecutionStatus.COMPLETED,
+            },
+        }
+
+        await svc._pubsub_service._handle_pubsub_result_message(
+            "op-1", "sess-1", raw
+        )
+
+        assert await registry.wait(payload_exec_id, timeout=0.5)
+        assert payload_exec_id in registry.complete_calls
+        # envelope.id was NOT used as the correlation key because payload.execution_id
+        # was present and non-empty.
+        assert envelope_id not in registry.complete_calls

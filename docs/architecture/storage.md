@@ -213,7 +213,7 @@ WAL mode enables concurrent readers with a single writer, which is critical for 
 
 ### g8es SQLite Schema
 
-Single database at `/data/g8e.db`. Canonical schema in `components/g8es/schema.sql`. The inline `listenSchema` in `components/g8eo/services/listen/listen_db.go` contains `documents`, `kv_store`, `sse_events`, and `blobs`.
+Single database at `/data/g8e.db`. Canonical schema is `components/g8eo/services/listen/schema.sql`, embedded into `listen_db.go` at compile time via `//go:embed schema.sql` and applied by `ListenDBService.initSchema`. Tables: `documents`, `kv_store`, `sse_events`, and `blobs`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS documents (
@@ -291,6 +291,8 @@ All components (g8ed, g8ee, g8eo) resolve configuration values using a strictly 
 
 This collection stores the authoritative source for platform-wide configuration. It is created by g8es on first boot and can be updated via the g8ed Settings UI. The bootstrap secrets (`internal_auth_token`, `session_encryption_key`) are also mirrored into this document's `settings` map by `SecretManager`, but the SSL volume files remain the authoritative source — see [Platform Initialization](#platform-initialization).
 
+**Bootstrap secret write protection:** `PLATFORM_SETTINGS` in `components/g8ed/models/settings_model.js` marks `internal_auth_token` and `session_encryption_key` as `writeOnce`. Once set to a non-empty value in the document, the g8ed Settings API (`savePlatformSettings` / `validatePlatformSettings`) refuses to overwrite them — such updates are recorded in the response's `skipped` array and never reach the DB. This prevents UI writes from silently diverging from the volume-authoritative value, which would otherwise be clobbered on the next g8eo boot by `SecretManager`.
+
 | Field | Type | Description |
 |---|---|---|
 | `settings` | object | Map of all platform-wide settings (LLM config, URLs, mirrored bootstrap secrets, etc.). |
@@ -333,7 +335,7 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `settings` | g8ed/g8ee | Platform-wide configuration document (`platform_settings` document) and User-specific application preferences (`user_settings_{user_id}` documents) |
 | `bound_sessions` | g8ed | Operator–web session binding records — one document per web session |
 | `console_audit` | g8ed | Console / admin action audit trail |
-| `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID (replaces previous KV-only storage) |
+| `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID. Challenges are single-use nonces consumed on read during verification (see `PasskeyAuthService._consumeChallenge`), so rows are always deleted after verification regardless of outcome. |
 
 ### Session Documents
 
@@ -674,15 +676,22 @@ g8eo **always writes to the scrubbed vault**. The raw vault write is conditional
 
 When `VaultMode` is absent from the payload, g8eo defaults to `"raw"`.
 
-The conversion happens at the pub/sub boundary in `_execute_command_internal`:
+At the Python application layer, `sentinel_mode` is a `bool` on
+`InvestigationModel` and on the chat/MCP request models. At the pub/sub wire
+boundary it is serialized into `CommandPayload.sentinel_mode` as a `str | None`
+holding one of the `VaultMode` values (`"raw"` or `"scrubbed"`) — see
+`components/g8ee/app/models/command_payloads.py`.
 
-```python
-if sentinel_mode is True:
-    wire_sentinel_mode = VaultMode.SCRUBBED
-elif sentinel_mode is False:
-    wire_sentinel_mode = VaultMode.RAW
-else:
-    wire_sentinel_mode
+g8eo is the defaulting authority: when `CommandPayload.sentinel_mode` is
+absent or empty on the wire, `CommandService.HandleExecutionRequest`
+(`components/g8eo/services/pubsub/command_service.go`) falls back to
+`constants.Status.VaultMode.Raw`:
+
+```go
+vaultMode := p.SentinelMode
+if vaultMode == "" {
+    vaultMode = constants.Status.VaultMode.Raw
+}
 ```
 
 | `sentinel_mode` (Python) | `VaultMode` (wire) | AI reads from |

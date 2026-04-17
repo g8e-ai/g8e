@@ -15,7 +15,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
-import { LLMProvider, AnthropicModel, OllamaModel } from '@g8ed/public/js/constants/ai-constants.js';
+import {
+    LLMProvider,
+    AnthropicModel,
+    OllamaModel,
+    PROVIDER_MODELS,
+} from '@g8ed/constants/ai.js';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
 import { ComponentName } from '@g8ed/public/js/constants/service-client-constants.js';
 
@@ -46,8 +51,15 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             create: vi.fn()
         };
 
-        // Set up DOM structure for the setup wizard (multi-provider layout)
+        // Set up DOM structure for the setup wizard (multi-provider layout).
+        // The llm-catalog script tag mirrors what setup.ejs injects in production,
+        // providing the canonical LLM provider catalog to setup-page.js.
+        const catalogJson = JSON.stringify({
+            providers: LLMProvider,
+            providerModels: PROVIDER_MODELS,
+        }).replace(/</g, '\\u003c');
         document.body.innerHTML = `
+            <script id="llm-catalog" type="application/json">${catalogJson}</script>
             <div id="setup-status" class="setup-status">
                 <span id="setup-status-icon" class="material-symbols-outlined"></span>
                 <span id="setup-status-msg"></span>
