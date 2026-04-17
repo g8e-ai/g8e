@@ -814,32 +814,21 @@ For services that push many event types (operator status, heartbeat, AI progress
 
 ## Prompt System
 
+Full prompt-system reference — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions — lives in [docs/architecture/prompts.md](../architecture/prompts.md). This section covers only the g8ee-specific integration points.
+
 ### Mode-Aware Prompts
 
-System prompts are assembled from discrete files in `app/prompts_data/`, organized by mode and concern:
-
-```
-prompts_data/
-  core/                     — Shared identity and safety constraints
-  modes/
-    operator_bound/         — Full execution capability prompts
-    operator_not_bound/     — Advisory mode prompts
-    cloud_operator_bound/   — AWS Cloud Operator prompts
-  tools/                — Per-tool descriptions
-  system/                   — Response constraints, sentinel mode
-```
-
-Each mode directory contains `capabilities.txt`, `execution.txt`, and `tools.txt`. The `operator_not_bound/` directory additionally contains `capabilities_no_search.txt` and `execution_no_search.txt` — loaded automatically by `load_mode_prompts` when `search_web_available=False`.
+`load_mode_prompts(operator_bound, is_cloud_operator, g8e_web_search_available)` in `app/prompts_data/loader.py` resolves the active `AgentMode` and returns the three mode-specific section files (`capabilities`, `execution`, `tools`). For `OPERATOR_NOT_BOUND` with `g8e_web_search_available=False`, the loader swaps `capabilities.txt` and `execution.txt` for their `_no_search` variants and `build_modular_system_prompt` suppresses the tools section entirely.
 
 ### Prompt Assembly
 
-`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` assembles the full system prompt by combining loaded prompt files with injected runtime context (operator system info, organization context, investigation state, learned memories). It is the only entry point for building system prompts — callers must not assemble prompt strings directly.
+`app/llm/prompts.py` owns all runtime prompt construction. `build_modular_system_prompt` is the only entry point for building system prompts — callers must not assemble prompt strings directly. The full section order is documented in `docs/architecture/prompts.md`.
 
 ### Prompt Constants
 
-All prompt file paths, agent modes, and section labels are defined in `shared/constants/prompts.json` — the authoritative source. g8ee loads this file and populates three enums in `app/constants/prompts.py`: `AgentMode`, `PromptSection`, and `PromptFile`.
+`PromptFile`, `AgentMode`, and `PromptSection` enums in `app/constants/prompts.py` are the authoritative source for prompt file paths and section labels. A sibling `shared/constants/prompts.json` is loaded into `_PROMPTS` by `app/constants/shared.py` but is currently unused at runtime — the Python enums are hardcoded.
 
-**Rule:** Never hardcode prompt file paths or section label strings in application code. Always use the enums from `app/constants/prompts.py`. All new prompt files must have a corresponding `PromptFile` entry added to `shared/constants/prompts.json` before use.
+**Rule:** Never hardcode prompt file paths or section label strings in application code. Always use the enums from `app/constants/prompts.py`. All new prompt files must have a corresponding `PromptFile` entry.
 
 ---
 

@@ -53,6 +53,7 @@ from datetime import datetime, timezone, UTC
 import uuid
 
 from app.constants import (
+    CloudSubtype,
     ComponentName,
     EventType,
     OperatorStatus,
@@ -732,7 +733,7 @@ class TestOperatorEnrichment:
         cloud_operator = build_production_operator_document(
             operator_type=OperatorType.CLOUD,
         )
-        cloud_operator.cloud_subtype = "aws"
+        cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
         
         investigation = create_investigation_data()
@@ -1135,7 +1136,7 @@ class TestAIContextExtraction:
             hostname="aws-instance",
             operator_type=OperatorType.CLOUD,
         )
-        cloud_operator.cloud_subtype = "aws"
+        cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
         
         investigation = EnrichedInvestigationContext(

@@ -1,11 +1,17 @@
 <tools mode="operator_bound">
 
 <instructions>
-1. Before executing ANY tool, you MUST first emit a text response to the user. This text chunk should summarize your internal reasoning, the decision-making process, and explain exactly what action you are about to take and why. Do not silently call tools; always provide this conversational context first.
-2. After receiving the tool's result, you MUST emit another text response to the user. This conversational analysis should explain the outcome, what it means for the user's request, and summarize the findings clearly.
-3. Use `query_investigation_context` to gather missing or deep investigation history (status, history trail, operator actions) rather than assuming you have the full state in the prompt.
-4. BEFORE calling `run_commands_with_operator`, you MUST call `get_command_constraints` to check current command validation rules (whitelist/blacklist). Violations WILL be blocked downstream with a validation error. Review the returned constraints and ensure your proposed command complies before proceeding.
+1. Every tool call is authorized only after a conversational text response that summarizes your reasoning, your decision path, and the specific action you are about to take. Lead with context; the tool call follows.
+2. After every tool result, emit another text response that analyzes the outcome, explains what it means for the user's request, and summarizes the findings clearly.
+3. Use `query_investigation_context` as the authoritative source for investigation state (status, history trail, operator actions). Pull it whenever your confidence in the prompt's snapshot is below complete.
+4. BEFORE calling `run_commands_with_operator`, you MUST call `get_command_constraints` to retrieve the active whitelist/blacklist. Review the returned constraints and confirm your proposed command complies; violations are blocked downstream with a validation error.
 </instructions>
+
+<never>
+- Never invoke a tool silently; the conversational text response that precedes the call is mandatory.
+- Never skip the post-tool analysis; every tool result is paired with an explanatory text response.
+- Never call `run_commands_with_operator` before `get_command_constraints` has returned for this turn.
+</never>
 
 <context>
 [query_investigation_context]
@@ -14,7 +20,7 @@ Retrieve investigation data on-demand. Use when you need to see earlier conversa
 - limit: Number of items to retrieve (optional)
 
 [list_files_and_directories_with_detailed_metadata]
-Use instead of `ls`. Returns full stat metadata (type, size, mode, mtime, owner). Use for existence checks — returns error if path missing.
+Authorized directory-listing tool. Returns full stat metadata (type, size, mode, mtime, owner) and doubles as an existence check — returns error if the path is missing.
 - path: directory to list | max_depth: 0-3 | max_entries: default 100, max 500
 - target_operator: REQUIRED when multiple operators bound (hostname, operator_id, or index)
 
@@ -29,7 +35,7 @@ Create new file. Fails if exists — use file_write_on_operator to overwrite. Cr
 - target_operator: REQUIRED when multiple operators bound
 
 [file_write_on_operator]
-Replace entire file contents. Backs up by default. Use file_update_on_operator for surgical edits.
+Replace entire file contents; a backup is written by default. For surgical edits, `file_update_on_operator` is the authorized tool.
 - file_path, content, justification: REQUIRED | create_if_missing: false | create_backup: true
 - target_operator: REQUIRED when multiple operators bound
 

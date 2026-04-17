@@ -103,32 +103,27 @@ def _scoped_model_capability_override(
     supported_thinking_levels: list[ThinkingLevel],
     supports_tools: bool,
 ):
-    """Temporarily override capability flags on a model config.
+    """Temporarily override capability flags on a registered model config.
 
     Overrides the two mutable backing fields (``supported_thinking_levels``
     and ``supports_tools``) in a scope bounded by this context manager, and
-    restores the originals on exit so an
-    aborted session cannot poison the process-wide MODEL_REGISTRY.
+    restores the originals on exit so an aborted session cannot poison the
+    process-wide MODEL_REGISTRY.
 
-    If the model name is not in the registry we append a placeholder config
-    for the session window and remove it on exit — this preserves the
-    previous fixture behavior for tests that run against a custom Ollama
-    model name that was never registered at import time.
+    Fails loudly if ``model_name`` is not registered in MODEL_REGISTRY.
+    Fabricating an ad-hoc config here would bypass the registration-time
+    dialect validation in ``_OLLAMA_CONFIGS`` and silently paper over a
+    missing registration — every probed model must already exist.
     """
-    from app.models.model_configs import LLMModelConfig
-
     existing = next((cfg for cfg in MODEL_REGISTRY.configs if cfg.name == model_name), None)
-    appended = False
     if existing is None:
-        existing = LLMModelConfig(
-            name=model_name,
-            supported_thinking_levels=list(supported_thinking_levels),
-            supports_tools=supports_tools,
-            context_window_input=128_000,
-            context_window_output=8_192,
+        registered = ", ".join(sorted(cfg.name for cfg in MODEL_REGISTRY.configs))
+        raise LookupError(
+            f"Cannot scope capabilities for unregistered model {model_name!r}. "
+            f"Register it in app/models/model_configs.py (with an explicit "
+            f"ThinkingDialect for Ollama models) before running the capability "
+            f"probe. Registered models: {registered}"
         )
-        MODEL_REGISTRY.configs.append(existing)
-        appended = True
 
     original_levels = list(existing.supported_thinking_levels)
     original_tools = existing.supports_tools
@@ -137,11 +132,8 @@ def _scoped_model_capability_override(
         existing.supports_tools = supports_tools
         yield existing
     finally:
-        if appended:
-            MODEL_REGISTRY.configs.remove(existing)
-        else:
-            existing.supported_thinking_levels = original_levels
-            existing.supports_tools = original_tools
+        existing.supported_thinking_levels = original_levels
+        existing.supports_tools = original_tools
 
 
 async def _probe_llm_capabilities(settings) -> None:

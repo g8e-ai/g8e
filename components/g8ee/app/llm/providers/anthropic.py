@@ -44,13 +44,6 @@ from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 
-# Minimum visible-output headroom reserved above thinking.budget_tokens when
-# extended thinking is enabled. Anthropic requires max_tokens > budget_tokens;
-# this constant guarantees the model still has room for a real reply after
-# burning the thinking budget. Callers that want more output must pass a
-# larger max_tokens explicitly.
-_ANTHROPIC_THINKING_OUTPUT_RESERVE = 4_096
-
 
 # =============================================================================
 # LLM-boundary models for the Anthropic SDK
@@ -235,10 +228,11 @@ class AnthropicProvider(LLMProvider):
         # wire shape. The translator enforces per-level budgets (from the model
         # config's thinking_budgets map or the default table) and signals whether
         # the call must switch into thinking mode (temp=1, no top_k).
+        model_config = get_model_config(model)
         if thinking_config is not None:
             translation = translate_for_anthropic(
                 thinking_config.thinking_level,
-                get_model_config(model),
+                model_config,
             )
         else:
             translation = None
@@ -257,7 +251,7 @@ class AnthropicProvider(LLMProvider):
             # An explicit reserve is cheaper than a surprising empty response.
             effective_max_tokens = max(
                 effective_max_tokens,
-                translation.budget_tokens + _ANTHROPIC_THINKING_OUTPUT_RESERVE,
+                translation.budget_tokens + model_config.thinking_output_reserve,
             )
             thinking_config_dict = {
                 "type": "enabled",

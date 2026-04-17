@@ -173,10 +173,17 @@ def translate_for_ollama(
     config: LLMModelConfig,
 ) -> OllamaThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
-    # G8eBaseModel uses `use_enum_values=True`, so enum fields stored on
-    # LLMModelConfig round-trip to their string values. Compare via `==`
-    # rather than `is` so both the enum instance and its string value match.
-    dialect = config.thinking_dialect or ThinkingDialect.NONE
+    # Every Ollama model MUST declare its dialect at registration time (see
+    # _OLLAMA_CONFIGS validation in model_configs.py). A None here means the
+    # caller supplied a config that was never registered as an Ollama model —
+    # fail loudly rather than silently masquerading as "no thinking".
+    if config.thinking_dialect is None:
+        raise ValueError(
+            f"Ollama model {config.name!r} has no thinking_dialect set. "
+            "Register the model in _OLLAMA_CONFIGS with an explicit "
+            "ThinkingDialect before invoking translate_for_ollama()."
+        )
+    dialect = config.thinking_dialect
 
     if dialect == ThinkingDialect.NONE:
         return OllamaThinkingTranslation(enabled=False, think=None)
@@ -185,5 +192,7 @@ def translate_for_ollama(
         enabled = clamped != ThinkingLevel.OFF
         return OllamaThinkingTranslation(enabled=enabled, think=enabled)
 
-    # Unknown dialect: be conservative and omit thinking.
-    return OllamaThinkingTranslation(enabled=False, think=None)
+    raise ValueError(
+        f"Unknown ThinkingDialect {dialect!r} for Ollama model "
+        f"{config.name!r}. Extend translate_for_ollama() to handle it."
+    )

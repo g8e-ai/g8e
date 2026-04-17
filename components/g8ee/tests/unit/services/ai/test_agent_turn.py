@@ -31,7 +31,6 @@ from app.services.ai.agent_turn import (
     handle_thought_chunk,
     handle_tool_call_chunk,
     handle_usage_chunk,
-    is_capability_error,
     normalize_finish_reason,
     process_provider_turn,
     should_retry_error,
@@ -672,49 +671,6 @@ class TestShouldRetryError:
         error = Exception("Invalid API key")
         error.status_code = 429
         assert should_retry_error(error) is True
-
-
-class TestIsCapabilityError:
-    """Test is_capability_error capability error detection via typed exceptions."""
-
-    def test_detects_thinking_not_supported_error(self):
-        from app.errors import ThinkingNotSupportedError
-        error = ThinkingNotSupportedError(
-            "thinking_config is not supported",
-            model="x",
-            service_name="test",
-        )
-        assert is_capability_error(error) is True
-
-    def test_detects_tools_not_supported_error(self):
-        from app.errors import ToolsNotSupportedError
-        error = ToolsNotSupportedError(
-            "function calling not supported",
-            model="x",
-            service_name="test",
-        )
-        assert is_capability_error(error) is True
-
-    def test_detects_base_model_capability_error(self):
-        from app.errors import ModelCapabilityError
-        error = ModelCapabilityError(
-            "capability X unsupported",
-            model="x",
-            capability="X",
-            service_name="test",
-        )
-        assert is_capability_error(error) is True
-
-    def test_plain_exception_is_not_capability_error(self):
-        """Plain Exceptions are never capability errors — only typed ones qualify.
-
-        Substring heuristics were removed; SDK errors must be translated to
-        typed errors by provider adapters before reaching consumers.
-        """
-        assert is_capability_error(Exception("thinking is not supported")) is False
-        assert is_capability_error(Exception("tool not supported")) is False
-        assert is_capability_error(Exception("rate limit exceeded")) is False
-        assert is_capability_error(Exception("invalid API key")) is False
 
 
 class TestExtractStatusCode:

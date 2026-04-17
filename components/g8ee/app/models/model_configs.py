@@ -85,6 +85,14 @@ class LLMModelConfig(G8eBaseModel):
     thinking_budgets: dict[ThinkingLevel, int] | None = None
     # Ollama-only: which wire dialect the model expects for reasoning toggling.
     thinking_dialect: ThinkingDialect | None = None
+    # Minimum visible-output headroom reserved above thinking.budget_tokens
+    # when extended thinking is enabled. Providers with a "total output
+    # budget" contract (Anthropic: max_tokens must strictly exceed
+    # budget_tokens) uplift max_tokens to budget_tokens + this reserve so
+    # the model has room for a real reply after burning its thinking budget.
+    # 4_096 is a conservative default for Haiku/Sonnet-class models;
+    # Opus-class models typically want 8_192+.
+    thinking_output_reserve: int = 4_096
 
 
 # -----------------------------------------------------------------------------
@@ -265,6 +273,9 @@ ANTHROPIC_CLAUDE_OPUS_4_6_CONFIG = LLMModelConfig(
         ThinkingLevel.MEDIUM: 16_384,
         ThinkingLevel.HIGH:   32_000,
     },
+    # Opus burns up to 32k on thinking at HIGH; a larger visible-output
+    # reserve keeps the final reply from being truncated.
+    thinking_output_reserve=8_192,
     supports_tools=True,
     context_window_input=200_000,
     context_window_output=8_192,
@@ -433,6 +444,11 @@ UNKNOWN_MODEL_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
+    # Declare NONE explicitly so the sentinel is a legal argument to
+    # translate_for_ollama() for unknown Ollama model names. The loud-failure
+    # contract in translate_for_ollama() still catches any *registered*
+    # LLMModelConfig that forgot its dialect (see _OLLAMA_CONFIGS validation).
+    thinking_dialect=ThinkingDialect.NONE,
 )
 
 
@@ -467,6 +483,32 @@ class LLMModelRegistry(G8eBaseModel):
     def get_highest_thinking_level(self, model_name: str) -> ThinkingLevel | None:
         """Return the most capable thinking level the model supports, or None."""
         return _highest_thinking_level(self.get(model_name))
+
+
+# Every Ollama config MUST declare its reasoning dialect explicitly —
+# ``NONE`` for models without reasoning, ``NATIVE_TOGGLE`` for those with the
+# native ``think`` kwarg. Silently defaulting a missing dialect hides the fact
+# that a new model has no reasoning configured, so we fail loudly at import
+# time if any entry in this tuple forgot the field.
+_OLLAMA_CONFIGS: tuple[LLMModelConfig, ...] = (
+    OLLAMA_QWEN3_5_122B_CONFIG,
+    OLLAMA_GLM_5_1_CONFIG,
+    OLLAMA_GEMMA4_26B_CONFIG,
+    OLLAMA_GEMMA4_E4B_CONFIG,
+    OLLAMA_GEMMA4_E2B_CONFIG,
+    OLLAMA_NEMOTRON_3_30B_CONFIG,
+    OLLAMA_LLAMA_3_2_3B_CONFIG,
+    OLLAMA_QWEN3_5_2B_CONFIG,
+    OLLAMA_DEFAULT_CONFIG,
+)
+for _cfg in _OLLAMA_CONFIGS:
+    if _cfg.thinking_dialect is None:
+        raise ValueError(
+            f"Ollama model {_cfg.name!r} is registered without a thinking_dialect. "
+            "Every Ollama config MUST declare ThinkingDialect.NONE or "
+            "ThinkingDialect.NATIVE_TOGGLE explicitly — a silent fallback "
+            "would bake 'no thinking' into a new model forever."
+        )
 
 
 MODEL_REGISTRY = LLMModelRegistry(configs=[

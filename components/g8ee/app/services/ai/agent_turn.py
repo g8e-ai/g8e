@@ -337,18 +337,6 @@ def should_retry_error(error: Exception) -> bool:
     return any(fragment in message for fragment in AGENT_RETRYABLE_ERROR_SUBSTRINGS)
 
 
-def is_capability_error(error: Exception) -> bool:
-    """Return True if the error is a typed ``ModelCapabilityError``.
-
-    Provider adapters translate SDK-level capability rejections into typed
-    ``ThinkingNotSupportedError`` / ``ToolsNotSupportedError`` at the LLM
-    boundary. Consumers MUST rely on the type, never on substring matching
-    of the exception message.
-    """
-    from app.errors import ModelCapabilityError
-    return isinstance(error, ModelCapabilityError)
-
-
 def extract_status_code(error: Exception) -> int | None:
     """Extract an HTTP status code from an exception, if present."""
     # Handle known library exceptions explicitly

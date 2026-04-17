@@ -278,12 +278,17 @@ class TestTranslateForOllama:
         assert translation.enabled is False
         assert translation.think is False
 
-    def test_unknown_dialect_omits_think(self):
-        """An unknown dialect is conservative: omit the kwarg."""
+    def test_missing_dialect_raises_loudly(self):
+        """A config without a thinking_dialect must fail loudly.
+
+        A silent fallback to NONE would bake "no reasoning" into a new
+        Ollama model forever. The contract now is: every Ollama model
+        registers its dialect explicitly; unregistered configs blow up.
+        """
         cfg = LLMModelConfig(
             name="weird",
             supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
             thinking_dialect=None,
         )
-        translation = translate_for_ollama(ThinkingLevel.HIGH, cfg)
-        assert translation.think is None
+        with pytest.raises(ValueError, match="thinking_dialect"):
+            translate_for_ollama(ThinkingLevel.HIGH, cfg)

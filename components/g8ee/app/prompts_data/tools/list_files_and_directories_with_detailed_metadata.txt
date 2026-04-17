@@ -1,4 +1,4 @@
-List files and directories with comprehensive metadata. Preferred over `ls` commands.
+Authoritative directory-listing tool. Returns comprehensive stat metadata and doubles as an existence check.
 
 <parameters>
 <required>

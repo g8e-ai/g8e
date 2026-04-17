@@ -198,13 +198,35 @@ class TestBuildKwargsThinkingMode:
 
     def test_thinking_opus_high_uplifts_max_tokens(self):
         """Opus HIGH requests a 32_000 budget; Opus default max_output_tokens is
-        only 8_192, so the provider must uplift to leave room for the reply."""
+        only 8_192, so the provider must uplift by the model's declared
+        thinking_output_reserve (Opus: 8_192) to leave room for the reply."""
         request = self._build(
             model=ANTHROPIC_CLAUDE_OPUS_4_6,
             max_tokens=8_192,
         )
         assert request.thinking["budget_tokens"] == 32_000
-        assert request.max_tokens == 32_000 + 4_096
+        assert request.max_tokens == 32_000 + 8_192
+
+    def test_thinking_output_reserve_sourced_from_model_config(self):
+        """Uplift uses the model's per-config thinking_output_reserve, not a
+        module-level constant. Mutating the reserve on a specific config must
+        change the uplifted max_tokens for that model only."""
+        from app.models.model_configs import get_model_config
+
+        sonnet_config = get_model_config(ANTHROPIC_CLAUDE_SONNET_4_6)
+        original_reserve = sonnet_config.thinking_output_reserve
+        sonnet_config.thinking_output_reserve = 2_048
+        try:
+            request = self._build(
+                model=ANTHROPIC_CLAUDE_SONNET_4_6,
+                max_tokens=1_000,
+            )
+            # Sonnet HIGH default budget is 16_384. With override reserve=2048,
+            # max_tokens must uplift to exactly budget + 2048.
+            assert request.thinking["budget_tokens"] == 16_384
+            assert request.max_tokens == 16_384 + 2_048
+        finally:
+            sonnet_config.thinking_output_reserve = original_reserve
 
     def test_thinking_haiku_minimal_uses_default_budget(self):
         """Haiku supports MINIMAL with no per-model override → default table."""
