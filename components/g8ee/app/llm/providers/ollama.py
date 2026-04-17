@@ -88,6 +88,50 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
     return ollama_tools if ollama_tools else None
 
 
+def _warn_on_empty_content(
+    response,
+    *,
+    model: str,
+    channel: str,
+    num_ctx: int,
+    num_predict: int,
+) -> None:
+    """Emit a diagnostic WARNING when Ollama returns HTTP 200 with no content.
+
+    Context-window overflow, load failures, and thinking-only output all surface
+    as ``message.content == ""`` with a 200 response. Surfacing the done_reason,
+    token counts, and configured num_ctx/num_predict makes the root cause
+    obvious instead of leaving callers with a generic "empty response" error.
+    """
+    message = getattr(response, "message", None)
+    content = getattr(message, "content", None) if message else None
+    if content:
+        return
+
+    done_reason = getattr(response, "done_reason", None)
+    prompt_eval_count = getattr(response, "prompt_eval_count", None)
+    eval_count = getattr(response, "eval_count", None)
+    thinking = getattr(message, "thinking", None) if message else None
+    thinking_len = len(thinking) if thinking else 0
+    tool_calls = getattr(message, "tool_calls", None) if message else None
+    tool_calls_count = len(tool_calls) if tool_calls else 0
+
+    ctx_overflow_suspected = (
+        prompt_eval_count is not None
+        and num_ctx is not None
+        and prompt_eval_count >= num_ctx
+    )
+
+    logger.warning(
+        "[OLLAMA] Empty message.content on 200 OK: channel=%s model=%s "
+        "done_reason=%s prompt_eval_count=%s eval_count=%s num_ctx=%s "
+        "num_predict=%s thinking_chars=%d tool_calls=%d ctx_overflow_suspected=%s",
+        channel, model, done_reason, prompt_eval_count, eval_count,
+        num_ctx, num_predict, thinking_len, tool_calls_count,
+        ctx_overflow_suspected,
+    )
+
+
 def _normalize_ollama_host(endpoint: str) -> str:
     """Normalize a user-supplied Ollama host into a base URL.
 
@@ -276,6 +320,14 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
+        _warn_on_empty_content(
+            response,
+            model=model,
+            channel="primary",
+            num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            num_predict=effective_max_tokens,
+        )
+
         parts = []
         if getattr(response.message, "thinking", None):
             parts.append(Part(text=response.message.thinking, thought=True))
@@ -371,7 +423,15 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         response = await self._client.chat(**chat_kwargs)
-        
+
+        _warn_on_empty_content(
+            response,
+            model=model,
+            channel="assistant",
+            num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            num_predict=effective_max_tokens,
+        )
+
         parts = []
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
@@ -460,7 +520,15 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         response = await self._client.chat(**chat_kwargs)
-        
+
+        _warn_on_empty_content(
+            response,
+            model=model,
+            channel="lite",
+            num_ctx=LLM_OLLAMA_DEFAULT_NUM_CTX,
+            num_predict=effective_max_tokens,
+        )
+
         parts = []
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))

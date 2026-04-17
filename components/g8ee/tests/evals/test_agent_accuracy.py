@@ -47,7 +47,13 @@ from tests.integration.conftest import auto_approve_pending
 logger = logging.getLogger(__name__)
 
 def load_gold_set() -> list[dict[str, Any]]:
-    return load_and_validate_gold_set(PATHS["g8ee"]["evals"]["gold_set_path"])
+    # The full agent pipeline has tools bound and can execute them end-to-end
+    # (operator-bound scenarios seed a real operator via seed_operator_if_bound),
+    # so expected_tools scenarios are in-scope for this test.
+    return load_and_validate_gold_set(
+        PATHS["g8ee"]["evals"]["gold_set_path"],
+        filter_expected_tools=False,
+    )
 
 
 # Use ai_integration marker to ensure this only runs when LLM is configured

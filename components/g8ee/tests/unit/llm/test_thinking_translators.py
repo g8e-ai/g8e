@@ -43,7 +43,7 @@ from app.models.model_configs import (
     GEMINI_3_1_FLASH_LITE_CONFIG,
     GEMINI_3_FLASH_CONFIG,
     LLMModelConfig,
-    OLLAMA_GEMMA4_26B_CONFIG,
+    OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_122B_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
@@ -254,9 +254,9 @@ class TestTranslateForOpenAI:
 class TestTranslateForOllama:
 
     def test_none_dialect_always_omits_think(self):
-        """Gemma has dialect=NONE; no think kwarg under any circumstance."""
+        """Llama has dialect=NONE; no think kwarg under any circumstance."""
         for level in ThinkingLevel:
-            translation = translate_for_ollama(level, OLLAMA_GEMMA4_26B_CONFIG)
+            translation = translate_for_ollama(level, OLLAMA_LLAMA_3_2_3B_CONFIG)
             assert translation.enabled is False
             assert translation.think is None, f"dialect=NONE must omit think for level={level}"
 

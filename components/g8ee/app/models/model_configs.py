@@ -172,8 +172,8 @@ GEMINI_3_FLASH_CONFIG = LLMModelConfig(
 # Ollama models
 #
 # Thinking capability per family:
-#   - Qwen3, GLM, Nemotron: native `think` toggle; treated as OFF/HIGH binary.
-#   - Gemma, Llama: no reasoning support; supported_thinking_levels=[].
+#   - Qwen3, GLM, Nemotron, Gemma4: native `think` toggle; treated as OFF/HIGH binary.
+#   - Llama: no reasoning support; supported_thinking_levels=[].
 # =============================================================================
 
 OLLAMA_QWEN3_5_122B_CONFIG = LLMModelConfig(
@@ -202,8 +202,8 @@ OLLAMA_GLM_5_1_CONFIG = LLMModelConfig(
 
 OLLAMA_GEMMA4_26B_CONFIG = LLMModelConfig(
     name=OLLAMA_GEMMA4_26B,
-    supported_thinking_levels=[],
-    thinking_dialect=ThinkingDialect.NONE,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=128_000,
     context_window_output=8_192,
@@ -214,8 +214,8 @@ OLLAMA_GEMMA4_26B_CONFIG = LLMModelConfig(
 
 OLLAMA_GEMMA4_E4B_CONFIG = LLMModelConfig(
     name=OLLAMA_GEMMA4_E4B,
-    supported_thinking_levels=[],
-    thinking_dialect=ThinkingDialect.NONE,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
@@ -226,8 +226,8 @@ OLLAMA_GEMMA4_E4B_CONFIG = LLMModelConfig(
 
 OLLAMA_GEMMA4_E2B_CONFIG = LLMModelConfig(
     name=OLLAMA_GEMMA4_E2B,
-    supported_thinking_levels=[],
-    thinking_dialect=ThinkingDialect.NONE,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
     context_window_input=32_768,
     context_window_output=8_192,
