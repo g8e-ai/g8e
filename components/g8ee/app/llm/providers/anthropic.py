@@ -20,6 +20,9 @@ from collections.abc import AsyncGenerator
 import anthropic
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.llm.thinking import translate_for_anthropic
+from ._capability import translate_capability_error
+from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -221,16 +224,38 @@ class AnthropicProvider(LLMProvider):
         effective_temperature = temperature if temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = max_tokens if max_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        thinking_enabled = (
-            thinking_config is not None
-            and thinking_config.thinking_level is not None
-        )
+        # Translate the canonical ThinkingConfig to Anthropic's extended-thinking
+        # wire shape. The translator enforces per-level budgets (from the model
+        # config's thinking_budgets map or the default table) and signals whether
+        # the call must switch into thinking mode (temp=1, no top_k).
+        model_config = get_model_config(model)
+        if thinking_config is not None:
+            translation = translate_for_anthropic(
+                thinking_config.thinking_level,
+                model_config,
+            )
+        else:
+            translation = None
+
+        thinking_enabled = translation is not None and translation.enabled
 
         if thinking_enabled:
             effective_temperature = 1.0
+            # Anthropic's contract: max_tokens is the TOTAL output budget and
+            # must strictly exceed thinking.budget_tokens so the model has
+            # headroom for a visible response. When the caller-provided
+            # max_tokens is too small for the requested thinking budget, uplift
+            # it rather than silently truncating the budget — clamping the
+            # budget down to a tiny value (as the previous min() guard did)
+            # leaves the model with effectively zero tokens for a real reply.
+            # An explicit reserve is cheaper than a surprising empty response.
+            effective_max_tokens = max(
+                effective_max_tokens,
+                translation.budget_tokens + model_config.thinking_output_reserve,
+            )
             thinking_config_dict = {
                 "type": "enabled",
-                "budget_tokens": effective_max_tokens // 2,
+                "budget_tokens": translation.budget_tokens,
             }
             effective_top_k = None
         else:
@@ -433,6 +458,16 @@ class AnthropicProvider(LLMProvider):
                 stream_exhausted = True
             except Exception as e:
                 logger.error("[ANTHROPIC] Exception during primary streaming: %s", e, exc_info=True)
+                translate_capability_error(
+                    e,
+                    service_name="anthropic",
+                    model=model,
+                    thinking_requested=bool(
+                        primary_llm_settings.thinking_config
+                        and primary_llm_settings.thinking_config.enabled
+                    ),
+                    tools_requested=bool(primary_llm_settings.tools),
+                )
                 raise
 
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
@@ -458,7 +493,20 @@ class AnthropicProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
 
-        response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
+        try:
+            response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="anthropic",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
         return self._build_response(response)
 
     async def generate_content_stream_assistant(

@@ -71,7 +71,7 @@ Host Filesystem / AWS / Target System
 | **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
-| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **internal_auth_token persisted in SSL volume** |
+| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
 
 ### Network Isolation
@@ -94,7 +94,7 @@ All components resolve configuration values in the following order (highest prio
 4.  **Schema Defaults**: Hardcoded safe defaults defined in the component's configuration service.
 
 **Exception: Bootstrap Secrets**
-For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`), the **Shared SSL Volume** is the absolute source of truth and the only place they are stored. They are never persisted in the database.
+For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
 
 #### Bootstrap Secrets Handling
 
@@ -105,19 +105,31 @@ The platform handles two critical secrets that are required for component-to-com
 
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
-**1. Authoritative Source (The Volume)**
-The `g8es-ssl` volume (mounted at `/g8es`) is the sole authoritative source of truth for these secrets. They are stored as plain-text files on this volume and are never written to the database.
+**1. Authoritative Runtime Source (The Volume)**
+The `g8es-ssl` volume is the authoritative source used by runtime consumers. It is mounted at `/g8es` on g8ed, g8ee, and g8ep (read-only), and at `/ssl` inside g8es itself. The secrets are stored as `0600` plain-text files on this volume.
 - `internal_auth_token` is stored at `/g8es/internal_auth_token`.
 - `session_encryption_key` is stored at `/g8es/session_encryption_key`.
 
-**2. Generation and Persistence**
-On the first platform start, **g8es** (g8eo in `--listen` mode) checks if these secrets exist on the volume. If they are missing, g8es generates cryptographically secure 32-byte hex values and writes them to the SSL volume files.
+**2. Generation and Synchronization**
+On every g8es startup, `SecretManager.InitPlatformSettings` reconciles the volume files with the `platform_settings` document in g8es:
+- If the `platform_settings` document does not exist and files are missing, g8es generates cryptographically secure 32-byte hex values, creates the document with both secrets, and writes the files.
+- If the document already exists, any file value (when present) takes precedence and is written back into the document; otherwise the document value is used to (re)populate the file.
+- After each successful write, g8es re-reads both files and aborts startup if their contents no longer match the DB document (`verifyDBMatchesFile`), closing the window where a partial write or concurrent writer could leave the two authorities silently disagreeing.
+- g8es then writes a tamper-evidence manifest at `/ssl/bootstrap_digest.json` (`writeDigestManifest`) containing the SHA-256 digest of each secret alongside a manifest version and UTC timestamp. The file is written atomically (`.tmp` + rename) with `0600` permissions.
+- The `platform_settings` cache-aside KV entry is warmed after any write so that the first authenticated request does not race the cold cache.
 
-**3. Automatic Discovery**
-g8ed and g8ee automatically discover these tokens by reading the files from the shared volume at startup. This enables a "zero-config" secure bootstrap without database dependencies for core identity.
+**3. Automatic Discovery and Verification**
+g8ed and g8ee discover these tokens by reading the files from the shared volume at startup via their `BootstrapService` (`components/g8ed/services/platform/bootstrap_service.js`, `components/g8ee/app/services/infra/bootstrap_service.py`). Neither component reads the bootstrap secrets from the database.
 
-**4. Elimination of DB Storage**
-Unlike other configuration, these secrets are never stored in the `platform_settings` database document. This ensures that even a full database wipe or reset does not compromise the platform's internal authentication or session encryption keys, as long as the SSL volume is preserved.
+Before authenticating with a loaded secret, each consumer calls `verifyAgainstManifest` (g8ed) / `verify_against_manifest` (g8ee), which:
+- Reads `bootstrap_digest.json` from the same volume;
+- Computes SHA-256 of the value it just loaded;
+- Aborts startup with a `BootstrapSecretTamperError` if the digest disagrees with the manifest entry for that secret.
+
+A missing manifest is treated as a transitional warning (not an error) so that upgrade ordering is not a footgun; once a g8eo with manifest support has booted, every subsequent consumer start is fully verified. This closes the silent coupling between `SecretManager` (sole writer) and the consumer `BootstrapService`s (sole readers): a divergent volume file now surfaces as a clear startup abort instead of an opaque 401 during the first downstream API call.
+
+**4. Dual-Location Persistence**
+These secrets live in two places: the SSL volume files (read by g8ed/g8ee) and the `platform_settings` document (written and kept in sync by g8es). The volume file is the boot-time source of truth; the DB copy exists to make the secrets visible to the platform settings view and to survive restarts where only the DB is inspected. A full database wipe is still non-destructive to identity because the next g8es startup will repopulate the document from the surviving volume files.
 
 #### Bootstrap Seeding
 
@@ -163,7 +175,7 @@ g8e operates its own private CA. There is no dependency on any public CA.
 
 - **Algorithm:** ECDSA with P-384. **Protocol:** TLS 1.3 only on all external and Operator-facing endpoints.
 - **Generation:** CA and server certificates are generated at runtime by the g8es operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8es-ssl` volume (`/ssl` inside g8es). Never baked into any Docker image.
-- **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es/ssl` on g8ed, g8ee, and g8ep. Both services read CA and server certificates from `/g8es/ssl/`. g8ed's `CertificateService` reads the CA cert and key from `/g8es/ssl/ca/` to sign per-operator client certificates. These mounts are read-only.
+- **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es` on g8ed, g8ee, and g8ep, and read-write at `/ssl` on g8es itself. Consumers read the CA from `/g8es/ca.crt` (or `/g8es/ca/ca.crt`). g8ed's `CertificateService` reads the CA cert and key from the same location to sign per-operator client certificates; per-operator client certs are written to `/g8es/certs/`.
 - **Volume isolation:** SSL certs live in a dedicated volume (`g8es-ssl`) separate from the SQLite DB volume (`g8es-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
 - **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
 - **Per-operator client certificates:** Issued dynamically during Operator slot creation and stored in the operator document. The certificate is not transmitted in the authentication response; the Operator retrieves it from the operator document after slot creation.
@@ -308,7 +320,7 @@ Role escalation is not possible through any public-facing API. Roles are validat
 - Created on successful bootstrap authentication.
 - Bound to both the Operator's API key and its permanent system fingerprint.
 - Scoped to specific pub/sub channels: `cmd:{operator_id}:{operator_session_id}` (inbound commands), `results:{operator_id}:{operator_session_id}` (outbound results), `heartbeat:{operator_id}:{operator_session_id}` (heartbeat telemetry).
-- `operator_id` field is encrypted with AES-256-GCM in the session document.
+- The `api_key` field is encrypted with AES-256-GCM in the session document before persistence; other fields (including `operator_id`) are stored unencrypted so they can be used as lookup keys.
 - Strictly isolated from web sessions — a user's web session and their bound Operator's session are separate security principals, linked via g8es KV keys.
 - API key refresh terminates the old Operator immediately, creates a new slot, and requires full re-authentication.
 
@@ -595,15 +607,17 @@ Before a command is presented for human approval, it passes through an additiona
 Large LLM proposes command via ReAct loop
   │
   ▼
-Tribunal — N concurrent generation passes (default: 3)
+Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes`)
   Each pass: same intent + operator OS/shell/working_directory context
-  Temperature: model default (via get_model_config)  Model: LLM_ASSISTANT_MODEL (default: gemma4:e4b)
+  Temperature: model default (via get_model_config)
+  Model: resolved via `assistant_model -> primary_model` (Ollama default: qwen3-5-122b)
+  Members cycle through Axiom / Concord / Variance
   │
   ▼
 Weighted majority vote — earlier passes weighted higher (weight 1/(i+1))
   │
   ▼
-SLM Verifier (same model, temperature: model default)
+SLM Verifier (same model, temperature: model default; disabled via `llm_command_gen_verifier=false`)
   Returns exactly "ok" — or a corrected command string
   │
   ▼
@@ -822,17 +836,18 @@ Automatic Function Calling (AFC) is **permanently disabled** in G8EE. The AI can
 | `file_create_on_operator` | **Required** | Create new files with content |
 | `file_write_on_operator` | **Required** | Replace entire file contents |
 | `file_update_on_operator` | **Required** | Surgical find-and-replace within a file |
-| `restore_file` | **Required** | Restore a file to a previous Ledger commit |
 | `grant_intent_permission` | **Required** (intent flow) | Request AWS intent permissions for cloud operators |
 | `revoke_intent_permission` | **Required** (intent flow) | Revoke AWS intent permissions |
 | `file_read_on_operator` | No | Read file content (with optional line ranges) |
 | `list_files_and_directories_with_detailed_metadata` | No | Directory listing with metadata |
-| `fetch_execution_output` | No | Retrieve command output from Operator local storage |
-| `fetch_session_history` | No | Retrieve session history from Operator LFAA vault |
 | `fetch_file_history` | No | Retrieve git version history for a file from the Ledger |
 | `fetch_file_diff` | No | Retrieve Sentinel-scrubbed file diffs from the Operator vault |
 | `check_port_status` | No | Check TCP/UDP port reachability |
-| `search_web` | No | Web search (requires `vertex_search_enabled=true`) |
+| `query_investigation_context` | No | Retrieve case/investigation context from g8es |
+| `get_command_constraints` | No | Return the active whitelist/blacklist state for Tribunal awareness |
+| `g8e_web_search` | No | Web search (only registered when a `WebSearchProvider` is configured) |
+
+The tool declarations that the AI can actually invoke are built in `AIToolService.__init__` (`components/g8ee/app/services/ai/tool_service.py`). The `restore_file`, `fetch_execution_output`, `fetch_session_history`, and `read_file_content` enum members exist in `OperatorToolName` but are not currently surfaced as AI-callable tool declarations — file restores and execution-output retrieval are driven directly by g8ee services rather than being exposed to the model.
 
 ---
 
@@ -953,11 +968,11 @@ No secrets are stored in environment variable files (`.env`), baked into images,
 
 | Secret | Storage | Injection mechanism |
 |---|---|---|
-| `INTERNAL_AUTH_TOKEN` | g8es `platform_settings` document | Read from g8es at service startup |
-| `SESSION_ENCRYPTION_KEY` | g8es `platform_settings` document | Read from g8es at service startup |
-| LLM API keys | g8es `platform_settings` document | Read from g8es at service startup |
-| SSL certificates and CA | g8es volume (`/g8es/ssl/`) | Mounted read-only into all services |
-| Per-operator mTLS certificates | In-memory only | Issued once at claim time; never persisted |
+| `internal_auth_token` | `g8es-ssl` volume file (`/g8es/internal_auth_token`), mirrored into `platform_settings` | Read from the volume file at service startup by `BootstrapService` |
+| `session_encryption_key` | `g8es-ssl` volume file (`/g8es/session_encryption_key`), mirrored into `platform_settings` | Read from the volume file at service startup by `BootstrapService` |
+| LLM API keys and other tenant-configurable secrets | g8es `platform_settings` / `user_settings` documents | Read from g8es at service startup and on settings changes |
+| SSL certificates and CA | `g8es-ssl` volume (`/g8es/ca.crt`, `/g8es/ca/ca.crt`, `/g8es/certs/`) | Mounted read-only into g8ed, g8ee, and g8ep |
+| Per-operator mTLS client certificates | Issued at slot-claim time and stored in the operator document; held in memory by the running operator | Operator retrieves its cert from the operator document after slot creation |
 
 ---
 

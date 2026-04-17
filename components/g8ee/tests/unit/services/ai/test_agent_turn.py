@@ -31,7 +31,6 @@ from app.services.ai.agent_turn import (
     handle_thought_chunk,
     handle_tool_call_chunk,
     handle_usage_chunk,
-    is_capability_error,
     normalize_finish_reason,
     process_provider_turn,
     should_retry_error,
@@ -672,41 +671,6 @@ class TestShouldRetryError:
         error = Exception("Invalid API key")
         error.status_code = 429
         assert should_retry_error(error) is True
-
-
-class TestIsCapabilityError:
-    """Test is_capability_error capability error detection."""
-
-    def test_detects_thinking_config_error(self):
-        """Test thinking_config error is detected."""
-        error = Exception("thinking_config is not supported")
-        assert is_capability_error(error) is True
-
-    def test_detects_thinking_not_supported(self):
-        """Test thinking not supported error is detected."""
-        error = Exception("thinking is not supported")
-        assert is_capability_error(error) is True
-
-    def test_detects_invalid_thinking_level(self):
-        """Test invalid thinking_level error is detected."""
-        error = Exception("invalid thinking_level requested")
-        assert is_capability_error(error) is True
-
-    def test_detects_tool_errors(self):
-        """Test tool-related errors are detected."""
-        assert is_capability_error(Exception("tool not supported"))
-        assert is_capability_error(Exception("function call error"))
-        assert is_capability_error(Exception("not supported"))
-
-    def test_case_insensitive_matching(self):
-        """Test matching is case-insensitive."""
-        error = Exception("THINKING IS NOT SUPPORTED")
-        assert is_capability_error(error) is True
-
-    def test_non_capability_errors(self):
-        """Test non-capability errors return False."""
-        assert is_capability_error(Exception("rate limit exceeded")) is False
-        assert is_capability_error(Exception("invalid API key")) is False
 
 
 class TestExtractStatusCode:

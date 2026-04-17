@@ -1204,4 +1204,82 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(content.children.length).toBeGreaterThan(0);
         });
     });
+
+    describe('Agent-continue approval rendering', () => {
+        it('renders a dedicated turn-limit card with no $ prompt and no risk badge', async () => {
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-agent-continue-1',
+                approval_id: 'approval-agent-continue-1',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'ai.agent.continue',
+                turn_limit: 25,
+                turns_completed: 25,
+                justification: 'Agent hit 25 tool-use turns',
+            });
+
+            const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
+            expect(approvalCard).not.toBeNull();
+            expect(approvalCard.dataset.approvalId).toBe('approval-agent-continue-1');
+
+            // Distinct visual treatment: dedicated card modifier, no $ prompt, no risk badge.
+            expect(approvalCard.querySelector('.approval-compact--agent-continue')).not.toBeNull();
+            expect(approvalCard.querySelector('.approval-compact__prompt')).toBeNull();
+            expect(approvalCard.querySelector('.operator-terminal__risk-badge')).toBeNull();
+
+            // Copy reflects the turn limit and a Continue button.
+            expect(approvalCard.textContent).toContain('Agent reached 25 tool-use turns');
+            const approveBtn = approvalCard.querySelector('.approval-compact__btn--approve');
+            expect(approveBtn).not.toBeNull();
+            expect(approveBtn.textContent).toContain('Continue');
+
+            // Registered as pending so Approve/Deny routes to handleApprovalResponse.
+            expect(terminal.pendingApprovals.get('approval-agent-continue-1')).toMatchObject({
+                turn_limit: 25,
+                task_id: 'ai.agent.continue',
+            });
+        });
+
+        it('does not spawn an executing indicator when an agent-continue approval is approved', async () => {
+            const mockPost = vi.fn().mockResolvedValue({ success: true });
+            global.window = global.window || {};
+            global.window.serviceClient = { post: mockPost };
+
+            const { webSessionService } = await import('@g8ed/public/js/utils/web-session-service.js');
+            webSessionService.getWebSessionId.mockReturnValue('session-xyz');
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-agent-continue-2',
+                approval_id: 'approval-agent-continue-2',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'ai.agent.continue',
+                turn_limit: 25,
+                turns_completed: 25,
+                justification: 'Agent hit 25 tool-use turns',
+            });
+
+            await terminal.handleApprovalResponse('approval-agent-continue-2', true);
+
+            expect(mockPost).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.anything(),
+                expect.objectContaining({
+                    approval_id: 'approval-agent-continue-2',
+                    approved: true,
+                    case_id: 'case-1',
+                    investigation_id: 'inv-1',
+                    task_id: 'ai.agent.continue',
+                }),
+            );
+
+            // No command-execution indicator after continue approval.
+            const executing = terminal.outputContainer.querySelector('.anchored-terminal__executing');
+            expect(executing).toBeNull();
+
+            // Shows "Continuing" status label (not "Approved").
+            const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
+            expect(approvalCard.textContent).toContain('Continuing');
+        });
+    });
 });

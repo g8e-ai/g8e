@@ -15,6 +15,24 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { createHash } from 'crypto';
+
+function sha256Hex(value) {
+    return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function writeManifest(volumePath, secrets) {
+    writeFileSync(
+        join(volumePath, 'bootstrap_digest.json'),
+        JSON.stringify({
+            version: 1,
+            updated_at: new Date().toISOString(),
+            secrets: Object.fromEntries(
+                Object.entries(secrets).map(([name, value]) => [name, { sha256: sha256Hex(value) }])
+            )
+        })
+    );
+}
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: {
@@ -388,6 +406,60 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
             const result = bootstrapService._safeListVolume(tmpVolumePath);
 
             expect(result[0]).toContain('error reading directory');
+        });
+    });
+
+    describe('verifyAgainstManifest', () => {
+        it('should pass when manifest digest matches the loaded value', () => {
+            const token = 'matching-token-value';
+            writeManifest(tmpVolumePath, { internal_auth_token: token });
+
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', token)).not.toThrow();
+        });
+
+        it('should throw when the loaded value does not match the manifest digest', () => {
+            writeManifest(tmpVolumePath, { internal_auth_token: 'db-authoritative-value' });
+
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', 'tampered-volume-value'))
+                .toThrow(/failed tamper-evidence check/);
+        });
+
+        it('should no-op when value is empty (nothing to verify)', () => {
+            writeManifest(tmpVolumePath, { internal_auth_token: 'whatever' });
+
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', '')).not.toThrow();
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', null)).not.toThrow();
+        });
+
+        it('should skip verification with a warning when manifest is missing', () => {
+            // Manifest absent: transitional window before g8eo upgrade. We log
+            // but do not hard-fail so g8ed can still bootstrap.
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', 'any-value')).not.toThrow();
+        });
+
+        it('should skip with a warning when manifest has no entry for the secret', () => {
+            writeManifest(tmpVolumePath, { session_encryption_key: 'abc' });
+
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', 'any-value')).not.toThrow();
+        });
+
+        it('should throw when the manifest is malformed JSON', () => {
+            writeFileSync(join(tmpVolumePath, 'bootstrap_digest.json'), '{not valid json');
+
+            expect(() => bootstrapService.verifyAgainstManifest('internal_auth_token', 'any-value'))
+                .toThrow(/unreadable or malformed/);
+        });
+
+        it('should verify against session_encryption_key digest independently', () => {
+            const key = 'a'.repeat(64);
+            writeManifest(tmpVolumePath, {
+                internal_auth_token: 'token',
+                session_encryption_key: key
+            });
+
+            expect(() => bootstrapService.verifyAgainstManifest('session_encryption_key', key)).not.toThrow();
+            expect(() => bootstrapService.verifyAgainstManifest('session_encryption_key', 'b'.repeat(64)))
+                .toThrow(/failed tamper-evidence check/);
         });
     });
 

@@ -1,8 +1,13 @@
 -- g8es SQLite Schema
 -- Canonical schema for the g8e coordination store (g8e.operator --listen mode).
--- All domain data (users, sessions, operators, cases, etc.) is stored as JSON documents
--- in the documents table. g8ed and g8ee interact with this store exclusively via the
--- g8ed HTTP API — neither component holds a local SQLite database.
+-- Embedded into `listen_db.go` via `//go:embed schema.sql` and applied on
+-- database open via `ListenDBService.initSchema`. This file is the SINGLE
+-- source of truth for the g8es schema — do not duplicate it elsewhere.
+--
+-- All domain data (users, sessions, operators, cases, etc.) is stored as JSON
+-- documents in the documents table. g8ed and g8ee interact with this store
+-- exclusively via the g8ed HTTP API — neither component holds a local SQLite
+-- database.
 
 -- Document store: unified collection/id based storage
 CREATE TABLE IF NOT EXISTS documents (

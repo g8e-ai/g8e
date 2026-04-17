@@ -13,8 +13,9 @@
 
 """Fixtures for AI accuracy evaluation tests.
 
-Provides eval_results_collector fixture that collects all evaluation results
-and displays them in a summary at the end of the test run.
+Provides unified_metrics_collector fixture that collects all evaluation results
+across accuracy, safety, and privacy dimensions, and displays them in a summary
+at the end of the test run with persisted artifacts.
 """
 
 import asyncio
@@ -25,9 +26,12 @@ import pytest
 import pytest_asyncio
 from typing import Any
 
+from app.constants.paths import PATHS
 from app.llm.factory import get_llm_settings, clear_provider_cache
 from app.models.settings import G8eeUserSettings, SearchSettings, EvalJudgeSettings
 from app.services.service_factory import ServiceFactory
+from tests.evals.metrics import EvalRow, FullReport
+from tests.evals.reporter import compute_summaries, persist_report, render_text_table
 
 logger = logging.getLogger(__name__)
 
@@ -103,130 +107,134 @@ def test_user_settings():
 
 
 @pytest.fixture(scope="session")
-def eval_results_collector(request):
-    """Collects and displays all eval results in a summary at the end.
+def unified_metrics_collector(request):
+    """Unified collector for all eval results across accuracy, safety, and privacy dimensions.
 
-    Tests should append their AccuracyTestResult to this collector's results list.
-    The fixture automatically prints a summary when the session ends.
+    Tests should call add_row(EvalRow) to record results. The fixture automatically
+    prints a text summary to stdout and persists artifacts (report.txt, results.csv,
+    summary.json) to components/g8ee/reports/evals/<timestamp>/ at session end.
     """
-    class EvalResultsCollector:
+    class UnifiedMetricsCollector:
         def __init__(self):
-            self.results: list[dict[str, Any]] = []
+            self.rows: list[EvalRow] = []
 
-        def add_result(self, result: dict[str, Any]):
-            self.results.append(result)
+        def add_row(self, row: EvalRow):
+            self.rows.append(row)
 
-    collector = EvalResultsCollector()
+    collector = UnifiedMetricsCollector()
 
-    def print_summary():
-        if not collector.results:
+    def finalize_session():
+        if not collector.rows:
             return
 
+        from datetime import datetime, UTC
+
+        llm_settings = get_llm_settings()
+        llm_config = {}
+        if llm_settings:
+            llm_config = {
+                "primary_provider": llm_settings.primary_provider.value if llm_settings.primary_provider else "unknown",
+                "primary_model": llm_settings.primary_model or "unknown",
+                "assistant_provider": llm_settings.assistant_provider.value if llm_settings.assistant_provider else "none",
+                "assistant_model": llm_settings.assistant_model or "none",
+            }
+
+        report = FullReport(
+            rows=collector.rows,
+            summaries=compute_summaries(collector.rows),
+            finished_at=datetime.now(UTC),
+            llm_config=llm_config,
+        )
+
         print("\n")
-        print("=" * 80)
-        print("EVALUATION RESULTS SUMMARY")
-        print("=" * 80)
-        print()
+        print(render_text_table(report))
 
-        for result in collector.results:
-            print("=" * 60)
-            print(f"[EVAL_RESULT] Scenario: {result['scenario_id']}")
-            print(f"[EVAL_RESULT] Score: {result['score']}/5")
-            print(f"[EVAL_RESULT] Passed: {result['passed']}")
-            print(f"[EVAL_RESULT] Execution Time: {result['execution_time_ms']:.1f}ms")
-            print(f"[EVAL_RESULT] Reasoning: {result['reasoning']}")
-            print("=" * 60)
-            print()
+        reports_dir = PATHS["g8ee"]["evals"]["reports_dir"]
+        try:
+            artifacts = persist_report(report, reports_dir)
+            print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
+        except Exception as e:
+            logger.error("Failed to persist eval artifacts: %s", e)
 
-        total = len(collector.results)
-        passed = sum(1 for r in collector.results if r['passed'])
-        avg_score = sum(r['score'] for r in collector.results) / total if total > 0 else 0
-
-        print("=" * 80)
-        print(f"Total Scenarios: {total}")
-        print(f"Passed: {passed}/{total}")
-        print(f"Average Score: {avg_score:.2f}/5")
-        print("=" * 80)
-
-    request.addfinalizer(print_summary)
+    request.addfinalizer(finalize_session)
     return collector
 
 
 @pytest.fixture(scope="session")
-def benchmark_results_collector(request):
-    """Collects benchmark results and displays a binary pass/fail summary with aggregate percentage.
+def eval_results_collector(unified_metrics_collector):
+    """Backwards-compatible shim for accuracy eval results.
 
-    Includes Tribunal delta statistics when available.
+    Delegates to unified_metrics_collector with dimension="accuracy".
+    Tests using this fixture should call add_result(dict) as before.
     """
-    class BenchmarkResultsCollector:
-        def __init__(self):
-            self.results: list[dict[str, Any]] = []
+    class EvalResultsCollectorShim:
+        def __init__(self, unified):
+            self.unified = unified
 
         def add_result(self, result: dict[str, Any]):
-            self.results.append(result)
-
-    collector = BenchmarkResultsCollector()
-
-    def print_summary():
-        if not collector.results:
-            return
-
-        print("\n")
-        print("=" * 80)
-        print("BENCHMARK RESULTS SUMMARY")
-        print("=" * 80)
-        print()
-
-        categories: dict[str, list[dict[str, Any]]] = {}
-        for result in collector.results:
-            cat = result.get("category", "general")
-            categories.setdefault(cat, []).append(result)
-
-        for cat, results in sorted(categories.items()):
-            cat_passed = sum(1 for r in results if r["passed"])
-            cat_total = len(results)
-            cat_pct = (cat_passed / cat_total * 100) if cat_total > 0 else 0
-            print(f"  [{cat}] {cat_passed}/{cat_total} ({cat_pct:.0f}%)")
-            for result in results:
-                status = "PASS" if result["passed"] else "FAIL"
-                print(f"    {status} {result['scenario_id']}")
-                if not result["passed"] and result.get("failures"):
-                    for failure in result["failures"][:3]:
-                        print(f"         - {failure[:120]}")
-            print()
-
-        total = len(collector.results)
-        passed = sum(1 for r in collector.results if r["passed"])
-        pct = (passed / total * 100) if total > 0 else 0
-
-        print("-" * 80)
-        print(f"AGGREGATE: {passed}/{total} scenarios passed ({pct:.1f}%)")
-        print("-" * 80)
-
-        tribunal_results = [r for r in collector.results if r.get("tribunal_outcome")]
-        if tribunal_results:
-            print()
-            print("TRIBUNAL DELTA:")
-            t_total = len(tribunal_results)
-            t_improved = sum(1 for r in tribunal_results if r.get("tribunal_improved"))
-            t_accuracy = sum(
-                1 for r in tribunal_results
-                if r.get("tribunal_improved") and r.get("passed") and r.get("tribunal_pre_score") is False
+            dimension = result.get("dimension", "accuracy")
+            row = EvalRow(
+                dimension=dimension,
+                suite=result.get("suite", "agent_accuracy"),
+                scenario_id=result["scenario_id"],
+                category=result.get("category", ""),
+                passed=result["passed"],
+                score=result.get("score"),
+                score_max=5 if result.get("score") is not None else None,
+                latency_ms=result.get("execution_time_ms", 0),
+                error=result.get("error"),
+                details={
+                    "reasoning": result.get("reasoning", ""),
+                    "response_text": result.get("response_text", "")[:500],
+                },
             )
-            t_rate = (t_accuracy / t_total * 100) if t_total > 0 else 0
+            self.unified.add_row(row)
 
-            print(f"  Scenarios with Tribunal: {t_total}")
-            print(f"  Tribunal changed command: {t_improved}/{t_total}")
-            print(f"  Tribunal improved accuracy: {t_accuracy}/{t_total} ({t_rate:.1f}%)")
+    return EvalResultsCollectorShim(unified_metrics_collector)
 
-            for r in tribunal_results:
-                if r.get("tribunal_improved"):
-                    print(f"    {r['scenario_id']}:")
-                    print(f"      BEFORE: {r.get('tribunal_original_command', 'N/A')[:100]}")
-                    print(f"      AFTER:  {r.get('tribunal_final_command', 'N/A')[:100]}")
-            print("-" * 80)
 
-        print("=" * 80)
+@pytest.fixture(scope="session")
+def benchmark_results_collector(unified_metrics_collector):
+    """Backwards-compatible shim for benchmark results.
 
-    request.addfinalizer(print_summary)
-    return collector
+    Delegates to unified_metrics_collector with dimension="accuracy" for most
+    benchmarks, or "safety" for security_refusal category.
+    """
+    class BenchmarkResultsCollectorShim:
+        def __init__(self, unified):
+            self.unified = unified
+
+        def add_result(self, result: dict[str, Any]):
+            category = result.get("category", "general")
+            if category == "security_refusal":
+                dimension = "safety"
+            else:
+                dimension = "accuracy"
+
+            row = EvalRow(
+                dimension=dimension,
+                suite=result.get("suite", "agent_benchmark"),
+                scenario_id=result["scenario_id"],
+                category=category,
+                passed=result["passed"],
+                score=None,
+                score_max=None,
+                latency_ms=result.get("execution_time_ms", 0),
+                error=result.get("error"),
+                details={
+                    "tool_called": result.get("tool_called", False),
+                    "matchers_total": result.get("matchers_total", 0),
+                    "matchers_passed": result.get("matchers_passed", 0),
+                    "failures": result.get("failures", []),
+                    "tribunal_original_command": result.get("tribunal_original_command"),
+                    "tribunal_final_command": result.get("tribunal_final_command"),
+                    "tribunal_outcome": result.get("tribunal_outcome"),
+                    "tribunal_improved": result.get("tribunal_improved"),
+                    "tribunal_pre_score": result.get("tribunal_pre_score"),
+                    "agent_continue_approvals": result.get("agent_continue_approvals", 0),
+                    "approvals_by_type": result.get("approvals_by_type", {}),
+                },
+            )
+            self.unified.add_row(row)
+
+    return BenchmarkResultsCollectorShim(unified_metrics_collector)

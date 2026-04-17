@@ -883,6 +883,7 @@ class TestNetworkSearchTools:
         finally:
             tool_service.reset_invocation_context(context_token)
 
+    @pytest.mark.requires_web_search
     async def test_search_web_tool_unavailable_handling(
         self, tool_service, sample_g8e_context, sample_investigation, request_settings
     ):

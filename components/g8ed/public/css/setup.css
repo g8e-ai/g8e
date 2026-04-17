@@ -330,6 +330,24 @@ body[data-theme="light"] .wizard-welcome-note { color: var(--text-muted); }
 
 .setup-field-hidden { display: none; }
 
+.setup-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.setup-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    accent-color: var(--accent-blue, #3b82f6);
+}
+
 .setup-label {
     display: flex;
     align-items: center;

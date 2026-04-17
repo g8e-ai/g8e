@@ -191,6 +191,7 @@ export function createDeviceLinkRouter({
             }
 
             return res.json(new DeviceRegistrationResponse({
+                success: true,
                 operator_session_id: result.operator_session_id,
                 operator_id: result.operator_id
             }).forClient());

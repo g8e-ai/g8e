@@ -206,7 +206,11 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         if not target_operators:
             raise ValidationError("target_operators list is empty", component="g8ee")
 
-        if len(target_operators) == 1 and target_operators[0].lower() == "all":
+        # Lenient "all" handling: any sentinel in the list expands to the full fleet.
+        # This rescues LLMs that pass e.g. ['all', 'web-1'] or ['*'] and makes whole-fleet
+        # intent robust against enumeration mistakes.
+        _fleet_sentinels = {"all", "*", "fleet", "every", "everyone"}
+        if any(isinstance(t, str) and t.strip().lower() in _fleet_sentinels for t in target_operators):
             return operator_documents
 
         resolved: list[OperatorDocument] = []

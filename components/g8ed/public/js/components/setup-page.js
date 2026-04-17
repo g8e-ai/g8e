@@ -11,24 +11,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { LLMProvider, PROVIDER_MODELS } from '../constants/ai-constants.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
 const LAST_STEP = 4;
 
+/**
+ * LLM provider catalog is server-injected as a JSON script tag in setup.ejs
+ * (sourced from components/g8ed/constants/ai.js — the single source of truth).
+ * Reading it from the DOM avoids duplicating the catalog in a browser-side module.
+ */
+function _readCatalog() {
+    const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
+    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    try {
+        return JSON.parse(el.textContent);
+    } catch {
+        return { providers: {}, providerModels: {} };
+    }
+}
+
+const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+
+// Wire-protocol provider identifiers are stable canonical strings
+// (see shared/constants/status.json and components/g8ed/constants/ai.js).
 const PROVIDER_KEY_FIELDS = {
-    [LLMProvider.GEMINI]:    'gemini_api_key',
-    [LLMProvider.ANTHROPIC]: 'anthropic_api_key',
-    [LLMProvider.OPENAI]:    'openai_api_key',
-    [LLMProvider.OLLAMA]:    'ollama_url',
+    gemini:    'gemini_api_key',
+    anthropic: 'anthropic_api_key',
+    openai:    'openai_api_key',
+    ollama:    'ollama_url',
 };
 
 const PROVIDER_LABELS = {
-    [LLMProvider.GEMINI]:    'Gemini',
-    [LLMProvider.ANTHROPIC]: 'Anthropic',
-    [LLMProvider.OPENAI]:    'OpenAI',
-    [LLMProvider.OLLAMA]:    'Ollama',
+    gemini:    'Gemini',
+    anthropic: 'Anthropic',
+    openai:    'OpenAI',
+    ollama:    'Ollama',
 };
 
 function _modelToProvider(modelValue) {
@@ -95,6 +113,7 @@ export class SetupPage {
         this._initRevealButtons();
         this._initFinishButton();
         this._initSearchProvider();
+        this._initUseGeminiKeyCheckbox();
         this._initModelDropdowns();
         this._updateProviderStates();
         this._updateNav();
@@ -139,6 +158,10 @@ export class SetupPage {
 
         this._updateNav();
         this._clearStatus();
+
+        if (step === 3) {
+            this._updateUseGeminiKeyVisibility();
+        }
 
         if (step === LAST_STEP) {
             this._renderSummary();
@@ -200,10 +223,26 @@ export class SetupPage {
                 return false;
             }
             const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-            if (ollamaUrl && ollamaUrl.startsWith('https://')) {
-                this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
-                document.getElementById('ollama_url').focus();
-                return false;
+            if (ollamaUrl) {
+                const focusField = () => document.getElementById('ollama_url').focus();
+                if (ollamaUrl.startsWith('https://')) {
+                    this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
+                    focusField();
+                    return false;
+                }
+                // host:port form preferred; tolerate legacy "http://" scheme, reject any path (e.g. /v1)
+                const stripped = ollamaUrl.replace(/^http:\/\//i, '');
+                if (stripped.includes('/')) {
+                    this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
+                    focusField();
+                    return false;
+                }
+                // must look like host:port -- non-empty host, then :port (digits), optional nothing else
+                if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
+                    this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
+                    focusField();
+                    return false;
+                }
             }
         }
 
@@ -350,10 +389,6 @@ export class SetupPage {
             return;
         }
 
-        let firstPrimaryDefault = null;
-        let firstAssistantDefault = null;
-        let firstLiteDefault = null;
-
         roles.forEach(role => {
             const dropdown = document.getElementById(`${role}_model`);
             const menu = document.getElementById(`${role}_model-menu`);
@@ -363,8 +398,31 @@ export class SetupPage {
             
             dropdown.classList.remove('disabled');
             menu.innerHTML = '';
-            
-            const prevValue = this._selectedModels[role];
+
+            let prevValue = this._selectedModels[role];
+            if (prevValue && prevValue !== 'custom') {
+                const stillAvailable = active.some(p => {
+                    const cfg = PROVIDER_MODELS[p];
+                    return cfg && (cfg.all || []).some(m => m.id === prevValue);
+                });
+                if (!stillAvailable) {
+                    prevValue = '';
+                    this._selectedModels[role] = '';
+                }
+            }
+            if (!prevValue) {
+                for (const provider of active) {
+                    const cfg = PROVIDER_MODELS[provider];
+                    const roleModels = cfg?.[role] || cfg?.all || [];
+                    if (roleModels.length > 0) {
+                        prevValue = roleModels[0].id;
+                        this._selectedModels[role] = prevValue;
+                        if (text) text.textContent = roleModels[0].label;
+                        break;
+                    }
+                }
+            }
+            if (text && !prevValue) text.textContent = 'Select a Model';
             
             for (const provider of active) {
                 const config = PROVIDER_MODELS[provider];
@@ -391,10 +449,6 @@ export class SetupPage {
                         option.classList.add('selected');
                         if (text) text.textContent = model.label;
                     }
-
-                    if (role === 'primary' && !firstPrimaryDefault) firstPrimaryDefault = config.defaultPrimary;
-                    if (role === 'assistant' && !firstAssistantDefault) firstAssistantDefault = config.defaultAssistant;
-                    if (role === 'lite' && !firstLiteDefault) firstLiteDefault = config.defaultLite;
 
                     option.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -426,11 +480,6 @@ export class SetupPage {
             if (menu.children.length === 0) {
                 if (text) text.textContent = 'No models available';
                 this._selectedModels[role] = '';
-            } else if (!prevValue) {
-                const defaultModel = role === 'primary' ? firstPrimaryDefault : role === 'assistant' ? firstAssistantDefault : firstLiteDefault;
-                if (defaultModel) {
-                    this._selectModel(role, defaultModel, this._findModelLabel(role, defaultModel));
-                }
             }
         });
     }
@@ -515,7 +564,42 @@ export class SetupPage {
             this._searchProvider = select.value;
             const googleConfig = document.getElementById('search-config-google');
             if (googleConfig) googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            this._updateUseGeminiKeyVisibility();
         });
+    }
+
+    // ---------------------------------------------------------------------------
+    // "Use Gemini API Key" checkbox
+    // ---------------------------------------------------------------------------
+
+    _initUseGeminiKeyCheckbox() {
+        const checkbox = document.getElementById('use_gemini_api_key');
+        if (!checkbox) return;
+        checkbox.addEventListener('change', () => {
+            const searchKeyEl = document.getElementById('search_api_key');
+            const geminiKeyEl = document.getElementById('gemini_api_key');
+            if (!searchKeyEl) return;
+            if (checkbox.checked) {
+                searchKeyEl.value = geminiKeyEl?.value.trim() || '';
+            } else {
+                searchKeyEl.value = '';
+            }
+            searchKeyEl.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    }
+
+    _updateUseGeminiKeyVisibility() {
+        const wrap = document.getElementById('use-gemini-key-wrap');
+        const checkbox = document.getElementById('use_gemini_api_key');
+        const geminiKeyEl = document.getElementById('gemini_api_key');
+        if (!wrap || !checkbox) return;
+
+        const hasGeminiKey = !!(geminiKeyEl && geminiKeyEl.value.trim());
+        const showCheckbox = hasGeminiKey && this._searchProvider === 'google';
+        wrap.classList.toggle('setup-field-hidden', !showCheckbox);
+        if (!showCheckbox && checkbox.checked) {
+            checkbox.checked = false;
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -632,9 +716,9 @@ export class SetupPage {
             userSettings.openai_endpoint = 'https://api.openai.com/v1';
         }
 
-        const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-        if (ollamaUrl) {
-            userSettings.ollama_endpoint = ollamaUrl.endsWith('/') ? ollamaUrl + 'v1' : ollamaUrl + '/v1';
+        const ollamaHost = document.getElementById('ollama_url')?.value.trim();
+        if (ollamaHost) {
+            userSettings.ollama_endpoint = ollamaHost;
         }
 
         if (this._searchProvider === 'google') {

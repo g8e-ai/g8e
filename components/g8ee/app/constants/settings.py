@@ -25,11 +25,51 @@ class LLMProvider(str, Enum):
 
 
 class ThinkingLevel(str, Enum):
+    """Canonical internal vocabulary for model "thinking" / "reasoning" effort.
+
+    Each provider maps these to its native concept at the LLM boundary
+    (see app/llm/thinking.py):
+      - Gemini:    direct enum (low/medium/high/minimal)
+      - OpenAI:    reasoning.effort (minimal/low/medium/high)
+      - Anthropic: thinking.budget_tokens (per-level token table)
+      - Ollama:    think=True/False plus optional dialect-specific hints
+
+    OFF is a first-class value meaning "thinking is disabled for this call".
+    Use OFF rather than None so the schema and intent agree.
+
+    Membership of a level in LLMModelConfig.supported_thinking_levels is the
+    single source of truth for what a model accepts. An empty list means the
+    model has no notion of thinking at all.
+    """
     __str__ = lambda self: self.value
-    HIGH    = "high"
-    MEDIUM  = "medium"
-    LOW     = "low"
+    OFF     = "off"
     MINIMAL = "minimal"
+    LOW     = "low"
+    MEDIUM  = "medium"
+    HIGH    = "high"
+
+
+# Ascending priority (cheap -> expensive). OFF is excluded; it is not an
+# "intensity" value but the absence of thinking. Lookup helpers in
+# app/models/model_configs.py rely on this ordering.
+THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
+    ThinkingLevel.MINIMAL,
+    ThinkingLevel.LOW,
+    ThinkingLevel.MEDIUM,
+    ThinkingLevel.HIGH,
+)
+
+
+class ThinkingDialect(str, Enum):
+    """Wire dialect a self-hosted (Ollama) model expects for reasoning toggling.
+
+    Cloud providers (Gemini/OpenAI/Anthropic) do not need this — their
+    translation is fixed. Ollama hosts a heterogeneous zoo of model families
+    where the same internal ThinkingLevel maps to different on-the-wire knobs.
+    """
+    __str__ = lambda self: self.value
+    NONE          = "none"           # Model has no reasoning mode (Llama, Gemma, ...)
+    NATIVE_TOGGLE = "native_toggle"  # Ollama `think=True/False` flag (Qwen3, GLM, Nemotron, ...)
 
 class TimestampErrorCode(str, Enum):
     __str__ = lambda self: self.value
@@ -274,29 +314,14 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
 GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite-preview"
 GEMINI_3_FLASH                  = "gemini-3-flash-preview"
 
-GEMMA3_1B                     = "gemma3-1b"
-GEMMA3_4B                     = "gemma3-4b"
-GEMMA3_12B                    = "gemma3-12b"
-GEMMA3_27B                    = "gemma3-27b"
-GEMMA4                        = "gemma4"
-GEMMA4_E2B                    = "gemma4-e2b"
-GEMMA4_E4B                    = "gemma4-e4b"
-
 OLLAMA_QWEN3_5_122B             = "qwen3.5:122b"
 OLLAMA_GLM_5_1                 = "glm-5.1:cloud"
 OLLAMA_GEMMA4_26B              = "gemma4:26b"
+OLLAMA_GEMMA4_E4B              = "gemma4:e4b"
+OLLAMA_GEMMA4_E2B              = "gemma4:e2b"
 OLLAMA_NEMOTRON_3_30B          = "nemotron-3-nano:30b"
 OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
-OLLAMA_CODELLAMA_7B            = "codellama-7b"
-OLLAMA_LLAMA3_70B              = "llama3-70b"
-OLLAMA_LLAMA3_8B               = "llama3-8b"
-OLLAMA_MISTRAL_7B              = "mistral-7b"
-
-QWEN3_1B7                     = "qwen3-1b7"
-QWEN3_CODER_30B               = "qwen3-coder-30b"
-QWEN25_7B                     = "qwen25-7b"
-QWEN25_14B                    = "qwen25-14b"
 
 # Provider default models
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4
@@ -372,6 +397,11 @@ FS_READ_MAX_SIZE_BYTES          = 102400
 # These are used when user/platform settings do not specify values
 LLM_DEFAULT_TEMPERATURE          = 0.4
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
+# Ollama-only: default context window passed as options.num_ctx.
+# Ollama's server default is 4096, which silently truncates real-world prompts
+# (system + chat history) and leaves thinking models with no budget for visible
+# output. 32768 matches common modern model context sizes.
+LLM_OLLAMA_DEFAULT_NUM_CTX        = 32768
 
 CACHE_TTL_DEFAULT               = 3600
 CACHE_TTL_SHORT                 = 300

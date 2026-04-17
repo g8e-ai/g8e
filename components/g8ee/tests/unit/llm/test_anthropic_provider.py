@@ -22,7 +22,14 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
+from app.constants import (
+    ANTHROPIC_CLAUDE_HAIKU_4_5,
+    ANTHROPIC_CLAUDE_OPUS_4_6,
+    ANTHROPIC_CLAUDE_SONNET_4_6,
+    LLM_DEFAULT_TEMPERATURE,
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+    ThinkingLevel,
+)
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -114,12 +121,18 @@ class TestBuildKwargs:
 
 
 class TestBuildKwargsThinkingMode:
-    """Thinking mode enforces temperature=1.0 and strips sampling params."""
+    """Thinking mode enforces temperature=1.0 and strips sampling params.
+
+    Tests use a model name that is present in MODEL_REGISTRY so the translator
+    can consult its supported_thinking_levels and thinking_budgets tables;
+    unknown model names would clamp every desired level to OFF and silently
+    disable the thinking path under test.
+    """
 
     def _build(self, **overrides):
         provider = _make_provider()
         defaults = {
-            "model": "claude-sonnet-4-20250514",
+            "model": ANTHROPIC_CLAUDE_SONNET_4_6,
             "messages": [],
             "temperature": 0.7,
             "max_tokens": 20000,
@@ -147,28 +160,120 @@ class TestBuildKwargsThinkingMode:
         request = self._build(top_k=40)
         assert request.top_k is None
 
-    def test_thinking_sets_budget(self):
+    def test_thinking_sets_default_sonnet_high_budget(self):
+        """Sonnet with HIGH has no per-model override, so default table applies."""
         request = self._build(max_tokens=20000)
         assert request.thinking["type"] == "enabled"
-        assert request.thinking["budget_tokens"] == 10000
+        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[HIGH]
+        assert request.thinking["budget_tokens"] == 16_384
+
+    def test_thinking_budget_unchanged_when_max_tokens_fits(self):
+        """When max_tokens already exceeds budget+reserve, no uplift happens."""
+        request = self._build(max_tokens=40_000)
+        assert request.max_tokens == 40_000
+        assert request.thinking["budget_tokens"] == 16_384
+
+    def test_thinking_uplifts_max_tokens_when_too_small(self):
+        """Anthropic requires max_tokens > budget_tokens. When the caller-supplied
+        max_tokens is below budget + the 4096-token output reserve, the provider
+        must uplift max_tokens rather than truncate the budget (the old behaviour
+        left ~1 output token for Opus HIGH)."""
+        request = self._build(max_tokens=8_192)
+        # budget is still the requested 16_384 — not clamped down.
+        assert request.thinking["budget_tokens"] == 16_384
+        # max_tokens is uplifted to budget + output reserve (4096).
+        assert request.max_tokens == 16_384 + 4_096
+
+    def test_thinking_opus_uses_per_model_budget_override(self):
+        """Opus declares thinking_budgets and must use its override, not the default."""
+        request = self._build(
+            model=ANTHROPIC_CLAUDE_OPUS_4_6,
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.MEDIUM,
+                include_thoughts=True,
+            ),
+        )
+        # Opus MEDIUM override = 16_384 (coincidentally same as default HIGH).
+        assert request.thinking["budget_tokens"] == 16_384
+
+    def test_thinking_opus_high_uplifts_max_tokens(self):
+        """Opus HIGH requests a 32_000 budget; Opus default max_output_tokens is
+        only 8_192, so the provider must uplift by the model's declared
+        thinking_output_reserve (Opus: 8_192) to leave room for the reply."""
+        request = self._build(
+            model=ANTHROPIC_CLAUDE_OPUS_4_6,
+            max_tokens=8_192,
+        )
+        assert request.thinking["budget_tokens"] == 32_000
+        assert request.max_tokens == 32_000 + 8_192
+
+    def test_thinking_output_reserve_sourced_from_model_config(self):
+        """Uplift uses the model's per-config thinking_output_reserve, not a
+        module-level constant. Installing a scoped override on a specific
+        model config must change the uplifted max_tokens for that model only."""
+        from app.models.model_configs import MODEL_REGISTRY
+
+        with MODEL_REGISTRY.override(ANTHROPIC_CLAUDE_SONNET_4_6, thinking_output_reserve=2_048):
+            request = self._build(
+                model=ANTHROPIC_CLAUDE_SONNET_4_6,
+                max_tokens=1_000,
+            )
+            # Sonnet HIGH default budget is 16_384. With override reserve=2048,
+            # max_tokens must uplift to exactly budget + 2048.
+            assert request.thinking["budget_tokens"] == 16_384
+            assert request.max_tokens == 16_384 + 2_048
+
+    def test_thinking_haiku_minimal_uses_default_budget(self):
+        """Haiku supports MINIMAL with no per-model override → default table."""
+        request = self._build(
+            model=ANTHROPIC_CLAUDE_HAIKU_4_5,
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.MINIMAL,
+                include_thoughts=True,
+            ),
+        )
+        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[MINIMAL]
+        assert request.thinking["budget_tokens"] == 1_024
+
+    def test_thinking_clamps_unsupported_level(self):
+        """Sonnet does not support MINIMAL; the translator must clamp it to the
+        lowest supported level (LOW) and use that level's budget."""
+        request = self._build(
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.MINIMAL,
+                include_thoughts=True,
+            ),
+        )
+        # ANTHROPIC_DEFAULT_THINKING_BUDGETS[LOW]
+        assert request.thinking["budget_tokens"] == 2_048
 
     def test_thinking_overrides_user_temperature(self):
         """Even if user sets temperature=0.2, thinking forces 1.0."""
         request = self._build(temperature=0.2)
         assert request.temperature == 1.0
 
+    def test_off_thinking_level_yields_no_thinking_dict(self):
+        """OFF is the canonical 'disabled' value; provider must omit the key."""
+        request = self._build(
+            thinking_config=ThinkingConfig(
+                thinking_level=ThinkingLevel.OFF,
+                include_thoughts=False,
+            ),
+        )
+        assert request.thinking is None
+
     def test_disabled_thinking_uses_normal_sampling(self):
-        """ThinkingConfig with thinking_level=None behaves like no thinking."""
+        """ThinkingConfig(thinking_level=OFF) leaves sampling params untouched."""
         provider = _make_provider()
         request = provider._build_kwargs(
-            model="claude-sonnet-4-20250514",
+            model=ANTHROPIC_CLAUDE_SONNET_4_6,
             messages=[],
             temperature=0.5,
             max_tokens=8192,
             top_k=40,
             system_instructions="",
             anthropic_tools=None,
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
         )
         assert request.temperature == 0.5
         assert request.top_k == 40
@@ -415,7 +520,7 @@ class TestPublicMethodsDelegateCorrectly:
             response_modalities=["TEXT"],
             tools=[],
             system_instructions="test",
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
 
@@ -520,7 +625,7 @@ class TestPublicMethodsDelegateCorrectly:
         )
 
         await provider.generate_content_primary(
-            model="claude-sonnet-4-20250514",
+            model=ANTHROPIC_CLAUDE_SONNET_4_6,
             contents=[Content(role="user", parts=[Part(text="complex problem")])],
             primary_llm_settings=settings,
         )
@@ -715,7 +820,7 @@ class TestStreamCompletionVerification:
             response_modalities=["TEXT"],
             tools=[],
             system_instructions="",
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
@@ -757,7 +862,7 @@ class TestStreamCompletionVerification:
             response_modalities=["TEXT"],
             tools=[],
             system_instructions="",
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         

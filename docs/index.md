@@ -28,6 +28,7 @@ Cross-component internals — data flows, protocols, and system-wide design deci
 | [architecture/docker.md](architecture/docker.md) | Docker architecture — service configuration, non-root users, security hardening, capability model, read-only filesystems, docker socket threat model, and dev/prod compose split |
 | [architecture/mcp.md](architecture/mcp.md) | MCP (Model Context Protocol) gateway architecture |
 | [architecture/operator.md](architecture/operator.md) | Operator architecture — g8eo lifecycle, session management, command dispatch, binding protocol, and Sentinel integration |
+| [architecture/prompts.md](architecture/prompts.md) | Prompt system — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions (positive framing, `<never>` blocks) |
 | [architecture/storage.md](architecture/storage.md) | Data storage architecture — all storage layers, component roles, topology, encryption, and retention |
 | [architecture/security.md](architecture/security.md) | Complete security architecture — authentication, session management, operator security, authorization, API security, data protection, LFAA encryption, Sentinel, threat model, and governance |
 

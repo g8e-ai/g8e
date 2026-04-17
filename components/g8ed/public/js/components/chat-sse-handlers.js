@@ -112,6 +112,12 @@ export const ChatSSEHandlersMixin = {
             this.handleOperatorExecutionRequest(data);
         });
 
+        this.eventBus.on(EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED, (data) => {
+            this.approvalPending = true;
+            this.showAIStopButton();
+            this.handleOperatorExecutionRequest(data);
+        });
+
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_PREPARING, () => {
             this.approvalPending = true;
             this.showAIStopButton();

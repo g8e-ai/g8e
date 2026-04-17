@@ -235,10 +235,9 @@ In this mode, the Operator acts as **g8es** (`g8es`), the platform's central bac
   - `/health` — Service health and readiness
   - `/db/` — Document Store (SQLite)
   - `/kv/` — Key-Value Store with TTL support
-  - `/blob/` — High-performance binary blob storage
+  - `/blob/` — High-performance binary blob storage (includes operator-binary namespace)
   - `/ws/pubsub` — WebSocket broker
   - `/pubsub/publish` — HTTP bridge for publishing events
-  - `/binary/` — Operator binary distribution point
 - **Authentication**: Serves as the authenticator for all internal platform traffic using a shared secret (`X-Internal-Auth`).
 - **Usage**:
   ```bash
@@ -312,7 +311,6 @@ The Operator supports the **Model Context Protocol (MCP)** as a native satellite
 | `--http-listen-port` | 443 | HTTPS port for internal g8ee/g8ed traffic |
 | `--data-dir` | `.g8e/data` in working directory | SQLite data directory |
 | `--ssl-dir` | `data-dir/ssl` | Directory for TLS certificates |
-| `--binary-dir` | `.g8e/bin` in working directory | Directory containing operator binaries to serve |
 | `--tls-cert` | — | Path to TLS certificate file |
 | `--tls-key` | — | Path to TLS private key file |
 

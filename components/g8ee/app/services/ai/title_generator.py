@@ -84,20 +84,21 @@ async def generate_case_title(
             system_instructions="",
             response_format=None,
         )
-        response = await provider.generate_content_lite(
-            model=model,
-            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-            lite_llm_settings=settings,
-        )
+        try:
+            from app.errors import OllamaEmptyResponseError
 
-        if not response or not response.text:
-            logger.warning("[TITLE-GEN] No response from LLM, using fallback title")
+            response = await provider.generate_content_lite(
+                model=model,
+                contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
+                lite_llm_settings=settings,
+            )
+            generated_title = response.text.strip()
+        except OllamaEmptyResponseError as exc:
+            logger.warning("[TITLE-GEN] No response from LLM, using fallback title: %s", exc)
             return CaseTitleResult(
                 generated_title=_create_fallback_title(description, max_length),
                 fallback=True
             )
-
-        generated_title = response.text.strip()
 
         if generated_title.startswith('"') and generated_title.endswith('"'):
             generated_title = generated_title[1:-1]

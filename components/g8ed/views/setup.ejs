@@ -214,7 +214,7 @@
                             <span class="wizard-provider-key-status" id="status-ollama"></span>
                         </div>
                         <div class="setup-field">
-                            <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="http://192.168.1.100:11434" spellcheck="false" autocomplete="off">
+                            <input type="text" id="ollama_url" name="ollama_url" class="setup-input" placeholder="192.168.1.100:11434" spellcheck="false" autocomplete="off">
                         </div>
                     </div>
                     </div>
@@ -257,6 +257,10 @@
                                 <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link" id="search-api-key-link">
                                     <span class="material-symbols-outlined">open_in_new</span>Get key
                                 </a>
+                            </label>
+                            <label class="setup-checkbox-label setup-field-hidden" id="use-gemini-key-wrap" for="use_gemini_api_key">
+                                <input type="checkbox" id="use_gemini_api_key" name="use_gemini_api_key" class="setup-checkbox">
+                                <span>Use Gemini API Key</span>
                             </label>
                             <div class="setup-input-wrap">
                                 <input type="password" id="search_api_key" name="search_api_key" class="setup-input has-toggle" placeholder="AIza..." autocomplete="new-password" spellcheck="false">
@@ -313,6 +317,7 @@
 
     <%- include('partials/footer-public') %>
 
+    <script id="llm-catalog" type="application/json"><%- JSON.stringify(llmCatalog).replace(/</g, '\u003c') %></script>
     <script type="module" src="/js/components/hamburger-menu.js"></script>
     <script type="module" src="/js/components/setup-page.js"></script>
 </body>

@@ -110,7 +110,8 @@
   "approval.type": {
     "command": "command",
     "file.edit": "file.edit",
-    "intent": "intent"
+    "intent": "intent",
+    "agent.continue": "agent.continue"
   },
 
   "workflow.type": {
@@ -186,6 +187,8 @@
   },
 
   "ai.task.id": {
+    "chat": "ai.chat",
+    "agent.continue": "ai.agent.continue",
     "command": "ai.command",
     "direct.command": "ai.direct.command",
     "file.edit": "ai.file.edit",
@@ -535,6 +538,8 @@
       "qwen3.5.122b": "qwen3.5:122b",
       "glm.5.1": "glm-5.1:cloud",
       "gemma4.26b": "gemma4:26b",
+      "gemma4.e4b": "gemma4:e4b",
+      "gemma4.e2b": "gemma4:e2b",
       "nemotron.3.30b": "nemotron-3-nano:30b",
       "llama.3.2.3b": "llama3.2:3b",
       "qwen3.5.2b": "qwen3.5:2b"

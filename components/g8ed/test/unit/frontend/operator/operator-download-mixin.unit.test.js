@@ -81,7 +81,10 @@ function buildMockContainer() {
                         </div>
                         <span class="operator-deploy-sublabel">Device Link Token</span>
                         <div class="operator-deploy-cmd-row">
-                            <div class="operator-deploy-cmd" id="device-link-token"></div>
+                            <div class="operator-deploy-cmd obfuscated" id="device-link-token"></div>
+                            <button class="operator-deploy-icon-btn" id="device-link-token-toggle" type="button" title="Show/Hide">
+                                <span class="material-symbols-outlined">visibility</span>
+                            </button>
                             <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy">
                                 <span class="material-symbols-outlined">content_copy</span>
                             </button>
@@ -409,7 +412,8 @@ describe('OperatorDownloadMixin [UNIT - jsdom]', () => {
             });
 
             const tokenDiv = container.querySelector('#device-link-token');
-            expect(tokenDiv.textContent).toBe(testToken);
+            expect(obfuscateApiKey).toHaveBeenCalledWith(testToken);
+            expect(tokenDiv.dataset.token).toBe(testToken);
 
             const resultDiv = container.querySelector('#device-link-result');
             expect(resultDiv.classList.contains('initially-hidden')).toBe(false);
@@ -575,6 +579,88 @@ describe('OperatorDownloadMixin [UNIT - jsdom]', () => {
                 const resultDiv = container.querySelector('#device-link-result');
                 expect(resultDiv.classList.contains('initially-hidden')).toBe(false);
             });
+        });
+
+        it('starts with obfuscated class on device link token', async () => {
+            const ctx = createMixinContext();
+            const container = buildMockContainer();
+
+            const testToken = 'dl_test_token_abc123';
+            operatorPanelService.createDeviceLink.mockResolvedValue({
+                ok: true,
+                json: async () => ({ success: true, token: testToken }),
+            });
+
+            ctx._bindDeviceLinkGeneration(container, TEST_API_KEY);
+
+            const generateBtn = container.querySelector('#device-link-generate-btn');
+            generateBtn.click();
+
+            await vi.waitFor(() => {
+                const tokenDiv = container.querySelector('#device-link-token');
+                expect(tokenDiv.classList.contains('obfuscated')).toBe(true);
+            });
+        });
+
+        it('toggles visibility on device link token toggle button click', async () => {
+            const ctx = createMixinContext();
+            const container = buildMockContainer();
+
+            const testToken = 'dl_test_token_abc123';
+            operatorPanelService.createDeviceLink.mockResolvedValue({
+                ok: true,
+                json: async () => ({ success: true, token: testToken }),
+            });
+
+            ctx._bindDeviceLinkGeneration(container, TEST_API_KEY);
+
+            const generateBtn = container.querySelector('#device-link-generate-btn');
+            generateBtn.click();
+
+            await vi.waitFor(() => {
+                const tokenDiv = container.querySelector('#device-link-token');
+                expect(tokenDiv.dataset.token).toBe(testToken);
+            });
+
+            const toggleBtn = container.querySelector('#device-link-token-toggle');
+            const tokenDiv = container.querySelector('#device-link-token');
+
+            toggleBtn.click();
+            expect(tokenDiv.classList.contains('obfuscated')).toBe(false);
+            expect(tokenDiv.textContent).toBe(testToken);
+
+            const icon = toggleBtn.querySelector('.material-symbols-outlined');
+            expect(icon.textContent).toBe('visibility_off');
+        });
+
+        it('re-obfuscates on second toggle click for device link token', async () => {
+            const ctx = createMixinContext();
+            const container = buildMockContainer();
+
+            const testToken = 'dl_test_token_abc123';
+            operatorPanelService.createDeviceLink.mockResolvedValue({
+                ok: true,
+                json: async () => ({ success: true, token: testToken }),
+            });
+
+            ctx._bindDeviceLinkGeneration(container, TEST_API_KEY);
+
+            const generateBtn = container.querySelector('#device-link-generate-btn');
+            generateBtn.click();
+
+            await vi.waitFor(() => {
+                const tokenDiv = container.querySelector('#device-link-token');
+                expect(tokenDiv.dataset.token).toBe(testToken);
+            });
+
+            const toggleBtn = container.querySelector('#device-link-token-toggle');
+            const tokenDiv = container.querySelector('#device-link-token');
+
+            toggleBtn.click();
+            toggleBtn.click();
+
+            expect(tokenDiv.classList.contains('obfuscated')).toBe(true);
+            expect(obfuscateApiKey).toHaveBeenCalledWith(testToken);
         });
     });
 

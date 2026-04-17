@@ -18,9 +18,15 @@ import { _COLLECTIONS } from './shared.js';
  * Canonical values loaded from shared/constants/collections.json.
  * That file is the single source of truth shared across g8ed and G8EE.
  *
- * IMPORTANT: When renaming collections, update:
- * 1. shared/constants/collections.json
- * 2. db/schema.sql
+ * IMPORTANT: When renaming or adding/removing collections, update:
+ * 1. shared/constants/collections.json (canonical)
+ * 2. components/g8ed/constants/collections.js (this file — extend the Collections object)
+ * 3. components/g8ee/app/constants/collections.py
+ * 4. docs/architecture/storage.md (Collections table)
+ *
+ * The drift guard at
+ * components/g8ed/test/unit/constants/docs-drift.unit.test.js
+ * enforces that (1), (2), and (4) agree.
  */
 
 const c = _COLLECTIONS['collections'];

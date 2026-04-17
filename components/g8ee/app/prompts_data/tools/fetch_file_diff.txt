@@ -1,4 +1,4 @@
-Retrieve file diffs from the Operator's Sentinel-scrubbed vault. Always reads from scrubbed vault — never raw.
+Retrieve file diffs from the Operator's Sentinel-scrubbed vault. The scrubbed vault is the sole authorized source for diffs returned by this tool.
 
 <parameters>
 - diff_id: retrieve full diff content for a specific diff

@@ -456,41 +456,52 @@ GET https://<host>
 
 GET /  →  hasAnyUsers() returns false  →  redirect to /setup
 
-5-step browser wizard:
+GET /setup  →  renders views/setup.ejs
+              (embeds the LLM provider catalog from components/g8ed/constants/ai.js
+               as a JSON script tag consumed by setup-page.js — no browser-side
+               duplicate of the catalog exists)
 
-  Step 1 — Welcome
-    (informational; no API calls)
+4-step browser wizard:
 
-  Step 2 — Account
-    User enters name + email
+  Step 1 — Account
+    User enters email (required) + optional full name
 
-  Step 3 — Platform
-    User selects hostname (localhost / g8e.local / custom)
+  Step 2 — AI Providers
+    User enters API keys/URLs for any subset of providers
+    (Gemini / Anthropic / OpenAI / Ollama — Ollama uses host:port, not an API key).
+    Three custom dropdowns (Primary / Assistant / Lite model) populate from the
+    union of configured providers; each model id is server-driven from the
+    injected catalog. The user may also type a custom model id via "Custom…".
+    llm_primary_provider / llm_assistant_provider / llm_lite_provider are
+    derived from the selected model ids.
 
-  Step 4 — AI Providers
-    User enters API keys for one or more providers (Gemini / Anthropic / OpenAI / Ollama)
-    Ollama uses an endpoint URL instead of an API key
-    The user selects separate providers for **Primary Model** (complex reasoning) and **Assistant Model** (triage, memory).
-    Two unified dropdowns (Primary Model / Assistant Model) populate with models from the selected providers.
-    The `primary_provider` and `assistant_provider` settings are derived from these selections.
+  Step 3 — Web Search (optional)
+    Google: vertex_search_project_id, vertex_search_engine_id, vertex_search_api_key
+    (or reuse the Gemini key via a checkbox). None: web search stays disabled.
 
-  Step 5 — Finish
-    GET /api/setup/config   →  preflight check + env var pre-fill
+  Step 4 — Finish
     Summary card shown
-    →  POST /api/setup/config                     →  settings saved to g8es
-    →  POST /api/auth/passkey/register-challenge  →  pending identity stored in KV under a random token; browser prompts authenticator
-    →  POST /api/auth/passkey/register-verify     →  WebAuthn verified; user record + credential created atomically; session cookie set  →  navigate to /chat
+    →  POST /api/auth/register                         →  body { email, name, settings };
+                                                          first-run branch creates the
+                                                          superadmin atomically via
+                                                          setupService.performFirstRunSetup
+                                                          and returns { user_id, challenge_options }
+    →  navigator.credentials.create(publicKey=options) →  browser passkey prompt
+    →  POST /api/auth/passkey/register-verify-setup    →  attestation verified;
+                                                          credential persisted;
+                                                          session cookie set
+                                                       →  redirect to /chat
 ```
 
 - Setup redirect triggers **only** when the users collection is entirely empty
-- `POST /api/setup/config` is blocked with 403 once any user exists — prevents post-setup tampering via the unauthenticated endpoint
-- `GET /api/setup/config` is also blocked with 403 once any user exists
-- `POST /api/auth/register` is blocked with 403 during first run — user creation happens atomically inside `POST /api/auth/passkey/register-verify` only after successful WebAuthn verification
-- Settings saved via the wizard are stored in g8es (`settings` collection, `platform_settings` doc). `internal_auth_token` and `session_encryption_key` are read from the SSL volume at startup — they are not injected via environment variables and do not need to be set anywhere
+- First-run state is tracked by `platform_settings.setup_complete`. `setupService.isFirstRun()` returns `true` while that flag is unset or `false`; `setupService.completeSetup()` sets it to `true` at the end of a successful `register-verify-setup`
+- During first-run, `POST /api/auth/register` takes the first-run branch (`setupService.performFirstRunSetup`) and creates the superadmin together with a WebAuthn challenge. After first-run completes it falls through to the standard registration path — a public `authRateLimiter`-protected endpoint that rejects duplicate emails
+- `POST /api/auth/passkey/register-verify-setup` is gated by the `requireFirstRun` middleware. It additionally rejects the request with `Setup already complete` if the target user already has any credential, so an admin credential cannot be silently overwritten
+- Settings collected by the wizard are stored in g8es as a **user settings** document (per-user, not platform-wide). The flat UI payload is converted to the nested `{ llm, search, eval_judge }` shape by `settings_model.js` before storage. `internal_auth_token` and `session_encryption_key` are read from the SSL volume at startup — they are not injected via environment variables
 - No default credentials are ever created
 - `hasAnyUsers()` throws on DB error — never silently returns false
 - First-run user is created with `UserRole.SUPERADMIN`
-- If passkey creation is cancelled or fails, no user record is created — the pending state is KV-only and expires after 5 minutes. The user can retry immediately
+- If the passkey attestation fails or is cancelled, the user row created by `/api/auth/register` remains. Because no credential has been persisted, the user can click Finish again to obtain a fresh challenge and retry the passkey prompt; `setup_complete` stays `false` until verification succeeds
 
 ### Workstation Certificate Trust Portal
 
@@ -887,15 +898,15 @@ For the full deep-reference security documentation covering internal auth token,
 | Route | Method | Purpose |
 |-------|--------|---------|
 | `/` | GET | Landing page — login or first-run redirect |
-| `/setup` | GET | First-run setup wizard (redirects to `/` when users exist) |
-| `/api/setup/config` | GET | Preflight: return current DB-level config for wizard pre-fill — first-run only |
-| `/api/setup/config` | POST | Save platform configuration — first-run only, 403 once any user exists |
+| `/setup` | GET | First-run setup wizard (redirects to `/` when users exist). The canonical LLM provider catalog (`components/g8ed/constants/ai.js`) is injected into the template as a JSON script tag and consumed by `setup-page.js` |
 | `/health` | GET | Simple health check |
 | `/health/live` | GET | Liveness probe |
-| `/api/auth/register` | POST | Create user account — blocked with 403 during first-run; user creation is atomic inside `register-verify` |
+| `/api/auth/register` | POST | Create user account and return a passkey registration challenge. During first-run this branches into `setupService.performFirstRunSetup` to atomically create the initial superadmin; otherwise it creates an ordinary user. Body: `{ email, name, settings }`. Returns `{ user_id, challenge_options }` |
 | `/api/auth/validate` | POST | Validate current session |
-| `/api/auth/passkey/register-challenge` | POST | Generate passkey registration challenge — dual-handler: unauthenticated setup flow (first-run) or authenticated add-passkey flow |
-| `/api/auth/passkey/register-verify` | POST | Verify passkey and complete registration — dual-handler: atomic user+credential creation (setup flow) or credential append (add-passkey flow) |
+| `/api/auth/passkey/register-challenge` | POST | Generate a passkey registration challenge for post-setup add-passkey flows |
+| `/api/auth/passkey/register-verify-setup` | POST | First-run only — verify the attestation for the admin user created by `/api/auth/register`, persist the credential, and return the initial session. Rejected once any user exists |
+| `/api/auth/passkey/register-verify-initial` | POST | First-passkey-for-a-new-user flow (no session yet). Rejected if the user already has a credential |
+| `/api/auth/passkey/register-verify` | POST | Authenticated add-passkey flow — appends a new credential to the current user |
 | `/api/auth/passkey/auth-challenge` | POST | Generate passkey authentication challenge |
 | `/api/auth/passkey/auth-verify` | POST | Verify passkey and set session cookie |
 | `/auth/link/:token/register` | POST | Device registration (public, rate limited) |

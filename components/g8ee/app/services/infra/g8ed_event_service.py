@@ -53,7 +53,7 @@ class EventService:
             return EVENT_PUBLISH_SUCCESS
 
         raise NetworkError(
-            f"Failed to deliver event '{event.event_type}' to g8ed",
+            f"Failed to deliver event '{event.event_type.value}' to g8ed",
             code=ErrorCode.API_RESPONSE_ERROR,
             component="g8ee",
         )

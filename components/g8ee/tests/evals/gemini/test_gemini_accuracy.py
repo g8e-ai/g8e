@@ -73,7 +73,7 @@ async def test_gemini_accuracy(
     This isolates the model's raw quality from pipeline behavior.
     """
     start_time = datetime.now(timezone.utc)
-    result_data = AccuracyTestResult(scenario_id=scenario["id"])
+    result_data = AccuracyTestResult(scenario_id=scenario["id"], dimension=scenario.get("dimension", "accuracy"))
 
     try:
         from app.llm.factory import get_llm_settings

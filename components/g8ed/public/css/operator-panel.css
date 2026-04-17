@@ -11,34 +11,72 @@
   overflow: hidden;
 }
 
-/* Panel Divider - draggable resize handle between operator panel and chat */
+/* Panel Divider - draggable resize handle between operator panel and chat.
+   Click the centered tab to collapse/expand; drag the divider body to resize. */
 .panel-divider {
   flex-shrink: 0;
-  width: 5px;
+  width: 10px;
   align-self: stretch;
   cursor: col-resize;
-  background: rgba(71, 85, 105, 0.4);
+  background: var(--border-color);
   position: relative;
   z-index: 10;
-  transition: background 0.15s ease;
+  transition: background var(--transition-fast);
   user-select: none;
 }
 
 .panel-divider:hover,
 .panel-divider.dragging {
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color);
 }
 
+/* Centered clickable tab - larger hit target, visible affordance */
 .panel-divider__handle {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 3px;
-  height: 40px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.25);
+  width: 22px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background: var(--border-color);
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1;
+  box-shadow: var(--shadow-md);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.panel-divider__handle:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--text-bright);
+}
+
+.panel-divider__chevron {
+  font-size: 20px;
+  line-height: 1;
   pointer-events: none;
+  transition: transform 0.2s ease;
+}
+
+/* When collapsed, flip chevron to point right (toward expand) */
+.panel-divider.collapsed .panel-divider__chevron {
+  transform: rotate(180deg);
+}
+
+/* Collapsed state: Operator panel width goes to zero; only the divider tab remains. */
+#operator-panel-container {
+  transition: width 0.2s ease;
+}
+
+#operator-panel-container.collapsed {
+  width: 0 !important;
+  border-right: none;
 }
 
 
@@ -643,7 +681,7 @@
   gap: 4px;
   flex: 1 1 50%;
   min-height: 120px;
-  overflow-y: auto;
+  overflow-y: scroll;
 }
 
 .operator-list-item {

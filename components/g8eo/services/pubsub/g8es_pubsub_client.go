@@ -154,13 +154,21 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 		defer close(out)
 		defer ws.Close()
 
-		for {
+		// Close the WebSocket when the context is cancelled so that
+		// ws.ReadMessage unblocks immediately. Without this, a cancelled
+		// subscription would leak until the next inbound frame (or forever
+		// on an idle channel).
+		stop := make(chan struct{})
+		defer close(stop)
+		go func() {
 			select {
 			case <-ctx.Done():
-				return
-			default:
+				ws.Close()
+			case <-stop:
 			}
+		}()
 
+		for {
 			_, raw, err := ws.ReadMessage()
 			if err != nil {
 				return

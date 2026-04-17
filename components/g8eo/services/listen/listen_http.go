@@ -19,7 +19,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -62,7 +61,6 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
-	mux.HandleFunc("/binary/", h.handleBinary)
 	mux.HandleFunc("/blob/", h.handleBlob)
 
 	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
@@ -479,81 +477,6 @@ func (h *HTTPHandler) handleKVDeletePattern(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	jsonResponse(w, http.StatusOK, models.KVDeletePatternResponse{Deleted: count})
-}
-
-// =============================================================================
-// /binary/{os}/{arch} — Operator Binary Download
-//
-// GET /binary/{os}/{arch}  → stream operator binary for the given platform
-//
-// Binaries are served directly from BinaryDir on the local filesystem.
-// The g8es container has the operator binary baked in at /usr/local/bin,
-// so g8ed and g8ee can fetch binaries on demand without any local caching.
-//
-// Path format: /binary/linux/amd64, /binary/linux/arm64, /binary/linux/386
-// =============================================================================
-
-func (h *HTTPHandler) handleBinary(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/binary/")
-	parts := strings.SplitN(path, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		jsonError(w, http.StatusBadRequest, "path must be /binary/{os}/{arch}")
-		return
-	}
-
-	goos := parts[0]
-	arch := parts[1]
-
-	if strings.ContainsAny(goos, "./\\") || strings.ContainsAny(arch, "./\\") {
-		jsonError(w, http.StatusBadRequest, "invalid os or arch")
-		return
-	}
-
-	binaryDir := h.cfg.Listen.BinaryDir
-	if binaryDir == "" {
-		binaryDir = "/tmp/g8e-binaries"
-		if err := os.MkdirAll(binaryDir, 0755); err != nil {
-			h.logger.Error("Failed to create default binary directory", "error", err)
-			jsonError(w, http.StatusInternalServerError, "internal configuration error")
-			return
-		}
-	}
-
-	binaryPath := filepath.Join(binaryDir, goos, arch, "g8e.operator")
-
-	f, err := os.Open(binaryPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			h.logger.Error("Binary not found", "path", binaryPath, "os", goos, "arch", arch)
-			jsonError(w, http.StatusNotFound, fmt.Sprintf("binary not found for platform: %s/%s", goos, arch))
-			return
-		}
-		h.logger.Error("Failed to open binary", "path", binaryPath, "error", err)
-		jsonError(w, http.StatusInternalServerError, "failed to read binary")
-		return
-	}
-	defer f.Close()
-
-	stat, err := f.Stat()
-	if err != nil {
-		h.logger.Error("Failed to stat binary", "path", binaryPath, "error", err)
-		jsonError(w, http.StatusInternalServerError, "failed to read binary")
-		return
-	}
-
-	h.logger.Info("Serving operator binary", "os", goos, "arch", arch,
-		"size_mb", fmt.Sprintf("%.2f", float64(stat.Size())/1024/1024))
-
-	w.Header().Set(constants.HeaderContentType, "application/octet-stream")
-	w.Header().Set(constants.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="g8e.operator-%s-%s"`, goos, arch))
-	w.Header().Set(constants.HeaderContentLength, strconv.FormatInt(stat.Size(), 10))
-	w.WriteHeader(http.StatusOK)
-	io.Copy(w, f)
 }
 
 // =============================================================================

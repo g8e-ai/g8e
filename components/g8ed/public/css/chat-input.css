@@ -449,7 +449,7 @@
     background: rgba(var(--accent-green-rgb), 0.1);
 }
 
-@media (max-width: 1680px) {
+@media (max-width: 1600px) {
     .llm-model-dropdown.custom-dropdown {
         min-width: auto;
         max-width: auto;

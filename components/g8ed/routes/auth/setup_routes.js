@@ -14,6 +14,7 @@
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { SetupPaths } from '../../constants/api_paths.js';
+import { LLMProvider, PROVIDER_MODELS } from '../../constants/ai.js';
 
 /**
  * @param {Object} options
@@ -34,7 +35,12 @@ export function createSetupRouter({ services }) {
             return res.redirect('/');
         }
 
-        res.render('setup');
+        res.render('setup', {
+            llmCatalog: {
+                providers: LLMProvider,
+                providerModels: PROVIDER_MODELS,
+            },
+        });
     });
 
     return router;

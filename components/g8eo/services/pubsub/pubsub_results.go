@@ -50,11 +50,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 }
 
 func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
-	isMCP := originalMsg.EventType == constants.Event.Operator.MCP.ToolsCall ||
-		originalMsg.EventType == constants.Event.Operator.MCP.ResourcesRead ||
-		originalMsg.EventType == constants.Event.Operator.MCP.ResourcesList
-
-	if !isMCP {
+	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
 		return nil
 	}
 
@@ -68,9 +64,6 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 		return fmt.Errorf("failed to marshal MCP response: %w", err)
 	}
 	msg.EventType = constants.Event.Operator.MCP.ToolsResult
-	if originalMsg.EventType == constants.Event.Operator.MCP.ResourcesRead || originalMsg.EventType == constants.Event.Operator.MCP.ResourcesList {
-		msg.EventType = constants.Event.Operator.MCP.ResourcesResult
-	}
 	msg.Payload = mcpRaw
 	return nil
 }

@@ -31,11 +31,13 @@ export default defineConfig({
       environment: 'node',
   
       setupFiles: ['./test/setup.js'],
-      // Run tests sequentially to avoid g8es KV flushdb() conflicts
+      // Each test file is responsible for cleaning up its own data via
+      // TestCleanupHelper, so files can safely run in parallel forks.
+      // Within a single file, tests still run sequentially (default).
       pool: 'forks',
-      forks: {
-        singleFork: true
-      },
+      maxWorkers: 4,
+      minWorkers: 2,
+      fileParallelism: true,
       reporters: ['dot'],
       // Suppress stdout/stderr output during tests
       silent: true,

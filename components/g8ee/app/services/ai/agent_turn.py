@@ -337,21 +337,6 @@ def should_retry_error(error: Exception) -> bool:
     return any(fragment in message for fragment in AGENT_RETRYABLE_ERROR_SUBSTRINGS)
 
 
-def is_capability_error(error: Exception) -> bool:
-    """Return True if the error indicates a model does not support a requested feature."""
-    message = str(error).lower()
-    # Patterns for thinking or tool support errors
-    capability_patterns = [
-        "thinking_config",
-        "thinking is not supported",
-        "invalid thinking_level",
-        "tool",
-        "function call",
-        "not supported",
-    ]
-    return any(p in message for p in capability_patterns)
-
-
 def extract_status_code(error: Exception) -> int | None:
     """Extract an HTTP status code from an exception, if present."""
     # Handle known library exceptions explicitly

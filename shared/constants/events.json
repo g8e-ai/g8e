@@ -252,16 +252,20 @@
       "tools": {
         "call":   "g8e.v1.operator.mcp.tools.call",
         "result": "g8e.v1.operator.mcp.tools.result"
-      },
-      "resources": {
-        "list":   "g8e.v1.operator.mcp.resources.list",
-        "read":   "g8e.v1.operator.mcp.resources.read",
-        "result": "g8e.v1.operator.mcp.resources.result"
       }
     }
   },
 
   "ai": {
+    "agent": {
+      "continue": {
+        "approval": {
+          "requested": "g8e.v1.ai.agent.continue.approval.requested",
+          "granted":   "g8e.v1.ai.agent.continue.approval.granted",
+          "rejected":  "g8e.v1.ai.agent.continue.approval.rejected"
+        }
+      }
+    },
     "tribunal": {
       "session": {
         "started":   "g8e.v1.ai.tribunal.session.started",

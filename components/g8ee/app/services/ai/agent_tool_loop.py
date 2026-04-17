@@ -25,9 +25,9 @@ from dataclasses import dataclass, field
 
 from app.constants.status import (
     CommandErrorType,
-    OPERATOR_TOOLS,
     OperatorToolName,
 )
+from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.settings import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
@@ -80,37 +80,26 @@ class ToolCallResult:
 logger = logging.getLogger(__name__)
 
 
-_TOOL_DISPLAY_METADATA: dict[str, tuple[str, str, ToolDisplayCategory]] = {
-    OperatorToolName.RUN_COMMANDS:           ("Executing command",     "terminal",   ToolDisplayCategory.EXECUTION),
-    OperatorToolName.FILE_CREATE:            ("Creating file",         "file-plus",  ToolDisplayCategory.FILE),
-    OperatorToolName.FILE_WRITE:             ("Writing file",          "file-edit",  ToolDisplayCategory.FILE),
-    OperatorToolName.FILE_READ:              ("Reading file",          "file-text",  ToolDisplayCategory.FILE),
-    OperatorToolName.FILE_UPDATE:            ("Updating file",         "file-edit",  ToolDisplayCategory.FILE),
-    OperatorToolName.LIST_FILES:             ("Listing directory",     "folder",     ToolDisplayCategory.FILE),
-    OperatorToolName.READ_FILE_CONTENT:      ("Reading file",          "file-text",  ToolDisplayCategory.FILE),
-    OperatorToolName.RESTORE_FILE:           ("Restoring file",        "file-check", ToolDisplayCategory.FILE),
-    OperatorToolName.FETCH_FILE_HISTORY:     ("Fetching file history", "history",    ToolDisplayCategory.FILE),
-    OperatorToolName.FETCH_FILE_DIFF:        ("Fetching file diff",    "git-diff",   ToolDisplayCategory.FILE),
-    OperatorToolName.G8E_SEARCH_WEB:             ("Searching the web",     "search",     ToolDisplayCategory.SEARCH),
-    OperatorToolName.CHECK_PORT:             ("Checking port",         "network",    ToolDisplayCategory.NETWORK),
-    OperatorToolName.GRANT_INTENT:           ("Requesting permission", "shield",     ToolDisplayCategory.GENERAL),
-    OperatorToolName.REVOKE_INTENT:          ("Revoking permission",   "shield-off", ToolDisplayCategory.GENERAL),
-    OperatorToolName.FETCH_EXECUTION_OUTPUT: ("Fetching output",       "terminal",   ToolDisplayCategory.GENERAL),
-    OperatorToolName.FETCH_SESSION_HISTORY:  ("Fetching history",      "clock",      ToolDisplayCategory.GENERAL),
-    OperatorToolName.QUERY_INVESTIGATION_CONTEXT: ("Querying investigation", "database", ToolDisplayCategory.GENERAL),
-    OperatorToolName.GET_COMMAND_CONSTRAINTS: ("Checking constraints", "shield-check", ToolDisplayCategory.GENERAL),
-}
+_FALLBACK_DISPLAY: tuple[str, str, ToolDisplayCategory] = (
+    "Processing", "sync", ToolDisplayCategory.GENERAL,
+)
 
 
 def tool_display_metadata(
     tool_name: str,
     display_detail: str,
 ) -> tuple[str, str, str, ToolDisplayCategory]:
-    """Return (display_label, display_icon, display_detail, category) for a tool call."""
-    label, icon, category = _TOOL_DISPLAY_METADATA.get(
-        tool_name,
-        ("Processing", "sync", ToolDisplayCategory.GENERAL),
-    )
+    """Return ``(display_label, display_icon, display_detail, category)`` for a tool call.
+
+    Display fields live on the tool's ``ToolSpec`` (the single-source registry)
+    so adding a new tool cannot silently miss display metadata. Unknown names
+    (e.g. dynamically-registered grounding stubs) fall back to a generic entry.
+    """
+    spec = get_tool_spec(tool_name)
+    if spec is None:
+        label, icon, category = _FALLBACK_DISPLAY
+    else:
+        label, icon, category = spec.display_label, spec.display_icon, spec.display_category
     return label, icon, display_detail, category
 
 

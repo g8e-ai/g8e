@@ -18,22 +18,27 @@ from app.constants import GEMINI_3_1_FLASH_LITE, ThinkingLevel
 def test_gemini_3_1_flash_lite_config():
     """Verify that gemini-3.1-flash-lite-preview is correctly registered and configured."""
     config = get_model_config(GEMINI_3_1_FLASH_LITE)
-    
+
     assert config.name == "gemini-3.1-flash-lite-preview"
-    assert config.supports_thinking is True
     assert config.supports_tools is True
     assert config.context_window_input == 1_000_000
     assert config.context_window_output == 64_000
-    
-    # Verify thinking levels
-    expected_levels = [
+
+    # supported_thinking_levels is the single source of truth; a non-empty
+    # list means the model supports thinking.
+    assert len(config.supported_thinking_levels) > 0
+
+    # OFF must be present so callers can explicitly disable thinking; MINIMAL,
+    # LOW, MEDIUM, HIGH are the full intensity range the Flash-Lite preview
+    # advertises. Order matches the model_configs.py declaration and is
+    # relied on by _lowest_thinking_level / _highest_thinking_level helpers.
+    assert config.supported_thinking_levels == [
+        ThinkingLevel.OFF,
         ThinkingLevel.MINIMAL,
         ThinkingLevel.LOW,
         ThinkingLevel.MEDIUM,
-        ThinkingLevel.HIGH
+        ThinkingLevel.HIGH,
     ]
-    assert all(level in config.supported_thinking_levels for level in expected_levels)
-    assert len(config.supported_thinking_levels) == len(expected_levels)
 
 def test_gemini_3_1_flash_lite_in_registry():
     """Verify the model is present in the global registry."""

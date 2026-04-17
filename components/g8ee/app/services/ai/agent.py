@@ -45,6 +45,7 @@ from app.constants import (
     AGENT_MAX_TOOL_TURNS,
     AGENT_RETRY_BACKOFF_MULTIPLIER,
     AGENT_RETRY_DELAY_SECONDS,
+    AITaskId,
     DEFAULT_FINISH_REASON,
 )
 from app.llm.provider import LLMProvider
@@ -58,7 +59,7 @@ from app.models.agent import (
     TurnResult,
 )
 from app.models.grounding import GroundingMetadata
-from app.models.operators import CommandApprovalRequest
+from app.models.operators import AgentContinueApprovalRequest
 from app.services.ai.agent_tool_loop import (
     execute_turn_tool_calls,
     merge_grounding,
@@ -299,15 +300,15 @@ class g8eEngine:
                     f"without completing its response. Approve to reset the turn counter "
                     f"and allow the agent to continue; deny to stop the agent now."
                 )
-                approval_result = await self._approval_service.request_command_approval(
-                    CommandApprovalRequest(
+                approval_result = await self._approval_service.request_agent_continue_approval(
+                    AgentContinueApprovalRequest(
                         g8e_context=context.g8e_context,
                         timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
                         justification=justification,
                         execution_id=generate_command_execution_id(),
-                        operator_id="",
-                        operator_session_id="",
-                        command=f"[agent] continue beyond {AGENT_MAX_TOOL_TURNS}-turn limit",
+                        turn_limit=AGENT_MAX_TOOL_TURNS,
+                        turns_completed=loop_turn - 1,
+                        task_id=AITaskId.AGENT_CONTINUE.value,
                     )
                 )
                 if not approval_result.approved:

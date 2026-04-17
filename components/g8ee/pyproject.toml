@@ -38,8 +38,10 @@ markers = [
     "requires_web_search: Tests requiring web search configuration (search.enabled, project_id, engine_id, api_key)",
     "agent_eval: AI agent accuracy evaluation tests using a Judge LLM",
     "agent_benchmark: Deterministic agent benchmark tests grading tool call payloads with BenchmarkJudge",
+    "agent_privacy: Privacy evaluation tests for Sentinel PII redaction across three egress layers",
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",
+    "operator_wire: Integration tests that publish tool-call events directly to a live g8ep operator via PubSub (no AI, no approval gate)",
 ]
 
 # Output and logging
@@ -48,6 +50,7 @@ addopts = [
     "--no-header",
     "--strict-markers",
     "--strict-config",
+    "-q",
     "-m", "not e2e",
 ]
 

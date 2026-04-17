@@ -62,6 +62,8 @@ class ComponentStatus(str, Enum):
     ERROR = "error"
 
 class AITaskId(str, Enum):
+    CHAT = "ai.chat"
+    AGENT_CONTINUE = "ai.agent.continue"
     COMMAND = "ai.command"
     DIRECT_COMMAND = "ai.direct.command"
     FILE_EDIT = "ai.file.edit"
@@ -86,6 +88,7 @@ class ApprovalType(str, Enum):
     COMMAND = "command"
     FILE_EDIT = "file.edit"
     INTENT = "intent"
+    AGENT_CONTINUE = "agent.continue"
 
 class CaseStatus(str, Enum):
     NEW = "New"
@@ -189,6 +192,26 @@ class NetworkProtocol(str, Enum):
     UDP = "udp"
 
 class OperatorToolName(str, Enum):
+    """Canonical names for every AI-facing tool dispatched through g8ee.
+
+    Contract:
+
+    Every value in this enum MUST be the ``name`` field of exactly one
+    ``ToolSpec`` in ``app.services.ai.tool_registry.TOOL_SPECS`` — except
+    values explicitly listed in
+    ``tests/unit/services/ai/test_tool_registry_invariants._PENDING_RESTORATION``
+    which are wire-protocol placeholders reserved for tools whose AI-facing
+    surface is not yet shipped (e.g. during phased restoration work).
+
+    This is NOT a wire-protocol command enum — values named here are the
+    identifiers the LLM sees. The g8ee → g8eo transport routes through
+    ``EventType.OPERATOR_*_REQUESTED`` constants via either
+    ``app.services.mcp.adapter.build_tool_call_request`` (MCP wrap) or a
+    direct event publish, and g8eo dispatches in
+    ``components/g8eo/services/pubsub/pubsub_commands.go``. Drift between
+    this enum and either side of the wire is the class of bug
+    ``test_tool_registry_invariants`` guards against.
+    """
     RUN_COMMANDS = "run_commands_with_operator"
     FILE_CREATE = "file_create_on_operator"
     FILE_WRITE = "file_write_on_operator"
@@ -208,23 +231,9 @@ class OperatorToolName(str, Enum):
     QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
     GET_COMMAND_CONSTRAINTS = "get_command_constraints"
 
-OPERATOR_TOOLS = frozenset({
-    OperatorToolName.RUN_COMMANDS.value,
-    OperatorToolName.FILE_CREATE.value,
-    OperatorToolName.FILE_WRITE.value,
-    OperatorToolName.FILE_READ.value,
-    OperatorToolName.FILE_UPDATE.value,
-    OperatorToolName.CHECK_PORT.value,
-    OperatorToolName.LIST_FILES.value,
-    OperatorToolName.READ_FILE_CONTENT.value,
-    OperatorToolName.GRANT_INTENT.value,
-    OperatorToolName.REVOKE_INTENT.value,
-    OperatorToolName.FETCH_EXECUTION_OUTPUT.value,
-    OperatorToolName.FETCH_SESSION_HISTORY.value,
-    OperatorToolName.FETCH_FILE_HISTORY.value,
-    OperatorToolName.RESTORE_FILE.value,
-    OperatorToolName.FETCH_FILE_DIFF.value,
-})
+# OPERATOR_TOOLS and AI_UNIVERSAL_TOOLS moved to app.services.ai.tool_registry
+# where they are derived from the single TOOL_SPECS declaration. Importers must
+# pull those frozensets from tool_registry directly.
 
 class OperatorType(str, Enum):
     SYSTEM = _STATUS["g8e.type"]["system"]

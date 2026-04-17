@@ -9,9 +9,11 @@
 <!-- Operator Sidebar -->
 <div id="operator-panel-container"></div>
 
-<!-- Horizontal Resize Divider -->
-<div class="panel-divider" id="panel-divider" title="Drag to resize panels">
-    <div class="panel-divider__handle"></div>
+<!-- Horizontal Resize Divider - click to collapse/expand, drag to resize -->
+<div class="panel-divider" id="panel-divider" title="Click to collapse, drag to resize" role="separator" aria-orientation="vertical">
+    <div class="panel-divider__handle" aria-hidden="true">
+        <span class="panel-divider__chevron material-symbols-outlined">chevron_left</span>
+    </div>
 </div>
 
 <div class="chat-panel">

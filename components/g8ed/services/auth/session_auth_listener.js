@@ -52,8 +52,13 @@ export class SessionAuthListener {
         const cleanup = () => { try { subscriber?.terminate(); } catch (_) {} };
         const timer = setTimeout(cleanup, SESSION_AUTH_LISTEN_TTL_MS);
 
-        this._pubSubClient.duplicate().then(sub => {
-            subscriber = sub;
+        // `duplicate()` and `subscribe()` on G8esPubSubClient are synchronous.
+        // This method is invoked fire-and-forget from the device-register
+        // HTTP handler, so ANY synchronous error here must be swallowed —
+        // otherwise it would bubble up and turn a successful registration
+        // into a 500. See session_auth_listener.unit.test.js.
+        try {
+            subscriber = this._pubSubClient.duplicate();
 
             subscriber.on('message', async (channel, _data) => {
                 if (channel !== authChannel) return;
@@ -102,16 +107,15 @@ export class SessionAuthListener {
                 }
             });
 
-            return subscriber.subscribe(authChannel);
-        }).then(() => {
+            subscriber.subscribe(authChannel);
             logger.info('[SESSION-AUTH-LISTENER] Listening for session auth', {
                 operator_id,
                 channel: authChannel,
             });
-        }).catch(err => {
+        } catch (err) {
             clearTimeout(timer);
             cleanup();
-            logger.error('[SESSION-AUTH-LISTENER] Failed to set up session auth listener', { error: err.message });
-        });
+            logger.error('[SESSION-AUTH-LISTENER] Failed to set up session auth listener', { error: err?.message ?? String(err) });
+        }
     }
 }

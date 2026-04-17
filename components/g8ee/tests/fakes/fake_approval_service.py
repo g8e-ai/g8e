@@ -15,6 +15,7 @@
 
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.operators import (
+    AgentContinueApprovalRequest,
     ApprovalResult,
     CommandApprovalRequest,
     FileEditApprovalRequest,
@@ -37,6 +38,7 @@ class FakeApprovalService:
         self.command_approval_calls: list[CommandApprovalRequest] = []
         self.file_edit_approval_calls: list[FileEditApprovalRequest] = []
         self.intent_approval_calls: list[IntentApprovalRequest] = []
+        self.agent_continue_approval_calls: list[AgentContinueApprovalRequest] = []
         self.approval_responses: list[dict] = []
         self._pending_approvals: dict[str, PendingApproval] = {}
         self._on_approval_requested = None
@@ -54,6 +56,10 @@ class FakeApprovalService:
 
     async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
         self.intent_approval_calls.append(request)
+        return ApprovalResult(approved=self._approved, approval_id=self._approval_id)
+
+    async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult:
+        self.agent_continue_approval_calls.append(request)
         return ApprovalResult(approved=self._approved, approval_id=self._approval_id)
 
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:

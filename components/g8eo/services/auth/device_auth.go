@@ -43,12 +43,22 @@ type DeviceInfo struct {
 	Username          string `json:"username"`
 }
 
-// deviceRegisterResponse is the API response from device link registration
+// deviceRegisterResponse is the API response from device link registration.
+// The error field is a json.RawMessage because the server may return either a
+// plain string (legacy / success=false envelope) or the standard g8ed error
+// object shape: { code, message, category, ... }.
 type deviceRegisterResponse struct {
-	Success           bool   `json:"success"`
-	OperatorSessionID string `json:"operator_session_id"`
-	OperatorID        string `json:"operator_id"`
-	Error             string `json:"error,omitempty"`
+	Success           bool            `json:"success"`
+	OperatorSessionID string          `json:"operator_session_id"`
+	OperatorID        string          `json:"operator_id"`
+	Error             json.RawMessage `json:"error,omitempty"`
+}
+
+// extractErrorMessage is retained as a thin alias for test readability; the
+// real implementation lives in httpclient.ExtractErrorMessage so every g8eo
+// client that deals with g8ed responses can share it.
+func extractErrorMessage(raw json.RawMessage) string {
+	return httpclient.ExtractErrorMessage(raw)
 }
 
 // deviceTokenRegex validates device link token format: dlk_ + 32 base64url chars
@@ -152,7 +162,7 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 	}
 
 	if !result.Success {
-		errMsg := result.Error
+		errMsg := extractErrorMessage(result.Error)
 		if errMsg == "" {
 			errMsg = fmt.Sprintf("registration failed with status %d", resp.StatusCode)
 		}

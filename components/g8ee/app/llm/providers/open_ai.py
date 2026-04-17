@@ -18,6 +18,8 @@ from collections.abc import AsyncGenerator
 from openai import AsyncOpenAI
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.llm.thinking import translate_for_openai
+from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -34,6 +36,7 @@ from app.llm.llm_types import (
 
 from ..provider import LLMProvider
 from ..utils import schema_to_dict
+from ._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +132,15 @@ class OpenAIProvider(LLMProvider):
         tools: list[dict] | None = None,
         response_format: dict | None = None,
         stream: bool = False,
+        thinking_config=None,
     ) -> dict:
-        """Build OpenAI API kwargs, omitting None values."""
+        """Build OpenAI API kwargs, omitting None values.
+
+        When a ThinkingConfig is supplied we translate its ThinkingLevel into
+        the reasoning.effort field that GPT-5/o-series reasoning models accept.
+        Models that do not support reasoning effort (per LLMModelConfig)
+        receive no reasoning key.
+        """
         kwargs = {
             "model": model,
             "messages": messages,
@@ -146,10 +156,41 @@ class OpenAIProvider(LLMProvider):
             kwargs["tools"] = tools
         if response_format:
             kwargs["response_format"] = response_format
+        if thinking_config is not None:
+            translation = translate_for_openai(
+                thinking_config.thinking_level,
+                get_model_config(model),
+            )
+            if translation.enabled and translation.reasoning_effort:
+                kwargs["reasoning"] = {"effort": translation.reasoning_effort}
         return kwargs
 
 
     async def generate_content_stream_primary(
+        self,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
+        try:
+            async for chunk in self._generate_content_stream_primary_impl(
+                model, contents, primary_llm_settings
+            ):
+                yield chunk
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="openai",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
+
+    async def _generate_content_stream_primary_impl(
         self,
         model: str,
         contents: list[Content],
@@ -173,6 +214,7 @@ class OpenAIProvider(LLMProvider):
                 stop=primary_llm_settings.stop_sequences,
                 tools=openai_tools,
                 stream=False,
+                thinking_config=primary_llm_settings.thinking_config,
             )
             response = await self._client.chat.completions.create(**kwargs)
             choice = response.choices[0] if response.choices else None
@@ -215,6 +257,7 @@ class OpenAIProvider(LLMProvider):
                 stop=primary_llm_settings.stop_sequences,
                 tools=openai_tools,
                 stream=True,
+                thinking_config=primary_llm_settings.thinking_config,
             )
             stream = await self._client.chat.completions.create(**kwargs)
 
@@ -255,8 +298,22 @@ class OpenAIProvider(LLMProvider):
             stop=primary_llm_settings.stop_sequences,
             tools=openai_tools,
             stream=False,
+            thinking_config=primary_llm_settings.thinking_config,
         )
-        response = await self._client.chat.completions.create(**kwargs)
+        try:
+            response = await self._client.chat.completions.create(**kwargs)
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="openai",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
 
         parts = []
         choice = response.choices[0] if response.choices else None

@@ -197,7 +197,10 @@ export const OperatorDownloadMixin = {
                     const curlCommand = `curl -fsSL ${dropUrl} | sh -s -- ${token}`;
 
                     if (curlCmdDiv) curlCmdDiv.textContent = curlCommand;
-                    if (tokenDiv) tokenDiv.textContent = token;
+                    if (tokenDiv) {
+                        tokenDiv.setAttribute('data-token', token);
+                        tokenDiv.textContent = obfuscateApiKey(token);
+                    }
 
                     if (copyCurlBtn) {
                         copyCurlBtn.onclick = () => copyToClipboardWithFeedback(curlCommand, copyCurlBtn, devLogger.log.bind(devLogger, '[OPERATOR]'), notificationService.error.bind(notificationService));
@@ -219,6 +222,17 @@ export const OperatorDownloadMixin = {
                     generateBtn.innerHTML = '<span class="material-symbols-outlined">add_link</span> Generate';
                 }
             });
+
+        const tokenToggleBtn = container.querySelector('#device-link-token-toggle');
+        if (tokenToggleBtn && tokenDiv) {
+            tokenToggleBtn.addEventListener('click', () => {
+                const isObfuscated = tokenDiv.classList.toggle('obfuscated');
+                const icon = tokenToggleBtn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
+                const token = tokenDiv.getAttribute('data-token');
+                tokenDiv.textContent = isObfuscated ? obfuscateApiKey(token) : token;
+            });
+        }
         }
     },
 

@@ -60,12 +60,8 @@
       "list.files": "tools/list_files_and_directories_with_detailed_metadata.txt",
       "grant.intent": "tools/grant_intent_permission.txt",
       "revoke.intent": "tools/revoke_intent_permission.txt",
-      "fetch.execution.output": "tools/fetch_execution_output.txt",
-      "fetch.session.history": "tools/fetch_session_history.txt",
       "fetch.file.history": "tools/fetch_file_history.txt",
-      "restore.file": "tools/restore_file.txt",
-      "fetch.file.diff": "tools/fetch_file_diff.txt",
-      "read.file.content": "tools/read_file_content.txt"
+      "fetch.file.diff": "tools/fetch_file_diff.txt"
     }
   }
 }

@@ -90,7 +90,9 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger) (*BootstrapSer
 	}, nil
 }
 
-// AuthServicesResponse represents the response from Auth Services Operator authentication
+// AuthServicesResponse represents the response from Auth Services Operator authentication.
+// Error is json.RawMessage so the decoder tolerates both legacy bare-string
+// errors and the standard g8ed error envelope object {code, message, ...}.
 type AuthServicesResponse struct {
 	Success           bool             `json:"success"`
 	OperatorSessionId string           `json:"operator_session_id"`
@@ -98,7 +100,7 @@ type AuthServicesResponse struct {
 	UserID            string           `json:"user_id"`
 	APIKey            string           `json:"api_key"`
 	Config            *BootstrapConfig `json:"config"`
-	Error             string           `json:"error,omitempty"`
+	Error             json.RawMessage  `json:"error,omitempty"`
 	OperatorCert      string           `json:"operator_cert"`
 	OperatorCertKey   string           `json:"operator_cert_key"`
 }
@@ -246,18 +248,24 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 			continue
 		}
 
-		// Handle non-200 status codes
+		// Handle non-200 status codes. The server may reply with either a bare
+		// string error or the standard g8ed error envelope object — decode into
+		// json.RawMessage and normalize via httpclient.ExtractErrorMessage so we
+		// never produce a confusing "cannot unmarshal object into string" failure.
 		if resp.StatusCode != http.StatusOK {
 			var errResp struct {
-				Error   string `json:"error"`
-				Message string `json:"message"`
+				Error json.RawMessage `json:"error"`
 			}
-			if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
+			msg := ""
+			if json.Unmarshal(respBody, &errResp) == nil {
+				msg = httpclient.ExtractErrorMessage(errResp.Error)
+			}
+			if msg != "" {
 				// If it's a 4xx error (client error), don't retry unless it's a 429
 				if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
-					return nil, fmt.Errorf("authentication failed (status %d): %s - %s", resp.StatusCode, errResp.Error, errResp.Message)
+					return nil, fmt.Errorf("authentication failed (status %d): %s", resp.StatusCode, msg)
 				}
-				lastErr = fmt.Errorf("authentication failed (status %d): %s - %s", resp.StatusCode, errResp.Error, errResp.Message)
+				lastErr = fmt.Errorf("authentication failed (status %d): %s", resp.StatusCode, msg)
 			} else {
 				lastErr = fmt.Errorf("authentication failed with status %d", resp.StatusCode)
 			}
@@ -273,7 +281,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 		if !authResp.Success {
 			// Success=false in the JSON body is a logical failure, usually shouldn't be retried
 			// unless it's a transient server issue.
-			return nil, fmt.Errorf("authentication failed: %s", authResp.Error)
+			return nil, fmt.Errorf("authentication failed: %s", httpclient.ExtractErrorMessage(authResp.Error))
 		}
 
 		if authResp.Config == nil {
@@ -322,11 +330,16 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 
 	if bootstrapConfig.OperatorCert != "" && bootstrapConfig.OperatorCertKey != "" {
 		if err := bs.rebuildTransportWithOperatorCert(bootstrapConfig.OperatorCert, bootstrapConfig.OperatorCertKey); err != nil {
-			bs.logger.Warn("Failed to apply per-operator cert to transport, continuing with embedded cert",
+			// Per-operator mTLS is a hard security requirement once the platform
+			// issues a cert; silently falling back to the embedded cert would
+			// violate the "mTLS on every connection" contract documented in
+			// docs/architecture/operator.md. Surface this as a cert trust
+			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
+			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
 				"error", err)
-		} else {
-			bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate")
+			return fmt.Errorf("cert trust failure: per-operator mTLS cert invalid: %w", err)
 		}
+		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate")
 	}
 
 	return nil

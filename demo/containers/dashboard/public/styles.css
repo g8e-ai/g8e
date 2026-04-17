@@ -30,7 +30,6 @@ header h1 {
 
 #summary {
   display: flex;
-  gap: 16px;
   margin-bottom: 28px;
   flex-wrap: wrap;
   align-items: center;

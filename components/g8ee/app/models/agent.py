@@ -55,11 +55,13 @@ class OperatorCommandArgs(TargetedOperatorArgs):
     target_operators: list[str] | None = Field(
         default=None,
         description=(
-            "Run the SAME command on MULTIPLE operators simultaneously. "
-            "Provide a list of Operator identifiers (hostnames, operator_ids, or indices). "
-            "Example: ['web-server-1', 'web-server-2'] or ['0', '1', '2'] for all bound operators. "
-            "Use 'all' as a single item to target ALL bound operators: ['all']. "
-            "The command executes on all specified systems in parallel."
+            "Run the SAME command on MULTIPLE operators simultaneously under a SINGLE approval. "
+            "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
+            "(e.g. 'on all systems', 'across the fleet', 'on all N hosts', or the user explicitly "
+            "names a count matching the bound operator count). DO NOT enumerate individual operators "
+            "for whole-fleet intent — use ['all']. Only enumerate specific hostnames/operator_ids/indices "
+            "when the user is asking about a proper subset. The command executes on all resolved "
+            "systems in parallel under one approval."
         ),
     )
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
@@ -112,6 +114,7 @@ class AgentStreamContext(G8eBaseModel):
     user_id: str | None = None
     g8e_context: G8eHttpContext
     web_session_id: str | None = None
+    task_id: str | None = None
     agent_mode: AgentMode
     request_settings: G8eeUserSettings
 

@@ -256,9 +256,11 @@ class EventType(str, Enum):
     # g8e.mcp
     OPERATOR_MCP_TOOLS_CALL = "g8e.v1.operator.mcp.tools.call"
     OPERATOR_MCP_TOOLS_RESULT = "g8e.v1.operator.mcp.tools.result"
-    OPERATOR_MCP_RESOURCES_LIST = "g8e.v1.operator.mcp.resources.list"
-    OPERATOR_MCP_RESOURCES_READ = "g8e.v1.operator.mcp.resources.read"
-    OPERATOR_MCP_RESOURCES_RESULT = "g8e.v1.operator.mcp.resources.result"
+
+    # ai.agent
+    AI_AGENT_CONTINUE_APPROVAL_REQUESTED = "g8e.v1.ai.agent.continue.approval.requested"
+    AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
+    AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
     # ai.tribunal
     TRIBUNAL_SESSION_STARTED = "g8e.v1.ai.tribunal.session.started"

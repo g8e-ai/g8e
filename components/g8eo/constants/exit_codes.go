@@ -13,6 +13,8 @@
 
 package constants
 
+import "strings"
+
 // Exit codes for the g8e Operator
 // These enable the g8e script to provide accurate error messages
 const (
@@ -127,37 +129,12 @@ func ExitCodeFromError(err error) int {
 	return ExitGeneralError
 }
 
-// containsAny checks if s contains any of the substrings (case-insensitive)
+// containsAny checks if s contains any of the substrings (case-insensitive).
+// All error-text substrings in ExitCodeFromError are ASCII, so ToLower is safe.
 func containsAny(s string, substrings []string) bool {
-	sLower := toLower(s)
+	sLower := strings.ToLower(s)
 	for _, sub := range substrings {
-		if contains(sLower, toLower(sub)) {
-			return true
-		}
-	}
-	return false
-}
-
-// toLower is a simple lowercase conversion without importing strings
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		b[i] = c
-	}
-	return string(b)
-}
-
-// contains checks if s contains substr
-func contains(s, substr string) bool {
-	if len(substr) > len(s) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
+		if strings.Contains(sLower, strings.ToLower(sub)) {
 			return true
 		}
 	}

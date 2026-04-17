@@ -65,11 +65,29 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid device token format")
 	})
 
+	t.Run("server omits success field (contract regression)", func(t *testing.T) {
+		// Regression: before the fix, g8ed's DeviceRegistrationResponse model
+		// did not include `success`, so every operator reported
+		// "registration failed with status 200" despite the server having
+		// created a valid session. The operator must require `success: true`
+		// in the envelope, matching every other g8ed response.
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"operator_session_id": "sess-x", "operator_id": "op-x"}`)
+		}))
+		defer server.Close()
+
+		result, err := authenticateWithDeviceTokenUsingClient(token, server.Listener.Addr().String(), logger, server.Client(), "")
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "registration failed with status 200")
+	})
+
 	t.Run("server error response", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			resp := deviceRegisterResponse{
 				Success: false,
-				Error:   "invalid token",
+				Error:   json.RawMessage(`"invalid token"`),
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)
@@ -80,6 +98,25 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, result)
 		assert.Contains(t, err.Error(), "device registration failed: invalid token")
+	})
+
+	t.Run("server returns g8ed error-object envelope", func(t *testing.T) {
+		// Regression: g8ed returns `{error: {code, message, ...}}`, not a bare
+		// string. Before the fix, json.Unmarshal into Error(string) failed with
+		// `cannot unmarshal object into Go struct field ... of type string`,
+		// masking the real server error (e.g. "G8E-1800 already registered").
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"success": false, "error": {"code": "G8E-1800", "message": "This device already registered with this device link", "category": "auth"}}`)
+		}))
+		defer server.Close()
+
+		result, err := authenticateWithDeviceTokenUsingClient(token, server.Listener.Addr().String(), logger, server.Client(), "")
+		require.Error(t, err)
+		assert.Nil(t, result)
+		assert.Contains(t, err.Error(), "G8E-1800")
+		assert.Contains(t, err.Error(), "already registered")
 	})
 
 	t.Run("server returns 500 without error field", func(t *testing.T) {

@@ -368,8 +368,18 @@ func streamToHost(
 	}
 	defer session.Close()
 
-	// Wire binary data as the remote stdin
+	// Wire binary data as the remote stdin.
 	session.Stdin = bytes.NewReader(binaryData)
+
+	// Capture stdout+stderr (bounded) so the caller can surface the remote
+	// operator's output when it exits non-zero. Without this, the deployment
+	// tool silently drops every remote log line and a failing operator is
+	// indistinguishable from a generic SSH exit — see g8eo review notes.
+	const maxCapturedBytes = 64 * 1024
+	stderrBuf := &boundedBuffer{limit: maxCapturedBytes}
+	stdoutBuf := &boundedBuffer{limit: maxCapturedBytes}
+	session.Stderr = stderrBuf
+	session.Stdout = stdoutBuf
 
 	// Build the remote ephemeral script inline (same trap pattern as bash impl)
 	var remoteCmd string
@@ -392,13 +402,25 @@ func streamToHost(
 
 	if err := session.Run(remoteCmd); err != nil {
 		// SSH exit status non-zero is surfaced as *ssh.ExitError — treat operator
-		// exit as a normal end of session, not a hard failure.
+		// exit as a normal end of session, not a hard failure, but attach the
+		// captured remote stderr (and last-resort stdout) so the caller can
+		// tell a real auth/registration failure apart from a clean exit.
 		var exitErr *ssh.ExitError
 		if isSSHExitError(err, &exitErr) {
-			emit(constants.StreamStatusExited, fmt.Sprintf("exit code %d", exitErr.ExitStatus()))
+			msg := fmt.Sprintf("exit code %d", exitErr.ExitStatus())
+			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
+				msg = fmt.Sprintf("%s: %s", msg, tail)
+			} else if tail := strings.TrimSpace(stdoutBuf.String()); tail != "" {
+				msg = fmt.Sprintf("%s: %s", msg, tail)
+			}
+			emit(constants.StreamStatusExited, msg)
 			return
 		}
-		emit(constants.StreamStatusFailed, fmt.Sprintf("run: %v", err))
+		msg := fmt.Sprintf("run: %v", err)
+		if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
+			msg = fmt.Sprintf("%s: %s", msg, tail)
+		}
+		emit(constants.StreamStatusFailed, msg)
 		return
 	}
 
@@ -413,6 +435,32 @@ func isSSHExitError(err error, target **ssh.ExitError) bool {
 	}
 	return false
 }
+
+// boundedBuffer is an io.Writer that retains at most `limit` bytes, dropping
+// any overflow silently. It is used to capture remote stderr/stdout from an
+// SSH session without risking unbounded memory growth for chatty operators.
+type boundedBuffer struct {
+	buf   bytes.Buffer
+	limit int
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	if b.limit <= 0 {
+		return len(p), nil
+	}
+	remaining := b.limit - b.buf.Len()
+	if remaining <= 0 {
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		b.buf.Write(p[:remaining])
+		return len(p), nil
+	}
+	b.buf.Write(p)
+	return len(p), nil
+}
+
+func (b *boundedBuffer) String() string { return b.buf.String() }
 
 // expandTilde replaces a leading ~ with the user's home directory.
 func expandTilde(path string) string {
