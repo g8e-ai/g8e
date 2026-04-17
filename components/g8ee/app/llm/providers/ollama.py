@@ -80,19 +80,33 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
     return ollama_tools if ollama_tools else None
 
 
+def _normalize_ollama_host(endpoint: str) -> str:
+    """Normalize a user-supplied Ollama host into a base URL.
+
+    Accepts any of:
+      - "host:port"              -> "http://host:port"
+      - "http://host:port"       -> "http://host:port"
+      - "http://host:port/v1"    -> "http://host:port"   (legacy)
+      - "http://host:port/v1/v1" -> "http://host:port"   (legacy double-append)
+
+    The Ollama native API lives at /api/chat, not /v1; any /v1 path suffix is
+    stripped so httpx base_url joining produces the correct URL.
+    """
+    cleaned = (endpoint or "").strip().rstrip('/')
+    while cleaned.endswith('/v1'):
+        cleaned = cleaned[:-3].rstrip('/')
+    if cleaned and not cleaned.startswith(('http://', 'https://')):
+        cleaned = 'http://' + cleaned
+    return cleaned
+
+
 class OllamaProvider(LLMProvider):
     def __init__(self, endpoint: str, api_key: str):
         super().__init__()
 
-        cleaned_endpoint = endpoint.rstrip('/')
-        if cleaned_endpoint.endswith('/v1'):
-            cleaned_endpoint = cleaned_endpoint[:-3]
-
-        if not cleaned_endpoint.startswith('http://') and not cleaned_endpoint.startswith('https://'):
-            cleaned_endpoint = 'http://' + cleaned_endpoint
-
-        self._client = AsyncClient(host=cleaned_endpoint)
-        logger.info("Ollama provider initialized: %s", cleaned_endpoint)
+        host = _normalize_ollama_host(endpoint)
+        self._client = AsyncClient(host=host)
+        logger.info("Ollama provider initialized: %s", host)
 
     async def _close_resources(self):
         """Clean up provider resources."""

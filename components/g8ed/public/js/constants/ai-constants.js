@@ -46,6 +46,8 @@ export const OllamaModel = Object.freeze({
     QWEN3_5_122B:    'qwen3.5:122b',
     GLM_5_1:         'glm-5.1:cloud',
     GEMMA4_26B:      'gemma4:26b',
+    GEMMA4_E4B:      'gemma4:e4b',
+    GEMMA4_E2B:      'gemma4:e2b',
     NEMOTRON_3_30B:  'nemotron-3-nano:30b',
     LLAMA_3_2_3B:    'llama3.2:3b',
     QWEN3_5_2B:      'qwen3.5:2b',
@@ -110,29 +112,25 @@ export const PROVIDER_MODELS = Object.freeze({
         defaultAssistant: OpenAIModel.GPT_5_4_MINI,
         defaultLite: OpenAIModel.GPT_5_4_NANO,
     },
-    [LLMProvider.OLLAMA]: {
-        all: [
+    [LLMProvider.OLLAMA]: (() => {
+        const allOllamaModels = [
             { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
             { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 Cloud' },
             { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
+            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
+            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
             { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
             { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
             { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
-        ],
-        primary: [
-            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
-            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 Cloud' },
-        ],
-        assistant: [
-            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
-            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
-        ],
-        lite: [
-            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
-            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
-        ],
-        defaultPrimary: OllamaModel.QWEN3_5_122B,
-        defaultAssistant: OllamaModel.GEMMA4_26B,
-        defaultLite: OllamaModel.LLAMA_3_2_3B,
-    },
+        ];
+        return {
+            all: allOllamaModels,
+            primary: allOllamaModels,
+            assistant: allOllamaModels,
+            lite: allOllamaModels,
+            defaultPrimary: OllamaModel.QWEN3_5_122B,
+            defaultAssistant: OllamaModel.GEMMA4_26B,
+            defaultLite: OllamaModel.LLAMA_3_2_3B,
+        };
+    })(),
 });

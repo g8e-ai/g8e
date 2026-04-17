@@ -152,12 +152,12 @@ export const USER_SETTINGS = Object.freeze([
     Object.freeze({
         key: 'ollama_endpoint',
         section: 'llm',
-        label: 'Ollama Endpoint URL',
-        description: 'API endpoint for Ollama (e.g. https://your-ollama-host:11434/v1).',
+        label: 'Ollama Host',
+        description: 'Host and port of your Ollama server (e.g. 192.168.1.100:11434). Do not include a scheme or path.',
         type: 'text',
         provider: LLMProvider.OLLAMA,
         secret: false,
-        placeholder: 'https://your-ollama-host:11434/v1',
+        placeholder: '192.168.1.100:11434',
         default: '',
     }),
     Object.freeze({

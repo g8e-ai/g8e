@@ -98,6 +98,25 @@ class TestOllamaProviderConstruction:
             )
             mock_ctor.assert_called_once_with(host="http://localhost:11434")
 
+    def test_constructor_strips_double_v1_suffix(self):
+        """Regression: legacy setups double-appended /v1 (setup page + manual entry)."""
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
+            OllamaProvider(
+                endpoint="http://192.168.1.2:11434/v1/v1",
+                api_key="test-key",
+            )
+            mock_ctor.assert_called_once_with(host="http://192.168.1.2:11434")
+
+    def test_constructor_accepts_bare_ip_port(self):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client) as mock_ctor:
+            OllamaProvider(
+                endpoint="192.168.1.100:11434",
+                api_key="test-key",
+            )
+            mock_ctor.assert_called_once_with(host="http://192.168.1.100:11434")
+
     @pytest.mark.asyncio
     async def test_context_manager_support(self):
         """Test that OllamaProvider supports async context manager."""

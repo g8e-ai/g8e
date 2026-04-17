@@ -856,11 +856,11 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.llm_assistant_provider).toBe(LLMProvider.OLLAMA);
         });
 
-        it('collects Ollama endpoint with /v1 suffix', () => {
-            document.getElementById('ollama_url').value = 'http://localhost:11434';
+        it('collects Ollama host as-is (backend normalizes to a URL)', () => {
+            document.getElementById('ollama_url').value = '192.168.1.100:11434';
             setupPage._updateModelDropdowns();
             const settings = setupPage._collectUserSettings();
-            expect(settings.ollama_endpoint).toBe('http://localhost:11434/v1');
+            expect(settings.ollama_endpoint).toBe('192.168.1.100:11434');
         });
 
         it('collects Google search settings', () => {

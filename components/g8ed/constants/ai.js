@@ -167,6 +167,8 @@ export const OllamaModel = Object.freeze({
     QWEN3_5_122B:    _STATUS['llm.models']['ollama']['qwen3.5.122b'],
     GLM_5_1:         _STATUS['llm.models']['ollama']['glm.5.1'],
     GEMMA4_26B:      _STATUS['llm.models']['ollama']['gemma4.26b'],
+    GEMMA4_E4B:      _STATUS['llm.models']['ollama']['gemma4.e4b'],
+    GEMMA4_E2B:      _STATUS['llm.models']['ollama']['gemma4.e2b'],
     NEMOTRON_3_30B:  _STATUS['llm.models']['ollama']['nemotron.3.30b'],
     LLAMA_3_2_3B:    _STATUS['llm.models']['ollama']['llama.3.2.3b'],
     QWEN3_5_2B:      _STATUS['llm.models']['ollama']['qwen3.5.2b'],
@@ -231,31 +233,29 @@ export const PROVIDER_MODELS = Object.freeze({
         defaultAssistant: OpenAIModel.GPT_5_4_MINI,
         defaultLite: OpenAIModel.GPT_5_4_NANO,
     },
-    [LLMProvider.OLLAMA]: {
-        all: [
+    [LLMProvider.OLLAMA]: (() => {
+        // Ollama users self-host and may run any model at any tier, so every
+        // role exposes the full catalog. Recommended defaults still apply.
+        const allOllamaModels = [
             { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
             { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
             { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
+            { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
+            { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
             { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B' },
             { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
             { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
-        ],
-        primary: [
-            { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
-            { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
-        ],
-        assistant: [
-            { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
-            { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B' },
-        ],
-        lite: [
-            { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
-            { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
-        ],
-        defaultPrimary: OllamaModel.QWEN3_5_122B,
-        defaultAssistant: OllamaModel.GEMMA4_26B,
-        defaultLite: OllamaModel.LLAMA_3_2_3B,
-    },
+        ];
+        return {
+            all: allOllamaModels,
+            primary: allOllamaModels,
+            assistant: allOllamaModels,
+            lite: allOllamaModels,
+            defaultPrimary: OllamaModel.QWEN3_5_122B,
+            defaultAssistant: OllamaModel.GEMMA4_26B,
+            defaultLite: OllamaModel.LLAMA_3_2_3B,
+        };
+    })(),
 });
 
 /**

@@ -632,9 +632,9 @@ export class SetupPage {
             userSettings.openai_endpoint = 'https://api.openai.com/v1';
         }
 
-        const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-        if (ollamaUrl) {
-            userSettings.ollama_endpoint = ollamaUrl.endsWith('/') ? ollamaUrl + 'v1' : ollamaUrl + '/v1';
+        const ollamaHost = document.getElementById('ollama_url')?.value.trim();
+        if (ollamaHost) {
+            userSettings.ollama_endpoint = ollamaHost;
         }
 
         if (this._searchProvider === 'google') {
