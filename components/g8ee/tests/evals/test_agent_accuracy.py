@@ -90,7 +90,7 @@ async def test_agent_accuracy(
     6. Cleanup: deletes investigation from g8es
     """
     start_time = datetime.now(timezone.utc)
-    result_data = AccuracyTestResult(scenario_id=scenario["id"])
+    result_data = AccuracyTestResult(scenario_id=scenario["id"], dimension=scenario.get("dimension", "accuracy"))
 
     investigation_service = all_services['investigation_service']
     investigation_data_service = all_services['investigation_data_service']

@@ -193,7 +193,11 @@ async def test_agent_benchmark(
     """
     start_time = datetime.now(timezone.utc)
     scenario = _build_scenario(scenario_data)
-    result_data = BenchmarkTestResult(scenario_id=scenario.id, category=scenario.category)
+    result_data = BenchmarkTestResult(
+        scenario_id=scenario.id,
+        category=scenario.category,
+        dimension=scenario_data.get("dimension", "accuracy")
+    )
 
     logger.info("[BENCH] ===== Starting test for scenario %s =====", scenario.id)
 

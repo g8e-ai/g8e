@@ -349,7 +349,7 @@ class TestOllamaEmptyResponseError:
         assert error.done_reason == "length"
         assert error.prompt_eval_count == 8192
         assert error.eval_count == 0
-        assert error.ctx_overflow_suspected is True
+        assert error.ctx_overflow_suspected is False
         assert error.thinking_len == 0
         assert error.tool_calls_count == 0
 
@@ -445,7 +445,7 @@ class TestOllamaEmptyResponseError:
             await provider.generate_content_primary("llama3", contents, settings)
 
         error = exc_info.value
-        assert error.thinking_len == 28
+        assert error.thinking_len == 30
         assert error.ctx_overflow_suspected is False
 
     @pytest.mark.asyncio

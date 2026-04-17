@@ -96,6 +96,8 @@ describe('g8ed Shared Definitions Contract', () => {
     });
 
     describe('AITaskId matches shared/constants/status.json', () => {
+        it('CHAT', () => expect(AITaskId.CHAT).toBe(STATUS['ai.task.id']['chat']));
+        it('AGENT_CONTINUE', () => expect(AITaskId.AGENT_CONTINUE).toBe(STATUS['ai.task.id']['agent.continue']));
         it('COMMAND', () => expect(AITaskId.COMMAND).toBe(STATUS['ai.task.id']['command']));
         it('DIRECT_COMMAND', () => expect(AITaskId.DIRECT_COMMAND).toBe(STATUS['ai.task.id']['direct.command']));
         it('FILE_EDIT', () => expect(AITaskId.FILE_EDIT).toBe(STATUS['ai.task.id']['file.edit']));
@@ -107,6 +109,8 @@ describe('g8ed Shared Definitions Contract', () => {
         it('FETCH_FILE_HISTORY', () => expect(AITaskId.FETCH_FILE_HISTORY).toBe(STATUS['ai.task.id']['fetch.file.history']));
         it('RESTORE_FILE', () => expect(AITaskId.RESTORE_FILE).toBe(STATUS['ai.task.id']['restore.file']));
         it('FETCH_FILE_DIFF', () => expect(AITaskId.FETCH_FILE_DIFF).toBe(STATUS['ai.task.id']['fetch.file.diff']));
+        it('INTENT_GRANT', () => expect(AITaskId.INTENT_GRANT).toBe(STATUS['ai.task.id']['intent.grant']));
+        it('INTENT_REVOKE', () => expect(AITaskId.INTENT_REVOKE).toBe(STATUS['ai.task.id']['intent.revoke']));
 
         it('covers all keys in shared JSON', () => {
             const jsonKeys = Object.keys(STATUS['ai.task.id']);

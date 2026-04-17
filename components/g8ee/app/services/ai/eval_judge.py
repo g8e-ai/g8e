@@ -133,7 +133,6 @@ class EvalJudge:
         self._settings = settings or EvalJudgeSettings(
             eval_judge_model=None,
             eval_judge_temperature=None,
-            eval_judge_max_tokens=4096,
         )
         self._model = model or self._settings.model
 
@@ -162,11 +161,10 @@ class EvalJudge:
         prompt = f"{prompt_template}\n\n<user_query>\n{user_query}\n</user_query>\n\n<gold_standard_criteria>\nExpected Behavior: {expected_behavior}\nRequired Concepts: {', '.join(required_concepts)}\nExpected Tools: {', '.join(expected_tools or [])}\nForbidden Tools: {', '.join(forbidden_tools or [])}\n</gold_standard_criteria>\n\n<student_interaction>\n{interaction_trace}\n</student_interaction>"
 
         from app.models.model_configs import get_model_config
+        from app.services.ai.command_generator import _resolve_temperature
 
-        effective_temperature = self._settings.temperature if self._settings.temperature is not None else None
-        if effective_temperature is None:
-            model_config = get_model_config(self._model)
-            effective_temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
+        effective_temperature = self._settings.temperature if self._settings.temperature is not None else persona.temperature
+        effective_temperature = _resolve_temperature(effective_temperature, self._model)
         model_config = get_model_config(self._model)
         settings = LiteLLMSettings(
             temperature=effective_temperature,
@@ -228,6 +226,8 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
+            if response is None or not hasattr(response, 'text') or response.text is None:
+                raise EvalJudgeError("Judge LLM returned an empty response")
         except OllamaEmptyResponseError as exc:
             raise EvalJudgeError(f"Judge LLM returned an empty response: {exc}") from exc
 

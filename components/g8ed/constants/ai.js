@@ -26,6 +26,8 @@ import { _STATUS } from './shared.js';
  * Canonical values from shared/constants/status.json ai.task.id.
  */
 export const AITaskId = Object.freeze({
+    CHAT:               _STATUS['ai.task.id']['chat'],
+    AGENT_CONTINUE:     _STATUS['ai.task.id']['agent.continue'],
     COMMAND:            _STATUS['ai.task.id']['command'],
     DIRECT_COMMAND:     _STATUS['ai.task.id']['direct.command'],
     FILE_EDIT:          _STATUS['ai.task.id']['file.edit'],

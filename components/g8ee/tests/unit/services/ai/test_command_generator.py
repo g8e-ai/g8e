@@ -1474,7 +1474,7 @@ class TestGenerateCommandVerifierFailure:
 
             assert exc_info.value.reason == "empty_response"
             assert exc_info.value.original_command == "ls -la"
-            assert exc_info.value.error == "Verifier returned empty response"
+            assert "Verifier returned empty response" in exc_info.value.error
 
         from app.constants import EventType
         emitted_types = [

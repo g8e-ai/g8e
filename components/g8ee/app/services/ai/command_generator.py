@@ -361,6 +361,20 @@ async def _run_generation_pass(
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
+        if not response.text or not response.text.strip():
+            raise OllamaEmptyResponseError(
+                f"Provider returned empty response text",
+                model=model,
+                channel="lite",
+                done_reason="stop",
+                prompt_eval_count=None,
+                eval_count=None,
+                num_ctx=None,
+                num_predict=None,
+                thinking_len=0,
+                tool_calls_count=0,
+                ctx_overflow_suspected=False,
+            )
         candidate = _normalise_command(response.text)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
@@ -436,6 +450,20 @@ async def _run_verifier(
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
+        if not response.text or not response.text.strip():
+            raise OllamaEmptyResponseError(
+                f"Verifier returned empty response text",
+                model=model,
+                channel="lite",
+                done_reason="stop",
+                prompt_eval_count=None,
+                eval_count=None,
+                num_ctx=None,
+                num_predict=None,
+                thinking_len=0,
+                tool_calls_count=0,
+                ctx_overflow_suspected=False,
+            )
         answer = response.text.strip()
         if answer.lower() == "ok":
             await emitter.emit(
