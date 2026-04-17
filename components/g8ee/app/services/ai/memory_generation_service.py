@@ -137,20 +137,22 @@ class MemoryGenerationService:
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
-        response = await provider.generate_content_assistant(
-            model=assistant_model,
-            contents=contents,
-            assistant_llm_settings=config,
-        )
+        try:
+            from app.errors import OllamaEmptyResponseError
 
-        if not response or not response.text:
+            response = await provider.generate_content_assistant(
+                model=assistant_model,
+                contents=contents,
+                assistant_llm_settings=config,
+            )
+            ai_analysis = self._parse_memory_analysis(response.text)
+        except OllamaEmptyResponseError as exc:
             logger.warning(
-                "AI response was empty during memory update for %s, skipping preference update",
+                "AI response was empty during memory update for %s, skipping preference update: %s",
                 memory.investigation_id,
+                exc,
             )
             return
-
-        ai_analysis = self._parse_memory_analysis(response.text)
 
         if not any([
             ai_analysis.investigation_summary,

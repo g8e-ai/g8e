@@ -218,16 +218,18 @@ class EvalJudge:
         settings: LiteLLMSettings,
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
+        from app.errors import OllamaEmptyResponseError
+
         if not self._model:
             raise EvalJudgeError("Model is not set")
-        response = await self._provider.generate_content_lite(
-            model=self._model,
-            contents=contents,
-            lite_llm_settings=settings,
-        )
-
-        if not response or not response.text:
-            raise EvalJudgeError("Judge LLM returned an empty response")
+        try:
+            response = await self._provider.generate_content_lite(
+                model=self._model,
+                contents=contents,
+                lite_llm_settings=settings,
+            )
+        except OllamaEmptyResponseError as exc:
+            raise EvalJudgeError(f"Judge LLM returned an empty response: {exc}") from exc
 
         try:
             data = _extract_json(response.text)

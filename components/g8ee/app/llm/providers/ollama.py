@@ -88,7 +88,7 @@ def _tools_to_ollama(tools: list[ToolGroup] | None) -> list[dict] | None:
     return ollama_tools if ollama_tools else None
 
 
-def _warn_on_empty_content(
+def _raise_on_empty_content(
     response,
     *,
     model: str,
@@ -96,13 +96,17 @@ def _warn_on_empty_content(
     num_ctx: int,
     num_predict: int,
 ) -> None:
-    """Emit a diagnostic WARNING when Ollama returns HTTP 200 with no content.
+    """Raise OllamaEmptyResponseError when Ollama returns HTTP 200 with no content.
 
     Context-window overflow, load failures, and thinking-only output all surface
-    as ``message.content == ""`` with a 200 response. Surfacing the done_reason,
-    token counts, and configured num_ctx/num_predict makes the root cause
-    obvious instead of leaving callers with a generic "empty response" error.
+    as ``message.content == ""`` with a 200 response. This error captures the
+    diagnostic context needed to identify the root cause.
+
+    Raises:
+        OllamaEmptyResponseError: If response.message.content is empty or falsy.
     """
+    from app.errors import OllamaEmptyResponseError
+
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
     if content:
@@ -129,6 +133,20 @@ def _warn_on_empty_content(
         channel, model, done_reason, prompt_eval_count, eval_count,
         num_ctx, num_predict, thinking_len, tool_calls_count,
         ctx_overflow_suspected,
+    )
+
+    raise OllamaEmptyResponseError(
+        f"Ollama returned empty message.content on 200 OK (channel={channel}, model={model})",
+        model=model,
+        channel=channel,
+        done_reason=done_reason,
+        prompt_eval_count=prompt_eval_count,
+        eval_count=eval_count,
+        num_ctx=num_ctx,
+        num_predict=num_predict,
+        thinking_len=thinking_len,
+        tool_calls_count=tool_calls_count,
+        ctx_overflow_suspected=ctx_overflow_suspected,
     )
 
 
@@ -320,7 +338,7 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
-        _warn_on_empty_content(
+        _raise_on_empty_content(
             response,
             model=model,
             channel="primary",
@@ -424,7 +442,7 @@ class OllamaProvider(LLMProvider):
         self._apply_think_kwarg(chat_kwargs, model, None)
         response = await self._client.chat(**chat_kwargs)
 
-        _warn_on_empty_content(
+        _raise_on_empty_content(
             response,
             model=model,
             channel="assistant",
@@ -521,7 +539,7 @@ class OllamaProvider(LLMProvider):
         self._apply_think_kwarg(chat_kwargs, model, None)
         response = await self._client.chat(**chat_kwargs)
 
-        _warn_on_empty_content(
+        _raise_on_empty_content(
             response,
             model=model,
             channel="lite",

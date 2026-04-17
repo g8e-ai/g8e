@@ -103,18 +103,20 @@ class TriageAgent:
                 system_instructions="",
             )
 
-            response = await provider.generate_content_lite(
-                model=model,
-                contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                lite_llm_settings=config,
-            )
+            try:
+                from app.errors import OllamaEmptyResponseError
 
-            if not response or not response.text:
-                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex")
+                response = await provider.generate_content_lite(
+                    model=model,
+                    contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
+                    lite_llm_settings=config,
+                )
+                result = self._parse_response(response.text)
+            except OllamaEmptyResponseError as exc:
+                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex: %s", exc)
                 return self._fallback_result("Could not determine intent (no model response).")
 
             try:
-                result = self._parse_response(response.text)
 
                 logger.info(
                     "[TRIAGE] Classification: complexity=%s confidence=%s model=%s intent=%s",

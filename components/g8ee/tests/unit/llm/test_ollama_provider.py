@@ -24,6 +24,7 @@ import httpx
 import pytest
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
+from app.errors import OllamaEmptyResponseError
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.llm_types import (
     Content,
@@ -292,9 +293,190 @@ class TestOllamaProviderGeneration:
         )
         
         response = await provider.generate_content_lite("llama3", contents, settings)
-        
+
         mock_client.chat.assert_called_once()
         assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(response.candidates) == 1
         assert response.candidates[0].content.parts[0].text == "Hello World"
         assert response.usage_metadata is not None
+
+
+class TestOllamaEmptyResponseError:
+    """Test that OllamaEmptyResponseError is raised for empty responses."""
+
+    @pytest.fixture
+    def provider(self):
+        mock_client = MagicMock()
+        with patch(PATCH_TARGET, return_value=mock_client):
+            provider = OllamaProvider(
+                endpoint="http://localhost:11434",
+                api_key="test-key",
+            )
+            yield provider, mock_client
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_raises_on_empty_content(self, provider):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.message.thinking = None
+        mock_response.done_reason = "length"
+        mock_response.prompt_eval_count = 8192
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(OllamaEmptyResponseError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        error = exc_info.value
+        assert error.model == "llama3"
+        assert error.channel == "primary"
+        assert error.done_reason == "length"
+        assert error.prompt_eval_count == 8192
+        assert error.eval_count == 0
+        assert error.ctx_overflow_suspected is True
+        assert error.thinking_len == 0
+        assert error.tool_calls_count == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_content_assistant_raises_on_empty_content(self, provider):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.done_reason = "load"
+        mock_response.prompt_eval_count = 100
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = AssistantLLMSettings(
+            system_instructions="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
+        )
+
+        with pytest.raises(OllamaEmptyResponseError) as exc_info:
+            await provider.generate_content_assistant("llama3", contents, settings)
+
+        error = exc_info.value
+        assert error.model == "llama3"
+        assert error.channel == "assistant"
+        assert error.done_reason == "load"
+        assert error.ctx_overflow_suspected is False
+
+    @pytest.mark.asyncio
+    async def test_generate_content_lite_raises_on_empty_content(self, provider):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 50
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = LiteLLMSettings(
+            system_instructions="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
+        )
+
+        with pytest.raises(OllamaEmptyResponseError) as exc_info:
+            await provider.generate_content_lite("llama3", contents, settings)
+
+        error = exc_info.value
+        assert error.model == "llama3"
+        assert error.channel == "lite"
+        assert error.done_reason == "stop"
+        assert error.ctx_overflow_suspected is False
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_with_thinking_only_raises_on_empty_content(self, provider):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.message.thinking = "This is my thinking process..."
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 100
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(OllamaEmptyResponseError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        error = exc_info.value
+        assert error.thinking_len == 28
+        assert error.ctx_overflow_suspected is False
+
+    @pytest.mark.asyncio
+    async def test_generate_content_primary_with_tool_calls_raises_on_empty_content(self, provider):
+        provider, mock_client = provider
+
+        mock_response = MagicMock()
+        mock_response.message.content = ""
+        mock_response.message.tool_calls = [MagicMock()]
+        mock_response.done_reason = "stop"
+        mock_response.prompt_eval_count = 100
+        mock_response.eval_count = 0
+        mock_client.chat = AsyncMock(return_value=mock_response)
+
+        contents = [Content(role="user", parts=[Part(text="Hi")])]
+        settings = PrimaryLLMSettings(
+            system_instructions="You are a helpful assistant",
+            temperature=0.7,
+            max_output_tokens=1000,
+            top_p_nucleus_sampling=1.0,
+            top_k_filtering=40,
+            stop_sequences=[],
+            response_modalities=["TEXT"],
+            tools=[],
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
+            tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
+        )
+
+        with pytest.raises(OllamaEmptyResponseError) as exc_info:
+            await provider.generate_content_primary("llama3", contents, settings)
+
+        error = exc_info.value
+        assert error.tool_calls_count == 1
+

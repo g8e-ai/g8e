@@ -75,9 +75,6 @@ class AIResponseAnalyzer:
             )
 
             response_text = response.text
-            if response_text is None:
-                logger.error("%s: LLM returned no text content", log_context)
-                return fallback_no_response()
             analysis = parse_structured_response(response_text, response_model)
 
             if post_process:
@@ -87,6 +84,10 @@ class AIResponseAnalyzer:
             return analysis
 
         except Exception as e:
+            from app.errors import OllamaEmptyResponseError
+            if isinstance(e, OllamaEmptyResponseError):
+                logger.error("%s: LLM returned no text content: %s", log_context, e)
+                return fallback_no_response()
             logger.error("%s failed: %s", log_context, e, exc_info=True)
             return fallback_exception(e)
 

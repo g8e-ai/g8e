@@ -475,3 +475,60 @@ class ToolsNotSupportedError(ModelCapabilityError):
             service_name=service_name,
             cause=cause,
         )
+
+
+class OllamaEmptyResponseError(ExternalServiceError):
+    """Ollama returned HTTP 200 with empty message.content.
+
+    Context-window overflow, load failures, and thinking-only output all surface
+    as message.content == "" with a 200 response. This error captures the diagnostic
+    context needed to identify the root cause.
+
+    Callers should catch this specific exception rather than checking response.text.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        model: str,
+        channel: str,
+        done_reason: str | None,
+        prompt_eval_count: int | None,
+        eval_count: int | None,
+        num_ctx: int,
+        num_predict: int,
+        thinking_len: int,
+        tool_calls_count: int,
+        ctx_overflow_suspected: bool,
+    ):
+        self.model = model
+        self.channel = channel
+        self.done_reason = done_reason
+        self.prompt_eval_count = prompt_eval_count
+        self.eval_count = eval_count
+        self.num_ctx = num_ctx
+        self.num_predict = num_predict
+        self.thinking_len = thinking_len
+        self.tool_calls_count = tool_calls_count
+        self.ctx_overflow_suspected = ctx_overflow_suspected
+
+        full_details = {
+            "model": model,
+            "channel": channel,
+            "done_reason": done_reason,
+            "prompt_eval_count": prompt_eval_count,
+            "eval_count": eval_count,
+            "num_ctx": num_ctx,
+            "num_predict": num_predict,
+            "thinking_len": thinking_len,
+            "tool_calls_count": tool_calls_count,
+            "ctx_overflow_suspected": ctx_overflow_suspected,
+        }
+
+        super().__init__(
+            message,
+            service_name="ollama",
+            code=ErrorCode.EXTERNAL_SERVICE_ERROR,
+            details=full_details,
+        )

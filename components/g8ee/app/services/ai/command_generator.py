@@ -354,26 +354,28 @@ async def _run_generation_pass(
         response_format=None,
     )
     try:
+        from app.errors import OllamaEmptyResponseError
+
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
-        if not response or not response.text:
-            error_msg = f"Pass {pass_index} ({member.value}) returned empty response"
-            pass_errors.append(error_msg)
-            logger.warning("[TRIBUNAL] %s", error_msg)
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-                TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False),
-            )
-            return None
         candidate = _normalise_command(response.text)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=candidate, success=True),
         )
         return candidate
+    except OllamaEmptyResponseError as exc:
+        error_msg = f"Pass {pass_index} ({member.value}) returned empty response: {exc}"
+        pass_errors.append(error_msg)
+        logger.warning("[TRIBUNAL] %s", error_msg)
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False),
+        )
+        return None
     except Exception as exc:
         error_msg = str(exc)
         pass_errors.append(error_msg)
@@ -427,23 +429,13 @@ async def _run_verifier(
         response_format=None,
     )
     try:
+        from app.errors import OllamaEmptyResponseError
+
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
-        if not response or not response.text:
-            logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate")
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-                TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.EMPTY_RESPONSE),
-            )
-            raise TribunalVerifierFailedError(
-                reason="empty_response",
-                error="Verifier returned empty response",
-                original_command=candidate_command,
-            )
-
         answer = response.text.strip()
         if answer.lower() == "ok":
             await emitter.emit(
@@ -475,6 +467,18 @@ async def _run_verifier(
     except TribunalVerifierFailedError:
         raise
     except Exception as exc:
+        from app.errors import OllamaEmptyResponseError
+        if isinstance(exc, OllamaEmptyResponseError):
+            logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate: %s", exc)
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
+                TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.EMPTY_RESPONSE),
+            )
+            raise TribunalVerifierFailedError(
+                reason="empty_response",
+                error=f"Verifier returned empty response: {exc}",
+                original_command=candidate_command,
+            ) from exc
         logger.error("[TRIBUNAL] Verifier failed with exception; cannot verify candidate: %s", exc)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
