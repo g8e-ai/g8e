@@ -274,14 +274,6 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS     = "gemini-3.1-pro-preview-customtools"
 GEMINI_3_1_FLASH_LITE           = "gemini-3.1-flash-lite-preview"
 GEMINI_3_FLASH                  = "gemini-3-flash-preview"
 
-GEMMA3_1B                     = "gemma3-1b"
-GEMMA3_4B                     = "gemma3-4b"
-GEMMA3_12B                    = "gemma3-12b"
-GEMMA3_27B                    = "gemma3-27b"
-GEMMA4                        = "gemma4"
-GEMMA4_E2B                    = "gemma4-e2b"
-GEMMA4_E4B                    = "gemma4-e4b"
-
 OLLAMA_QWEN3_5_122B             = "qwen3.5:122b"
 OLLAMA_GLM_5_1                 = "glm-5.1:cloud"
 OLLAMA_GEMMA4_26B              = "gemma4:26b"
@@ -290,15 +282,6 @@ OLLAMA_GEMMA4_E2B              = "gemma4:e2b"
 OLLAMA_NEMOTRON_3_30B          = "nemotron-3-nano:30b"
 OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
-OLLAMA_CODELLAMA_7B            = "codellama-7b"
-OLLAMA_LLAMA3_70B              = "llama3-70b"
-OLLAMA_LLAMA3_8B               = "llama3-8b"
-OLLAMA_MISTRAL_7B              = "mistral-7b"
-
-QWEN3_1B7                     = "qwen3-1b7"
-QWEN3_CODER_30B               = "qwen3-coder-30b"
-QWEN25_7B                     = "qwen25-7b"
-QWEN25_14B                    = "qwen25-14b"
 
 # Provider default models
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4

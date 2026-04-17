@@ -36,7 +36,7 @@ class TestGetAgentPersona:
         assert persona.tools == []
         assert persona.identity
         assert persona.purpose
-        assert persona.autonomy == "fully_autonomous"
+        assert isinstance(persona.autonomy, str) and persona.autonomy
 
     def test_get_tribunal_member_persona(self):
         """Test retrieving Tribunal member personas."""
@@ -232,9 +232,9 @@ class TestAgentPersonaValidation:
         with pytest.raises(ValidationError):
             AgentPersona.model_validate(invalid_data)
 
-    def test_invalid_autonomy_value_fails_validation(self):
-        """Test that invalid autonomy value fails validation."""
-        invalid_data = {
+    def test_autonomy_accepts_freeform_directive_prose(self):
+        """Autonomy is free-form empowering directive prose, not an enum."""
+        data = {
             "id": "test_agent",
             "display_name": "Test Agent",
             "icon": "test",
@@ -245,12 +245,11 @@ class TestAgentPersonaValidation:
             "tools": [],
             "identity": "Test identity",
             "purpose": "Test purpose",
-            "autonomy": "invalid_autonomy",  # Invalid value
+            "autonomy": "You operate at the maximum level of agency this seat permits.",
             "persona": ""
         }
-        # Note: Pydantic won't catch this without a validator, but the structure is in place
-        persona = AgentPersona.model_validate(invalid_data)
-        assert persona.autonomy == "invalid_autonomy"
+        persona = AgentPersona.model_validate(data)
+        assert isinstance(persona.autonomy, str) and persona.autonomy
 
     def test_temperature_accepts_null(self):
         """Test that temperature accepts None/null."""

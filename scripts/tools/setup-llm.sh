@@ -457,7 +457,7 @@ case "$LLM_PROVIDER" in
             LLM_MODEL="${ARG_MODEL:-gemma4:e4b}"
             LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma4:e4b}"
         else
-            printf "  Ollama endpoint [%s]: " "${_cur_endpoint:-https://your-ollama-host:11434/v1}" >&2
+            printf "  Ollama host [%s]: " "${_cur_endpoint:-your-ollama-host:11434}" >&2
             IFS= read -r _input
             LLM_ENDPOINT="${_input:-$_cur_endpoint}"
             if [[ -z "$LLM_ENDPOINT" ]]; then

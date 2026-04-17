@@ -487,21 +487,23 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |
-| `autonomy` | `string` | Autonomy level (`fully_autonomous` = no human approval needed, `human_approved` = requires explicit user consent for state-changing actions) |
+| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role, blending its identity, purpose, and persona. Free-form string, not an enum; the platform's actual governance (human approval for state-changing operator actions) is enforced structurally, not via this field. |
 
 ### AI Registry
 
-| AI | Role | Model Tier | Temp | Tools | Autonomy |
-|---|---|---|---|---|---|
-| **Triage** | classifier | primary | null (configurable) | none | fully_autonomous |
-| **Primary** | reasoner | primary | null (configurable) | full tool set | human_approved |
-| **Assistant** | responder | assistant | null (configurable) | full tool set | human_approved |
-| **Tribunal** | arbitrator | assistant | null (composite) | none | fully_autonomous |
-| **Verifier** | validator | assistant | null (model default) | none | fully_autonomous |
-| **Title Generator** | summarizer | assistant | null (model default) | none | fully_autonomous |
-| **Axiom** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
-| **Concord** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
-| **Variance** | tribunal_member | assistant | null (model default) | none | fully_autonomous |
+| AI | Role | Model Tier | Temp | Tools |
+|---|---|---|---|---|
+| **Triage** | classifier | primary | null (configurable) | none |
+| **Primary** | reasoner | primary | null (configurable) | full tool set |
+| **Assistant** | responder | assistant | null (configurable) | full tool set |
+| **Tribunal** | arbitrator | assistant | null (composite) | none |
+| **Verifier** | validator | assistant | null (model default) | none |
+| **Title Generator** | summarizer | assistant | null (model default) | none |
+| **Axiom** | tribunal_member | assistant | null (model default) | none |
+| **Concord** | tribunal_member | assistant | null (model default) | none |
+| **Variance** | tribunal_member | assistant | null (model default) | none |
+
+Each agent's `autonomy` field is a per-agent empowering directive; see `shared/constants/agents.json`. Governance (human approval for state-changing operator actions) is enforced structurally by the platform, not by this field.
 
 ### Contract Tests
 
@@ -913,7 +915,7 @@ Examples:
 ./g8e llm setup --provider openai --api-key sk-... --model gpt-4o --asst-model gpt-4o-mini
 
 # Ollama (remote)
-./g8e llm setup --provider ollama --endpoint https://your-ollama-host:11434/v1 --model gemma4:e4b --asst-model gemma4:e4b
+./g8e llm setup --provider ollama --endpoint your-ollama-host:11434 --model gemma4:e4b --asst-model gemma4:e4b
 
 # vLLM (self-hosted)
 ./g8e llm setup --provider vllm --endpoint https://your-host:443/v1 --model your-model

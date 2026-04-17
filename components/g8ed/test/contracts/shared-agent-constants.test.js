@@ -130,7 +130,6 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
 
     describe('AgentMetadata persona fields', () => {
         const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'temperature', 'tools', 'identity', 'purpose', 'autonomy'];
-        const VALID_AUTONOMY_VALUES = ['fully_autonomous', 'human_approved'];
         const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
 
         ALL_AGENT_KEYS.forEach(agentKey => {
@@ -171,8 +170,9 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
                     expect(agent.purpose.length).toBeGreaterThan(0);
                 });
 
-                it('autonomy is a valid value', () => {
-                    expect(VALID_AUTONOMY_VALUES).toContain(agent.autonomy);
+                it('autonomy is a non-empty string', () => {
+                    expect(typeof agent.autonomy).toBe('string');
+                    expect(agent.autonomy.length).toBeGreaterThan(0);
                 });
             });
         });

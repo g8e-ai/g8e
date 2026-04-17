@@ -22,7 +22,7 @@ g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
 | Component | File | Mechanism |
 |-----------|------|-----------|
 | g8ee (Python) | `components/g8ee/app/constants/events.py` | `EventType(str, Enum)` with hardcoded wire values |
-| g8ed (Node.js server) | `components/g8ed/constants/events.js` | `EventType` frozen object, reads from `events.json` via `shared.js` |
+| g8ed (Node.js server) | `components/g8ed/constants/events.js` | `EventType` frozen object, reads from `events.json` via `shared.js` (near-complete subset) |
 | g8ed (browser client) | `components/g8ed/public/js/constants/events.js` | `EventType` frozen object with hardcoded wire values (subset) |
 | g8eo (Go) | `components/g8eo/constants/events.go` | `Event` struct tree with hardcoded wire values (operator subset) |
 
@@ -371,7 +371,7 @@ The protocol defines five top-level domains. Total event count: **241**.
 
 ---
 
-## `ai` -- AI Events (48)
+## `ai` -- AI Events (51)
 
 ### `ai.llm.config` -- LLM Configuration
 
@@ -612,13 +612,13 @@ Not every component needs every event. This table shows which domains each compo
 | Domain | `events.json` | g8ee (Python) | g8ed (server JS) | g8ed (client JS) | g8eo (Go) |
 |--------|:---:|:---:|:---:|:---:|:---:|
 | `app` | 35 | 35 | 35 | 35 | -- |
-| `operator` | 114 | 114 | 114 | 114 | 65 |
-| `ai` | 51 | 51 | 51 | 51 | -- |
-| `platform` | 36 | 36 | 36 | 36 | -- |
+| `operator` | 114 | 114 | 114 | 102 | 64 |
+| `ai` | 51 | 51 | 48 | 51 | -- |
+| `platform` | 36 | 36 | 36 | 35 | -- |
 | `source` | 5 | 5 | 5 | 5 | -- |
-| **Total** | **241** | **241** | **241** | **241** | **65** |
+| **Total** | **241** | **241** | **238** | **228** | **64** |
 
-g8eo only binds the operator-domain events it produces or consumes. g8ed client JS mirrors all events with hardcoded values. g8ed server JS and g8ee mirror the full set.
+g8ee is the only binding that mirrors `events.json` in full. g8ed server JS resolves wire values from `events.json` at load time but omits the three `ai.llm.chat.iteration.retry` / `ai.llm.chat.iteration.tool.call.{started,completed}` keys (none of them are consumed by the server today). g8ed client JS is a hardcoded subset focused on events the browser actually consumes -- it covers all 51 `ai` events (the chat iteration pipeline is primarily a browser concern) but omits most `operator.mcp.*`, the `*.started` fetch variants, `file.edit.timeout`, `file.edit.approval.feedback`, and `platform.notification`. g8eo only binds the operator-domain events it produces or consumes.
 
 ---
 

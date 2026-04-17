@@ -76,7 +76,7 @@ export const PROVIDER_MODELS = Object.freeze({
     ]),
     [LLMProvider.OLLAMA]: _tierAll([
         { id: OllamaModel.QWEN3_5_122B, label: 'Qwen 3.5 122B' },
-        { id: OllamaModel.GLM_5_1, label: 'GLM 5.1 Cloud' },
+        { id: OllamaModel.GLM_5_1, label: 'GLM 5.1' },
         { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
         { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
         { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },

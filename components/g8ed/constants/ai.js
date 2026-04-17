@@ -201,7 +201,7 @@ export const PROVIDER_MODELS = Object.freeze({
         { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
         { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
         { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
-        { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 30B' },
+        { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
         { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
         { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
     ]),

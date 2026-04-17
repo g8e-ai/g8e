@@ -11,7 +11,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Metadata**: id, display_name, icon, description, role, model_tier, temperature (persona-level override; when `null`, runtime resolves via the precedence below), tools
 - **Identity**: Who the agent is
 - **Purpose**: What the agent does
-- **Autonomy**: How much independence the agent has (fully_autonomous, human_approved)
+- **Autonomy**: Empowering directive prose affirming the agent's maximum agency within its role — blended from its identity, purpose, and persona. Free-form string, not an enum.
 - **Persona**: The full prompt template for the agent (TODO placeholders to be filled in)
 
 ### Persona-driven temperature precedence
@@ -141,7 +141,11 @@ system_prompt = persona.get_system_prompt()
 print(persona.display_name)  # "Triage"
 print(persona.role)          # "classifier"
 print(persona.temperature)   # None
-print(persona.tools)         # ["run_commands_with_operator", ...]
+print(persona.tools)         # [] — Triage is a classifier and calls no tools
+
+# For personas that do bind tools, e.g. the Primary AI:
+primary = get_agent_persona("primary")
+print(primary.tools)         # ["run_commands_with_operator", "file_create_on_operator", ...]
 
 # For Tribunal members specifically
 member_persona = get_tribunal_member("axiom")

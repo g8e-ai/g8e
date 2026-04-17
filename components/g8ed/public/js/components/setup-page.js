@@ -205,10 +205,26 @@ export class SetupPage {
                 return false;
             }
             const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-            if (ollamaUrl && ollamaUrl.startsWith('https://')) {
-                this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
-                document.getElementById('ollama_url').focus();
-                return false;
+            if (ollamaUrl) {
+                const focusField = () => document.getElementById('ollama_url').focus();
+                if (ollamaUrl.startsWith('https://')) {
+                    this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
+                    focusField();
+                    return false;
+                }
+                // host:port form preferred; tolerate legacy "http://" scheme, reject any path (e.g. /v1)
+                const stripped = ollamaUrl.replace(/^http:\/\//i, '');
+                if (stripped.includes('/')) {
+                    this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
+                    focusField();
+                    return false;
+                }
+                // must look like host:port -- non-empty host, then :port (digits), optional nothing else
+                if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
+                    this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
+                    focusField();
+                    return false;
+                }
             }
         }
 

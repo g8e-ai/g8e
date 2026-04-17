@@ -103,7 +103,8 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
         key_parts.append(settings.anthropic_endpoint or "")
         key_parts.append(settings.anthropic_api_key or "")
     elif provider_value == LLMProvider.OLLAMA.value:
-        key_parts.append(settings.ollama_endpoint or "")
+        from .providers.ollama import _normalize_ollama_host
+        key_parts.append(_normalize_ollama_host(settings.ollama_endpoint or ""))
         key_parts.append(settings.ollama_api_key or "")
 
     return "|".join(key_parts)

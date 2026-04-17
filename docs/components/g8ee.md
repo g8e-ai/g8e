@@ -942,7 +942,7 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `llm_provider` | `ollama` | The active LLM provider (`ollama`, `openai`, `anthropic`, `gemini`) |
 | `ollama_model` | `gemma4:e4b` | The model name for Ollama |
 | `ollama_assistant_model` | `gemma4:e4b` | The assistant model name for Ollama |
-| `ollama_endpoint` | `http://host.docker.internal:11434` | The Ollama API endpoint |
+| `ollama_endpoint` | `host.docker.internal:11434` | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
 | `openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `openai_api_key` | - | OpenAI API key |
 | `anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |

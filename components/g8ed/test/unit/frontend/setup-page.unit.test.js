@@ -462,6 +462,34 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(setupPage._validateStep(2)).toBe(true);
         });
 
+        it('returns true for step 2 with bare Ollama host:port', () => {
+            document.getElementById('ollama_url').value = '192.168.1.100:11434';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(true);
+        });
+
+        it('rejects Ollama host with /v1 path', () => {
+            document.getElementById('ollama_url').value = 'http://localhost:11434/v1';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+            const text = document.getElementById('setup-status-msg');
+            expect(text.textContent).toContain('host:port');
+        });
+
+        it('rejects Ollama host missing port', () => {
+            document.getElementById('ollama_url').value = 'localhost';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+        });
+
+        it('rejects https Ollama URL', () => {
+            document.getElementById('ollama_url').value = 'https://localhost:11434';
+            setupPage._onProviderKeyChange();
+            expect(setupPage._validateStep(2)).toBe(false);
+            const text = document.getElementById('setup-status-msg');
+            expect(text.textContent).toBe('Ollama only supports HTTP, not HTTPS');
+        });
+
         it('returns true for step 3', () => {
             expect(setupPage._validateStep(3)).toBe(true);
         });
