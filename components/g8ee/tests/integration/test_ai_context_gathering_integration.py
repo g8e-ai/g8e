@@ -47,6 +47,7 @@ All tests use real g8es and cache services — no mocks allowed per testing guid
 """
 
 import asyncio
+import logging
 import pytest
 from datetime import datetime, timezone, UTC
 import uuid
@@ -268,10 +269,11 @@ class TestInvestigationContextResolution:
         )
         
         # Test (call without user_id for case-based lookup)
-        result = await service.get_investigation_context(
-            case_id=created_investigation.case_id
-            # Note: no user_id provided
-        )
+        with caplog.at_level(logging.WARNING):
+            result = await service.get_investigation_context(
+                case_id=created_investigation.case_id
+                # Note: no user_id provided
+            )
         
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)

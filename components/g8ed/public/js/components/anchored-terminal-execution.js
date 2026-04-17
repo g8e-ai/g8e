@@ -468,20 +468,19 @@ export class TerminalExecutionMixin {
         }
 
         const hostnameHtml = hostname
-            ? `<span class="anchored-terminal__result-hostname"><span class="material-symbols-outlined icon-12">computer</span>${hostname}</span>`
+            ? `<span class="anchored-terminal__result-hostname"><span class="material-symbols-outlined icon-12">computer</span>${escapeHtml(hostname)}</span>`
             : '';
 
         await templateLoader.renderTo(entry, 'command-result', {
             statusClass,
             statusIcon,
-            hostnameHtml: hostnameHtml || '',
+            hostnameHtml,
             command: escapeHtml(command),
             displayTime,
             outputContent: escapeHtml(outputContent),
             exitCodeHtml: exitCode !== undefined
                 ? `<div class="anchored-terminal__result-exit anchored-terminal__result-exit--${exitCode === 0 ? 'success' : 'error'}">Exit code: ${exitCode}</div>`
                 : '',
-            hostnameHtml_raw: hostnameHtml // for trusted rendering
         });
 
         body.appendChild(entry);

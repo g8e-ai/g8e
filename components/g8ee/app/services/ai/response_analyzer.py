@@ -17,6 +17,7 @@ import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
+from app.llm.structured import parse_structured_response
 from app.models.base import G8eBaseModel
 from app.models.tool_results import (
     CommandRiskAnalysis,
@@ -77,7 +78,7 @@ class AIResponseAnalyzer:
             if response_text is None:
                 logger.error("%s: LLM returned no text content", log_context)
                 return fallback_no_response()
-            analysis = response_model.model_validate_json(response_text)
+            analysis = parse_structured_response(response_text, response_model)
 
             if post_process:
                 post_process(analysis)

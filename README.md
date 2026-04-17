@@ -2,7 +2,7 @@
 
 # g8e
 
-### The governance layer between AI and production infrastructure.
+### governance architecture for trustless environments
 
 Self-hosted. Air-gap capable. Zero cloud dependencies.<br/>
 The AI reasons. You decide. The architecture enforces it.

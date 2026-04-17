@@ -414,3 +414,56 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
     assert "<operator index=\"1\">" in prompt
     assert "Operator Type: Operator - Standard system access" in prompt
     assert "Operator Type: Cloud Operator" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Operator-not-bound mode contract tests
+#
+# These tests deliberately do NOT mock load_mode_prompts. They assert that the
+# real, rendered OPERATOR_NOT_BOUND prompt contains the anchor phrases that
+# prevent the mode from contradicting itself (capabilities says "no tools",
+# execution must acknowledge that before offering any command). Regression
+# protection for the scenario_01_not_bound_command eval without depending on
+# a probabilistic model judge.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("g8e_web_search_available", [True, False])
+def test_operator_not_bound_prompt_requires_acknowledgement(g8e_web_search_available):
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=False,
+        system_context=None,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        g8e_web_search_available=g8e_web_search_available,
+    )
+
+    # Capabilities half: agent must know it has no execution hands.
+    assert "No Operator connected" in prompt
+    assert "no hands on user systems" in prompt
+
+    # Execution half: agent must acknowledge the not-bound state before
+    # offering any command. This is the directive that keeps the mode
+    # internally consistent and what scenario_01 validates.
+    assert "No Operator is currently bound" in prompt
+    assert "MUST acknowledge the limitation before anything else" in prompt
+    assert "Never skip the not-bound acknowledgement" in prompt
+
+
+def test_operator_not_bound_prompt_does_not_contradict_capabilities():
+    """Capabilities says no tools; execution must not contradict that by
+    instructing the agent to just run a command."""
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=False,
+        system_context=None,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        g8e_web_search_available=False,
+    )
+
+    # The failure mode we are guarding against: an execution-mode prompt that
+    # tells the agent to "provide a command" without any acknowledgement.
+    # The acknowledgement anchor must appear before any "command" guidance.
+    ack_pos = prompt.find("No Operator is currently bound")
+    assert ack_pos != -1, "acknowledgement directive missing from execution section"

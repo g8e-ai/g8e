@@ -46,12 +46,12 @@ from app.services.ai.command_generator import (
     _MAX_TOKENS_VERIFIER,
     _member_for_pass,
     _resolve_model,
+    _resolve_temperature,
     _run_generation_pass,
     _run_generation_stage,
     _run_verification_stage,
     _run_verifier,
     _run_voting_stage,
-    _temperature_for_pass,
     generate_command,
     TribunalEmitter,
 )
@@ -1737,33 +1737,57 @@ class TestTribunalMemberCycling:
         assert _member_for_pass(4) == TribunalMember.CONCORD
         assert _member_for_pass(5) == TribunalMember.VARIANCE
 
-    def test_temperature_for_pass_uses_model_config(self):
-        """_temperature_for_pass uses model config default temperature."""
+
+class TestResolveTemperature:
+    """_resolve_temperature honours persona > model default > global default.
+
+    Per-pass temperature variation was intentionally removed; Tribunal voice
+    comes from the persona prompt, not numeric skew. This test pins the
+    precedence contract.
+    """
+
+    def test_persona_temperature_wins_over_model_default(self):
+        from unittest.mock import patch
+
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_get_config.return_value = LLMModelConfig(
+                name="test-model", default_temperature=1.0,
+            )
+            assert _resolve_temperature(persona_temperature=0.3, model="test-model") == 0.3
+
+    def test_falls_back_to_model_default_when_persona_is_none(self):
+        from unittest.mock import patch
+
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_get_config.return_value = LLMModelConfig(
+                name="test-model", default_temperature=0.7,
+            )
+            assert _resolve_temperature(persona_temperature=None, model="test-model") == 0.7
+
+    def test_falls_back_to_global_default_when_model_config_missing(self):
         from unittest.mock import patch
         from app.constants import LLM_DEFAULT_TEMPERATURE
 
-        # Mock get_model_config to return a config with a specific temperature
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_config = LLMModelConfig(name="test-model", default_temperature=0.7)
-            mock_get_config.return_value = mock_config
-
-            # Test that all passes return the model's default temperature
-            temp_0 = _temperature_for_pass(0, "test-model")
-            temp_1 = _temperature_for_pass(1, "test-model")
-            temp_2 = _temperature_for_pass(2, "test-model")
-            assert temp_0 == 0.7
-            assert temp_1 == 0.7
-            assert temp_2 == 0.7
-
-        # Test fallback to LLM_DEFAULT_TEMPERATURE when model_config is None
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
             mock_get_config.return_value = None
-            temp = _temperature_for_pass(0, "test-model")
-            assert temp == LLM_DEFAULT_TEMPERATURE
+            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
 
-        # Test fallback when default_temperature is None
+    def test_falls_back_to_global_default_when_model_default_is_none(self):
+        from unittest.mock import patch
+        from app.constants import LLM_DEFAULT_TEMPERATURE
+
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_config = LLMModelConfig(name="test-model", default_temperature=None)
-            mock_get_config.return_value = mock_config
-            temp = _temperature_for_pass(0, "test-model")
-            assert temp == LLM_DEFAULT_TEMPERATURE
+            mock_get_config.return_value = LLMModelConfig(
+                name="test-model", default_temperature=None,
+            )
+            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
+
+    def test_persona_zero_is_respected_over_model_default(self):
+        """Regression: a persona-set temperature of 0.0 must not be treated as falsy."""
+        from unittest.mock import patch
+
+        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+            mock_get_config.return_value = LLMModelConfig(
+                name="test-model", default_temperature=1.0,
+            )
+            assert _resolve_temperature(persona_temperature=0.0, model="test-model") == 0.0

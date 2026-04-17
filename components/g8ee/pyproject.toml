@@ -48,6 +48,7 @@ addopts = [
     "--no-header",
     "--strict-markers",
     "--strict-config",
+    "-q",
     "-m", "not e2e",
 ]
 

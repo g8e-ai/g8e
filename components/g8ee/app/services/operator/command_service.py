@@ -359,6 +359,32 @@ class OperatorCommandService:
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 
+        async def _publish_failed(exec_id: str, op_id: str, op_session_id: str, hostname: str, error_msg: str) -> None:
+            """Emit OPERATOR_COMMAND_FAILED so the UI always reflects every operator in the batch."""
+            try:
+                await self.g8ed_event_service.publish_command_event(
+                    EventType.OPERATOR_COMMAND_FAILED,
+                    self._CommandResultBroadcastEvent(
+                        execution_id=exec_id,
+                        command=command,
+                        status=ExecutionStatus.FAILED,
+                        output=None,
+                        error=error_msg,
+                        stderr=None,
+                        exit_code=None,
+                        execution_time_seconds=None,
+                        operator_id=op_id,
+                        operator_session_id=op_session_id,
+                        hostname=hostname,
+                        approval_id=approval_result.approval_id,
+                        batch_id=batch_id,
+                    ),
+                    g8e_context,
+                    task_id=AITaskId.COMMAND,
+                )
+            except Exception as e:  # noqa: BLE001 — best-effort notification
+                logger.warning("[COMMAND] Failed to publish FAILED event for %s: %s", op_id, e)
+
         async def _dispatch(op: OperatorDocument) -> BatchOperatorExecutionResult:
             exec_id = generate_command_execution_id()
             op_id = op.operator_id or ""
@@ -366,6 +392,7 @@ class OperatorCommandService:
             hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
 
             if cancel_event.is_set():
+                await _publish_failed(exec_id, op_id, op_session_id, hostname, "Cancelled by fail-fast")
                 return BatchOperatorExecutionResult(
                     hostname=hostname, operator_id=op_id, execution_id=exec_id,
                     success=False, error="Cancelled by fail-fast",
@@ -373,6 +400,7 @@ class OperatorCommandService:
 
             async with semaphore:
                 if cancel_event.is_set():
+                    await _publish_failed(exec_id, op_id, op_session_id, hostname, "Cancelled by fail-fast")
                     return BatchOperatorExecutionResult(
                         hostname=hostname, operator_id=op_id, execution_id=exec_id,
                         success=False, error="Cancelled by fail-fast",
@@ -425,6 +453,7 @@ class OperatorCommandService:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
                         cancel_event.set()
+                    await _publish_failed(exec_id, op_id, op_session_id, hostname, str(e))
                     return BatchOperatorExecutionResult(
                         hostname=hostname, operator_id=op_id, execution_id=exec_id,
                         success=False, error=str(e),

@@ -172,6 +172,7 @@ export class DeviceLinkListResponse extends G8eBaseModel {
 
 export class DeviceRegistrationResponse extends G8eBaseModel {
     static fields = {
+        success:             { type: F.boolean, required: true },
         operator_session_id: { type: F.string,  required: true },
         operator_id:         { type: F.string,  required: true },
     };

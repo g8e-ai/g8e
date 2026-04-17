@@ -101,7 +101,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_RegistrationFailure(t *testing.T) 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := deviceRegisterResponse{
 			Success: false,
-			Error:   "max uses exhausted",
+			Error:   json.RawMessage(`"max uses exhausted"`),
 		}
 		w.Header().Set(constants.HeaderContentType, "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(resp))
