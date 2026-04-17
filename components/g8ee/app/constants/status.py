@@ -62,6 +62,8 @@ class ComponentStatus(str, Enum):
     ERROR = "error"
 
 class AITaskId(str, Enum):
+    CHAT = "ai.chat"
+    AGENT_CONTINUE = "ai.agent.continue"
     COMMAND = "ai.command"
     DIRECT_COMMAND = "ai.direct.command"
     FILE_EDIT = "ai.file.edit"
@@ -86,6 +88,7 @@ class ApprovalType(str, Enum):
     COMMAND = "command"
     FILE_EDIT = "file.edit"
     INTENT = "intent"
+    AGENT_CONTINUE = "agent.continue"
 
 class CaseStatus(str, Enum):
     NEW = "New"

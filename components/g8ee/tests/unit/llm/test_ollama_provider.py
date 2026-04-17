@@ -23,7 +23,7 @@ import json
 import httpx
 import pytest
 
-from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.llm_types import (
     Content,
@@ -168,7 +168,7 @@ class TestOllamaProviderGeneration:
             stop_sequences=[],
             response_modalities=["TEXT"],
             tools=[],
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         
@@ -222,7 +222,7 @@ class TestOllamaProviderGeneration:
             stop_sequences=[],
             response_modalities=["TEXT"],
             tools=[],
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
         

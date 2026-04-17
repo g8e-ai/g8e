@@ -21,6 +21,7 @@ import anthropic
 
 from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.thinking import translate_for_anthropic
+from ._capability import translate_capability_error
 from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
     AssistantLLMSettings,
@@ -42,6 +43,13 @@ from ..provider import LLMProvider
 from ..utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
+
+# Minimum visible-output headroom reserved above thinking.budget_tokens when
+# extended thinking is enabled. Anthropic requires max_tokens > budget_tokens;
+# this constant guarantees the model still has room for a real reply after
+# burning the thinking budget. Callers that want more output must pass a
+# larger max_tokens explicitly.
+_ANTHROPIC_THINKING_OUTPUT_RESERVE = 4_096
 
 
 # =============================================================================
@@ -239,10 +247,21 @@ class AnthropicProvider(LLMProvider):
 
         if thinking_enabled:
             effective_temperature = 1.0
-            budget = min(translation.budget_tokens, max(effective_max_tokens - 1, 1))
+            # Anthropic's contract: max_tokens is the TOTAL output budget and
+            # must strictly exceed thinking.budget_tokens so the model has
+            # headroom for a visible response. When the caller-provided
+            # max_tokens is too small for the requested thinking budget, uplift
+            # it rather than silently truncating the budget — clamping the
+            # budget down to a tiny value (as the previous min() guard did)
+            # leaves the model with effectively zero tokens for a real reply.
+            # An explicit reserve is cheaper than a surprising empty response.
+            effective_max_tokens = max(
+                effective_max_tokens,
+                translation.budget_tokens + _ANTHROPIC_THINKING_OUTPUT_RESERVE,
+            )
             thinking_config_dict = {
                 "type": "enabled",
-                "budget_tokens": budget,
+                "budget_tokens": translation.budget_tokens,
             }
             effective_top_k = None
         else:
@@ -445,6 +464,16 @@ class AnthropicProvider(LLMProvider):
                 stream_exhausted = True
             except Exception as e:
                 logger.error("[ANTHROPIC] Exception during primary streaming: %s", e, exc_info=True)
+                translate_capability_error(
+                    e,
+                    service_name="anthropic",
+                    model=model,
+                    thinking_requested=bool(
+                        primary_llm_settings.thinking_config
+                        and primary_llm_settings.thinking_config.enabled
+                    ),
+                    tools_requested=bool(primary_llm_settings.tools),
+                )
                 raise
 
         # Fallback: if stream ended without message_delta with stop_reason, yield completion
@@ -470,7 +499,20 @@ class AnthropicProvider(LLMProvider):
             thinking_config=primary_llm_settings.thinking_config,
         )
 
-        response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
+        try:
+            response = await self._client.messages.create(**request.model_dump(mode="json", exclude_none=True))
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="anthropic",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
         return self._build_response(response)
 
     async def generate_content_stream_assistant(

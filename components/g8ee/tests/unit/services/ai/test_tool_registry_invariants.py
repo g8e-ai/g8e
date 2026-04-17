@@ -173,6 +173,55 @@ def test_assertion_fails_when_declaration_is_unclassified(monkeypatch):
         _build_tool_service(web_search_provider=None)
 
 
+def test_every_spec_has_non_empty_display_metadata():
+    """Every ``ToolSpec`` must declare ``display_label``, ``display_icon``, and ``display_category``.
+
+    Display metadata previously lived in a parallel ``_TOOL_DISPLAY_METADATA``
+    dict in ``agent_tool_loop.py`` that had to be hand-kept in sync with
+    ``TOOL_SPECS``. After folding onto ``ToolSpec``, this test guards against
+    anyone re-introducing the drift by shipping a spec without a label/icon.
+    """
+    from app.services.ai.tool_registry import TOOL_SPECS
+
+    for spec in TOOL_SPECS:
+        assert spec.display_label, (
+            f"ToolSpec {spec.name.value} has empty display_label"
+        )
+        assert spec.display_icon, (
+            f"ToolSpec {spec.name.value} has empty display_icon"
+        )
+        assert spec.display_category, (
+            f"ToolSpec {spec.name.value} has empty display_category"
+        )
+
+
+def test_tool_display_metadata_uses_tool_spec():
+    """``tool_display_metadata`` must read from ``ToolSpec``, not a duplicated dict.
+
+    Verifies the fold from ``_TOOL_DISPLAY_METADATA`` onto ``ToolSpec`` is
+    wired end-to-end: the public lookup function returns the exact values
+    declared on the spec for a known tool, and returns the documented
+    fallback for an unknown one.
+    """
+    from app.services.ai.agent_tool_loop import tool_display_metadata
+    from app.services.ai.tool_registry import get_tool_spec
+
+    spec = get_tool_spec(OperatorToolName.RUN_COMMANDS)
+    assert spec is not None
+    label, icon, detail, category = tool_display_metadata(
+        OperatorToolName.RUN_COMMANDS.value, "uname -a"
+    )
+    assert (label, icon, category) == (
+        spec.display_label, spec.display_icon, spec.display_category,
+    )
+    assert detail == "uname -a"
+
+    # Unknown tool names fall back to the generic display.
+    label, icon, detail, category = tool_display_metadata("not_a_real_tool", "x")
+    assert (label, icon) == ("Processing", "sync")
+    assert detail == "x"
+
+
 def test_every_spec_has_builder_and_handler_method():
     """Every ``ToolSpec`` must reference real ``_build_*`` / ``_handle_*`` methods on ``AIToolService``.
 

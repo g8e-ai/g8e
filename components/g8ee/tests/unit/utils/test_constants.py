@@ -384,6 +384,16 @@ class TestApprovalTypeMatchesSharedJSON:
     def test_intent(self, status):
         assert status["approval.type"]["intent"] == ApprovalType.INTENT
 
+    def test_agent_continue(self, status):
+        assert status["approval.type"]["agent.continue"] == ApprovalType.AGENT_CONTINUE
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["approval.type"].keys())
+        enum_count = len(ApprovalType)
+        assert enum_count == len(json_keys), (
+            f"ApprovalType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
 
 class TestExecutionStatusMatchesSharedJSON:
     def test_pending(self, status):
@@ -482,6 +492,12 @@ class TestAISourceMatchesSharedJSON:
 
 
 class TestAITaskIdMatchesSharedJSON:
+    def test_chat(self, status):
+        assert status["ai.task.id"]["chat"] == AITaskId.CHAT
+
+    def test_agent_continue(self, status):
+        assert status["ai.task.id"]["agent.continue"] == AITaskId.AGENT_CONTINUE
+
     def test_command(self, status):
         assert status["ai.task.id"]["command"] == AITaskId.COMMAND
 

@@ -173,13 +173,16 @@ def translate_for_ollama(
     config: LLMModelConfig,
 ) -> OllamaThinkingTranslation:
     clamped = clamp_thinking_level(level, config)
+    # G8eBaseModel uses `use_enum_values=True`, so enum fields stored on
+    # LLMModelConfig round-trip to their string values. Compare via `==`
+    # rather than `is` so both the enum instance and its string value match.
     dialect = config.thinking_dialect or ThinkingDialect.NONE
 
-    if dialect is ThinkingDialect.NONE:
+    if dialect == ThinkingDialect.NONE:
         return OllamaThinkingTranslation(enabled=False, think=None)
 
-    if dialect is ThinkingDialect.NATIVE_TOGGLE:
-        enabled = clamped is not ThinkingLevel.OFF
+    if dialect == ThinkingDialect.NATIVE_TOGGLE:
+        enabled = clamped != ThinkingLevel.OFF
         return OllamaThinkingTranslation(enabled=enabled, think=enabled)
 
     # Unknown dialect: be conservative and omit thinking.

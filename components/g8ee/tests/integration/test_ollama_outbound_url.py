@@ -25,6 +25,7 @@ import json
 import httpx
 import pytest
 
+from app.constants import ThinkingLevel
 from app.llm.llm_types import (
     Content,
     Part,
@@ -89,7 +90,7 @@ async def test_outbound_url_is_api_chat(stored_endpoint):
         stop_sequences=[],
         response_modalities=["TEXT"],
         tools=[],
-        thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+        thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
         tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
     )
     contents = [Content(role="user", parts=[Part(text="ping")])]

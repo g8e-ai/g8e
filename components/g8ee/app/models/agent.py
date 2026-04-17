@@ -114,6 +114,7 @@ class AgentStreamContext(G8eBaseModel):
     user_id: str | None = None
     g8e_context: G8eHttpContext
     web_session_id: str | None = None
+    task_id: str | None = None
     agent_mode: AgentMode
     request_settings: G8eeUserSettings
 

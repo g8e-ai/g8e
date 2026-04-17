@@ -86,13 +86,6 @@ class LLMModelConfig(G8eBaseModel):
     # Ollama-only: which wire dialect the model expects for reasoning toggling.
     thinking_dialect: ThinkingDialect | None = None
 
-    @property
-    def supports_thinking(self) -> bool:
-        """Derived: any non-empty supported_thinking_levels list means the model
-        has some form of reasoning capability.
-        """
-        return bool(self.supported_thinking_levels)
-
 
 # -----------------------------------------------------------------------------
 # Default per-level token budgets for Anthropic extended thinking.
@@ -428,35 +421,40 @@ def clamp_thinking_level(desired: ThinkingLevel, config: "LLMModelConfig") -> Th
     return lowest if lowest is not None else ThinkingLevel.OFF
 
 
+# Module-level singleton returned for unknown model names. Using a shared
+# constant (instead of fabricating a fresh LLMModelConfig per call) guarantees
+# stable identity across callers and prevents accidental per-call mutation
+# leaking between tests. Its name is a sentinel ("unknown") rather than the
+# requested model name because the config is meant to be opaque — callers that
+# need the real model string must resolve it from their own context.
+UNKNOWN_MODEL_CONFIG = LLMModelConfig(
+    name="unknown",
+    supported_thinking_levels=[],
+    supports_tools=True,
+    context_window_input=128_000,
+    context_window_output=8_192,
+)
+
+
 class LLMModelRegistry(G8eBaseModel):
     """Registry of all known LLM model configurations."""
 
     configs: list[LLMModelConfig] = Field(default_factory=list)
 
     def get(self, model_name: str | None) -> LLMModelConfig:
-        """Return the config for a model, or a safe default for unknown models.
+        """Return the config for a model, or the shared UNKNOWN_MODEL_CONFIG.
 
         Unknown-model fallback assumes no thinking capability; operators that
-        need thinking on custom models must register a proper config.
+        need thinking on custom models must register a proper config. Returning
+        the shared constant (rather than a fresh object) preserves identity so
+        callers can safely compare, cache, or monkeypatch registry entries.
         """
         if not model_name:
-            return LLMModelConfig(
-                name="unknown",
-                supported_thinking_levels=[],
-                supports_tools=True,
-                context_window_input=128_000,
-                context_window_output=8_192,
-            )
+            return UNKNOWN_MODEL_CONFIG
         for config in self.configs:
             if config.name == model_name:
                 return config
-        return LLMModelConfig(
-            name=model_name,
-            supported_thinking_levels=[],
-            supports_tools=True,
-            context_window_input=128_000,
-            context_window_output=8_192,
-        )
+        return UNKNOWN_MODEL_CONFIG
 
     def available_models(self) -> list[str]:
         """Return list of all registered model names."""

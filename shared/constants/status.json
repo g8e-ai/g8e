@@ -110,7 +110,8 @@
   "approval.type": {
     "command": "command",
     "file.edit": "file.edit",
-    "intent": "intent"
+    "intent": "intent",
+    "agent.continue": "agent.continue"
   },
 
   "workflow.type": {
@@ -186,6 +187,8 @@
   },
 
   "ai.task.id": {
+    "chat": "ai.chat",
+    "agent.continue": "ai.agent.continue",
     "command": "ai.command",
     "direct.command": "ai.direct.command",
     "file.edit": "ai.file.edit",

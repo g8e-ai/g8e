@@ -241,7 +241,7 @@ Activated when at least one g8eo Operator has `status=bound`.
 
 - **Full tool suite** — command execution, file operations, directory listing, port checks, web search (if configured).
 - **Human-in-the-loop** — all state-changing operations require explicit user approval before execution.
-- **Thinking** — enabled for models that declare `supports_thinking=True`; uses the highest supported thinking level from the model's config.
+- **Thinking** — enabled for models whose `supported_thinking_levels` list contains at least one non-`OFF` level; the request builder asks for the highest level the model exposes and the per-provider translator clamps to exactly what goes on the wire. See [architecture/thinking_levels.md](../architecture/thinking_levels.md) for the full vocabulary and translator contract.
 - **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provide direct system access and bypass the intent system.
 - **Multi-operator** — multiple operators may be bound simultaneously; the AI selects the target per command using `target_operator` (hostname, operator ID, or index). Batch operations use `target_operators` for unified single-approval execution across N systems.
 
@@ -304,12 +304,14 @@ All LLM model configurations are defined in `components/g8ee/app/models/model_co
 
 - **Supported models** across all providers (Anthropic, Gemini, OpenAI, Ollama)
 - **Model capabilities and constraints** (context window, thinking support, tool support, output limits)
-- **Supported thinking levels** for each model (MINIMAL, LOW, MEDIUM, HIGH)
+- **Supported thinking levels** for each model (`OFF`, `MINIMAL`, `LOW`, `MEDIUM`, `HIGH`)
 
 The `LLMModelConfig` class defines the schema for each model:
 - `name`: Model identifier string
-- `supported_thinking_levels`: List of `ThinkingLevel` values the model supports
-- `supports_thinking`: Boolean indicating if the model supports thinking features
+- `supported_thinking_levels`: The single source of truth for thinking capability. An empty list means the model cannot think at all. A list containing `OFF` means thinking is opt-in; a list omitting `OFF` means the model is always-on reasoning and callers must supply one of the listed non-`OFF` levels. See [architecture/thinking_levels.md](../architecture/thinking_levels.md).
+- `supports_thinking`: Derived read-only property — `True` iff `supported_thinking_levels` is non-empty. Do not set this field directly; change the levels list instead.
+- `thinking_budgets`: Optional per-level `dict[ThinkingLevel, int]` used by Anthropic to override the default token-budget table when a model benefits from non-default values (Opus uses this to opt into a 32_000-token HIGH budget).
+- `thinking_dialect`: Ollama-only. Selects the wire encoding for reasoning toggling (`NONE` omits the `think` kwarg; `NATIVE_TOGGLE` sends `think=True`/`False`). Cloud providers ignore this field.
 - `supports_tools`: Boolean indicating if the model supports function calling
 - `context_window_input`: Maximum input tokens
 - `context_window_output`: Maximum output tokens (max_tokens)

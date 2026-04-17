@@ -36,6 +36,7 @@ from app.llm.llm_types import (
 
 from ..provider import LLMProvider
 from ..utils import schema_to_dict
+from ._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,30 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        try:
+            async for chunk in self._generate_content_stream_primary_impl(
+                model, contents, primary_llm_settings
+            ):
+                yield chunk
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="openai",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
+
+    async def _generate_content_stream_primary_impl(
+        self,
+        model: str,
+        contents: list[Content],
+        primary_llm_settings: PrimaryLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
@@ -275,7 +300,20 @@ class OpenAIProvider(LLMProvider):
             stream=False,
             thinking_config=primary_llm_settings.thinking_config,
         )
-        response = await self._client.chat.completions.create(**kwargs)
+        try:
+            response = await self._client.chat.completions.create(**kwargs)
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="openai",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
 
         parts = []
         choice = response.choices[0] if response.choices else None

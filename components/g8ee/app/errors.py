@@ -82,7 +82,7 @@ class G8eError(Exception):
         return self.error_detail.component
 
     def __str__(self) -> str:
-        result = f"{self.error_detail.code}: {self.error_detail.message}"
+        result = f"{self.error_detail.code.value}: {self.error_detail.message}"
         if self.cause:
             result += f" Caused by: {self.cause!s}"
         return result
@@ -404,4 +404,74 @@ class InternalUnexpectedError(G8eError):
             category=ErrorCategory.INTERNAL,
             severity=ErrorSeverity.CRITICAL,
             cause=cause
+        )
+
+
+# Model Capability Errors
+#
+# These are raised by LLM provider adapters when a request asks the model for
+# a capability it does not support (extended thinking, function calling, etc).
+# They are caught by name/type at call sites that need to decide whether to
+# downgrade, retry without the capability, or skip a test — never by matching
+# on exception message substrings. Consumers MUST use isinstance() rather
+# than string parsing.
+class ModelCapabilityError(ExternalServiceError):
+    """Base class for 'model does not support capability X' errors.
+
+    Raised by provider adapters at the LLM boundary when the remote API
+    rejects a request because the model cannot perform the requested
+    feature. Subclasses identify the specific capability so callers can
+    branch cleanly without parsing error messages.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        model: str,
+        capability: str,
+        service_name: str,
+        cause: Exception | None = None,
+        details: dict[str, Any] | None = None,
+    ):
+        self.model = model
+        self.capability = capability
+        full_details = details or {}
+        full_details.update({"model": model, "capability": capability})
+        super().__init__(
+            message,
+            service_name=service_name,
+            code=ErrorCode.MODEL_CAPABILITY_UNSUPPORTED,
+            cause=cause,
+            details=full_details,
+        )
+
+
+class ThinkingNotSupportedError(ModelCapabilityError):
+    """Model rejected a thinking/reasoning request it does not support."""
+
+    CAPABILITY = "thinking"
+
+    def __init__(self, message: str, *, model: str, service_name: str, cause: Exception | None = None):
+        super().__init__(
+            message,
+            model=model,
+            capability=self.CAPABILITY,
+            service_name=service_name,
+            cause=cause,
+        )
+
+
+class ToolsNotSupportedError(ModelCapabilityError):
+    """Model rejected a function-calling/tool-use request it does not support."""
+
+    CAPABILITY = "tools"
+
+    def __init__(self, message: str, *, model: str, service_name: str, cause: Exception | None = None):
+        super().__init__(
+            message,
+            model=model,
+            capability=self.CAPABILITY,
+            service_name=service_name,
+            cause=cause,
         )

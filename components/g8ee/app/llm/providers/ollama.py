@@ -8,6 +8,7 @@ from app.constants import (
     LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
+    ThinkingLevel,
 )
 from app.llm.thinking import translate_for_ollama
 from app.models.model_configs import get_model_config
@@ -27,6 +28,7 @@ from app.llm.llm_types import (
 
 from ..provider import LLMProvider
 from ..utils import schema_to_dict
+from ._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -153,15 +155,26 @@ class OllamaProvider(LLMProvider):
             "tools": ollama_tools or None,
         }
 
-        if thinking_config is not None:
-            translation = translate_for_ollama(
-                thinking_config.thinking_level,
-                get_model_config(model),
-            )
-            if translation.think is not None:
-                kwargs["think"] = translation.think
-
+        OllamaProvider._apply_think_kwarg(kwargs, model, thinking_config)
         return kwargs
+
+    @staticmethod
+    def _apply_think_kwarg(kwargs: dict, model: str, thinking_config) -> None:
+        """Apply the Ollama ``think`` kwarg according to the model's dialect.
+
+        Used by both primary (opt-in thinking) and assistant/lite (always-off
+        thinking) paths. Assistant and lite calls pass thinking_config=None;
+        we synthesize an OFF translation so dialect=NONE models still omit
+        the kwarg entirely while NATIVE_TOGGLE models receive ``think=False``
+        — matching the contract enforced on the primary path.
+        """
+        if thinking_config is not None:
+            level = thinking_config.thinking_level
+        else:
+            level = ThinkingLevel.OFF
+        translation = translate_for_ollama(level, get_model_config(model))
+        if translation.think is not None:
+            kwargs["think"] = translation.think
 
     async def generate_content_stream_primary(
         self,
@@ -186,8 +199,21 @@ class OllamaProvider(LLMProvider):
             ollama_tools=ollama_tools,
             stream=True,
         )
-        stream = await self._client.chat(**chat_kwargs)
-        
+        try:
+            stream = await self._client.chat(**chat_kwargs)
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="ollama",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
+
         async for chunk in stream:
             msg = chunk.message
             if getattr(msg, "thinking", None):
@@ -235,8 +261,21 @@ class OllamaProvider(LLMProvider):
             ollama_tools=ollama_tools,
             stream=False,
         )
-        response = await self._client.chat(**chat_kwargs)
-        
+        try:
+            response = await self._client.chat(**chat_kwargs)
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name="ollama",
+                model=model,
+                thinking_requested=bool(
+                    primary_llm_settings.thinking_config
+                    and primary_llm_settings.thinking_config.enabled
+                ),
+                tools_requested=bool(primary_llm_settings.tools),
+            )
+            raise
+
         parts = []
         if getattr(response.message, "thinking", None):
             parts.append(Part(text=response.message.thinking, thought=True))
@@ -275,20 +314,21 @@ class OllamaProvider(LLMProvider):
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        stream = await self._client.chat(
-            model=model,
-            messages=messages,
-            options={
+        chat_kwargs: dict = {
+            "model": model,
+            "messages": messages,
+            "options": {
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
                 "stop": assistant_llm_settings.stop_sequences,
             },
-            stream=True,
-            think=False,
-            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
-        )
+            "stream": True,
+            "format": assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
+        }
+        self._apply_think_kwarg(chat_kwargs, model, None)
+        stream = await self._client.chat(**chat_kwargs)
         
         async for chunk in stream:
             msg = chunk.message
@@ -316,20 +356,21 @@ class OllamaProvider(LLMProvider):
         effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response = await self._client.chat(
-            model=model,
-            messages=messages,
-            options={
+        chat_kwargs: dict = {
+            "model": model,
+            "messages": messages,
+            "options": {
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
                 "stop": assistant_llm_settings.stop_sequences,
             },
-            stream=False,
-            think=False,
-            format=assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
-        )
+            "stream": False,
+            "format": assistant_llm_settings.response_format.flatten_for_ollama() if assistant_llm_settings.response_format else None,
+        }
+        self._apply_think_kwarg(chat_kwargs, model, None)
+        response = await self._client.chat(**chat_kwargs)
         
         parts = []
         if getattr(response.message, "content", None):
@@ -362,20 +403,21 @@ class OllamaProvider(LLMProvider):
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        stream = await self._client.chat(
-            model=model,
-            messages=messages,
-            options={
+        chat_kwargs: dict = {
+            "model": model,
+            "messages": messages,
+            "options": {
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,
                 "stop": lite_llm_settings.stop_sequences,
             },
-            stream=True,
-            think=False,
-            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
-        )
+            "stream": True,
+            "format": lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
+        }
+        self._apply_think_kwarg(chat_kwargs, model, None)
+        stream = await self._client.chat(**chat_kwargs)
         
         async for chunk in stream:
             msg = chunk.message
@@ -403,20 +445,21 @@ class OllamaProvider(LLMProvider):
         effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
-        response = await self._client.chat(
-            model=model,
-            messages=messages,
-            options={
+        chat_kwargs: dict = {
+            "model": model,
+            "messages": messages,
+            "options": {
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,
                 "stop": lite_llm_settings.stop_sequences,
             },
-            stream=False,
-            think=False,
-            format=lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
-        )
+            "stream": False,
+            "format": lite_llm_settings.response_format.flatten_for_ollama() if lite_llm_settings.response_format else None,
+        }
+        self._apply_think_kwarg(chat_kwargs, model, None)
+        response = await self._client.chat(**chat_kwargs)
         
         parts = []
         if getattr(response.message, "content", None):

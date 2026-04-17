@@ -675,36 +675,44 @@ class TestShouldRetryError:
 
 
 class TestIsCapabilityError:
-    """Test is_capability_error capability error detection."""
+    """Test is_capability_error capability error detection via typed exceptions."""
 
-    def test_detects_thinking_config_error(self):
-        """Test thinking_config error is detected."""
-        error = Exception("thinking_config is not supported")
+    def test_detects_thinking_not_supported_error(self):
+        from app.errors import ThinkingNotSupportedError
+        error = ThinkingNotSupportedError(
+            "thinking_config is not supported",
+            model="x",
+            service_name="test",
+        )
         assert is_capability_error(error) is True
 
-    def test_detects_thinking_not_supported(self):
-        """Test thinking not supported error is detected."""
-        error = Exception("thinking is not supported")
+    def test_detects_tools_not_supported_error(self):
+        from app.errors import ToolsNotSupportedError
+        error = ToolsNotSupportedError(
+            "function calling not supported",
+            model="x",
+            service_name="test",
+        )
         assert is_capability_error(error) is True
 
-    def test_detects_invalid_thinking_level(self):
-        """Test invalid thinking_level error is detected."""
-        error = Exception("invalid thinking_level requested")
+    def test_detects_base_model_capability_error(self):
+        from app.errors import ModelCapabilityError
+        error = ModelCapabilityError(
+            "capability X unsupported",
+            model="x",
+            capability="X",
+            service_name="test",
+        )
         assert is_capability_error(error) is True
 
-    def test_detects_tool_errors(self):
-        """Test tool-related errors are detected."""
-        assert is_capability_error(Exception("tool not supported"))
-        assert is_capability_error(Exception("function call error"))
-        assert is_capability_error(Exception("not supported"))
+    def test_plain_exception_is_not_capability_error(self):
+        """Plain Exceptions are never capability errors — only typed ones qualify.
 
-    def test_case_insensitive_matching(self):
-        """Test matching is case-insensitive."""
-        error = Exception("THINKING IS NOT SUPPORTED")
-        assert is_capability_error(error) is True
-
-    def test_non_capability_errors(self):
-        """Test non-capability errors return False."""
+        Substring heuristics were removed; SDK errors must be translated to
+        typed errors by provider adapters before reaching consumers.
+        """
+        assert is_capability_error(Exception("thinking is not supported")) is False
+        assert is_capability_error(Exception("tool not supported")) is False
         assert is_capability_error(Exception("rate limit exceeded")) is False
         assert is_capability_error(Exception("invalid API key")) is False
 

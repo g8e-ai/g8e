@@ -67,8 +67,15 @@ class G8eBaseModel(BaseModel):
     - ``extra='ignore'``: unknown fields are silently dropped (safe deserialization from wire/DB)
     - ``exclude_none=True`` via model_config: ``model_dump()`` and ``model_dump_json()`` omit None
       fields by default, keeping payloads lean at every boundary
-    - ``use_enum_values=True``: enums serialize as their primitive values, not as enum instances
     - ``populate_by_name=True``: field aliases and field names both accepted on construction
+
+    Enum fields remain enum instances inside the application boundary. They are
+    only coerced to their string values when crossing a wire/DB/LLM boundary
+    via the ``flatten_for_*`` methods (which call ``recursive_serialize`` with
+    ``mode="json"``). This preserves typed-object invariants required by the
+    developer guide: identity comparisons (``is``/``in``) and ``match``
+    statements on enum-typed fields work uniformly whether the object was
+    constructed in memory or parsed from a wire payload.
 
     Boundary methods — use these instead of calling model_dump() directly at boundaries:
     - ``flatten_for_llm()``  — before Part.from_tool_response in agent.py
@@ -78,7 +85,6 @@ class G8eBaseModel(BaseModel):
 
     model_config = ConfigDict(
         populate_by_name=True,
-        use_enum_values=True,
         extra="ignore",
     )
 

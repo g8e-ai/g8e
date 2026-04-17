@@ -78,6 +78,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_ALL_MODES,
         builder_attr="_build_query_investigation_context_tool",
         handler_attr="_handle_query_investigation_context",
+        display_label="Querying investigation",
+        display_icon="database",
+        display_category=ToolDisplayCategory.GENERAL,
     ),
     ToolSpec(
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
@@ -85,6 +88,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_ALL_MODES,
         builder_attr="_build_get_command_constraints_tool",
         handler_attr="_handle_get_command_constraints",
+        display_label="Checking constraints",
+        display_icon="shield-check",
+        display_category=ToolDisplayCategory.GENERAL,
     ),
     ToolSpec(
         name=OperatorToolName.G8E_SEARCH_WEB,
@@ -93,6 +99,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         builder_attr="_build_search_web_tool",
         handler_attr="_handle_search_web",
         requires_web_search=True,
+        display_label="Searching the web",
+        display_icon="search",
+        display_category=ToolDisplayCategory.SEARCH,
     ),
     ToolSpec(
         name=OperatorToolName.RUN_COMMANDS,
@@ -100,6 +109,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_run_operator_commands_tool",
         handler_attr="_handle_run_commands",
+        display_label="Executing command",
+        display_icon="terminal",
+        display_category=ToolDisplayCategory.EXECUTION,
     ),
     ToolSpec(
         name=OperatorToolName.FILE_CREATE,
@@ -107,6 +119,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_file_create_tool",
         handler_attr="_handle_file_create",
+        display_label="Creating file",
+        display_icon="file-plus",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.FILE_WRITE,
@@ -114,6 +129,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_file_write_tool",
         handler_attr="_handle_file_write",
+        display_label="Writing file",
+        display_icon="file-edit",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.FILE_READ,
@@ -121,6 +139,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_file_read_tool",
         handler_attr="_handle_file_read",
+        display_label="Reading file",
+        display_icon="file-text",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.FILE_UPDATE,
@@ -128,6 +149,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_file_update_tool",
         handler_attr="_handle_file_update",
+        display_label="Updating file",
+        display_icon="file-edit",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.LIST_FILES,
@@ -135,6 +159,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_list_directory_tool",
         handler_attr="_handle_list_files",
+        display_label="Listing directory",
+        display_icon="folder",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.FETCH_FILE_HISTORY,
@@ -142,6 +169,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_fetch_file_history_tool",
         handler_attr="_handle_fetch_file_history",
+        display_label="Fetching file history",
+        display_icon="history",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.FETCH_FILE_DIFF,
@@ -149,6 +179,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_fetch_file_diff_tool",
         handler_attr="_handle_fetch_file_diff",
+        display_label="Fetching file diff",
+        display_icon="git-diff",
+        display_category=ToolDisplayCategory.FILE,
     ),
     ToolSpec(
         name=OperatorToolName.GRANT_INTENT,
@@ -156,6 +189,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_grant_intent_permission_tool",
         handler_attr="_handle_grant_intent",
+        display_label="Requesting permission",
+        display_icon="shield",
+        display_category=ToolDisplayCategory.GENERAL,
     ),
     ToolSpec(
         name=OperatorToolName.REVOKE_INTENT,
@@ -163,6 +199,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_revoke_intent_permission_tool",
         handler_attr="_handle_revoke_intent",
+        display_label="Revoking permission",
+        display_icon="shield-off",
+        display_category=ToolDisplayCategory.GENERAL,
     ),
     ToolSpec(
         name=OperatorToolName.CHECK_PORT,
@@ -170,6 +209,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         agent_modes=_BOUND_MODES,
         builder_attr="_build_port_check_tool",
         handler_attr="_handle_port_check",
+        display_label="Checking port",
+        display_icon="network",
+        display_category=ToolDisplayCategory.NETWORK,
     ),
 )
 

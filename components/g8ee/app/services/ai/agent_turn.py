@@ -338,18 +338,15 @@ def should_retry_error(error: Exception) -> bool:
 
 
 def is_capability_error(error: Exception) -> bool:
-    """Return True if the error indicates a model does not support a requested feature."""
-    message = str(error).lower()
-    # Patterns for thinking or tool support errors
-    capability_patterns = [
-        "thinking_config",
-        "thinking is not supported",
-        "invalid thinking_level",
-        "tool",
-        "function call",
-        "not supported",
-    ]
-    return any(p in message for p in capability_patterns)
+    """Return True if the error is a typed ``ModelCapabilityError``.
+
+    Provider adapters translate SDK-level capability rejections into typed
+    ``ThinkingNotSupportedError`` / ``ToolsNotSupportedError`` at the LLM
+    boundary. Consumers MUST rely on the type, never on substring matching
+    of the exception message.
+    """
+    from app.errors import ModelCapabilityError
+    return isinstance(error, ModelCapabilityError)
 
 
 def extract_status_code(error: Exception) -> int | None:

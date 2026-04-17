@@ -32,6 +32,7 @@ from app.constants import (
     AgentMode,
     LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+    ThinkingLevel,
 )
 from app.llm.llm_types import (
     PrimaryLLMSettings,
@@ -126,7 +127,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
             response_modalities=["TEXT"],
             tools=[],
             system_instructions="",
-            thinking_config=ThinkingConfig(thinking_level=None, include_thoughts=False),
+            thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         ),
         streaming_context=streaming,

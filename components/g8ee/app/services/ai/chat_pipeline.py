@@ -32,6 +32,7 @@ import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
+    AITaskId,
     NEW_CASE_ID,
     EventType,
     TriageComplexityClassification,
@@ -277,6 +278,7 @@ class ChatPipelineService:
             user_id=g8e_context.user_id,
             g8e_context=g8e_context,
             web_session_id=g8e_context.web_session_id,
+            task_id=AITaskId.CHAT.value,
             agent_mode=agent_mode,
             request_settings=request_settings,
             operator_bound=operator_bound,

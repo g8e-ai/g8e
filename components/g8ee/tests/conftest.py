@@ -25,6 +25,7 @@ E2E fixtures are in tests/e2e/conftest.py.
 import logging
 import os
 import sys
+from contextlib import contextmanager
 
 import pytest
 import pytest_asyncio
@@ -36,10 +37,10 @@ from app.services.infra.settings_service import SettingsService
 from app.services.cache.cache_aside import CacheAsideService
 from app.db.kv_service import KVService
 from app.db.db_service import DBService
-from app.constants import CloudSubtype, ComponentName, InvestigationStatus, LLMProvider, OperatorType
+from app.constants import CloudSubtype, ComponentName, InvestigationStatus, LLMProvider, OperatorType, ThinkingLevel
+from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
 from app.models.settings import LLMSettings, SearchSettings
 from app.models.model_configs import MODEL_REGISTRY, get_model_config
-from app.constants import ThinkingLevel as _ThinkingLevel
 from tests.fakes.builder import (
     create_mock_cache_aside_service,
     build_command_service,
@@ -48,8 +49,12 @@ from tests.fakes.factories import (
     build_enriched_context,
 )
 
-# Global to store probed capabilities for the session
-_PROBED_CAPABILITIES = {
+logger = logging.getLogger(__name__)
+
+# Global to store probed capabilities for the session. Consumed by the
+# collection-modify hook for marker-based skips; populated by
+# _probe_llm_capabilities when the session actually reaches the fixture.
+_PROBED_CAPABILITIES: dict = {
     "supports_thinking": True,
     "supports_tools": True,
     "supports_web_search": True,
@@ -58,12 +63,96 @@ _PROBED_CAPABILITIES = {
     "web_search_error": None,
 }
 
+# Conservative default override applied to a model config whose thinking probe
+# succeeds. The probe only confirms that *some* non-OFF level works, so we
+# cover the full intensity range; the provider's translator clamps to what the
+# actual model accepts at request time.
+_PROBED_THINKING_LEVELS: tuple[ThinkingLevel, ...] = (
+    ThinkingLevel.OFF,
+    ThinkingLevel.MINIMAL,
+    ThinkingLevel.LOW,
+    ThinkingLevel.MEDIUM,
+    ThinkingLevel.HIGH,
+)
 
-async def _probe_llm_capabilities(settings):
-    """Probe the LLM for thinking and tool support."""
+
+def _build_primary_settings_for_probe(
+    *,
+    thinking_config=None,
+    tools=None,
+):
+    """Build a PrimaryLLMSettings for a probe request.
+
+    The struct now defaults every non-essential field, so the probe only
+    needs to override what it is actually testing (thinking or tools).
+    """
+    from app.llm import llm_types as types
+
+    kwargs: dict = {"max_output_tokens": 1024}
+    if thinking_config is not None:
+        kwargs["thinking_config"] = thinking_config
+    if tools is not None:
+        kwargs["tools"] = list(tools)
+    return types.PrimaryLLMSettings(**kwargs)
+
+
+@contextmanager
+def _scoped_model_capability_override(
+    model_name: str,
+    *,
+    supported_thinking_levels: list[ThinkingLevel],
+    supports_tools: bool,
+):
+    """Temporarily override capability flags on a model config.
+
+    Overrides the two mutable backing fields (``supported_thinking_levels``
+    and ``supports_tools``) in a scope bounded by this context manager, and
+    restores the originals on exit so an
+    aborted session cannot poison the process-wide MODEL_REGISTRY.
+
+    If the model name is not in the registry we append a placeholder config
+    for the session window and remove it on exit — this preserves the
+    previous fixture behavior for tests that run against a custom Ollama
+    model name that was never registered at import time.
+    """
+    from app.models.model_configs import LLMModelConfig
+
+    existing = next((cfg for cfg in MODEL_REGISTRY.configs if cfg.name == model_name), None)
+    appended = False
+    if existing is None:
+        existing = LLMModelConfig(
+            name=model_name,
+            supported_thinking_levels=list(supported_thinking_levels),
+            supports_tools=supports_tools,
+            context_window_input=128_000,
+            context_window_output=8_192,
+        )
+        MODEL_REGISTRY.configs.append(existing)
+        appended = True
+
+    original_levels = list(existing.supported_thinking_levels)
+    original_tools = existing.supports_tools
+    try:
+        existing.supported_thinking_levels = list(supported_thinking_levels)
+        existing.supports_tools = supports_tools
+        yield existing
+    finally:
+        if appended:
+            MODEL_REGISTRY.configs.remove(existing)
+        else:
+            existing.supported_thinking_levels = original_levels
+            existing.supports_tools = original_tools
+
+
+async def _probe_llm_capabilities(settings) -> None:
+    """Probe the LLM for thinking, tool, and web-search support.
+
+    Populates the module-level _PROBED_CAPABILITIES dict. The caller is
+    responsible for mirroring the results onto the model registry via
+    ``_scoped_model_capability_override``.
+    """
     from app.llm.factory import get_llm_provider, get_llm_settings
     from app.llm import llm_types as types
-    from app.constants import ThinkingLevel
 
     llm = get_llm_settings()
     if not _has_llm_credentials(llm):
@@ -78,12 +167,10 @@ async def _probe_llm_capabilities(settings):
             logger.info(f"[PROBE] Testing thinking support for {primary_model}...")
             thinking_config = types.ThinkingConfig(
                 thinking_level=ThinkingLevel.MINIMAL,
-                include_thoughts=True
+                include_thoughts=True,
             )
-            thinking_llm_settings = types.PrimaryLLMSettings(
-                max_output_tokens=1024,
+            thinking_llm_settings = _build_primary_settings_for_probe(
                 thinking_config=thinking_config,
-                system_instructions="",
             )
             await provider.generate_content_primary(
                 model=primary_model,
@@ -91,15 +178,12 @@ async def _probe_llm_capabilities(settings):
                 primary_llm_settings=thinking_llm_settings,
             )
             logger.info(f"[PROBE] Thinking support confirmed for {primary_model}")
+        except ThinkingNotSupportedError as e:
+            _PROBED_CAPABILITIES["supports_thinking"] = False
+            _PROBED_CAPABILITIES["thinking_error"] = str(e)
+            logger.warning(f"[PROBE] Thinking support failed for {primary_model}: {e}")
         except Exception as e:
-            error_msg = str(e).lower()
-            # Common error patterns for lack of thinking support
-            if any(p in error_msg for p in ["thinking_config", "thinking is not supported", "invalid thinking_level", "400"]):
-                _PROBED_CAPABILITIES["supports_thinking"] = False
-                _PROBED_CAPABILITIES["thinking_error"] = str(e)
-                logger.warning(f"[PROBE] Thinking support failed for {primary_model}: {e}")
-            else:
-                logger.info(f"[PROBE] Thinking probe returned non-capability error (ignoring): {e}")
+            logger.info(f"[PROBE] Thinking probe returned non-capability error (ignoring): {e}")
 
         # 2. Probe Tools
         try:
@@ -116,10 +200,8 @@ async def _probe_llm_capabilities(settings):
                 },
             )
             tool_group = types.ToolGroup(tools=[dummy_tool])
-            tools_llm_settings = types.PrimaryLLMSettings(
-                max_output_tokens=1024,
+            tools_llm_settings = _build_primary_settings_for_probe(
                 tools=[tool_group],
-                system_instructions="",
             )
             await provider.generate_content_primary(
                 model=primary_model,
@@ -127,22 +209,12 @@ async def _probe_llm_capabilities(settings):
                 primary_llm_settings=tools_llm_settings,
             )
             logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
+        except ToolsNotSupportedError as e:
+            _PROBED_CAPABILITIES["supports_tools"] = False
+            _PROBED_CAPABILITIES["tools_error"] = str(e)
+            logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
         except Exception as e:
-            error_msg = str(e).lower()
-            # Common error patterns for lack of tool support - be specific to avoid false positives
-            if any(p in error_msg for p in ["tools not supported", "function calling not supported", "tool use not supported", "does not support tools"]):
-                _PROBED_CAPABILITIES["supports_tools"] = False
-                _PROBED_CAPABILITIES["tools_error"] = str(e)
-                logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
-            else:
-                logger.info(f"[PROBE] Tool probe returned non-capability error (ignoring): {e}")
-
-        # Update the registry for the duration of the session
-        config = get_model_config(primary_model)
-        original_supports_thinking = config.supports_thinking
-        original_supports_tools = config.supports_tools
-        config.supports_thinking = _PROBED_CAPABILITIES["supports_thinking"]
-        config.supports_tools = _PROBED_CAPABILITIES["supports_tools"]
+            logger.info(f"[PROBE] Tool probe returned non-capability error (ignoring): {e}")
 
         # 3. Probe Web Search
         if settings.search and settings.search.enabled:
@@ -167,23 +239,6 @@ async def _probe_llm_capabilities(settings):
                 _PROBED_CAPABILITIES["supports_web_search"] = False
                 _PROBED_CAPABILITIES["web_search_error"] = str(e)
                 logger.warning(f"[PROBE] Web search probe failed with exception: {e}")
-
-        # If the model is not in the registry yet, add it
-        found = False
-        for cfg in MODEL_REGISTRY.configs:
-            if cfg.name == primary_model:
-                cfg.supports_thinking = config.supports_thinking
-                cfg.supports_tools = config.supports_tools
-                found = True
-                break
-        if not found:
-            MODEL_REGISTRY.configs.append(config)
-
-        # Restore original config values to prevent global state pollution
-        config.supports_thinking = original_supports_thinking
-        config.supports_tools = original_supports_tools
-
-logger = logging.getLogger(__name__)
 
 
 def _has_llm_credentials(llm: LLMSettings | None) -> bool:
@@ -606,22 +661,43 @@ def mock_operator_document():
 async def probed_capabilities(test_settings):
     """Session-scoped fixture to probe LLM capabilities.
 
-    This defers the expensive probing logic from pytest_configure to the
-    actual start of the test session, allowing for graceful timeouts and
-    better visibility.
+    Runs the capability probe once per session (with a 30s timeout), then
+    mirrors the result onto the primary model's config via a scoped override
+    that is automatically reverted on session teardown. This keeps the
+    shared MODEL_REGISTRY free of test-induced mutations if the session
+    aborts partway through.
     """
     import asyncio
     from app.llm.factory import get_llm_settings
-    if _has_llm_credentials(get_llm_settings()):
+
+    llm_settings = get_llm_settings()
+    if _has_llm_credentials(llm_settings):
         try:
-            # Apply a 30s timeout to the entire probing session
             async with asyncio.timeout(30.0):
                 await _probe_llm_capabilities(test_settings)
         except TimeoutError:
             logger.warning("LLM capability probing timed out after 30s")
         except Exception as e:
             logger.warning(f"LLM capability probing failed: {e}")
-    return _PROBED_CAPABILITIES
+
+        # Mirror the probed capabilities onto the primary model's config for
+        # the rest of the session. Supported levels become the full range
+        # when the probe passed (the translator will clamp at request time)
+        # or empty when the probe clearly failed.
+        thinking_levels: list[ThinkingLevel] = (
+            list(_PROBED_THINKING_LEVELS)
+            if _PROBED_CAPABILITIES["supports_thinking"]
+            else []
+        )
+        with _scoped_model_capability_override(
+            llm_settings.primary_model,
+            supported_thinking_levels=thinking_levels,
+            supports_tools=_PROBED_CAPABILITIES["supports_tools"],
+        ):
+            yield _PROBED_CAPABILITIES
+        return
+
+    yield _PROBED_CAPABILITIES
 
 
 @pytest.fixture(scope="session")
