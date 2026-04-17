@@ -18,16 +18,16 @@
   width: 10px;
   align-self: stretch;
   cursor: col-resize;
-  background: rgba(71, 85, 105, 0.4);
+  background: var(--border-color);
   position: relative;
   z-index: 10;
-  transition: background 0.15s ease;
+  transition: background var(--transition-fast);
   user-select: none;
 }
 
 .panel-divider:hover,
 .panel-divider.dragging {
-  background: var(--primary-color, #3b82f6);
+  background: var(--primary-color);
 }
 
 /* Centered clickable tab - larger hit target, visible affordance */
@@ -38,23 +38,23 @@
   transform: translate(-50%, -50%);
   width: 22px;
   height: 56px;
-  border-radius: 6px;
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  color: rgba(226, 232, 240, 0.9);
+  border-radius: var(--radius-sm);
+  background: var(--border-color);
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow-md);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 
 .panel-divider__handle:hover {
-  background: var(--primary-color, #3b82f6);
-  border-color: var(--primary-color, #3b82f6);
-  color: #fff;
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--text-bright);
 }
 
 .panel-divider__chevron {
