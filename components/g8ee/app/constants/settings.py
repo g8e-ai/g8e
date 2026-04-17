@@ -374,6 +374,11 @@ FS_READ_MAX_SIZE_BYTES          = 102400
 # These are used when user/platform settings do not specify values
 LLM_DEFAULT_TEMPERATURE          = 0.4
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
+# Ollama-only: default context window passed as options.num_ctx.
+# Ollama's server default is 4096, which silently truncates real-world prompts
+# (system + chat history) and leaves thinking models with no budget for visible
+# output. 32768 matches common modern model context sizes.
+LLM_OLLAMA_DEFAULT_NUM_CTX        = 32768
 
 CACHE_TTL_DEFAULT               = 3600
 CACHE_TTL_SHORT                 = 300

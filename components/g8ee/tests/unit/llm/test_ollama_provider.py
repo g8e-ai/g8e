@@ -23,6 +23,7 @@ import json
 import httpx
 import pytest
 
+from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX
 from app.llm.providers.ollama import OllamaProvider
 from app.llm.llm_types import (
     Content,
@@ -174,6 +175,11 @@ class TestOllamaProviderGeneration:
         response = await provider.generate_content_primary("llama3", contents, settings)
         
         mock_client.chat.assert_called_once()
+        call_kwargs = mock_client.chat.call_args.kwargs
+        assert call_kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX, (
+            "num_ctx must be explicitly set; Ollama's 4096 default silently "
+            "truncates real-world prompts and starves thinking models of output budget"
+        )
         assert len(response.candidates) == 1
         assert response.candidates[0].content.parts[0].text == "Thinking..."
         assert response.candidates[0].content.parts[1].text == "Hello World"
@@ -225,6 +231,7 @@ class TestOllamaProviderGeneration:
             chunks.append(chunk)
             
         mock_client.chat.assert_called_once()
+        assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(chunks) == 3
         assert chunks[0].text == "Hello"
         assert chunks[1].text == " World"
@@ -257,6 +264,7 @@ class TestOllamaProviderGeneration:
         response = await provider.generate_content_assistant("llama3", contents, settings)
         
         mock_client.chat.assert_called_once()
+        assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(response.candidates) == 1
         assert response.candidates[0].content.parts[0].text == "Hello World"
         assert response.usage_metadata is not None
@@ -286,6 +294,7 @@ class TestOllamaProviderGeneration:
         response = await provider.generate_content_lite("llama3", contents, settings)
         
         mock_client.chat.assert_called_once()
+        assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(response.candidates) == 1
         assert response.candidates[0].content.parts[0].text == "Hello World"
         assert response.usage_metadata is not None

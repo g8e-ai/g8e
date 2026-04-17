@@ -4,7 +4,11 @@ from collections.abc import AsyncGenerator
 
 from ollama import AsyncClient, Message as OllamaMessage
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.constants import (
+    LLM_DEFAULT_TEMPERATURE,
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+    LLM_OLLAMA_DEFAULT_NUM_CTX,
+)
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -131,6 +135,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": primary_llm_settings.top_p_nucleus_sampling,
                 "stop": primary_llm_settings.stop_sequences,
             },
@@ -181,6 +186,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": primary_llm_settings.top_p_nucleus_sampling,
                 "stop": primary_llm_settings.stop_sequences,
             },
@@ -233,6 +239,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
                 "stop": assistant_llm_settings.stop_sequences,
             },
@@ -273,6 +280,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
                 "stop": assistant_llm_settings.stop_sequences,
             },
@@ -318,6 +326,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,
                 "stop": lite_llm_settings.stop_sequences,
             },
@@ -358,6 +367,7 @@ class OllamaProvider(LLMProvider):
             options={
                 "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
+                "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,
                 "stop": lite_llm_settings.stop_sequences,
             },
