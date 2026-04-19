@@ -14,7 +14,7 @@
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
-import { OperatorListUpdatedEvent, OperatorSlot } from '../../models/operator_model.js';
+import { OperatorPanelListUpdatedEvent } from '../../models/sse_models.js';
 import { now } from '../../models/base.js';
 import { redactWebSessionId } from '../../utils/security.js';
 
@@ -32,81 +32,39 @@ export class OperatorNotificationService {
     }
 
     async broadcastOperatorListToUser(userId, calculateSlotUsageFn) {
-        try {
-            const operators = await this.operatorDataService.queryOperators(
-                [{ field: 'user_id', operator: '==', value: userId }]
-            );
-
-            const visibleOperators = operators.filter(op =>
-                op.status !== OperatorStatus.UNAVAILABLE &&
-                op.status !== OperatorStatus.TERMINATED
-            );
-
-            const activeCount = visibleOperators.filter(op =>
-                op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND
-            ).length;
-
-            const { usedSlots } = calculateSlotUsageFn(visibleOperators);
-            const slots = visibleOperators.map(op => OperatorSlot.fromOperator(op));
-
-            const userWebSessions = await this.webSessionService.getUserActiveSessions(userId);
-            if (userWebSessions.length === 0) return;
-
-            const event = OperatorListUpdatedEvent.parse({
-                type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: slots,
-                total_count: slots.length,
-                active_count: activeCount,
-                used_slots: usedSlots,
-                max_slots: slots.length,
-                timestamp: now(),
-            });
-
-            for (const webSessionId of userWebSessions) {
-                await this.sseService.publishEvent(webSessionId, event);
-            }
-        } catch (error) {
-            logger.error('[OPERATOR-NOTIFY] Failed to broadcast Operator list', { userId, error: error.message });
-        }
+        // Keepalive now provides full operator list - this method is no-op
+        // Individual operator updates use broadcastOperatorContext instead
+        return;
     }
 
     async broadcastOperatorListToSession(userId, webSessionId, calculateSlotUsageFn) {
+        // Keepalive now provides full operator list - this method is no-op
+        // Individual operator updates use broadcastOperatorContext instead
+        return;
+    }
+
+    async broadcastOperatorContext(webSessionId, operatorId, context) {
         try {
-            if (!webSessionId) return;
-            if (!this.sseService) {
-                logger.error('[OPERATOR-NOTIFY] sseService is missing in OperatorNotificationService');
-                return;
-            }
+            if (!webSessionId || !this.sseService) return;
 
-            const allOperators = await this.operatorDataService.queryOperators(
-                [{ field: 'user_id', operator: '==', value: userId }]
-            );
-
-            const operators = allOperators.filter(op =>
-                op.status !== OperatorStatus.UNAVAILABLE &&
-                op.status !== OperatorStatus.TERMINATED
-            );
-
-            const activeCount = operators.filter(op =>
-                op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND
-            ).length;
-
-            const { usedSlots } = calculateSlotUsageFn(operators);
-            const slots = operators.map(op => OperatorSlot.fromOperator(op));
-
-            const event = OperatorListUpdatedEvent.parse({
+            const event = new OperatorPanelListUpdatedEvent({
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: slots,
-                total_count: slots.length,
-                active_count: activeCount,
-                used_slots: usedSlots,
-                max_slots: slots.length,
-                timestamp: now(),
+                data: {
+                    operator_id: operatorId,
+                    case_id: context.case_id || null,
+                    investigation_id: context.investigation_id || null,
+                    task_id: context.task_id || null,
+                    timestamp: now(),
+                },
             });
 
             await this.sseService.publishEvent(webSessionId, event);
         } catch (error) {
-            logger.error('[OPERATOR-NOTIFY] Failed to broadcast to session', { userId, webSessionId: redactWebSessionId(webSessionId), error: error.message });
+            logger.error('[OPERATOR-NOTIFY] Failed to broadcast operator context', { 
+                operatorId, 
+                webSessionId: redactWebSessionId(webSessionId), 
+                error: error.message 
+            });
         }
     }
 }

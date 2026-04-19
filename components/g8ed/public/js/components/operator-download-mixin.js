@@ -17,7 +17,7 @@ import { webSessionService } from '../utils/web-session-service.js';
 import { BEARER_PREFIX } from '../constants/service-client-constants.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { notificationService } from '../utils/notification-service.js';
-import { bindCounter, obfuscateApiKey, copyToClipboardWithFeedback } from '../utils/ui-utils.js';
+import { bindCounter, obfuscateApiKey, obfuscateCurlCommand, copyToClipboardWithFeedback } from '../utils/ui-utils.js';
 
 /**
  * OperatorDownloadMixin - Operator binary download and platform selection UI.
@@ -196,7 +196,10 @@ export const OperatorDownloadMixin = {
                     const dropUrl = `http://${window.location.hostname}/g8e`;
                     const curlCommand = `curl -fsSL ${dropUrl} | sh -s -- ${token}`;
 
-                    if (curlCmdDiv) curlCmdDiv.textContent = curlCommand;
+                    if (curlCmdDiv) {
+                        curlCmdDiv.setAttribute('data-curl-command', curlCommand);
+                        curlCmdDiv.textContent = obfuscateCurlCommand(curlCommand);
+                    }
                     if (tokenDiv) {
                         tokenDiv.setAttribute('data-token', token);
                         tokenDiv.textContent = obfuscateApiKey(token);
@@ -231,6 +234,17 @@ export const OperatorDownloadMixin = {
                 if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
                 const token = tokenDiv.getAttribute('data-token');
                 tokenDiv.textContent = isObfuscated ? obfuscateApiKey(token) : token;
+            });
+        }
+
+        const curlToggleBtn = container.querySelector('#device-link-curl-toggle');
+        if (curlToggleBtn && curlCmdDiv) {
+            curlToggleBtn.addEventListener('click', () => {
+                const isObfuscated = curlCmdDiv.classList.toggle('obfuscated');
+                const icon = curlToggleBtn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
+                const curlCommand = curlCmdDiv.getAttribute('data-curl-command');
+                curlCmdDiv.textContent = isObfuscated ? obfuscateCurlCommand(curlCommand) : curlCommand;
             });
         }
         }

@@ -32,7 +32,7 @@
         "type": "object",
         "properties": {
           "command": { "type": "string" },
-          "member": { "type": "string", "enum": ["axiom", "concord", "variance"] },
+          "member": { "type": "string", "enum": ["axiom", "concord", "variance", "pragma", "nemesis"] },
           "pass_index": { "type": "number" },
           "reasoning": { "type": "string" }
         }

@@ -49,6 +49,29 @@ const PROVIDER_LABELS = {
     ollama:    'Ollama',
 };
 
+const PROVIDER_DEFAULT_MODELS = {
+    gemini: {
+        primary: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Pro')?.id,
+        assistant: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3 Flash')?.id,
+        lite: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Flash Lite')?.id,
+    },
+    anthropic: {
+        primary: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Opus 4.6')?.id,
+        assistant: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Sonnet 4.6')?.id,
+        lite: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Haiku 4.5')?.id,
+    },
+    openai: {
+        primary: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Pro')?.id,
+        assistant: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4')?.id,
+        lite: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Mini')?.id,
+    },
+    ollama: {
+        primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
+        assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
+        lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
+    },
+};
+
 function _modelToProvider(modelValue) {
     for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
         const allModels = [...config.primary, ...config.assistant];
@@ -105,6 +128,7 @@ export class SetupPage {
         this._step           = 1;
         this._searchProvider = '';
         this._selectedModels = { primary: '', assistant: '', lite: '' };
+        this._lastProviderKeyChange = null;
     }
 
     init() {
@@ -277,9 +301,9 @@ export class SetupPage {
     // ---------------------------------------------------------------------------
 
     _initProviderKeyInputs() {
-        Object.values(PROVIDER_KEY_FIELDS).forEach(id => {
+        Object.entries(PROVIDER_KEY_FIELDS).forEach(([provider, id]) => {
             const el = document.getElementById(id);
-            if (el) el.addEventListener('input', () => this._onProviderKeyChange());
+            if (el) el.addEventListener('input', () => this._onProviderKeyChange(provider));
         });
 
         const searchKeyEl = document.getElementById('search_api_key');
@@ -291,7 +315,8 @@ export class SetupPage {
         });
     }
 
-    _onProviderKeyChange() {
+    _onProviderKeyChange(provider) {
+        this._lastProviderKeyChange = provider;
         this._updateProviderStates();
         this._updateModelDropdowns();
         this._updateNav();
@@ -411,14 +436,30 @@ export class SetupPage {
                 }
             }
             if (!prevValue) {
-                for (const provider of active) {
-                    const cfg = PROVIDER_MODELS[provider];
-                    const roleModels = cfg?.[role] || cfg?.all || [];
-                    if (roleModels.length > 0) {
-                        prevValue = roleModels[0].id;
-                        this._selectedModels[role] = prevValue;
-                        if (text) text.textContent = roleModels[0].label;
-                        break;
+                // If a provider key was just entered and it has sensible defaults, use those
+                if (this._lastProviderKeyChange && active.includes(this._lastProviderKeyChange)) {
+                    const defaults = PROVIDER_DEFAULT_MODELS[this._lastProviderKeyChange];
+                    if (defaults && defaults[role]) {
+                        const defaultModel = PROVIDER_MODELS[this._lastProviderKeyChange]?.all?.find(m => m.id === defaults[role]);
+                        if (defaultModel) {
+                            prevValue = defaultModel.id;
+                            this._selectedModels[role] = prevValue;
+                            if (text) text.textContent = defaultModel.label;
+                        }
+                    }
+                }
+                
+                // Fall back to first available model if no sensible default was used
+                if (!prevValue) {
+                    for (const provider of active) {
+                        const cfg = PROVIDER_MODELS[provider];
+                        const roleModels = cfg?.[role] || cfg?.all || [];
+                        if (roleModels.length > 0) {
+                            prevValue = roleModels[0].id;
+                            this._selectedModels[role] = prevValue;
+                            if (text) text.textContent = roleModels[0].label;
+                            break;
+                        }
                     }
                 }
             }

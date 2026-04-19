@@ -35,7 +35,8 @@ from app.models.investigations import (
     InvestigationQueryRequest,
 )
 
-from app.models.operators import CommandInternalResult, FileEditResult
+from app.models.operators import CommandInternalResult
+from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.timestamp import now

@@ -29,6 +29,20 @@ export function obfuscateApiKey(apiKey) {
 }
 
 /**
+ * Obfuscate a curl command for display purposes
+ * Shows first part of command, then obfuscated middle
+ * @param {string} curlCommand - The curl command to obfuscate
+ * @returns {string} Obfuscated curl command
+ */
+export function obfuscateCurlCommand(curlCommand) {
+    if (!curlCommand) return '••••••••••••••••';
+    const spaceIndex = curlCommand.indexOf(' ');
+    if (spaceIndex === -1) return '••••••••••••••••';
+    const firstPart = curlCommand.substring(0, spaceIndex);
+    return firstPart + ' •••••••• ••••••••••••••••'
+}
+
+/**
  * Copy text to clipboard with visual feedback on button
  * @param {string} text - Text to copy
  * @param {HTMLElement} button - Button element to show feedback on
@@ -97,6 +111,7 @@ export function bindCounter(decId, incId, input, min, max, container) {
  * @param {string} [options.descriptionClass=''] - Additional class for the message/description
  * @param {string} [options.htmlContent=''] - Optional HTML content to insert between message and actions
  * @param {Function} [options.onConfirm=null] - Optional async function to run when confirmed. If provided, the modal won't close until it resolves.
+ * @param {Function} [options.onRender=null] - Optional function to run after modal is rendered but before it's shown. Receives the overlay element.
  * @returns {Promise<boolean>} Resolves to true if confirmed, false if cancelled
  */
 export async function showConfirmationModal({ 
@@ -109,7 +124,8 @@ export async function showConfirmationModal({
     confirmClass = '',
     descriptionClass = '',
     htmlContent = '',
-    onConfirm = null
+    onConfirm = null,
+    onRender = null
 }) {
     // Auto-select icon if not provided
     if (!icon) {
@@ -151,6 +167,10 @@ export async function showConfirmationModal({
         document.body.appendChild(overlay);
 
         const modal = overlay.querySelector('.confirmation-modal');
+        
+        if (onRender) {
+            onRender(overlay);
+        }
         const confirmBtn = overlay.querySelector('[data-action="confirm"]');
         const cancelBtn = overlay.querySelector('[data-action="cancel"]');
         

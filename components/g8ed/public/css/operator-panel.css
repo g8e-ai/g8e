@@ -15,7 +15,7 @@
    Click the centered tab to collapse/expand; drag the divider body to resize. */
 .panel-divider {
   flex-shrink: 0;
-  width: 10px;
+  width: 6px;
   align-self: stretch;
   cursor: col-resize;
   background: var(--border-color);
@@ -103,8 +103,8 @@
   text-transform: none;
   background: var(--bg-card);
   border: none;
-  border-bottom: 1px solid rgba(71, 85, 105, 0.4);
-  border-right: 1px solid rgba(71, 85, 105, 0.4);
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   border-radius: 0;
   box-shadow: none;
   z-index: 201;
@@ -119,7 +119,7 @@
 .operator-panel.active,
 .operator-panel.expanded {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.15), 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.15), 0 4px 12px rgba(var(--text-rgb), 0.15);
 }
 
 .operator-panel::before {
@@ -147,15 +147,15 @@
 
 /* Light theme adjustments for Operator panel border */
 [data-theme="light"] .operator-panel {
-  border-color: rgba(208, 215, 222, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-color: var(--border-color);
+  box-shadow: 0 1px 3px rgba(var(--text-rgb), 0.08);
 }
 
 [data-theme="light"] .operator-panel:focus-within,
 [data-theme="light"] .operator-panel.active,
 [data-theme="light"] .operator-panel.expanded {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1), 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1), 0 2px 8px rgba(var(--text-rgb), 0.1);
 }
 
 /* swordShine animation - used by download buttons */
@@ -348,7 +348,7 @@
   z-index: 500;
   transform: translateX(-100%);
   transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 4px 0 24px rgba(var(--text-rgb), 0.4);
   border-right: 1px solid var(--border-color);
   overflow: hidden;
 }
@@ -378,7 +378,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(var(--text-rgb), 0.55);
   z-index: 499;
   opacity: 0;
   transition: opacity 0.28s ease;
@@ -413,7 +413,7 @@
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.25);
+  box-shadow: 2px 0 8px rgba(var(--text-rgb), 0.25);
   transition: width 0.15s ease, background 0.15s ease;
   padding: 0;
 }
@@ -441,11 +441,11 @@
 }
 
 [data-theme="light"] .operator-mobile-backdrop {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(var(--text-rgb), 0.35);
 }
 
 [data-theme="light"] .operator-panel-pull-tab {
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 2px 0 8px rgba(var(--text-rgb), 0.12);
 }
 
 /* High Contrast Mode */
@@ -521,6 +521,99 @@
   flex: 0 0 auto;
 }
 
+/* Collapsible Operator List Section */
+.operator-list-collapsible {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.operator-list-collapsible.expanded {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.operator-list-collapsible-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-secondary);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.operator-list-collapsible-bar:hover {
+  background: var(--bg-hover);
+  color: var(--primary-color);
+}
+
+.operator-list-collapsible.expanded .operator-list-collapsible-bar {
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.operator-list-bar-icon {
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.operator-list-bar-title {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex: 1;
+}
+
+.operator-list-bar-chevron {
+  font-size: 18px;
+  letter-spacing: 0;
+  transition: transform 0.3s ease;
+  position: absolute;
+  right: 12px;
+  transform: rotate(180deg);
+}
+
+.operator-list-collapsible.expanded .operator-list-bar-chevron {
+  transform: rotate(0deg);
+}
+
+.operator-list-collapsible .operator-drawer-content {
+  flex: 1 1 0;
+  min-height: 0;
+  opacity: 1;
+  overflow-y: auto;
+  transition: opacity 0.3s ease;
+}
+
+.operator-list-collapsible.collapsed .operator-drawer-content {
+  flex: 0 0 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease;
+}
+
 .operator-download-collapsible.expanded {
   flex: 0 1 420px;
   display: flex;
@@ -542,7 +635,7 @@
   background: var(--primary-color);
   border: none;
   cursor: pointer;
-  color: #fff;
+  color: var(--text-bright);
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 600;
@@ -555,12 +648,12 @@
 }
 
 .operator-download-collapsible-bar:hover {
-  color: #fff;
+  color: var(--text-bright);
   background: var(--accent-green);
 }
 
 .operator-download-collapsible.expanded .operator-download-collapsible-bar {
-  color: #fff;
+  color: var(--text-bright);
   border-bottom: 1px solid rgba(255, 255, 255, 0.3);
 }
 
@@ -720,7 +813,7 @@
     rgba(var(--accent-green-dark-rgb), 0.05) 50%,
     rgba(var(--accent-green-rgb), 0.08) 100%);
   border: 1px solid var(--accent-green);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1),
+  box-shadow: 0 1px 3px rgba(var(--text-rgb), 0.1),
               inset 0 1px 0 rgba(255, 255, 255, 0.05);
   position: relative;
   z-index: 2;
@@ -770,6 +863,15 @@
     rgba(var(--accent-blue-solid-rgb), 0.02) 100%);
   border-color: rgba(var(--accent-blue-solid-rgb), 0.4);
   border-left: 3px solid var(--accent-blue-light);
+}
+
+.operator-list-item.is-g8ep {
+  background: linear-gradient(135deg, 
+    rgba(var(--primary-rgb), 0.08) 0%, 
+    rgba(var(--primary-rgb), 0.05) 50%,
+    rgba(var(--primary-rgb), 0.03) 100%);
+  border-color: rgba(var(--primary-rgb), 0.5);
+  border-left: 4px solid var(--primary-color);
 }
 
 /* Light theme adjustments */
@@ -1042,7 +1144,7 @@
 .api-key-btn.copied {
   background: var(--success-color);
   border-color: var(--success-color);
-  color: white;
+  color: var(--text-bright);
 }
 
 .device-link-btn {
@@ -1086,7 +1188,7 @@
 .device-link-btn.copied {
   background: var(--success-color);
   border-color: var(--success-color);
-  color: white;
+  color: var(--text-bright);
   box-shadow: none;
 }
 
@@ -1630,7 +1732,7 @@
 .curl-copy-btn:hover {
   background: var(--primary-color-dark, var(--primary-color));
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.2);
 }
 
 .curl-copy-btn:active {
@@ -1776,7 +1878,7 @@
 
 .operator-deploy-icon-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.15);
 }
 
 .operator-deploy-icon-btn .material-symbols-outlined {
@@ -2070,7 +2172,7 @@
 .download-row-copy-btn:hover,
 .download-row-toggle-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.15);
 }
 
 .download-row-copy-btn:hover {
@@ -2112,7 +2214,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.15);
 }
 
 
@@ -2137,7 +2239,7 @@
   color: var(--text-primary);
   background: var(--primary-color-dark, var(--primary-color));
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.2);
 }
 
 
@@ -2240,7 +2342,7 @@
 .download-direct-btn:hover {
   background: var(--primary-color-dark, var(--primary-color));
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(var(--text-rgb), 0.2);
 }
 
 .download-direct-btn:active {
@@ -2371,14 +2473,14 @@
   font-size: 12px;
   color: var(--text-secondary);
   padding: 10px 12px;
-  background: var(--bg-tertiary, rgba(0, 0, 0, 0.1));
+  background: var(--bg-tertiary);
   border-radius: 0.25rem;
   border-left: 3px solid var(--border-color);
   line-height: 1.5;
 }
 
 .method-note code {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(var(--text-rgb), 0.3);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: var(--font-mono);
@@ -2560,25 +2662,25 @@
 
 /* Light theme adjustments for download methods */
 [data-theme="light"] .download-method-tabs {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(var(--text-rgb), 0.05);
 }
 
 [data-theme="light"] .download-method-tab:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(var(--text-rgb), 0.08);
 }
 
 
 [data-theme="light"] .method-note {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(var(--text-rgb), 0.03);
 }
 
 [data-theme="light"] .method-note code {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(var(--text-rgb), 0.08);
   color: var(--accent-blue);
 }
 
 [data-theme="light"] .direct-download-content {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(var(--text-rgb), 0.03);
 }
 
 
@@ -2588,7 +2690,7 @@
 }
 
 [data-theme="light"] .platform-option-btn:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(var(--text-rgb), 0.12);
 }
 
 [data-theme="light"] .platform-option-btn.selected {

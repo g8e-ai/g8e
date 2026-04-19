@@ -37,7 +37,8 @@ from app.models.investigations import (
     ConversationHistoryMessage,
     InvestigationCreateRequest,
 )
-from app.models.operators import CommandInternalResult, FileEditResult, OperatorDocument
+from app.models.operators import CommandInternalResult, OperatorDocument
+from app.models.tool_results import FileEditResult
 from app.services.protocols import InvestigationDataServiceProtocol, OperatorDataServiceProtocol, MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)

@@ -146,26 +146,36 @@ export function createSSERouter({
             });
         };
 
+        // Helper function to send keepalive with operator list
+        const sendKeepalive = async () => {
+            let operatorList = null;
+            try {
+                const rawOperatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                operatorList = rawOperatorList ? OperatorListData.parse(rawOperatorList) : null;
+            } catch (e) {
+                logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
+            }
+
+            await sseService.publishEvent(connectionId, new KeepaliveEvent({
+                type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
+                timestamp: now(),
+                serverTime: Date.now(),
+                operator_list: operatorList
+            }));
+        };
+
+        // Send immediate keepalive to provide operator list right away
+        sendKeepalive().catch(error => {
+            logger.error(`[G8ED-SSE] Initial keepalive failed for ${connectionId}:`, error);
+            cleanupConnection();
+        });
+
         // Send keepalive every 20 seconds to detect broken connections
         // Status transitions (ACTIVE→OFFLINE, BOUND→STALE) are handled by HeartbeatMonitorService
         keepaliveInterval = setInterval(async () => {
             if (sseService.hasLocalConnection(connectionId)) {
                 try {
-                    let operatorList = null;
-                    try {
-                        const rawOperatorList = await resolvedOperatorService.getUserOperators(req.userId);
-                        operatorList = rawOperatorList ? OperatorListData.parse(rawOperatorList) : null;
-                    } catch (e) {
-                        logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
-                    }
-
-                    await sseService.publishEvent(connectionId, new KeepaliveEvent({
-                        type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
-                        timestamp: now(),
-                        serverTime: Date.now(),
-                        operator_list: operatorList
-                    }));
-
+                    await sendKeepalive();
                 } catch (error) {
                     logger.error(`[G8ED-SSE] Keepalive failed for ${connectionId}:`, error);
                     cleanupConnection();

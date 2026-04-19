@@ -14,13 +14,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInternalSSERouter } from '@g8ed/routes/internal/internal_sse_routes.js';
 import { EventType } from '@g8ed/constants/events.js';
-import { OperatorSlot } from '@g8ed/models/operator_model.js';
 
 describe('Internal SSE Routes [UNIT]', () => {
     let router;
     let mockSSEService;
     let mockAuthorizationMiddleware;
-    let mockOperatorService;
 
     beforeEach(() => {
         mockSSEService = {
@@ -29,14 +27,10 @@ describe('Internal SSE Routes [UNIT]', () => {
         mockAuthorizationMiddleware = {
             requireInternalOrigin: vi.fn((req, res, next) => next())
         };
-        mockOperatorService = {
-            getUserOperators: vi.fn()
-        };
 
         router = createInternalSSERouter({
             services: {
-                sseService: mockSSEService,
-                operatorService: mockOperatorService
+                sseService: mockSSEService
             },
             authorizationMiddleware: mockAuthorizationMiddleware
         });
@@ -177,22 +171,11 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
         });
 
-        it('should replace g8ee operator payload with full operator list for OPERATOR_PANEL_LIST_UPDATED', async () => {
+        it('should pass through OPERATOR_PANEL_LIST_UPDATED event as-is since keepalive provides full list', async () => {
             const event = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operator_id: 'g8ee-operator-123'
-            };
-            const mockSlots = [
-                new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE', status_display: 'ACTIVE', status_class: 'active' }),
-                new OperatorSlot({ operator_id: 'op-2', status: 'AVAILABLE', status_display: 'AVAILABLE', status_class: 'available' })
-            ];
-            const mockOperatorList = {
-                type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operators: mockSlots,
-                total_count: 2,
-                active_count: 1,
-                used_slots: 0,
-                max_slots: 2
+                operator_id: 'g8ee-operator-123',
+                data: { some: 'context' }
             };
             const req = createMockReq({
                 body: {
@@ -203,45 +186,6 @@ describe('Internal SSE Routes [UNIT]', () => {
             });
             const res = createMockRes();
 
-            mockOperatorService.getUserOperators.mockResolvedValue(mockOperatorList);
-            mockSSEService.publishEvent.mockResolvedValue(true);
-
-            await getRoute()(req, res);
-
-            expect(mockOperatorService.getUserOperators).toHaveBeenCalledWith('user-456');
-            const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
-            const wireFormat = publishedEvent.forWire();
-            expect(wireFormat.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
-            expect(wireFormat.data.operators).toHaveLength(2);
-            expect(wireFormat.data.operators[0].operator_id).toBe('op-1');
-            expect(wireFormat.data.operators[0].status).toBe('ACTIVE');
-            expect(wireFormat.data.operators[1].operator_id).toBe('op-2');
-            expect(wireFormat.data.total_count).toBe(mockOperatorList.total_count);
-            expect(wireFormat.data.active_count).toBe(mockOperatorList.active_count);
-            expect(wireFormat.data.used_slots).toBe(mockOperatorList.used_slots);
-            expect(wireFormat.data.max_slots).toBe(mockOperatorList.max_slots);
-            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                message: 'Event delivered'
-            }));
-        });
-
-        it('should fallback to original event if operator list fetch fails', async () => {
-            const event = {
-                type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                operator_id: 'g8ee-operator-123'
-            };
-            const req = createMockReq({
-                body: {
-                    web_session_id: 'ws_123',
-                    user_id: 'user-456',
-                    event
-                }
-            });
-            const res = createMockRes();
-
-            mockOperatorService.getUserOperators.mockRejectedValue(new Error('DB error'));
             mockSSEService.publishEvent.mockResolvedValue(true);
 
             await getRoute()(req, res);

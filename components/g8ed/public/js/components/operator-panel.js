@@ -114,7 +114,7 @@ export class OperatorPanel {
         };
 
         this.eventBus.on(EventType.OPERATOR_PANEL_LIST_UPDATED, this._wireHandlers.onListUpdated);
-        this.eventBus.on(EventType.OPERATOR_HEARTBEAT_SENT,      this._wireHandlers.onHeartbeat);
+        this.eventBus.on(EventType.OPERATOR_HEARTBEAT_RECEIVED, this._wireHandlers.onHeartbeat);
 
         for (const eventType of _STATUS_UPDATED_VALUES) {
             this.eventBus.on(eventType, this._wireHandlers.onStatusUpdated);
@@ -147,7 +147,7 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        this._lastHeartbeat = Date.now();
+        this._lastHeartbeat = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
         this._isConnected = true;
         devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
         this._applyOperatorState({ cause: 'heartbeat' });
@@ -263,6 +263,10 @@ export class OperatorPanel {
 
         this.metricsDetailsExpanded = false;
 
+        this.operatorListCollapsible = document.getElementById('operator-list-collapsible');
+        this.operatorListCollapsibleBar = document.getElementById('operator-list-collapsible-bar');
+        this.operatorListBarTitle = document.getElementById('operator-list-bar-title');
+        this.operatorListBarChevron = document.getElementById('operator-list-bar-chevron');
         this.operatorList = document.getElementById('operator-list');
         this.drawerFooter = document.getElementById('operator-drawer-footer');
         this.bindAllBtn = document.getElementById('bind-all-btn');
@@ -276,6 +280,9 @@ export class OperatorPanel {
         this.downloadCollapsibleContent = document.getElementById('operator-download-collapsible-content');
         this.downloadSectionExpanded = true;
         this.downloadSectionPopulated = false;
+
+        // Operator list collapsible section
+        this.operatorListSectionExpanded = true;
 
         // Operator list state
         this.operators = [];
@@ -317,6 +324,10 @@ export class OperatorPanel {
         if (this.downloadSectionExpanded) {
             this.expandDownloadSection();
         }
+
+        if (this.operatorListSectionExpanded && this.operatorListCollapsible) {
+            this.operatorListCollapsible.classList.add('expanded');
+        }
     }
 
     bindEvents() {
@@ -342,6 +353,13 @@ export class OperatorPanel {
             this.downloadCollapsibleBar.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.toggleDownloadSection();
+            });
+        }
+
+        if (this.operatorListCollapsibleBar) {
+            this.operatorListCollapsibleBar.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleOperatorListSection();
             });
         }
 
@@ -398,6 +416,26 @@ export class OperatorPanel {
         this.updateStatus(OperatorStatus.OFFLINE);
     }
 
+    toggleOperatorListSection() {
+        this.operatorListSectionExpanded = !this.operatorListSectionExpanded;
+        if (this.operatorListCollapsible) {
+            if (this.operatorListSectionExpanded) {
+                this.operatorListCollapsible.classList.add('expanded');
+                this.operatorListCollapsible.classList.remove('collapsed');
+            } else {
+                this.operatorListCollapsible.classList.remove('expanded');
+                this.operatorListCollapsible.classList.add('collapsed');
+            }
+        }
+        devLogger.log('[OPERATOR] Operator list section toggled:', this.operatorListSectionExpanded);
+    }
+
+    updateOperatorListBarTitle() {
+        if (!this.operatorListBarTitle) return;
+        const boundCount = this.boundOperatorIds.length;
+        this.operatorListBarTitle.textContent = `(${boundCount}) Operators Bound`;
+    }
+
     displayInitialOperatorStatus() {
         if (!this.webSessionModel) return;
 
@@ -434,7 +472,7 @@ export class OperatorPanel {
     destroy() {
         if (this._wireHandlers) {
             this.eventBus.off(EventType.OPERATOR_PANEL_LIST_UPDATED, this._wireHandlers.onListUpdated);
-            this.eventBus.off(EventType.OPERATOR_HEARTBEAT_SENT,      this._wireHandlers.onHeartbeat);
+            this.eventBus.off(EventType.OPERATOR_HEARTBEAT_RECEIVED, this._wireHandlers.onHeartbeat);
             for (const eventType of _STATUS_UPDATED_VALUES) {
                 this.eventBus.off(eventType, this._wireHandlers.onStatusUpdated);
             }

@@ -86,17 +86,20 @@ export const OperatorListMixin = {
             const operatorName = operator.name || 'Unknown';
             const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (systemInfo.hostname || ' - ');
 
-            const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.web_session_id === currentWebSessionId;
+            const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
 
             if (isBoundToMe) {
                 item.classList.add('bound');
-                item.classList.add('expanded');
                 if (!this.boundOperatorIds.includes(operator.operator_id)) {
                     this.boundOperatorIds.push(operator.operator_id);
                 }
             } else if (isBoundElsewhere) {
                 item.classList.add('bound-elsewhere');
+            }
+
+            if (operator.is_g8ep) {
+                item.classList.add('is-g8ep');
             }
 
             const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
@@ -145,9 +148,11 @@ export const OperatorListMixin = {
                     <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
+                    ${operator.is_g8ep ? `
                     <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">restart_alt</span>
                     </button>
+                    ` : ''}
                     <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">vpn_key</span>
                     </button>
@@ -269,6 +274,7 @@ export const OperatorListMixin = {
 
         this.updateBindAllButtonVisibility();
         this.updateUnbindAllButtonVisibility();
+        this.updateOperatorListBarTitle();
     },
 
     renderPaginationControls(totalOperators, startSlot = 1, endSlot = 0) {

@@ -13,9 +13,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
-import { EventEmitter } from 'events';
 import { OperatorStatus } from '../../constants/operator.js';
-import { Collections } from '../../constants/collections.js';
 import { 
     OperatorDocument, 
     OperatorStatusInfo, 
@@ -24,13 +22,11 @@ import {
     OperatorSlot,
 } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
-import { HistoryEventType } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
 
 import { OperatorSlotService } from './operator_slot_service.js';
 import { OperatorRelayService } from './operator_relay_service.js';
 import { OperatorNotificationService } from './operator_notification_service.js';
-import { OperatorDataService } from './operator_data_service.js';
 
 /**
  * OperatorService (Domain Layer)
@@ -137,8 +133,8 @@ class OperatorService {
         const operatorSession = operator.operator_session_id && this.operatorSessionService
             ? await this.operatorSessionService.validateSession(operator.operator_session_id)
             : null;
-        const webSession = operator.web_session_id && this.webSessionService
-            ? await this.webSessionService.validateSession(operator.web_session_id)
+        const webSession = operator.bound_web_session_id && this.webSessionService
+            ? await this.webSessionService.validateSession(operator.bound_web_session_id)
             : null;
         return OperatorWithSessionContext.create(operator, operatorSession, webSession);
     }
@@ -165,16 +161,6 @@ class OperatorService {
         return this.relay.relayApprovalResponseToG8ee(approvalData, g8eContext);
     }
 
-    // --- Notifications ---
-
-    async broadcastOperatorListToSession(userId, webSessionId) {
-        return this.notifications.broadcastOperatorListToSession(userId, webSessionId, this.calculateSlotUsage.bind(this));
-    }
-
-    async _broadcastOperatorListToUser(userId) {
-        return this.notifications.broadcastOperatorListToUser(userId, this.calculateSlotUsage.bind(this));
-    }
-
     // --- Slots ---
 
     async initializeOperatorSlots(userId, organizationId) {
@@ -182,7 +168,7 @@ class OperatorService {
     }
 
     async refreshOperatorApiKey(operatorId, userId) {
-        return this.slots.refreshOperatorApiKey(operatorId, userId, this._broadcastOperatorListToUser.bind(this));
+        return this.slots.refreshOperatorApiKey(operatorId, userId);
     }
 
     async createOperatorSlot(params) {
@@ -194,12 +180,6 @@ class OperatorService {
      */
     async claimOperatorSlot(operatorId, params) {
         const success = await this.slots.claimSlot(operatorId, params);
-        if (success) {
-            const operator = await this.getOperator(operatorId);
-            if (operator && operator.user_id) {
-                await this._broadcastOperatorListToUser(operator.user_id);
-            }
-        }
         return success;
     }
 
@@ -242,21 +222,18 @@ class OperatorService {
             
             // Re-bind any operators that were bound to a different session ID (tab swap/refresh)
             for (const op of allOperators) {
-                if (op.status === OperatorStatus.BOUND && op.web_session_id && op.web_session_id !== webSessionId) {
-                    logger.info('[OPERATOR-SERVICE] Updating BOUND Operator web_session_id on reconnect', {
+                if (op.status === OperatorStatus.BOUND && op.bound_web_session_id && op.bound_web_session_id !== webSessionId) {
+                    logger.info('[OPERATOR-SERVICE] Updating BOUND Operator bound_web_session_id on reconnect', {
                         operator_id: op.operator_id,
-                        old_web_session_id: redactWebSessionId(op.web_session_id),
-                        new_web_session_id: redactWebSessionId(webSessionId)
+                        old_bound_web_session_id: redactWebSessionId(op.bound_web_session_id),
+                        new_bound_web_session_id: redactWebSessionId(webSessionId)
                     });
-                    // We call updateWebSessionLink but skip broadcast since we'll do a full list push below
-                    await this.updateWebSessionLink(op.operator_id, webSessionId, { skipBroadcast: true });
+                    await this.updateWebSessionLink(op.operator_id, webSessionId);
                 }
             }
 
-            // Push the full current operator list to the new connection
-            await this.broadcastOperatorListToSession(userId, webSessionId);
-            
-            logger.info('[OPERATOR-SERVICE] Proactively sent Operator list on connection', {
+            // Keepalive now provides full operator list - no need to push on connection
+            logger.info('[OPERATOR-SERVICE] Synced operator session on connection', {
                 webSessionId: redactWebSessionId(webSessionId),
                 userId
             });
@@ -272,7 +249,7 @@ class OperatorService {
      * Update operator's web session link.
      */
     async updateWebSessionLink(operatorId, webSessionId, options = {}) {
-        return this.operatorDataService.updateOperator(operatorId, { web_session_id: webSessionId });
+        return this.operatorDataService.updateOperator(operatorId, { bound_web_session_id: webSessionId });
     }
 
     async queryOperators(filters) {
@@ -294,7 +271,6 @@ class OperatorService {
         });
         
         await this.operatorDataService.createOperator(operatorId, freshOperator);
-        await this._broadcastOperatorListToUser(existing.user_id);
         
         // After reset, we should probably inform g8ee if it was tracking this operator
         const g8eContext = await this.getOperatorWithSessionContext(operatorId);
@@ -312,7 +288,6 @@ class OperatorService {
         const userId = existing.user_id;
 
         await this.operatorDataService.deleteOperator(operatorId);
-        await this._broadcastOperatorListToUser(userId);
 
         const g8eContext = await this.getOperatorWithSessionContext(operatorId);
         if (g8eContext) {

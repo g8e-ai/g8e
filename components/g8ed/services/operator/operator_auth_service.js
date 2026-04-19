@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { now } from '../../models/base.js';
 import { OperatorAuthResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
@@ -21,7 +20,6 @@ import {
     OperatorAuthError,
     AuthError,
     BEARER_PREFIX,
-    OperatorSessionRole,
     AuthMode,
 } from '../../constants/auth.js';
 import { SessionType } from '../../constants/session.js';
@@ -318,7 +316,7 @@ export class OperatorAuthService {
             organization_id,
         });
 
-        const web_session_id = operator.web_session_id || null;
+        const bound_web_session_id = operator.bound_web_session_id || null;
         const parsedSystemInfo = SystemInfo.parse(system_info || {});
 
         const claimStatus = operator.status === OperatorStatus.BOUND
@@ -327,7 +325,7 @@ export class OperatorAuthService {
 
         await this.operatorService.claimOperatorSlot(operator_id, {
             operator_session_id,
-            web_session_id,
+            web_session_id: bound_web_session_id,
             system_info: parsedSystemInfo,
             operator_type: operator.operator_type || null,
             status: claimStatus,
@@ -337,7 +335,7 @@ export class OperatorAuthService {
 
         try {
             const g8eContext = G8eHttpContext.parse({
-                web_session_id:  web_session_id || operator_session_id,
+                web_session_id:  bound_web_session_id || operator_session_id,
                 user_id,
                 organization_id,
                 bound_operators: [

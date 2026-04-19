@@ -235,6 +235,10 @@ export const BindOperatorsMixin = {
         const operatorsListHtml = activeOperators.map(op => this._createBindAllOperatorItem(op)).join('');
         const htmlContent = `
             <div class="bind-all-operators-container">
+                <div class="bind-all-operators-header">
+                    <input type="checkbox" id="select-all-operators" class="select-all-checkbox" checked>
+                    <label for="select-all-operators">Select All</label>
+                </div>
                 <div class="bind-all-operators-list">
                     ${operatorsListHtml}
                 </div>
@@ -255,6 +259,25 @@ export const BindOperatorsMixin = {
             htmlContent,
             onConfirm: async (overlay) => {
                 await this.executeBindAll(overlay, activeOperators);
+            },
+            onRender: (overlay) => {
+                const selectAllCheckbox = overlay.querySelector('#select-all-operators');
+                const operatorCheckboxes = overlay.querySelectorAll('.operator-select-checkbox');
+
+                if (selectAllCheckbox && operatorCheckboxes.length > 0) {
+                    selectAllCheckbox.addEventListener('change', (e) => {
+                        operatorCheckboxes.forEach(cb => {
+                            cb.checked = e.target.checked;
+                        });
+                    });
+
+                    operatorCheckboxes.forEach(cb => {
+                        cb.addEventListener('change', () => {
+                            const allChecked = Array.from(operatorCheckboxes).every(c => c.checked);
+                            selectAllCheckbox.checked = allChecked;
+                        });
+                    });
+                }
             }
         });
 
@@ -269,9 +292,29 @@ export const BindOperatorsMixin = {
         if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
         try {
-            const operatorIds = activeOperators.map(op => op.operator_id);
+            const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
+            const selectedOperatorIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    selectedOperatorIds.push(cb.getAttribute('data-operator-id'));
+                }
+            });
+
+            if (selectedOperatorIds.length === 0) {
+                if (feedbackContainer) {
+                    await templateLoader.renderTo(feedbackContainer, 'bind-result-feedback', { 
+                        resultClass: 'error', 
+                        icon: 'error', 
+                        message: 'No operators selected' 
+                    });
+                }
+                if (processingIndicator) processingIndicator.classList.add('initially-hidden');
+                await new Promise(r => setTimeout(r, 2000));
+                throw new Error('No operators selected');
+            }
+
             const service = this.operatorPanelService || operatorPanelService;
-            const response = await service.bindAllOperators(operatorIds);
+            const response = await service.bindAllOperators(selectedOperatorIds);
 
             if (!response) {
                 throw new Error('No response from operator panel service');
@@ -285,14 +328,14 @@ export const BindOperatorsMixin = {
             const result = await response.json();
             devLogger.log('[OPERATOR] Bind-all completed successfully:', result);
 
-            for (const opId of result.bound_operator_ids || operatorIds) {
+            for (const opId of result.bound_operator_ids || selectedOperatorIds) {
                 if (!this.boundOperatorIds.includes(opId)) {
                     this.boundOperatorIds.push(opId);
                 }
             }
 
             if (feedbackContainer) {
-                const boundCount = result.bound_count || operatorIds.length;
+                const boundCount = result.bound_count || selectedOperatorIds.length;
                 const label = `${boundCount} operator${boundCount !== 1 ? 's' : ''} bound successfully`;
                 await templateLoader.renderTo(feedbackContainer, 'bind-result-feedback', { 
                     resultClass: 'success', 

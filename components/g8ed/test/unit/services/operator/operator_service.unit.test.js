@@ -173,12 +173,10 @@ describe('OperatorService', () => {
             
             vi.spyOn(service, 'getUserVisibleOperatorStats').mockResolvedValue({ operators });
             vi.spyOn(service, 'updateWebSessionLink').mockResolvedValue(true);
-            vi.spyOn(service, 'broadcastOperatorListToSession').mockResolvedValue(true);
 
             await service.syncSessionOnConnect(userId, webSessionId);
 
-            expect(service.updateWebSessionLink).toHaveBeenCalledWith('op-1', webSessionId, { skipBroadcast: true });
-            expect(service.broadcastOperatorListToSession).toHaveBeenCalledWith(userId, webSessionId);
+            expect(service.updateWebSessionLink).toHaveBeenCalledWith('op-1', webSessionId);
         });
     });
 
@@ -201,14 +199,12 @@ describe('OperatorService', () => {
             };
             mocks.operatorDataService.getOperator.mockResolvedValue(existing);
             vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.resetOperator('op-1');
 
             expect(result.success).toBe(true);
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
             expect(mocks.operatorDataService.createOperator).toHaveBeenCalled();
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
     });
 
@@ -224,7 +220,6 @@ describe('OperatorService', () => {
             };
             mocks.operatorDataService.getOperator.mockResolvedValue(existing);
             vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.terminateOperator('op-1');
 
@@ -232,7 +227,6 @@ describe('OperatorService', () => {
             expect(result.operator_id).toBe('op-1');
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
 
         it('should return error if operator not found', async () => {
@@ -344,20 +338,6 @@ describe('OperatorService', () => {
         });
     });
 
-    describe('Notifications', () => {
-        it('should delegate broadcastOperatorListToSession to notifications subservice', async () => {
-            vi.spyOn(service.notifications, 'broadcastOperatorListToSession').mockResolvedValue(true);
-            await service.broadcastOperatorListToSession('u-1', 'ws-1');
-            expect(service.notifications.broadcastOperatorListToSession).toHaveBeenCalledWith('u-1', 'ws-1', expect.any(Function));
-        });
-
-        it('should delegate _broadcastOperatorListToUser to notifications subservice', async () => {
-            vi.spyOn(service.notifications, 'broadcastOperatorListToUser').mockResolvedValue(true);
-            await service._broadcastOperatorListToUser('u-1');
-            expect(service.notifications.broadcastOperatorListToUser).toHaveBeenCalledWith('u-1', expect.any(Function));
-        });
-    });
-
     describe('Slots & Key Management', () => {
         it('should delegate initializeOperatorSlots to slots subservice', async () => {
             vi.spyOn(service.slots, 'initializeOperatorSlots').mockResolvedValue(true);
@@ -368,7 +348,7 @@ describe('OperatorService', () => {
         it('should delegate refreshOperatorApiKey to slots subservice', async () => {
             vi.spyOn(service.slots, 'refreshOperatorApiKey').mockResolvedValue(true);
             await service.refreshOperatorApiKey('op-1', 'u-1');
-            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1', expect.any(Function));
+            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1');
         });
 
         it('should delegate createOperatorSlot to slots subservice', async () => {
@@ -378,23 +358,19 @@ describe('OperatorService', () => {
             expect(service.slots.createOperatorSlot).toHaveBeenCalledWith(params);
         });
 
-        it('should claim slot and broadcast update on success', async () => {
+        it('should claim slot and not broadcast since keepalive provides full list', async () => {
             vi.spyOn(service.slots, 'claimSlot').mockResolvedValue(true);
             vi.spyOn(service, 'getOperator').mockResolvedValue({ user_id: 'u-1' });
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.claimOperatorSlot('op-1', { fingerprint: 'fp' });
             expect(result).toBe(true);
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
 
-        it('should not broadcast if claim fails', async () => {
+        it('should return false if claim fails', async () => {
             vi.spyOn(service.slots, 'claimSlot').mockResolvedValue(false);
-            vi.spyOn(service, '_broadcastOperatorListToUser');
 
             const result = await service.claimOperatorSlot('op-1', { fingerprint: 'fp' });
             expect(result).toBe(false);
-            expect(service._broadcastOperatorListToUser).not.toHaveBeenCalled();
         });
     });
 

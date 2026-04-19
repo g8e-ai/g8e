@@ -19,7 +19,6 @@ import {
     BindOperatorsResponse,
     UnbindOperatorsResponse,
 } from '../../models/operator_model.js';
-import { now } from '../../models/base.js';
 
 export class BindOperatorsService {
     /**
@@ -81,10 +80,10 @@ export class BindOperatorsService {
                     continue;
                 }
 
-                // 1. Update Operator document (status + web_session_id)
+                // 1. Update Operator document (status + bound_web_session_id)
                 await this.operatorService.operatorDataService.updateOperator(operatorId, { 
                     status: OperatorStatus.BOUND,
-                    web_session_id: webSessionId 
+                    bound_web_session_id: webSessionId 
                 });
 
                 // 2. Update Web Session document
@@ -125,10 +124,6 @@ export class BindOperatorsService {
                 failed.push(operatorId);
                 errors.push({ operator_id: operatorId, error: err.message });
             }
-        }
-
-        if (bound.length > 0) {
-            await this.operatorService.broadcastOperatorListToSession(userId, webSessionId).catch(() => {});
         }
 
         const success = bound.length > 0 || failed.length === 0;
@@ -182,10 +177,10 @@ export class BindOperatorsService {
 
                 const operatorSessionId = operator.operator_session_id;
 
-                // 1. Update Operator document (status + web_session_id)
+                // 1. Update Operator document (status + bound_web_session_id)
                 await this.operatorService.operatorDataService.updateOperator(operatorId, { 
                     status: OperatorStatus.ACTIVE,
-                    web_session_id: null 
+                    bound_web_session_id: null 
                 });
 
                 // 2. Update Web Session document
@@ -229,10 +224,6 @@ export class BindOperatorsService {
                 failed.push(operatorId);
                 errors.push({ operator_id: operatorId, error: err.message });
             }
-        }
-
-        if (unbound.length > 0) {
-            await this.operatorService.broadcastOperatorListToSession(userId, webSessionId).catch(() => {});
         }
 
         const success = unbound.length > 0 || failed.length === 0;

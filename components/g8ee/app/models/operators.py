@@ -33,7 +33,6 @@ from app.constants import (
     CloudIntent,
     CloudSubtype,
     CommandErrorType,
-    ComponentName,
     ExecutionStatus,
     FileOperation,
     HeartbeatType,
@@ -45,7 +44,6 @@ from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,
-    FileEditResult,
     FileOperationRiskAnalysis,
 )
 from app.utils.timestamp import now
@@ -176,7 +174,7 @@ class OperatorDocument(G8eBaseModel):
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
-    web_session_id: str | None = Field(default=None, description="Bound web session ID")
+    bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     last_heartbeat: datetime | None = Field(default=None, description="Last heartbeat timestamp")
     system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
@@ -993,7 +991,7 @@ class BindingValidationResult(G8eBaseModel):
     web_session_id: str | None = Field(default=None, description="Web session ID")
     operator_id: str = Field(description="Operator ID")
     operator_status: OperatorStatus | None = Field(default=None, description="Operator status")
-    operator_web_session_id: str | None = Field(default=None, description="Operator's bound web session ID")
+    operator_bound_web_session_id: str | None = Field(default=None, description="Operator's bound web session ID")
     expected_operator_session_id: str | None = Field(default=None, description="Expected operator session ID")
     investigation_id: str | None = Field(default=None, description="Investigation ID for context")
 

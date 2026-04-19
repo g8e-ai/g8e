@@ -137,12 +137,19 @@
             </div>
             </div><!-- End operator-metrics-details -->
         </div>
-        <div class="operator-drawer-content" id="operator-drawer-content">
-            <div class="operator-drawer-loading" id="operator-drawer-loading">
-                Loading operators...
+        <div class="operator-list-collapsible" id="operator-list-collapsible">
+            <button class="operator-list-collapsible-bar" id="operator-list-collapsible-bar">
+                <span class="material-symbols-outlined operator-list-bar-icon">groups</span>
+                <span class="operator-list-bar-title" id="operator-list-bar-title">(0) Operators Bound</span>
+                <span class="material-symbols-outlined operator-list-bar-chevron" id="operator-list-bar-chevron">expand_more</span>
+            </button>
+            <div class="operator-drawer-content" id="operator-drawer-content">
+                <div class="operator-drawer-loading" id="operator-drawer-loading">
+                    Loading operators...
+                </div>
+                <div class="operator-list" id="operator-list"></div>
+                <div class="operator-drawer-empty" id="operator-drawer-empty"></div>
             </div>
-            <div class="operator-list" id="operator-list"></div>
-            <div class="operator-drawer-empty" id="operator-drawer-empty"></div>
         </div>
         <div class="operator-drawer-footer" id="operator-drawer-footer">
             <button class="bind-all-btn initially-hidden" id="bind-all-btn">

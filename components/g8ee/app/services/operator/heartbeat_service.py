@@ -17,7 +17,6 @@ import logging
 from app.clients.pubsub_client import PubSubClient
 from app.errors import ConfigurationError
 from app.constants.events import EventType
-from app.constants.status import OperatorStatus
 from app.constants.channels import PubSubChannel
 from app.models.events import SessionEvent
 from app.models.operators import (
@@ -29,27 +28,17 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
+from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
 
 logger = logging.getLogger(__name__)
-
-VALID_HEARTBEAT_STATUSES = {
-    OperatorStatus.ACTIVE,
-    OperatorStatus.BOUND,
-    OperatorStatus.STALE,
-    OperatorStatus.OFFLINE,
-}
 
 
 class OperatorHeartbeatService:
 
     def __init__(
         self,
-        operator_data_service: "OperatorDataServiceProtocol",
-        event_service: "EventServiceProtocol",
+        operator_data_service: OperatorDataServiceProtocol,
+        event_service: EventServiceProtocol,
     ):
         self.operator_data_service = operator_data_service
         self.event_service = event_service
@@ -286,11 +275,11 @@ class OperatorHeartbeatService:
         payload: G8eoHeartbeatPayload,
         operator: OperatorDocument,
     ) -> None:
-        web_session_id = operator.web_session_id
+        web_session_id = operator.bound_web_session_id
         user_id = operator.user_id
         if not web_session_id or not user_id:
-            logger.error(
-                "[HEARTBEAT] Cannot push SSE — operator %s has missing web_session_id or user_id (broken bind)",
+            logger.info(
+                "[HEARTBEAT] Skipping SSE push for operator %s - web_session_id only present for BOUND operators (operator is ACTIVE, not bound)",
                 operator.operator_id,
                 extra={
                     "operator_id": operator.operator_id,

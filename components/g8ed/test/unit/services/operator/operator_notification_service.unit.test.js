@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorNotificationService } from '@g8ed/services/operator/operator_notification_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
 import { EventType } from '@g8ed/constants/events.js';
-import { OperatorDocument, OperatorListUpdatedEvent, OperatorSlot } from '@g8ed/models/operator_model.js';
+import { OperatorPanelListUpdatedEvent } from '@g8ed/models/sse_models.js';
 
 describe('OperatorNotificationService', () => {
     let service;
@@ -40,80 +40,86 @@ describe('OperatorNotificationService', () => {
     const calculateSlotUsageFn = (ops) => ({ usedSlots: ops.filter(op => op.status === OperatorStatus.ACTIVE).length });
 
     describe('broadcastOperatorListToUser', () => {
-        it('should broadcast updated list to all active user web sessions', async () => {
+        it('should be no-op since keepalive now provides full operator list', async () => {
             const userId = 'u-123';
-            const operators = [
-                new OperatorDocument({ operator_id: 'op-1', status: OperatorStatus.ACTIVE, user_id: userId }),
-                new OperatorDocument({ operator_id: 'op-2', status: OperatorStatus.OFFLINE, user_id: userId }),
-                new OperatorDocument({ operator_id: 'op-3', status: OperatorStatus.TERMINATED, user_id: userId }),
-            ];
-
-            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
-            mocks.webSessionService.getUserActiveSessions.mockResolvedValue(['ws-1', 'ws-2']);
 
             await service.broadcastOperatorListToUser(userId, calculateSlotUsageFn);
 
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(2);
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledWith('ws-1', expect.any(OperatorListUpdatedEvent));
-
-            const event = mocks.sseService.publishEvent.mock.calls[0][1];
-            expect(event.operators).toHaveLength(2); // op-3 is filtered out
-            expect(event.active_count).toBe(1);
-
-            const slot = event.operators[0];
-            expect(slot).toBeInstanceOf(OperatorSlot);
-            expect(slot.operator_id).toBe('op-1');
-            expect(slot.status).toBe(OperatorStatus.ACTIVE);
-            expect(slot).not.toHaveProperty('api_key');
-            expect(slot).not.toHaveProperty('history_trail');
-        });
-
-        it('should do nothing if user has no active sessions', async () => {
-            mocks.operatorDataService.queryOperators.mockResolvedValue([]);
-            mocks.webSessionService.getUserActiveSessions.mockResolvedValue([]);
-
-            await service.broadcastOperatorListToUser('u-123', calculateSlotUsageFn);
-
             expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
-        });
-
-        it('should handle errors gracefully', async () => {
-            mocks.operatorDataService.queryOperators.mockRejectedValue(new Error('DB Error'));
-            
-            await expect(service.broadcastOperatorListToUser('u-123', calculateSlotUsageFn)).resolves.not.toThrow();
+            expect(mocks.operatorDataService.queryOperators).not.toHaveBeenCalled();
+            expect(mocks.webSessionService.getUserActiveSessions).not.toHaveBeenCalled();
         });
     });
 
     describe('broadcastOperatorListToSession', () => {
-        it('should broadcast updated list to a specific web session', async () => {
+        it('should be no-op since keepalive now provides full operator list', async () => {
             const userId = 'u-123';
             const webSessionId = 'ws-123';
-            const operators = [
-                new OperatorDocument({ operator_id: 'op-1', status: OperatorStatus.ACTIVE, user_id: userId }),
-            ];
-
-            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 
             await service.broadcastOperatorListToSession(userId, webSessionId, calculateSlotUsageFn);
 
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(1);
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledWith(webSessionId, expect.any(OperatorListUpdatedEvent));
+            expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
+            expect(mocks.operatorDataService.queryOperators).not.toHaveBeenCalled();
         });
 
-        it('should not throw if sseService is missing (race condition safety)', async () => {
+        it('should handle missing webSessionId gracefully', async () => {
+            await service.broadcastOperatorListToSession('u-1', null, calculateSlotUsageFn);
+            expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('broadcastOperatorContext', () => {
+        it('should broadcast operator context to web session', async () => {
+            const webSessionId = 'ws-123';
+            const operatorId = 'op-1';
+            const context = {
+                case_id: 'case-123',
+                investigation_id: 'inv-456',
+                task_id: 'task-789',
+            };
+
+            await service.broadcastOperatorContext(webSessionId, operatorId, context);
+
+            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(1);
+            expect(mocks.sseService.publishEvent).toHaveBeenCalledWith(webSessionId, expect.any(OperatorPanelListUpdatedEvent));
+
+            const event = mocks.sseService.publishEvent.mock.calls[0][1];
+            expect(event.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
+            expect(event.data.operator_id).toBe(operatorId);
+            expect(event.data.case_id).toBe(context.case_id);
+            expect(event.data.investigation_id).toBe(context.investigation_id);
+            expect(event.data.task_id).toBe(context.task_id);
+            expect(event.data.timestamp).toBeInstanceOf(Date);
+        });
+
+        it('should handle missing webSessionId gracefully', async () => {
+            await service.broadcastOperatorContext(null, 'op-1', {});
+            expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
+        });
+
+        it('should handle missing sseService gracefully', async () => {
             const unstableService = new OperatorNotificationService({
                 webSessionService: mocks.webSessionService,
                 operatorDataService: mocks.operatorDataService,
                 sseService: null
             });
 
-            await expect(unstableService.broadcastOperatorListToSession('u-1', 'ws-1', calculateSlotUsageFn))
+            await expect(unstableService.broadcastOperatorContext('ws-1', 'op-1', {}))
                 .resolves.not.toThrow();
         });
 
-        it('should handle missing webSessionId gracefully', async () => {
-            await service.broadcastOperatorListToSession('u-1', null, calculateSlotUsageFn);
-            expect(mocks.operatorDataService.queryOperators).not.toHaveBeenCalled();
+        it('should handle null context fields', async () => {
+            const webSessionId = 'ws-123';
+            const operatorId = 'op-1';
+
+            await service.broadcastOperatorContext(webSessionId, operatorId, {});
+
+            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(1);
+            const event = mocks.sseService.publishEvent.mock.calls[0][1];
+            expect(event.data.operator_id).toBe(operatorId);
+            expect(event.data.case_id).toBeNull();
+            expect(event.data.investigation_id).toBeNull();
+            expect(event.data.task_id).toBeNull();
         });
     });
 });

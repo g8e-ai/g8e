@@ -34,7 +34,6 @@ describe('BindOperatorsService', () => {
                 getOperator: vi.fn(),
                 getOperatorWithSessionContext: vi.fn(),
                 relayRegisterOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
-                broadcastOperatorListToSession: vi.fn().mockResolvedValue(),
                 operatorDataService: {
                     updateOperator: vi.fn(),
                 },
@@ -102,7 +101,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -138,7 +136,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -186,7 +183,6 @@ describe('BindOperatorsService', () => {
                 .mockResolvedValueOnce(g8eContext1)
                 .mockResolvedValueOnce(g8eContext2);
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-2'], 
@@ -226,7 +222,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(op1, { id: 'os-1' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValueOnce(g8eContextWrapper);
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-missing'], 
@@ -264,7 +259,6 @@ describe('BindOperatorsService', () => {
                 .mockResolvedValueOnce(OperatorWithSessionContext.create(op1, { id: 'os-1' }, { id: 'ws-123' }))
                 .mockResolvedValueOnce(OperatorWithSessionContext.create(op2, { id: 'os-2' }, { id: 'ws-123' }));
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-2'], 
@@ -302,7 +296,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-reg-1' }, { id: 'ws-reg-1' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             await service.bindOperators(new BindOperatorsRequest({
                 operator_ids: ['op-reg-1'],
@@ -328,7 +321,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-reg-2' }, { id: 'ws-reg-2' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             await service.unbindOperators(new UnbindOperatorsRequest({
                 operator_ids: ['op-reg-2'],
@@ -356,7 +348,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-wrapper-1' }, { id: 'ws-wrapper-1' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-wrapper-1'],
@@ -425,7 +416,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(op2, { id: 'os-new-2' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-already-1', 'op-new-2'],
@@ -483,7 +473,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-wrapper' }, { id: 'ws-unbind-wrapper' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = {
                 operator_ids: ['op-unbind-wrapper'],
@@ -512,7 +501,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-instance' }, { id: 'ws-unbind-instance' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-instance'],
@@ -584,7 +572,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(op1, { id: 'os-unbind-1' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-1', 'op-missing'],
@@ -609,7 +596,6 @@ describe('BindOperatorsService', () => {
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-no-session-unbind'],
@@ -645,7 +631,6 @@ describe('BindOperatorsService', () => {
                 OperatorWithSessionContext.create(operator, { id: 'os-relay-fail' }, { id: 'ws-123' })
             );
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-relay-fail'],
@@ -673,7 +658,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-broadcast-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession.mockRejectedValue(new Error('SSE down'));
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-broadcast-fail'],
@@ -700,7 +684,6 @@ describe('BindOperatorsService', () => {
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-relay-fail' }, { id: 'ws-123' })
             );
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-relay-fail'],
@@ -727,7 +710,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-broadcast-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession.mockRejectedValue(new Error('SSE down'));
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-broadcast-fail'],
@@ -754,7 +736,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.bindingService.getBoundOperatorSessionIds.mockResolvedValue([]);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-null-context'],
@@ -778,7 +759,6 @@ describe('BindOperatorsService', () => {
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-null-context-unbind'],

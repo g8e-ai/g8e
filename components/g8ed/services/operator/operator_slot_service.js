@@ -89,7 +89,7 @@ export class OperatorSlotService {
             terminated_at: ts,
             updated_at: ts,
             operator_session_id: null,
-            web_session_id: null,
+            bound_web_session_id: null,
         };
 
         await this.operatorDataService.updateOperator(operatorId, terminateData);
@@ -200,15 +200,22 @@ export class OperatorSlotService {
             ? system_info
             : SystemInfo.parse(system_info || {});
 
+        const operator = await this.operatorDataService.getOperator(operatorId);
+        
         const updateData = {
             status: status || OperatorStatus.ACTIVE,
             operator_session_id,
-            web_session_id,
+            bound_web_session_id: web_session_id,
             system_info: info,
             claimed: true,
             updated_at: ts,
             last_heartbeat: ts,
         };
+
+        // Set first_deployed if not already set (first time operator becomes ACTIVE)
+        if (operator && !operator.first_deployed) {
+            updateData.first_deployed = ts;
+        }
 
         if (operator_type) {
             updateData.operator_type = operator_type;
@@ -221,7 +228,7 @@ export class OperatorSlotService {
             actor: SourceComponent.G8ED,
             details: {
                 operator_session_id,
-                web_session_id,
+                bound_web_session_id: web_session_id,
                 hostname: info.hostname,
                 fingerprint: info.system_fingerprint
             }

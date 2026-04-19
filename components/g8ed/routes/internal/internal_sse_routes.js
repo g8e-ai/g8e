@@ -21,7 +21,6 @@
 import express from 'express';
 import { SSEPushRequest } from '../../models/request_models.js';
 import { G8eePassthroughEvent } from '../../models/sse_models.js';
-import { OperatorListUpdatedEvent } from '../../models/operator_model.js';
 import { ErrorResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
@@ -33,7 +32,7 @@ import { EventType } from '../../constants/events.js';
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
-    const { sseService, operatorService } = services;
+    const { sseService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -72,32 +71,10 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
             const targetWebSessionId = pushReq.web_session_id;
 
-            let finalEvent;
-            
-            // Special handling for OPERATOR_PANEL_LIST_UPDATED: replace g8ee's single-operator payload
-            // with g8ed's full operator list for the frontend
-            if (pushReq.event.type === EventType.OPERATOR_PANEL_LIST_UPDATED) {
-                try {
-                    const operatorList = await operatorService.getUserOperators(pushReq.user_id);
-                    finalEvent = new OperatorListUpdatedEvent(operatorList);
-                    logger.info('[INTERNAL-HTTP] Replaced g8ee operator payload with full operator list', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        operatorCount: operatorList.operators?.length || 0
-                    });
-                } catch (err) {
-                    logger.error('[INTERNAL-HTTP] Failed to get operator list for OPERATOR_PANEL_LIST_UPDATED', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        error: err.message
-                    });
-                    // Fallback to original event if we can't get the operator list
-                    finalEvent = new G8eePassthroughEvent({ _payload: pushReq.event });
-                }
-            } else {
-                const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
-                    ? normalizeCitationNums(pushReq.event)
-                    : pushReq.event;
-                finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
-            }
+            const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
+                ? normalizeCitationNums(pushReq.event)
+                : pushReq.event;
+            const finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
 
             // Forward to SSE service for delivery
             const published = await sseService.publishEvent(targetWebSessionId, finalEvent, (status) => {
