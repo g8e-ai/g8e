@@ -118,10 +118,12 @@ export function createSSERouter({
             logger.error('[G8ED-SSE] pushInitialState failed', { error: err.message });
         });
 
-        // Sync operator session state
-        resolvedOperatorService.syncSessionOnConnect(req.userId, connectionId).catch(err => {
+        // Sync operator session state before sending keepalive to ensure operator list is up-to-date
+        try {
+            await resolvedOperatorService.syncSessionOnConnect(req.userId, connectionId);
+        } catch (err) {
             logger.error('[G8ED-SSE] syncSessionOnConnect failed', { error: err.message });
-        });
+        }
 
         // Track cleanup state to prevent duplicate cleanup on simultaneous close/error events
         let cleanedUp = false;
