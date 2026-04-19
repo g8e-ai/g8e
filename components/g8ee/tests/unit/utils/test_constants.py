@@ -1471,8 +1471,23 @@ class TestEventTypeMatchesSharedJSON:
     def test_tribunal_session_completed(self, ev):
         assert ev["ai"]["tribunal"]["session"]["completed"] == EventType.TRIBUNAL_SESSION_COMPLETED
 
-    def test_tribunal_session_fallback_triggered(self, ev):
-        assert ev["ai"]["tribunal"]["session"]["fallback"]["triggered"] == EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED
+    def test_tribunal_session_disabled(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["disabled"] == EventType.TRIBUNAL_SESSION_DISABLED
+
+    def test_tribunal_session_model_not_configured(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["model_not_configured"] == EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+
+    def test_tribunal_session_provider_unavailable(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["provider_unavailable"] == EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE
+
+    def test_tribunal_session_system_error(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["system_error"] == EventType.TRIBUNAL_SESSION_SYSTEM_ERROR
+
+    def test_tribunal_session_generation_failed(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["generation_failed"] == EventType.TRIBUNAL_SESSION_GENERATION_FAILED
+
+    def test_tribunal_session_verifier_failed(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["verifier_failed"] == EventType.TRIBUNAL_SESSION_VERIFIER_FAILED
 
     def test_tribunal_voting_pass_completed(self, ev):
         assert ev["ai"]["tribunal"]["voting"]["pass"]["completed"] == EventType.TRIBUNAL_VOTING_PASS_COMPLETED

@@ -15,31 +15,53 @@ from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.constants import (
     CommandGenerationOutcome,
-    TribunalFallbackReason,
     TribunalMember,
     VerifierReason,
 )
 
 
-class TribunalSystemError(Exception):
+class TribunalError(Exception):
+    """Base class for all Tribunal terminal-state failures.
+
+    Every subclass represents a distinct reason the Tribunal could not
+    produce a trusted command. There is no fallback — Sage never proposes
+    a command directly, so a failed Tribunal means the tool call must
+    fail. Callers should catch this base class (rather than each concrete
+    subclass) when mapping errors to user-facing tool-call failures, and
+    inspect the concrete type only when richer context is required.
+
+    Contract:
+      - ``request`` is always set to Sage's original natural-language request
+        so UI/log surfaces can show what the Tribunal was asked to do.
+      - ``user_message`` is the concise, human-readable string that should
+        be surfaced to the LLM and the UI as the tool-call error detail.
+      - Subclasses set ``user_message`` via their ``__init__`` and pass it
+        to ``super().__init__`` so ``str(exc)`` matches ``exc.user_message``.
+    """
+
+    def __init__(self, *, request: str, user_message: str) -> None:
+        self.request = request
+        self.user_message = user_message
+        super().__init__(user_message)
+
+
+class TribunalSystemError(TribunalError):
     """Raised when all Tribunal passes fail due to system errors.
 
     System errors include authentication failures, network errors, and
     configuration problems. These are distinct from legitimate model
-    disagreement and must halt command execution. There is no fallback:
-    Sage never proposes a command, so a failed Tribunal means there is
-    no command to execute.
+    disagreement and must halt command execution.
     """
 
     def __init__(self, pass_errors: list[str], request: str) -> None:
         self.pass_errors = pass_errors
-        self.request = request
         super().__init__(
-            f"All Tribunal passes failed due to system errors: {pass_errors}"
+            request=request,
+            user_message=f"Tribunal system error: {'; '.join(pass_errors)}",
         )
 
 
-class TribunalProviderUnavailableError(Exception):
+class TribunalProviderUnavailableError(TribunalError):
     """Raised when the LLM provider cannot be initialized.
 
     This indicates a configuration problem (invalid provider, missing
@@ -49,13 +71,13 @@ class TribunalProviderUnavailableError(Exception):
     def __init__(self, provider: str, error: str, request: str) -> None:
         self.provider = provider
         self.error = error
-        self.request = request
         super().__init__(
-            f"Tribunal provider unavailable ({provider}): {error}"
+            request=request,
+            user_message=f"Tribunal provider unavailable ({provider}): {error}",
         )
 
 
-class TribunalGenerationFailedError(Exception):
+class TribunalGenerationFailedError(TribunalError):
     """Raised when all generation passes fail for non-system reasons.
 
     This indicates legitimate model failures (hallucinations, refusals,
@@ -64,13 +86,13 @@ class TribunalGenerationFailedError(Exception):
 
     def __init__(self, pass_errors: list[str], request: str) -> None:
         self.pass_errors = pass_errors
-        self.request = request
         super().__init__(
-            f"All Tribunal generation passes failed: {pass_errors}"
+            request=request,
+            user_message=f"Tribunal generation failed: {'; '.join(pass_errors)}",
         )
 
 
-class TribunalVerifierFailedError(Exception):
+class TribunalVerifierFailedError(TribunalError):
     """Raised when the verifier fails and cannot validate the candidate.
 
     This includes empty responses, exceptions, or non-ok answers without
@@ -78,16 +100,26 @@ class TribunalVerifierFailedError(Exception):
     candidate and must halt execution.
     """
 
-    def __init__(self, reason: str, error: str | None, candidate_command: str) -> None:
+    def __init__(
+        self,
+        reason: VerifierReason,
+        error: str | None,
+        candidate_command: str,
+        request: str,
+    ) -> None:
         self.reason = reason
         self.error = error
         self.candidate_command = candidate_command
         super().__init__(
-            f"Tribunal verifier failed ({reason}): {error or 'no error details'}"
+            request=request,
+            user_message=(
+                f"Tribunal verifier failed ({reason.value}): "
+                f"{error or 'no error details'}"
+            ),
         )
 
 
-class TribunalModelNotConfiguredError(Exception):
+class TribunalModelNotConfiguredError(TribunalError):
     """Raised when no model is configured for the Tribunal pipeline.
 
     This occurs when neither assistant_model nor primary_model is set
@@ -95,16 +127,18 @@ class TribunalModelNotConfiguredError(Exception):
     silently guessing a provider-specific default.
     """
 
-    def __init__(self, provider: str, request: str = "") -> None:
+    def __init__(self, provider: str, request: str) -> None:
         self.provider = provider
-        self.request = request
         super().__init__(
-            f"Tribunal model not configured for provider {provider}: "
-            "set assistant_model or primary_model in LLM settings"
+            request=request,
+            user_message=(
+                f"Tribunal model not configured for provider {provider}: "
+                "set assistant_model or primary_model in LLM settings"
+            ),
         )
 
 
-class TribunalDisabledError(Exception):
+class TribunalDisabledError(TribunalError):
     """Raised when the Tribunal pipeline is disabled but a command was requested.
 
     Sage never proposes commands directly; the Tribunal is the sole command
@@ -112,11 +146,14 @@ class TribunalDisabledError(Exception):
     cannot produce a command and must fail loudly rather than silently.
     """
 
-    def __init__(self, request: str = "") -> None:
-        self.request = request
+    def __init__(self, request: str) -> None:
         super().__init__(
-            "Tribunal is disabled (llm_command_gen_enabled=False) but Sage requested a "
-            "command. Enable the Tribunal or disable the run_commands_with_operator tool."
+            request=request,
+            user_message=(
+                "Tribunal is disabled (llm_command_gen_enabled=False) but Sage "
+                "requested a command. Enable the Tribunal or disable the "
+                "run_commands_with_operator tool."
+            ),
         )
 
 
@@ -197,16 +234,73 @@ class TribunalSessionStartedPayload(G8eBaseModel):
     members: list[TribunalMember]
 
 
-class TribunalFallbackPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_SESSION_FALLBACK_TRIGGERED events.
+class TribunalSessionDisabledPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_DISABLED.
 
-    Emitted only for terminal Tribunal errors (provider unavailable, all
-    passes failed, etc.). There is no fallback command — the tool fails.
+    Emitted when the operator has disabled the Tribunal
+    (llm_command_gen_enabled=False) but Sage requested a command.
+    No work was attempted; the tool call fails with a refusal.
     """
-    reason: TribunalFallbackReason
     request: str
+
+
+class TribunalSessionModelNotConfiguredPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED.
+
+    Emitted when neither assistant_model nor primary_model is set for
+    the Tribunal's provider. No work was attempted; configuration must
+    be fixed before the tool can run.
+    """
+    request: str
+    provider: str
+    error: str
+
+
+class TribunalSessionProviderUnavailablePayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE.
+
+    Emitted when the LLM provider failed to initialize (invalid
+    credentials, unsupported provider, etc.). Infrastructure-level
+    failure distinct from per-pass generation errors.
+    """
+    request: str
+    provider: str
+    error: str
+
+
+class TribunalSessionSystemErrorPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_SYSTEM_ERROR.
+
+    Emitted when every generation pass failed with a system-class error
+    (auth, network, configuration). Distinguishes infrastructure
+    problems from legitimate model disagreement.
+    """
+    request: str
+    pass_errors: list[str]
+
+
+class TribunalSessionGenerationFailedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_GENERATION_FAILED.
+
+    Emitted when every generation pass failed for non-system reasons
+    (refusals, hallucinations, rate limits not classified as system
+    errors). The model side is the problem, not the infrastructure.
+    """
+    request: str
+    pass_errors: list[str]
+
+
+class TribunalSessionVerifierFailedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_VERIFIER_FAILED.
+
+    Emitted when voting produced a candidate but the verifier rejected
+    it and produced no valid revision. The tool call fails because no
+    trusted command was produced.
+    """
+    request: str
+    reason: VerifierReason
     error: str | None = None
-    pass_errors: list[str] | None = None
+    candidate_command: str
 
 
 class TribunalVotingCompletedPayload(G8eBaseModel):

@@ -107,20 +107,20 @@ class TestPipelineTemplateContract:
         kwargs = dict(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
-            intent="list processes",
+            request="list processes",
+            guidelines="",
             os="linux",
             shell="bash",
             user_context="root (uid=0)",
             working_directory="/home/user",
             operator_context="Hostname: host1\nOS: linux",
-            original_command="ps aux",
         )
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             persona = get_tribunal_member(member_id)
             formatted = persona.persona.format(**kwargs)
             # Every substituted value must appear in the formatted prompt —
             # this catches silent placeholder drift.
-            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash", "ps aux"):
+            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
                 assert needle in formatted, f"{member_id} persona dropped '{needle}'"
 
     def test_verifier_persona_accepts_verifier_kwargs_and_enforces_ok_contract(self):
@@ -130,7 +130,8 @@ class TestPipelineTemplateContract:
         formatted = persona.get_system_prompt().format(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
-            intent="list files",
+            request="list files",
+            guidelines="",
             os="linux",
             shell="bash",
             working_directory="/home/user",

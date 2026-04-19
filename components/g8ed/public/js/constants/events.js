@@ -190,10 +190,14 @@ export const EventType = Object.freeze({
     AI_AGENT_CONTINUE_APPROVAL_REQUESTED: 'g8e.v1.ai.agent.continue.approval.requested',
     AI_AGENT_CONTINUE_APPROVAL_GRANTED: 'g8e.v1.ai.agent.continue.approval.granted',
     AI_AGENT_CONTINUE_APPROVAL_REJECTED: 'g8e.v1.ai.agent.continue.approval.rejected',
-    TRIBUNAL_SESSION_STARTED: 'g8e.v1.ai.tribunal.session.started',
-    TRIBUNAL_SESSION_COMPLETED: 'g8e.v1.ai.tribunal.session.completed',
-    TRIBUNAL_SESSION_FAILED: 'g8e.v1.ai.tribunal.session.failed',
-    TRIBUNAL_SESSION_FALLBACK_TRIGGERED: 'g8e.v1.ai.tribunal.session.fallback.triggered',
+    TRIBUNAL_SESSION_STARTED:              'g8e.v1.ai.tribunal.session.started',
+    TRIBUNAL_SESSION_COMPLETED:            'g8e.v1.ai.tribunal.session.completed',
+    TRIBUNAL_SESSION_DISABLED:             'g8e.v1.ai.tribunal.session.disabled',
+    TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED: 'g8e.v1.ai.tribunal.session.model.not_configured',
+    TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE: 'g8e.v1.ai.tribunal.session.provider.unavailable',
+    TRIBUNAL_SESSION_SYSTEM_ERROR:         'g8e.v1.ai.tribunal.session.system.error',
+    TRIBUNAL_SESSION_GENERATION_FAILED:    'g8e.v1.ai.tribunal.session.generation.failed',
+    TRIBUNAL_SESSION_VERIFIER_FAILED:      'g8e.v1.ai.tribunal.session.verifier.failed',
     TRIBUNAL_VOTING_STARTED: 'g8e.v1.ai.tribunal.voting.started',
     TRIBUNAL_VOTING_FAILED: 'g8e.v1.ai.tribunal.voting.failed',
     TRIBUNAL_VOTING_PASS_COMPLETED: 'g8e.v1.ai.tribunal.voting.pass.completed',
@@ -271,12 +275,18 @@ export const TribunalOutcome = Object.freeze({
     VERIFIED:            'verified',
 });
 
-export const TribunalFallbackReason = Object.freeze({
-    DISABLED:             'disabled',
-    PROVIDER_UNAVAILABLE: 'provider_unavailable',
-    ALL_PASSES_FAILED:    'all_passes_failed',
-    NO_VOTE_WINNER:       'no_vote_winner',
-});
+// Terminal Tribunal states are distinguished by event type, not by a shared
+// reason enum. This set lists the event types that indicate a session ended
+// without producing a command — consumers can membership-check against it
+// when they need generic "the Tribunal did not run to completion" handling.
+export const TRIBUNAL_TERMINAL_FAILURE_EVENTS = Object.freeze(new Set([
+    'g8e.v1.ai.tribunal.session.disabled',
+    'g8e.v1.ai.tribunal.session.model.not_configured',
+    'g8e.v1.ai.tribunal.session.provider.unavailable',
+    'g8e.v1.ai.tribunal.session.system.error',
+    'g8e.v1.ai.tribunal.session.generation.failed',
+    'g8e.v1.ai.tribunal.session.verifier.failed',
+]));
 
 export const ToolDisplayCategory = Object.freeze({
     EXECUTION: 'execution',

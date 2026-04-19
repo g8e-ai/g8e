@@ -27,7 +27,6 @@ from app.constants.status import (
     CommandErrorType,
     OperatorToolName,
 )
-from app.constants.events import EventType
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.settings import (
     DEFAULT_OS_NAME,
@@ -35,7 +34,6 @@ from app.constants.settings import (
     DEFAULT_WORKING_DIRECTORY,
     EXECUTION_ID_PREFIX,
     ToolDisplayCategory,
-    TribunalFallbackReason,
     StreamChunkFromModelType,
 )
 from app.llm.llm_types import ToolCall
@@ -56,12 +54,7 @@ from app.models.settings import G8eeUserSettings
 
 from app.models.agents.tribunal import (
     CommandGenerationResult,
-    TribunalFallbackPayload,
-    TribunalDisabledError,
-    TribunalSystemError,
-    TribunalProviderUnavailableError,
-    TribunalGenerationFailedError,
-    TribunalVerifierFailedError,
+    TribunalError,
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target
 from app.services.ai.tool_service import AIToolService
@@ -83,7 +76,7 @@ class ToolCallResult:
 logger = logging.getLogger(__name__)
 
 
-_FALLBACK_DISPLAY: tuple[str, str, ToolDisplayCategory] = (
+_UNKNOWN_TOOL_DISPLAY: tuple[str, str, ToolDisplayCategory] = (
     "Processing", "sync", ToolDisplayCategory.GENERAL,
 )
 
@@ -100,7 +93,7 @@ def tool_display_metadata(
     """
     spec = get_tool_spec(tool_name)
     if spec is None:
-        label, icon, category = _FALLBACK_DISPLAY
+        label, icon, category = _UNKNOWN_TOOL_DISPLAY
     else:
         label, icon, category = spec.display_label, spec.display_icon, spec.display_category
     return label, icon, display_detail, category
@@ -279,67 +272,21 @@ async def orchestrate_tool_execution(
                     gen_result.final_command[:80] if gen_result else None,
                     gen_result.outcome if gen_result else None,
                 )
-            except TribunalDisabledError as exc:
+            except TribunalError as exc:
+                # All Tribunal failure modes share one exit path: log, then
+                # return a failed ToolCallResult carrying the pre-built
+                # user-facing message. The concrete subclass has already
+                # emitted its typed TRIBUNAL_SESSION_* event inside
+                # command_generator.py at the raise site, so there is
+                # nothing to emit here.
                 logger.error(
-                    "[TRIBUNAL-ERROR] Tribunal is disabled — Sage cannot execute commands: %s",
-                    exc,
+                    "[TRIBUNAL-ERROR] %s (%s): %s",
+                    type(exc).__name__, tool_name, exc.user_message,
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
                     request=request,
-                    error_msg=str(exc),
-                )
-            except TribunalSystemError as exc:
-                logger.error(
-                    "[TRIBUNAL-ERROR] Tribunal system error — halting command execution: %s",
-                    exc.pass_errors,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=f"Tribunal system error: {'; '.join(exc.pass_errors)}",
-                )
-            except TribunalProviderUnavailableError as exc:
-                logger.error(
-                    "[TRIBUNAL-ERROR] Tribunal provider unavailable — halting command execution: %s",
-                    exc.error,
-                )
-                await g8ed_event_service.publish_investigation_event(
-                    investigation_id=investigation.id,
-                    event_type=EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-                    payload=TribunalFallbackPayload(
-                        reason=TribunalFallbackReason.PROVIDER_UNAVAILABLE,
-                        request=request,
-                        error=f"Provider unavailable ({exc.provider}): {exc.error}",
-                    ),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=f"Tribunal provider unavailable ({exc.provider}): {exc.error}",
-                )
-            except TribunalGenerationFailedError as exc:
-                logger.error(
-                    "[TRIBUNAL-ERROR] Tribunal generation failed — halting command execution: %s",
-                    exc.pass_errors,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=f"Tribunal generation failed: {'; '.join(exc.pass_errors)}",
-                )
-            except TribunalVerifierFailedError as exc:
-                logger.error(
-                    "[CMD_GEN] Tribunal verifier failed — halting command execution: %s",
-                    exc.error,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=f"Tribunal verifier failed ({exc.reason}): {exc.error}",
+                    error_msg=exc.user_message,
                 )
 
             logger.info(

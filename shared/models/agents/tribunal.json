@@ -24,8 +24,8 @@
     "vote_score": { "type": "number", "description": "Normalised weight of the winner (0.0-1.0)." },
     "outcome": {
       "type": "string",
-      "description": "Terminal outcome of the pipeline. `fallback` is no longer producible: when the Tribunal cannot produce a command the tool call fails with an error instead of emitting a fallback result.",
-      "enum": ["consensus", "verified", "verification_failed", "disabled", "system_error"]
+      "description": "Terminal outcome of the pipeline. Only successful outcomes are enumerated; Tribunal failures raise typed TribunalError subclasses instead of producing a fallback result.",
+      "enum": ["consensus", "verified", "verification_failed"]
     },
     "candidates": {
       "type": "array",

@@ -944,80 +944,95 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
     describe('failTribunal', () => {
         const WIDGET_ID = 'tribunal-test-widget-2';
+        const DISABLED = EventType.TRIBUNAL_SESSION_DISABLED;
 
         beforeEach(async () => {
             await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'rm -rf /', webSessionId: WEB_SESSION_ID });
         });
 
-        it('widget remains in the DOM after fallback', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+        it('widget remains in the DOM after failure', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
             expect(document.getElementById(WIDGET_ID)).not.toBeNull();
         });
 
-        it('adds tribunal--fallback class', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+        it('adds tribunal--failed class', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
-            expect(document.getElementById(WIDGET_ID).classList.contains('tribunal--fallback')).toBe(true);
+            expect(document.getElementById(WIDGET_ID).classList.contains('tribunal--failed')).toBe(true);
         });
 
         it('removes the spinner element', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+            terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
             expect(document.getElementById(WIDGET_ID).querySelector('.tribunal__spinner')).toBeNull();
         });
 
-        it('sets icon to info', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+        it('sets icon to warning', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
             const icon = document.getElementById(WIDGET_ID).querySelector('.tribunal__icon');
-            expect(icon.textContent).toBe('info');
+            expect(icon.textContent).toBe('warning');
         });
 
-        it('adds tribunal__icon--fallback class to icon', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+        it('adds tribunal__icon--failed class to icon', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
             const icon = document.getElementById(WIDGET_ID).querySelector('.tribunal__icon');
-            expect(icon.classList.contains('tribunal__icon--fallback')).toBe(true);
+            expect(icon.classList.contains('tribunal__icon--failed')).toBe(true);
         });
 
-        it('shows "TribunalDisabled" for disabled reason', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'disabled' });
+        it('shows disabled label for TRIBUNAL_SESSION_DISABLED', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_DISABLED });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('TribunalDisabled');
+            expect(status.textContent).toBe('Tribunal disabled \u2014 no command produced');
         });
 
-        it('shows "Tribunal unavailable" for provider_unavailable reason', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'provider_unavailable' });
+        it('shows model-not-configured label for TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('Tribunal unavailable');
+            expect(status.textContent).toBe('No model configured \u2014 Tribunal cannot run');
         });
 
-        it('shows correct label for all_passes_failed reason', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'all_passes_failed' });
+        it('shows provider-unavailable label for TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('All passes failed \u2014 using original');
+            expect(status.textContent).toBe('LLM provider unavailable \u2014 Tribunal halted');
         });
 
-        it('shows correct label for no_vote_winner reason', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'no_vote_winner' });
+        it('shows system-error label for TRIBUNAL_SESSION_SYSTEM_ERROR', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_SYSTEM_ERROR });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('No consensus \u2014 using original');
+            expect(status.textContent).toBe('System error \u2014 all passes failed (auth/network/config)');
         });
 
-        it('shows fallback label for unknown reason', () => {
-            terminal.failTribunal({ id: WIDGET_ID, reason: 'something_unexpected' });
+        it('shows generation-failed label for TRIBUNAL_SESSION_GENERATION_FAILED', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_GENERATION_FAILED });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('Using original command');
+            expect(status.textContent).toBe('All generation passes failed \u2014 no candidate produced');
+        });
+
+        it('shows verifier-failed label for TRIBUNAL_SESSION_VERIFIER_FAILED', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_VERIFIER_FAILED });
+
+            const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
+            expect(status.textContent).toBe('Verifier rejected the candidate \u2014 no trusted command');
+        });
+
+        it('shows generic label for unknown event type', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: 'g8e.v1.ai.tribunal.session.something_unexpected' });
+
+            const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
+            expect(status.textContent).toBe('Tribunal halted \u2014 no command produced');
         });
 
         it('does not throw when widget does not exist', () => {
-            expect(() => terminal.failTribunal({ id: 'ghost-id', reason: 'disabled' })).not.toThrow();
+            expect(() => terminal.failTribunal({ id: 'ghost-id', eventType: DISABLED })).not.toThrow();
         });
     });
 

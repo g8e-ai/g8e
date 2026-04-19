@@ -199,9 +199,19 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalCompleted(data);
         });
 
-        this.eventBus.on(EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED, (data) => {
-            this.handleTribunalFallback(data);
-        });
+        const TRIBUNAL_TERMINAL_FAILURE_EVENTS = [
+            EventType.TRIBUNAL_SESSION_DISABLED,
+            EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+            EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+            EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+            EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+        ];
+        for (const failureEvent of TRIBUNAL_TERMINAL_FAILURE_EVENTS) {
+            this.eventBus.on(failureEvent, (data) => {
+                this.handleTribunalSessionFailed(failureEvent, data);
+            });
+        }
 
         this.eventBus.on(EventType.LLM_CHAT_SUBMITTED, (payload) => {
             this.submitChatMessage(payload.message, {
@@ -555,7 +565,7 @@ export const ChatSSEHandlersMixin = {
         this._tribunalWidgetIds.delete(data.web_session_id);
     },
 
-    handleTribunalFallback(data) {
+    handleTribunalSessionFailed(eventType, data) {
         if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
@@ -563,7 +573,7 @@ export const ChatSSEHandlersMixin = {
 
         this.anchoredTerminal.failTribunal({
             id: widgetId,
-            reason: data.reason,
+            eventType,
         });
 
         this._tribunalWidgetIds.delete(data.web_session_id);

@@ -679,36 +679,37 @@ The Tribunal implements a **Stochastic Multi-AI Consensus** pattern using three 
 
 ```mermaid
 flowchart TD
-    In([Operator Command Proposed]) --> Enabled{Is Tribunal Enabled?}
-    
-    Enabled -- No --> Fallback[Fallback: Original Command]
-    Enabled -- Yes --> Provider{Provider OK?}
-    
-    Provider -- No --> Fallback
+    In([Sage sends request + guidelines]) --> Enabled{Tribunal enabled?}
+
+    Enabled -- No --> Disabled[TRIBUNAL_SESSION_DISABLED<br/>tool call fails]
+    Enabled -- Yes --> Model{Model configured?}
+
+    Model -- No --> NoModel[TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED<br/>tool call fails]
+    Model -- Yes --> Provider{Provider OK?}
+
+    Provider -- No --> NoProvider[TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE<br/>tool call fails]
     Provider -- Yes --> Gen[Parallel Generation Phase]
-    
+
     subgraph Gen [Stochastic Voting Swarm]
         direction LR
         P1[Axiom<br/>Pass 0 - The Minimalist]
         P2[Concord<br/>Pass 1 - The Archivist]
         P3[Variance<br/>Pass 2 - The Adversary]
     end
-    
-    Gen --> Vote[Weighted Majority Vote]
-    Vote --> Winner{Consensus Winner?}
-    
-    Winner -- No --> Fallback
-    Winner -- Yes --> VerifierEnabled{Is Verifier Enabled?}
-    
-    VerifierEnabled -- No --> OutVote[Final: Vote Winner]
-    VerifierEnabled -- Yes --> Verify[Final Verifier SLM]
-    
+
+    Gen --> Candidates{Any candidates?}
+    Candidates -- No, all system errors --> SysErr[TRIBUNAL_SESSION_SYSTEM_ERROR<br/>tool call fails]
+    Candidates -- No, non-system errors --> GenFail[TRIBUNAL_SESSION_GENERATION_FAILED<br/>tool call fails]
+    Candidates -- Yes --> Vote[Weighted Majority Vote]
+
+    Vote --> VerifierEnabled{Verifier enabled?}
+    VerifierEnabled -- No --> OutVote[CONSENSUS: vote winner]
+    VerifierEnabled -- Yes --> Verify[Verifier SLM]
+
     Verify --> Review{Verdict}
-    Review -- OK --> OutVote
-    Review -- Error/Empty --> OutVote
-    Review -- Revised --> OutRev[Final: Revised Command]
-    
-    Fallback --> OutFall[Final: Original Command]
+    Review -- OK --> OutVerified[VERIFIED: vote winner]
+    Review -- Revised --> OutRev[VERIFICATION_FAILED: verifier revision]
+    Review -- Empty/No valid revision/Exception --> VerFail[TRIBUNAL_SESSION_VERIFIER_FAILED<br/>tool call fails]
 ```
 
 #### 1. The Proposer (Primary AI)
@@ -788,35 +789,36 @@ Verifier failures raise `TribunalVerifierFailedError` and halt command execution
 
 The `CommandGenerationResult` carries `original_command`, `final_command`, `outcome`, `candidates`, `vote_winner`, `vote_score`, `verifier_passed`, and optionally `verifier_revision`.
 
+Successful outcomes carried on `CommandGenerationResult.outcome`:
+
 | `CommandGenerationOutcome` | Condition |
 |---|---|
+| `CONSENSUS` | Verifier disabled — `final_command` is the vote winner |
 | `VERIFIED` | Verifier enabled and approved the vote winner |
 | `VERIFICATION_FAILED` | Verifier enabled and produced a revision — `final_command` is the verifier's output |
-| `CONSENSUS` | Verifier disabled — `final_command` is the vote winner |
-| `FALLBACK` | Provider unavailable, all passes failed (non-system), or no vote winner — `final_command` is `original_command` unchanged |
-| `DISABLED` | Tribunal disabled via `LLM_COMMAND_GEN_ENABLED=false` |
-| `SYSTEM_ERROR` | All generation passes failed due to system errors (auth, network, config) — command execution is **halted**, not silently fallen back |
 
-If `final_command != original_command` the tribunal refined the command. `AI_tool_loop` updates `tool_args["command"]` with the refined value before passing to `AIToolService.execute_tool_call`.
+There is no fallback outcome. Sage never proposes a command, so a Tribunal that cannot reach a successful outcome has no candidate to fall back to — the tool call fails with one of the typed terminal events below.
 
-A `TRIBUNAL_SESSION_COMPLETED` SSE event (or `TRIBUNAL_SESSION_FALLBACK_TRIGGERED`) is emitted at the end of every pipeline run.
+On success, `TRIBUNAL_SESSION_COMPLETED` is emitted and `agent_tool_loop` injects `final_command` into the tool args before dispatching to `AIToolService.execute_tool_call`.
 
-#### Fallback and Error Reasons
+#### Terminal Failure States
 
-| Type | Reason | Trigger |
+Each scenario is its own event type — the event type is the discriminator, not a shared `reason` enum.
+
+| Event | Raised exception | Trigger |
 |---|---|---|
-| Fallback | `disabled` | `LLM_COMMAND_GEN_ENABLED=false` |
-| Fallback | `all_passes_failed` | Every generation pass returned `None` (non-system errors) |
-| Error | `provider_unavailable` | No LLM Provider configuration — raises `TribunalProviderUnavailableError` |
-| Error | `all_passes_failed` | Every generation pass failed (non-system) — raises `TribunalGenerationFailedError` |
-| Error | `verifier_failed` | Verifier malfunction (empty, no revision, exception) — raises `TribunalVerifierFailedError` |
-| Error | `system_error` | All passes failed due to system errors (401, connection refused, DNS, SSL, etc.) — raises `TribunalSystemError` |
+| `TRIBUNAL_SESSION_DISABLED` | `TribunalDisabledError` | `LLM_COMMAND_GEN_ENABLED=false` — refusal, no work attempted |
+| `TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED` | `TribunalModelNotConfiguredError` | Neither `assistant_model` nor `primary_model` is set for the Tribunal's provider |
+| `TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE` | `TribunalProviderUnavailableError` | LLM provider failed to initialize (bad credentials, unsupported provider) |
+| `TRIBUNAL_SESSION_SYSTEM_ERROR` | `TribunalSystemError` | All generation passes failed with system-class errors (401, connection refused, DNS, SSL) |
+| `TRIBUNAL_SESSION_GENERATION_FAILED` | `TribunalGenerationFailedError` | All generation passes failed for non-system reasons (refusals, hallucinations, rate limits) |
+| `TRIBUNAL_SESSION_VERIFIER_FAILED` | `TribunalVerifierFailedError` | Verifier returned empty, produced no valid revision, or threw — no trusted command produced |
 
 #### Tribunal Error Handling
 
-Tribunal exception handlers in `orchestrate_tool_execution` use a shared `_tribunal_error_result(tool_name, original_command, error_msg)` helper to return consistent error results for all Tribunal failure modes. This helper creates a `ToolCallResult` with a `CommandExecutionResult` containing the error message and `EXECUTION_ERROR` type.
+Tribunal exception handlers in `orchestrate_tool_execution` emit the matching terminal event, then build a `ToolCallResult` via the shared `_tribunal_error_result(tool_name, request, error_msg)` helper. The result carries a `CommandExecutionResult` with `EXECUTION_ERROR` so the agent loop surfaces the failure to Sage.
 
-The `TribunalFallbackPayload` includes `pass_errors: list[str] | None` for diagnostic visibility into individual pass failure messages.
+The system-error and generation-failed payloads both carry `pass_errors: list[str]` for diagnostic visibility into individual pass failure messages.
 
 The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is attached to the function args before dispatch. This ID is used for `fetch_execution_output` lookups and audit correlation.
 

@@ -37,7 +37,6 @@ from app.services.ai.benchmark_judge import (
     ToolCallCapture,
     TribunalCapture,
     compute_benchmark_percentage,
-    compute_tribunal_delta,
     _match_payload,
 )
 
@@ -350,59 +349,6 @@ class TestBenchmarkJudgeMultiStepGrading:
         assert grade.matchers_passed == 1
 
 
-class TestBenchmarkJudgeTribunalDelta:
-
-    def setup_method(self):
-        self.judge = BenchmarkJudge()
-
-    def test_tribunal_improved_command(self):
-        scenario = _scenario(matchers=[
-            {"field": "command", "pattern": r"ls\s+-lhR\s+/var/log"},
-        ])
-        tool_calls = [_tool_call(command="ls -lhR /var/log")]
-        tribunal = TribunalCapture(
-            original_command="ls -l /var/log",
-            final_command="ls -lhR /var/log",
-            outcome="VERIFIED",
-        )
-        grade = self.judge.grade_tool_call(scenario, tool_calls, tribunal=tribunal)
-        assert grade.passed is True
-        assert grade.tribunal_improved is True
-        assert grade.tribunal_pre_score is False
-        assert grade.tribunal_original_command == "ls -l /var/log"
-        assert grade.tribunal_final_command == "ls -lhR /var/log"
-        assert grade.tribunal_outcome == "VERIFIED"
-
-    def test_tribunal_no_change(self):
-        scenario = _scenario(matchers=[
-            {"field": "command", "pattern": r"ls\s+-lhR"},
-        ])
-        tool_calls = [_tool_call(command="ls -lhR /var/log")]
-        tribunal = TribunalCapture(
-            original_command="ls -lhR /var/log",
-            final_command="ls -lhR /var/log",
-            outcome="CONSENSUS",
-        )
-        grade = self.judge.grade_tool_call(scenario, tool_calls, tribunal=tribunal)
-        assert grade.tribunal_improved is False
-        assert grade.tribunal_pre_score is True
-
-    def test_tribunal_worsened_command(self):
-        scenario = _scenario(matchers=[
-            {"field": "command", "pattern": r"ls\s+-lhR\s+/var/log"},
-        ])
-        tool_calls = [_tool_call(command="ls -l /var/log")]
-        tribunal = TribunalCapture(
-            original_command="ls -lhR /var/log",
-            final_command="ls -l /var/log",
-            outcome="VERIFICATION_FAILED",
-        )
-        grade = self.judge.grade_tool_call(scenario, tool_calls, tribunal=tribunal)
-        assert grade.passed is False
-        assert grade.tribunal_improved is True
-        assert grade.tribunal_pre_score is True
-
-
 class TestBenchmarkJudgeGradeRefusal:
 
     def setup_method(self):
@@ -478,71 +424,6 @@ class TestComputeBenchmarkPercentage:
         assert compute_benchmark_percentage([
             BenchmarkGrade(passed=False, tool_called=False, matchers_total=1, matchers_passed=0)
         ]) == 0.0
-
-
-class TestComputeTribunalDelta:
-
-    def test_no_tribunal_data(self):
-        grades = [BenchmarkGrade(passed=True, tool_called=True, matchers_total=1, matchers_passed=1)]
-        delta = compute_tribunal_delta(grades)
-        assert delta["total_with_tribunal"] == 0
-        assert delta["improvement_rate"] == 0.0
-
-    def test_tribunal_improved_accuracy(self):
-        grades = [
-            BenchmarkGrade(
-                passed=True,
-                tool_called=True,
-                matchers_total=1,
-                matchers_passed=1,
-                tribunal_outcome="VERIFIED",
-                tribunal_improved=True,
-                tribunal_pre_score=False,
-            ),
-        ]
-        delta = compute_tribunal_delta(grades)
-        assert delta["total_with_tribunal"] == 1
-        assert delta["tribunal_improved_count"] == 1
-        assert delta["tribunal_improved_accuracy"] == 1
-        assert delta["improvement_rate"] == 1.0
-
-    def test_tribunal_no_improvement(self):
-        grades = [
-            BenchmarkGrade(
-                passed=True,
-                tool_called=True,
-                matchers_total=1,
-                matchers_passed=1,
-                tribunal_outcome="CONSENSUS",
-                tribunal_improved=False,
-                tribunal_pre_score=True,
-            ),
-        ]
-        delta = compute_tribunal_delta(grades)
-        assert delta["tribunal_improved_count"] == 0
-        assert delta["tribunal_improved_accuracy"] == 0
-        assert delta["improvement_rate"] == 0.0
-
-    def test_mixed_tribunal_results(self):
-        grades = [
-            BenchmarkGrade(
-                passed=True, tool_called=True, matchers_total=1, matchers_passed=1,
-                tribunal_outcome="VERIFIED", tribunal_improved=True, tribunal_pre_score=False,
-            ),
-            BenchmarkGrade(
-                passed=True, tool_called=True, matchers_total=1, matchers_passed=1,
-                tribunal_outcome="CONSENSUS", tribunal_improved=False, tribunal_pre_score=True,
-            ),
-            BenchmarkGrade(
-                passed=False, tool_called=True, matchers_total=2, matchers_passed=1,
-                tribunal_outcome="VERIFICATION_FAILED", tribunal_improved=True, tribunal_pre_score=True,
-            ),
-        ]
-        delta = compute_tribunal_delta(grades)
-        assert delta["total_with_tribunal"] == 3
-        assert delta["tribunal_improved_count"] == 2
-        assert delta["tribunal_improved_accuracy"] == 1
-        assert delta["improvement_rate"] == pytest.approx(1 / 3)
 
 
 class TestBenchmarkScenario:

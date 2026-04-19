@@ -273,7 +273,6 @@ from app.constants.settings import (
     ToolCallStatus,
     ToolDisplayCategory,
     TriageRole,
-    TribunalFallbackReason,
     UNKNOWN_ERROR_MESSAGE,
     G8EE_APP_CONTACT_EMAIL,
     G8EE_APP_CONTACT_NAME,

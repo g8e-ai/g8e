@@ -20,7 +20,7 @@
  */
 
 import { templateLoader } from '../utils/template-loader.js';
-import { TribunalOutcome, TribunalFallbackReason } from '../constants/events.js';
+import { TribunalOutcome, EventType } from '../constants/events.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -622,37 +622,43 @@ export class TerminalOutputMixin {
 
     }
 
-    failTribunal({ id, reason }) {
+    failTribunal({ id, eventType }) {
         const widget = document.getElementById(id);
         if (!widget) return;
 
-        widget.classList.add('tribunal--fallback');
+        widget.classList.add('tribunal--failed');
 
         const spinner = widget.querySelector('.tribunal__spinner');
         if (spinner) spinner.remove();
 
         const icon = widget.querySelector('.tribunal__icon');
         if (icon) {
-            icon.textContent = 'info';
-            icon.classList.add('tribunal__icon--fallback');
+            icon.textContent = 'warning';
+            icon.classList.add('tribunal__icon--failed');
         }
 
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
-            let reasonLabel;
-            if (reason === TribunalFallbackReason.DISABLED) {
-                reasonLabel = 'TribunalDisabled';
-            } else if (reason === TribunalFallbackReason.PROVIDER_UNAVAILABLE) {
-                reasonLabel = 'Tribunal unavailable';
-            } else if (reason === TribunalFallbackReason.ALL_PASSES_FAILED) {
-                reasonLabel = 'All passes failed — using original';
-            } else if (reason === TribunalFallbackReason.NO_VOTE_WINNER) {
-                reasonLabel = 'No consensus — using original';
-            } else {
-                reasonLabel = 'Using original command';
-            }
-            statusEl.textContent = reasonLabel;
+            statusEl.textContent = this._tribunalFailureLabel(eventType);
         }
+    }
 
+    _tribunalFailureLabel(eventType) {
+        switch (eventType) {
+            case EventType.TRIBUNAL_SESSION_DISABLED:
+                return 'Tribunal disabled — no command produced';
+            case EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED:
+                return 'No model configured — Tribunal cannot run';
+            case EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE:
+                return 'LLM provider unavailable — Tribunal halted';
+            case EventType.TRIBUNAL_SESSION_SYSTEM_ERROR:
+                return 'System error — all passes failed (auth/network/config)';
+            case EventType.TRIBUNAL_SESSION_GENERATION_FAILED:
+                return 'All generation passes failed — no candidate produced';
+            case EventType.TRIBUNAL_SESSION_VERIFIER_FAILED:
+                return 'Verifier rejected the candidate — no trusted command';
+            default:
+                return 'Tribunal halted — no command produced';
+        }
     }
 }

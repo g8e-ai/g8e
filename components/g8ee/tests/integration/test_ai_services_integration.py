@@ -619,7 +619,7 @@ class TestCommandGenerationIntegration:
         # Verify function signature (this will be tested more thoroughly in agent tests)
         import inspect
         sig = inspect.signature(generate_command)
-        expected_params = ['original_command', 'intent', 'os_name', 'shell', 'working_directory', 'user_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
+        expected_params = ['request', 'guidelines', 'operator_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
 

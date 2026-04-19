@@ -363,7 +363,7 @@
     color: var(--accent-blue);
 }
 
-.tribunal__icon--fallback {
+.tribunal__icon--failed {
     color: var(--text-secondary);
 }
 
@@ -435,7 +435,7 @@
     font-weight: 500;
 }
 
-.tribunal--fallback .tribunal__status {
+.tribunal--failed .tribunal__status {
     color: var(--text-muted);
 }
 

@@ -237,10 +237,14 @@ export const EventType = Object.freeze({
     AI_AGENT_CONTINUE_APPROVAL_GRANTED:   _EVENTS['ai']['agent']['continue']['approval']['granted'],
     AI_AGENT_CONTINUE_APPROVAL_REJECTED:  _EVENTS['ai']['agent']['continue']['approval']['rejected'],
 
-    TRIBUNAL_SESSION_STARTED:           _EVENTS['ai']['tribunal']['session']['started'],
-    TRIBUNAL_SESSION_COMPLETED:         _EVENTS['ai']['tribunal']['session']['completed'],
-    TRIBUNAL_SESSION_FAILED:            _EVENTS['ai']['tribunal']['session']['failed'],
-    TRIBUNAL_SESSION_FALLBACK_TRIGGERED: _EVENTS['ai']['tribunal']['session']['fallback']['triggered'],
+    TRIBUNAL_SESSION_STARTED:              _EVENTS['ai']['tribunal']['session']['started'],
+    TRIBUNAL_SESSION_COMPLETED:            _EVENTS['ai']['tribunal']['session']['completed'],
+    TRIBUNAL_SESSION_DISABLED:             _EVENTS['ai']['tribunal']['session']['disabled'],
+    TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED: _EVENTS['ai']['tribunal']['session']['model_not_configured'],
+    TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE: _EVENTS['ai']['tribunal']['session']['provider_unavailable'],
+    TRIBUNAL_SESSION_SYSTEM_ERROR:         _EVENTS['ai']['tribunal']['session']['system_error'],
+    TRIBUNAL_SESSION_GENERATION_FAILED:    _EVENTS['ai']['tribunal']['session']['generation_failed'],
+    TRIBUNAL_SESSION_VERIFIER_FAILED:      _EVENTS['ai']['tribunal']['session']['verifier_failed'],
 
     TRIBUNAL_VOTING_STARTED:            _EVENTS['ai']['tribunal']['voting']['started'],
     TRIBUNAL_VOTING_FAILED:             _EVENTS['ai']['tribunal']['voting']['failed'],

@@ -195,7 +195,7 @@ class TestCommandExecutionTools:
                 "command": "ls -la",
                 "working_directory": "/home/user",
                 "timeout_seconds": 30,
-                "justification": "List files in directory",
+                "guidelines": "List files in directory",
             }
 
             # Execute tool call
@@ -220,7 +220,7 @@ class TestCommandExecutionTools:
             args = call_args["args"]
             assert "ls -la" in args.command
             assert args.timeout_seconds == 30
-            assert args.justification == "List files in directory"
+            assert args.guidelines == "List files in directory"
         finally:
             tool_service.reset_invocation_context(context_token)
 

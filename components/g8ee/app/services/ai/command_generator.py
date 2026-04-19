@@ -60,7 +60,7 @@ Nemesis adversary), not from numerical parameters.
 import asyncio
 import logging
 from collections import defaultdict
-from typing import List
+from typing import Any, List, NoReturn
 
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.base import G8eBaseModel
@@ -73,7 +73,6 @@ from app.constants import (
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
     FORBIDDEN_COMMAND_PATTERNS,
-    TribunalFallbackReason,
     TribunalMember,
     EventType,
     VerifierReason,
@@ -94,7 +93,12 @@ from app.models.agents.tribunal import (
     TribunalVerifierStartedPayload,
     TribunalVerifierCompletedPayload,
     TribunalSessionStartedPayload,
-    TribunalFallbackPayload,
+    TribunalSessionDisabledPayload,
+    TribunalSessionModelNotConfiguredPayload,
+    TribunalSessionProviderUnavailablePayload,
+    TribunalSessionSystemErrorPayload,
+    TribunalSessionGenerationFailedPayload,
+    TribunalSessionVerifierFailedPayload,
     TribunalVotingCompletedPayload,
     TribunalSessionCompletedPayload,
 )
@@ -274,18 +278,23 @@ def _is_system_error(error_message: str) -> bool:
     return any(pattern in lower for pattern in _SYSTEM_ERROR_PATTERNS)
 
 
-def _resolve_model(llm: LLMSettings) -> str:
+def _resolve_model(llm: LLMSettings, request: str = "") -> str:
     """Resolve a concrete model string for the Tribunal pipeline.
 
     Fallback chain: assistant_model -> primary_model.
 
-    Raises TribunalModelNotConfiguredError if neither is set.
+    Raises TribunalModelNotConfiguredError if neither is set. ``request``
+    is threaded through so the exception carries Sage's original ask at
+    the raise site (no post-construction mutation by callers).
     """
     if llm.resolved_assistant_model:
         return llm.resolved_assistant_model
     if llm.primary_model:
         return llm.primary_model
-    raise TribunalModelNotConfiguredError(provider=llm.primary_provider)
+    raise TribunalModelNotConfiguredError(
+        provider=llm.primary_provider,
+        request=request,
+    )
 
 
 _TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
@@ -458,6 +467,63 @@ async def _run_generation_pass(
         return None
 
 
+async def _emit_verifier_failed_session(
+    emitter: TribunalEmitter,
+    request: str,
+    reason: VerifierReason,
+    error: str | None,
+    candidate_command: str,
+) -> None:
+    """Emit TRIBUNAL_SESSION_VERIFIER_FAILED co-located with the raise site.
+
+    Centralising emission next to the raise keeps all terminal-state events
+    symmetric with the other session-failure events (disabled, model-not-
+    configured, provider-unavailable, system-error, generation-failed) which
+    all fire inside this module rather than in the orchestration caller.
+    """
+    await emitter.emit(
+        EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+        TribunalSessionVerifierFailedPayload(
+            request=request,
+            reason=reason,
+            error=error,
+            candidate_command=candidate_command,
+        ),
+    )
+
+
+async def _fail_verifier(
+    emitter: TribunalEmitter,
+    request: str,
+    reason: VerifierReason,
+    error_msg: str,
+    candidate_command: str,
+    error_detail: str | None = None,
+) -> NoReturn:
+    """Emit verifier failure events and raise TribunalVerifierFailedError.
+
+    Centralises the dual emission pattern (TRIBUNAL_VOTING_REVIEW_COMPLETED
+    + TRIBUNAL_SESSION_VERIFIER_FAILED) and the error raise for all verifier
+    failure paths.
+    """
+    payload_kwargs: dict[str, Any] = {"passed": False, "reason": reason}
+    if error_detail is not None:
+        payload_kwargs["error"] = error_detail
+    await emitter.emit(
+        EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
+        TribunalVerifierCompletedPayload(**payload_kwargs),
+    )
+    await _emit_verifier_failed_session(
+        emitter, request, reason, error_msg, candidate_command,
+    )
+    raise TribunalVerifierFailedError(
+        reason=reason,
+        error=error_msg,
+        candidate_command=candidate_command,
+        request=request,
+    )
+
+
 async def _run_verifier(
     provider: LLMProvider,
     model: str,
@@ -538,14 +604,9 @@ async def _run_verifier(
             return False, revised
 
         logger.error("[TRIBUNAL] Verifier returned non-ok but no valid revision; cannot verify candidate")
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-            TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.NO_VALID_REVISION),
-        )
-        raise TribunalVerifierFailedError(
-            reason="no_valid_revision",
-            error=f"Verifier returned non-ok answer without valid revision: {answer[:100]}",
-            candidate_command=candidate_command,
+        error_msg = f"Verifier returned non-ok answer without valid revision: {answer[:100]}"
+        await _fail_verifier(
+            emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
         )
 
     except TribunalVerifierFailedError:
@@ -554,24 +615,13 @@ async def _run_verifier(
         from app.errors import OllamaEmptyResponseError
         if isinstance(exc, OllamaEmptyResponseError):
             logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate: %s", exc)
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-                TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.EMPTY_RESPONSE),
+            error_msg = f"Verifier returned empty response: {exc}"
+            await _fail_verifier(
+                emitter, request, VerifierReason.EMPTY_RESPONSE, error_msg, candidate_command,
             )
-            raise TribunalVerifierFailedError(
-                reason="empty_response",
-                error=f"Verifier returned empty response: {exc}",
-                candidate_command=candidate_command,
-            ) from exc
         logger.error("[TRIBUNAL] Verifier failed with exception; cannot verify candidate: %s", exc)
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-            TribunalVerifierCompletedPayload(passed=False, reason=VerifierReason.VERIFIER_ERROR, error=str(exc)),
-        )
-        raise TribunalVerifierFailedError(
-            reason="exception",
-            error=str(exc),
-            candidate_command=candidate_command,
+        await _fail_verifier(
+            emitter, request, VerifierReason.VERIFIER_ERROR, str(exc), candidate_command, error_detail=str(exc),
         )
 
 
@@ -613,9 +663,8 @@ async def _run_generation_stage(
                 num_passes, pass_errors,
             )
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-                TribunalFallbackPayload(
-                    reason=TribunalFallbackReason.SYSTEM_ERROR,
+                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                TribunalSessionSystemErrorPayload(
                     request=request,
                     pass_errors=pass_errors,
                 ),
@@ -624,11 +673,10 @@ async def _run_generation_stage(
 
         logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(
-                reason=TribunalFallbackReason.ALL_PASSES_FAILED,
+            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+            TribunalSessionGenerationFailedPayload(
                 request=request,
-                pass_errors=pass_errors if pass_errors else None,
+                pass_errors=pass_errors if pass_errors else ["No candidates produced"],
             ),
         )
         raise TribunalGenerationFailedError(
@@ -811,25 +859,24 @@ async def generate_command(
             "because Sage never proposes one directly"
         )
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(reason=TribunalFallbackReason.DISABLED, request=request),
+            EventType.TRIBUNAL_SESSION_DISABLED,
+            TribunalSessionDisabledPayload(request=request),
         )
         raise TribunalDisabledError(request=request)
 
     try:
-        model = _resolve_model(settings.llm)
+        model = _resolve_model(settings.llm, request=request)
         logger.info("[TRIBUNAL] Model resolved: %s", model)
     except TribunalModelNotConfiguredError as exc:
         logger.error("[TRIBUNAL] Model not configured: %s - assistant_model=%s primary_model=%s", exc, settings.llm.assistant_model, settings.llm.primary_model)
         await emitter.emit(
-            EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(
-                reason=TribunalFallbackReason.NO_MODEL_CONFIGURED,
+            EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+            TribunalSessionModelNotConfiguredPayload(
                 request=request,
-                error=str(exc),
+                provider=exc.provider,
+                error=exc.user_message,
             ),
         )
-        exc.request = request
         raise
     num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
@@ -855,6 +902,14 @@ async def generate_command(
         provider = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
         logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+            TribunalSessionProviderUnavailablePayload(
+                request=request,
+                provider=settings.llm.assistant_provider,
+                error=str(exc),
+            ),
+        )
         raise TribunalProviderUnavailableError(
             provider=settings.llm.assistant_provider,
             error=str(exc),

@@ -171,16 +171,6 @@ class CommandGenerationOutcome(str, Enum):
     VERIFICATION_FAILED = "verification_failed"
 
 
-class TribunalFallbackReason(str, Enum):
-    __str__ = lambda self: self.value
-    DISABLED              = "disabled"
-    PROVIDER_UNAVAILABLE  = "provider_unavailable"
-    ALL_PASSES_FAILED     = "all_passes_failed"
-    NO_VOTE_WINNER        = "no_vote_winner"
-    SYSTEM_ERROR          = "system_error"
-    NO_MODEL_CONFIGURED   = "no_model_configured"
-
-
 class VerifierReason(str, Enum):
     __str__ = lambda self: self.value
     OK                = "ok"
