@@ -247,5 +247,77 @@
       "case_id": "test-case-id",
       "web_session_id": "test-web-session-id"
     }
+  },
+  "tribunal_session_completed_consensus": {
+    "type": "g8e.v1.ai.tribunal.session.completed",
+    "data": {
+      "request": "test request",
+      "final_command": "ls -la",
+      "outcome": "consensus",
+      "vote_score": 1.0,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_verifier_failed_revised": {
+    "type": "g8e.v1.ai.tribunal.session.verifier.failed",
+    "data": {
+      "request": "test request",
+      "reason": "revised",
+      "error": "Verifier produced revision",
+      "candidate_command": "ls -la",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_verifier_failed_empty_response": {
+    "type": "g8e.v1.ai.tribunal.session.verifier.failed",
+    "data": {
+      "request": "test request",
+      "reason": "empty_response",
+      "error": "Verifier returned empty response",
+      "candidate_command": "ls -la",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_voting_review_completed_revised": {
+    "type": "g8e.v1.ai.tribunal.voting.review.completed",
+    "data": {
+      "passed": true,
+      "revision": "ls -la",
+      "reason": "revised",
+      "error": null,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_invalid_outcome": {
+    "type": "g8e.v1.ai.tribunal.session.completed",
+    "data": {
+      "request": "test request",
+      "final_command": "ls -la",
+      "outcome": "invalid_outcome",
+      "vote_score": 0.95,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_invalid_reason": {
+    "type": "g8e.v1.ai.tribunal.session.verifier.failed",
+    "data": {
+      "request": "test request",
+      "reason": "invalid_reason",
+      "error": "Verifier could not produce valid revision",
+      "candidate_command": "ls -la",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
   }
 }

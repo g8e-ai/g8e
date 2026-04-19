@@ -114,6 +114,21 @@
     "agent.continue": "agent.continue"
   },
 
+  "approval.error.type": {
+    "approval.publish.failure": "approval.publish.failure",
+    "approval.exception": "approval.exception",
+    "approval.timeout": "approval.timeout",
+    "invalid.intent": "invalid.intent",
+    "intent.approval.exception": "intent.approval.exception"
+  },
+
+  "attachment.type": {
+    "pdf": "pdf",
+    "image": "image",
+    "text": "text",
+    "other": "other"
+  },
+
   "workflow.type": {
     "g8e.bound": "g8e.bound",
     "g8e.not.bound": "g8e.not.bound"

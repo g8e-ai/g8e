@@ -62,6 +62,107 @@ from app.services.infra.g8ed_event_service import EventService
 from app.utils.timestamp import now, to_timestamp
 
 
+class TribunalInvoker:
+    """Encapsulates Tribunal invocation logic for run_commands_with_operator.
+
+    Converts a Sage-facing SageOperatorRequest into the executor-facing
+    ExecutorCommandArgs by running the Tribunal pipeline to produce a command.
+    """
+
+    @staticmethod
+    def _fetch_command_constraints(
+        tool_executor: AIToolService,
+    ) -> tuple[bool, bool, list[str], list[dict[str, str]]]:
+        """Fetch command validation constraints from tool executor settings."""
+        whitelisting_enabled = False
+        blacklisting_enabled = False
+        whitelisted_commands: list[str] = []
+        blacklisted_commands: list[dict[str, str]] = []
+
+        cv = tool_executor.user_settings
+        if cv:
+            whitelisting_enabled = cv.command_validation.enable_whitelisting
+            blacklisting_enabled = cv.command_validation.enable_blacklisting
+            if whitelisting_enabled:
+                whitelisted_commands = sorted(tool_executor.whitelist_validator.all_commands)
+            if blacklisting_enabled:
+                blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
+
+        return whitelisting_enabled, blacklisting_enabled, whitelisted_commands, blacklisted_commands
+
+    @staticmethod
+    async def run(
+        sage_request: SageOperatorRequest,
+        investigation: EnrichedInvestigationContext,
+        g8e_context: G8eHttpContext,
+        g8ed_event_service: EventService,
+        request_settings: G8eeUserSettings,
+        tool_executor: AIToolService,
+    ) -> tuple[ExecutorCommandArgs, CommandGenerationResult]:
+        """Invoke Tribunal pipeline and return executor args with generated command.
+
+        Raises TribunalError subclasses when the Tribunal cannot produce a command;
+        the caller is responsible for converting these into a failed ToolCallResult.
+        """
+        request = (sage_request.request or "").strip()
+        guidelines = (sage_request.guidelines or "").strip()
+        op_context = extract_operator_context_by_target(
+            investigation, sage_request.target_operator,
+        )
+
+        logger.info(
+            "[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s username=%s uid=%s hostname=%s arch=%s",
+            (op_context.os if op_context else None) or DEFAULT_OS_NAME,
+            (op_context.shell if op_context else None) or DEFAULT_SHELL,
+            (op_context.working_directory if op_context else None) or DEFAULT_WORKING_DIRECTORY,
+            op_context.username if op_context else None,
+            op_context.uid if op_context else None,
+            op_context.hostname if op_context else None,
+            op_context.architecture if op_context else None,
+        )
+
+        whitelisting_enabled, blacklisting_enabled, whitelisted_commands, blacklisted_commands = (
+            TribunalInvoker._fetch_command_constraints(tool_executor)
+        )
+
+        logger.info(
+            "[TRIBUNAL-INVOKE] Command constraints: whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
+            whitelisting_enabled, blacklisting_enabled,
+            len(whitelisted_commands), len(blacklisted_commands),
+        )
+
+        gen_result = await generate_command(
+            request=request,
+            guidelines=guidelines,
+            operator_context=op_context,
+            g8ed_event_service=g8ed_event_service,
+            web_session_id=g8e_context.web_session_id,
+            user_id=g8e_context.user_id,
+            case_id=g8e_context.case_id,
+            investigation_id=investigation.id,
+            settings=request_settings,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            whitelisted_commands=whitelisted_commands,
+            blacklisted_commands=blacklisted_commands,
+        )
+        logger.info(
+            "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
+            gen_result.outcome, request[:80], gen_result.final_command[:80],
+        )
+
+        executor_args = ExecutorCommandArgs(
+            command=gen_result.final_command,
+            request=request,
+            guidelines=guidelines,
+            target_operator=sage_request.target_operator,
+            target_operators=sage_request.target_operators,
+            expected_output_lines=sage_request.expected_output_lines,
+            timeout_seconds=sage_request.timeout_seconds,
+        )
+        return executor_args, gen_result
+
+
 @dataclass
 class ToolCallResult:
     """Internal pipeline carrier for a single dispatched tool call."""
@@ -193,12 +294,11 @@ async def orchestrate_tool_execution(
     if tool_name == OperatorToolName.RUN_COMMANDS:
         sage_request = SageOperatorRequest.model_validate(raw_args)
         request = (sage_request.request or "").strip()
-        guidelines = (sage_request.guidelines or "").strip()
 
         if request:
             logger.info(
                 "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
-                len(request), len(guidelines), sage_request.target_operator,
+                len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
             )
             logger.info(
                 "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
@@ -209,76 +309,16 @@ async def orchestrate_tool_execution(
                 request_settings.eval_judge.model,
             )
 
-            op_context = extract_operator_context_by_target(
-                investigation,
-                sage_request.target_operator,
-            )
-            os_name = (op_context.os if op_context else None) or DEFAULT_OS_NAME
-            shell = (op_context.shell if op_context else None) or DEFAULT_SHELL
-            working_directory = (
-                op_context.working_directory if op_context else None
-            ) or DEFAULT_WORKING_DIRECTORY
-            username = op_context.username if op_context else None
-            uid = op_context.uid if op_context else None
-            user_context = f"{username} (uid={uid})" if username and uid is not None else (username or "unknown")
-
-            logger.info(
-                "[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s user=%s username=%s uid=%s hostname=%s arch=%s",
-                os_name, shell, working_directory, user_context, username, uid,
-                op_context.hostname if op_context else None,
-                op_context.architecture if op_context else None,
-            )
-
-            # Fetch command constraints for Tribunal
-            whitelisting_enabled = False
-            blacklisting_enabled = False
-            whitelisted_commands: list[str] = []
-            blacklisted_commands: list[dict[str, str]] = []
-
-            cv = tool_executor.user_settings
-            if cv:
-                whitelisting_enabled = cv.command_validation.enable_whitelisting if cv else False
-                blacklisting_enabled = cv.command_validation.enable_blacklisting if cv else False
-                if whitelisting_enabled:
-                    whitelisted_commands = sorted(tool_executor.whitelist_validator.all_commands)
-                if blacklisting_enabled:
-                    blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
-
-            logger.info(
-                "[TRIBUNAL-INVOKE] Command constraints: whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
-                whitelisting_enabled, blacklisting_enabled,
-                len(whitelisted_commands), len(blacklisted_commands),
-            )
-
             try:
-                gen_result = await generate_command(
-                    request=request,
-                    guidelines=guidelines,
-                    operator_context=op_context,
+                executor_args, gen_result = await TribunalInvoker.run(
+                    sage_request=sage_request,
+                    investigation=investigation,
+                    g8e_context=g8e_context,
                     g8ed_event_service=g8ed_event_service,
-                    web_session_id=g8e_context.web_session_id,
-                    user_id=g8e_context.user_id,
-                    case_id=g8e_context.case_id,
-                    investigation_id=investigation.id,
-                    settings=request_settings,
-                    whitelisting_enabled=whitelisting_enabled,
-                    blacklisting_enabled=blacklisting_enabled,
-                    whitelisted_commands=whitelisted_commands,
-                    blacklisted_commands=blacklisted_commands,
-                )
-                logger.info(
-                    "[TRIBUNAL-RESULT] generate_command completed: request=%r final=%r outcome=%s",
-                    request[:80],
-                    gen_result.final_command[:80] if gen_result else None,
-                    gen_result.outcome if gen_result else None,
+                    request_settings=request_settings,
+                    tool_executor=tool_executor,
                 )
             except TribunalError as exc:
-                # All Tribunal failure modes share one exit path: log, then
-                # return a failed ToolCallResult carrying the pre-built
-                # user-facing message. The concrete subclass has already
-                # emitted its typed TRIBUNAL_SESSION_* event inside
-                # command_generator.py at the raise site, so there is
-                # nothing to emit here.
                 logger.error(
                     "[TRIBUNAL-ERROR] %s (%s): %s",
                     type(exc).__name__, tool_name, exc.user_message,
@@ -289,21 +329,6 @@ async def orchestrate_tool_execution(
                     error_msg=exc.user_message,
                 )
 
-            logger.info(
-                "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
-                gen_result.outcome, request[:80], gen_result.final_command[:80],
-            )
-            # Construct ExecutorCommandArgs with the Tribunal-produced command.
-            # This is the structural invariant: command is required in ExecutorCommandArgs.
-            executor_args = ExecutorCommandArgs(
-                command=gen_result.final_command,
-                request=request,
-                guidelines=guidelines,
-                target_operator=sage_request.target_operator,
-                target_operators=sage_request.target_operators,
-                expected_output_lines=sage_request.expected_output_lines,
-                timeout_seconds=sage_request.timeout_seconds,
-            )
             raw_args = executor_args.model_dump(by_alias=True)
 
     execution_id: str | None = None

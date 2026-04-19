@@ -409,7 +409,7 @@ export class OperatorPanel {
     updateOperatorListBarTitle() {
         if (!this.operatorCountElement) return;
         const boundCount = this.boundOperatorIds.length;
-        this.operatorCountElement.textContent = `(${boundCount})`;
+        this.operatorCountElement.textContent = boundCount;
     }
 
     displayInitialOperatorStatus() {

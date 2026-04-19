@@ -20,6 +20,7 @@ from app.constants import (
     CommandGenerationOutcome,
     LLMProvider,
     TribunalMember,
+    ComponentName,
     OLLAMA_DEFAULT_MODEL,
     OPENAI_DEFAULT_MODEL,
     ANTHROPIC_DEFAULT_MODEL,
@@ -428,6 +429,9 @@ class TestGenerateCommandSystemError:
             generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
         )
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
@@ -437,7 +441,7 @@ class TestGenerateCommandSystemError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=MagicMock(),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -461,6 +465,9 @@ class TestGenerateCommandSystemError:
             generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
         )
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
@@ -470,7 +477,7 @@ class TestGenerateCommandSystemError:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=MagicMock(),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -508,11 +515,13 @@ class TestGenerateCommandSystemError:
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ) as mock_factory:
+            mock_event_service = MagicMock()
+            mock_event_service.publish = AsyncMock()
             result = await generate_command(
                 request="list files",
                 guidelines="",
                 operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                g8ed_event_service=MagicMock(),
+                g8ed_event_service=mock_event_service,
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -548,6 +557,9 @@ class TestMixedErrorFallback:
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=mixed_side_effect)
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
@@ -557,7 +569,7 @@ class TestMixedErrorFallback:
                     request="list files",
                     guidelines="",
                     operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                    g8ed_event_service=MagicMock(),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -1878,6 +1890,7 @@ class TestTribunalEmitter:
             user_id="test-user",
             case_id="test-case",
             investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
         )
 
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
@@ -1903,6 +1916,7 @@ class TestTribunalEmitter:
             user_id="test-user",
             case_id="test-case",
             investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
         )
 
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
@@ -1938,21 +1952,22 @@ class TestTribunalEmitter:
             user_id="test-user",
             case_id="test-case",
             investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
         )
 
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
 
         terminal_events = [
-            (EventType.TRIBUNAL_SESSION_STARTED, TribunalSessionStartedPayload(request="test")),
-            (EventType.TRIBUNAL_SESSION_COMPLETED, TribunalSessionStartedPayload(request="test")),
+            (EventType.TRIBUNAL_SESSION_STARTED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
+            (EventType.TRIBUNAL_SESSION_COMPLETED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
             (EventType.TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
             (
                 EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
-                TribunalSessionModelNotConfiguredPayload(request="test", provider="ollama"),
+                TribunalSessionModelNotConfiguredPayload(request="test", provider="ollama", error="model not configured"),
             ),
             (
                 EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
-                TribunalSessionProviderUnavailablePayload(request="test", provider="ollama"),
+                TribunalSessionProviderUnavailablePayload(request="test", provider="ollama", error="provider unavailable"),
             ),
             (
                 EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,

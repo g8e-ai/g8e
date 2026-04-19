@@ -13,7 +13,7 @@
 
 import { G8eBaseModel, F, now } from './base.js';
 import { OperatorSlot } from './operator_model.js';
-import { VerifierReason } from '@g8ed/constants/agents.js';
+import { VerifierReason, TribunalOutcome } from '../constants/agents.js';
 
 // ---------------------------------------------------------------------------
 // SSE event models
@@ -282,28 +282,44 @@ export class G8eePassthroughEvent extends G8eBaseModel {
         }
 
         // Validate VerifierReason enum values in Tribunal payloads
-        const VALID_VERIFIER_REASONS = new Set([
-            VerifierReason.OK,
-            VerifierReason.REVISED,
-            VerifierReason.EMPTY_RESPONSE,
-            VerifierReason.NO_VALID_REVISION,
-            VerifierReason.VERIFIER_ERROR,
-        ]);
+        const VALID_VERIFIER_REASONS = new Set(Object.values(VerifierReason));
 
-        // Check for Tribunal events with reason field
+        // Validate TribunalOutcome enum values in Tribunal payloads
+        const VALID_TRIBUNAL_OUTCOMES = new Set(Object.values(TribunalOutcome));
+
+        // Check for Tribunal events with reason or outcome fields
         if (this._payload.data && typeof this._payload.data === 'object') {
             const reason = this._payload.data.reason;
+            const outcome = this._payload.data.outcome;
+
+            // Validate VerifierReason for specific Tribunal events
             if (reason !== undefined && reason !== null) {
-                const tribunalEventTypes = [
+                const tribunalReasonEventTypes = [
                     'g8e.v1.ai.tribunal.session.verifier.failed',
                     'g8e.v1.ai.tribunal.voting.review.completed',
                 ];
-                if (tribunalEventTypes.includes(this._payload.type)) {
+                if (tribunalReasonEventTypes.includes(this._payload.type)) {
                     if (!VALID_VERIFIER_REASONS.has(reason)) {
                         throw new Error(
                             `G8eePassthroughEvent: Invalid VerifierReason value '${reason}' ` +
                             `for Tribunal event '${this._payload.type}'. ` +
                             `Valid values: ${Array.from(VALID_VERIFIER_REASONS).join(', ')}`
+                        );
+                    }
+                }
+            }
+
+            // Validate TribunalOutcome for session completed events
+            if (outcome !== undefined && outcome !== null) {
+                const tribunalOutcomeEventTypes = [
+                    'g8e.v1.ai.tribunal.session.completed',
+                ];
+                if (tribunalOutcomeEventTypes.includes(this._payload.type)) {
+                    if (!VALID_TRIBUNAL_OUTCOMES.has(outcome)) {
+                        throw new Error(
+                            `G8eePassthroughEvent: Invalid TribunalOutcome value '${outcome}' ` +
+                            `for Tribunal event '${this._payload.type}'. ` +
+                            `Valid values: ${Array.from(VALID_TRIBUNAL_OUTCOMES).join(', ')}`
                         );
                     }
                 }

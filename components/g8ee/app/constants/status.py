@@ -30,25 +30,25 @@ def _load(filename: str) -> dict:
 _STATUS = _load("status.json")
 
 class OperatorStatus(str, Enum):
-    AVAILABLE = "available"
-    UNAVAILABLE = "unavailable"
-    OFFLINE = "offline"
-    BOUND = "bound"
-    STALE = "stale"
-    ACTIVE = "active"
-    STOPPED = "stopped"
-    TERMINATED = "terminated"
+    AVAILABLE = _STATUS["g8e.status"]["available"]
+    UNAVAILABLE = _STATUS["g8e.status"]["unavailable"]
+    OFFLINE = _STATUS["g8e.status"]["offline"]
+    BOUND = _STATUS["g8e.status"]["bound"]
+    STALE = _STATUS["g8e.status"]["stale"]
+    ACTIVE = _STATUS["g8e.status"]["active"]
+    STOPPED = _STATUS["g8e.status"]["stopped"]
+    TERMINATED = _STATUS["g8e.status"]["terminated"]
 
 class ExecutionStatus(str, Enum):
-    PENDING = "pending"
-    EXECUTING = "executing"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    TIMEOUT = "timeout"
-    CANCELLED = "cancelled"
-    CANCEL_REQUESTED = "cancel_requested"
-    DENIED = "denied"
-    FEEDBACK = "feedback"
+    PENDING = _STATUS["execution.status"]["pending"]
+    EXECUTING = _STATUS["execution.status"]["executing"]
+    COMPLETED = _STATUS["execution.status"]["completed"]
+    FAILED = _STATUS["execution.status"]["failed"]
+    TIMEOUT = _STATUS["execution.status"]["timeout"]
+    CANCELLED = _STATUS["execution.status"]["cancelled"]
+    CANCEL_REQUESTED = _STATUS["execution.status"]["cancel.requested"]
+    DENIED = _STATUS["execution.status"]["denied"]
+    FEEDBACK = _STATUS["execution.status"]["feedback"]
 
 class ComponentName(str, Enum):
     G8EE = "g8ee"
@@ -85,10 +85,10 @@ class ApiKeyStatus(str, Enum):
     SUSPENDED = "suspended"
 
 class ApprovalType(str, Enum):
-    COMMAND = "command"
-    FILE_EDIT = "file.edit"
-    INTENT = "intent"
-    AGENT_CONTINUE = "agent.continue"
+    COMMAND = _STATUS["approval.type"]["command"]
+    FILE_EDIT = _STATUS["approval.type"]["file.edit"]
+    INTENT = _STATUS["approval.type"]["intent"]
+    AGENT_CONTINUE = _STATUS["approval.type"]["agent.continue"]
 
 class CaseStatus(str, Enum):
     NEW = "New"

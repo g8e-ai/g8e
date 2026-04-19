@@ -84,6 +84,16 @@ export const VerifierReason = Object.freeze({
 });
 
 /**
+ * Tribunal Outcome
+ * Terminal outcomes the Tribunal pipeline can produce.
+ */
+export const TribunalOutcome = Object.freeze({
+    CONSENSUS:           _AGENTS['tribunal.outcome'].consensus,
+    VERIFIED:            _AGENTS['tribunal.outcome'].verified,
+    VERIFICATION_FAILED: _AGENTS['tribunal.outcome'].verification_failed,
+});
+
+/**
  * Agent Metadata
  * First-class persona definitions for all agents.
  * Each entry contains: id, display_name, icon, description, role, model_tier,

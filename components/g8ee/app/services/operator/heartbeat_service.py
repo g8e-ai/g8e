@@ -153,8 +153,15 @@ class OperatorHeartbeatService:
                 "operator_session_id": operator_session_id,
                 "system_hostname": payload.system_identity.hostname,
                 "system_os": payload.system_identity.os,
+                "system_architecture": payload.system_identity.architecture,
+                "system_cpu_count": payload.system_identity.cpu_count,
+                "system_memory_mb": payload.system_identity.memory_mb,
                 "system_user": payload.system_identity.current_user,
                 "public_ip": payload.network_info.public_ip,
+                "cpu_percent": payload.performance_metrics.cpu_percent,
+                "memory_percent": payload.performance_metrics.memory_percent,
+                "disk_percent": payload.performance_metrics.disk_percent,
+                "network_latency": payload.performance_metrics.network_latency,
                 "system_fingerprint": payload.system_fingerprint,
             }
         )

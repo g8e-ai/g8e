@@ -43,7 +43,7 @@ from typing import Optional, Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
-    g8es_BASE_URL,
+    G8ES_BASE_URL,
     get_document,
     print_banner,
     g8ed_request,

@@ -423,6 +423,7 @@ Query the g8es document store and KV store via the HTTP API. Runs inside g8ep an
 ### LFAA Audit Vault (`audit`)
 
 Query the operator's Local-First Audit Architecture (LFAA) vault (SQLite).
+Requires `--container NAME` (for operator containers with local storage) or `--db-path PATH` or `--volume NAME`.
 
 ```bash
 ./g8e data audit --container operator-test-1 stats

@@ -76,6 +76,11 @@ from app.constants import (
     VersionStability,
     AgentMode,
 )
+from app.constants.settings import (
+    CommandGenerationOutcome,
+    ApprovalErrorType,
+    AttachmentType,
+)
 from app.models.agent import (
     AgentStreamContext,
     OperatorContext,
@@ -1557,6 +1562,69 @@ class TestOperatorTypeValidation:
     def test_operator_context_accepts_string_coercion(self):
         ctx = OperatorContext(operator_id="op-1", operator_type="system")
         assert ctx.operator_type == OperatorType.SYSTEM
+
+
+class TestCommandGenerationOutcomeMatchesSharedJSON:
+    def test_consensus(self, status):
+        assert status["tribunal.outcome"]["consensus"] == CommandGenerationOutcome.CONSENSUS
+
+    def test_verified(self, status):
+        assert status["tribunal.outcome"]["verified"] == CommandGenerationOutcome.VERIFIED
+
+    def test_verification_failed(self, status):
+        assert status["tribunal.outcome"]["verification.failed"] == CommandGenerationOutcome.VERIFICATION_FAILED
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["tribunal.outcome"].keys())
+        enum_count = len(CommandGenerationOutcome)
+        assert enum_count == len(json_keys), (
+            f"CommandGenerationOutcome has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestApprovalErrorTypeMatchesSharedJSON:
+    def test_approval_publish_failure(self, status):
+        assert status["approval.error.type"]["approval.publish.failure"] == ApprovalErrorType.APPROVAL_PUBLISH_FAILURE
+
+    def test_approval_exception(self, status):
+        assert status["approval.error.type"]["approval.exception"] == ApprovalErrorType.APPROVAL_EXCEPTION
+
+    def test_approval_timeout(self, status):
+        assert status["approval.error.type"]["approval.timeout"] == ApprovalErrorType.APPROVAL_TIMEOUT
+
+    def test_invalid_intent(self, status):
+        assert status["approval.error.type"]["invalid.intent"] == ApprovalErrorType.INVALID_INTENT
+
+    def test_intent_approval_exception(self, status):
+        assert status["approval.error.type"]["intent.approval.exception"] == ApprovalErrorType.INTENT_APPROVAL_EXCEPTION
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["approval.error.type"].keys())
+        enum_count = len(ApprovalErrorType)
+        assert enum_count == len(json_keys), (
+            f"ApprovalErrorType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestAttachmentTypeMatchesSharedJSON:
+    def test_pdf(self, status):
+        assert status["attachment.type"]["pdf"] == AttachmentType.PDF
+
+    def test_image(self, status):
+        assert status["attachment.type"]["image"] == AttachmentType.IMAGE
+
+    def test_text(self, status):
+        assert status["attachment.type"]["text"] == AttachmentType.TEXT
+
+    def test_other(self, status):
+        assert status["attachment.type"]["other"] == AttachmentType.OTHER
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["attachment.type"].keys())
+        enum_count = len(AttachmentType)
+        assert enum_count == len(json_keys), (
+            f"AttachmentType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
 
 
 

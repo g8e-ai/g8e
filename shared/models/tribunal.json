@@ -121,7 +121,7 @@
     },
 
     "pipeline": {
-      "_description": "The three-stage Tribunal pipeline. Fires only for run_commands_with_operator. Sage never proposes a command; there is no fallback stage — failures raise and the tool call fails.",
+      "_description": "The three-stage Tribunal pipeline driven by five Tribunal members. Fires only for run_commands_with_operator. Sage never proposes a command; there is no fallback stage — failures raise and the tool call fails.",
 
       "stage_1_generation": {
         "name": "Generation",
