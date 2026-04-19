@@ -18,20 +18,23 @@
     <div class="operator-item-expandable">
         <div class="operator-item-details-row">
             <div class="operator-detail-item">
-                <span class="detail-label">Status</span>
-                <span class="status-text {{statusClass}}">{{statusDisplay}}</span>
+                <span class="detail-label">STATUS</span>
+                <div class="status-with-icon">
+                    <span class="status-dot {{statusClass}}"></span>
+                    <span class="status-text {{statusClass}}">{{statusDisplay}}</span>
+                </div>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">First Deployed</span>
+                <span class="detail-label">DEPLOYED</span>
                 <span class="detail-value">{{firstDeployedText}}</span>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">Last Heartbeat</span>
+                <span class="detail-label">HEARTBEAT</span>
                 <span class="detail-value">{{lastHeartbeatText}}</span>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">Operator Name</span>
-                <span class="operator-item-fingerprint {{nameClass}}">{{operatorName}}</span>
+                <span class="detail-label">OPERATOR</span>
+                <span class="detail-value {{nameClass}}">{{operatorName}}</span>
             </div>
         </div>
         <div class="operator-item-expanded-details">
@@ -90,7 +93,10 @@
                 <div class="operator-detail-grid">
                     <div class="operator-detail-item">
                         <span class="detail-label">Public IP</span>
-                        <span class="detail-value">{{publicIp}}</span>
+                        <span class="detail-value ip-value-container">
+                            <span class="operator-item-public-ip">{{publicIp}}</span>
+                            <span class="ip-visibility-toggle material-symbols-outlined" title="Show IP">visibility_off</span>
+                        </span>
                     </div>
                     <div class="operator-detail-item">
                         <span class="detail-label">Internal IP</span>

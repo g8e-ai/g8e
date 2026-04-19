@@ -232,7 +232,7 @@
 }
 
 .operator-detail-section-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -247,12 +247,12 @@
 }
 
 .operator-detail-label {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-tertiary);
 }
 
 .operator-detail-value {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 400;
     color: var(--text-secondary);
     font-family: var(--font-mono);
@@ -323,12 +323,12 @@
 }
 
 .storage-bar-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-tertiary);
 }
 
 .storage-bar-value {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     font-family: var(--font-mono);

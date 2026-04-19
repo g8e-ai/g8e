@@ -794,12 +794,12 @@
 }
 
 .operator-list-item.is-g8ep {
-  background: linear-gradient(135deg, 
-    rgba(var(--primary-rgb), 0.08) 0%, 
-    rgba(var(--primary-rgb), 0.05) 50%,
-    rgba(var(--primary-rgb), 0.03) 100%);
-  border-color: rgba(var(--primary-rgb), 0.5);
-  border-left: 4px solid var(--primary-color);
+  background: linear-gradient(135deg,
+    rgba(var(--secondary-color-rgb), 0.08) 0%,
+    rgba(var(--secondary-color-rgb), 0.05) 50%,
+    rgba(var(--secondary-color-rgb), 0.03) 100%);
+  border-color: rgba(var(--secondary-color-rgb), 0.5);
+  border-left: 4px solid var(--secondary-color);
 }
 
 /* Light theme adjustments */
@@ -1008,6 +1008,68 @@
   color: var(--accent-green);
 }
 
+.status-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.active {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(var(--accent-green-rgb), 0.6);
+}
+
+.status-dot.bound {
+  background-color: var(--accent-green);
+  box-shadow: 0 0 8px rgba(var(--accent-green-rgb), 0.6);
+}
+
+.status-dot.stale {
+  background-color: var(--warning-color);
+  box-shadow: 0 0 8px rgba(var(--accent-amber-rgb), 0.6);
+}
+
+.status-dot.stopped {
+  background-color: var(--danger-color);
+  box-shadow: 0 0 8px rgba(var(--accent-red-rgb), 0.6);
+}
+
+.status-dot.available {
+  background-color: var(--info-color);
+  box-shadow: 0 0 8px rgba(var(--accent-blue-rgb), 0.6);
+}
+
+.status-dot.inactive {
+  background-color: var(--text-muted);
+}
+
+.operator-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(var(--text-rgb), 0.15);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.operator-pill.not-deployed {
+  color: var(--text-muted);
+  background: rgba(var(--text-muted-rgb), 0.1);
+}
+
 .operator-detail-item {
   display: flex;
   flex-direction: column;
@@ -1015,7 +1077,7 @@
 }
 
 .detail-label {
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -1023,7 +1085,7 @@
 }
 
 .detail-value {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
   font-family: var(--font-mono);

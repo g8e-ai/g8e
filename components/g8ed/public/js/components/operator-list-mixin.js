@@ -14,7 +14,7 @@
 import { devLogger } from '../utils/dev-logger.js';
 import { OperatorStatus } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
-import { timeAgo, parseISOString, formatForDisplay } from '../utils/timestamp.js';
+import { timeAgo, timeAgoShort, parseISOString, formatForDisplay } from '../utils/timestamp.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { webSessionService } from '../utils/web-session-service.js';
 import { OperatorDialogs, OperatorAlerts } from '../constants/operator-messages.js';
@@ -31,6 +31,13 @@ import { showConfirmationModal } from '../utils/ui-utils.js';
  * Mixed into OperatorPanel via Object.assign(OperatorPanel.prototype, OperatorListMixin).
  */
 export const OperatorListMixin = {
+
+    _obfuscateIp(ip) {
+        if (!ip || ip === ' - ') return ' - ';
+        const parts = ip.split('.');
+        if (parts.length !== 4) return '•••••••••';
+        return `${parts[0]}.${'•'.repeat(parts[1].length)}.${'•'.repeat(parts[2].length)}.${'•'.repeat(parts[3].length)}`;
+    },
 
     displayOperators(operators) {
         if (!this.operatorList) {
@@ -117,7 +124,7 @@ export const OperatorListMixin = {
                 if (!timestamp) return ' - ';
                 const date = parseISOString(timestamp);
                 const diffMs = Date.now() - date.getTime();
-                if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgo(date);
+                if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgoShort(date);
                 return formatForDisplay(date);
             };
 
@@ -161,7 +168,8 @@ export const OperatorListMixin = {
             const cpuCount = systemInfo.cpu_count !== null && systemInfo.cpu_count !== undefined ? systemInfo.cpu_count : ' - ';
             const memoryMb = systemInfo.memory_mb !== null && systemInfo.memory_mb !== undefined ? systemInfo.memory_mb : ' - ';
             const currentUser = systemInfo.current_user || ' - ';
-            const publicIp = systemInfo.public_ip || ' - ';
+            const actualPublicIp = systemInfo.public_ip || ' - ';
+            const publicIp = this._obfuscateIp(actualPublicIp);
             const internalIp = systemInfo.internal_ip || ' - ';
 
             item.classList.add(statusClass);
@@ -255,6 +263,27 @@ export const OperatorListMixin = {
                 toggleBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     item.classList.toggle('expanded');
+                });
+            }
+
+            const ipToggleBtn = item.querySelector('.ip-visibility-toggle');
+            const ipElement = item.querySelector('.operator-item-public-ip');
+            if (ipToggleBtn && ipElement) {
+                ipElement.setAttribute('data-actual-ip', actualPublicIp);
+                ipToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isVisible = ipElement.getAttribute('data-ip-visible') === 'true';
+                    if (isVisible) {
+                        ipElement.textContent = this._obfuscateIp(actualPublicIp);
+                        ipElement.setAttribute('data-ip-visible', 'false');
+                        ipToggleBtn.textContent = 'visibility_off';
+                        ipToggleBtn.title = 'Show IP';
+                    } else {
+                        ipElement.textContent = actualPublicIp;
+                        ipElement.setAttribute('data-ip-visible', 'true');
+                        ipToggleBtn.textContent = 'visibility';
+                        ipToggleBtn.title = 'Hide IP';
+                    }
                 });
             }
 
