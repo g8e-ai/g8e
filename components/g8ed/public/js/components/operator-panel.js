@@ -129,7 +129,20 @@ export class OperatorPanel {
             devLogger.warn('[OPERATOR-PANEL] Ignoring OPERATOR_PANEL_LIST_UPDATED without operators array', data);
             return;
         }
-        this._operators = data.operators;
+        // Preserve merged heartbeat data when updating from keepalive
+        // to prevent heartbeat snapshots from being overwritten by backend data
+        this._operators = data.operators.map(newOp => {
+            const existingOp = this._operators.find(op => op.operator_id === newOp.operator_id);
+            if (existingOp && existingOp.latest_heartbeat_snapshot) {
+                // Preserve the heartbeat snapshot if the new data doesn't have it
+                return {
+                    ...newOp,
+                    latest_heartbeat_snapshot: newOp.latest_heartbeat_snapshot || existingOp.latest_heartbeat_snapshot,
+                    system_info: newOp.system_info || existingOp.system_info
+                };
+            }
+            return newOp;
+        });
         this._totalOperatorCount = data.total_count || 0;
         this._activeOperatorCount = data.active_count || 0;
         this._usedSlots = data.used_slots || 0;

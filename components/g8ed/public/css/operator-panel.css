@@ -499,6 +499,15 @@
   font-weight: 700;
 }
 
+.operator-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 
 .operator-drawer-header {
   display: flex;

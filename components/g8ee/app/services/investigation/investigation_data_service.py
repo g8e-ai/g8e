@@ -252,37 +252,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             details=metadata,
         )
 
-    async def add_heartbeat_record(
-        self,
-        investigation_id: str,
-        operator_id: str,
-        operator_session_id: str,
-        hostname: str | None = None,
-        actor: ComponentName = ComponentName.G8EO,
-    ) -> InvestigationModel:
-        """Record an operator heartbeat event in both conversation_history and history_trail."""
-        details = ConversationMessageMetadata(
-            operator_id=operator_id,
-            operator_session_id=operator_session_id,
-            hostname=hostname,
-        )
-        summary = f"Operator heartbeat received ({operator_id})"
-
-        await self.add_chat_message(
-            investigation_id=investigation_id,
-            sender=MessageSender.SYSTEM,
-            content=summary,
-            metadata=details,
-        )
-
-        return await self.add_history_entry(
-            investigation_id=investigation_id,
-            event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-            actor=actor,
-            summary=summary,
-            details=details,
-        )
-
     async def add_command_execution_result(
         self,
         investigation_id: str,

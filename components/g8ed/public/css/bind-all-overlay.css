@@ -381,20 +381,20 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 2px 8px;
+    background: rgba(var(--accent-green-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-green-rgb), 0.3);
     border-radius: 0.25rem;
-    color: #10b981;
-    font-size: 12px;
-    font-weight: 500;
+    color: var(--accent-green);
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .bind-all-btn:hover {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(var(--accent-green-rgb), 0.2);
+    border-color: rgba(var(--accent-green-rgb), 0.5);
 }
 
 .bind-all-btn:disabled {
@@ -407,24 +407,24 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 6px 12px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 2px 8px;
+    background: rgba(var(--accent-blue-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.3);
     border-radius: 0.25rem;
-    color: #ef4444;
-    font-size: 12px;
-    font-weight: 500;
+    color: var(--accent-blue);
+    font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .unbind-all-btn .material-symbols-outlined {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .unbind-all-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(var(--accent-blue-rgb), 0.2);
+    border-color: rgba(var(--accent-blue-rgb), 0.5);
 }
 
 .unbind-all-btn:disabled {
