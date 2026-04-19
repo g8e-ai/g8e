@@ -201,6 +201,32 @@ export class SettingsPage {
                 }
             }
 
+            // Try to find the selected model in ALL providers (not just active) to get its label
+            let foundLabel = null;
+            for (const provider of Object.keys(PROVIDER_MODELS)) {
+                const config = PROVIDER_MODELS[provider];
+                if (!config) continue;
+                const allModels = config.all || [];
+                const match = allModels.find(m => m.id === prevValue);
+                if (match) {
+                    foundLabel = match.label;
+                    break;
+                }
+            }
+
+            // If found in catalog but not in active providers, still set the text
+            if (foundLabel && !activeProviders.some(p => {
+                const config = PROVIDER_MODELS[p];
+                return config?.all?.some(m => m.id === prevValue);
+            })) {
+                if (text) text.textContent = foundLabel;
+            }
+
+            // Handle custom model label
+            if (!foundLabel && prevValue && this.selectedModels[`${role}CustomLabel`]) {
+                if (text) text.textContent = this.selectedModels[`${role}CustomLabel`];
+            }
+
             for (const provider of activeProviders) {
                 const config = PROVIDER_MODELS[provider];
                 if (!config) continue;
@@ -368,7 +394,7 @@ export class SettingsPage {
 
         this.sections.forEach((sec, idx) => {
             const secSettings = this.allSettings.filter(s => s.section === sec.id);
-            if (!secSettings.length) return;
+            if (!secSettings.length && sec.id !== 'advanced') return;
 
             const panel = document.createElement('div');
             panel.className = 'settings-section' + (idx === 0 ? ' active' : '');
@@ -401,49 +427,7 @@ export class SettingsPage {
     }
 
     _buildLlmSection(panel, settings) {
-        const primaryProviderSetting = settings.find(s => s.key === 'llm_primary_provider');
-        const assistantProviderSetting = settings.find(s => s.key === 'llm_assistant_provider');
-        const liteProviderSetting = settings.find(s => s.key === 'llm_lite_provider');
-        const universalSettings = settings.filter(s => s.group === 'universal');
         const providerSpecificSettings = settings.filter(s => s.provider);
-
-        const updateVisibility = () => {
-            const primary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
-            const assistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-            const lite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
-            this._updateLlmVisibility(panel, primary, assistant, lite);
-            this._updateModelDropdowns();
-        };
-
-        if (primaryProviderSetting) {
-            const field = this._buildField(primaryProviderSetting);
-            panel.appendChild(field);
-
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
-
-        if (assistantProviderSetting) {
-            const field = this._buildField(assistantProviderSetting);
-            panel.appendChild(field);
-
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
-
-        if (liteProviderSetting) {
-            const field = this._buildField(liteProviderSetting);
-            panel.appendChild(field);
-
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
 
         // Create custom model dropdown section (3 dropdowns in a row, categorized)
         const modelSelectionContainer = document.createElement('div');
@@ -476,6 +460,33 @@ export class SettingsPage {
         modelSelectionContainer.appendChild(modelFields);
         panel.appendChild(modelSelectionContainer);
 
+        // Add note about encrypted API keys
+        const encryptionNote = document.createElement('div');
+        encryptionNote.className = 'settings-encryption-note';
+        encryptionNote.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
+        encryptionNote.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
+        encryptionNote.style.borderRadius = '8px';
+        encryptionNote.style.padding = '0.75rem 1rem';
+        encryptionNote.style.marginBottom = '1rem';
+        encryptionNote.style.fontSize = '0.875rem';
+        encryptionNote.style.color = 'var(--text-secondary)';
+        encryptionNote.style.display = 'flex';
+        encryptionNote.style.alignItems = 'flex-start';
+        encryptionNote.style.gap = '0.5rem';
+
+        const noteIcon = document.createElement('span');
+        noteIcon.className = 'material-symbols-outlined';
+        noteIcon.textContent = 'lock';
+        noteIcon.style.fontSize = '1.25rem';
+        noteIcon.style.color = 'var(--accent-blue)';
+
+        const noteText = document.createElement('span');
+        noteText.textContent = 'API keys are encrypted at rest and not displayable. You can update them here if needed.';
+
+        encryptionNote.appendChild(noteIcon);
+        encryptionNote.appendChild(noteText);
+        panel.appendChild(encryptionNote);
+
         const specificContainer = document.createElement('div');
         specificContainer.className = 'settings-llm-specific';
         providerSpecificSettings.forEach(s => {
@@ -486,6 +497,10 @@ export class SettingsPage {
                 const value = this.dirty.get(s.key) || s.value;
                 if (value) {
                     this.selectedModels[role] = value;
+                    // If it's a custom model (not in any provider catalog), store as custom label
+                    if (!_modelToProvider(value)) {
+                        this.selectedModels[`${role}CustomLabel`] = value;
+                    }
                 }
                 return;
             }
@@ -495,26 +510,6 @@ export class SettingsPage {
         });
         panel.appendChild(specificContainer);
 
-        const divider = document.createElement('div');
-        divider.className = 'settings-section-divider';
-        const dividerText = document.createElement('div');
-        dividerText.className = 'settings-divider-text';
-        const icon = document.createElement('span');
-        icon.className = 'material-symbols-outlined';
-        icon.textContent = 'api';
-        dividerText.appendChild(icon);
-        dividerText.appendChild(document.createTextNode('LLM Controls & Safeguards'));
-        divider.appendChild(dividerText);
-        panel.appendChild(divider);
-
-        universalSettings.forEach(s => {
-            panel.appendChild(this._buildField(s));
-        });
-
-        const currentPrimary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
-        const currentAssistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-        const currentLite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
-        this._updateLlmVisibility(panel, currentPrimary, currentAssistant, currentLite);
         this._initModelDropdowns();
         this._updateModelDropdowns();
     }
@@ -564,15 +559,6 @@ export class SettingsPage {
         field.appendChild(dropdown);
 
         return field;
-    }
-
-    _updateLlmVisibility(panel, primaryProvider, assistantProvider, liteProvider) {
-        const specificFields = panel.querySelectorAll('.settings-llm-specific .settings-field');
-        specificFields.forEach(field => {
-            const fieldProvider = field.getAttribute('data-provider');
-            // If the field belongs to either the primary, assistant, or lite provider, show it.
-            field.style.display = (fieldProvider === primaryProvider || fieldProvider === assistantProvider || fieldProvider === liteProvider) ? 'block' : 'none';
-        });
     }
 
     _buildAdvancedSection(panel) {
@@ -763,6 +749,22 @@ export class SettingsPage {
 
         const updates = {};
         this.dirty.forEach((val, key) => { updates[key] = val; });
+
+        // Derive providers from selected models
+        const roleModelMap = {
+            'llm_model': 'llm_primary_provider',
+            'llm_assistant_model': 'llm_assistant_provider',
+            'llm_lite_model': 'llm_lite_provider'
+        };
+
+        for (const [modelKey, providerKey] of Object.entries(roleModelMap)) {
+            if (updates[modelKey]) {
+                const provider = _modelToProvider(updates[modelKey]);
+                if (provider) {
+                    updates[providerKey] = provider;
+                }
+            }
+        }
 
         try {
             const res = await fetch(ApiPaths.settings.save(), {

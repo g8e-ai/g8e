@@ -60,31 +60,38 @@
                         <input type="hidden" id="case-dropdown-value" value="">
                     </div>
                     <div class="llm-models-container">
-                        <div class="llm-model-dropdown custom-dropdown" id="llm-primary-model-dropdown" tabindex="0">
-                            <div class="llm-model-dropdown__selected">
-                                <span class="material-symbols-outlined llm-model-icon" title="Primary LLM model for complex tasks">psychology</span>
-                                <span class="llm-model-dropdown__text" id="llm-primary-model-text">Loading...</span>
-                                <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_less</span>
+                        <div class="llm-model-drawer custom-dropdown" id="llm-model-drawer" tabindex="0">
+                            <div class="llm-model-drawer__selected">
+                                <span class="material-symbols-outlined llm-model-icon" title="LLM models">model_training</span>
+                                <span class="llm-model-drawer__text" id="llm-model-drawer-text">Loading...</span>
+                                <span class="llm-model-drawer__arrow material-symbols-outlined">expand_less</span>
                             </div>
-                            <div class="llm-model-dropdown__menu" id="llm-primary-model-menu">
-                            </div>
-                        </div>
-                        <div class="llm-model-dropdown custom-dropdown" id="llm-assistant-model-dropdown" tabindex="0">
-                            <div class="llm-model-dropdown__selected">
-                                <span class="material-symbols-outlined llm-model-icon" title="Assistant LLM model for simple tasks">engineering</span>
-                                <span class="llm-model-dropdown__text" id="llm-assistant-model-text">Loading...</span>
-                                <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_less</span>
-                            </div>
-                            <div class="llm-model-dropdown__menu" id="llm-assistant-model-menu">
-                            </div>
-                        </div>
-                        <div class="llm-model-dropdown custom-dropdown" id="llm-lite-model-dropdown" tabindex="0">
-                            <div class="llm-model-dropdown__selected">
-                                <span class="material-symbols-outlined llm-model-icon" title="Lite LLM model for quick tasks">bolt</span>
-                                <span class="llm-model-dropdown__text" id="llm-lite-model-text">Loading...</span>
-                                <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_less</span>
-                            </div>
-                            <div class="llm-model-dropdown__menu" id="llm-lite-model-menu">
+                            <div class="llm-model-drawer__panel" id="llm-model-drawer-panel">
+                                <div class="llm-model-drawer__tabs">
+                                    <button class="llm-model-drawer__tab active" data-tab="primary">
+                                        <span class="material-symbols-outlined">psychology</span>
+                                        <span>Primary</span>
+                                    </button>
+                                    <button class="llm-model-drawer__tab" data-tab="assistant">
+                                        <span class="material-symbols-outlined">engineering</span>
+                                        <span>Assistant</span>
+                                    </button>
+                                    <button class="llm-model-drawer__tab" data-tab="lite">
+                                        <span class="material-symbols-outlined">bolt</span>
+                                        <span>Lite</span>
+                                    </button>
+                                </div>
+                                <div class="llm-model-drawer__content">
+                                    <div class="llm-model-drawer__tab-content active" id="llm-model-tab-primary">
+                                        <div class="llm-model-dropdown__menu" id="llm-primary-model-menu"></div>
+                                    </div>
+                                    <div class="llm-model-drawer__tab-content" id="llm-model-tab-assistant">
+                                        <div class="llm-model-dropdown__menu" id="llm-assistant-model-menu"></div>
+                                    </div>
+                                    <div class="llm-model-drawer__tab-content" id="llm-model-tab-lite">
+                                        <div class="llm-model-dropdown__menu" id="llm-lite-model-menu"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

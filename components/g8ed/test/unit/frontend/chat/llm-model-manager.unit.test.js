@@ -16,7 +16,7 @@ import { MockEventBus, MockElement } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { LlmModelManager } from '@g8ed/public/js/components/llm-model-manager.js';
 
-function buildDropdownElement(id) {
+function buildDrawerElement(id) {
     const el = new MockElement('div', id);
     el.classList = {
         _classes: new Set(),
@@ -109,36 +109,24 @@ function emitConfig(eventBus, overrides = {}) {
 describe('LlmModelManager [UNIT]', () => {
     let eventBus;
     let manager;
-    let primaryDropdown;
-    let assistantDropdown;
-    let liteDropdown;
-    let primaryText;
-    let assistantText;
-    let liteText;
+    let drawerElement;
+    let drawerText;
     let primaryMenu;
     let assistantMenu;
     let liteMenu;
 
     beforeEach(() => {
         eventBus = new MockEventBus();
-        primaryDropdown = buildDropdownElement('llm-primary-model-dropdown');
-        assistantDropdown = buildDropdownElement('llm-assistant-model-dropdown');
-        liteDropdown = buildDropdownElement('llm-lite-model-dropdown');
-        primaryText = buildTextElement('llm-primary-model-text');
-        assistantText = buildTextElement('llm-assistant-model-text');
-        liteText = buildTextElement('llm-lite-model-text');
+        drawerElement = buildDrawerElement('llm-model-drawer');
+        drawerText = buildTextElement('llm-model-drawer-text');
         primaryMenu = buildMenuElement('llm-primary-model-menu');
         assistantMenu = buildMenuElement('llm-assistant-model-menu');
         liteMenu = buildMenuElement('llm-lite-model-menu');
 
         global.document = {
             getElementById: (id) => {
-                if (id === 'llm-primary-model-dropdown') return primaryDropdown;
-                if (id === 'llm-assistant-model-dropdown') return assistantDropdown;
-                if (id === 'llm-lite-model-dropdown') return liteDropdown;
-                if (id === 'llm-primary-model-text') return primaryText;
-                if (id === 'llm-assistant-model-text') return assistantText;
-                if (id === 'llm-lite-model-text') return liteText;
+                if (id === 'llm-model-drawer') return drawerElement;
+                if (id === 'llm-model-drawer-text') return drawerText;
                 if (id === 'llm-primary-model-menu') return primaryMenu;
                 if (id === 'llm-assistant-model-menu') return assistantMenu;
                 if (id === 'llm-lite-model-menu') return liteMenu;
@@ -146,6 +134,7 @@ describe('LlmModelManager [UNIT]', () => {
             },
             createElement: (tag) => new MockElement(tag),
             addEventListener: vi.fn(),
+            querySelectorAll: () => [],
         };
 
         manager = new LlmModelManager(eventBus);

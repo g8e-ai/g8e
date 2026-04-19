@@ -754,7 +754,6 @@ export class SetupPage {
         const openaiKey = document.getElementById('openai_api_key')?.value.trim();
         if (openaiKey) {
             userSettings.openai_api_key = openaiKey;
-            userSettings.openai_endpoint = 'https://api.openai.com/v1';
         }
 
         const ollamaHost = document.getElementById('ollama_url')?.value.trim();

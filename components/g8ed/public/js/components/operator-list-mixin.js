@@ -46,6 +46,12 @@ export const OperatorListMixin = {
         const previousSelection = this.selectedMetricsOperatorId;
         const currentWebSessionId = webSessionService.getWebSessionId();
 
+        const expandedOperatorIds = new Set();
+        this.operatorList.querySelectorAll('.operator-list-item.expanded').forEach(el => {
+            const operatorId = el.getAttribute('data-operator-id');
+            if (operatorId) expandedOperatorIds.add(operatorId);
+        });
+
         devLogger.log(`[OPERATOR] Current web session ID: ${currentWebSessionId}`);
         devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`);
 
@@ -118,6 +124,46 @@ export const OperatorListMixin = {
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';
             const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
 
+            const formatPercent = (value) => {
+                if (value === null || value === undefined) return ' - ';
+                return `${Math.round(value)}%`;
+            };
+
+            const formatLatency = (latency) => {
+                if (latency === null || latency === undefined) return ' - ';
+                if (typeof latency === 'number') return `${latency.toFixed(0)}ms`;
+                return String(latency);
+            };
+
+            const formatUptime = (uptime) => {
+                if (!uptime) return ' - ';
+                if (typeof uptime === 'string') return uptime;
+                if (typeof uptime === 'number') {
+                    const seconds = uptime;
+                    const days = Math.floor(seconds / 86400);
+                    const hours = Math.floor((seconds % 86400) / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    if (days > 0) return `${days}d ${hours}h`;
+                    if (hours > 0) return `${hours}h ${minutes}m`;
+                    return `${minutes}m`;
+                }
+                return ' - ';
+            };
+
+            const cpuPercent = formatPercent(latestSnapshot.cpu_percent);
+            const memoryPercent = formatPercent(latestSnapshot.memory_percent);
+            const diskPercent = formatPercent(latestSnapshot.disk_percent);
+            const networkLatency = formatLatency(latestSnapshot.network_latency);
+            const uptime = formatUptime(latestSnapshot.uptime || latestSnapshot.uptime_seconds);
+
+            const systemOs = systemInfo.os || ' - ';
+            const architecture = systemInfo.architecture || ' - ';
+            const cpuCount = systemInfo.cpu_count !== null && systemInfo.cpu_count !== undefined ? systemInfo.cpu_count : ' - ';
+            const memoryMb = systemInfo.memory_mb !== null && systemInfo.memory_mb !== undefined ? systemInfo.memory_mb : ' - ';
+            const currentUser = systemInfo.current_user || ' - ';
+            const publicIp = systemInfo.public_ip || ' - ';
+            const internalIp = systemInfo.internal_ip || ' - ';
+
             item.classList.add(statusClass);
 
             const canBind = operator.status === OperatorStatus.ACTIVE;
@@ -189,7 +235,19 @@ export const OperatorListMixin = {
                 nameClass: !hasName ? 'not-deployed' : '',
                 operatorTypeIcon,
                 operatorTypeClass,
-                operatorTypeTitle
+                operatorTypeTitle,
+                cpuPercent,
+                memoryPercent,
+                diskPercent,
+                networkLatency,
+                uptime,
+                systemOs,
+                architecture,
+                cpuCount,
+                memoryMb,
+                currentUser,
+                publicIp,
+                internalIp
             });
 
             const toggleBtn = item.querySelector('.operator-toggle-btn');
@@ -265,6 +323,13 @@ export const OperatorListMixin = {
         });
 
         this.operatorList.replaceChildren(fragment);
+
+        expandedOperatorIds.forEach(operatorId => {
+            const cardElement = this.operatorList.querySelector(`[data-operator-id="${operatorId}"]`);
+            if (cardElement) {
+                cardElement.classList.add('expanded');
+            }
+        });
 
         this._applyDefaultMetricsSelection(sortedOperators, previousSelection);
 

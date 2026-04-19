@@ -227,10 +227,10 @@ export function createG8edApp({
 
     // Favicon
     app.get('/favicon.ico', (req, res) => {
-        const faviconPath = path.join(staticPath, 'media', 'g8e.ai.logo.tiny.png');
+        const faviconPath = path.join(staticPath, 'media', 'favicon.ico');
         if (fs.existsSync(faviconPath)) {
             res.sendFile(faviconPath, {
-                headers: { 'Content-Type': 'image/png' }
+                headers: { 'Content-Type': 'image/x-icon' }
             });
         } else {
             res.status(404).send('Favicon not found');

@@ -42,7 +42,7 @@ export function createSettingsRouter({
             const schema = settingsService.getSchema();
 
             // Minimal mapping for UI: Precedence resolved here or in UI
-            const settings = schema.map(s => {
+            const settings = schema.filter(s => s.section !== 'llm_internal').map(s => {
                 const value = userSettings[s.key] ?? platformSettings[s.key] ?? s.default;
                 return {
                     ...s,

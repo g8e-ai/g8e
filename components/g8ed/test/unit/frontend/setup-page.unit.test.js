@@ -1022,7 +1022,6 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.gemini_api_key).toBe('test-gemini-key');
             expect(settings.anthropic_api_key).toBe('test-anthropic-key');
             expect(settings.openai_api_key).toBe('test-openai-key');
-            expect(settings.openai_endpoint).toBe('https://api.openai.com/v1');
         });
 
         it('derives llm_primary_provider and llm_assistant_provider from selected models', () => {
