@@ -31,8 +31,7 @@
         "llm_max_tokens":        { "type": "integer", "required": false },
         "llm_command_gen_enabled":  { "type": "boolean", "required": false },
         "llm_command_gen_verifier": { "type": "boolean", "required": false },
-        "llm_command_gen_passes":   { "type": "integer", "required": false },
-        "llm_command_gen_temp":     { "type": "number",  "required": false }
+        "llm_command_gen_passes":   { "type": "integer", "required": false }
       },
       "search": {
         "_description": "Maps to g8ee SearchSettings model.",

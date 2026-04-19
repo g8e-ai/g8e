@@ -939,7 +939,6 @@ The following keys are read from the `settings` map inside the `platform_setting
 | `anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |
 | `anthropic_api_key` | - | Anthropic API key |
 | `gemini_api_key` | - | Google Gemini API key |
-| `llm_temperature` | `1.0` | Sampling temperature |
 | `llm_max_tokens` | `1000000` | Maximum tokens per response |
 
 #### Other Settings

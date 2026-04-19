@@ -93,7 +93,6 @@ _KEY_ORDER = [
     'llm_endpoint',
     'llm_model',
     'llm_assistant_model',
-    'llm_temperature',
     'llm_max_tokens',
     'provider',
     'model',

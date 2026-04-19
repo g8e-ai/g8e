@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
+import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, PROVIDER_MODELS } from '../constants/ai.js';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -233,21 +233,6 @@ export const USER_SETTINGS = Object.freeze([
         default: '',
     }),
     Object.freeze({
-        key: 'llm_temperature',
-        section: 'llm_internal',
-        label: 'Temperature',
-        description: 'LLM sampling temperature (0.0–2.0).',
-        type: 'text',
-        group: 'universal',
-        secret: false,
-        placeholder: '',
-        default: '',
-        validate: v => {
-            const f = parseFloat(v);
-            return !isNaN(f) && isFinite(f) && f >= 0.0 && f <= 2.0;
-        },
-    }),
-    Object.freeze({
         key: 'llm_max_tokens',
         section: 'llm_internal',
         label: 'Max Tokens',
@@ -303,18 +288,6 @@ export const USER_SETTINGS = Object.freeze([
         placeholder: '',
         default: '',
         validate: v => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 10,
-    }),
-    Object.freeze({
-        key: 'llm_command_gen_temp',
-        section: 'llm_internal',
-        label: 'Command Generation Temperature',
-        description: 'Sampling temperature for command generation passes (0.0–2.0).',
-        type: 'text',
-        group: 'universal',
-        secret: false,
-        placeholder: '',
-        default: '',
-        validate: v => !isNaN(parseFloat(v)) && isFinite(v),
     }),
 
     // -------------------------------------------------------------------------
@@ -665,7 +638,6 @@ const LLM_KEY_MAP = Object.freeze({
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes:   'llm_command_gen_passes',
-    llm_command_gen_temp:     'llm_command_gen_temp',
 });
 
 const SEARCH_KEY_MAP = Object.freeze({
@@ -725,7 +697,6 @@ const REVERSE_LLM_MAP    = Object.freeze({
     llm_command_gen_enabled: 'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes: 'llm_command_gen_passes',
-    llm_command_gen_temp:   'llm_command_gen_temp',
 });
 const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
 const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));

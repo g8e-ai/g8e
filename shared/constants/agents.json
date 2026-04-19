@@ -26,6 +26,13 @@
     "pragma": "pragma",
     "nemesis": "nemesis"
   },
+  "tribunal.verifier_reason": {
+    "ok": "ok",
+    "revised": "revised",
+    "empty_response": "empty_response",
+    "no_valid_revision": "no_valid_revision",
+    "verifier_error": "verifier_error"
+  },
   "agent.metadata": {
     "triage": {
       "id": "triage",

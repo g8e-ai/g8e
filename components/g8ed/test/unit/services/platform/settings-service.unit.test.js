@@ -177,14 +177,6 @@ describe('SettingsService [UNIT]', () => {
             expect(doc.user_id).toBe('user-1');
         });
 
-        it('validates settings against schema', async () => {
-            const result = await service.updateUserSettings('user-1', { 
-                llm_temperature: '2.5', // Invalid (> 2.0)
-                llm_primary_provider: LLMProvider.OPENAI  // Valid
-            });
-            expect(result.saved).toContain('llm_primary_provider');
-            expect(result.saved).not.toContain('llm_temperature');
-        });
 
         it('writes user_id at document level', async () => {
             await service.updateUserSettings('user-1', { llm_primary_provider: LLMProvider.GEMINI });

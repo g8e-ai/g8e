@@ -34,6 +34,7 @@ from app.constants.agents import (
     TriageIntentClassification,
     TriageRequestPosture,
     TribunalMember,
+    VerifierReason,
 )
 from app.constants.channels import (
     PubSubAction,
@@ -285,7 +286,6 @@ from app.constants.settings import (
     G8ED_CLIENT_MAX_RETRIES,
     G8ED_CLIENT_RECOVERY_TIME,
     G8ED_CLIENT_TIMEOUT,
-    VerifierReason,
     WEB_SEARCH_CLIENT_MAX_RETRIES,
     WEB_SEARCH_CLIENT_RETRY_BACKOFF,
     WEB_SEARCH_CLIENT_TIMEOUT,

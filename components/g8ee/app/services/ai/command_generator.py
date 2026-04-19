@@ -346,6 +346,18 @@ def _weighted_vote(candidates: List[CandidateCommand]) -> tuple[str | None, floa
     return winner, normalised
 
 
+_TERMINAL_TRIBUNAL_EVENTS: frozenset[EventType] = frozenset({
+    EventType.TRIBUNAL_SESSION_STARTED,
+    EventType.TRIBUNAL_SESSION_COMPLETED,
+    EventType.TRIBUNAL_SESSION_DISABLED,
+    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+    EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+})
+
+
 class TribunalEmitter:
     """Helper for emitting Tribunal SSE events with consistent context."""
 
@@ -358,7 +370,13 @@ class TribunalEmitter:
         self.ctx = g8e_context
 
     async def emit(self, event_type: EventType, payload: G8eBaseModel) -> None:
-        """Fire-and-forget SSE event. Swallows errors to prevent pipeline stalls."""
+        """Fire-and-forget SSE event. Swallows errors to prevent pipeline stalls.
+
+        Terminal events (TRIBUNAL_SESSION_*) are critical: they are the only signal
+        the frontend receives that the Tribunal has ended. If publish() fails for
+        a terminal event, log at CRITICAL and re-raise to ensure the caller is
+        aware of the failure. For progress events, log at ERROR and swallow.
+        """
         if not self.svc or not self.ctx or not self.ctx.web_session_id or not self.ctx.user_id:
             return
         try:
@@ -373,6 +391,13 @@ class TribunalEmitter:
                 )
             )
         except Exception as exc:
+            if event_type in _TERMINAL_TRIBUNAL_EVENTS:
+                logger.critical(
+                    "[TRIBUNAL_EMIT] CRITICAL: Failed to emit terminal event %s: %s. "
+                    "Frontend will not receive Tribunal completion signal.",
+                    event_type, exc
+                )
+                raise
             logger.error("[TRIBUNAL_EMIT] Failed to emit %s: %s", event_type, exc)
 
 
@@ -500,19 +525,12 @@ async def _fail_verifier(
     candidate_command: str,
     error_detail: str | None = None,
 ) -> NoReturn:
-    """Emit verifier failure events and raise TribunalVerifierFailedError.
+    """Emit verifier failure event and raise TribunalVerifierFailedError.
 
-    Centralises the dual emission pattern (TRIBUNAL_VOTING_REVIEW_COMPLETED
-    + TRIBUNAL_SESSION_VERIFIER_FAILED) and the error raise for all verifier
-    failure paths.
+    Emits TRIBUNAL_SESSION_VERIFIER_FAILED as the sole terminal signal for
+    all verifier failure paths. TRIBUNAL_VOTING_REVIEW_COMPLETED is reserved
+    for non-terminal outcomes (OK, REVISED) only.
     """
-    payload_kwargs: dict[str, Any] = {"passed": False, "reason": reason}
-    if error_detail is not None:
-        payload_kwargs["error"] = error_detail
-    await emitter.emit(
-        EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-        TribunalVerifierCompletedPayload(**payload_kwargs),
-    )
     await _emit_verifier_failed_session(
         emitter, request, reason, error_msg, candidate_command,
     )

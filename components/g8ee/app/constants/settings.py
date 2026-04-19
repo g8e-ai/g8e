@@ -171,15 +171,6 @@ class CommandGenerationOutcome(str, Enum):
     VERIFICATION_FAILED = "verification_failed"
 
 
-class VerifierReason(str, Enum):
-    __str__ = lambda self: self.value
-    OK                = "ok"
-    REVISED           = "revised"
-    EMPTY_RESPONSE    = "empty_response"
-    NO_VALID_REVISION = "no_valid_revision"
-    VERIFIER_ERROR    = "verifier_error"
-
-
 class ToolDisplayCategory(str, Enum):
     __str__ = lambda self: self.value
     EXECUTION = "execution"

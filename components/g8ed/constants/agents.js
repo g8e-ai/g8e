@@ -72,10 +72,22 @@ export const TribunalMember = Object.freeze({
 });
 
 /**
+ * Verifier Reason
+ * The Verifier's stated reason for its verdict in Tribunal SSE payloads.
+ */
+export const VerifierReason = Object.freeze({
+    OK:                _AGENTS['tribunal.verifier_reason'].ok,
+    REVISED:           _AGENTS['tribunal.verifier_reason'].revised,
+    EMPTY_RESPONSE:    _AGENTS['tribunal.verifier_reason'].empty_response,
+    NO_VALID_REVISION: _AGENTS['tribunal.verifier_reason'].no_valid_revision,
+    VERIFIER_ERROR:    _AGENTS['tribunal.verifier_reason'].verifier_error,
+});
+
+/**
  * Agent Metadata
  * First-class persona definitions for all agents.
  * Each entry contains: id, display_name, icon, description, role, model_tier,
- * temperature, tools, identity, purpose, autonomy.
+ * tools, identity, purpose, autonomy.
  */
 export const AgentMetadata = Object.freeze({
     TRIAGE:           _AGENTS['agent.metadata'].triage,

@@ -55,13 +55,16 @@ _TARGET_OPERATORS_DESCRIPTION = (
 )
 
 
-class OperatorCommandToolSchema(TargetedOperatorArgs):
-    """Sage-facing schema for run_commands_with_operator.
+class SageOperatorRequest(TargetedOperatorArgs):
+    """Sage-facing request schema for run_commands_with_operator.
 
     Sage does NOT propose shell commands. Sage articulates what it needs to
     accomplish and any creative guidelines; the Tribunal is the sole authority
     on the exact command string. The Tribunal-produced command is then routed
-    to the Operator via the internal OperatorCommandArgs payload.
+    to the Operator via ExecutorCommandArgs.
+
+    This type has NO command field — Sage literally cannot pass a command.
+    The invariant is structural, not conventional.
     """
     request: str = Field(
         default="",
@@ -86,14 +89,18 @@ class OperatorCommandToolSchema(TargetedOperatorArgs):
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
 
 
-class OperatorCommandArgs(TargetedOperatorArgs):
+class ExecutorCommandArgs(TargetedOperatorArgs):
     """Internal executor payload for run_commands_with_operator.
 
-    `command` is populated by the Tribunal after it processes Sage's `request`
-    and `guidelines`. Sage never writes to `command` directly; see
-    `OperatorCommandToolSchema` for the Sage-facing surface.
+    This type is what the executor receives AFTER the Tribunal has produced
+    the command. The `command` field is REQUIRED — this invariant is structural.
+    Sage never writes to this type directly; see SageOperatorRequest for the
+    Sage-facing surface.
+
+    Conversion from SageOperatorRequest to ExecutorCommandArgs happens in
+    orchestrate_tool_execution after Tribunal generates the command.
     """
-    command: str = Field(default="", description="Shell command produced by the Tribunal (never written by Sage).")
+    command: str = Field(..., description="Shell command produced by the Tribunal (required).")
     request: str = Field(default="", description="Sage's natural-language request passed to the Tribunal (shown to the user as justification).")
     guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal.")
     target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)

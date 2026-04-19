@@ -13,6 +13,7 @@
 
 import { G8eBaseModel, F, now } from './base.js';
 import { OperatorSlot } from './operator_model.js';
+import { VerifierReason } from '@g8ed/constants/agents.js';
 
 // ---------------------------------------------------------------------------
 // SSE event models
@@ -278,6 +279,35 @@ export class G8eePassthroughEvent extends G8eBaseModel {
                 `G8eePassthroughEvent: _payload.type must be a non-empty string, ` +
                 `got ${JSON.stringify(this._payload.type)}`
             );
+        }
+
+        // Validate VerifierReason enum values in Tribunal payloads
+        const VALID_VERIFIER_REASONS = new Set([
+            VerifierReason.OK,
+            VerifierReason.REVISED,
+            VerifierReason.EMPTY_RESPONSE,
+            VerifierReason.NO_VALID_REVISION,
+            VerifierReason.VERIFIER_ERROR,
+        ]);
+
+        // Check for Tribunal events with reason field
+        if (this._payload.data && typeof this._payload.data === 'object') {
+            const reason = this._payload.data.reason;
+            if (reason !== undefined && reason !== null) {
+                const tribunalEventTypes = [
+                    'g8e.v1.ai.tribunal.session.verifier.failed',
+                    'g8e.v1.ai.tribunal.voting.review.completed',
+                ];
+                if (tribunalEventTypes.includes(this._payload.type)) {
+                    if (!VALID_VERIFIER_REASONS.has(reason)) {
+                        throw new Error(
+                            `G8eePassthroughEvent: Invalid VerifierReason value '${reason}' ` +
+                            `for Tribunal event '${this._payload.type}'. ` +
+                            `Valid values: ${Array.from(VALID_VERIFIER_REASONS).join(', ')}`
+                        );
+                    }
+                }
+            }
         }
     }
 

@@ -215,7 +215,7 @@ class TestCommandExecutionTools:
             mock_operator_command_service.execute_command.assert_called_once()
             call_args = mock_operator_command_service.execute_command.call_args[1]
             
-            # Check the OperatorCommandArgs payload
+            # Check the ExecutorCommandArgs payload
             assert "args" in call_args
             args = call_args["args"]
             assert "ls -la" in args.command

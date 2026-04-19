@@ -19,7 +19,7 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants.status import ComponentName, CommandErrorType, ExecutionStatus
 from app.constants.events import EventType
 from app.constants.status import AITaskId
-from app.models.agent import OperatorCommandArgs
+from app.models.agent import ExecutorCommandArgs
 from app.models.command_payloads import (
     CheckPortArgs,
     FileEditPayload,
@@ -246,7 +246,7 @@ class OperatorCommandService:
 
     async def execute_command(
         self,
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
@@ -535,7 +535,7 @@ class OperatorCommandService:
     def _resolve_targets(
         self,
         operator_documents: list[OperatorDocument],
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
     ) -> list[OperatorDocument]:
         """Unified resolution for singular (`target_operator`) and batch (`target_operators`)."""
         if args.target_operators:

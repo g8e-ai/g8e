@@ -49,8 +49,9 @@ from app.models.version import VersionInfo
 
 from .agent import (
     AgentStreamContext,
-    OperatorCommandArgs,
+    ExecutorCommandArgs,
     OperatorContext,
+    SageOperatorRequest,
     StreamChunkFromModel,
     StreamChunkData,
 )

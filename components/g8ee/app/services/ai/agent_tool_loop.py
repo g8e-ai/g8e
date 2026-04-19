@@ -38,8 +38,8 @@ from app.constants.settings import (
 )
 from app.llm.llm_types import ToolCall
 from app.models.agent import (
-    OperatorCommandArgs,
-    OperatorCommandToolSchema,
+    ExecutorCommandArgs,
+    SageOperatorRequest,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
@@ -187,18 +187,18 @@ async def orchestrate_tool_execution(
     )
 
     is_operator_tool = tool_name in OPERATOR_TOOLS
-    tool_schema: OperatorCommandToolSchema | None = None
+    sage_request: SageOperatorRequest | None = None
     gen_result: CommandGenerationResult | None = None
 
     if tool_name == OperatorToolName.RUN_COMMANDS:
-        tool_schema = OperatorCommandToolSchema.model_validate(raw_args)
-        request = (tool_schema.request or "").strip()
-        guidelines = (tool_schema.guidelines or "").strip()
+        sage_request = SageOperatorRequest.model_validate(raw_args)
+        request = (sage_request.request or "").strip()
+        guidelines = (sage_request.guidelines or "").strip()
 
         if request:
             logger.info(
                 "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
-                len(request), len(guidelines), tool_schema.target_operator,
+                len(request), len(guidelines), sage_request.target_operator,
             )
             logger.info(
                 "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
@@ -211,7 +211,7 @@ async def orchestrate_tool_execution(
 
             op_context = extract_operator_context_by_target(
                 investigation,
-                tool_schema.target_operator,
+                sage_request.target_operator,
             )
             os_name = (op_context.os if op_context else None) or DEFAULT_OS_NAME
             shell = (op_context.shell if op_context else None) or DEFAULT_SHELL
@@ -293,11 +293,18 @@ async def orchestrate_tool_execution(
                 "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
                 gen_result.outcome, request[:80], gen_result.final_command[:80],
             )
-            # Inject the Tribunal-produced command into the args the executor sees.
-            # Sage never writes `command` — it is the Tribunal's authoritative output.
-            raw_args["command"] = gen_result.final_command
-            raw_args["request"] = request
-            raw_args["guidelines"] = guidelines
+            # Construct ExecutorCommandArgs with the Tribunal-produced command.
+            # This is the structural invariant: command is required in ExecutorCommandArgs.
+            executor_args = ExecutorCommandArgs(
+                command=gen_result.final_command,
+                request=request,
+                guidelines=guidelines,
+                target_operator=sage_request.target_operator,
+                target_operators=sage_request.target_operators,
+                expected_output_lines=sage_request.expected_output_lines,
+                timeout_seconds=sage_request.timeout_seconds,
+            )
+            raw_args = executor_args.model_dump(by_alias=True)
 
     execution_id: str | None = None
 
@@ -323,7 +330,7 @@ async def orchestrate_tool_execution(
     )
 
     command_display = gen_result.final_command if gen_result else (
-        tool_schema.request if tool_schema else ""
+        sage_request.request if sage_request else ""
     )
 
     display_label, display_icon, display_detail, category = tool_display_metadata(

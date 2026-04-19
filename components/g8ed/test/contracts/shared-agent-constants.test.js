@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, AgentMetadata, TribunalMember } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, AgentMetadata, TribunalMember, VerifierReason } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -80,6 +80,24 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
+    describe('VerifierReason constants', () => {
+        it('OK matches JSON', () => {
+            expect(VerifierReason.OK).toBe(_AGENTS['tribunal.verifier_reason'].ok);
+        });
+        it('REVISED matches JSON', () => {
+            expect(VerifierReason.REVISED).toBe(_AGENTS['tribunal.verifier_reason'].revised);
+        });
+        it('EMPTY_RESPONSE matches JSON', () => {
+            expect(VerifierReason.EMPTY_RESPONSE).toBe(_AGENTS['tribunal.verifier_reason'].empty_response);
+        });
+        it('NO_VALID_REVISION matches JSON', () => {
+            expect(VerifierReason.NO_VALID_REVISION).toBe(_AGENTS['tribunal.verifier_reason'].no_valid_revision);
+        });
+        it('VERIFIER_ERROR matches JSON', () => {
+            expect(VerifierReason.VERIFIER_ERROR).toBe(_AGENTS['tribunal.verifier_reason'].verifier_error);
+        });
+    });
+
     describe('AgentMetadata constants', () => {
         it('TRIAGE metadata matches JSON', () => {
             expect(AgentMetadata.TRIAGE).toEqual(_AGENTS['agent.metadata'].triage);
@@ -129,7 +147,7 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     });
 
     describe('AgentMetadata persona fields', () => {
-        const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'temperature', 'tools', 'identity', 'purpose', 'autonomy'];
+        const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'tools', 'identity', 'purpose', 'autonomy'];
         const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
 
         ALL_AGENT_KEYS.forEach(agentKey => {
@@ -150,10 +168,6 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
                 it('model_tier is a non-empty string', () => {
                     expect(typeof agent.model_tier).toBe('string');
                     expect(agent.model_tier.length).toBeGreaterThan(0);
-                });
-
-                it('temperature is null or a number', () => {
-                    expect(agent.temperature === null || typeof agent.temperature === 'number').toBe(true);
                 });
 
                 it('tools is an array', () => {

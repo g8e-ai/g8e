@@ -55,12 +55,11 @@ usage() {
     echo "  --openai-api-key     OpenAI API key (llm_api_key)"
     echo "  --gemini-api-key     Gemini API key (gemini_api_key)"
     echo "  --anthropic-api-key  Anthropic API key (anthropic_api_key)"
-    echo "  --temperature        LLM temperature (llm_temperature)"
     echo "  --max-tokens         Max tokens (llm_max_tokens)"
     echo ""
     echo "Examples:"
     echo "  ./setup-llm.sh setup --provider gemini --gemini-api-key AIza..."
-    echo "  ./setup-llm.sh set --primary-llm gpt-4o --temperature 0.5"
+    echo "  ./setup-llm.sh set --primary-llm gpt-4o"
     echo "  ./setup-llm.sh show"
     exit 0
 }
@@ -76,7 +75,6 @@ ARG_ENDPOINT=""
 ARG_API_KEY=""
 ARG_GEMINI_KEY=""
 ARG_ANTHROPIC_KEY=""
-ARG_TEMPERATURE=""
 ARG_MAX_TOKENS=""
 NON_INTERACTIVE=false
 
@@ -107,8 +105,6 @@ case "$COMMAND" in
                 --gemini-api-key)      ARG_GEMINI_KEY="$2";             shift 2 ;;
                 --anthropic-api-key=*) ARG_ANTHROPIC_KEY="${1#*=}";      shift 1 ;;
                 --anthropic-api-key)   ARG_ANTHROPIC_KEY="$2";          shift 2 ;;
-                --temperature=*)       ARG_TEMPERATURE="${1#*=}";       shift 1 ;;
-                --temperature)         ARG_TEMPERATURE="$2";            shift 2 ;;
                 --max-tokens=*)        ARG_MAX_TOKENS="${1#*=}";        shift 1 ;;
                 --max-tokens)          ARG_MAX_TOKENS="$2";             shift 2 ;;
                 -h|--help)             usage ;;
@@ -198,7 +194,6 @@ case "$COMMAND" in
         [[ -n "$ARG_API_KEY" ]]       && SET_ARGS+=("llm_api_key=$ARG_API_KEY")
         [[ -n "$ARG_GEMINI_KEY" ]]    && SET_ARGS+=("gemini_api_key=$ARG_GEMINI_KEY")
         [[ -n "$ARG_ANTHROPIC_KEY" ]] && SET_ARGS+=("anthropic_api_key=$ARG_ANTHROPIC_KEY")
-        [[ -n "$ARG_TEMPERATURE" ]]   && SET_ARGS+=("llm_temperature=$ARG_TEMPERATURE")
         [[ -n "$ARG_MAX_TOKENS" ]]    && SET_ARGS+=("llm_max_tokens=$ARG_MAX_TOKENS")
 
         if [[ ${#SET_ARGS[@]} -eq 0 ]]; then

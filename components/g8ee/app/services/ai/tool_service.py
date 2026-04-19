@@ -39,7 +39,7 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.llm.prompts import load_prompt
 from app.errors import ExternalServiceError, ValidationError, ConfigurationError
 from app.llm.llm_types import schema_from_model
-from app.models.agent import OperatorCommandArgs, OperatorCommandToolSchema
+from app.models.agent import ExecutorCommandArgs, SageOperatorRequest
 from app.models.model_configs import get_model_config
 from app.models.tool_results import (
     CommandConstraintsResult,
@@ -241,14 +241,14 @@ class AIToolService:
     def _build_run_operator_commands_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
         """Register tool metadata and executor for Operator command execution."""
 
-        def run_commands_with_operator(args: OperatorCommandArgs) -> ToolResult:
+        def run_commands_with_operator(args: ExecutorCommandArgs) -> ToolResult:
             raise NotImplementedError("run_commands_with_operator should be called via execute_tool_call")
 
         declaration = types.ToolDeclaration(
             name=OperatorToolName.RUN_COMMANDS,
             description=load_prompt(PromptFile.TOOL_RUN_COMMANDS),
             parameters=schema_from_model(
-                OperatorCommandToolSchema,
+                SageOperatorRequest,
                 required_override=["request"],
             ),
         )
@@ -445,7 +445,7 @@ class AIToolService:
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
     ) -> ToolResult:
-        args = OperatorCommandArgs.model_validate(tool_args)
+        args = ExecutorCommandArgs.model_validate(tool_args)
         logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
         result = await self.execute_command(
             args, g8e_context, investigation, request_settings=request_settings
@@ -856,7 +856,7 @@ class AIToolService:
 
     async def execute_command(
         self,
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,

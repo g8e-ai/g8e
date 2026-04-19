@@ -198,5 +198,54 @@
     "data": {
       "web_session_id": "test-web-session-id"
     }
+  },
+  "tribunal_session_started": {
+    "type": "g8e.v1.ai.tribunal.session.started",
+    "data": {
+      "request": "test request",
+      "guidelines": "",
+      "model": "gemini-3.1-pro-preview",
+      "num_passes": 3,
+      "members": ["axiom", "concord", "variance"],
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_verifier_failed": {
+    "type": "g8e.v1.ai.tribunal.session.verifier.failed",
+    "data": {
+      "request": "test request",
+      "reason": "no_valid_revision",
+      "error": "Verifier could not produce valid revision",
+      "candidate_command": "ls -la",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_voting_review_completed": {
+    "type": "g8e.v1.ai.tribunal.voting.review.completed",
+    "data": {
+      "passed": true,
+      "revision": null,
+      "reason": "ok",
+      "error": null,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_session_completed": {
+    "type": "g8e.v1.ai.tribunal.session.completed",
+    "data": {
+      "request": "test request",
+      "final_command": "ls -la",
+      "outcome": "verified",
+      "vote_score": 0.95,
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
   }
 }

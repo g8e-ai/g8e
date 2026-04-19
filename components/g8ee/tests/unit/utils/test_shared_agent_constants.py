@@ -65,6 +65,18 @@ class TestAgentConstantsMatchSharedJSON:
         actual = set(_AGENTS["agent.metadata"].keys())
         assert actual == expected
 
+class TestVerifierReason:
+    """VerifierReason enum matches shared constants."""
+
+    def test_verifier_reason_matches_shared_constants(self):
+        json_vals = _AGENTS["tribunal.verifier_reason"]
+        assert VerifierReason.OK.value == json_vals["ok"]
+        assert VerifierReason.REVISED.value == json_vals["revised"]
+        assert VerifierReason.EMPTY_RESPONSE.value == json_vals["empty_response"]
+        assert VerifierReason.NO_VALID_REVISION.value == json_vals["no_valid_revision"]
+        assert VerifierReason.VERIFIER_ERROR.value == json_vals["verifier_error"]
+
+
 class TestAgentMetadataPersonaFields:
     """Verifies all agents have first-class persona fields."""
 

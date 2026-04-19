@@ -1460,13 +1460,9 @@ class TestGenerateCommandVerifierFailure:
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
-
-        started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
-        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_STARTED)
-        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED)
-        assert started_idx < review_started_idx < review_completed_idx
 
     @pytest.mark.asyncio
     async def test_no_valid_revision_raises_through_generate_command(self):
@@ -1511,7 +1507,8 @@ class TestGenerateCommandVerifierFailure:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
@@ -1554,7 +1551,8 @@ class TestGenerateCommandVerifierFailure:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
@@ -1861,5 +1859,119 @@ class TestTribunalMemberCycling:
         assert _member_for_pass(7) == TribunalMember.VARIANCE
         assert _member_for_pass(8) == TribunalMember.PRAGMA
         assert _member_for_pass(9) == TribunalMember.NEMESIS
+
+
+class TestTribunalEmitter:
+    """TribunalEmitter distinguishes terminal from progress events and handles publish failures appropriately."""
+
+    @pytest.mark.asyncio
+    async def test_terminal_event_publish_failure_raises(self):
+        """Terminal event publish failures are re-raised to ensure caller is aware of the failure."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
+
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
+
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+        )
+
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
+
+        with pytest.raises(RuntimeError, match="broker down"):
+            await emitter.emit(
+                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+                TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
+            )
+
+    @pytest.mark.asyncio
+    async def test_progress_event_publish_failure_swallowed(self):
+        """Progress event publish failures are logged but not re-raised."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
+        from app.models.agents.tribunal import TribunalPassCompletedPayload
+
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
+
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+        )
+
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
+
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            TribunalPassCompletedPayload(
+                pass_index=0, member=TribunalMember.AXIOM, candidate="ls", success=True
+            ),
+        )
+
+        mock_event_service.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_all_terminal_events_raise_on_publish_failure(self):
+        """All TRIBUNAL_SESSION_* events are terminal and should re-raise on publish failure."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
+        from app.models.agents.tribunal import (
+            TribunalSessionStartedPayload,
+            TribunalSessionDisabledPayload,
+            TribunalSessionModelNotConfiguredPayload,
+            TribunalSessionProviderUnavailablePayload,
+            TribunalSessionSystemErrorPayload,
+            TribunalSessionVerifierFailedPayload,
+        )
+
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
+
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+        )
+
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
+
+        terminal_events = [
+            (EventType.TRIBUNAL_SESSION_STARTED, TribunalSessionStartedPayload(request="test")),
+            (EventType.TRIBUNAL_SESSION_COMPLETED, TribunalSessionStartedPayload(request="test")),
+            (EventType.TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
+            (
+                EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+                TribunalSessionModelNotConfiguredPayload(request="test", provider="ollama"),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+                TribunalSessionProviderUnavailablePayload(request="test", provider="ollama"),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                TribunalSessionSystemErrorPayload(request="test", pass_errors=["error"]),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+                TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+                TribunalSessionVerifierFailedPayload(
+                    request="test", reason=VerifierReason.VERIFIER_ERROR, error="error", candidate_command="ls"
+                ),
+            ),
+        ]
+
+        for event_type, payload in terminal_events:
+            with pytest.raises(RuntimeError, match="broker down"):
+                await emitter.emit(event_type, payload)
 
 

@@ -69,3 +69,17 @@ class TribunalMember(str, Enum):
     VARIANCE = _AGENTS["tribunal.members"]["variance"]
     PRAGMA = _AGENTS["tribunal.members"]["pragma"]
     NEMESIS = _AGENTS["tribunal.members"]["nemesis"]
+
+
+class VerifierReason(str, Enum):
+    """The Verifier's stated reason for its verdict.
+
+    These values are emitted in Tribunal SSE payloads and must match
+    the shared constants in shared/constants/agents.json.
+    """
+    __str__ = lambda self: self.value
+    OK                = _AGENTS["tribunal.verifier_reason"]["ok"]
+    REVISED           = _AGENTS["tribunal.verifier_reason"]["revised"]
+    EMPTY_RESPONSE    = _AGENTS["tribunal.verifier_reason"]["empty_response"]
+    NO_VALID_REVISION = _AGENTS["tribunal.verifier_reason"]["no_valid_revision"]
+    VERIFIER_ERROR    = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
