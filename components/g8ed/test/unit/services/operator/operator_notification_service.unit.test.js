@@ -14,8 +14,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorNotificationService } from '@g8ed/services/operator/operator_notification_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
-import { EventType } from '@g8ed/constants/events.js';
-import { OperatorPanelListUpdatedEvent } from '@g8ed/models/sse_models.js';
 
 describe('OperatorNotificationService', () => {
     let service;
@@ -41,9 +39,7 @@ describe('OperatorNotificationService', () => {
 
     describe('broadcastOperatorListToUser', () => {
         it('should be no-op since keepalive now provides full operator list', async () => {
-            const userId = 'u-123';
-
-            await service.broadcastOperatorListToUser(userId, calculateSlotUsageFn);
+            await service.broadcastOperatorListToUser('u-123', calculateSlotUsageFn);
 
             expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
             expect(mocks.operatorDataService.queryOperators).not.toHaveBeenCalled();
@@ -53,10 +49,7 @@ describe('OperatorNotificationService', () => {
 
     describe('broadcastOperatorListToSession', () => {
         it('should be no-op since keepalive now provides full operator list', async () => {
-            const userId = 'u-123';
-            const webSessionId = 'ws-123';
-
-            await service.broadcastOperatorListToSession(userId, webSessionId, calculateSlotUsageFn);
+            await service.broadcastOperatorListToSession('u-123', 'ws-123', calculateSlotUsageFn);
 
             expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
             expect(mocks.operatorDataService.queryOperators).not.toHaveBeenCalled();
@@ -68,58 +61,13 @@ describe('OperatorNotificationService', () => {
         });
     });
 
-    describe('broadcastOperatorContext', () => {
-        it('should broadcast operator context to web session', async () => {
-            const webSessionId = 'ws-123';
-            const operatorId = 'op-1';
-            const context = {
-                case_id: 'case-123',
-                investigation_id: 'inv-456',
-                task_id: 'task-789',
-            };
-
-            await service.broadcastOperatorContext(webSessionId, operatorId, context);
-
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(1);
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledWith(webSessionId, expect.any(OperatorPanelListUpdatedEvent));
-
-            const event = mocks.sseService.publishEvent.mock.calls[0][1];
-            expect(event.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
-            expect(event.data.operator_id).toBe(operatorId);
-            expect(event.data.case_id).toBe(context.case_id);
-            expect(event.data.investigation_id).toBe(context.investigation_id);
-            expect(event.data.task_id).toBe(context.task_id);
-            expect(event.data.timestamp).toBeInstanceOf(Date);
-        });
-
-        it('should handle missing webSessionId gracefully', async () => {
-            await service.broadcastOperatorContext(null, 'op-1', {});
-            expect(mocks.sseService.publishEvent).not.toHaveBeenCalled();
-        });
-
-        it('should handle missing sseService gracefully', async () => {
-            const unstableService = new OperatorNotificationService({
-                webSessionService: mocks.webSessionService,
-                operatorDataService: mocks.operatorDataService,
-                sseService: null
-            });
-
-            await expect(unstableService.broadcastOperatorContext('ws-1', 'op-1', {}))
-                .resolves.not.toThrow();
-        });
-
-        it('should handle null context fields', async () => {
-            const webSessionId = 'ws-123';
-            const operatorId = 'op-1';
-
-            await service.broadcastOperatorContext(webSessionId, operatorId, {});
-
-            expect(mocks.sseService.publishEvent).toHaveBeenCalledTimes(1);
-            const event = mocks.sseService.publishEvent.mock.calls[0][1];
-            expect(event.data.operator_id).toBe(operatorId);
-            expect(event.data.case_id).toBeNull();
-            expect(event.data.investigation_id).toBeNull();
-            expect(event.data.task_id).toBeNull();
+    describe('no sparse OPERATOR_PANEL_LIST_UPDATED publisher', () => {
+        it('does not expose broadcastOperatorContext (regression guard)', () => {
+            // The removed broadcastOperatorContext published a sparse
+            // {operator_id, case_id, investigation_id} payload under
+            // OPERATOR_PANEL_LIST_UPDATED, colliding with the full-list
+            // shape and wiping the operator panel on every heartbeat.
+            expect(service.broadcastOperatorContext).toBeUndefined();
         });
     });
 });

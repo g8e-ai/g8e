@@ -137,7 +137,7 @@ class TestOperatorCommandValidator:
             operator_id="op-test-1",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-1",
-            web_session_id="web-session-1",
+            bound_web_session_id="web-session-1",
         )
 
         result = await validator.validate_operator_binding(
@@ -152,7 +152,7 @@ class TestOperatorCommandValidator:
             operator_id="op-test-1",
             status=OperatorStatus.ACTIVE,
             operator_session_id="op-session-1",
-            web_session_id="web-session-1",
+            bound_web_session_id="web-session-1",
         )
 
         result = await validator.validate_operator_binding(
@@ -168,7 +168,7 @@ class TestOperatorCommandValidator:
             operator_id="op-test-1",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-1",
-            web_session_id="web-session-DIFFERENT",
+            bound_web_session_id="web-session-DIFFERENT",
         )
 
         result = await validator.validate_operator_binding(
@@ -184,7 +184,7 @@ class TestOperatorCommandValidator:
             operator_id="op-test-1",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-DIFFERENT",
-            web_session_id="web-session-1",
+            bound_web_session_id="web-session-1",
         )
 
         result = await validator.validate_operator_binding(

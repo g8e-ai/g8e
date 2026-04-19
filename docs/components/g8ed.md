@@ -1126,7 +1126,7 @@ SSE event type constants follow a strict naming convention:
 
 **Initialization order in `app.js`:**
 1. `SSEConnectionManager` constructed — registers the `EventType`
-2. `OperatorPanel` constructed — immediately calls `_setupWireListeners()`, which subscribes to `EventType.OPERATOR_PANEL_LIST_UPDATED`, `EventType.OPERATOR_HEARTBEAT_SENT`, and all `OPERATOR_STATUS_UPDATED_*` events on the `EventBus`
+2. `OperatorPanel` constructed — immediately calls `_setupWireListeners()`, which subscribes to `EventType.OPERATOR_PANEL_LIST_UPDATED`, `EventType.OPERATOR_HEARTBEAT_RECEIVED`, and all `OPERATOR_STATUS_UPDATED_*` events on the `EventBus`
 3. SSE connection opens (on `EventType.PLATFORM_AUTH_COMPONENT_INITIALIZED_AUTHSTATE`)
 4. `OperatorPanel.init()` called (on `EventType.PLATFORM_AUTH_COMPONENT_INITIALIZED_CHAT`) — renders DOM, then applies any `_pendingRender` payload that arrived before render
 

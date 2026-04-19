@@ -156,8 +156,6 @@ class TestTribunalSessionStartedPayloadRegression:
             model=model,
             num_passes=3,
             members=[],
-            os_name="linux",
-            shell="bash",
         )
         assert payload.model == "gemma3:1b"
 

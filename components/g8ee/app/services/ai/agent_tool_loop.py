@@ -41,6 +41,7 @@ from app.constants.settings import (
 from app.llm.llm_types import ToolCall
 from app.models.agent import (
     OperatorCommandArgs,
+    OperatorCommandToolSchema,
     ToolCallResponse,
     StreamChunkData,
     StreamChunkFromModel,
@@ -56,6 +57,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalFallbackPayload,
+    TribunalDisabledError,
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
@@ -135,20 +137,27 @@ def merge_grounding(
 
 def _tribunal_error_result(
     tool_name: str,
-    original_command: str,
+    request: str,
     error_msg: str,
 ) -> ToolCallResult:
+    """Build a failed ToolCallResult when the Tribunal cannot produce a command.
+
+    Sage never proposes a command, so we surface the original request string
+    (truncated if long) as the display detail so the UI and the LLM can see
+    what Sage asked for.
+    """
     error_result = CommandExecutionResult(
         success=False,
         error=error_msg,
         error_type=CommandErrorType.EXECUTION_ERROR,
     )
+    display_detail = request if len(request) <= 200 else request[:200] + "..."
     return ToolCallResult(
         tool_name=tool_name,
         call_info=StreamChunkData(
             tool_name=tool_name,
             execution_id=None,
-            command=original_command,
+            command=display_detail,
             is_operator_tool=True,
         ),
         result_info=StreamChunkData(
@@ -185,18 +194,18 @@ async def orchestrate_tool_execution(
     )
 
     is_operator_tool = tool_name in OPERATOR_TOOLS
-    typed_args: OperatorCommandArgs | None = None
+    tool_schema: OperatorCommandToolSchema | None = None
     gen_result: CommandGenerationResult | None = None
 
     if tool_name == OperatorToolName.RUN_COMMANDS:
-        typed_args = OperatorCommandArgs.model_validate(raw_args)
-        if typed_args.command:
-            original_command = typed_args.command
-            intent = typed_args.justification
+        tool_schema = OperatorCommandToolSchema.model_validate(raw_args)
+        request = (tool_schema.request or "").strip()
+        guidelines = (tool_schema.guidelines or "").strip()
 
+        if request:
             logger.info(
-                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: command=%r intent_len=%d target_operator=%s",
-                original_command[:100], len(intent), typed_args.target_operator,
+                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
+                len(request), len(guidelines), tool_schema.target_operator,
             )
             logger.info(
                 "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
@@ -209,7 +218,7 @@ async def orchestrate_tool_execution(
 
             op_context = extract_operator_context_by_target(
                 investigation,
-                typed_args.target_operator,
+                tool_schema.target_operator,
             )
             os_name = (op_context.os if op_context else None) or DEFAULT_OS_NAME
             shell = (op_context.shell if op_context else None) or DEFAULT_SHELL
@@ -250,8 +259,8 @@ async def orchestrate_tool_execution(
 
             try:
                 gen_result = await generate_command(
-                    original_command=original_command,
-                    intent=intent,
+                    request=request,
+                    guidelines=guidelines,
                     operator_context=op_context,
                     g8ed_event_service=g8ed_event_service,
                     web_session_id=g8e_context.web_session_id,
@@ -265,11 +274,20 @@ async def orchestrate_tool_execution(
                     blacklisted_commands=blacklisted_commands,
                 )
                 logger.info(
-                    "[TRIBUNAL-RESULT] generate_command completed: original=%r final=%r outcome=%s refined=%s",
-                    gen_result.original_command[:80] if gen_result else None,
+                    "[TRIBUNAL-RESULT] generate_command completed: request=%r final=%r outcome=%s",
+                    request[:80],
                     gen_result.final_command[:80] if gen_result else None,
                     gen_result.outcome if gen_result else None,
-                    gen_result.final_command != gen_result.original_command if gen_result else None,
+                )
+            except TribunalDisabledError as exc:
+                logger.error(
+                    "[TRIBUNAL-ERROR] Tribunal is disabled — Sage cannot execute commands: %s",
+                    exc,
+                )
+                return _tribunal_error_result(
+                    tool_name=tool_name,
+                    request=request,
+                    error_msg=str(exc),
                 )
             except TribunalSystemError as exc:
                 logger.error(
@@ -278,7 +296,7 @@ async def orchestrate_tool_execution(
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
-                    original_command=original_command,
+                    request=request,
                     error_msg=f"Tribunal system error: {'; '.join(exc.pass_errors)}",
                 )
             except TribunalProviderUnavailableError as exc:
@@ -291,8 +309,7 @@ async def orchestrate_tool_execution(
                     event_type=EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
                     payload=TribunalFallbackPayload(
                         reason=TribunalFallbackReason.PROVIDER_UNAVAILABLE,
-                        original_command=original_command,
-                        final_command=original_command,
+                        request=request,
                         error=f"Provider unavailable ({exc.provider}): {exc.error}",
                     ),
                     web_session_id=g8e_context.web_session_id,
@@ -301,7 +318,7 @@ async def orchestrate_tool_execution(
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
-                    original_command=original_command,
+                    request=request,
                     error_msg=f"Tribunal provider unavailable ({exc.provider}): {exc.error}",
                 )
             except TribunalGenerationFailedError as exc:
@@ -311,7 +328,7 @@ async def orchestrate_tool_execution(
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
-                    original_command=original_command,
+                    request=request,
                     error_msg=f"Tribunal generation failed: {'; '.join(exc.pass_errors)}",
                 )
             except TribunalVerifierFailedError as exc:
@@ -321,21 +338,19 @@ async def orchestrate_tool_execution(
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
-                    original_command=original_command,
+                    request=request,
                     error_msg=f"Tribunal verifier failed ({exc.reason}): {exc.error}",
                 )
 
-            if gen_result.final_command != original_command:
-                logger.info(
-                    "[CMD_GEN] Command refined: outcome=%s original=%r final=%r",
-                    gen_result.outcome, original_command, gen_result.final_command,
-                )
-                raw_args["command"] = gen_result.final_command
-            else:
-                logger.info(
-                    "[CMD_GEN] Command unchanged: outcome=%s command=%r",
-                    gen_result.outcome, original_command,
-                )
+            logger.info(
+                "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
+                gen_result.outcome, request[:80], gen_result.final_command[:80],
+            )
+            # Inject the Tribunal-produced command into the args the executor sees.
+            # Sage never writes `command` — it is the Tribunal's authoritative output.
+            raw_args["command"] = gen_result.final_command
+            raw_args["request"] = request
+            raw_args["guidelines"] = guidelines
 
     execution_id: str | None = None
 
@@ -360,7 +375,9 @@ async def orchestrate_tool_execution(
         tool_name, result.success, execution_id, result.error_type,
     )
 
-    command_display = typed_args.command if typed_args else ""
+    command_display = gen_result.final_command if gen_result else (
+        tool_schema.request if tool_schema else ""
+    )
 
     display_label, display_icon, display_detail, category = tool_display_metadata(
         tool_name, command_display

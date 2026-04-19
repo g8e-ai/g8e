@@ -290,13 +290,10 @@ flowchart LR
     subgraph g8ed [g8ed Component]
         D --> E[internal_sse_routes.js]
         E --> F{Special Event?}
-        F -- OPERATOR_PANEL_LIST_UPDATED --> G[OperatorService.getUserOperators]
-        G --> H[Replace with full operator list]
         F -- LLM_CHAT_ITERATION_CITATIONS_RECEIVED --> I[normalizeCitationNums]
         I --> J[Normalize citation numbers]
         F -- Other --> K[G8eePassthroughEvent wrapper]
-        H --> L[SSEService.publishEvent]
-        J --> L
+        J --> L[SSEService.publishEvent]
         K --> L
         L --> M[SSE connection sendToLocal]
     end
@@ -338,10 +335,9 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 | Event Type | Transformation | Purpose |
 |---|---|---|
-| `OPERATOR_PANEL_LIST_UPDATED` | Replaces g8ee's single-operator payload with g8ed's full operator list via `OperatorService.getUserOperators()` | Frontend needs complete operator panel state, not just the changed operator |
 | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` | Normalizes `citation_num` values to sequential 1-based integers via `normalizeCitationNums()` | g8ee may emit non-sequential citation numbers; frontend requires sequential display |
 
-- Fallback behavior: If operator list fetch fails, logs error and falls back to original g8ee event (prevents silent data loss)
+- `OPERATOR_PANEL_LIST_UPDATED` is emitted exclusively by g8ed (attached to SSE keepalive frames) and carries the full operator list; g8ee does not publish this event.
 - Wraps all other events in `G8eePassthroughEvent` for passthrough delivery
 
 **`SSEService.publishEvent`** (`components/g8ed/services/platform/sse_service.js`)
@@ -429,8 +425,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 **g8ed unit tests** (`components/g8ed/test/unit/routes/internal/internal_sse_routes.unit.test.js`):
 - Tests citation normalization for `LLM_CHAT_ITERATION_CITATIONS_RECEIVED`
-- Tests operator list replacement for `OPERATOR_PANEL_LIST_UPDATED`
-- Tests fallback behavior when operator list fetch fails
+- Tests passthrough of `OPERATOR_PANEL_LIST_UPDATED` (no transformation — keepalive provides the full list)
 - Tests malformed event payload handling
 
 **Frontend unit tests** (`components/g8ed/test/unit/frontend/sse/sse-connection-manager.unit.test.js`):

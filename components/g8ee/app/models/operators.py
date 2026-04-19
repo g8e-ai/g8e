@@ -927,17 +927,6 @@ class BatchCommandBroadcastEvent(G8eBaseModel):
     timestamp: datetime = Field(default_factory=now)
 
 
-class OperatorPanelListUpdatedPayload(G8eBaseModel):
-    """Broadcast payload for OPERATOR_PANEL_LIST_UPDATED SSE events.
-
-    Pushed directly from g8ee to g8ed via EventService when operator context
-    changes (investigation_id or case_id updates on heartbeat).
-    """
-    operator_id: str
-    case_id: str | None = None
-    investigation_id: str | None = None
-
-
 class FileEditBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_FILE_EDIT_COMPLETED / OPERATOR_FILE_EDIT_FAILED."""
     file_path: str

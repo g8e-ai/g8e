@@ -258,7 +258,14 @@ class OperatorCommandService:
         dispatches correlated by a batch_id. For N==1 the return shape matches legacy behavior.
         """
         command = args.command.strip()
-        justification = args.justification.strip()
+        # Sage never writes `command` directly; the Tribunal produces it from
+        # Sage's request+guidelines. The approval UI still shows a "justification"
+        # line to the user, which in the new model is Sage's natural-language
+        # request (plus optional guidelines).
+        justification_parts = [args.request.strip()] if args.request else []
+        if args.guidelines and args.guidelines.strip():
+            justification_parts.append(f"Guidelines: {args.guidelines.strip()}")
+        justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
 
         logger.info("[COMMAND] Starting execution: %s", command)
 

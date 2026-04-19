@@ -14,45 +14,47 @@
 """
 Tribunal Command Generator
 
-Implements the five-member heterogeneous AI panel (The Tribunal) for
-syntactically precise command generation.
+Implements the five-member heterogeneous AI panel (The Tribunal) as the sole
+authority for shell command generation. Sage (the primary LLM) never proposes
+commands directly; Sage sends the Tribunal a natural-language `request` and
+optional `guidelines`, and the Tribunal produces the command.
 
 Pipeline (fires only for run_commands_with_operator):
 
-  1. Generation  — N independent passes produce candidate command strings for
-                   the same intent + context. Each pass uses a different Tribunal
-                   member persona to encourage diverse candidates.
+  1. Generation  — N independent passes each read Sage's request + guidelines
+                   plus the operator context. Each pass uses a different Tribunal
+                   member persona to surface ideologically distinct candidates.
 
-  2. Voting      — Candidates are normalised (strip trailing whitespace / newlines)
-                   and grouped by exact value. Each unique string receives a weight
-                   equal to the sum of position-decay weights of its occurrences:
-                   weight[i] = 1 / (pass_index + 1), so earlier passes carry more
-                   weight when the Tribunal agrees quickly. The string with the
-                   highest aggregate weight becomes the vote winner.
+  2. Voting      — Candidates are normalised (strip whitespace, drop markdown
+                   fences) and grouped by exact value. Each unique string receives
+                   a weight equal to the sum of position-decay weights of its
+                   occurrences: weight[i] = 1 / (pass_index + 1). The string with
+                   the highest aggregate weight becomes the vote winner.
 
-  3. Verification — A separate fast Tribunal call (the verifier) evaluates the
-                    winner strictly against the original intent and reports either
-                    "ok" or a short revised command. If the verifier signals a
-                    problem it returns the revised string; we use that instead and
-                    record VERIFICATION_FAILED.
+  3. Verification — A separate fast Tribunal call (the Verifier) evaluates the
+                    winner against Sage's request + guidelines. It responds with
+                    either the literal string "ok" or a short revised command.
+                    A non-ok response without a valid revision raises.
 
-  4. Fallback     — If the Tribunal produces no consensus (all candidates unique,
-                    or total weight tie, or any unrecoverable error) the original
-                    Large LLM command is used unchanged and FALLBACK is recorded.
+Failure modes (all raise — there is no fallback command because Sage never
+proposed one):
 
-The Large LLM is never involved in this pipeline: it already proposed the
-command through the normal ReAct loop. The Tribunal only refines the syntactic
-accuracy of that proposal.
+  - TribunalDisabledError          — llm_command_gen_enabled=False
+  - TribunalModelNotConfiguredError — neither assistant_model nor primary_model set
+  - TribunalProviderUnavailableError — provider init failed
+  - TribunalSystemError             — all passes failed with system errors
+  - TribunalGenerationFailedError   — all passes failed for non-system reasons
+  - TribunalVerifierFailedError     — verifier returned unusable output
 
 Configuration:
 
   llm_command_gen_passes    — Number of Tribunal generation passes (default: 3)
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
-  LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
+  llm_command_gen_enabled   — master switch; when False the tool errors
 
 Tribunal behavioral diversity comes from the ideological voice of each persona
-(Axiom minimalist, Concord guardian, Variance exhaustive, Pragma conventional, Nemesis adversary),
-not from numerical parameters. The Verifier likewise runs at the model default.
+(Axiom minimalist, Concord guardian, Variance exhaustive, Pragma conventional,
+Nemesis adversary), not from numerical parameters.
     """
 
 import asyncio
@@ -82,6 +84,7 @@ from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
+    TribunalDisabledError,
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
@@ -193,11 +196,15 @@ def _format_forbidden_patterns_message() -> str:
     )
 
 
-def _prompt_fields(operator_context: OperatorContext | None) -> dict[str, str]:
+def _prompt_fields(
+    operator_context: OperatorContext | None,
+    request: str,
+    guidelines: str,
+) -> dict[str, str]:
     """Build the common template kwargs used by every Tribunal persona prompt.
 
     Returns a dict with keys: os, shell, working_directory, user_context,
-    operator_context, forbidden_patterns_message.
+    operator_context, forbidden_patterns_message, request, guidelines.
 
     Centralising this avoids each stage re-deriving the same fields and
     guarantees that every persona sees consistent context.
@@ -220,6 +227,8 @@ def _prompt_fields(operator_context: OperatorContext | None) -> dict[str, str]:
         "user_context": user_context,
         "operator_context": _build_operator_context_string(operator_context),
         "forbidden_patterns_message": _format_forbidden_patterns_message(),
+        "request": request.strip() if request else "",
+        "guidelines": guidelines.strip() if guidelines else "(none)",
     }
 
 
@@ -276,10 +285,7 @@ def _resolve_model(llm: LLMSettings) -> str:
         return llm.resolved_assistant_model
     if llm.primary_model:
         return llm.primary_model
-    raise TribunalModelNotConfiguredError(
-        provider=llm.primary_provider,
-        original_command="",
-    )
+    raise TribunalModelNotConfiguredError(provider=llm.primary_provider)
 
 
 _TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
@@ -364,8 +370,8 @@ class TribunalEmitter:
 async def _run_generation_pass(
     provider: LLMProvider,
     model: str,
-    intent: str,
-    original_command: str,
+    request: str,
+    guidelines: str,
     operator_context: OperatorContext | None,
     pass_index: int,
     emitter: TribunalEmitter,
@@ -380,11 +386,9 @@ async def _run_generation_pass(
     member = _member_for_pass(pass_index)
     member_persona = get_tribunal_member(member.value)
 
-    fields = _prompt_fields(operator_context)
+    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
     prompt = member_persona.persona.format(
         command_constraints_message=command_constraints_message,
-        intent=intent,
-        original_command=original_command,
         **fields,
     )
     logger.info(
@@ -457,7 +461,8 @@ async def _run_generation_pass(
 async def _run_verifier(
     provider: LLMProvider,
     model: str,
-    intent: str,
+    request: str,
+    guidelines: str,
     candidate_command: str,
     operator_context: OperatorContext | None,
     emitter: TribunalEmitter,
@@ -473,10 +478,9 @@ async def _run_verifier(
 
     verifier_persona = get_agent_persona("auditor")
 
-    fields = _prompt_fields(operator_context)
+    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
     prompt = verifier_persona.get_system_prompt().format(
         command_constraints_message=command_constraints_message,
-        intent=intent,
         candidate_command=candidate_command,
         **fields,
     )
@@ -541,7 +545,7 @@ async def _run_verifier(
         raise TribunalVerifierFailedError(
             reason="no_valid_revision",
             error=f"Verifier returned non-ok answer without valid revision: {answer[:100]}",
-            original_command=candidate_command,
+            candidate_command=candidate_command,
         )
 
     except TribunalVerifierFailedError:
@@ -557,7 +561,7 @@ async def _run_verifier(
             raise TribunalVerifierFailedError(
                 reason="empty_response",
                 error=f"Verifier returned empty response: {exc}",
-                original_command=candidate_command,
+                candidate_command=candidate_command,
             ) from exc
         logger.error("[TRIBUNAL] Verifier failed with exception; cannot verify candidate: %s", exc)
         await emitter.emit(
@@ -567,15 +571,15 @@ async def _run_verifier(
         raise TribunalVerifierFailedError(
             reason="exception",
             error=str(exc),
-            original_command=candidate_command,
+            candidate_command=candidate_command,
         )
 
 
 async def _run_generation_stage(
     provider: LLMProvider,
     model: str,
-    intent: str,
-    original_command: str,
+    request: str,
+    guidelines: str,
     operator_context: OperatorContext | None,
     num_passes: int,
     emitter: TribunalEmitter,
@@ -589,7 +593,7 @@ async def _run_generation_stage(
     pass_errors: List[str] = []
     pass_tasks = [
         _run_generation_pass(
-            provider=provider, model=model, intent=intent, original_command=original_command,
+            provider=provider, model=model, request=request, guidelines=guidelines,
             operator_context=operator_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
             command_constraints_message=command_constraints_message,
         )
@@ -612,29 +616,24 @@ async def _run_generation_stage(
                 EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
                 TribunalFallbackPayload(
                     reason=TribunalFallbackReason.SYSTEM_ERROR,
-                    original_command=original_command,
-                    final_command=original_command,
+                    request=request,
                     pass_errors=pass_errors,
                 ),
             )
-            raise TribunalSystemError(
-                pass_errors=pass_errors,
-                original_command=original_command,
-            )
+            raise TribunalSystemError(pass_errors=pass_errors, request=request)
 
         logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(
                 reason=TribunalFallbackReason.ALL_PASSES_FAILED,
-                original_command=original_command,
-                final_command=original_command,
+                request=request,
                 pass_errors=pass_errors if pass_errors else None,
             ),
         )
         raise TribunalGenerationFailedError(
             pass_errors=pass_errors if pass_errors else ["No candidates produced"],
-            original_command=original_command,
+            request=request,
         )
 
     return candidates
@@ -642,7 +641,7 @@ async def _run_generation_stage(
 
 async def _run_voting_stage(
     candidates: list[CandidateCommand],
-    original_command: str,
+    request: str,
     emitter: TribunalEmitter,
 ) -> tuple[str, float]:
     """Stage 2: compute weighted majority vote and emit consensus event.
@@ -659,7 +658,7 @@ async def _run_voting_stage(
             vote_winner=vote_winner,
             vote_score=vote_score,
             num_candidates=len(candidates),
-            original_command=original_command,
+            request=request,
         ),
     )
     return vote_winner, vote_score
@@ -668,7 +667,8 @@ async def _run_voting_stage(
 async def _run_verification_stage(
     provider: LLMProvider,
     model: str,
-    intent: str,
+    request: str,
+    guidelines: str,
     vote_winner: str,
     operator_context: OperatorContext | None,
     verifier_enabled: bool,
@@ -683,7 +683,7 @@ async def _run_verification_stage(
         return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None
 
     verifier_passed, verifier_revision = await _run_verifier(
-        provider=provider, model=model, intent=intent,
+        provider=provider, model=model, request=request, guidelines=guidelines,
         candidate_command=vote_winner, operator_context=operator_context,
         emitter=emitter, command_constraints_message=command_constraints_message,
     )
@@ -696,7 +696,8 @@ async def _run_verification_stage(
 
 
 async def _build_and_emit_result(
-    original_command: str,
+    request: str,
+    guidelines: str,
     final_command: str,
     outcome: CommandGenerationOutcome,
     candidates: list[CandidateCommand],
@@ -708,7 +709,8 @@ async def _build_and_emit_result(
 ) -> CommandGenerationResult:
     """Stage 4: assemble the result model and emit the session-completed event."""
     result = CommandGenerationResult(
-        original_command=original_command,
+        request=request,
+        guidelines=guidelines,
         final_command=final_command,
         outcome=outcome,
         candidates=candidates,
@@ -721,19 +723,18 @@ async def _build_and_emit_result(
     await emitter.emit(
         EventType.TRIBUNAL_SESSION_COMPLETED,
         TribunalSessionCompletedPayload(
-            original_command=original_command,
+            request=request,
             final_command=final_command,
             outcome=outcome,
             vote_score=vote_score,
-            refined=final_command != original_command,
         ),
     )
     return result
 
 
 async def generate_command(
-    original_command: str,
-    intent: str,
+    request: str,
+    guidelines: str,
     operator_context: OperatorContext | None,
     g8ed_event_service: EventService,
     web_session_id: str,
@@ -746,14 +747,23 @@ async def generate_command(
     whitelisted_commands: list[str] | None = None,
     blacklisted_commands: list[dict[str, str]] | None = None,
 ) -> CommandGenerationResult:
-    """Run the Tribunal pipeline to refine a command string."""
-    fields = _prompt_fields(operator_context)
-    os_name = fields["os"]
-    shell = fields["shell"]
+    """Run the Tribunal pipeline to generate a command from Sage's request.
+
+    Sage never proposes a command directly. `request` is Sage's natural-language
+    articulation of what the Operator must accomplish; `guidelines` is optional
+    creative guidance. The Tribunal is the sole authority on the resulting
+    command string.
+
+    Raises on any failure mode. There is no fallback — Sage did not propose a
+    command, so there is nothing to fall back to.
+    """
+    request = (request or "").strip()
+    guidelines = (guidelines or "").strip()
+    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
 
     logger.info(
-        "[TRIBUNAL-ENTRY] generate_command called: command=%r intent_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
-        original_command[:100], len(intent), os_name, shell, fields["user_context"],
+        "[TRIBUNAL-ENTRY] generate_command called: request_len=%d guidelines_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
+        len(request), len(guidelines), fields["os"], fields["shell"], fields["user_context"],
         operator_context.hostname if operator_context else None,
         operator_context.architecture if operator_context else None,
     )
@@ -789,17 +799,22 @@ async def generate_command(
     )
     emitter = TribunalEmitter(g8ed_event_service, g8e_context)
 
+    if not request:
+        raise TribunalGenerationFailedError(
+            pass_errors=["Sage submitted an empty request; cannot generate command"],
+            request=request,
+        )
+
     if not settings.llm.llm_command_gen_enabled:
-        logger.warning("[TRIBUNAL] DISABLED via llm_command_gen_enabled=False; using original command without Tribunal")
+        logger.error(
+            "[TRIBUNAL] DISABLED via llm_command_gen_enabled=False; cannot produce a command "
+            "because Sage never proposes one directly"
+        )
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
-            TribunalFallbackPayload(reason=TribunalFallbackReason.DISABLED, original_command=original_command, final_command=original_command),
+            TribunalFallbackPayload(reason=TribunalFallbackReason.DISABLED, request=request),
         )
-        return CommandGenerationResult(
-            original_command=original_command,
-            final_command=original_command,
-            outcome=CommandGenerationOutcome.DISABLED,
-        )
+        raise TribunalDisabledError(request=request)
 
     try:
         model = _resolve_model(settings.llm)
@@ -810,30 +825,29 @@ async def generate_command(
             EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED,
             TribunalFallbackPayload(
                 reason=TribunalFallbackReason.NO_MODEL_CONFIGURED,
-                original_command=original_command,
-                final_command=original_command,
+                request=request,
                 error=str(exc),
             ),
         )
-        exc.original_command = original_command
+        exc.request = request
         raise
     num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
 
     logger.info(
-        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s original_command=%r intent_chars=%d verifier_enabled=%s",
-        settings.llm.assistant_provider, model, num_passes, [m.value for m in members], original_command[:80], len(intent), settings.llm.llm_command_gen_verifier,
+        "[TRIBUNAL] Starting session: provider=%s model=%s passes=%d members=%s request_chars=%d guidelines_chars=%d verifier_enabled=%s",
+        settings.llm.assistant_provider, model, num_passes, [m.value for m in members],
+        len(request), len(guidelines), settings.llm.llm_command_gen_verifier,
     )
 
     await emitter.emit(
         EventType.TRIBUNAL_SESSION_STARTED,
         TribunalSessionStartedPayload(
-            original_command=original_command,
+            request=request,
+            guidelines=guidelines,
             model=model,
             num_passes=num_passes,
             members=members,
-            os_name=os_name,
-            shell=shell,
         ),
     )
 
@@ -844,34 +858,33 @@ async def generate_command(
         raise TribunalProviderUnavailableError(
             provider=settings.llm.assistant_provider,
             error=str(exc),
-            original_command=original_command,
+            request=request,
         ) from exc
 
     candidates = await _run_generation_stage(
-        provider=provider, model=model, intent=intent,
-        original_command=original_command, operator_context=operator_context,
-        num_passes=num_passes, emitter=emitter,
+        provider=provider, model=model, request=request, guidelines=guidelines,
+        operator_context=operator_context, num_passes=num_passes, emitter=emitter,
         command_constraints_message=command_constraints_message,
     )
 
     vote_winner, vote_score = await _run_voting_stage(
-        candidates=candidates, original_command=original_command,
-        emitter=emitter,
+        candidates=candidates, request=request, emitter=emitter,
     )
 
     final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
-        provider=provider, model=model, intent=intent,
+        provider=provider, model=model, request=request, guidelines=guidelines,
         vote_winner=vote_winner, operator_context=operator_context,
         verifier_enabled=settings.llm.llm_command_gen_verifier,
         emitter=emitter,
         command_constraints_message=command_constraints_message,
     )
 
-    # Ensure final_command is never None
-    final_command_str = final_command if final_command is not None else original_command
+    # Ensure final_command is never None — verifier contract guarantees a string,
+    # but belt-and-braces against a future refactor leaving verifier_revision empty.
+    final_command_str = final_command if final_command is not None else vote_winner
 
     return await _build_and_emit_result(
-        original_command=original_command, final_command=final_command_str,
+        request=request, guidelines=guidelines, final_command=final_command_str,
         outcome=outcome, candidates=candidates, vote_winner=vote_winner,
         vote_score=vote_score, verifier_passed=verifier_passed,
         verifier_revision=verifier_revision, emitter=emitter,

@@ -165,29 +165,6 @@ export class OperatorStatusUpdatedEvent extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OperatorPanelListUpdatedEvent  (SSE payload for OPERATOR_PANEL_LIST_UPDATED)
-// Carries operator context fields — not a status transition.
-// ---------------------------------------------------------------------------
-
-export class OperatorPanelListUpdatedData extends G8eBaseModel {
-    static fields = {
-        operator_id:      { type: F.string, required: true },
-        case_id:          { type: F.string, default: null },
-        investigation_id: { type: F.string, default: null },
-        task_id:          { type: F.string, default: null },
-        timestamp:        { type: F.date,   default: null },
-    };
-}
-
-export class OperatorPanelListUpdatedEvent extends G8eBaseModel {
-    static fields = {
-        type:      { type: F.string, required: true },
-        data:      { type: F.object, model: OperatorPanelListUpdatedData, default: null },
-        timestamp: { type: F.date,   default: () => now() },
-    };
-}
-
-// ---------------------------------------------------------------------------
 // CommandResultSSEEvent  (operator.command.completed / operator.command.failed)
 // Mirrors: components/g8ee/app/models/operators.py CommandResultBroadcastEvent
 // Schema:  shared/models/wire/result_payloads.json execution_result

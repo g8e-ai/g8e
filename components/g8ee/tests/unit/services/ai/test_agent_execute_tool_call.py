@@ -841,7 +841,10 @@ class TestTribunalRefinement:
             )
 
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.os == "ubuntu"
+        assert op_ctx.operator_id == "op-linux"
 
     async def test_generate_command_skipped_when_command_arg_missing(self):
         """Tribunal refinement must be skipped when there is no 'command' key in args."""
@@ -1000,9 +1003,10 @@ class TestTargetOperatorResolution:
 
         # Verify Tribunal received Linux operator's OS context
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["shell"] == "bash"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"
 
     async def test_target_operator_by_id_ubuntu(self):
         """Test Tribunal uses Ubuntu operator context when targeting by operator_id."""
@@ -1025,9 +1029,10 @@ class TestTargetOperatorResolution:
 
         # Verify Tribunal received Ubuntu operator's OS context
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["shell"] == "bash"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_by_hostname(self):
         """Test Tribunal resolves operator by hostname."""
@@ -1050,8 +1055,10 @@ class TestTargetOperatorResolution:
 
         # Should resolve to ubuntu operator by hostname
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_by_index(self):
         """Test Tribunal resolves operator by index."""
@@ -1074,8 +1081,10 @@ class TestTargetOperatorResolution:
 
         # Index 1 should resolve to second operator (ubuntu)
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_fallback_to_first(self):
         """Test Tribunal falls back to first operator when target not found."""
@@ -1098,8 +1107,10 @@ class TestTargetOperatorResolution:
 
         # Should fall back to first operator (linux)
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"
 
     async def test_no_target_operator_uses_first(self):
         """Test that no target_operator defaults to first operator (backward compatibility)."""
@@ -1122,5 +1133,7 @@ class TestTargetOperatorResolution:
 
         # Should use first operator (linux) by default
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"

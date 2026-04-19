@@ -471,9 +471,10 @@ export const ChatSSEHandlersMixin = {
 
         this.anchoredTerminal.showTribunal({
             id: widgetId,
-            model: data.primary_model,
+            model: data.model,
             numPasses: data.num_passes,
-            command: data.original_command,
+            request: data.request,
+            guidelines: data.guidelines,
             webSessionId: data.web_session_id,
         });
 

@@ -24,8 +24,6 @@ import {
     AuditDownloadResponse,
     OperatorStatusUpdatedData,
     OperatorStatusUpdatedEvent,
-    OperatorPanelListUpdatedData,
-    OperatorPanelListUpdatedEvent,
     CommandResultSSEEvent,
     ApprovalResponseEvent,
     DirectCommandResponseEvent,
@@ -536,91 +534,6 @@ describe('OperatorStatusUpdatedEvent [UNIT - PURE LOGIC]', () => {
         expect(wire.data instanceof OperatorStatusUpdatedData).toBe(false);
         expect(typeof wire.data).toBe('object');
         expect(wire.data.operator_id).toBe('op-123');
-    });
-});
-
-describe('OperatorPanelListUpdatedData [UNIT - PURE LOGIC]', () => {
-    it('accepts valid required fields with defaults', () => {
-        const data = OperatorPanelListUpdatedData.parse({
-            operator_id: 'op-123',
-        });
-        expect(data.operator_id).toBe('op-123');
-        expect(data.case_id).toBeNull();
-        expect(data.investigation_id).toBeNull();
-        expect(data.task_id).toBeNull();
-        expect(data.timestamp).toBeNull();
-    });
-
-    it('accepts all fields with values', () => {
-        const data = OperatorPanelListUpdatedData.parse({
-            operator_id: 'op-123',
-            case_id: 'case-1',
-            investigation_id: 'inv-1',
-            task_id: 'task-1',
-            timestamp: new Date('2026-01-01T00:00:00.000Z'),
-        });
-        expect(data.case_id).toBe('case-1');
-        expect(data.investigation_id).toBe('inv-1');
-        expect(data.task_id).toBe('task-1');
-        expect(data.timestamp).toBeInstanceOf(Date);
-    });
-
-    it('throws when operator_id is missing', () => {
-        expect(() => OperatorPanelListUpdatedData.parse({}))
-            .toThrow('operator_id is required');
-    });
-
-    it('timestamp defaults to null when not provided', () => {
-        const data = new OperatorPanelListUpdatedData({ operator_id: 'op-123' });
-        expect(data.timestamp).toBeNull();
-    });
-});
-
-describe('OperatorPanelListUpdatedEvent [UNIT - PURE LOGIC]', () => {
-    it('accepts valid event with nested OperatorPanelListUpdatedData', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: {
-                operator_id: 'op-123',
-                case_id: 'case-1',
-            },
-        });
-        expect(event.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(event.data).toBeInstanceOf(OperatorPanelListUpdatedData);
-        expect(event.data.operator_id).toBe('op-123');
-        expect(event.data.case_id).toBe('case-1');
-    });
-
-    it('defaults data to null when not provided', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({ type: 'g8e.v1.operator.panel.list.updated' });
-        expect(event.data).toBeNull();
-    });
-
-    it('throws when type is missing', () => {
-        expect(() => OperatorPanelListUpdatedEvent.parse({}))
-            .toThrow('type is required');
-    });
-
-    it('timestamp defaults to now() when not provided', () => {
-        const before = new Date();
-        const event = new OperatorPanelListUpdatedEvent({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: { operator_id: 'op-123' },
-        });
-        const after = new Date();
-        expect(event.timestamp).toBeInstanceOf(Date);
-        expect(event.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
-        expect(event.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
-
-    it('forWire() serializes nested model to plain object', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: { operator_id: 'op-123' },
-        });
-        const wire = event.forWire();
-        expect(wire.data instanceof OperatorPanelListUpdatedData).toBe(false);
-        expect(typeof wire.data).toBe('object');
     });
 });
 

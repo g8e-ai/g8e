@@ -23,7 +23,6 @@ from app.models.operators import (
     HeartbeatSSEPayload,
     OperatorDocument,
     OperatorHeartbeat,
-    OperatorPanelListUpdatedPayload,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
@@ -278,21 +277,6 @@ class OperatorHeartbeatService:
                 SessionEvent(
                     event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
                     payload=sse_payload,
-                    web_session_id=web_session_id,
-                    user_id=user_id,
-                    case_id=payload.case_id,
-                    investigation_id=payload.investigation_id,
-                )
-            )
-            # Always send OPERATOR_PANEL_LIST_UPDATED to ensure Operator Panel reflects current status
-            await self.event_service.publish(
-                SessionEvent(
-                    event_type=EventType.OPERATOR_PANEL_LIST_UPDATED,
-                    payload=OperatorPanelListUpdatedPayload(
-                        operator_id=operator.operator_id,
-                        case_id=payload.case_id,
-                        investigation_id=payload.investigation_id,
-                    ),
                     web_session_id=web_session_id,
                     user_id=user_id,
                     case_id=payload.case_id,

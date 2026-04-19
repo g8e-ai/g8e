@@ -157,13 +157,18 @@ class ErrorAnalysisCategory(str, Enum):
 
 
 class CommandGenerationOutcome(str, Enum):
+    """Terminal outcomes the Tribunal pipeline can produce.
+
+    Only successful outcomes are enumerated. Sage never proposes a command,
+    so there is no `fallback` outcome — when the Tribunal cannot produce
+    a command it raises a typed TribunalError (disabled / provider_unavailable /
+    generation_failed / system_error / verifier_failed / model_not_configured)
+    and the tool call fails.
+    """
     __str__ = lambda self: self.value
     CONSENSUS           = "consensus"
     VERIFIED            = "verified"
     VERIFICATION_FAILED = "verification_failed"
-    FALLBACK            = "fallback"
-    DISABLED            = "disabled"
-    SYSTEM_ERROR        = "system_error"
 
 
 class TribunalFallbackReason(str, Enum):

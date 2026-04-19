@@ -524,7 +524,7 @@ export class TerminalOutputMixin {
         this.scrollToBottom();
     }
 
-    async showTribunal({ id, model, numPasses, command, webSessionId }) {
+    async showTribunal({ id, model, numPasses, request, guidelines, webSessionId }) {
         if (!this.outputContainer) return null;
 
         this._removeWelcome();
@@ -562,7 +562,12 @@ export class TerminalOutputMixin {
         await templateLoader.renderTo(widget, 'tribunal', { dots });
 
         const commandEl = widget.querySelector('.tribunal__command');
-        if (commandEl) commandEl.textContent = command;
+        if (commandEl) {
+            const parts = [];
+            if (request) parts.push(request);
+            if (guidelines) parts.push(`Guidelines: ${guidelines}`);
+            commandEl.textContent = parts.join(' | ') || '';
+        }
 
         content.appendChild(widget);
         this.scrollToBottom();

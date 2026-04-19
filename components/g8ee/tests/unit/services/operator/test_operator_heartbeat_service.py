@@ -406,9 +406,15 @@ class TestOperatorHeartbeatServiceProcessMessage:
 
         assert result is False
 
-    async def test_publishes_panel_list_updated_when_investigation_present(
+    async def test_does_not_publish_panel_list_updated(
         self, service, mock_operator_data_service, mock_event_service, bound_operator
     ):
+        """Heartbeat must NOT publish OPERATOR_PANEL_LIST_UPDATED.
+
+        That event's shape is the full operator list (delivered via keepalive).
+        Publishing a sparse per-heartbeat payload under the same event type
+        causes the frontend to wipe its operator list — regression guard.
+        """
         mock_operator_data_service.get_operator.return_value = bound_operator
 
         result = await service.process_heartbeat_message(
@@ -418,35 +424,8 @@ class TestOperatorHeartbeatServiceProcessMessage:
 
         assert result is True
         event_types = [c.args[0].event_type for c in mock_event_service.publish.call_args_list]
-        assert EventType.OPERATOR_PANEL_LIST_UPDATED in event_types
-
-    async def test_publishes_panel_list_updated_when_only_case_id_present(
-        self, service, mock_operator_data_service, mock_event_service, bound_operator
-    ):
-        mock_operator_data_service.get_operator.return_value = bound_operator
-
-        result = await service.process_heartbeat_message(
-            "op-222", "op-session-111",
-            _make_payload(investigation_id=None, case_id="case-456")
-        )
-
-        assert result is True
-        event_types = [c.args[0].event_type for c in mock_event_service.publish.call_args_list]
-        assert EventType.OPERATOR_PANEL_LIST_UPDATED in event_types
-
-    async def test_sends_panel_list_updated_even_without_context(
-        self, service, mock_operator_data_service, mock_event_service, bound_operator
-    ):
-        mock_operator_data_service.get_operator.return_value = bound_operator
-
-        result = await service.process_heartbeat_message(
-            "op-222", "op-session-111",
-            _make_payload(investigation_id=None, case_id=None)
-        )
-
-        assert result is True
-        event_types = [c.args[0].event_type for c in mock_event_service.publish.call_args_list]
-        assert EventType.OPERATOR_PANEL_LIST_UPDATED in event_types
+        assert EventType.OPERATOR_PANEL_LIST_UPDATED not in event_types
+        assert EventType.OPERATOR_HEARTBEAT_RECEIVED in event_types
 
     async def test_sse_failure_does_not_fail_heartbeat(
         self, service, mock_operator_data_service, mock_event_service, bound_operator

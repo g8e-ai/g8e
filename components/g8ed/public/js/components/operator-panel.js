@@ -122,7 +122,14 @@ export class OperatorPanel {
     }
 
     _onListUpdated(data) {
-        this._operators = data.operators || [];
+        // Defense-in-depth: OPERATOR_PANEL_LIST_UPDATED must carry the full-list
+        // shape (operators array + counts). Ignore any payload that lacks an
+        // operators array so a malformed publisher cannot wipe panel state.
+        if (!data || !Array.isArray(data.operators)) {
+            devLogger.warn('[OPERATOR-PANEL] Ignoring OPERATOR_PANEL_LIST_UPDATED without operators array', data);
+            return;
+        }
+        this._operators = data.operators;
         this._totalOperatorCount = data.total_count || 0;
         this._activeOperatorCount = data.active_count || 0;
         this._usedSlots = data.used_slots || 0;

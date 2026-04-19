@@ -39,7 +39,7 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.llm.prompts import load_prompt
 from app.errors import ExternalServiceError, ValidationError, ConfigurationError
 from app.llm.llm_types import schema_from_model
-from app.models.agent import OperatorCommandArgs
+from app.models.agent import OperatorCommandArgs, OperatorCommandToolSchema
 from app.models.model_configs import get_model_config
 from app.models.tool_results import (
     CommandConstraintsResult,
@@ -248,8 +248,8 @@ class AIToolService:
             name=OperatorToolName.RUN_COMMANDS,
             description=load_prompt(PromptFile.TOOL_RUN_COMMANDS),
             parameters=schema_from_model(
-                OperatorCommandArgs,
-                required_override=["command", "justification"],
+                OperatorCommandToolSchema,
+                required_override=["request"],
             ),
         )
 

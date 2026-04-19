@@ -11,15 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { logger } from '../../utils/logger.js';
-import { OperatorStatus } from '../../constants/operator.js';
-import { EventType } from '../../constants/events.js';
-import { OperatorPanelListUpdatedEvent } from '../../models/sse_models.js';
-import { now } from '../../models/base.js';
-import { redactWebSessionId } from '../../utils/security.js';
-
 export class OperatorNotificationService {
     /**
+     * Legacy shim retained only for DI compatibility during the keepalive-driven
+     * operator panel transition. All three former broadcast paths are now no-ops:
+     *
+     *   - broadcastOperatorListToUser / broadcastOperatorListToSession:
+     *     superseded by the full operator list delivered via SSE keepalive.
+     *   - broadcastOperatorContext: removed — it published a sparse payload
+     *     under OPERATOR_PANEL_LIST_UPDATED that collided with the full-list
+     *     shape and caused the frontend to wipe the operator panel list.
+     *
      * @param {Object} options
      * @param {Object} options.webSessionService - WebSessionService instance
      * @param {Object} options.operatorDataService - OperatorDataService instance
@@ -31,40 +33,11 @@ export class OperatorNotificationService {
         this.sseService = sseService;
     }
 
-    async broadcastOperatorListToUser(userId, calculateSlotUsageFn) {
-        // Keepalive now provides full operator list - this method is no-op
-        // Individual operator updates use broadcastOperatorContext instead
+    async broadcastOperatorListToUser(_userId, _calculateSlotUsageFn) {
         return;
     }
 
-    async broadcastOperatorListToSession(userId, webSessionId, calculateSlotUsageFn) {
-        // Keepalive now provides full operator list - this method is no-op
-        // Individual operator updates use broadcastOperatorContext instead
+    async broadcastOperatorListToSession(_userId, _webSessionId, _calculateSlotUsageFn) {
         return;
-    }
-
-    async broadcastOperatorContext(webSessionId, operatorId, context) {
-        try {
-            if (!webSessionId || !this.sseService) return;
-
-            const event = new OperatorPanelListUpdatedEvent({
-                type: EventType.OPERATOR_PANEL_LIST_UPDATED,
-                data: {
-                    operator_id: operatorId,
-                    case_id: context.case_id || null,
-                    investigation_id: context.investigation_id || null,
-                    task_id: context.task_id || null,
-                    timestamp: now(),
-                },
-            });
-
-            await this.sseService.publishEvent(webSessionId, event);
-        } catch (error) {
-            logger.error('[OPERATOR-NOTIFY] Failed to broadcast operator context', { 
-                operatorId, 
-                webSessionId: redactWebSessionId(webSessionId), 
-                error: error.message 
-            });
-        }
     }
 }

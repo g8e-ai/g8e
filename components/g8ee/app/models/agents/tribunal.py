@@ -26,13 +26,14 @@ class TribunalSystemError(Exception):
 
     System errors include authentication failures, network errors, and
     configuration problems. These are distinct from legitimate model
-    disagreement and must halt command execution rather than silently
-    falling back to the original command.
+    disagreement and must halt command execution. There is no fallback:
+    Sage never proposes a command, so a failed Tribunal means there is
+    no command to execute.
     """
 
-    def __init__(self, pass_errors: list[str], original_command: str) -> None:
+    def __init__(self, pass_errors: list[str], request: str) -> None:
         self.pass_errors = pass_errors
-        self.original_command = original_command
+        self.request = request
         super().__init__(
             f"All Tribunal passes failed due to system errors: {pass_errors}"
         )
@@ -45,10 +46,10 @@ class TribunalProviderUnavailableError(Exception):
     credentials, or unsupported provider) and must halt execution.
     """
 
-    def __init__(self, provider: str, error: str, original_command: str) -> None:
+    def __init__(self, provider: str, error: str, request: str) -> None:
         self.provider = provider
         self.error = error
-        self.original_command = original_command
+        self.request = request
         super().__init__(
             f"Tribunal provider unavailable ({provider}): {error}"
         )
@@ -58,13 +59,12 @@ class TribunalGenerationFailedError(Exception):
     """Raised when all generation passes fail for non-system reasons.
 
     This indicates legitimate model failures (hallucinations, refusals,
-    rate limits not classified as system errors) and must halt execution
-    rather than silently falling back.
+    rate limits not classified as system errors) and must halt execution.
     """
 
-    def __init__(self, pass_errors: list[str], original_command: str) -> None:
+    def __init__(self, pass_errors: list[str], request: str) -> None:
         self.pass_errors = pass_errors
-        self.original_command = original_command
+        self.request = request
         super().__init__(
             f"All Tribunal generation passes failed: {pass_errors}"
         )
@@ -78,10 +78,10 @@ class TribunalVerifierFailedError(Exception):
     candidate and must halt execution.
     """
 
-    def __init__(self, reason: str, error: str | None, original_command: str) -> None:
+    def __init__(self, reason: str, error: str | None, candidate_command: str) -> None:
         self.reason = reason
         self.error = error
-        self.original_command = original_command
+        self.candidate_command = candidate_command
         super().__init__(
             f"Tribunal verifier failed ({reason}): {error or 'no error details'}"
         )
@@ -95,12 +95,28 @@ class TribunalModelNotConfiguredError(Exception):
     silently guessing a provider-specific default.
     """
 
-    def __init__(self, provider: str, original_command: str) -> None:
+    def __init__(self, provider: str, request: str = "") -> None:
         self.provider = provider
-        self.original_command = original_command
+        self.request = request
         super().__init__(
             f"Tribunal model not configured for provider {provider}: "
             "set assistant_model or primary_model in LLM settings"
+        )
+
+
+class TribunalDisabledError(Exception):
+    """Raised when the Tribunal pipeline is disabled but a command was requested.
+
+    Sage never proposes commands directly; the Tribunal is the sole command
+    authority. When the Tribunal is disabled, `run_commands_with_operator`
+    cannot produce a command and must fail loudly rather than silently.
+    """
+
+    def __init__(self, request: str = "") -> None:
+        self.request = request
+        super().__init__(
+            "Tribunal is disabled (llm_command_gen_enabled=False) but Sage requested a "
+            "command. Enable the Tribunal or disable the run_commands_with_operator tool."
         )
 
 
@@ -121,8 +137,9 @@ class CandidateCommand(G8eBaseModel):
 
 class CommandGenerationResult(G8eBaseModel):
     """Result of the Tribunal command generation pipeline for a single tool call."""
-    original_command: str = Field(description="Command string proposed by the Large LLM")
-    final_command: str = Field(description="Command string chosen by the tribunal pipeline")
+    request: str = Field(description="Sage's natural-language request that seeded the Tribunal")
+    guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal")
+    final_command: str = Field(description="Command string produced by the Tribunal pipeline")
     outcome: CommandGenerationOutcome
     candidates: list[CandidateCommand] = Field(
         default_factory=list,
@@ -173,19 +190,21 @@ class TribunalVerifierCompletedPayload(G8eBaseModel):
 
 class TribunalSessionStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_STARTED events."""
-    original_command: str
+    request: str
+    guidelines: str = ""
     model: str
     num_passes: int = Field(ge=1)
     members: list[TribunalMember]
-    os_name: str
-    shell: str
 
 
 class TribunalFallbackPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_SESSION_FALLBACK_TRIGGERED events."""
+    """SSE payload for TRIBUNAL_SESSION_FALLBACK_TRIGGERED events.
+
+    Emitted only for terminal Tribunal errors (provider unavailable, all
+    passes failed, etc.). There is no fallback command — the tool fails.
+    """
     reason: TribunalFallbackReason
-    original_command: str
-    final_command: str
+    request: str
     error: str | None = None
     pass_errors: list[str] | None = None
 
@@ -195,14 +214,13 @@ class TribunalVotingCompletedPayload(G8eBaseModel):
     vote_winner: str
     vote_score: float
     num_candidates: int = Field(ge=0)
-    original_command: str
+    request: str
 
 
 class TribunalSessionCompletedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_COMPLETED events."""
-    original_command: str
+    request: str
     final_command: str
     outcome: CommandGenerationOutcome
     vote_score: float
-    refined: bool
 

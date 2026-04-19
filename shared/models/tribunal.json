@@ -79,11 +79,11 @@
     },
 
     "pipeline": {
-      "_description": "The four-stage Tribunal pipeline. Fires only for run_commands_with_operator.",
+      "_description": "The three-stage Tribunal pipeline. Fires only for run_commands_with_operator. Sage never proposes a command; there is no fallback stage — failures raise and the tool call fails.",
 
       "stage_1_generation": {
         "name": "Generation",
-        "description": "N independent passes (one per Tribunal member by default) produce candidate command strings for the same intent and context. Diversity is driven by distinct member personas.",
+        "description": "N independent passes (one per Tribunal member by default) produce candidate command strings for Sage's request + guidelines under the current operator context. Diversity is driven by distinct member personas.",
         "sse_events": ["g8e.v1.ai.tribunal.voting.pass.completed"]
       },
       "stage_2_voting": {
@@ -93,30 +93,25 @@
       },
       "stage_3_verification": {
         "name": "Verification",
-        "description": "A separate fast Tribunal call evaluates the vote winner strictly against the original intent. Reports 'ok' or a short revised command. If the verifier signals a problem, the revised string is used and VERIFICATION_FAILED is recorded.",
+        "description": "A separate fast Tribunal call evaluates the vote winner strictly against Sage's request + guidelines. Reports 'ok' or a short revised command. If the verifier signals a problem, the revised string is used and VERIFICATION_FAILED is recorded.",
         "sse_events": ["g8e.v1.ai.tribunal.voting.review.started", "g8e.v1.ai.tribunal.voting.review.completed"]
-      },
-      "stage_4_fallback": {
-        "name": "Fallback",
-        "description": "If the Tribunal produces no consensus, the original Large LLM command is used unchanged and FALLBACK is recorded.",
-        "sse_events": ["g8e.v1.ai.tribunal.session.fallback.triggered"]
       }
     },
 
     "outcomes": {
-      "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome.",
+      "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome. `fallback` is no longer a producible outcome — failures raise and the tool call fails.",
       "consensus":           "Vote winner accepted without verifier (verifier disabled).",
       "verified":            "Verifier approved the vote winner.",
-      "verification_failed": "Verifier found issues and produced a revision — final_command is the verifier's output.",
-      "fallback":            "Pipeline disabled, provider unavailable, all passes failed, or no vote winner — final_command is original_command unchanged."
+      "verification_failed": "Verifier found issues and produced a revision — final_command is the verifier's output."
     },
 
-    "fallback_reasons": {
-      "_description": "Possible TribunalFallbackReason values when outcome=fallback. See status.json tribunal.fallback.reason.",
-      "disabled":             "Master switch LLM_COMMAND_GEN_ENABLED=false.",
-      "provider_unavailable": "LLM provider threw an exception at startup.",
-      "all_passes_failed":    "Every Tribunal generation pass returned no candidate.",
-      "no_vote_winner":       "_weighted_vote returned (None, 0.0)."
+    "failure_modes": {
+      "_description": "When the Tribunal cannot produce a command the tool call fails with one of these typed errors. There is no command to fall back to because Sage never proposed one.",
+      "disabled":             "llm_command_gen_enabled=False — TribunalDisabledError raised.",
+      "provider_unavailable": "LLM provider threw an exception at startup — TribunalProviderUnavailableError raised.",
+      "all_passes_failed":    "Every Tribunal generation pass returned no candidate — TribunalGenerationFailedError or TribunalSystemError raised.",
+      "no_model_configured":  "Neither assistant_model nor primary_model is set — TribunalModelNotConfiguredError raised.",
+      "verifier_failed":      "Verifier returned an empty or unusable response — TribunalVerifierFailedError raised."
     },
 
     "configuration": {
