@@ -483,7 +483,6 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `description` | `string` | One-line functional summary |
 | `role` | `string` | Functional role (`classifier`, `reasoner`, `responder`, `arbitrator`, `validator`, `summarizer`, `tribunal_member`) |
 | `model_tier` | `string` | LLM tier used at runtime (`primary` = high-reasoning model, `assistant` = fast/lightweight model) |
-| `temperature` | `number \| null` | Advisory only. Runtime uses the model's `default_temperature`; this field documents the persona's intended sampling character when the model allows it. `null` means no preference. |
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |

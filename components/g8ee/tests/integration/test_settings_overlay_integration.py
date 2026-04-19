@@ -103,7 +103,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -187,7 +186,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -213,7 +211,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -305,7 +302,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },

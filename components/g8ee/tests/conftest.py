@@ -261,7 +261,6 @@ def _llm_settings_from_env() -> LLMSettings | None:
     assistant_endpoint = os.environ.get("TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
-    temperature_str = os.environ.get("TEST_LLM_TEMPERATURE", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
     kwargs: dict = {"provider": provider, "assistant_provider": assistant_provider}
@@ -269,11 +268,6 @@ def _llm_settings_from_env() -> LLMSettings | None:
         kwargs["primary_model"] = primary
     if assistant:
         kwargs["assistant_model"] = assistant
-    if temperature_str:
-        try:
-            kwargs["llm_temperature"] = float(temperature_str)
-        except ValueError:
-            logger.warning("TEST_LLM_TEMPERATURE=%s is not a valid float, ignoring", temperature_str)
     if max_tokens_str:
         try:
             kwargs["llm_max_tokens"] = int(max_tokens_str)
@@ -831,9 +825,8 @@ def provider_config():
     a default configuration for isolated unit tests.
     """
     from app.llm.llm_types import GenerateContentConfig
-    from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
     return GenerateContentConfig(
-        temperature=LLM_DEFAULT_TEMPERATURE,
         max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     )
 

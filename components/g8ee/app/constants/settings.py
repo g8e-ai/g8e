@@ -395,7 +395,6 @@ FS_READ_MAX_SIZE_BYTES          = 102400
 
 # System-wide LLM generation defaults
 # These are used when user/platform settings do not specify values
-LLM_DEFAULT_TEMPERATURE          = 0.4
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts

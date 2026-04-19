@@ -103,14 +103,14 @@ class OperatorLFAAService:
         g8e_message = G8eMessage(
             id=f"audit_{execution_id}",
             source_component=ComponentName.G8EE,
-            event_type=EventType.OPERATOR_LFAA_AUDIT_EVENT,
+            event_type=EventType.OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED,
             case_id=g8e_context.case_id,
             task_id=AITaskId.DIRECT_COMMAND,
             investigation_id=g8e_context.investigation_id,
             web_session_id=g8e_context.web_session_id,
             operator_session_id=bound.operator_session_id,
             operator_id=bound.operator_id,
-            payload={
+            payload={  # type: ignore[arg-type]
                 "command": command,
                 "execution_id": execution_id,
                 "operator_session_id": bound.operator_session_id,

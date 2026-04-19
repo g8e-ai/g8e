@@ -541,6 +541,7 @@ class OperatorHeartbeatServiceProtocol(Protocol):
     async def stop(self) -> None: ...
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
+    def set_pubsub_client(self, client: PubSubClient) -> None: ...
 
 @runtime_checkable
 class ApprovalServiceProtocol(Protocol):
@@ -624,7 +625,7 @@ class ToolExecutorProtocol(Protocol):
     async def execute_tool_call(
         self,
         tool_name: str,
-        args: dict[str, Any],
+        tool_args: dict[str, Any],
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,

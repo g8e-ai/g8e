@@ -6,7 +6,7 @@
 # Usage (via ./g8e test g8ee):
 #   docker compose exec g8ee-test-runner /app/scripts/testing/run_tests.sh g8ee [OPTIONS]
 
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -21,6 +21,7 @@ RUN set -ex; \
             ca-certificates \
             openssl \
             jq \
+            libatomic1 \
         && break || \
         { echo "apt-get install failed, retrying in 5s... ($i/3)"; sleep 5; }; \
     done \

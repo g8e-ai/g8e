@@ -162,7 +162,6 @@ class TestOllamaProviderGeneration:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -216,7 +215,6 @@ class TestOllamaProviderGeneration:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -254,7 +252,6 @@ class TestOllamaProviderGeneration:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = AssistantLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -284,7 +281,6 @@ class TestOllamaProviderGeneration:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = LiteLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -329,7 +325,6 @@ class TestOllamaEmptyResponseError:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -367,7 +362,6 @@ class TestOllamaEmptyResponseError:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = AssistantLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -398,7 +392,6 @@ class TestOllamaEmptyResponseError:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = LiteLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -430,7 +423,6 @@ class TestOllamaEmptyResponseError:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -463,7 +455,6 @@ class TestOllamaEmptyResponseError:
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
-            temperature=0.7,
             max_output_tokens=1000,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,

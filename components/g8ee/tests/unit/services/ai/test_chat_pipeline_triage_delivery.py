@@ -30,7 +30,6 @@ from app.constants import (
     TriageConfidence,
     TriageIntentClassification,
     AgentMode,
-    LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
@@ -119,7 +118,6 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         system_instructions="",
         contents=[],
         generation_config=PrimaryLLMSettings(
-            temperature=LLM_DEFAULT_TEMPERATURE,
             max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,

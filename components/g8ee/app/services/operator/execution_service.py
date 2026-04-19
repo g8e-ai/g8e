@@ -145,7 +145,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     def resolve_target_operator(
         self,
         operator_documents: list[OperatorDocument],
-        target_operator: str,
+        target_operator: str | None,
     ) -> OperatorDocument:
         if not operator_documents:
             raise BusinessLogicError("No operators bound to this session", component="g8ee")

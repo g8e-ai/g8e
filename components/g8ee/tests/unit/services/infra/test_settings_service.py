@@ -114,7 +114,7 @@ class TestSettingsService:
         )
 
     async def test_llm_settings_no_overrides(self):
-        """Test that llm_temperature and llm_max_tokens are None if not provided in user settings."""
+        """Test that llm_max_tokens is None if not provided in user settings."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 
@@ -139,7 +139,6 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
-        assert settings.llm.llm_temperature is None
         assert settings.llm.llm_max_tokens is None
 
     async def test_llm_settings_with_overrides(self):

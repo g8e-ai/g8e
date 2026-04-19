@@ -24,7 +24,7 @@ as PubSubService for consistency across the g8ee service layer.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     import aiohttp
@@ -169,7 +169,7 @@ class HTTPService:
         """Check if the internal session is closed."""
         if not hasattr(self, "_session") or self._session is None:
             return True
-        return cast(Any, self._session).closed
+        return self._session.closed
 
     def get_client_status(self) -> dict[str, HTTPClientStatus]:
         """Get status information for all registered clients.

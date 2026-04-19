@@ -103,7 +103,6 @@ async def test_ollama_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=llm_settings.llm_temperature,
             max_tokens=llm_settings.llm_max_tokens or 4096,
             system_instructions=system_prompt,
             tools=[],

@@ -61,15 +61,15 @@ class TestAgentConstantsMatchSharedJSON:
 
     def test_metadata_completeness(self):
         """Verify all expected agents have metadata in the shared constants."""
-        expected = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance", "memory_generator", "eval_judge", "response_analyzer", "response_analyzer_command_risk", "response_analyzer_error", "response_analyzer_file_risk"}
+        expected = {"triage", "sage", "dash", "tribunal", "auditor", "scribe", "axiom", "concord", "variance", "pragma", "nemesis", "codex", "judge", "warden", "warden_command_risk", "warden_error", "warden_file_risk"}
         actual = set(_AGENTS["agent.metadata"].keys())
         assert actual == expected
 
 class TestAgentMetadataPersonaFields:
     """Verifies all agents have first-class persona fields."""
 
-    REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "temperature", "tools", "identity", "purpose", "autonomy"}
-    ALL_AGENT_KEYS = {"triage", "primary", "assistant", "tribunal", "verifier", "title_generator", "axiom", "concord", "variance", "memory_generator", "eval_judge", "response_analyzer", "response_analyzer_command_risk", "response_analyzer_error", "response_analyzer_file_risk"}
+    REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "tools", "identity", "purpose", "autonomy"}
+    ALL_AGENT_KEYS = {"triage", "sage", "dash", "tribunal", "auditor", "scribe", "axiom", "concord", "variance", "pragma", "nemesis", "codex", "judge", "warden", "warden_command_risk", "warden_error", "warden_file_risk"}
 
     def test_all_agents_have_persona_fields(self):
         metadata = _AGENTS["agent.metadata"]
@@ -85,11 +85,6 @@ class TestAgentMetadataPersonaFields:
     def test_model_tier_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
             assert isinstance(agent["model_tier"], str) and agent["model_tier"], f"Agent '{key}' model_tier must be a non-empty string"
-
-    def test_temperature_is_null_or_number(self):
-        for key, agent in _AGENTS["agent.metadata"].items():
-            temp = agent["temperature"]
-            assert temp is None or isinstance(temp, (int, float)), f"Agent '{key}' temperature must be null or numeric, got {type(temp)}"
 
     def test_tools_is_list(self):
         for key, agent in _AGENTS["agent.metadata"].items():

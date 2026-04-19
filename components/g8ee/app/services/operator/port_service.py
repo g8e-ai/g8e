@@ -19,6 +19,7 @@ Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 
 import logging
 import uuid
+from typing import cast
 
 from app.services.protocols import (
     ExecutionRegistryProtocol,
@@ -149,7 +150,7 @@ class OperatorPortService:
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
                 case_id=case_id,
-                investigation_id=investigation.id if investigation else None,
+                investigation_id=investigation.id if investigation else "",
                 task_id=AITaskId.PORT_CHECK,
                 web_session_id=web_session_id,
                 operator_session_id=operator_session_id,
@@ -244,7 +245,7 @@ class OperatorPortService:
                     success=True,
                     host=payload.host or host,
                     port=payload.port or port,
-                    protocol=payload.protocol or protocol,
+                    protocol=cast(NetworkProtocol, payload.protocol or protocol),
                     is_open=payload.is_open,
                     latency_ms=payload.latency_ms,
                     error=payload.error,

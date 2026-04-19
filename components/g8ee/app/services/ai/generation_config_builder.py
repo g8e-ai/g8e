@@ -24,14 +24,14 @@ Separation of Concerns:
 
 import logging
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
+from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS, ThinkingLevel
 import app.llm.llm_types as types
 from app.llm.llm_types import (
     AssistantLLMSettings,
     LiteLLMSettings,
     PrimaryLLMSettings,
 )
-from app.models.model_configs import clamp_thinking_level, get_model_config
+from app.models.model_configs import clamp_thinking_level, get_model_config, LLMModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -44,22 +44,8 @@ class AIGenerationConfigBuilder:
     """
 
     @staticmethod
-    def _get_effective_temperature(
-        model_config,
-        temperature: float | None,
-    ) -> float:
-        """Get effective temperature value with fallback to model config or default."""
-        if temperature is not None:
-            return temperature
-        return (
-            model_config.default_temperature
-            if model_config and model_config.default_temperature is not None
-            else LLM_DEFAULT_TEMPERATURE
-        )
-
-    @staticmethod
     def _get_effective_max_tokens(
-        model_config,
+        model_config: LLMModelConfig | None,
         max_tokens: int | None,
     ) -> int:
         """Get effective max_tokens value with fallback to model config or default."""
@@ -73,17 +59,15 @@ class AIGenerationConfigBuilder:
 
     @staticmethod
     def _get_effective_values(
-        model_config,
-        temperature: float | None,
+        model_config: LLMModelConfig | None,
         max_tokens: int | None,
-    ) -> tuple[float, int, int | None, float | None, list[str] | None]:
+    ) -> tuple[int, int | None, float | None, list[str] | None]:
         """Get all effective values from model config with fallbacks.
 
         Returns:
-            (temperature, max_tokens, top_k, top_p, stop_sequences)
+            (max_tokens, top_k, top_p, stop_sequences)
         """
         return (
-            AIGenerationConfigBuilder._get_effective_temperature(model_config, temperature),
             AIGenerationConfigBuilder._get_effective_max_tokens(model_config, max_tokens),
             model_config.top_k if model_config else None,
             model_config.top_p if model_config else None,
@@ -152,7 +136,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_primary_settings(
         model: str,
-        temperature: float | None,
+        
         max_tokens: int | None,
         system_instructions: str,
         tools: list[types.ToolGroup],
@@ -161,12 +145,11 @@ class AIGenerationConfigBuilder:
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, max_tokens)
         )
 
         settings = PrimaryLLMSettings(
-            temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
@@ -190,7 +173,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_assistant_settings(
         model: str,
-        temperature: float | None,
+        
         max_tokens: int | None,
         system_instructions: str,
         response_format: types.ResponseFormat | None = None,
@@ -198,12 +181,11 @@ class AIGenerationConfigBuilder:
         """Build AssistantLLMSettings for analysis calls."""
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, max_tokens)
         )
 
         settings = AssistantLLMSettings(
-            temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
@@ -220,7 +202,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_lite_settings(
         model: str,
-        temperature: float | None,
+        
         max_tokens: int | None,
         system_instructions: str,
         response_format: types.ResponseFormat | None = None,
@@ -231,29 +213,27 @@ class AIGenerationConfigBuilder:
         """
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, max_tokens)
         )
 
-        settings = LiteLLMSettings(
-            temperature=effective_temperature,
+        return LiteLLMSettings(
             max_output_tokens=effective_max_tokens,
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
+            stop_sequences=stop_sequences,
             system_instructions=system_instructions,
             response_format=response_format,
-            stop_sequences=stop_sequences,
         )
 
         logger.info(
             f" [BUILD_CONFIG] lite model={model}, max_tokens={effective_max_tokens}"
         )
-        return settings
 
     @staticmethod
     def build_config(
         model: str,
-        temperature: float | None,
+        
         max_tokens: int | None,
         system_instructions: str,
         tools: list[types.ToolGroup],
@@ -262,12 +242,11 @@ class AIGenerationConfigBuilder:
         thinking_config = AIGenerationConfigBuilder._build_thinking_config(model_name=model)
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        effective_max_tokens, effective_top_k, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, max_tokens)
         )
 
         config = types.GenerateContentConfig(
-            temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
@@ -289,7 +268,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def get_lite_generation_config(
         model: str,
-        temperature: float | None,
+        
         max_tokens: int | None,
         system_instructions: str,
     ) -> types.GenerateContentConfig:
@@ -302,12 +281,11 @@ class AIGenerationConfigBuilder:
         no_thinking = types.ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False)
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, effective_top_k, effective_top_p, _ = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, temperature, max_tokens)
+        effective_max_tokens, effective_top_k, effective_top_p, _ = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, max_tokens)
         )
 
         config = types.GenerateContentConfig(
-            temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_k_filtering=effective_top_k,
             top_p_nucleus_sampling=effective_top_p,
@@ -330,15 +308,15 @@ class AIGenerationConfigBuilder:
         """
         model_config = get_model_config(model)
 
-        effective_temperature, effective_max_tokens, _, effective_top_p, stop_sequences = (
-            AIGenerationConfigBuilder._get_effective_values(model_config, None, None)
+        effective_max_tokens, _, effective_top_p, stop_sequences = (
+            AIGenerationConfigBuilder._get_effective_values(model_config, None)
         )
 
         config = types.GenerateContentConfig(
-            temperature=effective_temperature,
             max_output_tokens=effective_max_tokens,
             top_p_nucleus_sampling=effective_top_p,
             stop_sequences=stop_sequences,
+            system_instructions="",
         )
 
         logger.info(f" [BUILD_CONFIG] title model={model}")

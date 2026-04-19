@@ -25,7 +25,6 @@ from typing import Any, Optional
 
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
-    LLM_DEFAULT_TEMPERATURE,
     ThinkingLevel,
 )
 from app.models.base import G8eBaseModel
@@ -442,7 +441,6 @@ class PrimaryLLMSettings:
     map to the same values the production ``AIGenerationConfigBuilder``
     applies when platform settings omit overrides.
     """
-    temperature: float = LLM_DEFAULT_TEMPERATURE
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
@@ -462,7 +460,6 @@ class AssistantLLMSettings:
     helpers. See PrimaryLLMSettings for the rationale behind per-field
     defaults.
     """
-    temperature: float = LLM_DEFAULT_TEMPERATURE
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
@@ -479,7 +476,6 @@ class LiteLLMSettings:
     helpers. See PrimaryLLMSettings for the rationale behind per-field
     defaults.
     """
-    temperature: float = LLM_DEFAULT_TEMPERATURE
     max_output_tokens: int = LLM_DEFAULT_MAX_OUTPUT_TOKENS
     top_p_nucleus_sampling: float | None = None
     top_k_filtering: int | None = None
@@ -490,7 +486,6 @@ class LiteLLMSettings:
 
 @dataclass
 class GenerateContentConfig:
-    temperature: float
     max_output_tokens: int
     system_instructions: str
     top_p_nucleus_sampling: float | None = None

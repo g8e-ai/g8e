@@ -29,7 +29,7 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
@@ -209,7 +209,7 @@ class OperatorHeartbeatService:
         if not ts_result.is_valid:
             return RequestValidationResult(
                 is_valid=False,
-                error=ts_result.error,
+                error=ts_result.error or "Timestamp validation failed",
                 error_code=ts_result.error_code,
             )
         return RequestValidationResult(is_valid=True)

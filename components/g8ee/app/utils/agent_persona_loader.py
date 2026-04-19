@@ -37,7 +37,6 @@ class AgentPersona(BaseModel):
     description: str = Field(..., alias="description")
     role: str = Field(..., alias="role")
     model_tier: str = Field(..., alias="model_tier")
-    temperature: float | None = Field(None, alias="temperature")
     tools: list[str] = Field(default_factory=list, alias="tools")
     identity: str = Field(..., alias="identity")
     purpose: str = Field(..., alias="purpose")
@@ -108,7 +107,7 @@ def get_tribunal_member(member_id: str) -> AgentPersona:
     """Retrieve a Tribunal member persona by member ID.
     
     Args:
-        member_id: Tribunal member identifier (axiom, concord, variance)
+        member_id: Tribunal member identifier (atom, clio, nemesis)
         
     Returns:
         AgentPersona for the specified Tribunal member

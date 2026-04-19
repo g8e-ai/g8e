@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar, Token as ContextVarToken
+from typing import Any
 from app.services.operator.command_service import OperatorCommandService
 
 import app.llm.llm_types as types
@@ -29,7 +30,6 @@ from app.services.ai.tool_registry import (
     AI_UNIVERSAL_TOOLS,
     OPERATOR_TOOLS,
     TOOL_SPECS,
-    ToolScope,
 )
 from app.constants.prompts import AgentMode, PromptFile
 from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
@@ -111,7 +111,7 @@ class AIToolService:
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
-        self._tool_handlers: dict[str, Callable] = {}
+        self._tool_handlers: dict[str, Callable[..., ToolResult]] = {}
 
         for spec in TOOL_SPECS:
             if spec.requires_web_search and self.web_search_provider is None:
@@ -192,6 +192,21 @@ class AIToolService:
     def g8e_web_search_available(self) -> bool:
         """True when the g8e_web_search tool is registered (Google Custom Search configured)."""
         return OperatorToolName.G8E_SEARCH_WEB in self._tool_declarations
+
+    @property
+    def user_settings(self) -> G8eeUserSettings | None:
+        """The configured user settings."""
+        return self._user_settings
+
+    @property
+    def whitelist_validator(self) -> CommandWhitelistValidator:
+        """The configured whitelist validator."""
+        return self._whitelist_validator
+
+    @property
+    def blacklist_validator(self) -> CommandBlacklistValidator:
+        """The configured blacklist validator."""
+        return self._blacklist_validator
 
     def get_tools(
         self,

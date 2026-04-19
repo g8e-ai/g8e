@@ -102,7 +102,6 @@ async def test_gemini_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=llm.llm_temperature,
             max_tokens=llm.llm_max_tokens or 4096,
             system_instructions=system_prompt,
             tools=[],

@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from fastapi import Request
 
 from app.constants import ComponentName, HealthStatus

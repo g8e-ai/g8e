@@ -27,6 +27,7 @@ from app.constants.status import (
     CommandErrorType,
     OperatorToolName,
 )
+from app.constants.events import EventType
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
 from app.constants.settings import (
     DEFAULT_OS_NAME,
@@ -226,15 +227,15 @@ async def orchestrate_tool_execution(
             blacklisting_enabled = False
             whitelisted_commands: list[str] = []
             blacklisted_commands: list[dict[str, str]] = []
-            
-            cv = tool_executor._user_settings
+
+            cv = tool_executor.user_settings
             if cv:
-                whitelisting_enabled = cv.enable_whitelisting if cv else False
-                blacklisting_enabled = cv.enable_blacklisting if cv else False
+                whitelisting_enabled = cv.command_validation.enable_whitelisting if cv else False
+                blacklisting_enabled = cv.command_validation.enable_blacklisting if cv else False
                 if whitelisting_enabled:
-                    whitelisted_commands = sorted(tool_executor._whitelist_validator.all_commands)
+                    whitelisted_commands = sorted(tool_executor.whitelist_validator.all_commands)
                 if blacklisting_enabled:
-                    blacklisted_commands = tool_executor._blacklist_validator.get_forbidden_commands()
+                    blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
 
             logger.info(
                 "[TRIBUNAL-INVOKE] Command constraints: whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",

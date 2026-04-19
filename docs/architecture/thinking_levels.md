@@ -60,7 +60,7 @@ Emits `thinking = {"type": "enabled", "budget_tokens": N}`. The budget is resolv
 1. Looking up `config.thinking_budgets[clamped_level]` first (per-model override).
 2. Falling back to `ANTHROPIC_DEFAULT_THINKING_BUDGETS[clamped_level]`.
 
-When thinking is enabled the provider also forces `temperature=1.0` and drops `top_k`/`top_p`, matching Anthropic's API contract.
+When thinking is enabled the provider drops `top_k`/`top_p`, matching Anthropic's API contract.
 
 #### max_tokens uplift
 

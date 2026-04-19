@@ -12,6 +12,8 @@
 # limitations under the License.
 
 import logging
+from collections.abc import Callable
+from typing import TypeVar
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
@@ -32,6 +34,8 @@ from app.utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar('T', bound=G8eBaseModel)
+
 
 class AIResponseAnalyzer:
     """Analyzes AI responses and performs defensive operations.
@@ -46,15 +50,15 @@ class AIResponseAnalyzer:
     async def _run_assistant_analysis(
         self,
         prompt: str,
-        response_model: type[G8eBaseModel],
+        response_model: type[T],
         assistant_model: str | None,
         settings: G8eeUserSettings,
-        fallback_no_model,
-        fallback_no_response,
-        fallback_exception,
+        fallback_no_model: Callable[[], T],
+        fallback_no_response: Callable[[], T],
+        fallback_exception: Callable[[Exception], T],
         log_context: str,
-        post_process=None,
-    ):
+        post_process: Callable[[T], None] | None = None,
+    ) -> T:
         if not assistant_model:
             logger.warning("%s: no assistant_model configured", log_context)
             return fallback_no_model()
@@ -63,7 +67,6 @@ class AIResponseAnalyzer:
             client = get_llm_provider(settings.llm, is_assistant=True)
             config = AIGenerationConfigBuilder.build_assistant_settings(
                 model=assistant_model,
-                temperature=settings.llm.llm_temperature,
                 max_tokens=settings.llm.llm_max_tokens,
                 system_instructions=prompt,
                 response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
@@ -102,7 +105,7 @@ class AIResponseAnalyzer:
         working_dir = context.working_directory
         resolved_settings = settings
 
-        command_risk_persona = get_agent_persona("response_analyzer_command_risk")
+        command_risk_persona = get_agent_persona("warden_command_risk")
         prompt = command_risk_persona.persona.format(
             command=command,
             justification=justification,
@@ -111,7 +114,7 @@ class AIResponseAnalyzer:
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
-        def log_result(analysis):
+        def log_result(analysis: CommandRiskAnalysis) -> None:
             logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
 
         return await self._run_assistant_analysis(
@@ -154,7 +157,7 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
             )
 
-        error_persona = get_agent_persona("response_analyzer_error")
+        error_persona = get_agent_persona("warden_error")
         prompt = error_persona.persona.format(
             command=command,
             exit_code=exit_code,
@@ -166,7 +169,7 @@ class AIResponseAnalyzer:
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
-        def post_process(analysis):
+        def post_process(analysis: ErrorAnalysisResult) -> None:
             if retry_count >= 2:
                 analysis.can_auto_fix = False
                 analysis.should_escalate = True
@@ -224,7 +227,7 @@ class AIResponseAnalyzer:
 
         content_preview = content[:500] if content else "N/A"
 
-        file_risk_persona = get_agent_persona("response_analyzer_file_risk")
+        file_risk_persona = get_agent_persona("warden_file_risk")
         prompt = file_risk_persona.persona.format(
             operation=operation,
             file_path=file_path,
@@ -235,7 +238,7 @@ class AIResponseAnalyzer:
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
-        def post_process(analysis):
+        def post_process(analysis: FileOperationRiskAnalysis) -> None:
             system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
             analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
 

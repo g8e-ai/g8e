@@ -25,6 +25,7 @@ polling loop that previously lived across every mixin.
 import json
 import logging
 from collections.abc import Callable, Coroutine
+from typing import cast
 from uuid import uuid4
 
 from app.clients.pubsub_client import PubSubClient
@@ -86,7 +87,7 @@ _PAYLOAD_MODELS = {
 
 
 def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, object]) -> G8eoResultPayload:
-    event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw
+    event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw  # type: ignore[reportUnnecessaryIsInstance]
 
     if event_type == EventType.OPERATOR_SHUTDOWN_ACKNOWLEDGED:
         return ShutdownAckPayload.model_validate(payload_raw)
@@ -277,11 +278,11 @@ class OperatorPubSubService:
                 logger.warning("[PUBSUB] Received message without event_type; ignoring")
                 return
             _raw_payload = raw.get("payload")
-            payload_raw: dict[str, object] = _raw_payload if isinstance(_raw_payload, dict) else {}
+            payload_raw: dict[str, object] = _raw_payload if isinstance(_raw_payload, dict) else {}  # type: ignore[reportUnknownVariableType]
             for id_field in ("case_id", "investigation_id", "task_id"):
                 if not raw.get(id_field) and payload_raw.get(id_field):
                     raw[id_field] = payload_raw[id_field]
-            payload = _parse_g8eo_payload(event_type_raw, payload_raw)
+            payload = _parse_g8eo_payload(cast(str | EventType, event_type_raw), payload_raw)
             envelope = G8eoResultEnvelope.model_validate({
                 **raw,
                 "operator_id": operator_id,

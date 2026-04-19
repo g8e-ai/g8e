@@ -17,7 +17,7 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.thinking import translate_for_openai
 from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
@@ -125,7 +125,6 @@ class OpenAIProvider(LLMProvider):
     def _build_openai_kwargs(
         model: str,
         messages: list[dict],
-        temperature: float,
         max_tokens: int,
         top_p: float | None,
         stop: list[str] | None,
@@ -144,7 +143,6 @@ class OpenAIProvider(LLMProvider):
         kwargs = {
             "model": model,
             "messages": messages,
-            "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": stream,
         }
@@ -199,7 +197,6 @@ class OpenAIProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         if openai_tools:
@@ -208,7 +205,6 @@ class OpenAIProvider(LLMProvider):
             kwargs = self._build_openai_kwargs(
                 model=model,
                 messages=messages,
-                temperature=effective_temperature,
                 max_tokens=effective_max_tokens,
                 top_p=primary_llm_settings.top_p_nucleus_sampling,
                 stop=primary_llm_settings.stop_sequences,
@@ -251,7 +247,6 @@ class OpenAIProvider(LLMProvider):
             kwargs = self._build_openai_kwargs(
                 model=model,
                 messages=messages,
-                temperature=effective_temperature,
                 max_tokens=effective_max_tokens,
                 top_p=primary_llm_settings.top_p_nucleus_sampling,
                 stop=primary_llm_settings.stop_sequences,
@@ -286,13 +281,11 @@ class OpenAIProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         openai_tools = _tools_to_openai(primary_llm_settings.tools)
 
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
-            temperature=effective_temperature,
             max_tokens=effective_max_tokens,
             top_p=primary_llm_settings.top_p_nucleus_sampling,
             stop=primary_llm_settings.stop_sequences,
@@ -359,7 +352,6 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
@@ -367,7 +359,6 @@ class OpenAIProvider(LLMProvider):
         kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
-            temperature=effective_temperature,
             max_tokens=effective_max_tokens,
             top_p=assistant_llm_settings.top_p_nucleus_sampling,
             stop=assistant_llm_settings.stop_sequences,
@@ -394,7 +385,6 @@ class OpenAIProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         response_format = assistant_llm_settings.response_format.flatten_for_openai() if assistant_llm_settings.response_format else None
@@ -402,7 +392,6 @@ class OpenAIProvider(LLMProvider):
         kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
-            temperature=effective_temperature,
             max_tokens=effective_max_tokens,
             top_p=assistant_llm_settings.top_p_nucleus_sampling,
             stop=assistant_llm_settings.stop_sequences,
@@ -442,7 +431,6 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
@@ -450,7 +438,6 @@ class OpenAIProvider(LLMProvider):
         kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
-            temperature=effective_temperature,
             max_tokens=effective_max_tokens,
             top_p=lite_llm_settings.top_p_nucleus_sampling,
             stop=lite_llm_settings.stop_sequences,
@@ -477,7 +464,6 @@ class OpenAIProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         response_format = lite_llm_settings.response_format.flatten_for_openai() if lite_llm_settings.response_format else None
@@ -485,7 +471,6 @@ class OpenAIProvider(LLMProvider):
         kwargs = self._build_openai_kwargs(
             model=model,
             messages=messages,
-            temperature=effective_temperature,
             max_tokens=effective_max_tokens,
             top_p=lite_llm_settings.top_p_nucleus_sampling,
             stop=lite_llm_settings.stop_sequences,

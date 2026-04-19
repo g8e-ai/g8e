@@ -26,7 +26,6 @@ from app.constants import (
     ANTHROPIC_CLAUDE_HAIKU_4_5,
     ANTHROPIC_CLAUDE_OPUS_4_6,
     ANTHROPIC_CLAUDE_SONNET_4_6,
-    LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
@@ -70,7 +69,6 @@ class TestBuildKwargs:
         defaults = {
             "model": "claude-sonnet-4-20250514",
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
-            "temperature": 0.4,
             "max_tokens": 8192,
             "top_k": None,
             "system_instructions": "",
@@ -81,14 +79,9 @@ class TestBuildKwargs:
         return provider._build_kwargs(**defaults)
 
     def test_never_sends_top_p(self):
-        """Anthropic: temperature and top_p are mutually exclusive. We never send top_p."""
-        request = self._build(temperature=0.7)
+        """Anthropic: top_p is not supported by this provider."""
+        request = self._build()
         assert "top_p" not in request.model_dump(mode="json", exclude_none=True)
-        assert request.temperature == 0.7
-
-    def test_temperature_defaults_when_none(self):
-        request = self._build(temperature=None)
-        assert request.temperature == LLM_DEFAULT_TEMPERATURE
 
     def test_max_tokens_defaults_when_none(self):
         request = self._build(max_tokens=None)
@@ -121,12 +114,11 @@ class TestBuildKwargs:
 
 
 class TestBuildKwargsThinkingMode:
-    """Thinking mode enforces temperature=1.0 and strips sampling params.
+    """Thinking mode strips sampling params.
 
     Tests use a model name that is present in MODEL_REGISTRY so the translator
     can consult its supported_thinking_levels and thinking_budgets tables;
-    unknown model names would clamp every desired level to OFF and silently
-    disable the thinking path under test.
+    otherwise the translator returns disabled (no thinking key) for unknown models.
     """
 
     def _build(self, **overrides):
@@ -134,31 +126,23 @@ class TestBuildKwargsThinkingMode:
         defaults = {
             "model": ANTHROPIC_CLAUDE_SONNET_4_6,
             "messages": [],
-            "temperature": 0.7,
             "max_tokens": 20000,
             "top_k": None,
             "system_instructions": "",
             "anthropic_tools": None,
-            "thinking_config": ThinkingConfig(
-                thinking_level=ThinkingLevel.HIGH,
-                include_thoughts=True,
-            ),
+            "thinking_config": ThinkingConfig(thinking_level=ThinkingLevel.HIGH, include_thoughts=True),
         }
         defaults.update(overrides)
         return provider._build_kwargs(**defaults)
 
-    def test_thinking_forces_temperature_1(self):
+    def test_thinking_enabled(self):
         request = self._build()
-        assert request.temperature == 1.0
+        assert request.thinking is not None
+        assert request.thinking["type"] == "enabled"
 
     def test_thinking_never_sends_top_p(self):
         request = self._build()
         assert "top_p" not in request.model_dump(mode="json", exclude_none=True)
-
-    def test_thinking_never_sends_top_k(self):
-        """top_k must not be sent when thinking is enabled."""
-        request = self._build(top_k=40)
-        assert request.top_k is None
 
     def test_thinking_sets_default_sonnet_high_budget(self):
         """Sonnet with HIGH has no per-model override, so default table applies."""
@@ -247,10 +231,10 @@ class TestBuildKwargsThinkingMode:
         # ANTHROPIC_DEFAULT_THINKING_BUDGETS[LOW]
         assert request.thinking["budget_tokens"] == 2_048
 
-    def test_thinking_overrides_user_temperature(self):
-        """Even if user sets temperature=0.2, thinking forces 1.0."""
-        request = self._build(temperature=0.2)
-        assert request.temperature == 1.0
+    def test_thinking_strips_top_k(self):
+        """Thinking mode strips top_k."""
+        request = self._build()
+        assert request.top_k is None
 
     def test_off_thinking_level_yields_no_thinking_dict(self):
         """OFF is the canonical 'disabled' value; provider must omit the key."""
@@ -268,14 +252,12 @@ class TestBuildKwargsThinkingMode:
         request = provider._build_kwargs(
             model=ANTHROPIC_CLAUDE_SONNET_4_6,
             messages=[],
-            temperature=0.5,
             max_tokens=8192,
             top_k=40,
             system_instructions="",
             anthropic_tools=None,
             thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
         )
-        assert request.temperature == 0.5
         assert request.top_k == 40
         assert request.thinking is None
 
@@ -512,7 +494,6 @@ class TestPublicMethodsDelegateCorrectly:
         provider._client.messages.create = AsyncMock(return_value=mock_response)
 
         settings = PrimaryLLMSettings(
-            temperature=0.3,
             max_output_tokens=4096,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
@@ -532,7 +513,6 @@ class TestPublicMethodsDelegateCorrectly:
 
         call_kwargs = provider._client.messages.create.call_args.kwargs
         assert "top_p" not in call_kwargs
-        assert call_kwargs["temperature"] == 0.3
         assert call_kwargs["top_k"] == 50
         assert call_kwargs["system"] == "test"
         assert result.candidates[0].content.parts[0].text == "ok"
@@ -548,7 +528,6 @@ class TestPublicMethodsDelegateCorrectly:
         provider._client.messages.create = AsyncMock(return_value=mock_response)
 
         settings = AssistantLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -565,7 +544,6 @@ class TestPublicMethodsDelegateCorrectly:
 
         call_kwargs = provider._client.messages.create.call_args.kwargs
         assert "top_p" not in call_kwargs
-        assert call_kwargs["temperature"] == 0.5
 
     @pytest.mark.asyncio
     async def test_generate_content_lite_uses_build_kwargs(self):
@@ -578,7 +556,6 @@ class TestPublicMethodsDelegateCorrectly:
         provider._client.messages.create = AsyncMock(return_value=mock_response)
 
         settings = LiteLLMSettings(
-            temperature=0.2,
             max_output_tokens=1024,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -595,11 +572,10 @@ class TestPublicMethodsDelegateCorrectly:
 
         call_kwargs = provider._client.messages.create.call_args.kwargs
         assert "top_p" not in call_kwargs
-        assert call_kwargs["temperature"] == 0.2
 
     @pytest.mark.asyncio
-    async def test_primary_with_thinking_forces_temperature_1(self):
-        """Regression: thinking mode must force temperature=1.0 and exclude top_k."""
+    async def test_primary_with_thinking_strips_sampling_params(self):
+        """Regression: thinking mode must exclude top_k and top_p."""
         provider = _make_provider()
         mock_response = MagicMock()
         mock_block = MagicMock(type="text", text="thought out")
@@ -609,7 +585,6 @@ class TestPublicMethodsDelegateCorrectly:
         provider._client.messages.create = AsyncMock(return_value=mock_response)
 
         settings = PrimaryLLMSettings(
-            temperature=0.3,
             max_output_tokens=20000,
             top_p_nucleus_sampling=0.95,
             top_k_filtering=50,
@@ -631,7 +606,6 @@ class TestPublicMethodsDelegateCorrectly:
         )
 
         call_kwargs = provider._client.messages.create.call_args.kwargs
-        assert call_kwargs["temperature"] == 1.0
         assert "top_p" not in call_kwargs
         assert "top_k" not in call_kwargs
         assert call_kwargs["thinking"]["type"] == "enabled"
@@ -669,7 +643,6 @@ class TestStreamCompletionVerification:
         provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
         
         settings = AssistantLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -708,7 +681,6 @@ class TestStreamCompletionVerification:
         provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
         
         settings = AssistantLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -760,7 +732,6 @@ class TestStreamCompletionVerification:
         provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
         
         settings = AssistantLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -812,7 +783,6 @@ class TestStreamCompletionVerification:
         provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
         
         settings = PrimaryLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -854,7 +824,6 @@ class TestStreamCompletionVerification:
         provider._client.messages.stream = MagicMock(return_value=mock_stream_context)
         
         settings = PrimaryLLMSettings(
-            temperature=0.5,
             max_output_tokens=2048,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,

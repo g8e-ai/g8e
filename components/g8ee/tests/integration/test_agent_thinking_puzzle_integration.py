@@ -120,7 +120,6 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
     gen_config = AIGenerationConfigBuilder.build_primary_settings(
         model=model_name,
-        temperature=None,
         max_tokens=None,
         system_instructions=sys_prompt,
         tools=[],

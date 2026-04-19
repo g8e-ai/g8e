@@ -98,7 +98,6 @@ class TriageAgent:
 
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=model,
-                temperature=None,
                 max_tokens=None,
                 system_instructions="",
             )

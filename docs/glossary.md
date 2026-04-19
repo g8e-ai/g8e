@@ -439,7 +439,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 4. **Fallback** — If no consensus (all candidates unique or total weight tie), the original Large LLM command is used unchanged and `FALLBACK` is recorded.
 
-Configuration via environment variables: `LLM_COMMAND_GEN_PASSES` (default: 3), `LLM_COMMAND_GEN_VERIFIER` (default: true), `LLM_COMMAND_GEN_ENABLED` (default: true). Temperature is not a configurable Tribunal parameter — all passes inherit the configured model's `default_temperature`. Uses the lowest supported thinking level for models that support thinking (`include_thoughts=False`); models without thinking support receive a disabled thinking config.
+Configuration via environment variables: `LLM_COMMAND_GEN_PASSES` (default: 3), `LLM_COMMAND_GEN_VERIFIER` (default: true), `LLM_COMMAND_GEN_ENABLED` (default: true). Uses the lowest supported thinking level for models that support thinking (`include_thoughts=False`); models without thinking support receive a disabled thinking config.
 
 ---
 

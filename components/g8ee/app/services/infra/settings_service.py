@@ -124,11 +124,7 @@ class SettingsService:
             settings.auth.session_encryption_key = platform_settings.auth.session_encryption_key
         if platform_settings.auth.g8e_api_key:
             settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
-            
-        # Do NOT provide platform-level defaults for temperature/max_tokens if not explicitly set.
-        # Our agents use unique temperatures and we should not override them with a platform default
-        # unless the user has explicitly configured one in g8es.
-        
+
         return settings
 
     def _build_llm_settings(self, user_settings: G8eeUserSettings) -> LLMSettings:

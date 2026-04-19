@@ -94,7 +94,7 @@ class OperatorApprovalService:
         return self._pending_approvals
 
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
-        from app.errors import ExternalServiceError, ValidationError, ResourceNotFoundError
+        from app.errors import ExternalServiceError, ValidationError, ConfigurationError
 
         if not response.approval_id:
             raise ValidationError("approval_id must be provided", component="g8ee")

@@ -57,13 +57,15 @@ class TriageRequestPosture(str, Enum):
 
 
 class TribunalMember(str, Enum):
-    """The three permanent members of the Tribunal.
+    """The five permanent members of the Tribunal.
 
-    Each member has a fixed name, role, and AI temperature that defines its
-    reasoning profile. The ordering is canonical: Axiom (pass 0), Concord (pass 1),
-    Variance (pass 2). When more than 3 passes are configured the members cycle.
+    Each member has a fixed name and role that defines its reasoning profile.
+    The ordering is canonical: Axiom (pass 0), Concord (pass 1), Variance (pass 2),
+    Pragma (pass 3), Nemesis (pass 4). When more than 5 passes are configured the members cycle.
     """
     __str__ = lambda self: self.value
     AXIOM   = _AGENTS["tribunal.members"]["axiom"]
     CONCORD = _AGENTS["tribunal.members"]["concord"]
     VARIANCE = _AGENTS["tribunal.members"]["variance"]
+    PRAGMA = _AGENTS["tribunal.members"]["pragma"]
+    NEMESIS = _AGENTS["tribunal.members"]["nemesis"]

@@ -256,7 +256,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         try:
             request_payload = BindOperatorsRequest(operator_ids=operator_ids)
 
-            response = await self.internal_http_client.post(
+            response = await self.internal_http_client.post(  # type: ignore[reportUnknownMemberType]
                 "/api/operators/bind-all",
                 json_data=request_payload.flatten_for_wire(),
                 headers={

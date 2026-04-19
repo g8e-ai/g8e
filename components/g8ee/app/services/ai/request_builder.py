@@ -173,7 +173,6 @@ class AIRequestBuilder:
 
         return AIGenerationConfigBuilder.build_primary_settings(
             model=model,
-            temperature=settings.llm.llm_temperature,
             max_tokens=max_tokens or settings.llm.llm_max_tokens,
             system_instructions=system_instructions,
             tools=tools,

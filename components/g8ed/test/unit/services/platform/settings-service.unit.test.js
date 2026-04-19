@@ -277,9 +277,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
         });
 
         it('passes when provider fields are not present in updates', () => {
-            const result = validateUserSettings({
-                llm_temperature: '0.7'
-            });
+            const result = validateUserSettings({});
             expect(result.errors).toHaveLength(0);
         });
     });

@@ -673,7 +673,6 @@ const LLM_KEY_MAP = Object.freeze({
     gemini_api_key:         'gemini_api_key',
     anthropic_endpoint:     'anthropic_endpoint',
     anthropic_api_key:      'anthropic_api_key',
-    llm_temperature:        'llm_temperature',
     llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
@@ -691,7 +690,6 @@ const SEARCH_KEY_MAP = Object.freeze({
 
 const EVAL_JUDGE_KEY_MAP = Object.freeze({
     eval_judge_model:       'eval_judge_model',
-    eval_judge_temperature: 'eval_judge_temperature',
     eval_judge_max_tokens:  'eval_judge_max_tokens',
 });
 
@@ -734,11 +732,10 @@ const REVERSE_LLM_MAP    = Object.freeze({
     openai_api_key: 'openai_api_key',
     ollama_endpoint: 'ollama_endpoint',
     ollama_api_key: 'ollama_api_key',
-    gemini_api_key: 'gemini_api_key',
-    anthropic_endpoint: 'anthropic_endpoint',
-    anthropic_api_key: 'anthropic_api_key',
-    llm_temperature: 'llm_temperature',
-    llm_max_tokens: 'llm_max_tokens',
+    gemini_api_key:         'gemini_api_key',
+    anthropic_endpoint:     'anthropic_endpoint',
+    anthropic_api_key:      'anthropic_api_key',
+    llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled: 'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes: 'llm_command_gen_passes',

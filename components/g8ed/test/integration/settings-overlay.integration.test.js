@@ -73,9 +73,7 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
 
     it('persists settings in nested structure with user_id', async () => {
         const userId = 'user-abc';
-        const updates = {
-            llm_temperature: '0.5'
-        };
+        const updates = {};
 
         cacheAside.getDocument.mockResolvedValue({
             user_id: userId,
@@ -97,7 +95,6 @@ describe('Settings Service - User Settings Overlay [INTEGRATION]', () => {
                 settings: expect.objectContaining({
                     llm: expect.objectContaining({
                         provider: LLMProvider.GEMINI,
-                        llm_temperature: '0.5',
                     }),
                 }),
             })

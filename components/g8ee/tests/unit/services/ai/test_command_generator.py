@@ -46,7 +46,6 @@ from app.services.ai.command_generator import (
     _MAX_TOKENS_VERIFIER,
     _member_for_pass,
     _resolve_model,
-    _resolve_temperature,
     _run_generation_pass,
     _run_generation_stage,
     _run_verification_stage,
@@ -831,6 +830,8 @@ class TestRunVotingStage:
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
             CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
             CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
@@ -1693,7 +1694,7 @@ class TestMaxTokensConstants:
         assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
 
     @pytest.mark.asyncio
-    async def test_verifier_uses_max_tokens_and_zero_temperature(self):
+    async def test_verifier_uses_max_tokens(self):
         from unittest.mock import patch
         mock_response = MagicMock()
         mock_response.text = "ok"
@@ -1701,11 +1702,10 @@ class TestMaxTokensConstants:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
-        # Mock get_model_config to return a config with default_temperature=0.0 for verifier
+        # Mock get_model_config to return a config for verifier
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
             mock_config = LLMModelConfig(
                 name="test-model",
-                default_temperature=0.0,
                 max_output_tokens=_MAX_TOKENS_VERIFIER,
                 top_p=1.0,
                 top_k=None,
@@ -1722,72 +1722,22 @@ class TestMaxTokensConstants:
             call_kwargs = mock_provider.generate_content_lite.call_args
             settings = call_kwargs.kwargs.get("lite_llm_settings")
             assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
-            assert settings.temperature == 0.0
 
 
 class TestTribunalMemberCycling:
-    """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE."""
+    """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE, PRAGMA, NEMESIS."""
 
     def test_member_for_pass_cycles_correctly(self):
-        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), then repeats."""
+        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
         assert _member_for_pass(0) == TribunalMember.AXIOM
         assert _member_for_pass(1) == TribunalMember.CONCORD
         assert _member_for_pass(2) == TribunalMember.VARIANCE
-        assert _member_for_pass(3) == TribunalMember.AXIOM
-        assert _member_for_pass(4) == TribunalMember.CONCORD
-        assert _member_for_pass(5) == TribunalMember.VARIANCE
+        assert _member_for_pass(3) == TribunalMember.PRAGMA
+        assert _member_for_pass(4) == TribunalMember.NEMESIS
+        assert _member_for_pass(5) == TribunalMember.AXIOM
+        assert _member_for_pass(6) == TribunalMember.CONCORD
+        assert _member_for_pass(7) == TribunalMember.VARIANCE
+        assert _member_for_pass(8) == TribunalMember.PRAGMA
+        assert _member_for_pass(9) == TribunalMember.NEMESIS
 
 
-class TestResolveTemperature:
-    """_resolve_temperature honours persona > model default > global default.
-
-    Per-pass temperature variation was intentionally removed; Tribunal voice
-    comes from the persona prompt, not numeric skew. This test pins the
-    precedence contract.
-    """
-
-    def test_persona_temperature_wins_over_model_default(self):
-        from unittest.mock import patch
-
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=1.0,
-            )
-            assert _resolve_temperature(persona_temperature=0.3, model="test-model") == 0.3
-
-    def test_falls_back_to_model_default_when_persona_is_none(self):
-        from unittest.mock import patch
-
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=0.7,
-            )
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == 0.7
-
-    def test_falls_back_to_global_default_when_model_config_missing(self):
-        from unittest.mock import patch
-        from app.constants import LLM_DEFAULT_TEMPERATURE
-
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = None
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
-
-    def test_falls_back_to_global_default_when_model_default_is_none(self):
-        from unittest.mock import patch
-        from app.constants import LLM_DEFAULT_TEMPERATURE
-
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=None,
-            )
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
-
-    def test_persona_zero_is_respected_over_model_default(self):
-        """Regression: a persona-set temperature of 0.0 must not be treated as falsy."""
-        from unittest.mock import patch
-
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=1.0,
-            )
-            assert _resolve_temperature(persona_temperature=0.0, model="test-model") == 0.0

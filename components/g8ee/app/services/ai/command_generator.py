@@ -14,14 +14,14 @@
 """
 Tribunal Command Generator
 
-Implements the three-member heterogeneous AI panel (The Tribunal) for
+Implements the five-member heterogeneous AI panel (The Tribunal) for
 syntactically precise command generation.
 
 Pipeline (fires only for run_commands_with_operator):
 
   1. Generation  — N independent passes produce candidate command strings for
-                   the same intent + context. Higher temperature encourages
-                   diverse candidates.
+                   the same intent + context. Each pass uses a different Tribunal
+                   member persona to encourage diverse candidates.
 
   2. Voting      — Candidates are normalised (strip trailing whitespace / newlines)
                    and grouped by exact value. Each unique string receives a weight
@@ -50,24 +50,15 @@ Configuration:
   llm_command_gen_verifier  — "true"/"false" to enable/disable verifier (default: true)
   LLM_COMMAND_GEN_ENABLED   — "true"/"false" master switch (default: true)
 
-Temperature resolution precedence (persona-driven, not per-pass):
-  1. The agent persona's `temperature` field (when explicitly set in
-     shared/constants/agents.json). Lets a specific persona override.
-  2. The model's `default_temperature` (from app/models/model_configs.py).
-     For Gemini 3 family this is 1.0 per Google's own guidance ("strongly
-     recommend keeping temperature at its default value").
-  3. LLM_DEFAULT_TEMPERATURE as a last-resort global default.
-
-Per-pass temperature variation was intentionally removed: the Tribunal's
-behavioral diversity comes from the ideological voice of each persona
-(Axiom minimalist, Concord archivist, Variance adversary), not from
-numerical temperature skew. The Verifier likewise runs at the persona
-or model default.
+Tribunal behavioral diversity comes from the ideological voice of each persona
+(Axiom minimalist, Concord guardian, Variance exhaustive, Pragma conventional, Nemesis adversary),
+not from numerical parameters. The Verifier likewise runs at the model default.
     """
 
 import asyncio
 import logging
 from collections import defaultdict
+from typing import List
 
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.base import G8eBaseModel
@@ -90,8 +81,8 @@ from app.models.agents.tribunal import (
     TribunalSystemError,
     TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
-    TribunalVerifierFailedError,
     TribunalModelNotConfiguredError,
+    TribunalVerifierFailedError,
     TribunalPassCompletedPayload,
     TribunalVerifierStartedPayload,
     TribunalVerifierCompletedPayload,
@@ -100,6 +91,7 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     TribunalSessionCompletedPayload,
 )
+from app.errors import OllamaEmptyResponseError
 from app.models.events import SessionEvent
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
@@ -110,8 +102,8 @@ logger = logging.getLogger(__name__)
 def _format_command_constraints_message(
     whitelisting_enabled: bool,
     blacklisting_enabled: bool,
-    whitelisted_commands: list[str] | None,
-    blacklisted_commands: list[dict[str, str]] | None,
+    whitelisted_commands: List[str] | None,
+    blacklisted_commands: List[dict[str, str]] | None,
 ) -> str:
     """Generate a message describing command constraints for Tribunal prompts."""
     parts = []
@@ -214,35 +206,14 @@ _TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
     TribunalMember.AXIOM,
     TribunalMember.CONCORD,
     TribunalMember.VARIANCE,
+    TribunalMember.PRAGMA,
+    TribunalMember.NEMESIS,
 )
 
 
 def _member_for_pass(pass_index: int) -> TribunalMember:
-    """Return the Tribunal member assigned to a given pass index (cycles every 3)."""
+    """Return the Tribunal member assigned to a given pass index (cycles every 5)."""
     return _TRIBUNAL_MEMBERS[pass_index % len(_TRIBUNAL_MEMBERS)]
-
-
-def _resolve_temperature(persona_temperature: float | None, model: str) -> float:
-    """Resolve temperature for a Tribunal or Verifier call.
-
-    Precedence: persona override > model default > global default.
-
-    The persona is the preferred control surface. Runtime behavioral
-    differences between Axiom / Concord / Variance / Verifier are carried
-    by their prompt language, not by forcing different temperatures. A
-    persona may still set an explicit numeric temperature when it has a
-    concrete reason to; in practice all Tribunal personas leave this null
-    and fall through to the model default (1.0 for Gemini 3).
-    """
-    from app.models.model_configs import get_model_config
-    from app.constants import LLM_DEFAULT_TEMPERATURE
-
-    if persona_temperature is not None:
-        return persona_temperature
-    model_config = get_model_config(model)
-    if model_config and model_config.default_temperature is not None:
-        return model_config.default_temperature
-    return LLM_DEFAULT_TEMPERATURE
 
 
 def _normalise_command(raw: str) -> str:
@@ -257,7 +228,7 @@ def _normalise_command(raw: str) -> str:
     return cmd.strip()
 
 
-def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, float]:
+def _weighted_vote(candidates: List[CandidateCommand]) -> tuple[str | None, float]:
     """
     Compute weighted majority vote over candidate commands.
 
@@ -321,7 +292,7 @@ async def _run_generation_pass(
     user_context: str,
     pass_index: int,
     emitter: TribunalEmitter,
-    pass_errors: list[str],
+    pass_errors: List[str],
     command_constraints_message: str,
 ) -> str | None:
     """Run one Tribunal generation pass and return the normalised candidate command.
@@ -331,7 +302,6 @@ async def _run_generation_pass(
     """
     member = _member_for_pass(pass_index)
     member_persona = get_tribunal_member(member.value)
-    temperature = _resolve_temperature(member_persona.temperature, model)
     prompt = member_persona.persona.format(
         forbidden_patterns_message=_format_forbidden_patterns_message(),
         command_constraints_message=command_constraints_message,
@@ -345,7 +315,6 @@ async def _run_generation_pass(
     from app.models.model_configs import get_model_config
     model_config = get_model_config(model)
     settings = LiteLLMSettings(
-        temperature=temperature,
         max_output_tokens=_MAX_TOKENS_GENERATION,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
@@ -369,8 +338,8 @@ async def _run_generation_pass(
                 done_reason="stop",
                 prompt_eval_count=None,
                 eval_count=None,
-                num_ctx=None,
-                num_predict=None,
+                num_ctx=0,
+                num_predict=0,
                 thinking_len=0,
                 tool_calls_count=0,
                 ctx_overflow_suspected=False,
@@ -422,7 +391,7 @@ async def _run_verifier(
 
     from app.models.model_configs import get_model_config
 
-    verifier_persona = get_agent_persona("verifier")
+    verifier_persona = get_agent_persona("auditor")
     prompt = verifier_persona.get_system_prompt().format(
         forbidden_patterns_message=_format_forbidden_patterns_message(),
         command_constraints_message=command_constraints_message,
@@ -432,9 +401,7 @@ async def _run_verifier(
         candidate_command=candidate_command,
     )
     model_config = get_model_config(model)
-    temperature = _resolve_temperature(verifier_persona.temperature, model)
     settings = LiteLLMSettings(
-        temperature=temperature,
         max_output_tokens=_MAX_TOKENS_VERIFIER,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
@@ -458,8 +425,8 @@ async def _run_verifier(
                 done_reason="stop",
                 prompt_eval_count=None,
                 eval_count=None,
-                num_ctx=None,
-                num_predict=None,
+                num_ctx=0,
+                num_predict=0,
                 thinking_len=0,
                 tool_calls_count=0,
                 ctx_overflow_suspected=False,
@@ -531,13 +498,13 @@ async def _run_generation_stage(
     num_passes: int,
     emitter: TribunalEmitter,
     command_constraints_message: str,
-) -> list[CandidateCommand]:
+) -> List[CandidateCommand]:
     """Stage 1: run N parallel generation passes and return successful candidates.
 
     Raises TribunalSystemError when all passes fail due to system errors, or
     TribunalGenerationFailedError when all passes fail for non-system reasons.
     """
-    pass_errors: list[str] = []
+    pass_errors: List[str] = []
     pass_tasks = [
         _run_generation_pass(
             provider=provider, model=model, intent=intent, original_command=original_command,
@@ -820,8 +787,11 @@ async def generate_command(
         command_constraints_message=command_constraints_message,
     )
 
+    # Ensure final_command is never None
+    final_command_str = final_command if final_command is not None else original_command
+
     return await _build_and_emit_result(
-        original_command=original_command, final_command=final_command,
+        original_command=original_command, final_command=final_command_str,
         outcome=outcome, candidates=candidates, vote_winner=vote_winner,
         vote_score=vote_score, verifier_passed=verifier_passed,
         verifier_revision=verifier_revision, emitter=emitter,
