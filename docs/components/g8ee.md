@@ -273,19 +273,22 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object that Triage (The Gatekeeper) and Sage (The Architect) receive on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
 
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the AI proceeds without it.
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; Triage (The Gatekeeper) and Sage (The Architect) proceed without it.
 
 **Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
 
 **Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, disk, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields.
 
+**Step 5 — conversation history:** The `InvestigationModel` (and thus `EnrichedInvestigationContext`) includes a `conversation_history` field containing all user and AI messages for the investigation. During chat pipeline preparation (`ChatPipelineService._prepare_chat_context`), conversation history is fetched separately via `get_chat_messages` and converted to LLM contents via `build_contents_from_history`. This ensures Triage (The Gatekeeper) and Sage (The Architect) receive the full conversation context on every turn. Conversation history can also be retrieved on-demand by Inquisitor (The Interrogator) or other agents via the `query_investigation_context` tool with `data_type="conversation_history"`.
+
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records
 - `memory` — the attached `InvestigationMemory` (or `None`)
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn)
 
 For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
 

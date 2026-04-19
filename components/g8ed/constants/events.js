@@ -281,8 +281,6 @@ export const EventType = Object.freeze({
     PLATFORM_TERMINAL_MAXIMIZED: _EVENTS['platform']['terminal']['maximized'],
     PLATFORM_TERMINAL_CLOSED:   _EVENTS['platform']['terminal']['closed'],
 
-    PLATFORM_SENTINEL_MODE_CHANGED: _EVENTS['platform']['sentinel']['mode']['changed'],
-
     AUTH_USER_AUTHENTICATED:   _EVENTS['platform']['auth']['user']['authenticated'],
     AUTH_USER_UNAUTHENTICATED: _EVENTS['platform']['auth']['user']['unauthenticated'],
     AUTH_SESSION_EXPIRED:      _EVENTS['platform']['auth']['session']['expired'],

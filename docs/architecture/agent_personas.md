@@ -17,6 +17,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ## Current Agents
 
 ### 1. Triage
+- **Icon**: `scan-eye`
 - **Role**: Classifier / Gatekeeper
 - **Model Tier**: Primary
 - **Purpose**: Routes user messages by **complexity**, **intent**, and **request_posture** (`normal` / `escalated` / `adversarial` / `confused`). Posture is the loyal-friction signal the responding agent uses to calibrate dissent and denial-memory behavior.
@@ -26,6 +27,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Note**: `adversarial` requires prior-turn context (a first-turn message cannot be adversarial). See `core/dissent.txt` for how downstream agents consume the posture tag.
 
 ### 2. Sage (Primary AI)
+- **Icon**: `cpu`
 - **Role**: Reasoner
 - **Model Tier**: Primary
 - **Purpose**: Main reasoning AI for complex tasks
@@ -33,6 +35,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Migration Status**: TODO - Uses modular prompt system, not yet centralized
 
 ### 3. Dash (Assistant AI)
+- **Icon**: `zap`
 - **Role**: Responder
 - **Model Tier**: Assistant
 - **Purpose**: Fast-path AI for simple tasks
@@ -40,14 +43,23 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Migration Status**: TODO - Uses modular prompt system, not yet centralized
 
 ### 4. Tribunal
+- **Icon**: `users`
 - **Role**: Arbitrator
 - **Model Tier**: Assistant
-- **Purpose**: Syntactic refinement and validation for shell commands
+- **Purpose**: Syntactic refinement and validation for shell commands through a five-member panel
 - **Migration Status**: Complete
 - **Usage**: Documentation record only. Runtime loads `axiom`, `concord`, `variance`, `pragma`, and `nemesis` directly via `get_tribunal_member(...)` and `verifier` via `get_agent_persona("auditor")`. The base `tribunal` entry describes the shared output contract and is not injected into any prompt.
 - **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
+**Tribunal Members**:
+- **Axiom** (icon: `minimize-2`) — The Minimalist. Pass 0. Proposes the smallest command that satisfies intent.
+- **Concord** (icon: `shield`) — The Guardian. Pass 1. Proposes the safest command that satisfies intent.
+- **Variance** (icon: `layers`) — The Exhaustive. Pass 2. Proposes a command that handles edge cases.
+- **Pragma** (icon: `code`) — The Conventional. Pass 3. Proposes the command the target system's community would produce.
+- **Nemesis** (icon: `alert-triangle`) — The Adversary. Pass 4. Proposes a plausible-but-subtly-wrong command to test for attack surfaces.
+
 ### 5. Auditor (Verifier)
+- **Icon**: `gavel`
 - **Role**: Validator / Final Judgment
 - **Model Tier**: Assistant
 - **Purpose**: The last voice before the command reaches user approval. Produces one of two verdicts in a strict wire contract: the literal string `ok` when the Tribunal winner is correct as-is, or a single corrected command string when a specific nameable flaw requires revision. Defaults to confirming; revises only on concrete errors, never on general unease.
@@ -55,6 +67,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Usage**: `get_agent_persona("auditor")` in `command_generator.py`
 
 ### 6. Scribe (Title Generator)
+- **Icon**: `type`
 - **Role**: Summarizer
 - **Model Tier**: Assistant
 - **Temperature**: `null` — uses the configured model's `default_temperature`.
@@ -62,47 +75,8 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("scribe")` in `title_generator.py`
 
-### 7. Axiom (Tribunal Member)
-- **Role**: Tribunal Member — The Minimalist
-- **Model Tier**: Assistant
-- **Purpose**: Proposes the smallest command that satisfies intent. Rejects unnecessary flags, extra pipes, defensive wrappers. Do less.
-- **Pass Assignment**: Pass 0 in voting swarm
-- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
-- **Usage**: `get_tribunal_member("axiom")` in `command_generator.py`
-
-### 8. Concord (Tribunal Member)
-- **Role**: Tribunal Member — The Guardian
-- **Model Tier**: Assistant
-- **Purpose**: Proposes the safest command that satisfies intent. Adds defensive flags, prefers non-destructive operations, quotes variables conservatively. Do it safely.
-- **Pass Assignment**: Pass 1 in voting swarm
-- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
-- **Usage**: `get_tribunal_member("concord")` in `command_generator.py`
-
-### 9. Variance (Tribunal Member)
-- **Role**: Tribunal Member — The Exhaustive
-- **Model Tier**: Assistant
-- **Purpose**: Proposes a command that handles edge cases the obvious version misses. Unusual inputs, error paths, boundary conditions. Do it completely.
-- **Pass Assignment**: Pass 2 in voting swarm
-- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
-- **Usage**: `get_tribunal_member("variance")` in `command_generator.py`
-
-### 10. Pragma (Tribunal Member)
-- **Role**: Tribunal Member — The Conventional
-- **Model Tier**: Assistant
-- **Purpose**: Proposes the command the target system's community would produce. Uses idiomatic flags and patterns for the specific OS/shell/tool. Do it the standard way.
-- **Pass Assignment**: Pass 3 in voting swarm
-- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
-- **Usage**: `get_tribunal_member("pragma")` in `command_generator.py`
-
-### 11. Nemesis (Tribunal Member)
-- **Role**: Tribunal Member — The Adversary
-- **Model Tier**: Assistant
-- **Purpose**: Proposes a plausible-but-subtly-wrong command, or honestly abstains if no attack surface exists. Simulates adversarial origin per-command: compromised terminal, pasted snippet, social engineering. Do it wrong, carefully.
-- **Pass Assignment**: Pass 4 in voting swarm
-- **Migration Status**: Complete (voice sharpened; tribunal `.format()` contract preserved)
-- **Usage**: `get_tribunal_member("nemesis")` in `command_generator.py`
-
-### 12. Codex (Memory Generator)
+### 7. Codex (Memory Generator)
+- **Icon**: `brain`
 - **Role**: Analyzer
 - **Model Tier**: Assistant
 - **Purpose**: Analyzes conversation history to extract user preferences and investigation summaries
@@ -110,7 +84,8 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Usage**: `get_agent_persona("codex")` in `memory_generation_service.py`
 - **Prompt Source**: `shared/constants/agents.json` (`codex`)
 
-### 13. Judge (Eval Judge)
+### 8. Judge (Eval Judge)
+- **Icon**: `gavel`
 - **Role**: Evaluator
 - **Model Tier**: Primary
 - **Purpose**: Evaluates AI agent performance against gold standard criteria
@@ -118,7 +93,8 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Usage**: `get_agent_persona("judge")` in `eval_judge.py`
 - **Prompt Source**: `shared/constants/agents.json` (`judge`)
 
-### 14. Warden (Response Analyzer)
+### 9. Warden (Response Analyzer)
+- **Icon**: `shield`
 - **Role**: Defender
 - **Model Tier**: Assistant
 - **Purpose**: Defensive analysis of AI responses (command risk, error analysis, file operation risk)
@@ -149,7 +125,7 @@ sage = get_agent_persona("sage")
 print(sage.tools)         # ["run_commands_with_operator", "file_create_on_operator", ...]
 
 # For Tribunal members specifically
-member_persona = get_tribunal_member("atom")
+member_persona = get_tribunal_member("axiom")
 ```
 
 The loader uses Pydantic validation to ensure all agent entries are well-formed at load time.
@@ -163,9 +139,9 @@ Some agents delegate to specialized sub-agents for different analysis types. The
 - Metadata only, no active persona
 
 **Sub-Agents**:
-- `warden_command_risk` - Analyzes shell command risk levels (LOW/MEDIUM/HIGH)
-- `warden_error` - Analyzes command failures and determines auto-fixability
-- `warden_file_risk` - Analyzes file operation safety and risk levels
+- `warden_command_risk` (icon: `shield-alert`) - Analyzes shell command risk levels (LOW/MEDIUM/HIGH)
+- `warden_error` (icon: `alert-triangle`) - Analyzes command failures and determines auto-fixability
+- `warden_file_risk` (icon: `file-shield`) - Analyzes file operation safety and risk levels
 
 **Usage in Service**:
 ```python

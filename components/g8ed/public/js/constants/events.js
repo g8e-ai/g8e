@@ -227,7 +227,6 @@ export const EventType = Object.freeze({
     PLATFORM_TERMINAL_MINIMIZED: 'g8e.v1.platform.terminal.minimized',
     PLATFORM_TERMINAL_MAXIMIZED: 'g8e.v1.platform.terminal.maximized',
     PLATFORM_TERMINAL_CLOSED: 'g8e.v1.platform.terminal.closed',
-    PLATFORM_SENTINEL_MODE_CHANGED: 'g8e.v1.platform.sentinel.mode.changed',
     AUTH_USER_AUTHENTICATED: 'g8e.v1.platform.auth.user.authenticated',
     AUTH_USER_UNAUTHENTICATED: 'g8e.v1.platform.auth.user.unauthenticated',
     AUTH_SESSION_EXPIRED: 'g8e.v1.platform.auth.session.expired',

@@ -14,7 +14,6 @@
 import { EventType } from '../constants/events.js';
 import { ApiPaths } from '../constants/api-paths.js';
 import { AnchoredOperatorTerminal } from './anchored-terminal.js';
-import { SentinelModeManager } from './sentinel-mode-manager.js';
 import { LlmModelManager } from './llm-model-manager.js';
 import { AttachmentsManager, CompactAttachmentsUI } from '../utils/attachments.js';
 import { ThinkingManager } from './thinking.js';
@@ -51,9 +50,6 @@ export class ChatComponent {
         this._hasResetAutoScrollForSession = new Set();
 
         this.casesManager = null;
-
-        this.sentinelModeManager = new SentinelModeManager(this.eventBus);
-        window.sentinelModeManager = this.sentinelModeManager;
 
         this.llmModelManager = new LlmModelManager(this.eventBus);
         window.llmModelManager = this.llmModelManager;
@@ -216,7 +212,6 @@ export class ChatComponent {
             this.aiStopBtn.addEventListener('click', () => this.stopAIProcessing());
         }
 
-        this.sentinelModeManager.init();
         this.llmModelManager.init();
 
         const scrollContainer = document.getElementById('anchored-terminal-body');

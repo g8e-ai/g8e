@@ -132,7 +132,6 @@ describe('ChatMessageRequest [UNIT - PURE LOGIC]', () => {
         expect(req.user_id).toBe('user-456');
         expect(req.message).toBe('test message');
         expect(req.attachments).toEqual([]);
-        expect(req.sentinel_mode).toBe(true);
         expect(req.llm_primary_model).toBeNull();
         expect(req.llm_assistant_model).toBeNull();
         expect(req.case_id).toBeNull();
@@ -146,14 +145,12 @@ describe('ChatMessageRequest [UNIT - PURE LOGIC]', () => {
             user_id: 'user-456',
             message: 'test message',
             attachments: attachments,
-            sentinel_mode: false,
             llm_primary_model: 'gemini-2.5-pro',
             llm_assistant_model: 'gemini-2.5-flash',
             case_id: 'case-abc',
             investigation_id: 'inv-def',
         });
         expect(req.attachments).toEqual(attachments);
-        expect(req.sentinel_mode).toBe(false);
         expect(req.llm_primary_model).toBe('gemini-2.5-pro');
         expect(req.llm_assistant_model).toBe('gemini-2.5-flash');
         expect(req.case_id).toBe('case-abc');

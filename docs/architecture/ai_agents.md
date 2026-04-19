@@ -80,21 +80,24 @@ All state-changing operator actions require explicit user approval. The platform
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object that Triage (The Gatekeeper) and Sage (The Architect) receive on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times (default 3) with configurable per-attempt delays (100ms, 200ms, 300ms) to handle propagation lag.
 
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`.
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; Triage (The Gatekeeper) and Sage (The Architect) proceed without it.
 
 **Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators` from `G8eHttpContext`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`.
 
 **Step 4 — operator context extraction:** `extract_all_operators_context` (which uses `_extract_single_operator_context`) maps `OperatorDocument` records to a list of typed `OperatorContext` objects — OS, hostname, architecture, CPU, memory, public IP, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields (type, subtype, intents).
+
+**Step 5 — conversation history:** The `InvestigationModel` (and thus `EnrichedInvestigationContext`) includes a `conversation_history` field containing all user and AI messages for the investigation. During chat pipeline preparation (`ChatPipelineService._prepare_chat_context`), conversation history is fetched separately via `get_chat_messages` and converted to LLM contents via `build_contents_from_history`. This ensures Triage (The Gatekeeper) and Sage (The Architect) receive the full conversation context on every turn. Conversation history can also be retrieved on-demand by Inquisitor (The Interrogator) or other agents via the `query_investigation_context` tool with `data_type="conversation_history"`.
 
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records from the cache.
 - `memory` — the attached `InvestigationMemory` (or `None`).
 - `bound_operators` — `BoundOperator` instances from `G8eHttpContext`.
 - `operator_session_token` — transient operator session token for authorization validation.
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn).
 
 ### Security
 
@@ -112,6 +115,8 @@ The resulting `EnrichedInvestigationContext` carries:
 |---|---|---|
 | `identity` | `prompts_data/core/identity.txt` | AI persona, role, core directives |
 | `safety` | `prompts_data/core/safety.txt` | Hard safety constraints, approval requirements |
+| `loyalty` | `prompts_data/core/loyalty.txt` | Mission-over-moment doctrine, prioritizing user intent |
+| `dissent` | `prompts_data/core/dissent.txt` | Warning protocol, denial memory, escalation response |
 
 ### Mode Sections (loaded by `load_mode_prompts`)
 
@@ -119,9 +124,9 @@ The resulting `EnrichedInvestigationContext` carries:
 
 | Mode | Loaded When |
 |---|---|
-| `OPERATOR_BOUND` | Standard operator connected |
-| `CLOUD_OPERATOR_BOUND` | Cloud operator connected (AWS/GCP/Azure/g8ep) |
-| `OPERATOR_NOT_BOUND` | No operator connected (advisor mode) |
+| `OPERATOR_BOUND` | Standard (system) Operator connected |
+| `CLOUD_OPERATOR_BOUND` | Cloud Operator connected (AWS/GCP/Azure/g8ep) |
+| `OPERATOR_NOT_BOUND` | No Operator connected (advisor mode) |
 
 When `OPERATOR_NOT_BOUND` and `g8e_web_search_available` is false, it loads `_no_search` variants of capabilities and execution prompts.
 
@@ -139,19 +144,24 @@ Each mode provides sections: `capabilities`, `execution`, and `tools`. The `tool
 
 **`<learned_context>`** — built by `build_learned_context_section` from `user_memories` and `case_memories`; injects preferences (communication, technical, style, approach, interaction) and previous investigation summaries.
 
+**`<triage_context>`** — built by `build_triage_context_section` from `TriageResult`; injects `request_posture` (normal/escalated/adversarial/confused) and `intent_summary` to calibrate downstream agent behavior based on the user's state.
+
 ### Section Order
 
 ```
 1. core/identity.txt
 2. core/safety.txt
-3. modes/<mode>/capabilities.txt
-4. modes/<mode>/execution.txt
-5. modes/<mode>/tools.txt          (conditional)
-6. <system_context>                (when operator present)
-7. system/sentinel_mode.txt        (when sentinel_mode=True)
-8. <investigation_context>         (when investigation present)
-9. system/response_constraints.txt
-10. <learned_context>              (when memories exist)
+3. core/loyalty.txt
+4. core/dissent.txt
+5. modes/<mode>/capabilities.txt
+6. modes/<mode>/execution.txt
+7. modes/<mode>/tools.txt          (conditional)
+8. <system_context>                (when operator present)
+9. system/sentinel_mode.txt        (when sentinel_mode=True)
+10. <triage_context>              (when triage_result available)
+11. <investigation_context>       (when investigation present)
+12. system/response_constraints.txt
+13. <learned_context>              (when memories exist)
 ```
 
 ---
@@ -203,73 +213,56 @@ After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sen
 
 When the AI proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal in `agent_tool_loop.py`, then dispatches an approval request to the user via g8ed SSE. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the AI's ReAct loop as a function response. `OperatorLFAAService` handles direct terminal execution audits (`OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED`).
 
+### Tool Call ID Propagation
+
+For models like Anthropic Claude that require tool call IDs for multi-turn reliability, the `ToolCallResponse` dataclass includes a `tool_call_id` field. This field is populated in `execute_turn_tool_calls` from the function call's `id` and passed through to `Part.from_tool_response` in the ReAct loop. This ensures that tool result blocks in subsequent LLM calls reference the correct tool call IDs, preventing Anthropic 400 errors like "unexpected tool_use_id in tool_result blocks".
+
+### Agent Continue Approval
+
+When the ReAct loop exceeds `AGENT_MAX_TOOL_TURNS` (default: 25), the agent requests user approval to continue or stop. This prevents runaway tool loops while allowing legitimate multi-step investigations to proceed. The `ApprovalService.request_agent_continue_approval` method emits an `AGENT_CONTINUE` approval request with a justification message describing how many turns have completed and asking the user to approve continuation or stop the agent. If approved, the turn counter resets and the loop continues; if denied or no approval service is available, the loop stops cleanly with finish reason `stopped_by_operator`.
+
 ---
 
 ## Chat Turn Flow
 
-```mermaid
-sequenceDiagram
-    participant Browser
-    participant g8ed
-    participant G8ee_Pipeline as ChatPipelineService
-    participant CtxMgr as InvestigationService
-    participant Triage
-    participant Prompt as build_modular_system_prompt
-    participant AI as g8e AI
-    participant Provider as LLMProvider
-    participant Tools as AIToolService
-    participant Tribunal as Tribunal
-    participant g8eo
+When you send a message, the AI processes it through a multi-stage pipeline that adapts to the complexity of your request and the current investigation state.
 
-    Browser->>g8ed: POST /api/chat {message}
-    G8ed->>G8ee_Pipeline: run_chat(message, g8e_context)
+### Turn Overview
 
-    G8ee_Pipeline->>CtxMgr: get_investigation_context(investigation_id)
-    CtxMgr->>CtxMgr: _attach_memory_context
-    CtxMgr-->>G8ee_Pipeline: EnrichedInvestigationContext
+1. **Context Assembly** — The platform gathers everything the AI needs to understand your request: the investigation history, bound operator details, prior memories, and conversation context.
 
-    G8ee_Pipeline->>CtxMgr: get_enriched_investigation_context (operator docs)
-    CtxMgr-->>G8ee_Pipeline: EnrichedInvestigationContext
+2. **Triage** — A classifier analyzes your message to determine:
+   - **Complexity**: Simple questions get routed to a fast assistant model; complex tasks go to the high-reasoning primary model.
+   - **Intent**: What you're trying to accomplish.
+   - **Confidence**: If triage is uncertain, it may ask a follow-up question instead of proceeding.
 
-    G8ee_Pipeline->>Triage: triage(request)
-    Triage-->>G8ee_Pipeline: TriageResult
+3. **AI Response** — The selected model generates a response using a ReAct (Reasoning + Acting) loop:
+   - The AI thinks through your request and streams its reasoning in real-time.
+   - If it needs to take action (search the web, run a command, read a file), it calls a tool.
+   - Tool results are fed back into the AI's thinking process.
+   - This loop continues until the AI has enough information to provide a complete answer.
 
-    G8ee_Pipeline->>G8ee_Pipeline: persist user message to DB
-    G8ee_Pipeline->>G8ee_Pipeline: get_user_memories + get_case_memories
-    G8ee_Pipeline->>Prompt: build_modular_system_prompt(...)
-    Prompt-->>G8ee_Pipeline: system_instructions
+4. **Operator Actions** — For commands that run on your operators:
+   - The AI's natural language request goes through a Tribunal (multiple AI agents generate and vote on the best command).
+   - You must approve the command before it executes.
+   - The command runs on the operator and results are returned to the AI.
+   - The AI incorporates the results into its response.
 
-    G8ee_Pipeline->>AI: run_with_sse(...)
+5. **Persistence** — After the AI finishes, the response is saved to the investigation history, and an AI analysis updates the investigation memory for future turns.
 
-    loop ReAct loop
-        AI->>Provider: generate_content_stream(...)
-        Provider-->>AI: StreamChunkFromModel stream
-        AI->>AI: process_provider_turn (thinking state machine)
+### Multi-Turn Investigations
 
-        opt Tool calls present
-            AI->>AgentToolLoop: execute_turn_tool_calls
-            AgentToolLoop->>AgentToolLoop: orchestrate_tool_execution
-            opt run_commands tool
-                AgentToolLoop->>Tribunal: generate_command (N passes + verifier)
-                Tribunal-->>AgentToolLoop: CommandGenerationResult
-            end
-            AgentToolLoop->>Tools: execute_tool_call
-            Tools->>g8ed: approval request SSE event
-            G8ed->>Browser: g8e.v1.operator.command.approval.requested
-            Browser->>g8ed: approve
-            G8ed->>G8eo: pub/sub command dispatch
-            G8eo-->>G8ee_Pipeline: command result
-            AgentToolLoop-->>AI: ToolCallResponse list
-            AI->>AI: append model + tool responses to contents
-        end
-    end
+Each turn builds on the previous ones. The conversation history grows with every exchange, giving the AI full context of what has been discussed, what tools were used, and what outcomes were achieved. Investigation memory (preferences, technical background, communication style) is extracted from conversations and injected into future turns to personalize responses.
 
-    AI->>g8ed: g8e.v1.ai.llm.chat.iteration.text.completed (via EventService)
-    G8ed->>Browser: SSE stream
+### Real-Time Streaming
 
-    G8ee_Pipeline->>G8ee_Pipeline: _persist_ai_response
-    G8ee_Pipeline->>MemoryGen: update_memory_from_conversation
-```
+You see the AI's response as it generates:
+- Text chunks appear word-by-word.
+- Thinking indicators show when the AI is reasoning.
+- Tool call indicators show when the AI is taking actions.
+- Citations appear when web search grounding is used.
+
+All events flow through g8ed to your browser via Server-Sent Events (SSE), ensuring low-latency delivery.
 
 ---
 
@@ -441,7 +434,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | Service | File | Responsibility |
 |---|---|---|
 | `ChatPipelineService` | `components/g8ee/app/services/ai/chat_pipeline.py` | Top-level orchestrator — assembles context, calls AI, persists results |
-| `ChatTaskManager` | `components/g8ee/app/services/ai/chat_task_manager.py` | Owns asyncio task tracking and cancellation for in-flight AI chat processing |
+| `BackgroundTaskManager` | `components/g8ee/app/services/ai/chat_task_manager.py` | Owns asyncio task tracking and cancellation for in-flight AI chat processing |
 | `g8eEngine` | `components/g8ee/app/services/ai/agent.py` | ReAct streaming loop — retry logic, function loop, SSE delivery |
 | `InvestigationService` | `components/g8ee/app/services/investigation/investigation_service.py` | (Domain Layer) Investigation fetch, operator enrichment, memory attachment, history orchestration |
 | `InvestigationDataService` | `components/g8ee/app/services/investigation/investigation_data_service.py` | (Data Layer) Pure CRUD for investigations and chat message persistence |
@@ -449,8 +442,9 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `MemoryGenerationService` | `components/g8ee/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update |
 | `MemoryDataService` | `components/g8ee/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
 | `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification. Persona loaded from `agents.json`. |
-| `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. |
-| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult`. |
+| `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. Handles thinking state transitions (INACTIVE → ACTIVE → INACTIVE), consolidates model parts, normalizes finish reasons, and extracts token usage. Emits THINKING/THINKING_END chunks for models with thinking capabilities. |
+| `TribunalInvoker` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Encapsulates Tribunal pipeline invocation for `run_commands_with_operator`, including command constraints (whitelist/blacklist) fetch and SSE event emission. |
+| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (original_command, final_command, outcome, vote_score, verifier_passed, verifier_revision, candidates). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when command arg is missing. |
 | `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
 | `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier. Persona templates in `agents.json`. |
@@ -488,14 +482,16 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | AI | Role | Model Tier | Temp | Tools |
 |---|---|---|---|---|
 | **Triage** | classifier | primary | null (configurable) | none |
-| **Primary** | reasoner | primary | null (configurable) | full tool set |
-| **Assistant** | responder | assistant | null (configurable) | full tool set |
+| **Sage (Primary)** | reasoner | primary | null (configurable) | full tool set |
+| **Dash (Assistant)** | responder | assistant | null (configurable) | full tool set |
 | **Tribunal** | arbitrator | assistant | null (composite) | none |
-| **Verifier** | validator | assistant | null (model default) | none |
-| **Title Generator** | summarizer | assistant | null (model default) | none |
+| **Auditor (Verifier)** | validator | assistant | null (model default) | none |
+| **Scribe (Title Generator)** | summarizer | assistant | null (model default) | none |
 | **Axiom** | tribunal_member | assistant | null (model default) | none |
 | **Concord** | tribunal_member | assistant | null (model default) | none |
 | **Variance** | tribunal_member | assistant | null (model default) | none |
+| **Pragma** | tribunal_member | assistant | null (model default) | none |
+| **Nemesis** | tribunal_member | assistant | null (model default) | none |
 
 Each agent's `autonomy` field is a per-agent empowering directive; see `shared/constants/agents.json`. Governance (human approval for state-changing operator actions) is enforced structurally by the platform, not by this field.
 
@@ -599,6 +595,9 @@ Together they replace sycophantic compliance with guarded service: the agent rem
 - `scope` — `UNIVERSAL` or `OPERATOR_GATED` (the latter gates the bound-operator auth check in `execute_tool_call` and Tribunal routing in `agent_tool_loop`)
 - `agent_modes` — the set of `AgentMode` values in which the tool is advertised to the LLM
 - `builder_attr` / `handler_attr` — method names on `AIToolService` that build the declaration and dispatch execution
+- `display_label` — human-readable label for UI display (e.g., "Executing command")
+- `display_icon` — Lucide icon name for UI rendering (e.g., "terminal")
+- `display_category` — UI category for grouping (e.g., `ToolDisplayCategory.EXECUTION`)
 - `requires_web_search` — conditional registration gate (used only by `g8e_web_search`)
 
 `OPERATOR_TOOLS` and `AI_UNIVERSAL_TOOLS` are **derived** from `TOOL_SPECS` (they are no longer hand-maintained in `status.py`). `AIToolService.__init__`, `get_tools`, and the per-tool handler dispatch table are all populated by iterating `TOOL_SPECS`, so adding a new tool means adding exactly one `ToolSpec` entry plus the corresponding `_build_*` and `_handle_*` methods.
@@ -675,7 +674,7 @@ The resolved operator's OS context (OS name, shell, working directory) is passed
 
 The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **sourced from the `assistant_provider` setting** (falling back to `primary_provider`) if the chosen model is the assistant model. This decouples the Tribunal model from the primary chat provider: e.g. a user with `primary_provider=gemini` and `assistant_provider=ollama` with `assistant_model=gemma4:e4b` will route Tribunal calls to the Ollama endpoint, not Gemini.
 
-The Tribunal implements a **Stochastic Multi-AI Consensus** pattern using three distinct roles:
+The Tribunal implements a **Stochastic Multi-AI Consensus** pattern using five distinct roles:
 
 ```mermaid
 flowchart TD
@@ -693,8 +692,10 @@ flowchart TD
     subgraph Gen [Stochastic Voting Swarm]
         direction LR
         P1[Axiom<br/>Pass 0 - The Minimalist]
-        P2[Concord<br/>Pass 1 - The Archivist]
-        P3[Variance<br/>Pass 2 - The Adversary]
+        P2[Concord<br/>Pass 1 - The Guardian]
+        P3[Variance<br/>Pass 2 - The Exhaustive]
+        P4[Pragma<br/>Pass 3 - The Conventional]
+        P5[Nemesis<br/>Pass 4 - The Adversary]
     end
 
     Gen --> Candidates{Any candidates?}
@@ -704,11 +705,11 @@ flowchart TD
 
     Vote --> VerifierEnabled{Verifier enabled?}
     VerifierEnabled -- No --> OutVote[CONSENSUS: vote winner]
-    VerifierEnabled -- Yes --> Verify[Verifier SLM]
+    VerifierEnabled -- Yes --> Verify[Auditor SLM]
 
     Verify --> Review{Verdict}
     Review -- OK --> OutVerified[VERIFIED: vote winner]
-    Review -- Revised --> OutRev[VERIFICATION_FAILED: verifier revision]
+    Review -- Revised --> OutRev[VERIFICATION_FAILED: auditor revision]
     Review -- Empty/No valid revision/Exception --> VerFail[TRIBUNAL_SESSION_VERIFIER_FAILED<br/>tool call fails]
 ```
 
@@ -723,13 +724,15 @@ flowchart TD
 - **Temperature**: Every pass uses the configured model's `default_temperature` (resolved via `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Per-pass temperature spreads are **not** hardcoded — some providers (e.g. Gemini 3+) require a fixed temperature of 1.0, so forcing per-member values would break them.
 - **Diversity Source**: Distinct personas, not distinct temperatures. Each pass loads a different Tribunal member persona from `shared/constants/agents.json`:
     - **Axiom** (Pass 0) — The Minimalist. Optimizes for simplicity.
-    - **Concord** (Pass 1) — The Archivist. Optimizes for audit-log legibility.
-    - **Variance** (Pass 2) — The Adversary. Optimizes for adversarial robustness.
+    - **Concord** (Pass 1) — The Guardian. Optimizes for safety with defensive flags.
+    - **Variance** (Pass 2) — The Exhaustive. Optimizes for edge case handling and robustness.
+    - **Pragma** (Pass 3) — The Conventional. Optimizes for idiomatic, community-standard patterns.
+    - **Nemesis** (Pass 4) — The Adversary. Optimizes for adversarial robustness by testing attack surfaces.
 
 #### 3. The Final Verifier (Consensus Orchestrator)
 - **Role**: Deterministic arbitration and final verdict formatting.
 - **Thinking Level**: Set to low or off to avoid overthinking penalties.
-- **Temperature**: The configured model's `default_temperature`. The Verifier's convergent behavior is enforced through its persona (`get_agent_persona("verifier")`) and the strict `ok`/corrected-command wire contract — not by forcing a numeric temperature that many providers reject.
+- **Temperature**: The configured model's `default_temperature`. The Auditor's convergent behavior is enforced through its persona (`get_agent_persona("auditor")`) and the strict `ok`/corrected-command wire contract — not by forcing a numeric temperature that many providers reject.
 
 #### Configuration
 
@@ -743,7 +746,9 @@ flowchart TD
 
 **Stage 1 — Generation (`_run_generation_stage` / `_run_generation_pass`)**
 
-`LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member persona (Axiom, Concord, or Variance) via `_member_for_pass`. All passes use the configured model's `default_temperature` (resolved through `_temperature_for_pass` → `get_model_config`); diversity comes from the member personas, not per-pass temperature overrides. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
+`LLM_COMMAND_GEN_PASSES` coroutines are launched concurrently. Each pass assigns a Tribunal member persona (Axiom, Concord, Variance, Pragma, or Nemesis) via `_member_for_pass`, cycling through the five members. All passes use the configured model's `default_temperature` (resolved through `_temperature_for_pass` → `get_model_config`); diversity comes from the member personas, not per-pass temperature overrides. The assistant SLM is instructed to return only the exact command string — no explanation, no markdown fences.
+
+The `TribunalInvoker` fetches command constraints (whitelist/blacklist) via `_fetch_command_constraints` before invoking the Tribunal pipeline. These constraints are formatted into a `command_constraints_message` that is injected into each Tribunal member's prompt via the `{command_constraints_message}` template variable. This ensures the Tribunal respects user-configured command restrictions during generation.
 
 Raw output is normalised by `_normalise_command`: strips surrounding whitespace, trailing newlines, and any ` ```bash `, ` ```shell `, ` ```sh `, or ` ``` ` fences. Each pass emits a `TRIBUNAL_VOTING_PASS_COMPLETED` SSE event carrying the `pass_index`, the normalised candidate (or `None`), and a `success` flag.
 

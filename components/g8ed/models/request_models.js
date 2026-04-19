@@ -72,7 +72,6 @@ export class ChatMessageRequest extends G8eBaseModel {
         user_id:              { type: F.string,  required: true },
         message:              { type: F.string,  required: true, minLength: 1 },
         attachments:          { type: F.array,   default: () => [] },
-        sentinel_mode:        { type: F.boolean, default: true },
         llm_primary_provider: { type: F.string,  default: null },
         llm_assistant_provider: { type: F.string,  default: null },
         llm_lite_provider:    { type: F.string,  default: null },
@@ -87,7 +86,7 @@ export class ChatMessageRequest extends G8eBaseModel {
         return {
             message:               this.message,
             attachments:           this.attachments,
-            sentinel_mode:         this.sentinel_mode,
+            sentinel_mode:         true,
             llm_primary_provider:  this.llm_primary_provider,
             llm_assistant_provider: this.llm_assistant_provider,
             llm_lite_provider:     this.llm_lite_provider,
