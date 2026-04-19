@@ -247,21 +247,6 @@ class OperatorHeartbeatService:
             )
             return None
 
-        if operator.status not in VALID_HEARTBEAT_STATUSES:
-            logger.warning(
-                "Ignoring heartbeat from Operator %s with invalid status: %s",
-                operator_id,
-                operator.status,
-                extra={
-                    "operator_id": operator_id,
-                    "status": operator.status,
-                    "valid_statuses": list(VALID_HEARTBEAT_STATUSES),
-                    "operator_session_id": operator_session_id,
-                    "security_event": "invalid_status_operator_heartbeat",
-                }
-            )
-            return None
-
         logger.info(
             "Operator %s validated for heartbeat",
             operator_id,

@@ -218,9 +218,14 @@ async def orchestrate_tool_execution(
             ) or DEFAULT_WORKING_DIRECTORY
             username = op_context.username if op_context else None
             uid = op_context.uid if op_context else None
-            user_context = f"{username} (uid={uid})" if username and uid else (username or "unknown")
+            user_context = f"{username} (uid={uid})" if username and uid is not None else (username or "unknown")
 
-            logger.info("[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s user=%s", os_name, shell, working_directory, user_context)
+            logger.info(
+                "[TRIBUNAL-INVOKE] Operator context: os=%s shell=%s working_dir=%s user=%s username=%s uid=%s hostname=%s arch=%s",
+                os_name, shell, working_directory, user_context, username, uid,
+                op_context.hostname if op_context else None,
+                op_context.architecture if op_context else None,
+            )
 
             # Fetch command constraints for Tribunal
             whitelisting_enabled = False
@@ -247,10 +252,7 @@ async def orchestrate_tool_execution(
                 gen_result = await generate_command(
                     original_command=original_command,
                     intent=intent,
-                    os_name=os_name,
-                    shell=shell,
-                    working_directory=working_directory,
-                    user_context=user_context,
+                    operator_context=op_context,
                     g8ed_event_service=g8ed_event_service,
                     web_session_id=g8e_context.web_session_id,
                     user_id=g8e_context.user_id,

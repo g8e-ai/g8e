@@ -494,6 +494,11 @@
   white-space: nowrap;
 }
 
+#operator-count {
+  color: var(--primary-color);
+  font-weight: 700;
+}
+
 
 .operator-drawer-header {
   display: flex;
@@ -521,97 +526,11 @@
   flex: 0 0 auto;
 }
 
-/* Collapsible Operator List Section */
-.operator-list-collapsible {
-  background: var(--bg-card);
-  border-bottom: 1px solid var(--border-color);
-  overflow: hidden;
-  transition: border-color 0.2s ease;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.operator-list-collapsible.expanded {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.operator-list-collapsible-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 0.75rem 1rem;
-  background: var(--bg-secondary);
-  border: none;
-  border-bottom: 1px solid var(--border-color);
-  cursor: pointer;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  transition: all 0.2s ease;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-sizing: border-box;
-}
-
-.operator-list-collapsible-bar:hover {
-  background: var(--bg-hover);
-  color: var(--primary-color);
-}
-
-.operator-list-collapsible.expanded .operator-list-collapsible-bar {
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.operator-list-bar-icon {
-  font-size: 18px;
-  letter-spacing: 0;
-}
-
-.operator-list-bar-title {
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex: 1;
-}
-
-.operator-list-bar-chevron {
-  font-size: 18px;
-  letter-spacing: 0;
-  transition: transform 0.3s ease;
-  position: absolute;
-  right: 12px;
-  transform: rotate(180deg);
-}
-
-.operator-list-collapsible.expanded .operator-list-bar-chevron {
-  transform: rotate(0deg);
-}
-
-.operator-list-collapsible .operator-drawer-content {
+.operator-drawer-content {
   flex: 1 1 0;
   min-height: 0;
   opacity: 1;
   overflow-y: auto;
-  transition: opacity 0.3s ease;
-}
-
-.operator-list-collapsible.collapsed .operator-drawer-content {
-  flex: 0 0 0;
-  height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: opacity 0.3s ease;
 }
 
 .operator-download-collapsible.expanded {

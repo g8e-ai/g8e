@@ -30,6 +30,7 @@ from app.constants import (
 from app.llm.llm_types import Content, Role
 from app.models.model_configs import LLMModelConfig
 from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
     TribunalFallbackPayload,
     TribunalGenerationFailedError,
@@ -41,10 +42,13 @@ from app.models.agents.tribunal import (
 )
 from app.services.ai.command_generator import (
     _build_and_emit_result,
+    _build_operator_context_string,
+    _format_forbidden_patterns_message,
     _is_system_error,
     _MAX_TOKENS_GENERATION,
     _MAX_TOKENS_VERIFIER,
     _member_for_pass,
+    _prompt_fields,
     _resolve_model,
     _run_generation_pass,
     _run_generation_stage,
@@ -66,6 +70,28 @@ def _make_mock_provider(generate_content_lite_side_effect=None, generate_content
     mock_provider.__aenter__ = AsyncMock(return_value=mock_provider)
     mock_provider.__aexit__ = AsyncMock(return_value=False)
     return mock_provider
+
+
+def _make_mock_operator_context(
+    os="linux",
+    shell="bash",
+    username="testuser",
+    uid=1000,
+    working_directory="/home/testuser",
+    hostname="testhost",
+    architecture="x86_64",
+) -> OperatorContext:
+    """Create a mock OperatorContext for tests."""
+    return OperatorContext(
+        operator_id="test-operator",
+        os=os,
+        shell=shell,
+        username=username,
+        uid=uid,
+        working_directory=working_directory,
+        hostname=hostname,
+        architecture=architecture,
+    )
 
 
 class TestResolveModel:
@@ -120,9 +146,7 @@ class TestTribunalSessionStartedPayloadRegression:
                 model=None,
                 num_passes=3,
                 members=[],
-                os_name="linux",
-                shell="bash",
-            )
+                )
 
     def test_payload_accepts_resolved_model(self):
         llm = LLMSettings(provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
@@ -164,14 +188,12 @@ class TestRoleImportRegression:
             model="test-model",
             intent="list files",
             original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result == "ls -la"
@@ -195,10 +217,10 @@ class TestRoleImportRegression:
             model="test-model",
             intent="list files",
             candidate_command="ls -la",
-            os_name="linux",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert passed is True
@@ -271,14 +293,12 @@ class TestPassErrorsCollection:
             model="test-model",
             intent="list files",
             original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result is None
@@ -300,14 +320,12 @@ class TestPassErrorsCollection:
             model="test-model",
             intent="list files",
             original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result is None
@@ -329,14 +347,12 @@ class TestPassErrorsCollection:
             model="test-model",
             intent="list files",
             original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result == "ls -la"
@@ -375,10 +391,7 @@ class TestGenerateCommandOutcomes:
         result = await generate_command(
             original_command="ls",
             intent="list files",
-            os_name="linux",
-            shell="bash",
-            working_directory="/tmp",
-            user_context="root (uid=0)",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
             g8ed_event_service=AsyncMock(),
             web_session_id="ws-1",
             user_id="user-1",
@@ -414,10 +427,7 @@ class TestGenerateCommandSystemError:
                 await generate_command(
                     original_command="ls",
                     intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -450,10 +460,7 @@ class TestGenerateCommandSystemError:
                 await generate_command(
                     original_command="ls",
                     intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -495,10 +502,7 @@ class TestGenerateCommandSystemError:
             result = await generate_command(
                 original_command="ls",
                 intent="list files",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=MagicMock(),
                 web_session_id="ws-1",
                 user_id="user-1",
@@ -543,10 +547,7 @@ class TestMixedErrorFallback:
                 await generate_command(
                     original_command="ls",
                     intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=MagicMock(),
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -598,10 +599,7 @@ class TestTribunalProviderUnavailableError:
                 await generate_command(
                     original_command="ls",
                     intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -636,10 +634,7 @@ class TestTribunalModelNotConfiguredError:
                 await generate_command(
                     original_command="ls",
                     intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -674,15 +669,15 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            intent="list files",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
         assert exc_info.value.reason == "empty_response"
         assert exc_info.value.original_command == "ls -la"
@@ -700,15 +695,15 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            intent="list files",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
         assert exc_info.value.reason == "no_valid_revision"
         assert exc_info.value.original_command == "ls -la"
@@ -724,15 +719,15 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            intent="list files",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
         assert exc_info.value.reason == "exception"
         assert "timeout" in exc_info.value.error
@@ -751,8 +746,8 @@ class TestRunGenerationStage:
 
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
+            original_command="ls",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
             num_passes=3, emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -770,8 +765,8 @@ class TestRunGenerationStage:
         with pytest.raises(TribunalSystemError):
             await _run_generation_stage(
                 provider=mock_provider, model="test-model", intent="list files",
-                original_command="ls", os_name="linux", shell="bash",
-                working_directory="/home/user", user_context="user (uid=1000)",
+                original_command="ls",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 num_passes=3, emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -786,8 +781,8 @@ class TestRunGenerationStage:
         with pytest.raises(TribunalGenerationFailedError):
             await _run_generation_stage(
                 provider=mock_provider, model="test-model", intent="list files",
-                original_command="ls", os_name="linux", shell="bash",
-                working_directory="/home/user", user_context="user (uid=1000)",
+                original_command="ls",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 num_passes=2, emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -810,8 +805,8 @@ class TestRunGenerationStage:
 
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
+            original_command="ls",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
             num_passes=3, emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -866,7 +861,7 @@ class TestRunVerificationStage:
     async def test_verifier_disabled_returns_consensus(self):
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=MagicMock(), model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=False, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -884,7 +879,7 @@ class TestRunVerificationStage:
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -902,7 +897,7 @@ class TestRunVerificationStage:
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
             provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -921,7 +916,7 @@ class TestRunVerificationStage:
         with pytest.raises(TribunalVerifierFailedError):
             await _run_verification_stage(
                 provider=mock_provider, model="test-model", intent="list files",
-                vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+                vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
                 verifier_enabled=True, emitter=TribunalEmitter(None, None),
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -1016,10 +1011,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="ls",
                 intent="list files with details",
-                os_name="linux",
-                shell="bash",
-                working_directory="/tmp",
-                user_context="root (uid=0)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-1",
                 user_id="user-happy-1",
@@ -1064,10 +1056,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="find logs",
                 intent="find all log files under /var/log",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-2",
                 user_id="user-happy-2",
@@ -1111,10 +1100,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="grep TODO",
                 intent="find all TODO comments recursively with line numbers",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user/project",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-3",
                 user_id="user-happy-3",
@@ -1167,10 +1153,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="df",
                 intent="show disk usage in human-readable format",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-4",
                 user_id="user-happy-4",
@@ -1201,10 +1184,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="who",
                 intent="show current user name",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-5",
                 user_id="user-happy-5",
@@ -1235,10 +1215,7 @@ class TestGenerateCommandHappyPath:
             await generate_command(
                 original_command="up",
                 intent="show system uptime",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-6",
                 user_id="user-happy-6",
@@ -1282,10 +1259,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="ls /tmp",
                 intent="list files in /tmp with details",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-7",
                 user_id="user-happy-7",
@@ -1324,10 +1298,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="hostname",
                 intent="show the system hostname from /etc/hostname",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-8",
                 user_id="user-happy-8",
@@ -1364,10 +1335,7 @@ class TestGenerateCommandHappyPath:
             result = await generate_command(
                 original_command="ls",
                 intent="list files",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-9",
                 user_id="user-happy-9",
@@ -1461,10 +1429,7 @@ class TestGenerateCommandVerifierFailure:
                 await generate_command(
                     original_command="ls",
                     intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-1",
                     user_id="user-vf-1",
@@ -1516,10 +1481,7 @@ class TestGenerateCommandVerifierFailure:
                 await generate_command(
                     original_command="ls",
                     intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-2",
                     user_id="user-vf-2",
@@ -1562,10 +1524,7 @@ class TestGenerateCommandVerifierFailure:
                 await generate_command(
                     original_command="ls",
                     intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-3",
                     user_id="user-vf-3",
@@ -1611,10 +1570,7 @@ class TestGenerateCommandVerifierFailure:
                 await generate_command(
                     original_command="hostname",
                     intent="show system hostname",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-4",
                     user_id="user-vf-4",
@@ -1647,10 +1603,7 @@ class TestGenerateCommandVerifierFailure:
                 await generate_command(
                     original_command="who",
                     intent="show current user",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-5",
                     user_id="user-vf-5",
@@ -1682,11 +1635,16 @@ class TestMaxTokensConstants:
         emitter = TribunalEmitter(None, None)
 
         await _run_generation_pass(
-            provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
-            pass_index=0, emitter=emitter, pass_errors=[],
+            provider=mock_provider,
+            model="test-model",
+            intent="list files",
+            original_command="ls",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
+            pass_index=0,
+            emitter=emitter,
+            pass_errors=[],
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         call_kwargs = mock_provider.generate_content_lite.call_args
@@ -1714,14 +1672,164 @@ class TestMaxTokensConstants:
             mock_get_config.return_value = mock_config
 
             await _run_verifier(
-                provider=mock_provider, model="test-model", intent="list files",
-                candidate_command="ls -la", os_name="linux", user_context="user (uid=1000)",
-                emitter=emitter, command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            intent="list files",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
             call_kwargs = mock_provider.generate_content_lite.call_args
             settings = call_kwargs.kwargs.get("lite_llm_settings")
             assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
+
+
+class TestForbiddenPatternsMessage:
+    """The forbidden-patterns message must unconditionally ban sudo regardless of uid.
+
+    Regression: a prior refactor introduced a uid-conditional variant that told the
+    Tribunal sudo was acceptable for non-root users. That contradicts
+    tool_service.execute_tool_call which rejects any command containing
+    FORBIDDEN_COMMAND_PATTERNS, so any sudo-bearing Tribunal output was guaranteed
+    to be blocked downstream with SECURITY_VIOLATION.
+    """
+
+    def test_message_always_critical_and_never(self):
+        message = _format_forbidden_patterns_message()
+        assert "CRITICAL" in message
+        assert "NEVER" in message
+        assert "privilege escalation" in message
+
+    def test_message_lists_all_forbidden_base_patterns(self):
+        from app.constants import FORBIDDEN_COMMAND_PATTERNS
+
+        message = _format_forbidden_patterns_message()
+        for pattern in FORBIDDEN_COMMAND_PATTERNS:
+            base = pattern.strip()
+            if base:
+                assert base in message, f"{base!r} missing from forbidden-patterns message"
+
+    def test_message_does_not_expose_uid_conditional_wording(self):
+        """The message must not suggest sudo is sometimes acceptable."""
+        message = _format_forbidden_patterns_message()
+        assert "should only be added" not in message
+        assert "include sudo explicitly" not in message
+
+
+class TestBuildOperatorContextString:
+    """_build_operator_context_string displays uid=0 correctly (regression)."""
+
+    def test_uid_zero_is_displayed(self):
+        ctx = OperatorContext(
+            operator_id="op",
+            username="root",
+            uid=0,
+        )
+        rendered = _build_operator_context_string(ctx)
+        assert "root" in rendered
+        assert "uid=0" in rendered
+
+    def test_none_uid_is_not_rendered(self):
+        ctx = OperatorContext(
+            operator_id="op",
+            username="alice",
+            uid=None,
+        )
+        rendered = _build_operator_context_string(ctx)
+        assert "alice" in rendered
+        assert "uid=" not in rendered
+
+    def test_none_context_returns_placeholder(self):
+        assert _build_operator_context_string(None) == "No operator context available"
+
+
+class TestPromptFields:
+    """_prompt_fields returns all keys required by every Tribunal persona template."""
+
+    def test_returns_all_required_keys(self):
+        fields = _prompt_fields(
+            OperatorContext(
+                operator_id="op",
+                os="linux",
+                shell="bash",
+                working_directory="/home/alice",
+                username="alice",
+                uid=1000,
+            )
+        )
+        assert fields["os"] == "linux"
+        assert fields["shell"] == "bash"
+        assert fields["working_directory"] == "/home/alice"
+        assert fields["user_context"] == "alice (uid=1000)"
+        assert "alice" in fields["operator_context"]
+        assert "CRITICAL" in fields["forbidden_patterns_message"]
+
+    def test_defaults_applied_when_context_none(self):
+        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
+
+        fields = _prompt_fields(None)
+        assert fields["os"] == DEFAULT_OS_NAME
+        assert fields["shell"] == DEFAULT_SHELL
+        assert fields["working_directory"] == DEFAULT_WORKING_DIRECTORY
+        assert fields["user_context"] == "unknown"
+
+    def test_root_uid_is_preserved_in_user_context(self):
+        fields = _prompt_fields(
+            OperatorContext(operator_id="op", username="root", uid=0)
+        )
+        assert fields["user_context"] == "root (uid=0)"
+
+    def test_all_tribunal_personas_accept_prompt_fields(self):
+        """Every Tribunal persona template (+ auditor) must render with _prompt_fields.
+
+        Regression: previously 4 of 6 personas lacked the {operator_context} placeholder
+        and/or the _prompt_fields keys. str.format silently ignores unused kwargs but
+        raises KeyError on missing placeholders — this test catches the latter and
+        also verifies all six personas now receive {operator_context}.
+        """
+        from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+
+        fields = _prompt_fields(
+            OperatorContext(
+                operator_id="op",
+                os="linux",
+                shell="bash",
+                working_directory="/home/alice",
+                username="alice",
+                uid=1000,
+                hostname="host1",
+                architecture="x86_64",
+            )
+        )
+        common = dict(
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            intent="list files",
+        )
+
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            persona = get_tribunal_member(member_id)
+            rendered = persona.persona.format(
+                original_command="ls",
+                **common,
+                **fields,
+            )
+            assert "{operator_context}" in persona.persona, (
+                f"{member_id}: persona template is missing the {{operator_context}} placeholder"
+            )
+            assert "host1" in rendered, f"{member_id}: operator_context did not render"
+            assert "CRITICAL" in rendered, f"{member_id}: forbidden_patterns missing"
+
+        auditor = get_agent_persona("auditor")
+        rendered = auditor.get_system_prompt().format(
+            candidate_command="ls -la",
+            **common,
+            **fields,
+        )
+        assert "host1" in rendered
+        assert "CRITICAL" in rendered
 
 
 class TestTribunalMemberCycling:

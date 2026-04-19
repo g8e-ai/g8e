@@ -21,10 +21,7 @@ from app.errors import ConfigurationError
 from app.models.events import SessionEvent
 from app.models.operators import HeartbeatSSEPayload, OperatorDocument, OperatorHeartbeat
 from app.models.pubsub_messages import G8eoHeartbeatPayload
-from app.services.operator.heartbeat_service import (
-    VALID_HEARTBEAT_STATUSES,
-    OperatorHeartbeatService,
-)
+from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.utils.timestamp import now
 
 pytestmark = [pytest.mark.unit]
@@ -265,7 +262,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
         return _make_service(operator_data_service=mock_operator_data_service)
 
     async def test_cache_hit_returns_operator(self, service, mock_operator_data_service):
-        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.ACTIVE, user_id="user-1", web_session_id="ws-1")
+        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.ACTIVE, user_id="user-1", bound_web_session_id="ws-1")
         mock_operator_data_service.get_operator.return_value = operator
 
         result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
@@ -274,28 +271,26 @@ class TestOperatorHeartbeatServiceOperatorValidation:
         mock_operator_data_service.get_operator.assert_called_once_with("op-222")
 
     async def test_cache_miss_returns_none(self, service, mock_operator_data_service):
-        mock_operator_data_service.get_operator.return_value
+        mock_operator_data_service.get_operator.return_value = None
 
         result = await service._get_and_validate_operator("op-unknown", "sess-111", _make_payload())
 
         assert result is None
 
-    async def test_invalid_status_rejected(self, service, mock_operator_data_service):
-        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.TERMINATED, user_id="user-1", web_session_id="ws-1")
-        mock_operator_data_service.get_operator.return_value = operator
+    async def test_any_known_operator_status_accepted(self, service, mock_operator_data_service):
+        """Heartbeats are accepted for any OperatorDocument regardless of its status.
 
-        result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
-
-        assert result is None
-
-    async def test_all_valid_heartbeat_statuses_accepted(self, service, mock_operator_data_service):
-        for status in VALID_HEARTBEAT_STATUSES:
-            operator = OperatorDocument(operator_id="op-222", status=status, user_id="user-1", web_session_id="ws-1")
+        The operator's status is a property of the operator doc itself; it is not
+        a gate for receiving heartbeats. Unknown operators (None) are still rejected
+        upstream via API-key validation — see test_cache_miss_returns_none.
+        """
+        for status in OperatorStatus:
+            operator = OperatorDocument(operator_id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
             mock_operator_data_service.get_operator.return_value = operator
 
             result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
 
-            assert result is not None, f"Status {status} should be valid for heartbeats"
+            assert result is not None, f"Status {status} should not gate heartbeat acceptance"
 
 
 
@@ -325,7 +320,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
             user_id="user-333",
-            web_session_id="web-999",
+            bound_web_session_id="web-999",
         )
 
     async def test_success_writes_cache_and_publishes_sse(
@@ -359,7 +354,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
     async def test_sse_payload_status_set_from_operator(
         self, service, mock_operator_data_service, mock_event_service
     ):
-        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.BOUND, web_session_id="web-999", user_id="user-1")
+        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.BOUND, bound_web_session_id="web-999", user_id="user-1")
         mock_operator_data_service.get_operator.return_value = operator
 
         await service.process_heartbeat_message("op-222", "op-session-111", _make_payload())
@@ -403,7 +398,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
         assert result is False
 
     async def test_unknown_operator_returns_false(self, service, mock_operator_data_service):
-        mock_operator_data_service.get_operator.return_value
+        mock_operator_data_service.get_operator.return_value = None
 
         result = await service.process_heartbeat_message(
             "op-unknown", "op-session-111", _make_payload(operator_id="op-unknown")
@@ -481,7 +476,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, web_session_id="web-999", user_id="user-1"
+            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
         sse_payload = HeartbeatSSEPayload(
             operator_id="op-222",
@@ -504,7 +499,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, web_session_id=None
+            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id=None
         )
         sse_payload = HeartbeatSSEPayload(
             operator_id="op-222",
@@ -521,7 +516,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, web_session_id="web-999", user_id="user-1"
+            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
         sse_payload = HeartbeatSSEPayload(
             operator_id="op-222",

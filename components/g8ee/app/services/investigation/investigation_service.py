@@ -545,11 +545,12 @@ def extract_system_context(
     logger.info(
         "[CONTEXT] Primary operator context: operator_id=%s hostname=%s os=%s "
         "arch=%s memory_mb=%s cpu_count=%s public_ip=%s operator_type=%s "
-        "is_cloud=%s granted_intents=%s",
+        "is_cloud=%s granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
         context.operator_id, context.hostname, context.os,
         context.architecture, context.memory_mb, context.cpu_count,
         context.public_ip, context.operator_type,
         context.is_cloud_operator, context.granted_intents or [],
+        context.username, context.uid, context.shell, context.working_directory,
     )
     return context
 

@@ -633,17 +633,18 @@ class TestCommandGenerationIntegration:
         if not llm or not llm.primary_model:
             pytest.skip("LLM provider is not configured")
         
-        # Verify that the forbidden patterns message is dynamically generated from the constant
+        # The platform forbids privilege-escalation tokens unconditionally (see
+        # tool_service.execute_tool_call); the Tribunal prompt must reflect that regardless of uid.
         message = _format_forbidden_patterns_message()
-        
+
         # Check that all patterns in FORBIDDEN_COMMAND_PATTERNS are reflected in the message
         for pattern in FORBIDDEN_COMMAND_PATTERNS:
-            # Strip whitespace for comparison
             base_pattern = pattern.strip()
-            if base_pattern:  # Skip empty patterns
-                # The message should contain the base pattern (without trailing whitespace)
-                assert base_pattern in message or pattern in message, f"Pattern {pattern} not found in forbidden patterns message"
-        
+            if base_pattern:
+                assert base_pattern in message or pattern in message, (
+                    f"Pattern {pattern} not found in forbidden patterns message"
+                )
+
         # Verify the message contains critical keywords
         assert "CRITICAL" in message
         assert "NEVER" in message

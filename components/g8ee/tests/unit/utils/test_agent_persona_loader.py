@@ -112,6 +112,7 @@ class TestPipelineTemplateContract:
             shell="bash",
             user_context="root (uid=0)",
             working_directory="/home/user",
+            operator_context="Hostname: host1\nOS: linux",
             original_command="ps aux",
         )
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
@@ -131,7 +132,10 @@ class TestPipelineTemplateContract:
             command_constraints_message="CONSTRAINTS",
             intent="list files",
             os="linux",
+            shell="bash",
+            working_directory="/home/user",
             user_context="root (uid=0)",
+            operator_context="Hostname: host1\nOS: linux",
             candidate_command="ls -la",
         )
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):

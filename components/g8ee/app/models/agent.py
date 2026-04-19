@@ -87,7 +87,7 @@ class OperatorContext(G8eBaseModel):
     kernel: str | None = None
     os_version: str | None = None
     username: str | None = None
-    uid: str | None = None
+    uid: int | None = None
     home_directory: str | None = None
     shell: str | None = None
     working_directory: str | None = None

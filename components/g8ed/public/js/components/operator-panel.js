@@ -263,10 +263,7 @@ export class OperatorPanel {
 
         this.metricsDetailsExpanded = false;
 
-        this.operatorListCollapsible = document.getElementById('operator-list-collapsible');
-        this.operatorListCollapsibleBar = document.getElementById('operator-list-collapsible-bar');
-        this.operatorListBarTitle = document.getElementById('operator-list-bar-title');
-        this.operatorListBarChevron = document.getElementById('operator-list-bar-chevron');
+        this.operatorCountElement = document.getElementById('operator-count');
         this.operatorList = document.getElementById('operator-list');
         this.drawerFooter = document.getElementById('operator-drawer-footer');
         this.bindAllBtn = document.getElementById('bind-all-btn');
@@ -280,9 +277,6 @@ export class OperatorPanel {
         this.downloadCollapsibleContent = document.getElementById('operator-download-collapsible-content');
         this.downloadSectionExpanded = true;
         this.downloadSectionPopulated = false;
-
-        // Operator list collapsible section
-        this.operatorListSectionExpanded = true;
 
         // Operator list state
         this.operators = [];
@@ -324,10 +318,6 @@ export class OperatorPanel {
         if (this.downloadSectionExpanded) {
             this.expandDownloadSection();
         }
-
-        if (this.operatorListSectionExpanded && this.operatorListCollapsible) {
-            this.operatorListCollapsible.classList.add('expanded');
-        }
     }
 
     bindEvents() {
@@ -353,13 +343,6 @@ export class OperatorPanel {
             this.downloadCollapsibleBar.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.toggleDownloadSection();
-            });
-        }
-
-        if (this.operatorListCollapsibleBar) {
-            this.operatorListCollapsibleBar.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleOperatorListSection();
             });
         }
 
@@ -416,24 +399,10 @@ export class OperatorPanel {
         this.updateStatus(OperatorStatus.OFFLINE);
     }
 
-    toggleOperatorListSection() {
-        this.operatorListSectionExpanded = !this.operatorListSectionExpanded;
-        if (this.operatorListCollapsible) {
-            if (this.operatorListSectionExpanded) {
-                this.operatorListCollapsible.classList.add('expanded');
-                this.operatorListCollapsible.classList.remove('collapsed');
-            } else {
-                this.operatorListCollapsible.classList.remove('expanded');
-                this.operatorListCollapsible.classList.add('collapsed');
-            }
-        }
-        devLogger.log('[OPERATOR] Operator list section toggled:', this.operatorListSectionExpanded);
-    }
-
     updateOperatorListBarTitle() {
-        if (!this.operatorListBarTitle) return;
+        if (!this.operatorCountElement) return;
         const boundCount = this.boundOperatorIds.length;
-        this.operatorListBarTitle.textContent = `(${boundCount}) Operators Bound`;
+        this.operatorCountElement.textContent = `(${boundCount})`;
     }
 
     displayInitialOperatorStatus() {

@@ -71,8 +71,8 @@ class SystemInfoOSDetails(G8eBaseModel):
 class SystemInfoUserDetails(G8eBaseModel):
     """User detail sub-fields from wire/system_info.json."""
     username: str | None = Field(default=None)
-    uid: str | None = Field(default=None)
-    gid: str | None = Field(default=None)
+    uid: int | None = Field(default=None)
+    gid: int | None = Field(default=None)
     home: str | None = Field(default=None)
     name: str | None = Field(default=None)
     shell: str | None = Field(default=None)

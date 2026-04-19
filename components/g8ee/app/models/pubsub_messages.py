@@ -305,8 +305,8 @@ class G8eoHeartbeatOSDetails(G8eBaseModel):
 class G8eoHeartbeatUserDetails(G8eBaseModel):
     """user_details block from heartbeat.json (ref: system_info.json)."""
     username: str | None = None
-    uid: str | None = None
-    gid: str | None = None
+    uid: int | None = None
+    gid: int | None = None
     home: str | None = None
     name: str | None = None
     shell: str | None = None

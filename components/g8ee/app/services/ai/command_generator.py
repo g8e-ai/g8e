@@ -63,9 +63,13 @@ from typing import List
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext
+from app.models.agent import OperatorContext
 from app.constants import (
     CommandGenerationOutcome,
     ComponentName,
+    DEFAULT_OS_NAME,
+    DEFAULT_SHELL,
+    DEFAULT_WORKING_DIRECTORY,
     FORBIDDEN_COMMAND_PATTERNS,
     TribunalFallbackReason,
     TribunalMember,
@@ -130,17 +134,93 @@ def _format_command_constraints_message(
     return " ".join(parts)
 
 
+def _build_operator_context_string(operator_context: OperatorContext | None) -> str:
+    """Build a formatted string of operator context for Tribunal prompts."""
+    if not operator_context:
+        return "No operator context available"
+
+    parts = []
+    if operator_context.hostname:
+        parts.append(f"Hostname: {operator_context.hostname}")
+    if operator_context.os:
+        parts.append(f"OS: {operator_context.os}")
+    if operator_context.architecture:
+        parts.append(f"Architecture: {operator_context.architecture}")
+    if operator_context.username:
+        uid_suffix = f" (uid={operator_context.uid})" if operator_context.uid is not None else ""
+        parts.append(f"User: {operator_context.username}{uid_suffix}")
+    if operator_context.shell:
+        parts.append(f"Shell: {operator_context.shell}")
+    if operator_context.working_directory:
+        parts.append(f"Working Directory: {operator_context.working_directory}")
+    if operator_context.operator_type:
+        parts.append(f"Operator Type: {operator_context.operator_type}")
+    if operator_context.is_cloud_operator:
+        parts.append("Cloud Operator: Yes")
+        if operator_context.cloud_subtype:
+            parts.append(f"Cloud Subtype: {operator_context.cloud_subtype}")
+        if operator_context.granted_intents:
+            parts.append(f"Granted Intents: {operator_context.granted_intents}")
+    if operator_context.is_container:
+        parts.append("Container Environment: Yes")
+        if operator_context.container_runtime:
+            parts.append(f"Container Runtime: {operator_context.container_runtime}")
+        if operator_context.init_system:
+            parts.append(f"Init System: {operator_context.init_system}")
+    elif operator_context.init_system:
+        parts.append(f"Init System: {operator_context.init_system}")
+
+    return "\n".join(parts) if parts else "No operator details available"
+
+
 def _format_forbidden_patterns_message() -> str:
-    """Generate a message listing all forbidden command patterns from FORBIDDEN_COMMAND_PATTERNS."""
+    """Generate a message listing all forbidden command patterns.
+
+    Privilege escalation wrappers (sudo, su, pkexec, doas, etc.) are rejected
+    unconditionally by `tool_service.execute_tool_call` regardless of uid. The
+    platform's contract is that the Operator is launched with whatever privilege
+    level it needs; in-command escalation is never permitted. The Tribunal
+    must therefore never emit these patterns.
+    """
     # Extract unique base patterns (e.g., "sudo" from "sudo", "su " from "su ")
     base_patterns = sorted(set(p.strip() for p in FORBIDDEN_COMMAND_PATTERNS))
     pattern_list = ", ".join(f'"{p}"' for p in base_patterns)
     return (
         f"CRITICAL: NEVER add {pattern_list}, or any privilege escalation wrapper. "
-        f"The command runs as the user shown in system_context. If that user is root (uid=0), "
-        f"no elevation is needed. If a non-root user lacks permissions, the command should still "
-        f"be written WITHOUT these patterns — the platform handles privilege escalation externally."
+        f"The platform rejects any command containing these tokens regardless of the user's uid. "
+        f"If a command requires root, the Operator itself must be launched with sufficient "
+        f"privileges — in-command escalation is never accepted."
     )
+
+
+def _prompt_fields(operator_context: OperatorContext | None) -> dict[str, str]:
+    """Build the common template kwargs used by every Tribunal persona prompt.
+
+    Returns a dict with keys: os, shell, working_directory, user_context,
+    operator_context, forbidden_patterns_message.
+
+    Centralising this avoids each stage re-deriving the same fields and
+    guarantees that every persona sees consistent context.
+    """
+    os_name = (operator_context.os if operator_context else None) or DEFAULT_OS_NAME
+    shell = (operator_context.shell if operator_context else None) or DEFAULT_SHELL
+    working_directory = (
+        operator_context.working_directory if operator_context else None
+    ) or DEFAULT_WORKING_DIRECTORY
+    username = operator_context.username if operator_context else None
+    uid = operator_context.uid if operator_context else None
+    if username and uid is not None:
+        user_context = f"{username} (uid={uid})"
+    else:
+        user_context = username or "unknown"
+    return {
+        "os": os_name,
+        "shell": shell,
+        "working_directory": working_directory,
+        "user_context": user_context,
+        "operator_context": _build_operator_context_string(operator_context),
+        "forbidden_patterns_message": _format_forbidden_patterns_message(),
+    }
 
 
 _MAX_TOKENS_GENERATION = 256
@@ -286,10 +366,7 @@ async def _run_generation_pass(
     model: str,
     intent: str,
     original_command: str,
-    os_name: str,
-    shell: str,
-    working_directory: str,
-    user_context: str,
+    operator_context: OperatorContext | None,
     pass_index: int,
     emitter: TribunalEmitter,
     pass_errors: List[str],
@@ -302,16 +379,20 @@ async def _run_generation_pass(
     """
     member = _member_for_pass(pass_index)
     member_persona = get_tribunal_member(member.value)
+
+    fields = _prompt_fields(operator_context)
     prompt = member_persona.persona.format(
-        forbidden_patterns_message=_format_forbidden_patterns_message(),
         command_constraints_message=command_constraints_message,
         intent=intent,
-        os=os_name,
-        shell=shell,
-        user_context=user_context,
-        working_directory=working_directory,
         original_command=original_command,
+        **fields,
     )
+    logger.info(
+        "[TRIBUNAL-PASS-%d] Member=%s prompt_len=%d user_context=%s os=%s shell=%s working_dir=%s",
+        pass_index, member.value, len(prompt),
+        fields["user_context"], fields["os"], fields["shell"], fields["working_directory"],
+    )
+    logger.debug("[TRIBUNAL-PASS-%d] Full prompt: %s", pass_index, prompt[:5000])
     from app.models.model_configs import get_model_config
     model_config = get_model_config(model)
     settings = LiteLLMSettings(
@@ -378,8 +459,7 @@ async def _run_verifier(
     model: str,
     intent: str,
     candidate_command: str,
-    os_name: str,
-    user_context: str,
+    operator_context: OperatorContext | None,
     emitter: TribunalEmitter,
     command_constraints_message: str,
 ) -> tuple[bool, str | None]:
@@ -392,14 +472,19 @@ async def _run_verifier(
     from app.models.model_configs import get_model_config
 
     verifier_persona = get_agent_persona("auditor")
+
+    fields = _prompt_fields(operator_context)
     prompt = verifier_persona.get_system_prompt().format(
-        forbidden_patterns_message=_format_forbidden_patterns_message(),
         command_constraints_message=command_constraints_message,
         intent=intent,
-        os=os_name,
-        user_context=user_context,
         candidate_command=candidate_command,
+        **fields,
     )
+    logger.info(
+        "[TRIBUNAL-VERIFIER] prompt_len=%d user_context=%s os=%s candidate_command=%s",
+        len(prompt), fields["user_context"], fields["os"], candidate_command,
+    )
+    logger.debug("[TRIBUNAL-VERIFIER] Full prompt: %s", prompt[:5000])
     model_config = get_model_config(model)
     settings = LiteLLMSettings(
         max_output_tokens=_MAX_TOKENS_VERIFIER,
@@ -491,10 +576,7 @@ async def _run_generation_stage(
     model: str,
     intent: str,
     original_command: str,
-    os_name: str,
-    shell: str,
-    working_directory: str,
-    user_context: str,
+    operator_context: OperatorContext | None,
     num_passes: int,
     emitter: TribunalEmitter,
     command_constraints_message: str,
@@ -508,8 +590,7 @@ async def _run_generation_stage(
     pass_tasks = [
         _run_generation_pass(
             provider=provider, model=model, intent=intent, original_command=original_command,
-            os_name=os_name, shell=shell, working_directory=working_directory,
-            user_context=user_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
+            operator_context=operator_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
             command_constraints_message=command_constraints_message,
         )
         for i in range(num_passes)
@@ -589,8 +670,7 @@ async def _run_verification_stage(
     model: str,
     intent: str,
     vote_winner: str,
-    os_name: str,
-    user_context: str,
+    operator_context: OperatorContext | None,
     verifier_enabled: bool,
     emitter: TribunalEmitter,
     command_constraints_message: str,
@@ -604,9 +684,8 @@ async def _run_verification_stage(
 
     verifier_passed, verifier_revision = await _run_verifier(
         provider=provider, model=model, intent=intent,
-        candidate_command=vote_winner, os_name=os_name,
-        user_context=user_context, emitter=emitter,
-        command_constraints_message=command_constraints_message,
+        candidate_command=vote_winner, operator_context=operator_context,
+        emitter=emitter, command_constraints_message=command_constraints_message,
     )
     if verifier_passed:
         logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
@@ -655,10 +734,7 @@ async def _build_and_emit_result(
 async def generate_command(
     original_command: str,
     intent: str,
-    os_name: str,
-    shell: str,
-    working_directory: str,
-    user_context: str,
+    operator_context: OperatorContext | None,
     g8ed_event_service: EventService,
     web_session_id: str,
     user_id: str,
@@ -671,9 +747,15 @@ async def generate_command(
     blacklisted_commands: list[dict[str, str]] | None = None,
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to refine a command string."""
+    fields = _prompt_fields(operator_context)
+    os_name = fields["os"]
+    shell = fields["shell"]
+
     logger.info(
-        "[TRIBUNAL-ENTRY] generate_command called: command=%r intent_len=%d os=%s shell=%s",
-        original_command[:100], len(intent), os_name, shell,
+        "[TRIBUNAL-ENTRY] generate_command called: command=%r intent_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
+        original_command[:100], len(intent), os_name, shell, fields["user_context"],
+        operator_context.hostname if operator_context else None,
+        operator_context.architecture if operator_context else None,
     )
 
     command_constraints_message = _format_command_constraints_message(
@@ -767,8 +849,7 @@ async def generate_command(
 
     candidates = await _run_generation_stage(
         provider=provider, model=model, intent=intent,
-        original_command=original_command, os_name=os_name, shell=shell,
-        working_directory=working_directory, user_context=user_context,
+        original_command=original_command, operator_context=operator_context,
         num_passes=num_passes, emitter=emitter,
         command_constraints_message=command_constraints_message,
     )
@@ -780,8 +861,7 @@ async def generate_command(
 
     final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
         provider=provider, model=model, intent=intent,
-        vote_winner=vote_winner, os_name=os_name,
-        user_context=user_context,
+        vote_winner=vote_winner, operator_context=operator_context,
         verifier_enabled=settings.llm.llm_command_gen_verifier,
         emitter=emitter,
         command_constraints_message=command_constraints_message,
