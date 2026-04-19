@@ -157,6 +157,41 @@ export class OperatorPanel {
         this._lastHeartbeat = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
         this._isConnected = true;
         devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
+
+        // Merge heartbeat data into operator object for UI display
+        const operatorIndex = this._operators.findIndex(op => op.operator_id === data.operator_id);
+        if (operatorIndex !== -1) {
+            this._operators[operatorIndex] = {
+                ...this._operators[operatorIndex],
+                latest_heartbeat_snapshot: {
+                    cpu_percent: data.cpu_percent,
+                    memory_percent: data.memory_percent,
+                    disk_percent: data.disk_percent,
+                    network_latency: data.network_latency,
+                    uptime: data.uptime,
+                    uptime_seconds: data.uptime_seconds,
+                    timestamp: data.timestamp
+                },
+                system_info: {
+                    ...this._operators[operatorIndex].system_info,
+                    os: data.os,
+                    architecture: data.architecture,
+                    hostname: data.hostname,
+                    public_ip: data.public_ip,
+                    internal_ip: data.internal_ip,
+                    os_details: data.os_details,
+                    user_details: data.user_details,
+                    disk_details: data.disk_details,
+                    memory_details: data.memory_details,
+                    environment: data.environment,
+                    cpu_count: data.cpu_count || data.user_details?.cpu_count,
+                    memory_mb: data.memory_total_mb || data.memory_details?.total_mb,
+                    current_user: data.user_details?.username
+                },
+                last_heartbeat: data.timestamp
+            };
+        }
+
         this._applyOperatorState({ cause: 'heartbeat' });
     }
 
@@ -180,9 +215,8 @@ export class OperatorPanel {
                 this.updateMetrics(heartbeatData);
                 this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
             }
-            if (this.selectedMetricsOperatorId) {
-                this.updateOperatorCardInPlace(this.selectedMetricsOperatorId);
-            }
+            // Re-render operator list to show updated heartbeat metrics in expanded details
+            this.displayOperators(this.operators);
             return;
         }
 

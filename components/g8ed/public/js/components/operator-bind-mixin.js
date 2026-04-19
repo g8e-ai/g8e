@@ -19,6 +19,7 @@ import { EventType } from '../constants/events.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { escapeHtml } from '../utils/html.js';
 import { showConfirmationModal } from '../utils/ui-utils.js';
+import { webSessionService } from '../utils/web-session-service.js';
 
 /**
  * BindOperatorsMixin - Operator bind/unbind operations and confirmation overlays.
@@ -65,6 +66,15 @@ export const BindOperatorsMixin = {
                 this.updateStatus(result.operator.status || OperatorStatus.BOUND);
             }
 
+            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            if (operatorIndex !== -1) {
+                const currentWebSessionId = webSessionService.getWebSessionId();
+                this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
+                if (typeof this.displayOperators === 'function') {
+                    this.displayOperators(this.operators);
+                }
+            }
+
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to bind operator:', error);
             notificationService.error(`Failed to bind operator: ${error.message}`);
@@ -97,6 +107,14 @@ export const BindOperatorsMixin = {
 
             this.updateBindAllButtonVisibility();
             this.updateUnbindAllButtonVisibility();
+
+            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            if (operatorIndex !== -1) {
+                this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
+                if (typeof this.displayOperators === 'function') {
+                    this.displayOperators(this.operators);
+                }
+            }
 
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to unbind operator:', error);
@@ -334,6 +352,17 @@ export const BindOperatorsMixin = {
                 }
             }
 
+            const currentWebSessionId = webSessionService.getWebSessionId();
+            for (const opId of result.bound_operator_ids || selectedOperatorIds) {
+                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                if (operatorIndex !== -1) {
+                    this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
+                }
+            }
+            if (typeof this.displayOperators === 'function') {
+                this.displayOperators(this.operators);
+            }
+
             if (feedbackContainer) {
                 const boundCount = result.bound_count || selectedOperatorIds.length;
                 const label = `${boundCount} operator${boundCount !== 1 ? 's' : ''} bound successfully`;
@@ -474,6 +503,16 @@ export const BindOperatorsMixin = {
 
             for (const opId of result.unbound_operator_ids || operatorIds) {
                 this.boundOperatorIds = this.boundOperatorIds.filter(id => id !== opId);
+            }
+
+            for (const opId of result.unbound_operator_ids || operatorIds) {
+                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                if (operatorIndex !== -1) {
+                    this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
+                }
+            }
+            if (typeof this.displayOperators === 'function') {
+                this.displayOperators(this.operators);
             }
 
             if (feedbackContainer) {

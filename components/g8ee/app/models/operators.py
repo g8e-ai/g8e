@@ -519,6 +519,7 @@ class OperatorHeartbeat(G8eBaseModel):
             disk_details=self.disk_details,
             memory_details=self.memory_details,
             environment=self.environment,
+            cpu_count=self.system_identity.cpu_count,
         )
 
 
