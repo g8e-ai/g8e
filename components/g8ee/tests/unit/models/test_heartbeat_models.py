@@ -22,16 +22,19 @@ Coverage:
 - HeartbeatVersionInfo: operator_version, status
 - G8eoHeartbeatCapabilityFlags: nested shape, defaults
 - OperatorHeartbeat.from_wire: full round-trip from a complete G8eoHeartbeatPayload
-- OperatorHeartbeat.to_sse_payload: all fields emitted correctly
+- HeartbeatSSEEnvelope.from_heartbeat / HeartbeatMetrics.from_heartbeat: all fields projected correctly
+- HeartbeatSSEEnvelope.flatten_for_wire: nested models serialized to dicts
 - _coerce_heartbeat_type: valid values pass through, unknown falls back to AUTOMATIC
 """
 
 import pytest
 from app.constants import HeartbeatType, OperatorStatus, VersionStability
 from app.models.operators import (
+    HeartbeatMetrics,
     HeartbeatNetworkInfo,
     HeartbeatNetworkInterface,
     HeartbeatPerformanceMetrics,
+    HeartbeatSSEEnvelope,
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
     HeartbeatVersionInfo,
@@ -515,82 +518,158 @@ class TestOperatorHeartbeatFromWireFull:
 
 
 # =============================================================================
-# OperatorHeartbeat.to_sse_payload
+# HeartbeatSSEEnvelope.from_heartbeat — domain/wire boundary
 # =============================================================================
 
-class TestOperatorHeartbeatToSSEPayload:
+class TestHeartbeatSSEEnvelope:
+    """Verifies the authorship split: operator_id + status are g8ee-owned
+    envelope fields; all telemetry is projected into the g8eo-authored
+    ``metrics`` sub-model. Status never leaks into metrics."""
 
     def _make_heartbeat(self) -> OperatorHeartbeat:
         return OperatorHeartbeat.from_wire(_full_payload())
 
-    def test_operator_id_set_correctly(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.operator_id == "op-sse-001"
+    def _make_envelope(self, status: OperatorStatus = OperatorStatus.ACTIVE) -> HeartbeatSSEEnvelope:
+        return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", status, self._make_heartbeat())
 
-    def test_status_is_active(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.status == OperatorStatus.ACTIVE
+    def test_operator_id_set_on_envelope(self):
+        env = self._make_envelope()
+        assert env.operator_id == "op-sse-001"
 
-    def test_hostname_from_system_identity(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.hostname == "testhost"
+    def test_status_lives_on_envelope_not_metrics(self):
+        env = self._make_envelope(OperatorStatus.ACTIVE)
+        assert env.status == OperatorStatus.ACTIVE
+        assert not hasattr(env.metrics, "status")
 
-    def test_cpu_percent_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.cpu_percent == 42.5
+    def test_operator_id_not_duplicated_into_metrics(self):
+        env = self._make_envelope()
+        assert not hasattr(env.metrics, "operator_id")
 
-    def test_memory_percent_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.memory_percent == 61.0
+    def test_status_bound_passed_through(self):
+        assert self._make_envelope(OperatorStatus.BOUND).status == OperatorStatus.BOUND
 
-    def test_disk_percent_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.disk_percent == 35.0
+    def test_status_offline_passed_through(self):
+        assert self._make_envelope(OperatorStatus.OFFLINE).status == OperatorStatus.OFFLINE
 
-    def test_network_latency_field_name_is_network_latency(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert hasattr(sse, "network_latency")
-        assert not hasattr(sse, "network_latency_ms")
-        assert sse.network_latency == 8.0
+    def test_metrics_is_typed_heartbeat_metrics(self):
+        env = self._make_envelope()
+        assert isinstance(env.metrics, HeartbeatMetrics)
+
+    def test_hostname_projected_into_metrics(self):
+        assert self._make_envelope().metrics.hostname == "testhost"
+
+    def test_cpu_percent_projected_into_metrics(self):
+        assert self._make_envelope().metrics.cpu_percent == 42.5
+
+    def test_memory_percent_projected_into_metrics(self):
+        assert self._make_envelope().metrics.memory_percent == 61.0
+
+    def test_disk_percent_projected_into_metrics(self):
+        assert self._make_envelope().metrics.disk_percent == 35.0
+
+    def test_network_latency_field_name(self):
+        m = self._make_envelope().metrics
+        assert hasattr(m, "network_latency")
+        assert not hasattr(m, "network_latency_ms")
+        assert m.network_latency == 8.0
 
     def test_uptime_seconds_is_int(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.uptime_seconds == 191400
-        assert isinstance(sse.uptime_seconds, int)
+        m = self._make_envelope().metrics
+        assert m.uptime_seconds == 191400
+        assert isinstance(m.uptime_seconds, int)
 
-    def test_uptime_string_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.uptime == "2 days, 4:30:00"
+    def test_uptime_display_string_projected(self):
+        assert self._make_envelope().metrics.uptime == "2 days, 4:30:00"
 
-    def test_public_ip_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.public_ip == "1.2.3.4"
+    def test_public_ip_projected(self):
+        assert self._make_envelope().metrics.public_ip == "1.2.3.4"
 
-    def test_operator_version_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.operator_version == "1.2.3"
+    def test_operator_version_projected(self):
+        assert self._make_envelope().metrics.operator_version == "1.2.3"
 
-    def test_local_storage_enabled_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.local_storage_enabled is True
-
-    def test_git_available_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.git_available is True
-
-    def test_ledger_enabled_false_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.ledger_enabled is False
+    def test_capability_flags_projected(self):
+        m = self._make_envelope().metrics
+        assert m.local_storage_enabled is True
+        assert m.git_available is True
+        assert m.ledger_enabled is False
 
     def test_heartbeat_type_preserved(self):
         hb = OperatorHeartbeat.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
-        sse = hb.to_sse_payload("op-sse-001")
-        assert sse.heartbeat_type == HeartbeatType.BOOTSTRAP.value
+        env = HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
+        assert env.metrics.heartbeat_type == HeartbeatType.BOOTSTRAP.value
 
-    def test_memory_used_mb_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.memory_used_mb == 9830.0
+    def test_memory_used_mb_projected(self):
+        assert self._make_envelope().metrics.memory_used_mb == 9830.0
 
-    def test_disk_used_gb_emitted(self):
-        sse = self._make_heartbeat().to_sse_payload("op-sse-001")
-        assert sse.disk_used_gb == 120.0
+    def test_disk_used_gb_projected(self):
+        assert self._make_envelope().metrics.disk_used_gb == 120.0
+
+    def test_nested_models_stay_typed_inside_boundary(self):
+        """Application-boundary rule: nested fields are Pydantic instances, not dicts."""
+        m = self._make_envelope().metrics
+        from app.models.operators import (
+            HeartbeatDiskDetails,
+            HeartbeatEnvironment,
+            HeartbeatMemoryDetails,
+            HeartbeatOSDetails,
+            HeartbeatUserDetails,
+        )
+        assert isinstance(m.os_details, HeartbeatOSDetails)
+        assert isinstance(m.user_details, HeartbeatUserDetails)
+        assert isinstance(m.disk_details, HeartbeatDiskDetails)
+        assert isinstance(m.memory_details, HeartbeatMemoryDetails)
+        assert isinstance(m.environment, HeartbeatEnvironment)
+
+
+class TestHeartbeatSSEEnvelopeFlattenForWire:
+    """Verifies serialization happens only at the wire boundary and that nested
+    Pydantic models are emitted as plain dicts (no lingering model instances,
+    no JSON-as-string coercion)."""
+
+    def _make_envelope(self) -> HeartbeatSSEEnvelope:
+        hb = OperatorHeartbeat.from_wire(_full_payload())
+        return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
+
+    def test_envelope_top_level_shape(self):
+        data = self._make_envelope().model_dump(mode="json")
+        assert set(data.keys()) == {"operator_id", "status", "metrics"}
+
+    def test_status_is_string_on_wire(self):
+        data = self._make_envelope().model_dump(mode="json")
+        assert data["status"] == OperatorStatus.ACTIVE.value
+
+    def test_metrics_is_plain_dict(self):
+        data = self._make_envelope().model_dump(mode="json")
+        assert isinstance(data["metrics"], dict)
+
+    def test_nested_models_serialized_to_dicts(self):
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
+        assert isinstance(metrics["os_details"], dict)
+        assert isinstance(metrics["user_details"], dict)
+        assert isinstance(metrics["disk_details"], dict)
+        assert isinstance(metrics["memory_details"], dict)
+        assert isinstance(metrics["environment"], dict)
+
+    def test_heartbeat_type_is_string_on_wire(self):
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
+        assert metrics["heartbeat_type"] == HeartbeatType.AUTOMATIC.value
+
+    def test_timestamp_is_iso_string_on_wire(self):
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
+        assert isinstance(metrics["timestamp"], str)
+        assert metrics["timestamp"].endswith("Z")
+
+    def test_none_fields_excluded(self):
+        hb = OperatorHeartbeat.from_wire(
+            G8eoHeartbeatPayload(
+                event_type="g8e.v1.operator.heartbeat.sent",
+                operator_id="op-min",
+                operator_session_id="sess-min",
+            )
+        )
+        data = HeartbeatSSEEnvelope.from_heartbeat(
+            "op-min", OperatorStatus.ACTIVE, hb
+        ).model_dump(mode="json")
+        metrics = data["metrics"]
+        assert "hostname" not in metrics
+        assert "cpu_percent" not in metrics

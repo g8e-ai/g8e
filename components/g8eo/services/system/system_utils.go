@@ -301,10 +301,14 @@ func GetUserDetails(shell string) models.HeartbeatUserDetails {
 			Shell:    shell,
 		}
 	}
+	// os/user returns UID/GID as decimal strings; the wire format carries them as
+	// POSIX ints. Fall back to 0 on a malformed string (never expected on real systems).
+	uid, _ := strconv.Atoi(currentUser.Uid)
+	gid, _ := strconv.Atoi(currentUser.Gid)
 	return models.HeartbeatUserDetails{
 		Username: currentUser.Username,
-		UID:      currentUser.Uid,
-		GID:      currentUser.Gid,
+		UID:      uid,
+		GID:      gid,
 		Home:     currentUser.HomeDir,
 		Name:     currentUser.Name,
 		Shell:    shell,

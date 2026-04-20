@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import json
-from typing import Any
 from app.constants.paths import PATHS
 
 _SHARED_DIR = PATHS["infra"]["shared_constants_dir"]

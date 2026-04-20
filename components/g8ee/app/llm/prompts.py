@@ -15,9 +15,8 @@
 
 import logging
 
-from ..constants import CloudSubtype, EventType, ExecutionStatus, OperatorType, PromptFile, PromptSection
+from ..constants import CloudSubtype, OperatorType, PromptFile, PromptSection
 from ..constants.prompts import InvestigationContextLabel
-from ..constants.message_sender import MessageSender
 from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
@@ -255,7 +254,7 @@ def build_modular_system_prompt(
             if ctx.hostname:
                 system_parts.append(f"Hostname: {ctx.hostname}")
             if ctx.username:
-                uid_suffix = f" (uid={ctx.uid})" if ctx.uid else ""
+                uid_suffix = f" (uid={ctx.uid})" if ctx.uid is not None else ""
                 system_parts.append(f"User: {ctx.username}{uid_suffix}")
             if ctx.working_directory:
                 system_parts.append(f"Working Directory: {ctx.working_directory}")
@@ -288,7 +287,20 @@ def build_modular_system_prompt(
                 system_parts.append("</operator>")
 
         system_parts.append("</system_context>")
-        sections.append("\n".join(system_parts) + "\n")
+        system_context_str = "\n".join(system_parts) + "\n"
+        sections.append(system_context_str)
+        
+        # Log the system context being injected
+        logger.info(
+            "[PROMPT] system_context injected: operator_count=%d context_len=%d username=%s uid=%s hostname=%s os=%s",
+            len(contexts_to_render),
+            len(system_context_str),
+            contexts_to_render[0].username if contexts_to_render and contexts_to_render[0] else None,
+            contexts_to_render[0].uid if contexts_to_render and contexts_to_render[0] else None,
+            contexts_to_render[0].hostname if contexts_to_render and contexts_to_render[0] else None,
+            contexts_to_render[0].os if contexts_to_render and contexts_to_render[0] else None,
+        )
+        logger.debug("[PROMPT] full system_context:\n%s", system_context_str[:5000])
 
     if investigation and investigation.sentinel_mode is True:
         sections.append(load_prompt(PromptFile.SYSTEM_SENTINEL_MODE))

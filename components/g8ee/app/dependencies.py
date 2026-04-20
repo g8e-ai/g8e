@@ -32,7 +32,6 @@ from app.models.auth import AuthenticatedUser
 from app.models.health import HealthCheckResult
 from app.models.http_context import G8eHttpContext
 from app.services.cache.cache_aside import CacheAsideService
-from app.utils.timestamp import now
 from app.security.auth import (
     is_infrastructure_health_check_ip,
     validate_internal_origin,

@@ -22,24 +22,17 @@ from app.constants.events import EventType
 from app.constants.intents import CloudIntent
 from app.constants.status import FileOperation
 from app.models.internal_api import OperatorApprovalResponse
-from app.models.investigations import ApprovalMetadata, FileEditMetadata
+from app.models.investigations import ApprovalMetadata
 from app.models.operators import (
     AgentContinueApprovalEvent,
     AgentContinueApprovalRequest,
-    ApprovalResult,
     ApprovalType,
-    CommandApprovalEvent,
     CommandApprovalRequest,
     CommandRiskAnalysis,
-    FileEditApprovalEvent,
     FileEditApprovalRequest,
-    FileOperationRiskAnalysis,
-    IntentApprovalEvent,
     IntentApprovalRequest,
     PendingApproval,
-    TargetSystem,
 )
-from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
 from app.models.tool_results import RiskLevel
 from app.services.operator.approval_service import OperatorApprovalService
@@ -48,7 +41,7 @@ from app.services.protocols import (
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
 )
-from app.utils.ids import generate_approval_id, generate_intent_approval_id
+from app.utils.ids import generate_approval_id
 
 
 class TestOperatorApprovalServiceInit:

@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import re
-from typing import Any
 
 
 def to_snake_case(string: str) -> str:

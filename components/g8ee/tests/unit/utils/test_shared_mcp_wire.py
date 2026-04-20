@@ -20,13 +20,9 @@ from typing import Any, Dict
 import pytest
 from app.constants.paths import PATHS
 from app.services.mcp.types import (
-    CallToolParams,
     CallToolResult,
     Content,
-    JSONRPCError,
     JSONRPCRequest,
-    JSONRPCResponse,
-    Resource,
     ResourceContent,
 )
 

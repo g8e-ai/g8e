@@ -30,7 +30,6 @@ from app.constants import (
     TriageConfidence,
     TriageIntentClassification,
     AgentMode,
-    LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
@@ -40,6 +39,7 @@ from app.llm.llm_types import (
     ToolConfig,
     ToolCallingConfig,
 )
+from app.llm.utils import ModelOverrideResolver
 from app.models.agent import AgentStreamContext
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
@@ -119,7 +119,6 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         system_instructions="",
         contents=[],
         generation_config=PrimaryLLMSettings(
-            temperature=LLM_DEFAULT_TEMPERATURE,
             max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
             top_p_nucleus_sampling=1.0,
             top_k_filtering=40,
@@ -296,6 +295,76 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
     assert resolved_llm.primary_provider is LLMProvider.OPENAI
     assert isinstance(resolved_llm.assistant_provider, LLMProvider)
     assert resolved_llm.assistant_provider is LLMProvider.ANTHROPIC
+
+
+async def test_prepare_chat_context_passes_assistant_model_to_triage():
+    """Regression: triage runs on the assistant provider, so model_override
+    must be the assistant model — not the primary model.
+
+    Previously chat_pipeline passed llm_primary_model as the triage override,
+    causing cross-provider mismatches (e.g. a Claude model name sent to the
+    Gemini API endpoint, producing a 404 NOT_FOUND on generateContent).
+    """
+    from app.models.agents.triage import TriageRequest, TriageResult
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _make_pipeline()
+    svc.investigation_service.get_investigation_context = AsyncMock(
+        return_value=build_enriched_context(investigation_id="inv-1")
+    )
+    svc.investigation_service.get_enriched_investigation_context = AsyncMock(
+        return_value=build_enriched_context(investigation_id="inv-1")
+    )
+    svc.investigation_service.update_investigation_raw = AsyncMock()
+    svc.investigation_service.get_chat_messages = AsyncMock(return_value=[])
+    svc.memory_service = MagicMock()
+    svc.memory_service.get_user_memories = AsyncMock(return_value=[])
+    svc.memory_service.get_case_memories = AsyncMock(return_value=[])
+    svc.request_builder = MagicMock()
+    svc.request_builder.build_system_prompt = MagicMock(return_value="")
+    svc.request_builder.format_attachment_parts = MagicMock(return_value=[])
+    svc.request_builder.build_contents_from_history = MagicMock(return_value=[])
+
+    captured: dict = {}
+
+    async def _capture_triage(req: TriageRequest) -> TriageResult:
+        captured["model_override"] = req.model_override
+        return TriageResult(
+            complexity=TriageComplexityClassification.COMPLEX,
+            complexity_confidence=TriageConfidence.HIGH,
+            intent=TriageIntentClassification.INFORMATION,
+            intent_confidence=TriageConfidence.HIGH,
+            intent_summary="ok",
+        )
+
+    svc.triage_agent = MagicMock()
+    svc.triage_agent.triage = AsyncMock(side_effect=_capture_triage)
+
+    g8e_ctx = build_g8e_http_context(
+        investigation_id="inv-1", case_id="case-1", web_session_id="web-1", user_id="user-1"
+    )
+    request_settings = G8eeUserSettings(llm=LLMSettings())
+
+    with patch("app.services.ai.chat_pipeline.resolve_model", return_value="main-model"):
+        try:
+            model_overrides = ModelOverrideResolver(
+                primary_model="claude-opus-4-6",
+                assistant_model="gemini-3-flash-preview",
+            )
+            await svc._prepare_chat_context(
+                message="hello",
+                g8e_context=g8e_ctx,
+                request_settings=request_settings,
+                attachments=[],
+                sentinel_mode=True,
+                model_overrides=model_overrides,
+            )
+        except Exception:
+            # downstream steps may depend on additional mocked services; the
+            # triage call happens early, which is all this test needs.
+            pass
+
+    assert captured["model_override"] == "gemini-3-flash-preview"
 
 
 async def test_run_chat_impl_rejects_unknown_provider_override():

@@ -2289,6 +2289,41 @@
     color: var(--link-visited-hover);
     border-bottom-color: rgba(var(--accent-purple-light-rgb, 210, 168, 255), 0.6);
 }
+
+/* Operator terminal links - use subtle accent-blue-light instead of bright link-color */
+.operator-terminal .message-content a,
+.operator-terminal-message .message-content a,
+.anchored-terminal .message-content a,
+.anchored-terminal__agent-message-content a,
+.operator-terminal-content a,
+.message-content.g8e_ai_agent a,
+.message-content.g8e_ai_agent .markdown-link,
+.message-content .markdown-link,
+.message-content .content-text a,
+.message-content .content-text .markdown-link,
+.message-item.g8e_ai_agent .message-content a,
+.message-item.g8e_ai_agent .content-text a,
+.message-item.g8e_ai_agent .markdown-link {
+    color: var(--accent-blue-light) !important;
+    border-bottom: none !important;
+}
+
+.operator-terminal .message-content a:hover,
+.operator-terminal-message .message-content a:hover,
+.anchored-terminal .message-content a:hover,
+.anchored-terminal__agent-message-content a:hover,
+.operator-terminal-content a:hover,
+.message-content.g8e_ai_agent a:hover,
+.message-content.g8e_ai_agent .markdown-link:hover,
+.message-content .markdown-link:hover,
+.message-content .content-text a:hover,
+.message-content .content-text .markdown-link:hover,
+.message-item.g8e_ai_agent .message-content a:hover,
+.message-item.g8e_ai_agent .content-text a:hover,
+.message-item.g8e_ai_agent .markdown-link:hover {
+    color: var(--accent-blue) !important;
+    text-decoration: underline;
+}
 /* Base activity indicator - appears inline in chat flow, right-aligned */
 
 

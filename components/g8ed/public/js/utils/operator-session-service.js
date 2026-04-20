@@ -47,7 +47,7 @@ class OperatorSessionService {
     getBoundOperatorForSession(webSessionId) {
         if (!webSessionId) return null;
         return this._boundOperators.find(
-            op => op.status === OperatorStatus.BOUND && op.web_session_id === webSessionId
+            op => op.status === OperatorStatus.BOUND && op.bound_web_session_id === webSessionId
         ) ?? null;
     }
 }

@@ -11,7 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from app.models.model_configs import get_model_config
 from app.constants import GEMINI_3_1_FLASH_LITE, ThinkingLevel
 

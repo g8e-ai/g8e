@@ -233,7 +233,8 @@ class OperatorCommandValidator:
                 reason="operator_session_id is required",
                 operator_session_id=None,
                 web_session_id=web_session_id,
-                operator_id=operator_id
+                operator_id=operator_id,
+                operator_bound_web_session_id=None
             )
 
         if not web_session_id:
@@ -242,7 +243,8 @@ class OperatorCommandValidator:
                 reason="web_session_id is required for bound operators",
                 operator_session_id=operator_session_id,
                 web_session_id=None,
-                operator_id=operator_id
+                operator_id=operator_id,
+                operator_bound_web_session_id=None
             )
 
         operator = await self.operator_cache.get_operator(operator_id)
@@ -252,10 +254,11 @@ class OperatorCommandValidator:
                 reason=f"Operator {operator_id} not found",
                 operator_session_id=operator_session_id,
                 web_session_id=web_session_id,
-                operator_id=operator_id
+                operator_id=operator_id,
+                operator_bound_web_session_id=None
             )
 
-        operator_web_session_id = operator.web_session_id
+        operator_bound_web_session_id = operator.bound_web_session_id
         operator_operator_session_id = operator.operator_session_id
         operator_status = operator.status
 
@@ -267,17 +270,17 @@ class OperatorCommandValidator:
                 web_session_id=web_session_id,
                 operator_id=operator_id,
                 operator_status=operator_status,
-                operator_web_session_id=operator_web_session_id
+                operator_bound_web_session_id=operator_bound_web_session_id
             )
 
-        if operator_web_session_id != web_session_id:
+        if operator_bound_web_session_id != web_session_id:
             return BindingValidationResult(
                 valid=False,
-                reason="Operator web_session_id mismatch - Operator bound to different session",
+                reason="Operator bound_web_session_id mismatch - Operator bound to different session",
                 operator_session_id=operator_session_id,
                 web_session_id=web_session_id,
                 operator_id=operator_id,
-                operator_web_session_id=operator_web_session_id
+                operator_bound_web_session_id=operator_bound_web_session_id
             )
 
         if operator_operator_session_id != operator_session_id:
@@ -287,7 +290,8 @@ class OperatorCommandValidator:
                 operator_session_id=operator_session_id,
                 expected_operator_session_id=operator_operator_session_id,
                 web_session_id=web_session_id,
-                operator_id=operator_id
+                operator_id=operator_id,
+                operator_bound_web_session_id=operator_bound_web_session_id
             )
 
         logger.info("[BINDING-VALIDATED] Operator binding validated successfully", extra={
@@ -304,7 +308,8 @@ class OperatorCommandValidator:
             operator_session_id=operator_session_id,
             web_session_id=web_session_id,
             operator_id=operator_id,
-            operator_status=operator_status
+            operator_status=operator_status,
+            operator_bound_web_session_id=operator_bound_web_session_id
         )
 
     async def check_operator_health(self, operator_id: str) -> HealthCheckResultModel:

@@ -21,7 +21,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 ### Command Execution
 - Executes shell commands on the target system with user-controlled cancellation
 - **Non-interactive enforcement** — terminates commands that request user input by closing `stdin`
-- **Cloud CLI Protection** — blocks cloud tools (`aws`, `terraform`, `kubectl`, etc.) unless `--cloud` is enabled
+- **Cloud CLI Protection** — blocks cloud tools (`aws`, `gcloud`, `az`, `terraform`, etc.) unless `--cloud` is enabled
 - No automatic timeouts; users cancel via UI when needed
 
 ### File Operations
@@ -29,7 +29,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 - Automatic backups before modifications
 
 ### Heartbeat Telemetry
-- Sends system metrics at a configurable interval (default: 60 seconds; overridable by `--heartbeat-interval` flag or bootstrap config)
+- Sends system metrics at a configurable interval (default: 30 seconds; overridable by `--heartbeat-interval` flag or bootstrap config)
 - Includes hostname, CPU, memory, disk, network, OS details, uptime
 
 ### Data Storage
@@ -138,13 +138,6 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 | 5 | Config error | No |
 | 6 | Storage error | No |
 | 7 | TLS cert failure | No |
-| 8 | Shutdown requested | No |
-| 9 | Resource not found | No |
-| 10 | Already exists | No |
-| 11 | Timeout | Yes |
-| 12 | Operation cancelled | No |
-| 13 | Not implemented | No |
-| 14 | Busy / Locked | Yes |
 
 ---
 
@@ -176,7 +169,7 @@ g8ee returns result to AI
 
 ### Heartbeat Flow
 
-g8eo calls `buildHeartbeat()` at the configured interval (default 60 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to g8es pub/sub. From there, g8ee and g8ed handle persistence and SSE fan-out — see [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow.
+g8eo calls `buildHeartbeat()` at the configured interval (default 30 seconds; overridable via `--heartbeat-interval` flag at startup or `HeartbeatIntervalSeconds` in bootstrap config), collects system metrics, then calls `PublishHeartbeat()` to send the payload over the Gateway WebSocket to g8es pub/sub. From there, g8ee and g8ed handle persistence and SSE fan-out — see [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow.
 
 ---
 
@@ -261,17 +254,18 @@ g8e.operator --openclaw \
 
 The Operator supports the **Model Context Protocol (MCP)** as a native satellite. This is implemented through a **protocol translator layer** (`services/mcp/translator.go`) that maps MCP tool names to internal g8e event types.
 
-| MCP Tool Name | internal g8e Event Type |
+| MCP Tool Name | Internal g8e Event Type |
 |---------------|-------------------------|
-| `run_commands_with_operator` | `operator:command:requested` |
-| `file_create_on_operator` | `operator:file_edit:requested` |
-| `file_write_on_operator` | `operator:file_edit:requested` |
-| `file_read_on_operator` | `operator:file_edit:requested` |
-| `file_update_on_operator` | `operator:file_edit:requested` |
-| `check_port_status` | `operator:port_check:requested` |
-| `list_files_and_directories_with_detailed_metadata` | `operator:fs_list:requested` |
-| `fetch_file_history` | `operator:fetch_file_history:requested` |
-| `fetch_file_diff` | `operator:fetch_file_diff:requested` |
+| `run_commands_with_operator` | `g8e.v1.operator.command.requested` |
+| `file_create_on_operator` | `g8e.v1.operator.file.edit.requested` |
+| `file_write_on_operator` | `g8e.v1.operator.file.edit.requested` |
+| `file_read_on_operator` | `g8e.v1.operator.file.edit.requested` |
+| `file_update_on_operator` | `g8e.v1.operator.file.edit.requested` |
+| `check_port_status` | `g8e.v1.operator.network.port.check.requested` |
+| `list_files_and_directories_with_detailed_metadata` | `g8e.v1.operator.filesystem.list.requested` |
+| `fetch_file_history` | `g8e.v1.operator.file.history.fetch.requested` |
+| `fetch_file_diff` | `g8e.v1.operator.file.diff.fetch.requested` |
+| `grant_intent_permission` | `g8e.v1.operator.intent.approval.requested` |
 
 - **Request Handling**: Interprets MCP `tools/call` requests and maps them to internal actions.
 - **Result Wrapping**: Wraps execution results in MCP `CallToolResult` format before transmitting back to the platform.
@@ -296,7 +290,7 @@ The Operator supports the **Model Context Protocol (MCP)** as a native satellite
 | `-s` / `--local-storage` | — | true | Local storage mode — store output locally instead of cloud |
 | `-l` / `--log` | `G8E_LOG_LEVEL` | info | Log level |
 | `-G` / `--no-git` | — | false | Disable Ledger (git-backed file versioning) |
-| `--heartbeat-interval` | — | 60s | Heartbeat interval (e.g. `60s`, `2m`); overrides the 60s default |
+| `--heartbeat-interval` | — | 30s | Heartbeat interval (e.g. `60s`, `2m`); overrides the 30s default |
 | `--working-dir` | — | launch dir | Working directory for commands and data storage |
 | `-c` / `--cloud` | — | true | Cloud Operator mode — unlocks cloud CLI tools. Always set on g8ep. |
 | `-p` / `--provider` | — | — | Cloud provider: `aws`, `gcp`, `azure`. Required for Cloud Operator. |
@@ -389,7 +383,7 @@ All storage and security services are now injected into `PubSubCommandService` a
 ```
 g8eo/
 ├── certs/                 # CA trust store (fetched at startup), TLS config
-├── cmd/                   # CLI subcommands (do, stream)
+├── cmd/                   # CLI subcommands (stream)
 ├── config/                # Configuration management
 ├── constants/             # Exit codes, channels, events
 ├── contracts/             # Cross-component contract tests
@@ -399,6 +393,7 @@ g8eo/
 │   ├── auth/              # Bootstrap, device auth, fingerprint
 │   ├── execution/         # Command execution, file edit, fs_list
 │   ├── listen/            # Listen mode (DB, HTTP, pub/sub broker)
+│   ├── mcp/               # MCP protocol translator
 │   ├── openclaw/          # OpenClaw Node Host
 │   ├── pubsub/            # g8es WebSocket transport
 │   ├── sentinel/          # Pre-execution threat detection + post-execution scrubbing

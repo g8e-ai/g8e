@@ -69,11 +69,8 @@ class BenchmarkTestResult:
     failures: list[str] | None = None
     execution_time_ms: float = 0.0
     error: str | None = None
-    tribunal_original_command: str | None = None
     tribunal_final_command: str | None = None
     tribunal_outcome: str | None = None
-    tribunal_improved: bool | None = None
-    tribunal_pre_score: bool | None = None
     agent_continue_approvals: int = 0
     approvals_by_type: dict[str, int] | None = None
     dimension: str = "accuracy"
@@ -94,11 +91,8 @@ class BenchmarkTestResult:
             "dimension": self.dimension,
         }
         if self.tribunal_outcome is not None:
-            result["tribunal_original_command"] = self.tribunal_original_command
             result["tribunal_final_command"] = self.tribunal_final_command
             result["tribunal_outcome"] = self.tribunal_outcome
-            result["tribunal_improved"] = self.tribunal_improved
-            result["tribunal_pre_score"] = self.tribunal_pre_score
         return result
 
 

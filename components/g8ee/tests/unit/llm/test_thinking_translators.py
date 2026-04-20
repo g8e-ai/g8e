@@ -28,7 +28,7 @@ typed result. Tests avoid any provider SDK mocking.
 
 import pytest
 
-from app.constants import ThinkingDialect, ThinkingLevel
+from app.constants import ThinkingLevel
 from app.llm.thinking import (
     translate_for_anthropic,
     translate_for_gemini,

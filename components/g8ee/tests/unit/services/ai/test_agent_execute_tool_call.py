@@ -42,7 +42,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import app.services.ai.agent_tool_loop as agent_tool_loop_module
-from app.constants import NEW_CASE_ID, CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
+from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
 from app.models.agents.tribunal import TribunalSystemError
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
@@ -80,8 +80,6 @@ def _make_tool_executor() -> MagicMock:
     mock_user_settings.command_validation = CommandValidationSettings()
     executor._user_settings = mock_user_settings
     
-    from app.utils.whitelist_validator import CommandWhitelistValidator
-    from app.utils.blacklist_validator import CommandBlacklistValidator
     from app.utils.validators import get_whitelist_validator, get_blacklist_validator
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()
@@ -99,19 +97,26 @@ def _mock_executor_failure(executor: MagicMock, error_type: CommandErrorType = C
     executor.execute_tool_call = AsyncMock(return_value=result)
 
 
-def _noop_generate_command(original_command: str, **_kwargs):
+def _noop_generate_command(request: str, **_kwargs):
+    """Mock Tribunal that passes the request through verbatim as the final command.
+
+    Used by tests that need Tribunal to run but do not care about refinement.
+    In production the Tribunal would never return the raw natural-language
+    request as a shell command; tests only care that the pipeline flows.
+    """
     from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
-        original_command=original_command,
-        final_command=original_command,
-        outcome=CommandGenerationOutcome.FALLBACK,
+        request=request,
+        final_command=request,
+        outcome=CommandGenerationOutcome.CONSENSUS,
     )
 
 
-def _refining_generate_command(original_command: str, refined: str, **_kwargs):
+def _refining_generate_command(request: str, refined: str, **_kwargs):
+    """Mock Tribunal that produces a refined command distinct from the request."""
     from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
-        original_command=original_command,
+        request=request,
         final_command=refined,
         outcome=CommandGenerationOutcome.CONSENSUS,
     )
@@ -140,7 +145,7 @@ INVESTIGATION = create_enriched_context(
                 memory_mb=4096,
             ),
             user_id="user-exec-test",
-            web_session_id="web-001",
+            bound_web_session_id="web-001",
         )
     ],
 )
@@ -165,7 +170,7 @@ class TestExecutionIdGeneration:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -183,7 +188,7 @@ class TestExecutionIdGeneration:
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             for _ in range(3):
                 result = await orchestrate_tool_execution(
-                    ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "whoami"}),
+                    ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show current user"}),
                     tool_executor=executor,
                     investigation=INVESTIGATION,
                     g8e_context=G8E_CONTEXT,
@@ -220,7 +225,7 @@ class TestExecutionIdGeneration:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "id"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -246,7 +251,7 @@ class TestOperatorToolDetection:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -325,7 +330,7 @@ class TestToolArgsInjection:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "df -h"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show disk usage"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -349,7 +354,7 @@ class TestToolArgsInjection:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "uptime"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show uptime"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -396,7 +401,7 @@ class TestToolArgsInjection:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "echo hello", "justification": "checking output"},
+                    args={"request": "echo hello", "guidelines": "prefer minimal output"},
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
@@ -405,8 +410,10 @@ class TestToolArgsInjection:
                 request_settings=REQUEST_SETTINGS,
             )
 
-        assert captured_args["command"] == "echo hello"
-        assert captured_args["justification"] == "checking output"
+        # Tribunal injects `command` from its final_command; `request`/`guidelines` pass through.
+        assert captured_args["request"] == "echo hello"
+        assert captured_args["guidelines"] == "prefer minimal output"
+        assert "command" in captured_args
         assert "execution_id" in captured_args
         assert "_web_session_id" in captured_args
 
@@ -423,7 +430,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -439,7 +446,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -456,7 +463,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "pwd"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show working directory"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -474,7 +481,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "echo hello"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo hello"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -491,7 +498,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -508,7 +515,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "bad"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "run a bad command"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -525,7 +532,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "id"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -548,7 +555,7 @@ class TestTribunalResultSurfaced:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -557,19 +564,19 @@ class TestTribunalResultSurfaced:
             )
 
         assert result.tribunal_result is not None
-        assert result.tribunal_result.original_command == "ls"
-        assert result.tribunal_result.final_command == "ls"
+        assert result.tribunal_result.request == "list files"
+        assert result.tribunal_result.final_command == "list files"
 
     async def test_tribunal_result_carries_refined_command(self):
         executor = _make_tool_executor()
         _mock_executor_success(executor)
 
-        async def refining_generate(original_command, **kwargs):
-            return _refining_generate_command(original_command, refined="ls -lhR")
+        async def refining_generate(request, **kwargs):
+            return _refining_generate_command(request, refined="ls -lhR")
 
         with patch.object(agent_tool_loop_module, "generate_command", new=refining_generate):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files recursively"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -578,7 +585,7 @@ class TestTribunalResultSurfaced:
             )
 
         assert result.tribunal_result is not None
-        assert result.tribunal_result.original_command == "ls"
+        assert result.tribunal_result.request == "list files recursively"
         assert result.tribunal_result.final_command == "ls -lhR"
         from app.constants import CommandGenerationOutcome
         assert result.tribunal_result.outcome == CommandGenerationOutcome.CONSENSUS
@@ -621,11 +628,11 @@ class TestTribunalResultSurfaced:
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized"],
-            original_command="ls",
+            request="list files",
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -635,7 +642,8 @@ class TestTribunalResultSurfaced:
 
         assert result.tribunal_result is None
 
-    async def test_tribunal_result_none_when_command_arg_missing(self):
+    async def test_tribunal_result_none_when_request_missing(self):
+        """Empty args => empty request => Tribunal is skipped and tribunal_result is None."""
         executor = _make_tool_executor()
         _mock_executor_success(executor)
 
@@ -711,7 +719,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls -la", "justification": "list files"},
+                    args={"request": "list files in long format", "guidelines": "favour -la flags"},
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
@@ -722,8 +730,8 @@ class TestTribunalRefinement:
 
         mock_generate.assert_awaited_once()
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["original_command"] == "ls -la"
-        assert call_kwargs["intent"] == "list files"
+        assert call_kwargs["request"] == "list files in long format"
+        assert call_kwargs["guidelines"] == "favour -la flags"
 
     async def test_generate_command_not_called_for_file_read(self):
         executor = _make_tool_executor()
@@ -756,14 +764,14 @@ class TestTribunalRefinement:
 
         executor.execute_tool_call = capture_call
 
-        async def refining_generate(original_command, **kwargs):
-            return _refining_generate_command(original_command, refined="df -h --output=source,size,avail")
+        async def refining_generate(request, **kwargs):
+            return _refining_generate_command(request, refined="df -h --output=source,size,avail")
 
         with patch.object(agent_tool_loop_module, "generate_command", new=refining_generate):
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "df -h", "justification": "check disk"},
+                    args={"request": "check disk usage", "guidelines": "human-readable"},
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
@@ -772,9 +780,18 @@ class TestTribunalRefinement:
                 request_settings=REQUEST_SETTINGS,
             )
 
+        # The Tribunal-produced final_command is what the executor sees, not
+        # the caller's natural-language request.
         assert captured_args["command"] == "df -h --output=source,size,avail"
+        assert captured_args["request"] == "check disk usage"
+        assert captured_args["guidelines"] == "human-readable"
 
-    async def test_unchanged_command_not_replaced(self):
+    async def test_noop_tribunal_passes_request_as_command(self):
+        """The noop mock Tribunal returns request verbatim as final_command.
+
+        Verifies that whatever the Tribunal produces is what the executor sees,
+        even when the noop mock does not refine.
+        """
         executor = _make_tool_executor()
         captured_args = {}
 
@@ -789,7 +806,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "uptime", "justification": "check uptime"},
+                    args={"request": "uptime", "guidelines": "show uptime"},
                 ),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
@@ -807,6 +824,7 @@ class TestTribunalRefinement:
 
         op = OperatorDocument(
             operator_id="op-linux",
+            user_id="user-os-test",
             operator_session_id="session-op-linux",
             operator_type=OperatorType.SYSTEM,
             status=OperatorStatus.BOUND,
@@ -827,7 +845,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "justification": "list files"},
+                    args={"request": "list files", "guidelines": "detailed view"},
                 ),
                 tool_executor=executor,
                 investigation=investigation,
@@ -841,10 +859,17 @@ class TestTribunalRefinement:
             )
 
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.os == "ubuntu"
+        assert op_ctx.operator_id == "op-linux"
 
-    async def test_generate_command_skipped_when_command_arg_missing(self):
-        """Tribunal refinement must be skipped when there is no 'command' key in args."""
+    async def test_generate_command_skipped_when_request_missing(self):
+        """Tribunal refinement must be skipped when there is no 'request' key in args.
+
+        Sage is the sole writer of ``request``; an empty request means Sage
+        had nothing to ask, so there is nothing for the Tribunal to produce.
+        """
         executor = _make_tool_executor()
         _mock_executor_success(executor)
 
@@ -878,11 +903,11 @@ class TestTribunalSystemErrorHaltsExecution:
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized", "Connection refused"],
-            original_command="rm -rf /",
+            request="delete the filesystem root",
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "rm -rf /"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "delete the filesystem root"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -904,11 +929,11 @@ class TestTribunalSystemErrorHaltsExecution:
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized"],
-            original_command="ls",
+            request="list files",
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"command": "ls"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
                 tool_executor=executor,
                 investigation=INVESTIGATION,
                 g8e_context=G8E_CONTEXT,
@@ -947,7 +972,7 @@ class TestTargetOperatorResolution:
                         working_directory="/home/g8e",
                     ),
                     user_id="user-multi-test",
-                    web_session_id="web-001",
+                    bound_web_session_id="web-001",
                 ),
                 OperatorDocument(
                     operator_id="op-ubuntu",
@@ -962,7 +987,7 @@ class TestTargetOperatorResolution:
                         shell="bash",
                     ),
                     user_id="user-multi-test",
-                    web_session_id="web-001",
+                    bound_web_session_id="web-001",
                 ),
             ],
         )
@@ -989,7 +1014,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "target_operator": "op-linux"},
+                    args={"request": "list files", "target_operator": "op-linux"},
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1000,9 +1025,10 @@ class TestTargetOperatorResolution:
 
         # Verify Tribunal received Linux operator's OS context
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["shell"] == "bash"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"
 
     async def test_target_operator_by_id_ubuntu(self):
         """Test Tribunal uses Ubuntu operator context when targeting by operator_id."""
@@ -1014,7 +1040,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "target_operator": "op-ubuntu"},
+                    args={"request": "list files", "target_operator": "op-ubuntu"},
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1025,9 +1051,10 @@ class TestTargetOperatorResolution:
 
         # Verify Tribunal received Ubuntu operator's OS context
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["shell"] == "bash"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_by_hostname(self):
         """Test Tribunal resolves operator by hostname."""
@@ -1039,7 +1066,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "target_operator": "ubuntu-host"},
+                    args={"request": "list files", "target_operator": "ubuntu-host"},
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1050,8 +1077,10 @@ class TestTargetOperatorResolution:
 
         # Should resolve to ubuntu operator by hostname
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_by_index(self):
         """Test Tribunal resolves operator by index."""
@@ -1063,7 +1092,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "target_operator": "1"},
+                    args={"request": "list files", "target_operator": "1"},
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1074,8 +1103,10 @@ class TestTargetOperatorResolution:
 
         # Index 1 should resolve to second operator (ubuntu)
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "ubuntu"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-ubuntu"
+        assert op_ctx.os == "ubuntu"
 
     async def test_target_operator_fallback_to_first(self):
         """Test Tribunal falls back to first operator when target not found."""
@@ -1087,7 +1118,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls", "target_operator": "nonexistent-operator"},
+                    args={"request": "list files", "target_operator": "nonexistent-operator"},
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1098,8 +1129,10 @@ class TestTargetOperatorResolution:
 
         # Should fall back to first operator (linux)
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"
 
     async def test_no_target_operator_uses_first(self):
         """Test that no target_operator defaults to first operator (backward compatibility)."""
@@ -1111,7 +1144,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"command": "ls"},  # No target_operator
+                    args={"request": "list files"},  # No target_operator
                 ),
                 tool_executor=executor,
                 investigation=self.multi_op_investigation,
@@ -1122,5 +1155,7 @@ class TestTargetOperatorResolution:
 
         # Should use first operator (linux) by default
         call_kwargs = mock_generate.call_args.kwargs
-        assert call_kwargs["os_name"] == "linux"
-        assert call_kwargs["working_directory"] == "/"
+        op_ctx = call_kwargs["operator_context"]
+        assert op_ctx is not None
+        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.os == "linux"

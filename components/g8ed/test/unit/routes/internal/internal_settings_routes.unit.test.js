@@ -26,7 +26,8 @@ describe('Internal Settings Routes [UNIT]', () => {
             updatePlatformSettings: vi.fn()
         };
         mockAuthorizationMiddleware = {
-            requireInternalOrigin: vi.fn((req, res, next) => next())
+            requireInternalOrigin: vi.fn((req, res, next) => next()),
+            requireInternalOrUserAuth: vi.fn((req, res, next) => next())
         };
 
         router = createInternalSettingsRouter({

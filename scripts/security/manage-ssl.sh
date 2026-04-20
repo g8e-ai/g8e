@@ -65,7 +65,7 @@ PROJECT_TMP="$PROJECT_ROOT/tmp"
 
 CONTAINER="g8es"
 CERT_CONTAINER="g8ep"
-CERT_SSL_DIR="/g8es/ssl"
+CERT_SSL_DIR="/g8es"
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yml"
 
 log()  { echo "[certs] $*"; }
@@ -168,7 +168,7 @@ exec_rotate() {
 exec_status() {
     _require_running
     echo ""
-    _cert_info "CA cert     (${CERT_SSL_DIR}/ca/ca.crt)" "${CERT_SSL_DIR}/ca/ca.crt"
+    _cert_info "CA cert     (${CERT_SSL_DIR}/ca.crt)" "${CERT_SSL_DIR}/ca.crt"
     echo ""
     _cert_info "Server cert (${CERT_SSL_DIR}/server.crt)" "${CERT_SSL_DIR}/server.crt"
     echo ""

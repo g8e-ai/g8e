@@ -1021,9 +1021,9 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         chat.handleTribunalStarted({
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
-            primary_model: 'claude-4-sonnet',
+            model: 'claude-4-sonnet',
             num_passes: 3,
-            original_command: 'uptime',
+            request: 'show system uptime',
         });
 
         expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();
@@ -1034,9 +1034,9 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         chat.handleTribunalStarted({
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
-            primary_model: 'claude-4-sonnet',
+            model: 'claude-4-sonnet',
             num_passes: 3,
-            original_command: 'uptime',
+            request: 'show system uptime',
         });
 
         expect(chat.streamingActive).toBe(false);
@@ -1048,9 +1048,9 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         chat.handleTribunalStarted({
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
-            primary_model: 'claude-4-sonnet',
+            model: 'claude-4-sonnet',
             num_passes: 3,
-            original_command: 'uptime',
+            request: 'show system uptime',
         });
 
         expect(terminalSpy.sealStreamingResponse).not.toHaveBeenCalled();
@@ -1064,9 +1064,9 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         chat.handleTribunalStarted({
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
-            primary_model: 'claude-4-sonnet',
+            model: 'claude-4-sonnet',
             num_passes: 3,
-            original_command: 'uptime',
+            request: 'show system uptime',
         });
 
         expect(terminalSpy.clearActivityIndicators).toHaveBeenCalledOnce();
@@ -1081,9 +1081,9 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         eventBus.emit(EventType.TRIBUNAL_SESSION_STARTED, {
             web_session_id: WEB_SESSION_ID,
             investigation_id: INVESTIGATION_ID,
-            primary_model: 'claude-4-sonnet',
+            model: 'claude-4-sonnet',
             num_passes: 3,
-            original_command: 'uptime',
+            request: 'show system uptime',
         });
 
         expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();

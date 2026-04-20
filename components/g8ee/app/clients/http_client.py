@@ -32,7 +32,6 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 
 from app.constants import (
-    DEFAULT_HTTP_CLIENT_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BACKOFF_FACTOR,
     DEFAULT_RETRY_JITTER,

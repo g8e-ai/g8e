@@ -44,26 +44,66 @@ from app.models.tool_results import (
 from app.constants import (
     StreamChunkFromModelType,
 )
-class OperatorCommandArgs(TargetedOperatorArgs):
-    """Typed input for _execute_g8eo_command, replacing the raw tool_args dict.
+_TARGET_OPERATORS_DESCRIPTION = (
+    "Run on MULTIPLE operators simultaneously under a SINGLE approval. "
+    "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
+    "(e.g. 'on all systems', 'across the fleet', 'on all N hosts', or the user explicitly "
+    "names a count matching the bound operator count). DO NOT enumerate individual operators "
+    "for whole-fleet intent — use ['all']. Only enumerate specific hostnames/operator_ids/indices "
+    "when the user is asking about a proper subset. The same Tribunal-generated command executes "
+    "on all resolved systems in parallel under one approval."
+)
 
-    Constructed at the application barrier (tool_executor) from
-    the AI model's raw dict, then passed typed through the rest of the stack.
+
+class SageOperatorRequest(TargetedOperatorArgs):
+    """Sage-facing request schema for run_commands_with_operator.
+
+    Sage does NOT propose shell commands. Sage articulates what it needs to
+    accomplish and any creative guidelines; the Tribunal is the sole authority
+    on the exact command string. The Tribunal-produced command is then routed
+    to the Operator via ExecutorCommandArgs.
+
+    This type has NO command field — Sage literally cannot pass a command.
+    The invariant is structural, not conventional.
     """
-    command: str = Field(default="", description="Exact shell command to run on the Operator host.")
-    justification: str = Field(default="", description="Human-readable explanation for why this command is required.")
-    target_operators: list[str] | None = Field(
-        default=None,
+    request: str = Field(
+        default="",
         description=(
-            "Run the SAME command on MULTIPLE operators simultaneously under a SINGLE approval. "
-            "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
-            "(e.g. 'on all systems', 'across the fleet', 'on all N hosts', or the user explicitly "
-            "names a count matching the bound operator count). DO NOT enumerate individual operators "
-            "for whole-fleet intent — use ['all']. Only enumerate specific hostnames/operator_ids/indices "
-            "when the user is asking about a proper subset. The command executes on all resolved "
-            "systems in parallel under one approval."
+            "Natural-language description of what Sage needs the Operator to accomplish "
+            "to maximise confidence in identifying the solution. Focus on investigative "
+            "intent — what you want to learn, verify, or change — NOT shell syntax. "
+            "The Tribunal will translate this into a precise command for the target OS/shell."
         ),
     )
+    guidelines: str = Field(
+        default="",
+        description=(
+            "Optional creative guidance for the Tribunal: flags to favour, behaviours to avoid, "
+            "edge cases to cover, output formats preferred, or tradeoffs Sage considers important. "
+            "Leave empty when no guidance is needed. Never include shell syntax here — express "
+            "preferences in plain language so the Tribunal can choose the correct realisation."
+        ),
+    )
+    target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
+    expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
+    timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
+
+
+class ExecutorCommandArgs(TargetedOperatorArgs):
+    """Internal executor payload for run_commands_with_operator.
+
+    This type is what the executor receives AFTER the Tribunal has produced
+    the command. The `command` field is REQUIRED — this invariant is structural.
+    Sage never writes to this type directly; see SageOperatorRequest for the
+    Sage-facing surface.
+
+    Conversion from SageOperatorRequest to ExecutorCommandArgs happens in
+    orchestrate_tool_execution after Tribunal generates the command.
+    """
+    command: str = Field(..., description="Shell command produced by the Tribunal (required).")
+    request: str = Field(default="", description="Sage's natural-language request passed to the Tribunal (shown to the user as justification).")
+    guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal.")
+    target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
     execution_id: str | None = Field(default=None, alias="execution_id")
@@ -87,7 +127,7 @@ class OperatorContext(G8eBaseModel):
     kernel: str | None = None
     os_version: str | None = None
     username: str | None = None
-    uid: str | None = None
+    uid: int | None = None
     home_directory: str | None = None
     shell: str | None = None
     working_directory: str | None = None

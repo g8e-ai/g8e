@@ -14,14 +14,12 @@
 """Unit tests for agent_turn.py - provider turn processing functions."""
 
 import pytest
-from dataclasses import dataclass
 
 from app.llm.llm_types import ToolCall, ThoughtSignature, UsageMetadata
 from app.constants import (
     DEFAULT_FINISH_REASON,
     StreamChunkFromModelType,
 )
-from app.models.agent import StreamChunkData, TurnResult
 from app.services.ai.agent_turn import (
     TurnState,
     consolidate_model_parts,

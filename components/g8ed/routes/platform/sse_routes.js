@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { now } from '../../models/base.js';
-import { ConnectionEstablishedEvent, KeepaliveEvent, OperatorListData } from '../../models/sse_models.js';
+import { ConnectionEstablishedEvent, KeepaliveEvent } from '../../models/sse_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { EventType, SSE_KEEPALIVE_INTERVAL_MS } from '../../constants/events.js';
@@ -83,6 +83,7 @@ export function createSSERouter({
         try {
             const result = await sseService.registerConnection(
                 connectionId,
+                req.userId,
                 res,
                 {
                     ip: req.ip,
@@ -118,10 +119,12 @@ export function createSSERouter({
             logger.error('[G8ED-SSE] pushInitialState failed', { error: err.message });
         });
 
-        // Sync operator session state
-        resolvedOperatorService.syncSessionOnConnect(req.userId, connectionId).catch(err => {
+        // Sync operator session state before sending keepalive to ensure operator list is up-to-date
+        try {
+            await resolvedOperatorService.syncSessionOnConnect(req.userId, connectionId);
+        } catch (err) {
             logger.error('[G8ED-SSE] syncSessionOnConnect failed', { error: err.message });
-        });
+        }
 
         // Track cleanup state to prevent duplicate cleanup on simultaneous close/error events
         let cleanedUp = false;
@@ -146,26 +149,34 @@ export function createSSERouter({
             });
         };
 
+        // Helper function to send keepalive (heartbeat only, no operator list)
+        const sendKeepalive = async () => {
+            await sseService.publishEvent(connectionId, new KeepaliveEvent({
+                type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
+                timestamp: now(),
+                serverTime: Date.now(),
+            }));
+        };
+
+        // Send initial operator list when SSE connection is established
+        (async () => {
+            try {
+                const operatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                await sseService.publishEvent(connectionId, operatorList);
+            } catch (error) {
+                logger.warn('[G8ED-SSE] Failed to send initial operator list', { error: error.message });
+            }
+        })().catch(error => {
+            logger.error(`[G8ED-SSE] Initial operator list failed for ${connectionId}:`, error);
+            cleanupConnection();
+        });
+
         // Send keepalive every 20 seconds to detect broken connections
         // Status transitions (ACTIVE→OFFLINE, BOUND→STALE) are handled by HeartbeatMonitorService
         keepaliveInterval = setInterval(async () => {
             if (sseService.hasLocalConnection(connectionId)) {
                 try {
-                    let operatorList = null;
-                    try {
-                        const rawOperatorList = await resolvedOperatorService.getUserOperators(req.userId);
-                        operatorList = rawOperatorList ? OperatorListData.parse(rawOperatorList) : null;
-                    } catch (e) {
-                        logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
-                    }
-
-                    await sseService.publishEvent(connectionId, new KeepaliveEvent({
-                        type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
-                        timestamp: now(),
-                        serverTime: Date.now(),
-                        operator_list: operatorList
-                    }));
-
+                    await sendKeepalive();
                 } catch (error) {
                     logger.error(`[G8ED-SSE] Keepalive failed for ${connectionId}:`, error);
                     cleanupConnection();

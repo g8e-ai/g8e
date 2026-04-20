@@ -35,7 +35,8 @@ from app.models.investigations import (
     InvestigationQueryRequest,
 )
 
-from app.models.operators import CommandInternalResult, FileEditResult
+from app.models.operators import CommandInternalResult
+from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
 from app.utils.timestamp import now
@@ -128,7 +129,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             "priority": request.priority,
         }
         filters = [
-            FieldFilter(field=field, op="==", value=value).flatten_for_wire()
+            FieldFilter(field=field, op="==", value=value).model_dump(mode="json")
             for field, value in filter_map.items()
             if value is not None
         ]
@@ -189,7 +190,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             collection=self.collection,
             document_id=investigation_id,
             array_field="conversation_history",
-            items_to_add=[message.flatten_for_db()],
+            items_to_add=[message.model_dump(mode="json")],
             additional_updates={"created_at": now()},
         )
 
@@ -221,7 +222,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         await self.update_investigation_raw(
             investigation_id=investigation_id,
-            updates={"history_trail": [entry.flatten_for_db() for entry in investigation.history_trail]},
+            updates={"history_trail": [entry.model_dump(mode="json") for entry in investigation.history_trail]},
         )
 
         return investigation

@@ -57,7 +57,7 @@ Only the WebSearchProvider network boundary is replaced:
 
 import pytest
 
-from app.constants import EventType, OperatorToolName, StreamChunkFromModelType, AgentMode
+from app.constants import EventType, OperatorToolName, StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.models.grounding import GroundingMetadata
 from app.models.settings import LLMSettings, G8eeUserSettings
@@ -65,7 +65,6 @@ from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import make_streaming_context, make_g8ed_event_service
 from tests.fakes.factories import build_enriched_context, build_g8e_http_context
-from tests.fakes.builder import create_mock_tool_executor
 from tests.fakes.fake_web_search_provider import FakeWebSearchProvider
 from tests.fakes.tool_helpers import create_tool_service_fake
 

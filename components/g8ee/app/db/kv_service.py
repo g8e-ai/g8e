@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import logging
-from typing import Any
 
 from app.clients.kv_cache_client import KVCacheClient
 

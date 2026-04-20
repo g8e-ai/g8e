@@ -43,16 +43,18 @@ class TestGetAgentPersona:
         axiom = get_tribunal_member("axiom")
         assert axiom.agent_id == "axiom"
         assert axiom.display_name == "Axiom"
-        # Temperature is advisory-only; runtime uses model default_temperature.
-        assert axiom.temperature is None
 
         concord = get_tribunal_member("concord")
         assert concord.agent_id == "concord"
-        assert concord.temperature is None
 
         variance = get_tribunal_member("variance")
         assert variance.agent_id == "variance"
-        assert variance.temperature is None
+
+        pragma = get_tribunal_member("pragma")
+        assert pragma.agent_id == "pragma"
+
+        nemesis = get_tribunal_member("nemesis")
+        assert nemesis.agent_id == "nemesis"
 
     def test_get_invalid_agent_raises_keyerror(self):
         """Test that requesting an invalid agent ID raises KeyError."""
@@ -73,27 +75,22 @@ class TestGetAgentPersona:
 
     def test_get_system_prompt_with_todo_persona(self):
         """Test get_system_prompt falls back to identity/purpose for TODO personas."""
-        persona = get_agent_persona("primary")
+        persona = get_agent_persona("sage")
         system_prompt = persona.get_system_prompt()
-        # primary has TODO persona, so should fall back to identity/purpose
+        # sage has TODO persona, so should fall back to identity/purpose
         assert "<identity>" in system_prompt
         assert "<purpose>" in system_prompt
         assert persona.identity in system_prompt
         assert persona.purpose in system_prompt
-
-    def test_temperature_handling_null(self):
-        """Test temperature handling for agents with null temperature."""
-        persona = get_agent_persona("triage")
-        assert persona.temperature is None
 
     def test_tools_is_list(self):
         """Test that tools field is always a list."""
         triage = get_agent_persona("triage")
         assert isinstance(triage.tools, list)
         
-        primary = get_agent_persona("primary")
-        assert isinstance(primary.tools, list)
-        assert len(primary.tools) > 0
+        sage = get_agent_persona("sage")
+        assert isinstance(sage.tools, list)
+        assert len(sage.tools) > 0
 
 
 class TestPipelineTemplateContract:
@@ -105,36 +102,41 @@ class TestPipelineTemplateContract:
     """
 
     def test_tribunal_member_personas_accept_generation_kwargs(self):
-        """All three Tribunal members must format cleanly with the exact kwargs
+        """All five Tribunal members must format cleanly with the exact kwargs
         command_generator._run_generation_pass supplies."""
         kwargs = dict(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
-            intent="list processes",
+            request="list processes",
+            guidelines="",
             os="linux",
             shell="bash",
             user_context="root (uid=0)",
             working_directory="/home/user",
-            original_command="ps aux",
+            operator_context="Hostname: host1\nOS: linux",
         )
-        for member_id in ("axiom", "concord", "variance"):
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             persona = get_tribunal_member(member_id)
             formatted = persona.persona.format(**kwargs)
             # Every substituted value must appear in the formatted prompt —
             # this catches silent placeholder drift.
-            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash", "ps aux"):
+            for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
                 assert needle in formatted, f"{member_id} persona dropped '{needle}'"
 
     def test_verifier_persona_accepts_verifier_kwargs_and_enforces_ok_contract(self):
         """Verifier persona must format with the caller's kwargs AND carry the
         terse 'ok / corrected-command' output contract that the pipeline parses."""
-        persona = get_agent_persona("verifier")
+        persona = get_agent_persona("auditor")
         formatted = persona.get_system_prompt().format(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
-            intent="list files",
+            request="list files",
+            guidelines="",
             os="linux",
+            shell="bash",
+            working_directory="/home/user",
             user_context="root (uid=0)",
+            operator_context="Hostname: host1\nOS: linux",
             candidate_command="ls -la",
         )
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
@@ -147,27 +149,32 @@ class TestPipelineTemplateContract:
 
 
 class TestSharpenedTribunalPersonas:
-    """Guard rails for the sharpened Axiom / Concord / Variance voices. Each
+    """Guard rails for the sharpened Axiom / Concord / Variance / Pragma / Nemesis voices. Each
     member must have a distinct worldview so the Tribunal's disagreement is
     ideological, not just statistical."""
 
     def test_axiom_is_the_minimalist(self):
         axiom = get_tribunal_member("axiom")
         assert "Minimalist" in axiom.persona
-        assert axiom.temperature is None
 
-    def test_concord_is_the_archivist(self):
+    def test_concord_is_the_guardian(self):
         concord = get_tribunal_member("concord")
-        assert "Archivist" in concord.persona
-        assert concord.temperature is None
+        assert "Guardian" in concord.persona
 
-    def test_variance_is_the_adversary(self):
+    def test_variance_is_the_exhaustive(self):
         variance = get_tribunal_member("variance")
-        assert "Adversary" in variance.persona
-        assert variance.temperature is None
-        # Variance is the only member that should reference the adversarial
+        assert "Exhaustive" in variance.persona
+
+    def test_pragma_is_the_conventional(self):
+        pragma = get_tribunal_member("pragma")
+        assert "Conventional" in pragma.persona
+
+    def test_nemesis_is_the_adversary(self):
+        nemesis = get_tribunal_member("nemesis")
+        assert "Adversary" in nemesis.persona
+        # Nemesis is the only member that should reference the adversarial
         # request_posture signal — that coupling is part of the design.
-        assert "adversarial" in variance.persona.lower()
+        assert "adversarial" in nemesis.persona.lower()
 
 
 class TestListAllAgents:
@@ -179,24 +186,26 @@ class TestListAllAgents:
         assert isinstance(agents, list)
         assert len(agents) > 0
         assert "triage" in agents
-        assert "primary" in agents
-        assert "assistant" in agents
+        assert "sage" in agents
+        assert "dash" in agents
         assert "tribunal" in agents
-        assert "verifier" in agents
-        assert "title_generator" in agents
+        assert "auditor" in agents
+        assert "scribe" in agents
         assert "axiom" in agents
         assert "concord" in agents
         assert "variance" in agents
-        assert "memory_generator" in agents
-        assert "eval_judge" in agents
-        assert "response_analyzer" in agents
+        assert "pragma" in agents
+        assert "nemesis" in agents
+        assert "codex" in agents
+        assert "judge" in agents
+        assert "warden" in agents
 
     def test_list_all_agents_includes_sub_agents(self):
-        """Test that list_all_agents includes response_analyzer sub-agents."""
+        """Test that list_all_agents includes warden sub-agents."""
         agents = list_all_agents()
-        assert "response_analyzer_command_risk" in agents
-        assert "response_analyzer_error" in agents
-        assert "response_analyzer_file_risk" in agents
+        assert "warden_command_risk" in agents
+        assert "warden_error" in agents
+        assert "warden_file_risk" in agents
 
 
 class TestAgentPersonaValidation:
@@ -211,7 +220,6 @@ class TestAgentPersonaValidation:
             "description": "A test agent",
             "role": "tester",
             "model_tier": "primary",
-            "temperature": 0.5,
             "tools": ["test_tool"],
             "identity": "Test identity",
             "purpose": "Test purpose",
@@ -241,7 +249,6 @@ class TestAgentPersonaValidation:
             "description": "A test agent",
             "role": "tester",
             "model_tier": "primary",
-            "temperature": None,
             "tools": [],
             "identity": "Test identity",
             "purpose": "Test purpose",
@@ -251,40 +258,3 @@ class TestAgentPersonaValidation:
         persona = AgentPersona.model_validate(data)
         assert isinstance(persona.autonomy, str) and persona.autonomy
 
-    def test_temperature_accepts_null(self):
-        """Test that temperature accepts None/null."""
-        data = {
-            "id": "test_agent",
-            "display_name": "Test Agent",
-            "icon": "test",
-            "description": "A test agent",
-            "role": "tester",
-            "model_tier": "primary",
-            "temperature": None,
-            "tools": [],
-            "identity": "Test identity",
-            "purpose": "Test purpose",
-            "autonomy": "fully_autonomous",
-            "persona": ""
-        }
-        persona = AgentPersona.model_validate(data)
-        assert persona.temperature is None
-
-    def test_temperature_accepts_float(self):
-        """Test that temperature accepts float values."""
-        data = {
-            "id": "test_agent",
-            "display_name": "Test Agent",
-            "icon": "test",
-            "description": "A test agent",
-            "role": "tester",
-            "model_tier": "primary",
-            "temperature": 0.7,
-            "tools": [],
-            "identity": "Test identity",
-            "purpose": "Test purpose",
-            "autonomy": "fully_autonomous",
-            "persona": ""
-        }
-        persona = AgentPersona.model_validate(data)
-        assert persona.temperature == 0.7

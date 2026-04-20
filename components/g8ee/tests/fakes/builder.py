@@ -22,8 +22,6 @@ from app.models.settings import G8eePlatformSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.investigation.investigation_data_service import InvestigationDataService
-from app.services.investigation.memory_data_service import MemoryDataService
 
 from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -35,8 +33,6 @@ from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
 from .fake_investigation_service import FakeInvestigationService
 from .fake_g8ed_client import FakeG8edClient
-from .fake_pubsub_service import FakePubSubService
-from .fake_operator_cache import FakeOperatorCache
 
 
 def create_pure_mock_cache_aside():

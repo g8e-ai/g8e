@@ -12,8 +12,6 @@
 # limitations under the License.
 
 import json
-import logging
-from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
 from fastapi import Request
@@ -22,16 +20,15 @@ from app.constants import (
     NEW_CASE_ID,
     ComponentName,
     OperatorStatus,
-    OperatorType,
     G8eHeaders,
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
 
-from .base import Field, G8eBaseModel, field_validator
+from .base import Field, G8eBaseModel, UTCDatetime, field_validator
 
 if TYPE_CHECKING:
-    from app.errors import AuthenticationError
+    pass
 
 
 class BoundOperator(G8eBaseModel):
@@ -41,6 +38,7 @@ class BoundOperator(G8eBaseModel):
     """
     operator_id: str = Field(..., description="Unique operator identifier")
     operator_session_id: str | None = Field(default=None, description="Operator session identifier")
+    bound_web_session_id: str | None = Field(default=None, description="Web session ID this operator is bound to")
     status: OperatorStatus | None = Field(default=None, description="Operator status")
 
 
@@ -75,7 +73,7 @@ class G8eHttpContext(G8eBaseModel):
         default_factory=generate_execution_id,
         description="Unique execution identifier for tracking"
     )
-    timestamp: datetime = Field(
+    timestamp: UTCDatetime = Field(
         default_factory=now,
         description="Timestamp of context creation"
     )
@@ -111,9 +109,24 @@ class G8eHttpContext(G8eBaseModel):
         from app.logging import get_logger
         logger = get_logger(__name__)
 
+        logger.info(
+            "[G8eHTTP-CONTEXT] Starting header validation",
+            extra={"endpoint": request.url.path, "method": request.method}
+        )
+
         web_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
         user_id = request.headers.get(G8eHeaders.USER_ID.lower())
         raw_source_component = request.headers.get(G8eHeaders.SOURCE_COMPONENT.lower())
+
+        logger.info(
+            "[G8eHTTP-CONTEXT] Extracted basic headers",
+            extra={
+                "endpoint": request.url.path,
+                "has_web_session_id": bool(web_session_id),
+                "has_user_id": bool(user_id),
+                "has_source_component": bool(raw_source_component),
+            }
+        )
 
         if not web_session_id:
             logger.error(
@@ -171,6 +184,15 @@ class G8eHttpContext(G8eBaseModel):
         new_case = request.headers.get(G8eHeaders.NEW_CASE.lower(), "").lower() == "true"
 
         case_id = request.headers.get(G8eHeaders.CASE_ID.lower())
+        logger.info(
+            "[G8eHTTP-CONTEXT] Extracted case_id",
+            extra={
+                "endpoint": request.url.path,
+                "has_case_id": bool(case_id),
+                "case_id": case_id[:20] + "..." if case_id else None,
+                "new_case": new_case,
+            }
+        )
         if not case_id and not new_case:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",
@@ -185,6 +207,15 @@ class G8eHttpContext(G8eBaseModel):
             case_id = NEW_CASE_ID
 
         investigation_id = request.headers.get(G8eHeaders.INVESTIGATION_ID.lower())
+        logger.info(
+            "[G8eHTTP-CONTEXT] Extracted investigation_id",
+            extra={
+                "endpoint": request.url.path,
+                "has_investigation_id": bool(investigation_id),
+                "investigation_id": investigation_id[:20] + "..." if investigation_id else None,
+                "new_case": new_case,
+            }
+        )
         if not investigation_id and not new_case:
             logger.error(
                 "SECURITY VIOLATION: Missing required %s header",

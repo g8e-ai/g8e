@@ -535,8 +535,8 @@ async def delete_case(
     memory_docs = await cache_aside_service.query_documents(
         collection=DB_COLLECTION_MEMORIES,
         field_filters=[
-            FieldFilter(field="user_id", op="==", value=user_id).flatten_for_wire(),
-            FieldFilter(field="case_id", op="==", value=case_id).flatten_for_wire(),
+            FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json"),
+            FieldFilter(field="case_id", op="==", value=case_id).model_dump(mode="json"),
         ],
     )
 

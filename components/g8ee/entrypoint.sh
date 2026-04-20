@@ -5,6 +5,15 @@ set -e
 
 SSL_DIR="/g8es"
 
+# Load security tokens into environment if files exist
+if [ -f "${SSL_DIR}/internal_auth_token" ]; then
+    export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d ' \n\r')
+fi
+
+if [ -f "${SSL_DIR}/session_encryption_key" ]; then
+    export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
+fi
+
 # Wait for g8es to be ready
 echo "[G8EE-ENTRYPOINT] Waiting for g8es health check..."
 MAX_RETRIES=30

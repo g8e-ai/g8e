@@ -1,11 +1,20 @@
 Execute shell commands on the connected system through the g8e Operator.
 
+IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-member AI panel — is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
+
 <parameters>
-- command, justification: REQUIRED
+- request: REQUIRED — natural-language description of what the Operator must accomplish. Focus on investigative intent (what to learn, verify, or change). DO NOT write shell syntax here.
+- guidelines: OPTIONAL — creative guidance for the Tribunal expressed in plain language: flags to favour, behaviours to avoid, edge cases to cover, tradeoffs you consider important. NEVER include shell syntax. Leave empty when no guidance is needed.
 - target_operator: hostname, operator_id, or index ("0","1") — REQUIRED when multiple operators bound
-- target_operators: run same command on multiple simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
+- target_operators: run the Tribunal-generated command on multiple operators simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
 - timeout_seconds: default 300 | expected_output_lines: for UI sizing
 </parameters>
+
+<examples>
+GOOD request: "Show disk usage under /home broken down per-user, sorted largest first, top 10."
+GOOD request with guidelines: request="Find all files modified in the last 24 hours under /var/log"; guidelines="Prefer a portable find invocation over locate; exclude compressed archives."
+BAD (do not do this): request="du -sh /home/*/ | sort -rh | head -10"  — that is a command string, which is the Tribunal's job to write.
+</examples>
 
 <batch_execution>
 target_operators=["all"] runs on all bound operators in parallel. Use for fleet-wide operations.

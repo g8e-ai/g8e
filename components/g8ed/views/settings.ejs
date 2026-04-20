@@ -61,11 +61,11 @@
                     <div class="settings-field-label">Dev Logging</div>
                     <div class="settings-field-desc">Enable verbose browser console output for this account. Only visible to admin and superadmin users. Takes effect immediately on next page load.</div>
                     <label class="settings-toggle">
-                        <input type="checkbox" id="dev-logs-toggle" <%= locals.devLogsEnabled !== false ? 'checked' : '' %>>
+                        <input type="checkbox" id="dev-logs-toggle">
                         <span class="settings-toggle-track">
                             <span class="settings-toggle-thumb"></span>
                         </span>
-                        <span class="settings-toggle-label" id="dev-logs-label"><%= locals.devLogsEnabled !== false ? 'Enabled' : 'Disabled' %></span>
+                        <span class="settings-toggle-label" id="dev-logs-label">Disabled</span>
                     </label>
                 </div>
             </template>
@@ -80,6 +80,7 @@
 
     <%- include('partials/footer-public') %>
 
+    <script id="llm-catalog" type="application/json"><%- JSON.stringify(llmCatalog).replace(/</g, '\u003c') %></script>
     <script type="module" src="/js/components/hamburger-menu.js"></script>
     <script type="module" nonce="<%= cspNonce %>">
         import { SettingsPage } from '/js/components/settings-page.js';

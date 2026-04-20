@@ -121,7 +121,7 @@ class MemoryGenerationService:
     ) -> None:
         contents = self._conversation_to_contents(conversation_history, memory)
 
-        memory_persona = get_agent_persona("memory_generator")
+        memory_persona = get_agent_persona("codex")
         system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
 
         assistant_model = settings.llm.resolved_assistant_model
@@ -132,7 +132,6 @@ class MemoryGenerationService:
         provider = get_llm_provider(settings.llm, is_assistant=True)
         config = AIGenerationConfigBuilder.build_assistant_settings(
             model=assistant_model,
-            temperature=None,
             max_tokens=None,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
@@ -145,6 +144,20 @@ class MemoryGenerationService:
                 contents=contents,
                 assistant_llm_settings=config,
             )
+            if response.text is None:
+                raise OllamaEmptyResponseError(
+                    "LLM returned empty response",
+                    model=assistant_model,
+                    channel="assistant",
+                    done_reason="stop",
+                    prompt_eval_count=None,
+                    eval_count=None,
+                    num_ctx=0,
+                    num_predict=0,
+                    thinking_len=0,
+                    tool_calls_count=0,
+                    ctx_overflow_suspected=False,
+                )
             ai_analysis = self._parse_memory_analysis(response.text)
         except OllamaEmptyResponseError as exc:
             logger.warning(

@@ -13,7 +13,6 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi import Request
 from app.constants import ComponentName
 from app.routers.internal_router import (
     internal_chat,

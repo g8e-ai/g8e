@@ -63,7 +63,7 @@ Auth Domain
 ├── OperatorSessionService ─────> CacheAsideService, BootstrapService
 ├── ApiKeyDataService ──────────> CacheAsideService
 ├── ApiKeyService ──────────────> ApiKeyDataService
-├── UserService ────────────────> CacheAsideService, OrganizationModel, ApiKeyService
+├── UserService ────────────────> CacheAsideService, ApiKeyService
 ├── PasskeyAuthService ─────────> UserService, CacheAsideService, SettingsService
 ├── LoginSecurityService ───────> CacheAsideService
 ├── DownloadAuthService ────────> CacheAsideService, UserService, ApiKeyService
@@ -84,9 +84,12 @@ Operator Domain
 ├── OperatorAuthService ────────> ApiKeyService, UserService, OperatorService,
 │                                 OperatorSessionService, BoundSessionsService,
 │                                 WebSessionService
-├── BindOperatorsService ───────> OperatorService, BoundSessionsService,
+├── OperatorBindService ───────> OperatorService, BoundSessionsService,
 │                                 OperatorSessionService, WebSessionService
-└── BoundSessionsService ──────> CacheAsideService, OperatorService
+├── BoundSessionsService ──────> CacheAsideService, OperatorService
+├── OperatorSlotService ────────> CacheAsideService, OperatorService
+├── OperatorRelayService ───────> G8esPubSubClient, OperatorService
+└── OperatorNotificationService ─> SSEService, OperatorService
 
 Platform Domain
 ├── SettingsService ────────────> CacheAsideService, BootstrapService
@@ -96,6 +99,7 @@ Platform Domain
 ├── ConsoleMetricsService ──────> CacheAsideService, InternalHttpClient
 ├── G8ENodeOperatorService ─────> SettingsService, OperatorService
 ├── HealthCheckService ─────────> CacheAsideService, WebSessionService
+├── InvestigationService ───────> CacheAsideService
 ├── SetupService ───────────────> UserService, SettingsService
 ├── AuditService
 └── InternalHttpClient ─────────> BootstrapService, SettingsService
@@ -120,6 +124,7 @@ Infra Services
 ├── SettingsService ────────────> CacheAsideService, BootstrapService
 ├── HTTPService
 ├── InternalHttpClient ─────────> G8eePlatformSettings
+├── HealthService
 └── EventService (g8ed) ────────> InternalHttpClient
 
 Data Layer (CRUD)
@@ -127,7 +132,7 @@ Data Layer (CRUD)
 ├── InvestigationDataService ───> CacheAsideService
 ├── OperatorDataService ────────> CacheAsideService, InternalHttpClient
 ├── MemoryDataService ──────────> CacheAsideService
-└── AttachmentService ──────────> BlobService
+└── AttachmentStoreService ─────> BlobService
 
 Domain Layer (Orchestration)
 ├── InvestigationService ───────> InvestigationDataService, OperatorDataService,
@@ -135,26 +140,33 @@ Domain Layer (Orchestration)
 └── MemoryGenerationService ────> MemoryDataService
 
 Operator Services
-├── OperatorHeartbeatService ───> OperatorDataService, EventService, PubSubClient
+├── HeartbeatService ───────────> OperatorDataService, EventService, PubSubClient
 ├── ExecutionRegistryService
-├── OperatorApprovalService ────> EventService, OperatorDataService,
+├── ExecutionService ───────────> ExecutionRegistryService, PubSubClient
+├── ApprovalService ────────────> EventService, OperatorDataService,
 │                                 InvestigationDataService
-└── OperatorCommandService ─────> CacheAsideService, OperatorDataService,
+├── CommandService ─────────────> CacheAsideService, OperatorDataService,
 │                                 InvestigationService, EventService,
 │                                 ExecutionRegistryService, ApprovalService,
 │                                 InternalHttpClient, PubSubClient
+├── FileService ────────────────> CommandService
+├── FilesystemService ──────────> CommandService
+├── PortService ────────────────> CommandService
+├── LFAAService ────────────────> CommandService
+├── IntentService ──────────────> CommandService
+└── PubSubService ──────────────> PubSubClient
 
 AI Pipeline
-├── AIToolService ──────────────> OperatorCommandService, InvestigationService,
+├── AIToolService ──────────────> CommandService, InvestigationService,
 │                                 WebSearchProvider
 ├── GroundingService
 │   ├── AttachmentProvider
 │   └── WebSearchProvider
-├── AIRequestBuilder ───────────> AIToolService
-├── AIResponseAnalyzer
+├── RequestBuilder ─────────────> AIToolService
+├── ResponseAnalyzer
 ├── g8eEngine ──────────────────> AIToolService, GroundingService
 ├── ChatPipelineService ────────> EventService, InvestigationService,
-│                                 AIRequestBuilder, g8eEngine,
+│                                 RequestBuilder, g8eEngine,
 │                                 MemoryDataService, MemoryGenerationService
 ├── ChatTaskManager
 ├── TriageAgent (instantiated directly by ChatPipelineService)
@@ -219,6 +231,15 @@ The AI pipeline in g8ee consists of several specialized services that orchestrat
   - State machine for tracking thinking state, pending tool calls, and response parts
   - All functions are stateless and accept typed inputs for testability
 
+### Tool Execution (tool_service.py)
+- **Location:** `app/services/ai/tool_service.py`
+- **Purpose:** Orchestrates the execution of AI tool calls, including dispatching to specific handlers and managing Tribunal oversight.
+- **Key Features:**
+  - Uses a dispatch table `_tool_handlers` for efficient tool lookup.
+  - Uniform handler signature: `(tool_args, investigation, g8e_context, request_settings)`.
+  - Integrated Tribunal oversight via `orchestrate_tool_execution`.
+  - Support for multiple tool types: Operator commands, MCP tools, and internal utility tools.
+
 ---
 
 ## Shared Source of Truth
@@ -241,13 +262,15 @@ Every component derives its own strongly-typed model classes from the canonical 
 
 Inside the application boundary, data lives as typed model instances — never as raw dicts or unstructured JSON. Models are only flattened to plain objects when crossing a boundary:
 
-| Boundary | g8ed method | g8ee method |
-|---|---|---|
-| Database write | `model.forDB()` | `model.flatten_for_db()` |
-| KV cache write | `model.forKV()` | `model.flatten_for_db()` (uses same method) |
-| Outbound HTTP / pub-sub | `model.forWire()` | `model.flatten_for_wire()` |
-| Browser response | `model.forClient()` | `model.model_dump()` |
-| LLM tool response | — | `model.flatten_for_llm()` |
+| Boundary | g8ee method |
+|---|---|
+| Database write | `model.model_dump(mode="json")` |
+| KV cache write | `model.model_dump(mode="json")` |
+| Outbound HTTP / pub-sub | `model.model_dump(mode="json")` |
+| Browser response | `model.model_dump()` |
+| LLM tool response | `model.model_dump(mode="json")` |
+
+All datetime fields use the `UTCDatetime` type which serializes to ISO 8601 with `Z` suffix (e.g., `2026-01-15T10:30:00.123456Z`).
 
 Passing raw dicts between services, storing unvalidated JSON in the database, or constructing ad-hoc objects at call sites are all prohibited. If a shape crosses a wire boundary, it must have a corresponding entry in `shared/models/` and a typed model class in the consuming component.
 

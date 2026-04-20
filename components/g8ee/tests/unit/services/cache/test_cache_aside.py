@@ -22,7 +22,6 @@ from app.constants import (
     CACHE_TTL_MEDIUM,
     CACHE_TTL_SHORT,
     DB_COLLECTION_INVESTIGATIONS,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_USERS,
     BatchWriteOpType,
     ComponentName,
@@ -30,14 +29,13 @@ from app.constants import (
     KVKeyPrefix,
     OperatorStatus,
 )
-from app.errors import DatabaseError, ValidationError
+from app.errors import DatabaseError
 from app.models.cache import (
     BatchWriteOperation,
     CacheOperationResult,
     DocumentResult,
 )
 from app.services.cache.cache_aside import CacheAsideService
-from app.models.operators import OperatorDocument, OperatorSystemInfo
 from tests.fakes.fake_g8es_clients import FakeDBClient, FakeKVClient
 
 pytestmark = pytest.mark.unit

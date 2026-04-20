@@ -12,11 +12,10 @@
 # limitations under the License.
 
 from typing import Any
-from datetime import datetime
 
 from pydantic import field_validator
 from app.constants import ErrorCategory, ErrorCode, ErrorSeverity
-from app.models.base import Field, G8eBaseModel
+from app.models.base import Field, G8eBaseModel, UTCDatetime
 from app.utils.timestamp import now
 
 
@@ -34,7 +33,7 @@ class ErrorDetail(G8eBaseModel):
     message: str
     category: ErrorCategory
     severity: ErrorSeverity = ErrorSeverity.MEDIUM
-    timestamp: datetime = Field(default_factory=now)
+    timestamp: UTCDatetime = Field(default_factory=now)
     source: str 
     component: str | None = None
     trace_id: str | None = None
@@ -59,7 +58,7 @@ class ErrorBody(G8eBaseModel):
     message: str
     category: ErrorCategory
     severity: ErrorSeverity
-    timestamp: datetime = Field(default_factory=now)
+    timestamp: UTCDatetime = Field(default_factory=now)
     component: str | None = None
     details: dict[str, object] | None = None
     cause_message: str | None = None

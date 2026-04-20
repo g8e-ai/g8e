@@ -15,7 +15,7 @@
 
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.http_context import G8eHttpContext
-from app.models.g8ed_client import IntentOperationResult
+from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
 from app.services.protocols import G8edClientProtocol
 
 
@@ -30,14 +30,30 @@ class FakeG8edClient:
         self.revoked: list[dict] = []
         self.pushed_events: list[SessionEvent | BackgroundEvent] = []
         self.bound_operators: list[dict] = []
-        self.push_sse_event_return_value = True
+        self._push_sse_event_response: SSEPushResponse = SSEPushResponse(success=True, delivered=1)
+        self._push_sse_event_exception: Exception | None = None
 
-    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> bool:
+    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse:
         self.pushed_events.append(event)
-        return self.push_sse_event_return_value
+        if self._push_sse_event_exception is not None:
+            raise self._push_sse_event_exception
+        return self._push_sse_event_response
+
+    def set_push_sse_event_response(self, response: SSEPushResponse) -> None:
+        self._push_sse_event_response = response
+        self._push_sse_event_exception = None
+
+    def set_push_sse_event_exception(self, exc: Exception) -> None:
+        self._push_sse_event_exception = exc
 
     def set_push_sse_event_return_value(self, value: bool) -> None:
-        self.push_sse_event_return_value = value
+        """Back-compat shim: True => success, False => success=False (inline failure)."""
+        self._push_sse_event_response = SSEPushResponse(
+            success=value,
+            delivered=1 if value else 0,
+            error=None if value else "fake failure",
+        )
+        self._push_sse_event_exception = None
 
     def assert_push_sse_event_called_with(self, event: SessionEvent | BackgroundEvent) -> None:
         assert event in self.pushed_events

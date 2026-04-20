@@ -38,11 +38,6 @@
         "required": false,
         "default": 3
       },
-      "llm_command_gen_temp": {
-        "type": "number",
-        "required": false,
-        "default": 0.0
-      },
       "google_search_enabled": {
         "type": "boolean",
         "required": false,

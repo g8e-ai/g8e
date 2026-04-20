@@ -83,8 +83,8 @@
         "description": "Details about the current OS user",
         "fields": {
           "username": { "type": "string" },
-          "uid": { "type": "string" },
-          "gid": { "type": "string" },
+          "uid": { "type": "integer" },
+          "gid": { "type": "integer" },
           "home": { "type": "string" },
           "name": { "type": "string" },
           "shell": { "type": "string" }

@@ -26,7 +26,6 @@ import {
     HeartbeatSSEEvent,
     OperatorStatusUpdatedEvent,
     OperatorStatusUpdatedData,
-    G8eePassthroughEvent,
 } from '@g8ed/models/sse_models.js';
 
 /**
@@ -51,152 +50,134 @@ export const mockSSEEvents = {
   },
 
   chatThinkingStart(investigationId, webSessionId, thinkingText = 'Analyzing...', metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          thinking: thinkingText,
-          action_type: 'start',
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        thinking: thinkingText,
+        action_type: 'start',
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   chatThinkingUpdate(investigationId, webSessionId, thinkingText = 'Processing...', metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          thinking: thinkingText,
-          action_type: 'update',
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        thinking: thinkingText,
+        action_type: 'update',
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   chatThinkingEnd(investigationId, webSessionId, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          thinking: '',
-          action_type: 'end',
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_THINKING_STARTED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        thinking: '',
+        action_type: 'end',
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   chatResponseChunk(investigationId, content, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: metadata.web_session_id || null,
-          content: content,
-          chunk_type: 'chat_response',
-          workflow_type: metadata.workflow_type || 'operator_bound',
-          grounding_detected: metadata.grounding_detected,
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: metadata.web_session_id || null,
+        content: content,
+        chunk_type: 'chat_response',
+        workflow_type: metadata.workflow_type || 'operator_bound',
+        grounding_detected: metadata.grounding_detected,
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   aiSearchWebRequested(investigationId, webSessionId, info = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          query: info.query || 'check disk usage',
-          execution_id: info.execution_id || `search_${Date.now()}`,
-          status: 'started',
-          timestamp: now(),
-        },
+    return {
+      type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        query: info.query || 'check disk usage',
+        execution_id: info.execution_id || `search_${Date.now()}`,
+        status: 'started',
+        timestamp: now(),
       },
-    });
+    };
   },
 
   operatorNetworkPortCheckRequested(investigationId, webSessionId, info = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          port: info.port || '443',
-          execution_id: info.execution_id || `port_${Date.now()}`,
-          status: 'started',
-          timestamp: now(),
-        },
+    return {
+      type: EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        port: info.port || '443',
+        execution_id: info.execution_id || `port_${Date.now()}`,
+        status: 'started',
+        timestamp: now(),
       },
-    });
+    };
   },
 
   chatResponseComplete(investigationId, messageId, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: metadata.web_session_id || null,
-          message_id: messageId,
-          finish_reason: metadata.finish_reason || 'STOP',
-          has_citations: metadata.has_citations,
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: metadata.web_session_id || null,
+        message_id: messageId,
+        finish_reason: metadata.finish_reason || 'STOP',
+        has_citations: metadata.has_citations,
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   chatCitationsReady(investigationId, webSessionId, groundingMetadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: webSessionId,
-          grounding_metadata: {
-            grounding_used: true,
-            sources: [],
-            ...groundingMetadata,
-          },
-          timestamp: now(),
+    return {
+      type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: webSessionId,
+        grounding_metadata: {
+          grounding_used: true,
+          sources: [],
+          ...groundingMetadata,
         },
+        timestamp: now(),
       },
-    });
+    };
   },
 
   chatError(investigationId, error, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.LLM_CHAT_ITERATION_FAILED,
-        data: {
-          investigation_id: investigationId,
-          web_session_id: metadata.web_session_id || null,
-          error: error,
-          error_type: metadata.error_type || 'streaming_error',
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.LLM_CHAT_ITERATION_FAILED,
+      data: {
+        investigation_id: investigationId,
+        web_session_id: metadata.web_session_id || null,
+        error: error,
+        error_type: metadata.error_type || 'streaming_error',
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   operatorHeartbeat(operatorId, status = 'Active') {
@@ -218,31 +199,27 @@ export const mockSSEEvents = {
   },
 
   caseCreated(caseId, title, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.CASE_CREATED,
-        data: {
-          case_id: caseId,
-          title,
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.CASE_CREATED,
+      data: {
+        case_id: caseId,
+        title,
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 
   investigationCreated(investigationId, caseId, metadata = {}) {
-    return new G8eePassthroughEvent({
-      _payload: {
-        type: EventType.INVESTIGATION_CREATED,
-        data: {
-          investigation_id: investigationId,
-          case_id: caseId,
-          timestamp: now(),
-          ...metadata,
-        },
+    return {
+      type: EventType.INVESTIGATION_CREATED,
+      data: {
+        investigation_id: investigationId,
+        case_id: caseId,
+        timestamp: now(),
+        ...metadata,
       },
-    });
+    };
   },
 };
 

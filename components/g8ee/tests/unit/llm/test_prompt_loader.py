@@ -17,7 +17,7 @@ from unittest.mock import patch
 import pytest
 
 from app.errors import ResourceNotFoundError
-from app.constants import AGENT_MODE_PROMPT_FILES, AgentMode, PromptFile, PromptSection
+from app.constants import PromptFile
 
 from app.prompts_data.loader import (
     PROMPTS_DIR,

@@ -321,6 +321,7 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `users` | g8ed | User accounts — email, name, passkey credentials, roles, org, session tracking |
 | `web_sessions` | g8ed | Web session documents — see [Session Documents](#session-documents) |
 | `operator_sessions` | g8ed | Operator session documents — see [Session Documents](#session-documents) |
+| `cli_sessions` | g8ed | CLI login session documents — issued to operator hosts during `g8e login` and exchanged for operator sessions |
 | `login_audit` | g8ed | Login attempt history — identifier, method, outcome, IP, timestamp |
 | `auth_admin_audit` | g8ed | Admin authentication events |
 | `account_locks` | g8ed | Account lockout state — identifier, locked\_until, attempt count |

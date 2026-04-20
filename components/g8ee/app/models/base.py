@@ -12,10 +12,10 @@
 # limitations under the License.
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Annotated
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_validator
 
 __all__ = [
     "ConfigDict",
@@ -25,6 +25,7 @@ __all__ = [
     "G8eBaseModel",
     "G8eIdentifiableModel",
     "G8eTimestampedModel",
+    "UTCDatetime",
     "_to_iso_z",
     "field_validator",
     "recursive_serialize",
@@ -42,12 +43,18 @@ def _to_iso_z(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S") + (f".{dt.microsecond:06d}" if dt.microsecond else "") + "Z"
 
 
+UTCDatetime = Annotated[
+    datetime,
+    PlainSerializer(lambda dt: _to_iso_z(dt) if dt else None, return_type=str | None, when_used="json"),
+]
+
+
 def recursive_serialize(value: Any) -> Any:
     """Recursively convert Pydantic models to plain dicts for boundary crossing.
 
-    Used by flatten_for_db(), flatten_for_llm(), and flatten_for_wire(). Not for
-    use inside the application boundary — models stay as models until a boundary
-    is crossed.
+    Intended for dict/list inputs only (e.g., raw DB responses). For models,
+    use ``model.model_dump(mode="json")`` directly. Used by CacheAsideService
+    to flatten datetime-bearing dicts returned from the DB (cache_aside.py:281).
     """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json", exclude_none=True)
@@ -71,16 +78,15 @@ class G8eBaseModel(BaseModel):
 
     Enum fields remain enum instances inside the application boundary. They are
     only coerced to their string values when crossing a wire/DB/LLM boundary
-    via the ``flatten_for_*`` methods (which call ``recursive_serialize`` with
-    ``mode="json"``). This preserves typed-object invariants required by the
-    developer guide: identity comparisons (``is``/``in``) and ``match``
+    via ``model.model_dump(mode="json")``. This preserves typed-object invariants
+    required by the developer guide: identity comparisons (``is``/``in``) and ``match``
     statements on enum-typed fields work uniformly whether the object was
     constructed in memory or parsed from a wire payload.
 
-    Boundary methods — use these instead of calling model_dump() directly at boundaries:
-    - ``flatten_for_llm()``  — before Part.from_tool_response in agent.py
-    - ``flatten_for_db()``   — before db_client.create_document / update_document
-    - ``flatten_for_wire()`` — before pubsub_client.publish / outbound HTTP POST to external services
+    Boundary serialization — use ``model.model_dump(mode="json")`` at all boundaries:
+    - Wire boundary (pubsub_client.publish, outbound HTTP POST): ``model.model_dump(mode="json")``
+    - DB boundary (db_client.create_document / update_document): ``model.model_dump(mode="json")``
+    - LLM boundary (before Part.from_tool_response in agent.py): ``model.model_dump(mode="json")``
     """
 
     model_config = ConfigDict(
@@ -96,27 +102,6 @@ class G8eBaseModel(BaseModel):
         kwargs.setdefault("exclude_none", True)
         return super().model_dump_json(**kwargs)
 
-    def flatten_for_llm(self) -> dict[str, Any]:
-        """Serialize for the LLM boundary (before Part.from_tool_response).
-
-        Subclasses override to control exactly what the LLM sees.
-        """
-        return recursive_serialize(self)
-
-    def flatten_for_db(self) -> dict[str, Any]:
-        """Serialize for the DB write boundary (before create_document / update_document).
-
-        Subclasses override to control exactly what is persisted.
-        """
-        return recursive_serialize(self)
-
-    def flatten_for_wire(self) -> dict[str, Any]:
-        """Serialize for the HTTP/pub-sub wire boundary (before any outbound payload).
-
-        Subclasses override to control exactly what goes on the wire.
-        """
-        return recursive_serialize(self)
-
 
 class G8eTimestampedModel(G8eBaseModel):
     """Adds UTC timestamps to any g8e model.
@@ -126,8 +111,8 @@ class G8eTimestampedModel(G8eBaseModel):
     For persisted entities use ``G8eIdentifiableModel``.
     """
 
-    created_at: datetime = Field(default_factory=now, description="When the entity was created (UTC)")
-    updated_at: datetime | None = Field(default=None, description="When the entity was last updated (UTC)")
+    created_at: UTCDatetime = Field(default_factory=now, description="When the entity was created (UTC)")
+    updated_at: UTCDatetime | None = Field(default=None, description="When the entity was last updated (UTC)")
 
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
@@ -141,10 +126,6 @@ class G8eTimestampedModel(G8eBaseModel):
             else:
                 return v.astimezone(UTC)
         return v
-
-    @field_serializer("created_at", "updated_at")
-    def serialize_datetime(self, dt: datetime | None) -> str | None:
-        return _to_iso_z(dt) if dt is not None else None
 
     def update_timestamp(self) -> None:
         self.updated_at = now()

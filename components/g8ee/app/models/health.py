@@ -11,11 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
 
 from app.constants import HealthStatus
 
-from .base import Field, G8eBaseModel
+from .base import G8eBaseModel, UTCDatetime
 
 
 class DependencyStatus(G8eBaseModel):
@@ -26,7 +25,7 @@ class DependencyStatus(G8eBaseModel):
 
 class HealthCheckResult(G8eBaseModel):
     """Result of a full dependency health check."""
-    timestamp: datetime
+    timestamp: UTCDatetime
     component: str
     dependencies: dict[str, DependencyStatus]
     overall_status: HealthStatus
@@ -42,6 +41,6 @@ class WorkflowHealthResult(G8eBaseModel):
 class ServiceHealthResult(G8eBaseModel):
     """Top-level health check result for a g8ee service."""
     service: HealthStatus
-    timestamp: datetime
+    timestamp: UTCDatetime
     checks: dict[str, DependencyStatus]
     error: str | None = None

@@ -57,18 +57,6 @@ const MOCK_SETTINGS = [
         dbValue: LLMProvider.GEMINI,
     },
     {
-        key: 'temperature',
-        section: 'llm',
-        label: 'Temperature',
-        description: 'LLM sampling temperature.',
-        type: 'text',
-        options: null,
-        secret: false,
-        placeholder: '1.0',
-        value: '1.0',
-        dbValue: '1.0',
-    },
-    {
         key: 'openai_api_key',
         section: 'llm',
         label: 'OpenAI API Key',

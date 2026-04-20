@@ -16,17 +16,18 @@ It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-com
 components/g8ep/
 ├── Dockerfile                    # Container definition (python:3.13-alpine base)
 ├── reports/                      # Scan output (gitignored, .gitkeep preserves dir)
-└── scripts/
-    ├── entrypoint.sh             # Writes supervisor config, execs supervisord as PID 1
-    ├── fetch-key-and-run.sh      # Downloads operator binary from blob store if absent, fetches API key, execs operator
-    └── security/                 # Security scan scripts (tools lazy-installed at runtime, not baked into image)
-        ├── install-scan-tools.sh # Lazy-installs Nuclei, testssl.sh, Trivy, Grype on first use
-        ├── run-full-audit.sh     # Orchestrates all scanners against a target
-        ├── scan-tls.sh           # TLS/SSL configuration audit via testssl.sh
-        ├── scan-nuclei.sh        # Template-based web vulnerability scan via Nuclei
-        ├── scan-containers.sh    # Container image CVE scan via Trivy
-        ├── scan-dependencies.sh  # Dependency CVE scan via Grype
-        └── fetch-public-grades.sh # Queries SSL Labs, Mozilla Observatory, SecurityHeaders.com
+├── scripts/
+│   ├── entrypoint.sh             # Writes supervisor config, execs supervisord as PID 1
+│   ├── fetch-key-and-run.sh      # Downloads operator binary from blob store if absent, fetches API key, execs operator
+│   └── security/                 # Security scan scripts (tools lazy-installed at runtime, not baked into image)
+│       ├── install-scan-tools.sh # Lazy-installs Nuclei, testssl.sh, Trivy, Grype on first use
+│       ├── run-full-audit.sh     # Orchestrates all scanners against a target
+│       ├── scan-tls.sh           # TLS/SSL configuration audit via testssl.sh
+│       ├── scan-nuclei.sh        # Template-based web vulnerability scan via Nuclei
+│       ├── scan-containers.sh    # Container image CVE scan via Trivy
+│       ├── scan-dependencies.sh  # Dependency CVE scan via Grype
+│       └── fetch-public-grades.sh # Queries SSL Labs, Mozilla Observatory, SecurityHeaders.com
+└── sudoers-g8e                   # Sudo configuration for the g8e user
 ```
 
 ---
@@ -96,7 +97,7 @@ Component source directories are **volume-mounted** at runtime for scripts — c
 
 ## Docker Compose Integration
 
-g8ep is a managed service in `docker-compose.yml`, started alongside the core platform. It has no `depends_on` constraints and no `restart` policy — it stays running as a sidecar.
+g8ep is a managed service in `docker-compose.yml`, started alongside the core platform. It depends on `g8ed` being healthy and has no `restart` policy — it stays running as a sidecar.
 
 **Healthcheck:** `pgrep -x supervisord` — passes once supervisord is running.
 
@@ -117,9 +118,10 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `HOME` | `/home/g8e` | User home directory |
-| `G8E_DB_PATH` | `/data/g8e.db` | g8ee local SQLite path (for g8ee tests) |
+| `G8E_DB_PATH` | `/data/g8e.db` | g8ee local SQLite path (ephemeral in g8ep) |
 | `G8E_SSL_DIR` | `/g8es` | Path to the SSL directory |
 | `G8E_PUBSUB_CA_CERT` | `/g8es/ca.crt` | CA cert for pub/sub TLS |
+| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8es:9001` | g8es pub/sub endpoint |
 | `G8E_SSL_CERT_FILE` | `/g8es/ca.crt` | System trust store injection |
 | `RUNNING_IN_DOCKER` | `1` | Signals container context to scripts |
 | `G8E_INTERNAL_AUTH_TOKEN` | — | Shared secret for inter-service authentication. Loaded from `/g8es/internal_auth_token` by entrypoint. |
@@ -133,7 +135,6 @@ g8ep is a managed service in `docker-compose.yml`, started alongside the core pl
 | `CI` | `false` | CI flag |
 | `G8E_INTERNAL_HTTP_URL` | `https://g8es` | g8ed HTTP endpoint |
 | `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es` | g8es pub/sub endpoint for internal services (g8ee) |
-| `G8E_OPERATOR_PUBSUB_URL` | `wss://g8es:9001` | g8es pub/sub endpoint |
 | `LLM_ENDPOINT` | — | LLM inference endpoint |
 | `APP_URL` | — | Application URL (required — set in `docker-compose.yml` or shell) |
 
@@ -177,7 +178,7 @@ POST /api/auth/login (or /register)
                     → supervisord runs fetch-key-and-run.sh:
                           curl g8es /db/settings/platform_settings (with retry)
                           → if binary absent: downloads from blob store (/blob/operator-binary/linux-{arch})
-                          → extracts g8ep_operator_api_key
+                          → extracts g8ep_operator_api_key from settings.g8ep_operator_api_key
                           → exec g8e.operator --endpoint g8e.local --working-dir /home/g8e --no-git --log info --cloud --provider g8ep
                           → operator discovers CA cert locally at /g8es/ca.crt (no network fetch)
                     → binary authenticates with API key, slot is claimed, operator goes ACTIVE
@@ -209,9 +210,9 @@ Test running is no longer handled by g8ep. Each component has a dedicated test-r
 
 | Container | Image | Purpose |
 |-----------|-------|---------|
-| `g8ee-test-runner` | `python:3.13-slim` | g8ee pytest + pyright |
-| `g8ed-test-runner` | `node:22-alpine` | g8ed vitest |
-| `g8eo-test-runner` | `golang:1.24.1-alpine3.21` | g8eo tests + operator builds |
+| `g8ee-test-runner` | `python:3.12-slim` | g8ee pytest + pyright |
+| `g8ed-test-runner` | `node:22-alpine3.23` | g8ed vitest |
+| `g8eo-test-runner` | `golang:1.26-alpine3.23` | g8eo tests + operator builds |
 
 The `./g8e test <component>` CLI command routes to the correct test-runner container. The `./g8e operator build` command now runs inside `g8eo-test-runner`.
 
@@ -328,7 +329,7 @@ Each host emits a status line as it completes; a summary line is written last. S
 | Event | Result |
 |-------|--------|
 | Normal exit | Operator exits, remote `EXIT` trap fires, binary deleted |
-| Network g8e | SSHD kills the remote shell, `EXIT` trap fires, binary deleted |
+| Network drop | SSHD kills the remote shell, `EXIT` trap fires, binary deleted |
 | Ctrl+C on host | Go context cancels, all SSH sessions close, remote `EXIT` traps fire |
 
 **SSH config resolution:** The inline parser reads `~/.ssh/config` (volume-mounted from the host into g8ep at `/root/.ssh`) and resolves `HostName`, `User`, `Port`, and `IdentityFile` per host. Wildcard patterns (`prod-*`, `?`) are supported. SSH agent (`SSH_AUTH_SOCK`) is used when available; identity files fall back to standard paths (`id_ed25519`, `id_ecdsa`, `id_rsa`).
@@ -398,15 +399,15 @@ The g8ep operator is sorted to the top of the operator list — it is identified
 | Device Link | Generate a `dlk_` token and copy to clipboard | `POST /api/auth/link/generate` (body: `{ operator_id }`) |
 | Restart g8ep | Stop the supervised process, reset slot, relaunch with fresh token | `POST /api/operators/g8ep/reauth` |
 | Copy API Key | Copy `operator_api_key` to clipboard | `GET /api/operators/:operatorId/api-key` |
-| Refresh API Key | Terminate operator, create new slot with new API key | `POST /api/operators/:operatorId/refresh-key` |
-| Bind / Unbind | Bind operator to the current web session (or unbind/clear stale) | `POST /api/operators/:operatorId/bind` / `/unbind` |
+| Refresh API Key | Terminate operator, create new slot with new API key | `POST /api/operators/:operatorId/refresh-api-key` |
+| Bind / Unbind | Bind operator to the current web session (or unbind/clear stale) | `POST /api/operators/bind` / `/unbind` |
 | Stop | Send shutdown command to a running operator | `POST /api/operators/:operatorId/stop` |
 
 **Restart g8ep flow (UI-triggered):**
 
 `POST /api/operators/g8ep/reauth` is an authenticated user-facing route on g8ed — the caller's identity comes from the session (`req.userId`). It calls `relaunchG8ENodeOperatorForUser` in `G8ENodeOperatorService`, which is the same function used by the internal CLI route. No `operator_id` parameter is required because each user has exactly one g8ep operator slot.
 
-**SSE updates:** The panel subscribes to `EVENTS.OPERATOR.DATA_UPDATED` events emitted by `OperatorSSEHandler`. Heartbeat events update the metrics display in place; state-change and stale events trigger a full operator list re-render.
+**SSE updates:** The panel subscribes to `EventType.OPERATOR_PANEL_LIST_UPDATED`, `EventType.OPERATOR_HEARTBEAT_RECEIVED`, and various `OPERATOR_STATUS_UPDATED_*` events. Heartbeat events update the metrics display in place; state-change and list-update events trigger a full operator list re-render.
 
 ---
 

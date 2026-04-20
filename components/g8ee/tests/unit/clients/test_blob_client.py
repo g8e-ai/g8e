@@ -11,12 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import aiohttp
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.clients.blob_client import BlobClient
-from app.errors import DatabaseError, NetworkError
+from app.errors import NetworkError
 
 pytestmark = pytest.mark.unit
 

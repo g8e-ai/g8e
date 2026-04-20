@@ -11,11 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import asyncio
-import json
-from unittest.mock import AsyncMock, MagicMock
 
-import aiohttp
 import pytest
 
 from app.clients.kv_cache_client import KVCacheClient, _encode_key

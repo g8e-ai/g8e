@@ -13,7 +13,6 @@
 
 """Models for HTTP client and service state."""
 
-from typing import Optional
 from app.models.base import G8eBaseModel
 
 class HTTPClientStatus(G8eBaseModel):

@@ -177,6 +177,39 @@ def test_build_triage_context_section_renders_posture_and_intent():
     assert section.endswith("</triage_context>\n")
 
 
+def test_build_triage_context_section_includes_user_facing_intent_on_error():
+    """When triage fails, intent_summary is included but contains only user-facing
+    instructions, not internal error details. Internal error fields (error_code,
+    error_class, error_message) are for logging only and never exposed to AI."""
+    from app.constants import (
+        TriageComplexityClassification,
+        TriageConfidence,
+        TriageIntentClassification,
+        TriageRequestPosture,
+    )
+    from app.models.agents.triage import TriageResult
+
+    result = TriageResult(
+        complexity=TriageComplexityClassification.COMPLEX,
+        complexity_confidence=TriageConfidence.LOW,
+        intent=TriageIntentClassification.UNKNOWN,
+        intent_confidence=TriageConfidence.LOW,
+        intent_summary="Triage unavailable: classification failed. Escalating to full LLM for complexity classification. Check provider configuration and retry.",
+        request_posture=TriageRequestPosture.NORMAL,
+        posture_confidence=TriageConfidence.LOW,
+        error_code="CLASSIFICATION_ERROR",
+        error_class="Exception",
+        error_message="Provider error details",
+    )
+    section = prompts.build_triage_context_section(result)
+    assert "<triage_context>" in section
+    assert "request_posture: normal" in section
+    assert "intent_summary: Triage unavailable: classification failed." in section
+    assert "CLASSIFICATION_ERROR" not in section
+    assert "Provider error details" not in section
+    assert section.endswith("</triage_context>\n")
+
+
 def test_build_modular_system_prompt_injects_triage_context(mock_loader, operator_context):
     """When Triage supplies a posture, the modular prompt must include the
     <triage_context> block so the dissent protocol can calibrate on it."""

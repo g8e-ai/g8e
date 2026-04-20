@@ -67,6 +67,43 @@ export const ExecutionStatus = Object.freeze({
 });
 
 /**
+ * Approval Type
+ * Types of approvals that can be requested.
+ * Canonical values from shared/constants/status.json approval.type.
+ */
+export const ApprovalType = Object.freeze({
+    COMMAND:        _STATUS['approval.type']['command'],
+    FILE_EDIT:      _STATUS['approval.type']['file.edit'],
+    INTENT:         _STATUS['approval.type']['intent'],
+    AGENT_CONTINUE: _STATUS['approval.type']['agent.continue'],
+});
+
+/**
+ * Approval Error Type
+ * Error classifications for approval failures.
+ * Canonical values from shared/constants/status.json approval.error.type.
+ */
+export const ApprovalErrorType = Object.freeze({
+    APPROVAL_PUBLISH_FAILURE:  _STATUS['approval.error.type']['approval.publish.failure'],
+    APPROVAL_EXCEPTION:         _STATUS['approval.error.type']['approval.exception'],
+    APPROVAL_TIMEOUT:           _STATUS['approval.error.type']['approval.timeout'],
+    INVALID_INTENT:             _STATUS['approval.error.type']['invalid.intent'],
+    INTENT_APPROVAL_EXCEPTION:  _STATUS['approval.error.type']['intent.approval.exception'],
+});
+
+/**
+ * Attachment Type
+ * File attachment classifications.
+ * Canonical values from shared/constants/status.json attachment.type.
+ */
+export const AttachmentType = Object.freeze({
+    PDF:   _STATUS['attachment.type']['pdf'],
+    IMAGE: _STATUS['attachment.type']['image'],
+    TEXT:  _STATUS['attachment.type']['text'],
+    OTHER: _STATUS['attachment.type']['other'],
+});
+
+/**
  * Cloud Operator Subtypes
  * Further classifies cloud operators by provider.
  * Canonical values from shared/constants/status.json cloud.subtype.

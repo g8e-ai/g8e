@@ -83,7 +83,6 @@ async def test_outbound_url_is_api_chat(stored_endpoint):
 
     settings = PrimaryLLMSettings(
         system_instructions="",
-        temperature=0.0,
         max_output_tokens=16,
         top_p_nucleus_sampling=1.0,
         top_k_filtering=40,

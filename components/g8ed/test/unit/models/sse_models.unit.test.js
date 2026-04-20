@@ -24,14 +24,11 @@ import {
     AuditDownloadResponse,
     OperatorStatusUpdatedData,
     OperatorStatusUpdatedEvent,
-    OperatorPanelListUpdatedData,
-    OperatorPanelListUpdatedEvent,
     CommandResultSSEEvent,
     ApprovalResponseEvent,
     DirectCommandResponseEvent,
     LogStreamEvent,
     LogStreamConnectedEvent,
-    G8eePassthroughEvent,
 } from '@g8ed/models/sse_models.js';
 import { OperatorSlot } from '@g8ed/models/operator_model.js';
 
@@ -159,54 +156,6 @@ describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
         expect(wire.type).toBe('keepalive');
         expect(wire.serverTime).toBe(1234567890);
         expect(typeof wire.timestamp).toBe('string');
-    });
-
-    it('defaults operator_list to null when not provided', () => {
-        const event = KeepaliveEvent.parse({ type: 'keepalive' });
-        expect(event.operator_list).toBeNull();
-    });
-
-    it('accepts operator_list when provided', () => {
-        const operatorList = OperatorListData.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
-            total_count: 1,
-            active_count: 1,
-            used_slots: 1,
-            max_slots: 1,
-        });
-        const event = KeepaliveEvent.parse({
-            type: 'keepalive',
-            operator_list: operatorList,
-        });
-        expect(event.operator_list).toBeInstanceOf(OperatorListData);
-        expect(event.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(event.operator_list.total_count).toBe(1);
-    });
-
-    it('forWire() includes operator_list when provided', () => {
-        const testDate = new Date('2026-04-13T17:21:05.940Z');
-        const operatorList = OperatorListData.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            operators: [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })],
-            total_count: 1,
-            active_count: 1,
-            used_slots: 1,
-            max_slots: 1,
-            timestamp: testDate,
-        });
-        const event = KeepaliveEvent.parse({
-            type: 'keepalive',
-            operator_list: operatorList,
-        });
-        const wire = event.forWire();
-        expect(wire.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(wire.operator_list.operators[0].operator_id).toBe('op-1');
-        expect(wire.operator_list.operators[0].status).toBe('ACTIVE');
-        expect(wire.operator_list.total_count).toBe(1);
-        expect(wire.operator_list.active_count).toBe(1);
-        expect(wire.operator_list.used_slots).toBe(1);
-        expect(wire.operator_list.max_slots).toBe(1);
     });
 });
 
@@ -539,91 +488,6 @@ describe('OperatorStatusUpdatedEvent [UNIT - PURE LOGIC]', () => {
     });
 });
 
-describe('OperatorPanelListUpdatedData [UNIT - PURE LOGIC]', () => {
-    it('accepts valid required fields with defaults', () => {
-        const data = OperatorPanelListUpdatedData.parse({
-            operator_id: 'op-123',
-        });
-        expect(data.operator_id).toBe('op-123');
-        expect(data.case_id).toBeNull();
-        expect(data.investigation_id).toBeNull();
-        expect(data.task_id).toBeNull();
-        expect(data.timestamp).toBeNull();
-    });
-
-    it('accepts all fields with values', () => {
-        const data = OperatorPanelListUpdatedData.parse({
-            operator_id: 'op-123',
-            case_id: 'case-1',
-            investigation_id: 'inv-1',
-            task_id: 'task-1',
-            timestamp: new Date('2026-01-01T00:00:00.000Z'),
-        });
-        expect(data.case_id).toBe('case-1');
-        expect(data.investigation_id).toBe('inv-1');
-        expect(data.task_id).toBe('task-1');
-        expect(data.timestamp).toBeInstanceOf(Date);
-    });
-
-    it('throws when operator_id is missing', () => {
-        expect(() => OperatorPanelListUpdatedData.parse({}))
-            .toThrow('operator_id is required');
-    });
-
-    it('timestamp defaults to null when not provided', () => {
-        const data = new OperatorPanelListUpdatedData({ operator_id: 'op-123' });
-        expect(data.timestamp).toBeNull();
-    });
-});
-
-describe('OperatorPanelListUpdatedEvent [UNIT - PURE LOGIC]', () => {
-    it('accepts valid event with nested OperatorPanelListUpdatedData', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: {
-                operator_id: 'op-123',
-                case_id: 'case-1',
-            },
-        });
-        expect(event.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(event.data).toBeInstanceOf(OperatorPanelListUpdatedData);
-        expect(event.data.operator_id).toBe('op-123');
-        expect(event.data.case_id).toBe('case-1');
-    });
-
-    it('defaults data to null when not provided', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({ type: 'g8e.v1.operator.panel.list.updated' });
-        expect(event.data).toBeNull();
-    });
-
-    it('throws when type is missing', () => {
-        expect(() => OperatorPanelListUpdatedEvent.parse({}))
-            .toThrow('type is required');
-    });
-
-    it('timestamp defaults to now() when not provided', () => {
-        const before = new Date();
-        const event = new OperatorPanelListUpdatedEvent({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: { operator_id: 'op-123' },
-        });
-        const after = new Date();
-        expect(event.timestamp).toBeInstanceOf(Date);
-        expect(event.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
-        expect(event.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
-    });
-
-    it('forWire() serializes nested model to plain object', () => {
-        const event = OperatorPanelListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            data: { operator_id: 'op-123' },
-        });
-        const wire = event.forWire();
-        expect(wire.data instanceof OperatorPanelListUpdatedData).toBe(false);
-        expect(typeof wire.data).toBe('object');
-    });
-});
-
 describe('CommandResultSSEEvent [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields with defaults', () => {
         const event = CommandResultSSEEvent.parse({
@@ -910,84 +774,5 @@ describe('LogStreamConnectedEvent [UNIT - PURE LOGIC]', () => {
         const event = LogStreamConnectedEvent.parse({ type: 'console.log.connected' });
         const wire = event.forWire();
         expect(typeof wire.timestamp).toBe('string');
-    });
-});
-
-describe('G8eePassthroughEvent [UNIT - PURE LOGIC]', () => {
-    it('accepts valid payload with type field', () => {
-        const payload = { type: 'llm.chat.iteration', data: { content: 'test' } };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        expect(event._payload).toEqual(payload);
-    });
-
-    it('throws when _payload is missing', () => {
-        expect(() => G8eePassthroughEvent.parse({}))
-            .toThrow('_payload is required');
-    });
-
-    it('throws when _payload is not an object', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: 'not-an-object' }))
-            .toThrow('_payload must be a plain object');
-    });
-
-    it('throws when _payload is null', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: null }))
-            .toThrow('_payload is required');
-    });
-
-    it('throws when _payload.type is missing', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { data: 'test' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is not a string', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: 123 } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is an empty string', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is only whitespace', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '   ' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('accepts _payload.type with value', () => {
-        const event = G8eePassthroughEvent.parse({
-            _payload: { type: 'llm.chat.iteration' },
-        });
-        expect(event._payload.type).toBe('llm.chat.iteration');
-    });
-
-    it('forWire() returns the inner payload directly', () => {
-        const payload = { type: 'llm.chat.iteration', data: { chunk: 'hello' } };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        const wire = event.forWire();
-        expect(wire).toBe(payload);
-        expect(wire).not.toBe(event);
-    });
-
-    it('forWire() preserves the original payload structure', () => {
-        const payload = {
-            type: 'llm.chat.iteration',
-            data: { chunk: 'test', done: false },
-            metadata: { model: 'gemini-2.5-pro' },
-        };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        const wire = event.forWire();
-        expect(wire.type).toBe('llm.chat.iteration');
-        expect(wire.data.chunk).toBe('test');
-        expect(wire.data.done).toBe(false);
-        expect(wire.metadata.model).toBe('gemini-2.5-pro');
-    });
-
-    it('constructor validates _payload', () => {
-        expect(() => new G8eePassthroughEvent({ _payload: { type: 'valid' } }))
-            .not.toThrow();
-        expect(() => new G8eePassthroughEvent({ _payload: {} }))
-            .toThrow('_payload.type must be a non-empty string');
     });
 });

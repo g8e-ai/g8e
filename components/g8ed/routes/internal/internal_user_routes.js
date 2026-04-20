@@ -46,7 +46,7 @@ import {
  */
 export function createInternalUserRouter({ services, authorizationMiddleware }) {
     const { userService, webSessionService, passkeyAuthService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -79,7 +79,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * GET /api/internal/users
      */
-    router.get('/', requireInternalOrigin, async (req, res, next) => {
+    router.get('/', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { limit: limitParam } = req.query;
 
@@ -110,7 +110,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * GET /api/internal/users/email/:email
      */
-    router.get('/email/:email', requireInternalOrigin, async (req, res, next) => {
+    router.get('/email/:email', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { email } = req.params;
 
@@ -147,7 +147,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * GET /api/internal/users/:userId
      */
-    router.get('/:userId', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
 
@@ -184,7 +184,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * POST /api/internal/users
      */
-    router.post('/', requireInternalOrigin, async (req, res, next) => {
+    router.post('/', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const userReq = CreateUserRequest.parse(req.body);
 
@@ -215,7 +215,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * PATCH /api/internal/users/:userId/roles
      */
-    router.patch('/:userId/roles', requireInternalOrigin, async (req, res, next) => {
+    router.patch('/:userId/roles', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
             const rolesReq = UpdateUserRolesRequest.parse(req.body);
@@ -262,7 +262,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * GET /api/internal/users/:userId/passkeys
      */
-    router.get('/:userId/passkeys', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:userId/passkeys', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
 
@@ -286,7 +286,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * DELETE /api/internal/users/:userId/passkeys/:credentialId
      */
-    router.delete('/:userId/passkeys/:credentialId', requireInternalOrigin, async (req, res, next) => {
+    router.delete('/:userId/passkeys/:credentialId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId, credentialId } = req.params;
 
@@ -316,7 +316,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * DELETE /api/internal/users/:userId/passkeys
      */
-    router.delete('/:userId/passkeys', requireInternalOrigin, async (req, res, next) => {
+    router.delete('/:userId/passkeys', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
 
@@ -342,7 +342,7 @@ export function createInternalUserRouter({ services, authorizationMiddleware }) 
     /**
      * DELETE /api/internal/users/:userId
      */
-    router.delete('/:userId', requireInternalOrigin, async (req, res, next) => {
+    router.delete('/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
 

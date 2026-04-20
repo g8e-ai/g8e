@@ -17,7 +17,6 @@ from unittest.mock import MagicMock
 from app.models.investigations import (
     EnrichedInvestigationContext,
     InvestigationModel,
-    ConversationHistoryMessage,
     ConversationMessageMetadata,
 )
 from app.models.tool_results import CommandInternalResult, FileEditResult

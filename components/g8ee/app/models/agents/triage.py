@@ -67,3 +67,15 @@ class TriageResult(G8eBaseModel):
         default=TriageConfidence.LOW,
         description="Confidence in the request_posture classification.",
     )
+    error_code: str | None = Field(
+        default=None,
+        description="Structured error code when triage fails (e.g., 'PROVIDER_ERROR', 'MODEL_UNAVAILABLE').",
+    )
+    error_class: str | None = Field(
+        default=None,
+        description="Exception class name when triage fails (e.g., 'HTTPError', 'ConnectionError').",
+    )
+    error_message: str | None = Field(
+        default=None,
+        description="Detailed error message for internal logging/tracking only, never exposed to AI in prompt context.",
+    )

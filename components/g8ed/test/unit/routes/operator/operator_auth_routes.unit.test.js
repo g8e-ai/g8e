@@ -34,6 +34,7 @@ describe('OperatorAuthRoutes Unit Tests', () => {
     let app;
     let mockOperatorAuthService;
     let mockOperatorSessionService;
+    let mockCliSessionService;
     let mockRateLimiters;
     let mockRequestTimestampMiddleware;
 
@@ -45,6 +46,9 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             validateSession: vi.fn(),
             refreshSession: vi.fn()
         };
+        mockCliSessionService = {
+            validateSession: vi.fn()
+        };
         mockRateLimiters = {
             operatorRefreshRateLimiter: vi.fn((req, res, next) => next())
         };
@@ -55,7 +59,8 @@ describe('OperatorAuthRoutes Unit Tests', () => {
         const router = createOperatorAuthRouter({
             services: {
                 operatorAuthService: mockOperatorAuthService,
-                operatorSessionService: mockOperatorSessionService
+                operatorSessionService: mockOperatorSessionService,
+                cliSessionService: mockCliSessionService
             },
 
             rateLimiters: mockRateLimiters,
@@ -144,6 +149,66 @@ describe('OperatorAuthRoutes Unit Tests', () => {
 
             expect(res.status).toBe(401);
             expect(res.body.error).toBe(AuthError.INVALID_OR_EXPIRED_SESSION);
+        });
+    });
+
+    describe(`POST ${AuthPaths.OPERATOR_VALIDATE}`, () => {
+        it('returns valid:true for a live operator session', async () => {
+            mockOperatorSessionService.validateSession.mockResolvedValue({
+                user_id: 'u-1',
+                operator_id: 'op-1',
+            });
+
+            const res = await request(app)
+                .post('/api/auth/operator/validate')
+                .send({ operator_session_id: 'operator_session_abc' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.valid).toBe(true);
+            expect(res.body.success).toBe(true);
+            expect(res.body.session_type).toBe('OPERATOR');
+            expect(res.body.user_id).toBe('u-1');
+            expect(res.body.operator_id).toBe('op-1');
+            expect(mockCliSessionService.validateSession).not.toHaveBeenCalled();
+        });
+
+        it('routes CLI-prefixed session ids to cliSessionService', async () => {
+            mockCliSessionService.validateSession.mockResolvedValue({
+                user_id: 'u-2',
+                operator_id: null,
+            });
+
+            const res = await request(app)
+                .post('/api/auth/operator/validate')
+                .send({ operator_session_id: 'cli_session_xyz' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.valid).toBe(true);
+            expect(res.body.session_type).toBe('CLI');
+            expect(res.body.user_id).toBe('u-2');
+            expect(res.body.operator_id).toBeNull();
+            expect(mockOperatorSessionService.validateSession).not.toHaveBeenCalled();
+        });
+
+        it('returns 401 with valid:false when session is invalid', async () => {
+            mockOperatorSessionService.validateSession.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/auth/operator/validate')
+                .send({ operator_session_id: 'operator_session_gone' });
+
+            expect(res.status).toBe(401);
+            expect(res.body.valid).toBe(false);
+            expect(res.body.success).toBe(false);
+        });
+
+        it('returns 400 with valid:false when session id missing', async () => {
+            const res = await request(app)
+                .post('/api/auth/operator/validate')
+                .send({});
+
+            expect(res.status).toBe(400);
+            expect(res.body.valid).toBe(false);
         });
     });
 });

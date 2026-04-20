@@ -19,34 +19,37 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.constants import (
     CommandGenerationOutcome,
     LLMProvider,
-    TribunalFallbackReason,
     TribunalMember,
-    OLLAMA_DEFAULT_MODEL,
-    OPENAI_DEFAULT_MODEL,
-    ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
+    ComponentName,
     EventType,
+    VerifierReason,
 )
-from app.llm.llm_types import Content, Role
+from app.llm.llm_types import Role
 from app.models.model_configs import LLMModelConfig
 from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
-    TribunalFallbackPayload,
+    TribunalDisabledError,
     TribunalGenerationFailedError,
     TribunalModelNotConfiguredError,
     TribunalProviderUnavailableError,
+    TribunalSessionGenerationFailedPayload,
+    TribunalSessionModelNotConfiguredPayload,
     TribunalSessionStartedPayload,
+    TribunalSessionSystemErrorPayload,
     TribunalSystemError,
     TribunalVerifierFailedError,
 )
 from app.services.ai.command_generator import (
     _build_and_emit_result,
+    _build_operator_context_string,
+    _format_forbidden_patterns_message,
     _is_system_error,
     _MAX_TOKENS_GENERATION,
     _MAX_TOKENS_VERIFIER,
     _member_for_pass,
+    _prompt_fields,
     _resolve_model,
-    _resolve_temperature,
     _run_generation_pass,
     _run_generation_stage,
     _run_verification_stage,
@@ -67,6 +70,28 @@ def _make_mock_provider(generate_content_lite_side_effect=None, generate_content
     mock_provider.__aenter__ = AsyncMock(return_value=mock_provider)
     mock_provider.__aexit__ = AsyncMock(return_value=False)
     return mock_provider
+
+
+def _make_mock_operator_context(
+    os="linux",
+    shell="bash",
+    username="testuser",
+    uid=1000,
+    working_directory="/home/testuser",
+    hostname="testhost",
+    architecture="x86_64",
+) -> OperatorContext:
+    """Create a mock OperatorContext for tests."""
+    return OperatorContext(
+        operator_id="test-operator",
+        os=os,
+        shell=shell,
+        username=username,
+        uid=uid,
+        working_directory=working_directory,
+        hostname=hostname,
+        architecture=architecture,
+    )
 
 
 class TestResolveModel:
@@ -117,24 +142,20 @@ class TestTribunalSessionStartedPayloadRegression:
     def test_payload_rejects_none_model(self):
         with pytest.raises(Exception):
             TribunalSessionStartedPayload(
-                original_command="ls",
+                request="list files",
                 model=None,
                 num_passes=3,
                 members=[],
-                os_name="linux",
-                shell="bash",
-            )
+                )
 
     def test_payload_accepts_resolved_model(self):
         llm = LLMSettings(provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
         model = _resolve_model(llm)
         payload = TribunalSessionStartedPayload(
-            original_command="ls",
+            request="list files",
             model=model,
             num_passes=3,
             members=[],
-            os_name="linux",
-            shell="bash",
         )
         assert payload.model == "gemma3:1b"
 
@@ -163,16 +184,14 @@ class TestRoleImportRegression:
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
-            intent="list files",
-            original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result == "ls -la"
@@ -194,12 +213,13 @@ class TestRoleImportRegression:
         passed, revision = await _run_verifier(
             provider=mock_provider,
             model="test-model",
-            intent="list files",
+            request="list files",
+            guidelines="",
             candidate_command="ls -la",
-            os_name="linux",
-            user_context="user (uid=1000)",
+            operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert passed is True
@@ -241,17 +261,17 @@ class TestIsSystemError:
 
 
 class TestTribunalSystemError:
-    """TribunalSystemError carries pass_errors and original_command."""
+    """TribunalSystemError carries pass_errors and request."""
 
     def test_attributes(self):
         errors = ["401 Unauthorized", "Connection refused"]
-        exc = TribunalSystemError(pass_errors=errors, original_command="ls -la")
+        exc = TribunalSystemError(pass_errors=errors, request="list files")
         assert exc.pass_errors == errors
-        assert exc.original_command == "ls -la"
+        assert exc.request == "list files"
         assert "401 Unauthorized" in str(exc)
 
     def test_is_exception(self):
-        exc = TribunalSystemError(pass_errors=["err"], original_command="ls")
+        exc = TribunalSystemError(pass_errors=["err"], request="list files")
         assert isinstance(exc, Exception)
 
 
@@ -270,16 +290,14 @@ class TestPassErrorsCollection:
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
-            intent="list files",
-            original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result is None
@@ -299,16 +317,14 @@ class TestPassErrorsCollection:
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
-            intent="list files",
-            original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result is None
@@ -328,41 +344,46 @@ class TestPassErrorsCollection:
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
-            intent="list files",
-            original_command="ls",
-            os_name="linux",
-            shell="bash",
-            working_directory="/home/user",
-            user_context="user (uid=1000)",
+            request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
             pass_index=0,
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+        
         )
 
         assert result == "ls -la"
         assert pass_errors == []
 
 
-class TestTribunalFallbackPayloadPassErrors:
-    """TribunalFallbackPayload supports the pass_errors field."""
+class TestTribunalSessionTerminalPayloads:
+    """Each Tribunal terminal-state scenario has its own typed payload."""
 
-    def test_accepts_pass_errors(self):
-        payload = TribunalFallbackPayload(
-            reason=TribunalFallbackReason.ALL_PASSES_FAILED,
-            original_command="ls",
-            final_command="ls",
-            pass_errors=["err1", "err2"],
+    def test_system_error_payload_requires_pass_errors(self):
+        payload = TribunalSessionSystemErrorPayload(
+            request="list files",
+            pass_errors=["auth failed", "network timeout"],
         )
-        assert payload.pass_errors == ["err1", "err2"]
+        assert payload.request == "list files"
+        assert payload.pass_errors == ["auth failed", "network timeout"]
 
-    def test_defaults_to_none(self):
-        payload = TribunalFallbackPayload(
-            reason=TribunalFallbackReason.DISABLED,
-            original_command="ls",
-            final_command="ls",
+    def test_generation_failed_payload_requires_pass_errors(self):
+        payload = TribunalSessionGenerationFailedPayload(
+            request="list files",
+            pass_errors=["model refused"],
         )
-        assert payload.pass_errors is None
+        assert payload.pass_errors == ["model refused"]
+
+    def test_model_not_configured_payload_requires_provider(self):
+        payload = TribunalSessionModelNotConfiguredPayload(
+            request="list files",
+            provider="ollama",
+            error="no model set",
+        )
+        assert payload.provider == "ollama"
+        assert payload.error == "no model set"
 
 
 class TestGenerateCommandOutcomes:
@@ -373,23 +394,20 @@ class TestGenerateCommandOutcomes:
         llm = LLMSettings(llm_command_gen_enabled=False)
         settings = G8eeUserSettings(llm=llm)
 
-        result = await generate_command(
-            original_command="ls",
-            intent="list files",
-            os_name="linux",
-            shell="bash",
-            working_directory="/tmp",
-            user_context="root (uid=0)",
-            g8ed_event_service=AsyncMock(),
-            web_session_id="ws-1",
-            user_id="user-1",
-            case_id="case-1",
-            investigation_id="inv-1",
-            settings=settings,
-        )
+        with pytest.raises(TribunalDisabledError) as exc_info:
+            await generate_command(
+                request="list files",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
+                g8ed_event_service=AsyncMock(),
+                web_session_id="ws-1",
+                user_id="user-1",
+                case_id="case-1",
+                investigation_id="inv-1",
+                settings=settings,
+            )
 
-        assert result.final_command == "ls"
-        assert result.outcome == CommandGenerationOutcome.DISABLED
+        assert exc_info.value.request == "list files"
 
 
 class TestGenerateCommandSystemError:
@@ -407,19 +425,19 @@ class TestGenerateCommandSystemError:
             generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
         )
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalSystemError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
-                    g8ed_event_service=MagicMock(),
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -443,19 +461,19 @@ class TestGenerateCommandSystemError:
             generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
         )
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
-                    g8ed_event_service=MagicMock(),
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -463,7 +481,7 @@ class TestGenerateCommandSystemError:
                     settings=settings,
                 )
 
-            assert exc_info.value.original_command == "ls"
+            assert exc_info.value.request == "list files"
             assert len(exc_info.value.pass_errors) > 0
 
     @pytest.mark.asyncio
@@ -493,14 +511,13 @@ class TestGenerateCommandSystemError:
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ) as mock_factory:
+            mock_event_service = MagicMock()
+            mock_event_service.publish = AsyncMock()
             result = await generate_command(
-                original_command="ls",
-                intent="list files",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
-                g8ed_event_service=MagicMock(),
+                request="list files",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                g8ed_event_service=mock_event_service,
                 web_session_id="ws-1",
                 user_id="user-1",
                 case_id="case-1",
@@ -536,19 +553,19 @@ class TestMixedErrorFallback:
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=mixed_side_effect)
 
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
-                    g8ed_event_service=MagicMock(),
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
+                    g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
                     case_id="case-1",
@@ -556,24 +573,18 @@ class TestMixedErrorFallback:
                     settings=settings,
                 )
 
-            assert exc_info.value.original_command == "ls"
+            assert exc_info.value.request == "list files"
             assert len(exc_info.value.pass_errors) == 3
 
 
 class TestNewEnumValues:
     """New enum values exist and are distinct from existing ones."""
 
-    def test_command_generation_outcome_disabled(self):
-        assert CommandGenerationOutcome.DISABLED == "disabled"
-        assert CommandGenerationOutcome.DISABLED != CommandGenerationOutcome.FALLBACK
-
-    def test_command_generation_outcome_system_error(self):
-        assert CommandGenerationOutcome.SYSTEM_ERROR == "system_error"
-        assert CommandGenerationOutcome.SYSTEM_ERROR != CommandGenerationOutcome.FALLBACK
-
-    def test_tribunal_fallback_reason_system_error(self):
-        assert TribunalFallbackReason.SYSTEM_ERROR == "system_error"
-        assert TribunalFallbackReason.SYSTEM_ERROR != TribunalFallbackReason.ALL_PASSES_FAILED
+    def test_tribunal_terminal_events_are_distinct(self):
+        # Terminal states are distinguished by event type, not a reason enum.
+        assert EventType.TRIBUNAL_SESSION_SYSTEM_ERROR != EventType.TRIBUNAL_SESSION_GENERATION_FAILED
+        assert EventType.TRIBUNAL_SESSION_DISABLED != EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+        assert EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE != EventType.TRIBUNAL_SESSION_VERIFIER_FAILED
 
 
 class TestTribunalProviderUnavailableError:
@@ -597,12 +608,9 @@ class TestTribunalProviderUnavailableError:
         ):
             with pytest.raises(TribunalProviderUnavailableError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -612,7 +620,7 @@ class TestTribunalProviderUnavailableError:
                 )
 
             assert exc_info.value.provider == "ollama"
-            assert exc_info.value.original_command == "ls"
+            assert exc_info.value.request == "list files"
             assert "Unsupported LLM provider" in exc_info.value.error
 
 
@@ -635,12 +643,9 @@ class TestTribunalModelNotConfiguredError:
         ):
             with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="list files",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-1",
                     user_id="user-1",
@@ -650,14 +655,15 @@ class TestTribunalModelNotConfiguredError:
                 )
 
             assert exc_info.value.provider == "ollama"
-            assert exc_info.value.original_command == "ls"
+            assert exc_info.value.request == "list files"
             assert "model not configured" in str(exc_info.value).lower()
 
             mock_event_service.publish.assert_called()
             call_args = mock_event_service.publish.call_args
             event = call_args[0][0]
-            assert event.event_type == EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED
-            assert event.payload.reason == TribunalFallbackReason.NO_MODEL_CONFIGURED
+            assert event.event_type == EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+            assert event.payload.provider == "ollama"
+            assert isinstance(event.payload, TribunalSessionModelNotConfiguredPayload)
 
 
 class TestTribunalVerifierFailedError:
@@ -675,18 +681,19 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
-        assert exc_info.value.reason == "empty_response"
-        assert exc_info.value.original_command == "ls -la"
+        assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
+        assert exc_info.value.request == "list files"
 
     @pytest.mark.asyncio
     async def test_raises_on_no_valid_revision(self):
@@ -701,18 +708,19 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
-        assert exc_info.value.reason == "no_valid_revision"
-        assert exc_info.value.original_command == "ls -la"
+        assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
+        assert exc_info.value.request == "list files"
 
     @pytest.mark.asyncio
     async def test_raises_on_verifier_exception(self):
@@ -725,19 +733,20 @@ class TestTribunalVerifierFailedError:
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
-                provider=mock_provider,
-                model="test-model",
-                intent="list files",
-                candidate_command="ls -la",
-                os_name="linux",
-                user_context="user (uid=1000)",
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            
+        )
 
-        assert exc_info.value.reason == "exception"
+        assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
         assert "timeout" in exc_info.value.error
-        assert exc_info.value.original_command == "ls -la"
+        assert exc_info.value.request == "list files"
 
 
 class TestRunGenerationStage:
@@ -751,9 +760,9 @@ class TestRunGenerationStage:
         emitter = TribunalEmitter(None, None)
 
         candidates = await _run_generation_stage(
-            provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
+            provider=mock_provider, model="test-model", request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
             num_passes=3, emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -770,9 +779,9 @@ class TestRunGenerationStage:
 
         with pytest.raises(TribunalSystemError):
             await _run_generation_stage(
-                provider=mock_provider, model="test-model", intent="list files",
-                original_command="ls", os_name="linux", shell="bash",
-                working_directory="/home/user", user_context="user (uid=1000)",
+                provider=mock_provider, model="test-model", request="list files",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 num_passes=3, emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -786,9 +795,9 @@ class TestRunGenerationStage:
 
         with pytest.raises(TribunalGenerationFailedError):
             await _run_generation_stage(
-                provider=mock_provider, model="test-model", intent="list files",
-                original_command="ls", os_name="linux", shell="bash",
-                working_directory="/home/user", user_context="user (uid=1000)",
+                provider=mock_provider, model="test-model", request="list files",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 num_passes=2, emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -810,9 +819,9 @@ class TestRunGenerationStage:
         emitter = TribunalEmitter(None, None)
 
         candidates = await _run_generation_stage(
-            provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
+            provider=mock_provider, model="test-model", request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
             num_passes=3, emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -831,11 +840,13 @@ class TestRunVotingStage:
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
             CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
             CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score = await _run_voting_stage(
-            candidates=candidates, original_command="ls", emitter=emitter,
+            candidates=candidates, request="list files", emitter=emitter,
         )
 
         assert winner == "ls -la"
@@ -851,7 +862,7 @@ class TestRunVotingStage:
         emitter = TribunalEmitter(None, None)
 
         winner, score = await _run_voting_stage(
-            candidates=candidates, original_command="ls", emitter=emitter,
+            candidates=candidates, request="list files", emitter=emitter,
         )
 
         assert winner == "ls -la"
@@ -864,8 +875,8 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_verifier_disabled_returns_consensus(self):
         final_cmd, outcome, passed, revision = await _run_verification_stage(
-            provider=MagicMock(), model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            provider=MagicMock(), model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=False, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -882,8 +893,8 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
-            provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -900,8 +911,8 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
-            provider=mock_provider, model="test-model", intent="list files",
-            vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -919,8 +930,8 @@ class TestRunVerificationStage:
 
         with pytest.raises(TribunalVerifierFailedError):
             await _run_verification_stage(
-                provider=mock_provider, model="test-model", intent="list files",
-                vote_winner="ls -la", os_name="linux", user_context="user (uid=1000)",
+                provider=mock_provider, model="test-model", request="list files", guidelines="",
+                vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
                 verifier_enabled=True, emitter=TribunalEmitter(None, None),
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -939,13 +950,13 @@ class TestBuildAndEmitResult:
         emitter = TribunalEmitter(None, None)
 
         result = await _build_and_emit_result(
-            original_command="ls", final_command="ls -la",
+            request="list files", guidelines="", final_command="ls -la",
             outcome=CommandGenerationOutcome.VERIFIED, candidates=candidates,
             vote_winner="ls -la", vote_score=1.0, verifier_passed=True,
             verifier_revision=None, emitter=emitter,
         )
 
-        assert result.original_command == "ls"
+        assert result.request == "list files"
         assert result.final_command == "ls -la"
         assert result.outcome == CommandGenerationOutcome.VERIFIED
         assert result.vote_winner == "ls -la"
@@ -1013,12 +1024,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="ls",
-                intent="list files with details",
-                os_name="linux",
-                shell="bash",
-                working_directory="/tmp",
-                user_context="root (uid=0)",
+                request="list files with details",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/tmp", username="root", uid=0),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-1",
                 user_id="user-happy-1",
@@ -1029,7 +1037,7 @@ class TestGenerateCommandHappyPath:
 
         assert result.outcome == CommandGenerationOutcome.CONSENSUS
         assert result.final_command == "ls -la"
-        assert result.original_command == "ls"
+        assert result.request == "list files with details"
         assert len(result.candidates) == 3
         assert result.vote_winner == "ls -la"
         assert result.vote_score == 1.0
@@ -1061,12 +1069,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="find logs",
-                intent="find all log files under /var/log",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="find all log files under /var/log",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-2",
                 user_id="user-happy-2",
@@ -1108,12 +1113,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="grep TODO",
-                intent="find all TODO comments recursively with line numbers",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user/project",
-                user_context="user (uid=1000)",
+                request="find all TODO comments recursively with line numbers",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user/project", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-3",
                 user_id="user-happy-3",
@@ -1164,12 +1166,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="df",
-                intent="show disk usage in human-readable format",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="show disk usage in human-readable format",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-4",
                 user_id="user-happy-4",
@@ -1198,12 +1197,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="who",
-                intent="show current user name",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="show current user name",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-5",
                 user_id="user-happy-5",
@@ -1232,12 +1228,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             await generate_command(
-                original_command="up",
-                intent="show system uptime",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="show system uptime",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-6",
                 user_id="user-happy-6",
@@ -1279,12 +1272,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="ls /tmp",
-                intent="list files in /tmp with details",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="list files in /tmp with details",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-7",
                 user_id="user-happy-7",
@@ -1293,7 +1283,7 @@ class TestGenerateCommandHappyPath:
                 settings=settings,
             )
 
-        assert result.original_command == "ls /tmp"
+        assert result.request == "list files in /tmp with details"
         assert result.final_command == "ls -la /tmp"
         assert result.outcome == CommandGenerationOutcome.VERIFIED
         assert len(result.candidates) == 3
@@ -1309,7 +1299,7 @@ class TestGenerateCommandHappyPath:
 
     @pytest.mark.asyncio
     async def test_refined_command_differs_from_original(self):
-        """When the pipeline refines a command, final_command differs from original_command."""
+        """When the pipeline refines a command, final_command differs from request and payload reflects the refinement."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
@@ -1321,12 +1311,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="hostname",
-                intent="show the system hostname from /etc/hostname",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="show the system hostname from /etc/hostname",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-8",
                 user_id="user-happy-8",
@@ -1335,7 +1322,7 @@ class TestGenerateCommandHappyPath:
                 settings=settings,
             )
 
-        assert result.final_command != result.original_command
+        assert result.final_command != result.request
         assert result.final_command == "cat /etc/hostname"
 
         from app.constants import EventType
@@ -1345,11 +1332,12 @@ class TestGenerateCommandHappyPath:
         ]
         assert len(completed_calls) == 1
         payload = completed_calls[0].args[0].payload
-        assert payload.refined is True
+        assert payload.request == "show the system hostname from /etc/hostname"
+        assert payload.final_command == "cat /etc/hostname"
 
     @pytest.mark.asyncio
     async def test_unchanged_command_marks_refined_false(self):
-        """When final_command equals original_command, the completed event has refined=False."""
+        """When final_command equals request, the completed event payload reflects the unchanged command."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
@@ -1361,12 +1349,9 @@ class TestGenerateCommandHappyPath:
             return_value=mock_provider,
         ):
             result = await generate_command(
-                original_command="ls",
-                intent="list files",
-                os_name="linux",
-                shell="bash",
-                working_directory="/home/user",
-                user_context="user (uid=1000)",
+                request="ls",
+                guidelines="",
+                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                 g8ed_event_service=mock_event_service,
                 web_session_id="ws-happy-9",
                 user_id="user-happy-9",
@@ -1375,7 +1360,7 @@ class TestGenerateCommandHappyPath:
                 settings=settings,
             )
 
-        assert result.final_command == result.original_command
+        assert result.final_command == result.request
 
         from app.constants import EventType
         completed_calls = [
@@ -1384,7 +1369,8 @@ class TestGenerateCommandHappyPath:
         ]
         assert len(completed_calls) == 1
         payload = completed_calls[0].args[0].payload
-        assert payload.refined is False
+        assert payload.request == "ls"
+        assert payload.final_command == "ls"
 
 
 class TestGenerateCommandVerifierFailure:
@@ -1458,12 +1444,9 @@ class TestGenerateCommandVerifierFailure:
         ):
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="list files with details",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-1",
                     user_id="user-vf-1",
@@ -1472,8 +1455,8 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == "empty_response"
-            assert exc_info.value.original_command == "ls -la"
+            assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
+            assert exc_info.value.request == "list files with details"
             assert "Verifier returned empty response" in exc_info.value.error
 
         from app.constants import EventType
@@ -1485,13 +1468,9 @@ class TestGenerateCommandVerifierFailure:
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
-
-        started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
-        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_STARTED)
-        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED)
-        assert started_idx < review_started_idx < review_completed_idx
 
     @pytest.mark.asyncio
     async def test_no_valid_revision_raises_through_generate_command(self):
@@ -1513,12 +1492,9 @@ class TestGenerateCommandVerifierFailure:
         ):
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="list files with details",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-2",
                     user_id="user-vf-2",
@@ -1527,8 +1503,8 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == "no_valid_revision"
-            assert exc_info.value.original_command == "ls -la"
+            assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
+            assert exc_info.value.request == "list files with details"
             assert "non-ok answer without valid revision" in exc_info.value.error
 
         from app.constants import EventType
@@ -1539,7 +1515,8 @@ class TestGenerateCommandVerifierFailure:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
@@ -1559,12 +1536,9 @@ class TestGenerateCommandVerifierFailure:
         ):
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await generate_command(
-                    original_command="ls",
-                    intent="list files with details",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="list files with details",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-3",
                     user_id="user-vf-3",
@@ -1573,9 +1547,9 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == "exception"
+            assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
             assert "timeout" in exc_info.value.error.lower()
-            assert exc_info.value.original_command == "ls -la"
+            assert exc_info.value.request == "list files with details"
 
         from app.constants import EventType
         emitted_types = [
@@ -1585,12 +1559,13 @@ class TestGenerateCommandVerifierFailure:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
-    async def test_verifier_failure_preserves_original_command_from_vote_winner(self):
-        """TribunalVerifierFailedError.original_command is the vote winner, not the caller's original command."""
+    async def test_verifier_failure_preserves_request_from_vote_winner(self):
+        """TribunalVerifierFailedError.request is the vote winner, not the caller's request."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
@@ -1608,12 +1583,9 @@ class TestGenerateCommandVerifierFailure:
         ):
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await generate_command(
-                    original_command="hostname",
-                    intent="show system hostname",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="show system hostname",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-4",
                     user_id="user-vf-4",
@@ -1622,8 +1594,8 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.original_command == "cat /etc/hostname"
-            assert exc_info.value.reason == "empty_response"
+            assert exc_info.value.request == "show system hostname"
+            assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
 
     @pytest.mark.asyncio
     async def test_single_pass_verifier_failure_raises(self):
@@ -1644,12 +1616,9 @@ class TestGenerateCommandVerifierFailure:
         ):
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await generate_command(
-                    original_command="who",
-                    intent="show current user",
-                    os_name="linux",
-                    shell="bash",
-                    working_directory="/home/user",
-                    user_context="user (uid=1000)",
+                    request="show current user",
+                    guidelines="",
+                    operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
                     g8ed_event_service=mock_event_service,
                     web_session_id="ws-vf-5",
                     user_id="user-vf-5",
@@ -1658,8 +1627,8 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == "exception"
-            assert exc_info.value.original_command == "whoami"
+            assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
+            assert exc_info.value.request == "show current user"
 
         from app.constants import EventType
         emitted_types = [
@@ -1681,11 +1650,16 @@ class TestMaxTokensConstants:
         emitter = TribunalEmitter(None, None)
 
         await _run_generation_pass(
-            provider=mock_provider, model="test-model", intent="list files",
-            original_command="ls", os_name="linux", shell="bash",
-            working_directory="/home/user", user_context="user (uid=1000)",
-            pass_index=0, emitter=emitter, pass_errors=[],
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
+            pass_index=0,
+            emitter=emitter,
+            pass_errors=[],
             command_constraints_message="No whitelist or blacklist constraints are active.",
+
         )
 
         call_kwargs = mock_provider.generate_content_lite.call_args
@@ -1693,7 +1667,7 @@ class TestMaxTokensConstants:
         assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
 
     @pytest.mark.asyncio
-    async def test_verifier_uses_max_tokens_and_zero_temperature(self):
+    async def test_verifier_uses_max_tokens(self):
         from unittest.mock import patch
         mock_response = MagicMock()
         mock_response.text = "ok"
@@ -1701,11 +1675,10 @@ class TestMaxTokensConstants:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
-        # Mock get_model_config to return a config with default_temperature=0.0 for verifier
+        # Mock get_model_config to return a config for verifier
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
             mock_config = LLMModelConfig(
                 name="test-model",
-                default_temperature=0.0,
                 max_output_tokens=_MAX_TOKENS_VERIFIER,
                 top_p=1.0,
                 top_k=None,
@@ -1714,80 +1687,302 @@ class TestMaxTokensConstants:
             mock_get_config.return_value = mock_config
 
             await _run_verifier(
-                provider=mock_provider, model="test-model", intent="list files",
-                candidate_command="ls -la", os_name="linux", user_context="user (uid=1000)",
-                emitter=emitter, command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
+            provider=mock_provider,
+            model="test-model",
+            request="list files",
+            guidelines="",
+            candidate_command="ls -la",
+            operator_context=_make_mock_operator_context(os="linux"),
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+
+        )
 
             call_kwargs = mock_provider.generate_content_lite.call_args
             settings = call_kwargs.kwargs.get("lite_llm_settings")
             assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
-            assert settings.temperature == 0.0
+
+
+class TestForbiddenPatternsMessage:
+    """The forbidden-patterns message must unconditionally ban sudo regardless of uid.
+
+    Regression: a prior refactor introduced a uid-conditional variant that told the
+    Tribunal sudo was acceptable for non-root users. That contradicts
+    tool_service.execute_tool_call which rejects any command containing
+    FORBIDDEN_COMMAND_PATTERNS, so any sudo-bearing Tribunal output was guaranteed
+    to be blocked downstream with SECURITY_VIOLATION.
+    """
+
+    def test_message_always_critical_and_never(self):
+        message = _format_forbidden_patterns_message()
+        assert "CRITICAL" in message
+        assert "NEVER" in message
+        assert "privilege escalation" in message
+
+    def test_message_lists_all_forbidden_base_patterns(self):
+        from app.constants import FORBIDDEN_COMMAND_PATTERNS
+
+        message = _format_forbidden_patterns_message()
+        for pattern in FORBIDDEN_COMMAND_PATTERNS:
+            base = pattern.strip()
+            if base:
+                assert base in message, f"{base!r} missing from forbidden-patterns message"
+
+    def test_message_does_not_expose_uid_conditional_wording(self):
+        """The message must not suggest sudo is sometimes acceptable."""
+        message = _format_forbidden_patterns_message()
+        assert "should only be added" not in message
+        assert "include sudo explicitly" not in message
+
+
+class TestBuildOperatorContextString:
+    """_build_operator_context_string displays uid=0 correctly (regression)."""
+
+    def test_uid_zero_is_displayed(self):
+        ctx = OperatorContext(
+            operator_id="op",
+            username="root",
+            uid=0,
+        )
+        rendered = _build_operator_context_string(ctx)
+        assert "root" in rendered
+        assert "uid=0" in rendered
+
+    def test_none_uid_is_not_rendered(self):
+        ctx = OperatorContext(
+            operator_id="op",
+            username="alice",
+            uid=None,
+        )
+        rendered = _build_operator_context_string(ctx)
+        assert "alice" in rendered
+        assert "uid=" not in rendered
+
+    def test_none_context_returns_placeholder(self):
+        assert _build_operator_context_string(None) == "No operator context available"
+
+
+class TestPromptFields:
+    """_prompt_fields returns all keys required by every Tribunal persona template."""
+
+    def test_returns_all_required_keys(self):
+        fields = _prompt_fields(
+            OperatorContext(
+                operator_id="op",
+                os="linux",
+                shell="bash",
+                working_directory="/home/alice",
+                username="alice",
+                uid=1000,
+            ),
+            request="test request",
+            guidelines="test guidelines",
+        )
+        assert fields["os"] == "linux"
+        assert fields["shell"] == "bash"
+        assert fields["working_directory"] == "/home/alice"
+        assert fields["user_context"] == "alice (uid=1000)"
+        assert "alice" in fields["operator_context"]
+        assert "CRITICAL" in fields["forbidden_patterns_message"]
+
+    def test_defaults_applied_when_context_none(self):
+        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
+
+        fields = _prompt_fields(None, request="", guidelines="")
+        assert fields["os"] == DEFAULT_OS_NAME
+        assert fields["shell"] == DEFAULT_SHELL
+        assert fields["working_directory"] == DEFAULT_WORKING_DIRECTORY
+        assert fields["user_context"] == "unknown"
+
+    def test_root_uid_is_preserved_in_user_context(self):
+        fields = _prompt_fields(
+            OperatorContext(operator_id="op", username="root", uid=0),
+            request="",
+            guidelines="",
+        )
+        assert fields["user_context"] == "root (uid=0)"
+
+    def test_all_tribunal_personas_accept_prompt_fields(self):
+        """Every Tribunal persona template (+ auditor) must render with _prompt_fields.
+
+        Regression: previously 4 of 6 personas lacked the {operator_context} placeholder
+        and/or the _prompt_fields keys. str.format silently ignores unused kwargs but
+        raises KeyError on missing placeholders — this test catches the latter and
+        also verifies all six personas now receive {operator_context}.
+        """
+        from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+
+        fields = _prompt_fields(
+            OperatorContext(
+                operator_id="op",
+                os="linux",
+                shell="bash",
+                working_directory="/home/alice",
+                username="alice",
+                uid=1000,
+                hostname="host1",
+                architecture="x86_64",
+            ),
+            request="test request",
+            guidelines="test guidelines",
+        )
+        common = dict(
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            persona = get_tribunal_member(member_id)
+            rendered = persona.persona.format(
+                **common,
+                **fields,
+            )
+            assert "{operator_context}" in persona.persona, (
+                f"{member_id}: persona template is missing the {{operator_context}} placeholder"
+            )
+            assert "host1" in rendered, f"{member_id}: operator_context did not render"
+            assert "CRITICAL" in rendered, f"{member_id}: forbidden_patterns missing"
+
+        auditor = get_agent_persona("auditor")
+        rendered = auditor.get_system_prompt().format(
+            candidate_command="ls -la",
+            **common,
+            **fields,
+        )
+        assert "host1" in rendered
+        assert "CRITICAL" in rendered
 
 
 class TestTribunalMemberCycling:
-    """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE."""
+    """Tribunal member assignment cycles correctly through AXIOM, CONCORD, VARIANCE, PRAGMA, NEMESIS."""
 
     def test_member_for_pass_cycles_correctly(self):
-        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), then repeats."""
+        """_member_for_pass returns members in order: AXIOM (0), CONCORD (1), VARIANCE (2), PRAGMA (3), NEMESIS (4), then repeats."""
         assert _member_for_pass(0) == TribunalMember.AXIOM
         assert _member_for_pass(1) == TribunalMember.CONCORD
         assert _member_for_pass(2) == TribunalMember.VARIANCE
-        assert _member_for_pass(3) == TribunalMember.AXIOM
-        assert _member_for_pass(4) == TribunalMember.CONCORD
-        assert _member_for_pass(5) == TribunalMember.VARIANCE
+        assert _member_for_pass(3) == TribunalMember.PRAGMA
+        assert _member_for_pass(4) == TribunalMember.NEMESIS
+        assert _member_for_pass(5) == TribunalMember.AXIOM
+        assert _member_for_pass(6) == TribunalMember.CONCORD
+        assert _member_for_pass(7) == TribunalMember.VARIANCE
+        assert _member_for_pass(8) == TribunalMember.PRAGMA
+        assert _member_for_pass(9) == TribunalMember.NEMESIS
 
 
-class TestResolveTemperature:
-    """_resolve_temperature honours persona > model default > global default.
+class TestTribunalEmitter:
+    """TribunalEmitter distinguishes terminal from progress events and handles publish failures appropriately."""
 
-    Per-pass temperature variation was intentionally removed; Tribunal voice
-    comes from the persona prompt, not numeric skew. This test pins the
-    precedence contract.
-    """
+    @pytest.mark.asyncio
+    async def test_terminal_event_publish_failure_raises(self):
+        """Terminal event publish failures are re-raised to ensure caller is aware of the failure."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
 
-    def test_persona_temperature_wins_over_model_default(self):
-        from unittest.mock import patch
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
 
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=1.0,
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
+        )
+
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
+
+        with pytest.raises(RuntimeError, match="broker down"):
+            await emitter.emit(
+                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+                TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             )
-            assert _resolve_temperature(persona_temperature=0.3, model="test-model") == 0.3
 
-    def test_falls_back_to_model_default_when_persona_is_none(self):
-        from unittest.mock import patch
+    @pytest.mark.asyncio
+    async def test_progress_event_publish_failure_swallowed(self):
+        """Progress event publish failures are logged but not re-raised."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
+        from app.models.agents.tribunal import TribunalPassCompletedPayload
 
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=0.7,
-            )
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == 0.7
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
 
-    def test_falls_back_to_global_default_when_model_config_missing(self):
-        from unittest.mock import patch
-        from app.constants import LLM_DEFAULT_TEMPERATURE
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
+        )
 
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = None
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
 
-    def test_falls_back_to_global_default_when_model_default_is_none(self):
-        from unittest.mock import patch
-        from app.constants import LLM_DEFAULT_TEMPERATURE
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            TribunalPassCompletedPayload(
+                pass_index=0, member=TribunalMember.AXIOM, candidate="ls", success=True
+            ),
+        )
 
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=None,
-            )
-            assert _resolve_temperature(persona_temperature=None, model="test-model") == LLM_DEFAULT_TEMPERATURE
+        mock_event_service.publish.assert_called_once()
 
-    def test_persona_zero_is_respected_over_model_default(self):
-        """Regression: a persona-set temperature of 0.0 must not be treated as falsy."""
-        from unittest.mock import patch
+    @pytest.mark.asyncio
+    async def test_all_terminal_events_raise_on_publish_failure(self):
+        """All TRIBUNAL_SESSION_* events are terminal and should re-raise on publish failure."""
+        from app.models.http_context import G8eHttpContext
+        from app.services.infra.g8ed_event_service import EventService
+        from app.models.agents.tribunal import (
+            TribunalSessionStartedPayload,
+            TribunalSessionDisabledPayload,
+            TribunalSessionModelNotConfiguredPayload,
+            TribunalSessionProviderUnavailablePayload,
+            TribunalSessionSystemErrorPayload,
+            TribunalSessionVerifierFailedPayload,
+        )
 
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
-            mock_get_config.return_value = LLMModelConfig(
-                name="test-model", default_temperature=1.0,
-            )
-            assert _resolve_temperature(persona_temperature=0.0, model="test-model") == 0.0
+        mock_event_service = MagicMock(spec=EventService)
+        mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
+
+        ctx = G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-investigation",
+            source_component=ComponentName.G8EE,
+        )
+
+        emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
+
+        terminal_events = [
+            (EventType.TRIBUNAL_SESSION_STARTED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
+            (EventType.TRIBUNAL_SESSION_COMPLETED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
+            (EventType.TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
+            (
+                EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+                TribunalSessionModelNotConfiguredPayload(request="test", provider="ollama", error="model not configured"),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+                TribunalSessionProviderUnavailablePayload(request="test", provider="ollama", error="provider unavailable"),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                TribunalSessionSystemErrorPayload(request="test", pass_errors=["error"]),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+                TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+                TribunalSessionVerifierFailedPayload(
+                    request="test", reason=VerifierReason.VERIFIER_ERROR, error="error", candidate_command="ls"
+                ),
+            ),
+        ]
+
+        for event_type, payload in terminal_events:
+            with pytest.raises(RuntimeError, match="broker down"):
+                await emitter.emit(event_type, payload)
+
+

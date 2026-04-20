@@ -70,9 +70,9 @@ class LFAAManager:
         self._db_path = db_path
         self._container = container
         self._volume = volume
-        self._conn: Optional[sqlite3.Connection]
-        self._temp_dir: Optional[str]
-        self._local_db_path: Optional[str]
+        self._conn: Optional[sqlite3.Connection] = None
+        self._temp_dir: Optional[str] = None
+        self._local_db_path: Optional[str] = None
 
     @property
     def conn(self) -> sqlite3.Connection:

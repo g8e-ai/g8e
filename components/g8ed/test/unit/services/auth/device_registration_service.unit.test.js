@@ -153,7 +153,7 @@ describe('DeviceRegistrationService', () => {
             
             expect(operatorService.claimOperatorSlot).toHaveBeenCalledWith(operatorId, expect.objectContaining({
                 operator_session_id: operatorSessionId,
-                web_session_id: mockG8eContext.web_session_id
+                bound_web_session_id: mockG8eContext.web_session_id
             }));
             
             const claimCall = operatorService.claimOperatorSlot.mock.calls[0][1];

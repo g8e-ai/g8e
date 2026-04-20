@@ -37,7 +37,8 @@ from app.models.investigations import (
     ConversationHistoryMessage,
     InvestigationCreateRequest,
 )
-from app.models.operators import CommandInternalResult, FileEditResult, OperatorDocument
+from app.models.operators import CommandInternalResult, OperatorDocument
+from app.models.tool_results import FileEditResult
 from app.services.protocols import InvestigationDataServiceProtocol, OperatorDataServiceProtocol, MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -369,7 +370,7 @@ class InvestigationService:
             patch["technical_context"] = investigation.technical_context
         if "sentinel_mode" in changes:
             patch["sentinel_mode"] = investigation.sentinel_mode
-        patch["history_trail"] = [e.flatten_for_db() for e in investigation.history_trail]
+        patch["history_trail"] = [e.model_dump(mode="json") for e in investigation.history_trail]
 
         await self.investigation_data_service.update_investigation_raw(investigation_id, patch)
         logger.info(f"Updated investigation {investigation_id}")
@@ -544,11 +545,12 @@ def extract_system_context(
     logger.info(
         "[CONTEXT] Primary operator context: operator_id=%s hostname=%s os=%s "
         "arch=%s memory_mb=%s cpu_count=%s public_ip=%s operator_type=%s "
-        "is_cloud=%s granted_intents=%s",
+        "is_cloud=%s granted_intents=%s username=%s uid=%s shell=%s working_dir=%s",
         context.operator_id, context.hostname, context.os,
         context.architecture, context.memory_mb, context.cpu_count,
         context.public_ip, context.operator_type,
         context.is_cloud_operator, context.granted_intents or [],
+        context.username, context.uid, context.shell, context.working_directory,
     )
     return context
 

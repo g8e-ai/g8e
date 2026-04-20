@@ -12,12 +12,10 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.constants import (
     TriageComplexityClassification,
-    TriageConfidence,
-    TriageIntentClassification,
     AgentMode,
 )
 from app.services.ai.triage import TriageAgent

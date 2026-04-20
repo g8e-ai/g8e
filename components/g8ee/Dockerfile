@@ -1,7 +1,7 @@
 # g8ee (g8ee) - AI backend
 
 # -- Builder stage: install Python dependencies --
-FROM python:3.13-slim AS g8ee-builder
+FROM python:3.12-slim AS g8ee-builder
 
 ENV PYTHONDONTWRITEBYTECODE=1
 
@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # -- Final stage: minimal runtime image --
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

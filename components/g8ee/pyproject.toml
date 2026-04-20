@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g8ee"
-version = "4.3.0"
+version = "0.1.1"
 description = "g8e Engine - AI engine for g8e infrastructure operations"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 
 # ============================================================================
 # Pytest Configuration
@@ -183,7 +183,7 @@ line-ending = "auto"
 # MyPy Configuration (Type Checking)
 # ============================================================================
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

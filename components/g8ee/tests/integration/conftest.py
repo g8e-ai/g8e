@@ -29,7 +29,6 @@ All integration tests should use these fixtures to ensure consistency
 and avoid code duplication.
 """
 
-import asyncio
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field

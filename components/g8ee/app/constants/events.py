@@ -263,10 +263,17 @@ class EventType(str, Enum):
     AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
     # ai.tribunal
-    TRIBUNAL_SESSION_STARTED = "g8e.v1.ai.tribunal.session.started"
-    TRIBUNAL_SESSION_COMPLETED = "g8e.v1.ai.tribunal.session.completed"
-    TRIBUNAL_SESSION_FAILED = "g8e.v1.ai.tribunal.session.failed"
-    TRIBUNAL_SESSION_FALLBACK_TRIGGERED = "g8e.v1.ai.tribunal.session.fallback.triggered"
+    # Terminal states are expressed as distinct event types, one per scenario.
+    # The event type itself is the discriminator; there is no shared "failure"
+    # payload with a reason enum.
+    TRIBUNAL_SESSION_STARTED              = "g8e.v1.ai.tribunal.session.started"
+    TRIBUNAL_SESSION_COMPLETED            = "g8e.v1.ai.tribunal.session.completed"
+    TRIBUNAL_SESSION_DISABLED             = "g8e.v1.ai.tribunal.session.disabled"
+    TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED = "g8e.v1.ai.tribunal.session.model.not_configured"
+    TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE = "g8e.v1.ai.tribunal.session.provider.unavailable"
+    TRIBUNAL_SESSION_SYSTEM_ERROR         = "g8e.v1.ai.tribunal.session.system.error"
+    TRIBUNAL_SESSION_GENERATION_FAILED    = "g8e.v1.ai.tribunal.session.generation.failed"
+    TRIBUNAL_SESSION_VERIFIER_FAILED      = "g8e.v1.ai.tribunal.session.verifier.failed"
 
     TRIBUNAL_VOTING_STARTED = "g8e.v1.ai.tribunal.voting.started"
     TRIBUNAL_VOTING_FAILED = "g8e.v1.ai.tribunal.voting.failed"

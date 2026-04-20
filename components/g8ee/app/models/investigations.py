@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -31,7 +30,7 @@ from app.constants import (
 )
 from app.utils.timestamp import now
 
-from .base import G8eBaseModel, G8eIdentifiableModel
+from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 from .grounding import GroundingMetadata
 from .http_context import BoundOperator, G8eHttpContext
 from .memory import InvestigationMemory
@@ -76,9 +75,9 @@ class ConversationMessageMetadata(G8eBaseModel):
     operation: FileOperation | None = Field(default=None, description="File operation type")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
-    requested_at: datetime | None = Field(default=None, description="When the approval was requested")
-    responded_at: datetime | None = Field(default=None, description="When the approval response was received")
-    completed_at: datetime | None = Field(default=None, description="When the operation completed")
+    requested_at: UTCDatetime | None = Field(default=None, description="When the approval was requested")
+    responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
+    completed_at: UTCDatetime | None = Field(default=None, description="When the operation completed")
     backup_path: str | None = Field(default=None, description="Backup file path for file edit operations")
     error: str | None = Field(default=None, description="Error message if operation failed")
     error_type: str | None = Field(default=None, description="Structured error type classification")
@@ -139,8 +138,8 @@ class OperatorCommandMetadata(ConversationMessageMetadata):
     execution_time_seconds: float | None = Field(default=None, description="Command execution duration in seconds")
     error: str | None = Field(default=None, description="Error message if command failed")
     error_type: str | None = Field(default=None, description="Structured error type classification")
-    requested_at: datetime | None = Field(default=None, description="When the command was requested")
-    completed_at: datetime | None = Field(default=None, description="When the command completed")
+    requested_at: UTCDatetime | None = Field(default=None, description="When the command was requested")
+    completed_at: UTCDatetime | None = Field(default=None, description="When the command completed")
 
 
 class ApprovalMetadata(ConversationMessageMetadata):
@@ -154,8 +153,8 @@ class ApprovalMetadata(ConversationMessageMetadata):
     feedback_reason: str | None = Field(default=None, description="User feedback reason when bypassing approval")
     is_batch_execution: bool | None = Field(default=None, description="Whether this targets multiple operators")
     batch_id: str | None = Field(default=None, description="Batch correlation ID when the approval covers multiple operators")
-    requested_at: datetime | None = Field(default=None, description="When the approval was requested")
-    responded_at: datetime | None = Field(default=None, description="When the approval response was received")
+    requested_at: UTCDatetime | None = Field(default=None, description="When the approval was requested")
+    responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
 
@@ -169,8 +168,8 @@ class FileEditMetadata(ConversationMessageMetadata):
     backup_path: str | None = Field(default=None, description="Backup file path")
     error: str | None = Field(default=None, description="Error message if operation failed")
     error_type: str | None = Field(default=None, description="Structured error type classification")
-    requested_at: datetime | None = Field(default=None, description="When the file edit was requested")
-    completed_at: datetime | None = Field(default=None, description="When the file edit completed")
+    requested_at: UTCDatetime | None = Field(default=None, description="When the file edit was requested")
+    completed_at: UTCDatetime | None = Field(default=None, description="When the file edit completed")
     timeout_seconds: int | None = Field(default=None, description="Timeout value for the operation")
     approval_id: str | None = Field(default=None, description="Approval ID if approval was required")
 
@@ -179,14 +178,14 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     """Single message in investigation conversation history."""
     sender: str = Field(..., description="Message sender path, e.g. user.chat")
     content: str = Field(default="", description="Message content")
-    timestamp: datetime = Field(default_factory=now, description="When the message was sent")
+    timestamp: UTCDatetime = Field(default_factory=now, description="When the message was sent")
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
 
 
 class ThinkingMessage(G8eBaseModel):
     """A single AI thinking entry extracted from a conversation session."""
 
-    timestamp: datetime = Field(..., description="Timestamp of the source message")
+    timestamp: UTCDatetime = Field(..., description="Timestamp of the source message")
     sender: EventType = Field(..., description="Message sender")
     thinking_content: str = Field(..., description="Sanitized/scrubbed thinking text")
     final_response: str = Field(default="", description="Corresponding final response, if any")
@@ -231,7 +230,7 @@ class InvestigationCurrentState(G8eBaseModel):
     """Current state tracking for investigation."""
     active_attempt: int = Field(default=1, ge=1, description="Current attempt number")
     pending_actions: list[str] = Field(default_factory=list, description="Pending actions")
-    next_deadline: datetime | None = Field(default=None, description="Next deadline")
+    next_deadline: UTCDatetime | None = Field(default=None, description="Next deadline")
     escalation_risk: EscalationRisk = Field(default=EscalationRisk.LOW, description="Escalation risk level")
     collaboration_status: dict[ComponentName, ComponentStatus] = Field(default_factory=dict, description="Component collaboration status")
 
@@ -246,7 +245,7 @@ class ConversationUpdateOperation(G8eBaseModel):
 class InvestigationHistoryEntry(G8eBaseModel):
     """Single entry in investigation history trail."""
     attempt_number: int = Field(..., ge=1, description="Attempt number for this entry")
-    timestamp: datetime = Field(default_factory=now, description="When this event occurred")
+    timestamp: UTCDatetime = Field(default_factory=now, description="When this event occurred")
     event_type: EventType = Field(..., description="Type of event")
     actor: ComponentName = Field(..., description="Who performed this action")
     summary: str = Field(..., description="Brief summary of what happened")

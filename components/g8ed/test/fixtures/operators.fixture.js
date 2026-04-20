@@ -18,7 +18,7 @@
  */
 
 import { OperatorStatus } from '../../constants/operator.js';
-import { OperatorDocument, SystemInfo, HeartbeatSnapshot } from '../../models/operator_model.js';
+import { OperatorDocument, SystemInfo } from '../../models/operator_model.js';
 import { now, addSeconds } from '@test/fixtures/base.fixture.js';
 
 const PRIMARY_USER_ID = 'a1b2c3d4-e5f6-4789-a0b1-c2d3e4f56789';

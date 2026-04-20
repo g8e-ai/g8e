@@ -12,8 +12,7 @@
 # limitations under the License.
 
 from enum import Enum
-from app.constants.agents import TribunalMember
-from app.constants.shared import _AGENTS
+from app.constants.shared import _AGENTS, _STATUS
 
 
 class LLMProvider(str, Enum):
@@ -119,11 +118,15 @@ class AnthropicStopReason(str, Enum):
 
 
 class AttachmentType(str, Enum):
+    """Attachment types for user-uploaded files.
+
+    These values must match the shared constants in shared/constants/status.json.
+    """
     __str__ = lambda self: self.value
-    PDF   = "pdf"
-    IMAGE = "image"
-    TEXT  = "text"
-    OTHER = "other"
+    PDF   = _STATUS["attachment.type"]["pdf"]
+    IMAGE = _STATUS["attachment.type"]["image"]
+    TEXT  = _STATUS["attachment.type"]["text"]
+    OTHER = _STATUS["attachment.type"]["other"]
 
 
 class GroundingSource(str, Enum):
@@ -157,32 +160,21 @@ class ErrorAnalysisCategory(str, Enum):
 
 
 class CommandGenerationOutcome(str, Enum):
+    """Terminal outcomes the Tribunal pipeline can produce.
+
+    Only successful outcomes are enumerated. Sage never proposes a command,
+    so there is no `fallback` outcome — when the Tribunal cannot produce
+    a command it raises a typed TribunalError (disabled / provider_unavailable /
+    generation_failed / system_error / verifier_failed / model_not_configured)
+    and the tool call fails.
+
+    These values are emitted in Tribunal SSE payloads and must match
+    the shared constants in shared/constants/agents.json.
+    """
     __str__ = lambda self: self.value
-    CONSENSUS           = "consensus"
-    VERIFIED            = "verified"
-    VERIFICATION_FAILED = "verification_failed"
-    FALLBACK            = "fallback"
-    DISABLED            = "disabled"
-    SYSTEM_ERROR        = "system_error"
-
-
-class TribunalFallbackReason(str, Enum):
-    __str__ = lambda self: self.value
-    DISABLED              = "disabled"
-    PROVIDER_UNAVAILABLE  = "provider_unavailable"
-    ALL_PASSES_FAILED     = "all_passes_failed"
-    NO_VOTE_WINNER        = "no_vote_winner"
-    SYSTEM_ERROR          = "system_error"
-    NO_MODEL_CONFIGURED   = "no_model_configured"
-
-
-class VerifierReason(str, Enum):
-    __str__ = lambda self: self.value
-    OK                = "ok"
-    REVISED           = "revised"
-    EMPTY_RESPONSE    = "empty_response"
-    NO_VALID_REVISION = "no_valid_revision"
-    VERIFIER_ERROR    = "verifier_error"
+    CONSENSUS           = _AGENTS["tribunal.outcome"]["consensus"]
+    VERIFIED            = _AGENTS["tribunal.outcome"]["verified"]
+    VERIFICATION_FAILED = _AGENTS["tribunal.outcome"]["verification_failed"]
 
 
 class ToolDisplayCategory(str, Enum):
@@ -285,12 +277,16 @@ class ResponseType(str, Enum):
 
 
 class ApprovalErrorType(str, Enum):
+    """Approval error types emitted in SSE payloads.
+
+    These values must match the shared constants in shared/constants/status.json.
+    """
     __str__ = lambda self: self.value
-    APPROVAL_PUBLISH_FAILURE    = "approval.publish.failure"
-    APPROVAL_EXCEPTION          = "approval.exception"
-    APPROVAL_TIMEOUT            = "approval.timeout"
-    INVALID_INTENT              = "invalid.intent"
-    INTENT_APPROVAL_EXCEPTION   = "intent.approval.exception"
+    APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]
+    APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]
+    APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]
+    INVALID_INTENT              = _STATUS["approval.error.type"]["invalid.intent"]
+    INTENT_APPROVAL_EXCEPTION   = _STATUS["approval.error.type"]["intent.approval.exception"]
 
 
 # OpenAI models
@@ -395,7 +391,6 @@ FS_READ_MAX_SIZE_BYTES          = 102400
 
 # System-wide LLM generation defaults
 # These are used when user/platform settings do not specify values
-LLM_DEFAULT_TEMPERATURE          = 0.4
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
 # Ollama-only: default context window passed as options.num_ctx.
 # Ollama's server default is 4096, which silently truncates real-world prompts

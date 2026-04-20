@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorService } from '@g8ed/services/operator/operator_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
-import { OperatorDocument, OperatorWithSessionContext, OperatorSlot } from '@g8ed/models/operator_model.js';
+import { OperatorDocument, OperatorWithSessionContext, OperatorSlot, OperatorListUpdatedEvent } from '@g8ed/models/operator_model.js';
 import { EventType } from '@g8ed/constants/events.js';
 
 describe('OperatorService', () => {
@@ -98,7 +98,7 @@ describe('OperatorService', () => {
                 user_id: 'u-1',
                 status: OperatorStatus.ACTIVE,
                 operator_session_id: 'os-1', 
-                web_session_id: 'ws-1' 
+                bound_web_session_id: 'ws-1' 
             });
             mocks.operatorDataService.getOperator.mockResolvedValue(operator);
             
@@ -113,7 +113,7 @@ describe('OperatorService', () => {
             expect(result).toBeInstanceOf(OperatorWithSessionContext);
             expect(result.operator_id).toBe('op-1');
             expect(result.operator_session_id).toBe('os-1');
-            expect(result.web_session_id).toBe('ws-1');
+            expect(result.bound_web_session_id).toBe('ws-1');
         });
     });
 
@@ -134,13 +134,14 @@ describe('OperatorService', () => {
     describe('getUserOperators', () => {
         it('should return OperatorSlot projections for the panel list', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', web_session_id: 'ws-1' }),
+                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
                 new OperatorDocument({ operator_id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 
             const result = await service.getUserOperators('u-1');
 
+            expect(result).toBeInstanceOf(OperatorListUpdatedEvent);
             expect(result.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
             expect(result.operators).toHaveLength(2);
             expect(result.active_count).toBe(1);
@@ -153,7 +154,7 @@ describe('OperatorService', () => {
             expect(slot.status).toBe(OperatorStatus.ACTIVE);
             expect(slot.status_display).toBe('ACTIVE');
             expect(slot.status_class).toBe('active');
-            expect(slot.web_session_id).toBe('ws-1');
+            expect(slot.bound_web_session_id).toBe('ws-1');
 
             expect(slot).not.toHaveProperty('api_key');
             expect(slot).not.toHaveProperty('history_trail');
@@ -167,25 +168,23 @@ describe('OperatorService', () => {
             const userId = 'u-1';
             const webSessionId = 'ws-new';
             const operators = [
-                { operator_id: 'op-1', status: OperatorStatus.BOUND, web_session_id: 'ws-old' },
+                { operator_id: 'op-1', status: OperatorStatus.BOUND, bound_web_session_id: 'ws-old' },
                 { operator_id: 'op-2', status: OperatorStatus.ACTIVE }
             ];
             
             vi.spyOn(service, 'getUserVisibleOperatorStats').mockResolvedValue({ operators });
             vi.spyOn(service, 'updateWebSessionLink').mockResolvedValue(true);
-            vi.spyOn(service, 'broadcastOperatorListToSession').mockResolvedValue(true);
 
             await service.syncSessionOnConnect(userId, webSessionId);
 
-            expect(service.updateWebSessionLink).toHaveBeenCalledWith('op-1', webSessionId, { skipBroadcast: true });
-            expect(service.broadcastOperatorListToSession).toHaveBeenCalledWith(userId, webSessionId);
+            expect(service.updateWebSessionLink).toHaveBeenCalledWith('op-1', webSessionId);
         });
     });
 
     describe('updateWebSessionLink', () => {
         it('should update operator document via data service', async () => {
             await service.updateWebSessionLink('op-1', 'ws-1');
-            expect(mocks.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', { web_session_id: 'ws-1' });
+            expect(mocks.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', { bound_web_session_id: 'ws-1' });
         });
     });
 
@@ -201,14 +200,12 @@ describe('OperatorService', () => {
             };
             mocks.operatorDataService.getOperator.mockResolvedValue(existing);
             vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.resetOperator('op-1');
 
             expect(result.success).toBe(true);
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
             expect(mocks.operatorDataService.createOperator).toHaveBeenCalled();
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
     });
 
@@ -224,7 +221,6 @@ describe('OperatorService', () => {
             };
             mocks.operatorDataService.getOperator.mockResolvedValue(existing);
             vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.terminateOperator('op-1');
 
@@ -232,7 +228,6 @@ describe('OperatorService', () => {
             expect(result.operator_id).toBe('op-1');
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
 
         it('should return error if operator not found', async () => {
@@ -344,20 +339,6 @@ describe('OperatorService', () => {
         });
     });
 
-    describe('Notifications', () => {
-        it('should delegate broadcastOperatorListToSession to notifications subservice', async () => {
-            vi.spyOn(service.notifications, 'broadcastOperatorListToSession').mockResolvedValue(true);
-            await service.broadcastOperatorListToSession('u-1', 'ws-1');
-            expect(service.notifications.broadcastOperatorListToSession).toHaveBeenCalledWith('u-1', 'ws-1', expect.any(Function));
-        });
-
-        it('should delegate _broadcastOperatorListToUser to notifications subservice', async () => {
-            vi.spyOn(service.notifications, 'broadcastOperatorListToUser').mockResolvedValue(true);
-            await service._broadcastOperatorListToUser('u-1');
-            expect(service.notifications.broadcastOperatorListToUser).toHaveBeenCalledWith('u-1', expect.any(Function));
-        });
-    });
-
     describe('Slots & Key Management', () => {
         it('should delegate initializeOperatorSlots to slots subservice', async () => {
             vi.spyOn(service.slots, 'initializeOperatorSlots').mockResolvedValue(true);
@@ -368,7 +349,7 @@ describe('OperatorService', () => {
         it('should delegate refreshOperatorApiKey to slots subservice', async () => {
             vi.spyOn(service.slots, 'refreshOperatorApiKey').mockResolvedValue(true);
             await service.refreshOperatorApiKey('op-1', 'u-1');
-            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1', expect.any(Function));
+            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1');
         });
 
         it('should delegate createOperatorSlot to slots subservice', async () => {
@@ -378,23 +359,19 @@ describe('OperatorService', () => {
             expect(service.slots.createOperatorSlot).toHaveBeenCalledWith(params);
         });
 
-        it('should claim slot and broadcast update on success', async () => {
+        it('should claim slot and not broadcast since keepalive provides full list', async () => {
             vi.spyOn(service.slots, 'claimSlot').mockResolvedValue(true);
             vi.spyOn(service, 'getOperator').mockResolvedValue({ user_id: 'u-1' });
-            vi.spyOn(service, '_broadcastOperatorListToUser').mockResolvedValue(true);
 
             const result = await service.claimOperatorSlot('op-1', { fingerprint: 'fp' });
             expect(result).toBe(true);
-            expect(service._broadcastOperatorListToUser).toHaveBeenCalledWith('u-1');
         });
 
-        it('should not broadcast if claim fails', async () => {
+        it('should return false if claim fails', async () => {
             vi.spyOn(service.slots, 'claimSlot').mockResolvedValue(false);
-            vi.spyOn(service, '_broadcastOperatorListToUser');
 
             const result = await service.claimOperatorSlot('op-1', { fingerprint: 'fp' });
             expect(result).toBe(false);
-            expect(service._broadcastOperatorListToUser).not.toHaveBeenCalled();
         });
     });
 

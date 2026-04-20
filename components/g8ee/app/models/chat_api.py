@@ -11,19 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
 
 from pydantic import Field
 
 from app.constants import ChatSessionStatus, EntityType
-from app.models.base import G8eBaseModel
+from app.models.base import G8eBaseModel, UTCDatetime
 from app.models.investigations import ConversationHistoryMessage
 
 
 class ChatSessionResponse(G8eBaseModel):
     """Response model for GET /chat/sessions/{web_session_id}."""
     web_session_id: str = Field(..., description="Chat session identifier")
-    created_at: datetime = Field(..., description="Session creation timestamp")
+    created_at: UTCDatetime = Field(..., description="Session creation timestamp")
     status: ChatSessionStatus = Field(..., description="Session status")
     case_id: str | None = Field(default=None, description="Associated case ID")
     entity_type: EntityType = Field(default=EntityType.MESSAGE, description="Entity type")
@@ -35,8 +34,8 @@ class ChatSessionDetailsResponse(G8eBaseModel):
     case_id: str = Field(..., description="Associated case ID")
     investigation_id: str = Field(..., description="Associated investigation ID")
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list, description="Session conversation messages")
-    created_at: datetime | None = Field(default=None, description="Session creation timestamp")
-    updated_at: datetime | None = Field(default=None, description="Last update timestamp")
+    created_at: UTCDatetime | None = Field(default=None, description="Session creation timestamp")
+    updated_at: UTCDatetime | None = Field(default=None, description="Last update timestamp")
     is_active: bool = Field(..., description="Whether the session is active")
 
 

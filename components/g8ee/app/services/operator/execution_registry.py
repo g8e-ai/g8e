@@ -22,6 +22,7 @@ No persistent storage — fully stateless and event-driven.
 
 import asyncio
 import logging
+from app.models.pubsub_messages import G8eoResultEnvelope
 from app.services.protocols import ExecutionRegistryProtocol
 
 logger = logging.getLogger(__name__)
@@ -58,9 +59,14 @@ class ExecutionRegistryService(ExecutionRegistryProtocol):
         self._results[execution_id] = result
         self.signal(execution_id)
 
-    def get_result(self, execution_id: str) -> object | None:
+    def get_result(self, execution_id: str) -> G8eoResultEnvelope | None:
         """Retrieve a stashed result payload (does not remove it)."""
-        return self._results.get(execution_id)
+        result = self._results.get(execution_id)
+        if result is None:
+            return None
+        # Cast to satisfy type checker since we store as object for flexibility
+        from typing import cast
+        return cast(G8eoResultEnvelope, result)
 
     async def wait(self, execution_id: str, timeout: float) -> bool:
         """Wait for an execution to complete or time out."""

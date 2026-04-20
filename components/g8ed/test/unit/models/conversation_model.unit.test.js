@@ -98,8 +98,7 @@ describe('Conversation Model [UNIT]', () => {
             const session = { id: 'ws_123', user_id: 'u_123' };
             const chatRequest = { 
                 case_id: 'c_1', 
-                investigation_id: 'i_1',
-                sentinel_mode: false 
+                investigation_id: 'i_1'
             };
             
             const conv = Conversation.fromSessionAndRequest(session, chatRequest);
@@ -108,7 +107,7 @@ describe('Conversation Model [UNIT]', () => {
             expect(conv.user_id).toBe('u_123');
             expect(conv.case_id).toBe('c_1');
             expect(conv.investigation_id).toBe('i_1');
-            expect(conv.sentinel_mode).toBe(false);
+            expect(conv.sentinel_mode).toBe(true);
         });
 
         it('should use defaults in fromSessionAndRequest', () => {

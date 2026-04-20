@@ -10,12 +10,10 @@
     "G8E_LLM_OLLAMA_API_KEY": "llm.ollama_api_key",
     "G8E_LLM_GEMINI_API_KEY": "llm.gemini_api_key",
     "G8E_LLM_ANTHROPIC_API_KEY": "llm.anthropic_api_key",
-    "G8E_LLM_TEMPERATURE": "llm.temperature",
     "G8E_LLM_MAX_TOKENS": "llm.max_tokens",
     "G8E_LLM_COMMAND_GEN_ENABLED": "llm.command_gen_enabled",
     "G8E_LLM_COMMAND_GEN_VERIFIER": "llm.command_gen_verifier",
-    "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes",
-    "G8E_LLM_COMMAND_GEN_TEMP": "llm.command_gen_temp"
+    "G8E_LLM_COMMAND_GEN_PASSES": "llm.command_gen_passes"
   },
   "auth": {
     "G8E_INTERNAL_AUTH_TOKEN": "auth.internal_auth_token",

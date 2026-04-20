@@ -43,7 +43,7 @@ from typing import Optional, Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
-    g8es_BASE_URL,
+    G8ES_BASE_URL,
     get_document,
     print_banner,
     g8ed_request,
@@ -93,7 +93,6 @@ _KEY_ORDER = [
     'llm_endpoint',
     'llm_model',
     'llm_assistant_model',
-    'llm_temperature',
     'llm_max_tokens',
     'provider',
     'model',

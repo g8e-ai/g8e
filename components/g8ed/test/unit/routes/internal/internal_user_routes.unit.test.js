@@ -43,7 +43,8 @@ describe('Internal User Routes [UNIT]', () => {
             revokeAllCredentials: vi.fn()
         };
         mockAuthorizationMiddleware = {
-            requireInternalOrigin: vi.fn((req, res, next) => next())
+            requireInternalOrigin: vi.fn((req, res, next) => next()),
+            requireInternalOrUserAuth: vi.fn((req, res, next) => next())
         };
 
         router = createInternalUserRouter({

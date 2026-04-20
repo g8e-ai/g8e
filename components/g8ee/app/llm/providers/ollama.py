@@ -5,7 +5,6 @@ from collections.abc import AsyncGenerator
 from ollama import AsyncClient, Message as OllamaMessage
 
 from app.constants import (
-    LLM_DEFAULT_TEMPERATURE,
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     ThinkingLevel,
@@ -188,7 +187,6 @@ class OllamaProvider(LLMProvider):
         *,
         model: str,
         messages: list,
-        effective_temperature: float,
         effective_max_tokens: int,
         top_p: float | None,
         stop: list[str] | None,
@@ -207,7 +205,6 @@ class OllamaProvider(LLMProvider):
             "model": model,
             "messages": messages,
             "options": {
-                "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": top_p,
@@ -247,13 +244,11 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs = self._build_primary_chat_kwargs(
             model=model,
             messages=messages,
-            effective_temperature=effective_temperature,
             effective_max_tokens=effective_max_tokens,
             top_p=primary_llm_settings.top_p_nucleus_sampling,
             stop=primary_llm_settings.stop_sequences,
@@ -309,13 +304,11 @@ class OllamaProvider(LLMProvider):
         messages = _contents_to_messages(contents, primary_llm_settings.system_instructions)
         ollama_tools = _tools_to_ollama(primary_llm_settings.tools)
 
-        effective_temperature = primary_llm_settings.temperature if primary_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = primary_llm_settings.max_output_tokens if primary_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs = self._build_primary_chat_kwargs(
             model=model,
             messages=messages,
-            effective_temperature=effective_temperature,
             effective_max_tokens=effective_max_tokens,
             top_p=primary_llm_settings.top_p_nucleus_sampling,
             stop=primary_llm_settings.stop_sequences,
@@ -381,14 +374,12 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs: dict = {
             "model": model,
             "messages": messages,
             "options": {
-                "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
@@ -423,14 +414,12 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
-        effective_temperature = assistant_llm_settings.temperature if assistant_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs: dict = {
             "model": model,
             "messages": messages,
             "options": {
-                "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": assistant_llm_settings.top_p_nucleus_sampling,
@@ -478,14 +467,12 @@ class OllamaProvider(LLMProvider):
     ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs: dict = {
             "model": model,
             "messages": messages,
             "options": {
-                "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,
@@ -520,14 +507,12 @@ class OllamaProvider(LLMProvider):
     ) -> GenerateContentResponse:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
-        effective_temperature = lite_llm_settings.temperature if lite_llm_settings.temperature is not None else LLM_DEFAULT_TEMPERATURE
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
 
         chat_kwargs: dict = {
             "model": model,
             "messages": messages,
             "options": {
-                "temperature": effective_temperature,
                 "num_predict": effective_max_tokens,
                 "num_ctx": LLM_OLLAMA_DEFAULT_NUM_CTX,
                 "top_p": lite_llm_settings.top_p_nucleus_sampling,

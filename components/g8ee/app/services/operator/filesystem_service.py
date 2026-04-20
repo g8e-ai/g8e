@@ -125,9 +125,18 @@ class OperatorFilesystemService:
                 entries = envelope.payload.entries or []
 
             # Notify completion/failure
+            if internal_result is None:
+                status = ExecutionStatus.FAILED
+                output = None
+                error = "Execution returned no result"
+            else:
+                status = internal_result.status
+                output = internal_result.output
+                error = internal_result.error
+
             completion_event_type = (
-                EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED 
-                if internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED
+                if status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILESYSTEM_LIST_FAILED
             )
 
@@ -136,9 +145,9 @@ class OperatorFilesystemService:
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
                     command=f"ls {args.path}",
-                    status=internal_result.status,
-                    output=internal_result.output,
-                    error=internal_result.error,
+                    status=status if status is not None else ExecutionStatus.FAILED,
+                    output=output,
+                    error=error,
                     operator_id=resolved_operator.operator_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
@@ -147,10 +156,10 @@ class OperatorFilesystemService:
             )
 
             return FsListToolResult(
-                success=internal_result.status == ExecutionStatus.COMPLETED,
+                success=status == ExecutionStatus.COMPLETED,
                 path=args.path,
                 entries=entries,
-                error=internal_result.error,
+                error=error,
             )
         finally:
             self.execution_registry.release(execution_id)
@@ -220,9 +229,18 @@ class OperatorFilesystemService:
                 content = envelope.payload.content
 
             # Notify completion/failure
+            if internal_result is None:
+                status = ExecutionStatus.FAILED
+                output = None
+                error = "Execution returned no result"
+            else:
+                status = internal_result.status
+                output = internal_result.output
+                error = internal_result.error
+
             completion_event_type = (
-                EventType.OPERATOR_FILESYSTEM_READ_COMPLETED 
-                if internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILESYSTEM_READ_COMPLETED
+                if status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILESYSTEM_READ_FAILED
             )
 
@@ -231,9 +249,9 @@ class OperatorFilesystemService:
                 CommandResultBroadcastEvent(
                     execution_id=execution_id,
                     command=f"cat {args.path}",
-                    status=internal_result.status,
-                    output=internal_result.output,
-                    error=internal_result.error,
+                    status=status if status is not None else ExecutionStatus.FAILED,
+                    output=output,
+                    error=error,
                     operator_id=resolved_operator.operator_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
@@ -242,10 +260,10 @@ class OperatorFilesystemService:
             )
 
             return FsReadToolResult(
-                success=internal_result.status == ExecutionStatus.COMPLETED,
+                success=status == ExecutionStatus.COMPLETED,
                 path=args.path,
                 content=content,
-                error=internal_result.error,
+                error=error,
             )
         finally:
             self.execution_registry.release(execution_id)

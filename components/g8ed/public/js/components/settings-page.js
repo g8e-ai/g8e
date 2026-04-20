@@ -13,6 +13,66 @@
 
 import { ApiPaths } from '../constants/api-paths.js';
 
+/**
+ * LLM provider catalog is server-injected as a JSON script tag in settings.ejs
+ * (sourced from components/g8ed/constants/ai.js — the single source of truth).
+ * Reading it from the DOM avoids duplicating the catalog in a browser-side module.
+ */
+function _readCatalog() {
+    const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
+    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    try {
+        return JSON.parse(el.textContent);
+    } catch {
+        return { providers: {}, providerModels: {} };
+    }
+}
+
+const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+
+const PROVIDER_LABELS = {
+    gemini:    'Gemini',
+    anthropic: 'Anthropic',
+    openai:    'OpenAI',
+    ollama:    'Ollama',
+};
+
+const PROVIDER_DEFAULT_MODELS = {
+    gemini: {
+        primary: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Pro')?.id,
+        assistant: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3 Flash')?.id,
+        lite: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Flash Lite')?.id,
+    },
+    anthropic: {
+        primary: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Opus 4.6')?.id,
+        assistant: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Sonnet 4.6')?.id,
+        lite: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Haiku 4.5')?.id,
+    },
+    openai: {
+        primary: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Pro')?.id,
+        assistant: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4')?.id,
+        lite: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Mini')?.id,
+    },
+    ollama: {
+        primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
+        assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
+        lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
+    },
+};
+
+function _modelToProvider(modelValue) {
+    for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
+        const allModels = [...config.primary, ...config.assistant];
+        if (allModels.some(m => m.id === modelValue)) return provider;
+    }
+    return null;
+}
+
+function _getModelKey(role) {
+    const keyMap = { primary: 'llm_model', assistant: 'llm_assistant_model', lite: 'llm_lite_model' };
+    return keyMap[role];
+}
+
 function escHtml(str) {
     if (str == null) return '';
     if (typeof str !== 'string') str = String(str);
@@ -34,11 +94,237 @@ export class SettingsPage {
         this.sections = [];
         this.dirty = new Map();
         this.activeSection = null;
+        this.selectedModels = { primary: '', assistant: '', lite: '' };
+        this.lastProviderKeyChange = null;
     }
 
     init() {
         document.getElementById('save-btn').addEventListener('click', () => this._saveSettings());
         this._loadSettings();
+    }
+
+    _initModelDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (!dropdown) return;
+
+            dropdown.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._toggleDropdown(role);
+            });
+
+            dropdown.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    this._toggleDropdown(role);
+                } else if (e.key === 'Escape') {
+                    this._closeAllDropdowns();
+                }
+            });
+        });
+
+        document.addEventListener('click', () => {
+            this._closeAllDropdowns();
+        });
+    }
+
+    _toggleDropdown(role) {
+        const dropdown = document.getElementById(`${role}_model`);
+        if (!dropdown || dropdown.classList.contains('disabled')) return;
+
+        const isOpen = dropdown.classList.contains('open');
+        this._closeAllDropdowns();
+
+        if (!isOpen) {
+            dropdown.classList.add('open');
+            dropdown.setAttribute('aria-expanded', 'true');
+        }
+    }
+
+    _closeAllDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            if (dropdown) {
+                dropdown.classList.remove('open');
+                dropdown.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    _updateModelDropdowns() {
+        const roles = ['primary', 'assistant', 'lite'];
+
+        roles.forEach(role => {
+            const dropdown = document.getElementById(`${role}_model`);
+            const menu = document.getElementById(`${role}_model-menu`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+
+            if (!dropdown || !menu) return;
+
+            menu.innerHTML = '';
+
+            const prevValue = this.selectedModels[role] || '';
+            if (text && !prevValue) text.textContent = 'Select a Model';
+
+            // Show all providers regardless of API key configuration
+            const activeProviders = Object.keys(PROVIDER_MODELS);
+
+            dropdown.classList.remove('disabled');
+
+            // Auto-select sensible defaults if a provider key was just entered and no model is selected
+            if (!prevValue && this.lastProviderKeyChange && activeProviders.includes(this.lastProviderKeyChange)) {
+                const defaults = PROVIDER_DEFAULT_MODELS[this.lastProviderKeyChange];
+                if (defaults && defaults[role]) {
+                    const defaultModel = PROVIDER_MODELS[this.lastProviderKeyChange]?.all?.find(m => m.id === defaults[role]);
+                    if (defaultModel) {
+                        prevValue = defaultModel.id;
+                        this.selectedModels[role] = prevValue;
+                        if (text) text.textContent = defaultModel.label;
+                        this._markDirty(this._getModelKey(role), prevValue);
+                    }
+                }
+            }
+
+            // Try to find the selected model in ALL providers (not just active) to get its label
+            let foundLabel = null;
+            for (const provider of Object.keys(PROVIDER_MODELS)) {
+                const config = PROVIDER_MODELS[provider];
+                if (!config) continue;
+                const allModels = config.all || [];
+                const match = allModels.find(m => m.id === prevValue);
+                if (match) {
+                    foundLabel = match.label;
+                    break;
+                }
+            }
+
+            // If found in catalog but not in active providers, still set the text
+            if (foundLabel && !activeProviders.some(p => {
+                const config = PROVIDER_MODELS[p];
+                return config?.all?.some(m => m.id === prevValue);
+            })) {
+                if (text) text.textContent = foundLabel;
+            }
+
+            // Handle custom model label
+            if (!foundLabel && prevValue && this.selectedModels[`${role}CustomLabel`]) {
+                if (text) text.textContent = this.selectedModels[`${role}CustomLabel`];
+            }
+
+            for (const provider of activeProviders) {
+                const config = PROVIDER_MODELS[provider];
+                if (!config) continue;
+
+                const providerLabel = PROVIDER_LABELS[provider] || provider;
+                const models = config.all || [];
+
+                if (models.length === 0) continue;
+
+                const category = document.createElement('div');
+                category.className = 'llm-model-dropdown__category';
+                category.textContent = providerLabel;
+                menu.appendChild(category);
+
+                for (const model of models) {
+                    const option = document.createElement('div');
+                    option.className = 'llm-model-dropdown__option';
+                    option.textContent = model.label;
+                    option.dataset.value = model.id;
+                    option.dataset.provider = provider;
+
+                    if (model.id === prevValue) {
+                        option.classList.add('selected');
+                        if (text) text.textContent = model.label;
+                    }
+
+                    option.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this._selectModel(role, model.id, model.label);
+                    });
+
+                    menu.appendChild(option);
+                }
+            }
+
+            const customOption = document.createElement('div');
+            customOption.className = 'llm-model-dropdown__option';
+            customOption.textContent = 'Custom...';
+            customOption.dataset.value = 'custom';
+            customOption.dataset.custom = 'true';
+
+            if (prevValue === 'custom') {
+                customOption.classList.add('selected');
+                if (text) text.textContent = this.selectedModels[`${role}CustomLabel`] || 'Custom';
+            }
+
+            customOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._showCustomModelInput(role);
+            });
+
+            menu.appendChild(customOption);
+        });
+    }
+
+    _selectModel(role, modelId, label) {
+        this.selectedModels[role] = modelId;
+
+        const dropdown = document.getElementById(`${role}_model`);
+        const menu = document.getElementById(`${role}_model-menu`);
+        const text = dropdown?.querySelector('.llm-model-dropdown__text');
+
+        if (text) text.textContent = label;
+
+        const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
+        options.forEach(option => {
+            if (option.dataset.value === modelId) {
+                option.classList.add('selected');
+            } else {
+                option.classList.remove('selected');
+            }
+        });
+
+        this._closeAllDropdowns();
+
+        // Mark dirty with the appropriate key
+        const keyMap = { primary: 'llm_model', assistant: 'llm_assistant_model', lite: 'llm_lite_model' };
+        const key = keyMap[role];
+        if (key) {
+            this._markDirty(key, modelId);
+        }
+    }
+
+    _showCustomModelInput(role) {
+        const customLabel = prompt('Enter custom model name:');
+        if (customLabel && customLabel.trim()) {
+            this.selectedModels[role] = 'custom';
+            this.selectedModels[`${role}CustomLabel`] = customLabel.trim();
+
+            const dropdown = document.getElementById(`${role}_model`);
+            const menu = document.getElementById(`${role}_model-menu`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+
+            if (text) text.textContent = customLabel.trim();
+
+            const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
+            options.forEach(option => {
+                if (option.dataset.value === 'custom') {
+                    option.classList.add('selected');
+                } else {
+                    option.classList.remove('selected');
+                }
+            });
+
+            this._closeAllDropdowns();
+
+            const keyMap = { primary: 'llm_model', assistant: 'llm_assistant_model', lite: 'llm_lite_model' };
+            const key = keyMap[role];
+            if (key) {
+                this._markDirty(key, customLabel.trim());
+            }
+        }
     }
 
     _showStatus(type, msg) {
@@ -94,7 +380,7 @@ export class SettingsPage {
 
         this.sections.forEach((sec, idx) => {
             const secSettings = this.allSettings.filter(s => s.section === sec.id);
-            if (!secSettings.length) return;
+            if (!secSettings.length && sec.id !== 'advanced') return;
 
             const panel = document.createElement('div');
             panel.className = 'settings-section' + (idx === 0 ? ' active' : '');
@@ -127,93 +413,138 @@ export class SettingsPage {
     }
 
     _buildLlmSection(panel, settings) {
-        const primaryProviderSetting = settings.find(s => s.key === 'llm_primary_provider');
-        const assistantProviderSetting = settings.find(s => s.key === 'llm_assistant_provider');
-        const liteProviderSetting = settings.find(s => s.key === 'llm_lite_provider');
-        const universalSettings = settings.filter(s => s.group === 'universal');
         const providerSpecificSettings = settings.filter(s => s.provider);
 
-        const updateVisibility = () => {
-            const primary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
-            const assistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-            const lite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
-            this._updateLlmVisibility(panel, primary, assistant, lite);
-        };
+        // Create custom model dropdown section (3 dropdowns in a row, categorized)
+        const modelSelectionContainer = document.createElement('div');
+        modelSelectionContainer.className = 'settings-model-selection';
+        modelSelectionContainer.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
+        modelSelectionContainer.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
+        modelSelectionContainer.style.borderRadius = '8px';
+        modelSelectionContainer.style.padding = '1rem';
+        modelSelectionContainer.style.marginBottom = '1rem';
 
-        if (primaryProviderSetting) {
-            const field = this._buildField(primaryProviderSetting);
-            panel.appendChild(field);
+        const modelFields = document.createElement('div');
+        modelFields.className = 'wizard-model-fields';
+        modelFields.style.display = 'grid';
+        modelFields.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
+        modelFields.style.gap = '1rem';
+        modelFields.style.minWidth = '0';
 
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
+        // Primary model dropdown
+        const primaryModelField = this._buildModelDropdownField('primary', 'Primary Model', 'model_training');
+        modelFields.appendChild(primaryModelField);
 
-        if (assistantProviderSetting) {
-            const field = this._buildField(assistantProviderSetting);
-            panel.appendChild(field);
+        // Assistant model dropdown
+        const assistantModelField = this._buildModelDropdownField('assistant', 'Assistant Model', 'psychology');
+        modelFields.appendChild(assistantModelField);
 
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
+        // Lite model dropdown
+        const liteModelField = this._buildModelDropdownField('lite', 'Lite Model', 'bolt');
+        modelFields.appendChild(liteModelField);
 
-        if (liteProviderSetting) {
-            const field = this._buildField(liteProviderSetting);
-            panel.appendChild(field);
+        modelSelectionContainer.appendChild(modelFields);
+        panel.appendChild(modelSelectionContainer);
 
-            const select = field.querySelector('select');
-            if (select) {
-                select.addEventListener('change', updateVisibility);
-            }
-        }
+        // Add note about encrypted API keys
+        const encryptionNote = document.createElement('div');
+        encryptionNote.className = 'settings-encryption-note';
+        encryptionNote.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
+        encryptionNote.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
+        encryptionNote.style.borderRadius = '8px';
+        encryptionNote.style.padding = '0.75rem 1rem';
+        encryptionNote.style.marginBottom = '1rem';
+        encryptionNote.style.fontSize = '0.875rem';
+        encryptionNote.style.color = 'var(--text-secondary)';
+        encryptionNote.style.display = 'flex';
+        encryptionNote.style.alignItems = 'flex-start';
+        encryptionNote.style.gap = '0.5rem';
+
+        const noteIcon = document.createElement('span');
+        noteIcon.className = 'material-symbols-outlined';
+        noteIcon.textContent = 'lock';
+        noteIcon.style.fontSize = '1.25rem';
+        noteIcon.style.color = 'var(--accent-blue)';
+
+        const noteText = document.createElement('span');
+        noteText.textContent = 'API keys are encrypted at rest and not displayable. You can update them here if needed.';
+
+        encryptionNote.appendChild(noteIcon);
+        encryptionNote.appendChild(noteText);
+        panel.appendChild(encryptionNote);
 
         const specificContainer = document.createElement('div');
         specificContainer.className = 'settings-llm-specific';
         providerSpecificSettings.forEach(s => {
+            // Skip model fields since they're now handled by custom dropdowns
+            if (s.key === 'llm_model' || s.key === 'llm_assistant_model' || s.key === 'llm_lite_model') {
+                // Initialize selectedModels from current values
+                const role = s.key === 'llm_model' ? 'primary' : s.key === 'llm_assistant_model' ? 'assistant' : 'lite';
+                const value = this.dirty.get(s.key) || s.value;
+                if (value) {
+                    this.selectedModels[role] = value;
+                    // If it's a custom model (not in any provider catalog), store as custom label
+                    if (!_modelToProvider(value)) {
+                        this.selectedModels[`${role}CustomLabel`] = value;
+                    }
+                }
+                return;
+            }
             const field = this._buildField(s);
             field.setAttribute('data-provider', s.provider);
-            
-            // For unified keys, ensure inputs only update their specific provider context in the dirty map
-            // though actually we want one key to rule them all now.
-            if (s.key === 'llm_model' || s.key === 'llm_assistant_model' || s.key === 'llm_lite_model') {
-                field.classList.add('llm-model-field');
-            }
             specificContainer.appendChild(field);
         });
         panel.appendChild(specificContainer);
 
-        const divider = document.createElement('div');
-        divider.className = 'settings-section-divider';
-        const dividerText = document.createElement('div');
-        dividerText.className = 'settings-divider-text';
-        const icon = document.createElement('span');
-        icon.className = 'material-symbols-outlined';
-        icon.textContent = 'api';
-        dividerText.appendChild(icon);
-        dividerText.appendChild(document.createTextNode('LLM Controls & Safeguards'));
-        divider.appendChild(dividerText);
-        panel.appendChild(divider);
-
-        universalSettings.forEach(s => {
-            panel.appendChild(this._buildField(s));
-        });
-
-        const currentPrimary = primaryProviderSetting ? (this.dirty.get('llm_primary_provider') || primaryProviderSetting.value) : '';
-        const currentAssistant = assistantProviderSetting ? (this.dirty.get('llm_assistant_provider') || assistantProviderSetting.value) : '';
-        const currentLite = liteProviderSetting ? (this.dirty.get('llm_lite_provider') || liteProviderSetting.value) : '';
-        this._updateLlmVisibility(panel, currentPrimary, currentAssistant, currentLite);
+        this._initModelDropdowns();
+        this._updateModelDropdowns();
     }
 
-    _updateLlmVisibility(panel, primaryProvider, assistantProvider, liteProvider) {
-        const specificFields = panel.querySelectorAll('.settings-llm-specific .settings-field');
-        specificFields.forEach(field => {
-            const fieldProvider = field.getAttribute('data-provider');
-            // If the field belongs to either the primary, assistant, or lite provider, show it.
-            field.style.display = (fieldProvider === primaryProvider || fieldProvider === assistantProvider || fieldProvider === liteProvider) ? 'block' : 'none';
-        });
+    _buildModelDropdownField(role, label, iconName) {
+        const field = document.createElement('div');
+        field.className = 'setup-field';
+        field.style.minWidth = '0';
+
+        const labelEl = document.createElement('label');
+        labelEl.className = 'setup-label';
+        labelEl.textContent = label;
+        field.appendChild(labelEl);
+
+        const dropdown = document.createElement('div');
+        dropdown.id = `${role}_model`;
+        dropdown.className = 'llm-model-dropdown custom-dropdown setup-model-dropdown';
+        dropdown.tabIndex = 0;
+        dropdown.setAttribute('role', 'combobox');
+        dropdown.setAttribute('aria-expanded', 'false');
+
+        const selected = document.createElement('div');
+        selected.className = 'llm-model-dropdown__selected';
+
+        const icon = document.createElement('span');
+        icon.className = 'llm-model-icon material-symbols-outlined';
+        icon.textContent = iconName;
+
+        const text = document.createElement('span');
+        text.className = 'llm-model-dropdown__text';
+        text.textContent = 'Select a Model';
+
+        const arrow = document.createElement('span');
+        arrow.className = 'llm-model-dropdown__arrow material-symbols-outlined';
+        arrow.textContent = 'expand_more';
+
+        selected.appendChild(icon);
+        selected.appendChild(text);
+        selected.appendChild(arrow);
+
+        const menu = document.createElement('div');
+        menu.className = 'llm-model-dropdown__menu';
+        menu.id = `${role}_model-menu`;
+
+        dropdown.appendChild(selected);
+        dropdown.appendChild(menu);
+        field.appendChild(dropdown);
+
+        return field;
     }
 
     _buildAdvancedSection(panel) {
@@ -310,8 +641,20 @@ export class SettingsPage {
                     }
                     return raw;
                 };
-                input.addEventListener('input',  () => this._markDirty(setting.key, resolveValue()));
-                input.addEventListener('change', () => this._markDirty(setting.key, resolveValue()));
+                
+                // Track provider key changes for auto-selection of default models
+                const handleInputChange = () => {
+                    this._markDirty(setting.key, resolveValue());
+                    
+                    // Check if this is a provider API key field
+                    if (setting.provider && (setting.key.includes('api_key') || setting.key.includes('endpoint'))) {
+                        this.lastProviderKeyChange = setting.provider;
+                        this._updateModelDropdowns();
+                    }
+                };
+                
+                input.addEventListener('input', handleInputChange);
+                input.addEventListener('change', handleInputChange);
             }
 
             const revealBtn = wrap.querySelector('.settings-reveal-btn');
@@ -393,6 +736,22 @@ export class SettingsPage {
         const updates = {};
         this.dirty.forEach((val, key) => { updates[key] = val; });
 
+        // Derive providers from selected models
+        const roleModelMap = {
+            'llm_model': 'llm_primary_provider',
+            'llm_assistant_model': 'llm_assistant_provider',
+            'llm_lite_model': 'llm_lite_provider'
+        };
+
+        for (const [modelKey, providerKey] of Object.entries(roleModelMap)) {
+            if (updates[modelKey]) {
+                const provider = _modelToProvider(updates[modelKey]);
+                if (provider) {
+                    updates[providerKey] = provider;
+                }
+            }
+        }
+
         try {
             const res = await fetch(ApiPaths.settings.save(), {
                 method: 'PUT',
@@ -431,6 +790,9 @@ export class SettingsPage {
         const toggle = document.getElementById('dev-logs-toggle');
         const label  = document.getElementById('dev-logs-label');
         if (!toggle) return;
+
+        toggle.checked = window.__DEV_LOGS_ENABLED === true;
+        label.textContent = window.__DEV_LOGS_ENABLED === true ? 'Enabled' : 'Disabled';
 
         toggle.addEventListener('change', async () => {
             const enabled = toggle.checked;

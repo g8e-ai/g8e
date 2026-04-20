@@ -13,6 +13,7 @@
 
 import { G8eBaseModel, F, now } from './base.js';
 import { OperatorSlot } from './operator_model.js';
+import { VerifierReason, TribunalOutcome } from '../constants/agents.js';
 
 // ---------------------------------------------------------------------------
 // SSE event models
@@ -59,7 +60,6 @@ export class KeepaliveEvent extends G8eBaseModel {
         type:          { type: F.string,  required: true },
         timestamp:     { type: F.date,    default: () => now() },
         serverTime:    { type: F.number,  default: null },
-        operator_list: { type: F.object,  model: OperatorListData, default: null },
     };
 }
 
@@ -165,29 +165,6 @@ export class OperatorStatusUpdatedEvent extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OperatorPanelListUpdatedEvent  (SSE payload for OPERATOR_PANEL_LIST_UPDATED)
-// Carries operator context fields — not a status transition.
-// ---------------------------------------------------------------------------
-
-export class OperatorPanelListUpdatedData extends G8eBaseModel {
-    static fields = {
-        operator_id:      { type: F.string, required: true },
-        case_id:          { type: F.string, default: null },
-        investigation_id: { type: F.string, default: null },
-        task_id:          { type: F.string, default: null },
-        timestamp:        { type: F.date,   default: null },
-    };
-}
-
-export class OperatorPanelListUpdatedEvent extends G8eBaseModel {
-    static fields = {
-        type:      { type: F.string, required: true },
-        data:      { type: F.object, model: OperatorPanelListUpdatedData, default: null },
-        timestamp: { type: F.date,   default: () => now() },
-    };
-}
-
-// ---------------------------------------------------------------------------
 // CommandResultSSEEvent  (operator.command.completed / operator.command.failed)
 // Mirrors: components/g8ee/app/models/operators.py CommandResultBroadcastEvent
 // Schema:  shared/models/wire/result_payloads.json execution_result
@@ -273,38 +250,3 @@ export class LogStreamConnectedEvent extends G8eBaseModel {
 }
 
 
-// ---------------------------------------------------------------------------
-// G8eePassthroughEvent  (internal SSE push — raw g8ee payloads forwarded as-is)
-//
-// g8ee sends typed events over HTTP to /api/internal/sse/push.
-// The payload is already wire-formatted by G8EE.  This model wraps it so the
-// boundary contract of SSEService.publishEvent (requires G8eBaseModel) is
-// satisfied.  forWire() returns the inner payload directly, preserving the
-// original wire shape.
-//
-// Schema enforcement: the wrapped payload MUST have a non-empty string `type`
-// field.  A missing or non-string `type` means g8ee sent a malformed event —
-// forwarding it would produce an untyped SSE message the frontend cannot route.
-// ---------------------------------------------------------------------------
-
-export class G8eePassthroughEvent extends G8eBaseModel {
-    static fields = {
-        _payload: { type: F.any, required: true },
-    };
-
-    _validate() {
-        if (!this._payload || typeof this._payload !== 'object') {
-            throw new Error('G8eePassthroughEvent: _payload must be a plain object');
-        }
-        if (typeof this._payload.type !== 'string' || this._payload.type.trim() === '') {
-            throw new Error(
-                `G8eePassthroughEvent: _payload.type must be a non-empty string, ` +
-                `got ${JSON.stringify(this._payload.type)}`
-            );
-        }
-    }
-
-    forWire() {
-        return this._payload;
-    }
-}

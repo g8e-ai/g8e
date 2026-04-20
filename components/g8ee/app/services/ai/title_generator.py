@@ -20,7 +20,7 @@ Uses a lightweight model optimized for quick text generation tasks.
 
 import logging
 
-from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
@@ -66,17 +66,15 @@ async def generate_case_title(
                 fallback=True
             )
 
-        persona = get_agent_persona("title_generator")
+        persona = get_agent_persona("scribe")
         prompt = f"{persona.get_system_prompt()}\n\n<message>\n{description}\n</message>\n\nTitle:"
 
         logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
         from app.models.model_configs import get_model_config
         model_config = get_model_config(model)
-        temperature = model_config.default_temperature if model_config and model_config.default_temperature is not None else LLM_DEFAULT_TEMPERATURE
         max_output_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
-        settings = LiteLLMSettings(
-            temperature=temperature,
+        lite_llm_settings = LiteLLMSettings(
             max_output_tokens=max_output_tokens,
             top_p_nucleus_sampling=model_config.top_p,
             top_k_filtering=model_config.top_k,
@@ -90,8 +88,22 @@ async def generate_case_title(
             response = await provider.generate_content_lite(
                 model=model,
                 contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-                lite_llm_settings=settings,
+                lite_llm_settings=lite_llm_settings,
             )
+            if response.text is None:
+                raise OllamaEmptyResponseError(
+                    "LLM returned empty response",
+                    model=model,
+                    channel="lite",
+                    done_reason="stop",
+                    prompt_eval_count=None,
+                    eval_count=None,
+                    num_ctx=0,
+                    num_predict=0,
+                    thinking_len=0,
+                    tool_calls_count=0,
+                    ctx_overflow_suspected=False,
+                )
             generated_title = response.text.strip()
         except OllamaEmptyResponseError as exc:
             logger.warning("[TITLE-GEN] No response from LLM, using fallback title: %s", exc)

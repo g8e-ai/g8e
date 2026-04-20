@@ -13,7 +13,6 @@
 
 """Typed fake for WebSearchProvider."""
 
-from app.models.tool_results import SearchWebResult
 from app.constants.settings import GroundingSource
 from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
 

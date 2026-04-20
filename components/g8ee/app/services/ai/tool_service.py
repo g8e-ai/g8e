@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar, Token as ContextVarToken
+from typing import Any
 from app.services.operator.command_service import OperatorCommandService
 
 import app.llm.llm_types as types
@@ -29,7 +30,6 @@ from app.services.ai.tool_registry import (
     AI_UNIVERSAL_TOOLS,
     OPERATOR_TOOLS,
     TOOL_SPECS,
-    ToolScope,
 )
 from app.constants.prompts import AgentMode, PromptFile
 from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
@@ -39,7 +39,7 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.llm.prompts import load_prompt
 from app.errors import ExternalServiceError, ValidationError, ConfigurationError
 from app.llm.llm_types import schema_from_model
-from app.models.agent import OperatorCommandArgs
+from app.models.agent import ExecutorCommandArgs, SageOperatorRequest
 from app.models.model_configs import get_model_config
 from app.models.tool_results import (
     CommandConstraintsResult,
@@ -111,7 +111,7 @@ class AIToolService:
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
-        self._tool_handlers: dict[str, Callable] = {}
+        self._tool_handlers: dict[str, Callable[..., ToolResult]] = {}
 
         for spec in TOOL_SPECS:
             if spec.requires_web_search and self.web_search_provider is None:
@@ -193,6 +193,21 @@ class AIToolService:
         """True when the g8e_web_search tool is registered (Google Custom Search configured)."""
         return OperatorToolName.G8E_SEARCH_WEB in self._tool_declarations
 
+    @property
+    def user_settings(self) -> G8eeUserSettings | None:
+        """The configured user settings."""
+        return self._user_settings
+
+    @property
+    def whitelist_validator(self) -> CommandWhitelistValidator:
+        """The configured whitelist validator."""
+        return self._whitelist_validator
+
+    @property
+    def blacklist_validator(self) -> CommandBlacklistValidator:
+        """The configured blacklist validator."""
+        return self._blacklist_validator
+
     def get_tools(
         self,
         agent_mode: AgentMode,
@@ -226,15 +241,15 @@ class AIToolService:
     def _build_run_operator_commands_tool(self) -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
         """Register tool metadata and executor for Operator command execution."""
 
-        def run_commands_with_operator(args: OperatorCommandArgs) -> ToolResult:
+        def run_commands_with_operator(args: ExecutorCommandArgs) -> ToolResult:
             raise NotImplementedError("run_commands_with_operator should be called via execute_tool_call")
 
         declaration = types.ToolDeclaration(
             name=OperatorToolName.RUN_COMMANDS,
             description=load_prompt(PromptFile.TOOL_RUN_COMMANDS),
             parameters=schema_from_model(
-                OperatorCommandArgs,
-                required_override=["command", "justification"],
+                SageOperatorRequest,
+                required_override=["request"],
             ),
         )
 
@@ -430,7 +445,7 @@ class AIToolService:
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
     ) -> ToolResult:
-        args = OperatorCommandArgs.model_validate(tool_args)
+        args = ExecutorCommandArgs.model_validate(tool_args)
         logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
         result = await self.execute_command(
             args, g8e_context, investigation, request_settings=request_settings
@@ -690,10 +705,10 @@ class AIToolService:
             )
             
         except Exception as e:
-            logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e)
+            logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e, exc_info=True)
             return InvestigationContextResult(
                 success=False,
-                error=str(e),
+                error=f"Investigation context query failed: {e}. Retry or check investigation ID.",
                 error_type=CommandErrorType.EXECUTION_ERROR,
                 data_type=args.data_type,
                 investigation_id=investigation_id,
@@ -841,7 +856,7 @@ class AIToolService:
 
     async def execute_command(
         self,
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,

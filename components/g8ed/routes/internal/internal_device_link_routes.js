@@ -38,7 +38,7 @@ import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess, DEFAULT_DE
  */
 export function createInternalDeviceLinkRouter({ services, authorizationMiddleware }) {
     const { deviceLinkService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -48,7 +48,7 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.get('/user/:userId', requireInternalOrigin, async (req, res, next) => {
+    router.get('/user/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         const { userId } = req.params;
 
         if (!userId) {
@@ -87,7 +87,7 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.post('/user/:userId', requireInternalOrigin, async (req, res, next) => {
+    router.post('/user/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         const { userId } = req.params;
         const { name, max_uses, expires_in_hours } = req.body;
 
@@ -146,7 +146,7 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.delete('/:token', requireInternalOrigin, async (req, res, next) => {
+    router.delete('/:token', requireInternalOrUserAuth, async (req, res, next) => {
         const { token } = req.params;
         const action = req.query.action;
 

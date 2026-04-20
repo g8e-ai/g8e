@@ -15,7 +15,6 @@ from __future__ import annotations
 
 """Typed fake for EventServiceProtocol."""
 
-import logging
 from unittest.mock import AsyncMock
 
 from app.constants import EventType

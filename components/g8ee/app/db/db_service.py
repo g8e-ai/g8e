@@ -40,7 +40,7 @@ class DBService:
         # DBClient implementation only accepts dict[str, object] for now.
         # Use flatten_for_db if it is a G8eBaseModel.
         if isinstance(data, G8eBaseModel):
-            data = data.flatten_for_db()
+            data = data.model_dump(mode="json")
         return await self.client.create_document(
             collection=collection, document_id=document_id, data=data
         )
@@ -53,7 +53,7 @@ class DBService:
         merge: bool = True,
     ) -> CacheOperationResult:
         if isinstance(data, G8eBaseModel):
-            data = data.flatten_for_db()
+            data = data.model_dump(mode="json")
         return await self.client.update_document(
             collection=collection, document_id=document_id, data=data, merge=merge
         )

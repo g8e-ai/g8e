@@ -357,7 +357,7 @@ class TestExecuteIntentPermissionRequestValidation:
 
     async def test_every_valid_cloud_intent_passes_validation(self):
         """No CloudIntent member should be rejected as invalid."""
-        from app.constants import CommandErrorType, ApprovalType, FileOperation
+        from app.constants import CommandErrorType
 
         def _auto_deny(aid, pending):
             pending.resolve(approved=False, reason="test-deny")

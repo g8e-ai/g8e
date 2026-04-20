@@ -18,6 +18,7 @@ import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
 import { escapeHtml } from '../utils/html.js';
+import { HeartbeatSnapshot } from '../models/operator-models.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
 import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
@@ -114,7 +115,7 @@ export class OperatorPanel {
         };
 
         this.eventBus.on(EventType.OPERATOR_PANEL_LIST_UPDATED, this._wireHandlers.onListUpdated);
-        this.eventBus.on(EventType.OPERATOR_HEARTBEAT_SENT,      this._wireHandlers.onHeartbeat);
+        this.eventBus.on(EventType.OPERATOR_HEARTBEAT_RECEIVED, this._wireHandlers.onHeartbeat);
 
         for (const eventType of _STATUS_UPDATED_VALUES) {
             this.eventBus.on(eventType, this._wireHandlers.onStatusUpdated);
@@ -122,7 +123,7 @@ export class OperatorPanel {
     }
 
     _onListUpdated(data) {
-        this._operators = data.operators || [];
+        this._operators = data.operators;
         this._totalOperatorCount = data.total_count || 0;
         this._activeOperatorCount = data.active_count || 0;
         this._usedSlots = data.used_slots || 0;
@@ -147,9 +148,27 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        this._lastHeartbeat = Date.now();
+        const heartbeat = data.data || {};
+        const heartbeatTimestamp = heartbeat.metrics?.timestamp ?? null;
+        this._lastHeartbeat = heartbeatTimestamp ? new Date(heartbeatTimestamp).getTime() : Date.now();
         this._isConnected = true;
-        devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
+        devLogger.log('[OPERATOR-PANEL] Heartbeat:', heartbeat.operator_id);
+
+        const operatorIndex = this._operators.findIndex(op => op.operator_id === heartbeat.operator_id);
+        if (operatorIndex !== -1) {
+            const existingOperator = this._operators[operatorIndex];
+
+            this._operators[operatorIndex] = {
+                ...existingOperator,
+                status: heartbeat.status ?? existingOperator.status,
+                latest_heartbeat_snapshot: HeartbeatSnapshot.parse({
+                    timestamp: heartbeatTimestamp ? new Date(heartbeatTimestamp) : new Date(),
+                    ...(heartbeat.metrics || {})
+                }),
+                last_heartbeat: heartbeatTimestamp,
+            };
+        }
+
         this._applyOperatorState({ cause: 'heartbeat' });
     }
 
@@ -173,9 +192,8 @@ export class OperatorPanel {
                 this.updateMetrics(heartbeatData);
                 this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
             }
-            if (this.selectedMetricsOperatorId) {
-                this.updateOperatorCardInPlace(this.selectedMetricsOperatorId);
-            }
+            // Re-render operator list to show updated heartbeat metrics in expanded details
+            this.displayOperators(this.operators);
             return;
         }
 
@@ -263,6 +281,7 @@ export class OperatorPanel {
 
         this.metricsDetailsExpanded = false;
 
+        this.operatorCountElement = document.getElementById('operator-count');
         this.operatorList = document.getElementById('operator-list');
         this.drawerFooter = document.getElementById('operator-drawer-footer');
         this.bindAllBtn = document.getElementById('bind-all-btn');
@@ -398,6 +417,12 @@ export class OperatorPanel {
         this.updateStatus(OperatorStatus.OFFLINE);
     }
 
+    updateOperatorListBarTitle() {
+        if (!this.operatorCountElement) return;
+        const boundCount = this.boundOperatorIds.length;
+        this.operatorCountElement.textContent = boundCount;
+    }
+
     displayInitialOperatorStatus() {
         if (!this.webSessionModel) return;
 
@@ -434,7 +459,7 @@ export class OperatorPanel {
     destroy() {
         if (this._wireHandlers) {
             this.eventBus.off(EventType.OPERATOR_PANEL_LIST_UPDATED, this._wireHandlers.onListUpdated);
-            this.eventBus.off(EventType.OPERATOR_HEARTBEAT_SENT,      this._wireHandlers.onHeartbeat);
+            this.eventBus.off(EventType.OPERATOR_HEARTBEAT_RECEIVED, this._wireHandlers.onHeartbeat);
             for (const eventType of _STATUS_UPDATED_VALUES) {
                 this.eventBus.off(eventType, this._wireHandlers.onStatusUpdated);
             }

@@ -19,8 +19,7 @@ medium/high). Each provider speaks a different dialect for the same concept:
   * Gemini 3+:  config.thinking_config.thinking_level (enum string)
                 + include_thoughts toggle
   * OpenAI:     reasoning.effort (enum string), or omit the key entirely
-  * Anthropic:  thinking={"type": "enabled", "budget_tokens": N}, also
-                requires temperature=1.0 and no top_k/top_p
+  * Anthropic:  thinking={"type": "enabled", "budget_tokens": N}
   * Ollama:     per-model dialect; NATIVE_TOGGLE uses the chat() think kwarg,
                 NONE omits all thinking params.
 
@@ -87,7 +86,6 @@ class AnthropicThinkingTranslation:
 
     When ``enabled`` is True the provider MUST:
       - set thinking = {"type": "enabled", "budget_tokens": budget_tokens}
-      - set temperature = 1.0
       - drop top_k and top_p
 
     When ``enabled`` is False the provider should omit the thinking key and

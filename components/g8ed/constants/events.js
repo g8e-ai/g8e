@@ -237,10 +237,14 @@ export const EventType = Object.freeze({
     AI_AGENT_CONTINUE_APPROVAL_GRANTED:   _EVENTS['ai']['agent']['continue']['approval']['granted'],
     AI_AGENT_CONTINUE_APPROVAL_REJECTED:  _EVENTS['ai']['agent']['continue']['approval']['rejected'],
 
-    TRIBUNAL_SESSION_STARTED:           _EVENTS['ai']['tribunal']['session']['started'],
-    TRIBUNAL_SESSION_COMPLETED:         _EVENTS['ai']['tribunal']['session']['completed'],
-    TRIBUNAL_SESSION_FAILED:            _EVENTS['ai']['tribunal']['session']['failed'],
-    TRIBUNAL_SESSION_FALLBACK_TRIGGERED: _EVENTS['ai']['tribunal']['session']['fallback']['triggered'],
+    TRIBUNAL_SESSION_STARTED:              _EVENTS['ai']['tribunal']['session']['started'],
+    TRIBUNAL_SESSION_COMPLETED:            _EVENTS['ai']['tribunal']['session']['completed'],
+    TRIBUNAL_SESSION_DISABLED:             _EVENTS['ai']['tribunal']['session']['disabled'],
+    TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED: _EVENTS['ai']['tribunal']['session']['model_not_configured'],
+    TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE: _EVENTS['ai']['tribunal']['session']['provider_unavailable'],
+    TRIBUNAL_SESSION_SYSTEM_ERROR:         _EVENTS['ai']['tribunal']['session']['system_error'],
+    TRIBUNAL_SESSION_GENERATION_FAILED:    _EVENTS['ai']['tribunal']['session']['generation_failed'],
+    TRIBUNAL_SESSION_VERIFIER_FAILED:      _EVENTS['ai']['tribunal']['session']['verifier_failed'],
 
     TRIBUNAL_VOTING_STARTED:            _EVENTS['ai']['tribunal']['voting']['started'],
     TRIBUNAL_VOTING_FAILED:             _EVENTS['ai']['tribunal']['voting']['failed'],
@@ -276,8 +280,6 @@ export const EventType = Object.freeze({
     PLATFORM_TERMINAL_MINIMIZED: _EVENTS['platform']['terminal']['minimized'],
     PLATFORM_TERMINAL_MAXIMIZED: _EVENTS['platform']['terminal']['maximized'],
     PLATFORM_TERMINAL_CLOSED:   _EVENTS['platform']['terminal']['closed'],
-
-    PLATFORM_SENTINEL_MODE_CHANGED: _EVENTS['platform']['sentinel']['mode']['changed'],
 
     AUTH_USER_AUTHENTICATED:   _EVENTS['platform']['auth']['user']['authenticated'],
     AUTH_USER_UNAUTHENTICATED: _EVENTS['platform']['auth']['user']['unauthenticated'],

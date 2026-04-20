@@ -16,8 +16,6 @@ Integration test to confirm AI agent thinking capabilities with a puzzle.
 """
 
 import pytest
-from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
 
 from app.constants import (
     EventType,
@@ -26,17 +24,10 @@ from app.constants import (
     InvestigationStatus,
 )
 import app.llm.llm_types as types
-from app.services.ai.agent import g8eEngine
-from app.services.ai.tool_service import AIToolService
-from app.services.operator.command_service import OperatorCommandService
-from app.services.service_factory import ServiceFactory
-from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.models.agent import AgentStreamContext
-from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import (
-    build_enriched_context,
     build_g8e_http_context,
 )
 
@@ -120,7 +111,6 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
     gen_config = AIGenerationConfigBuilder.build_primary_settings(
         model=model_name,
-        temperature=None,
         max_tokens=None,
         system_instructions=sys_prompt,
         tools=[],

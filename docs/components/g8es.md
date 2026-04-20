@@ -13,10 +13,10 @@ g8es is the Operator binary running in `--listen` mode. It is the platform's **s
 │                    g8e.operator --listen             │
 │                                                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐ │
-│  │ Document     │  │ KV Store     │  │ SSE Event     │ │
-│  │ Store        │  │ (with TTL)   │  │ Buffer        │ │
+│  │ Document     │  │ KV Store     │  │ Blob          │ │
+│  │ Store        │  │ (with TTL)   │  │ Store         │ │
 │  │              │  │              │  │               │ │
-│  │ /db/:coll/:id│  │ /kv/:key     │  │ /sse/:session │ │
+│  │ /db/:coll/:id│  │ /kv/:key     │  │ /blob/:ns/:id │ │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬────────┘ │
 │         │                 │                  │          │
 │         └─────────┬───────┘──────────────────┘          │
@@ -47,6 +47,7 @@ g8es is the Operator binary running in `--listen` mode. It is the platform's **s
     │ (Node)  │    │ (Python)│        │ (Go)    │
     └─────────┘    └─────────┘        └─────────┘
 ```
+```
 
 g8ed and g8ee both use HTTP for document store, KV operations, and blob storage, and WebSocket for pub/sub. The Operator (in normal mode) connects via WebSocket only for pub/sub.
 
@@ -57,7 +58,7 @@ g8ed and g8ee both use HTTP for document store, KV operations, and blob storage,
 | **Document store** | HTTP | Request/response semantics; status codes carry errors natively |
 | **KV store** | HTTP | Stateless; each operation is independent |
 | **Blob store** | HTTP | Large binary data; streamed via standard HTTP |
-| **SSE event buffer** | HTTP | Ring buffer for reconnection replay; per-session row management via DELETE/GET |
+| **SSE event buffer** | HTTP | Legacy ring buffer for reconnection replay (currently unused by g8ed) |
 | **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling. Supports HTTP publish. |
 | **Operator Binaries**| HTTP | Served from the blob store under namespace `operator-binary` (`GET /blob/operator-binary/linux-{arch}`) |
 
@@ -71,18 +72,21 @@ g8e.operator --listen
 g8e.operator --listen --wss-listen-port 443 --http-listen-port 443 -l debug
 ```
 
-## TLS / Certificate Management
+## Internal Authentication
 
-g8es manages its own private CA and server certificate when started without explicit TLS flags. All certificate logic lives in `components/g8eo/services/listen/listen_certs.go` (`CertStore`).
+g8es requires an internal authentication token for all API access except the health check and initial bootstrap paths.
 
-This CA is the root of trust for the entire platform:
-- g8ed uses the g8es-generated server certificate for browser HTTPS on port 443
-- g8ed reads the CA from `/ssl/ca.crt` to power the workstation trust portal
-- Field Operators discover the CA locally from the `g8es-ssl` volume, or fetch it over HTTPS from `https://<endpoint>:9000/ssl/ca.crt` as a fallback
+### Bootstrap Bypass
 
-### Auto-Generated Certificates (default)
+During first-start (before `internal_auth_token` is initialized), the following paths are allowed without a token:
+- `GET/PUT /db/settings/platform_settings`
+- `ANY /kv/*`
+- `ANY /ws/*`
+- `GET /ssl/ca.crt`
 
-On first start, `CertStore.EnsureCerts` generates:
+### Credentials Management
+
+On first start, `CertStore.EnsureCerts` and `SecretManager` generate:
 
 | Artifact | Path (in `--ssl-dir`) | Algorithm | Validity |
 |----------|----------------------|-----------|----------|
@@ -91,7 +95,10 @@ On first start, `CertStore.EnsureCerts` generates:
 | Server private key | `server.key` | ECDSA P-384 | — |
 | Server certificate | `server.crt` | Signed by platform CA | 90 days |
 | **Internal Auth Token** | `internal_auth_token` | 32-byte random hex | — |
-| **Session Encryption Key** | `session_encryption_key` | 32-byte random hex | — |
+
+The `internal_auth_token` is written to the SSL volume and also stored in the `settings/platform_settings` document.
+
+## TLS / Certificate Management
 
 The server certificate includes the following SANs:
 - **DNS:** `g8e.local`, `localhost`, `g8es`, `g8ee`, `g8ed`
@@ -184,7 +191,7 @@ POST   /kv/_delete_pattern    → Delete by pattern   {"pattern": "cache:user:*"
 
 ### SSE Event Buffer
 
-g8es provides a per-session event ring buffer used for reconnection replay of audit events.
+g8es provides a per-session event ring buffer table (`sse_events`). **Note:** This is currently a legacy component. In the current architecture, `g8ee` pushes events to `g8ed` via HTTP, and `g8ed` delivers them to local SSE connections (fire-and-forget). The g8es buffer is not used for reconnection replay in the 2026 stack.
 
 ```
 DELETE /db/_sse_events         → Wipe all SSE events
@@ -241,6 +248,7 @@ g8ed uses purpose-built clients in `components/g8ed/services/clients/`:
 | `KVCacheClient` | `g8es_kv_cache_client.js` | HTTP | KV store operations (`/kv/...`) |
 | `G8esPubSubClient` | `g8es_pubsub_client.js` | WebSocket | Pub/sub messaging (`/ws/pubsub`) |
 | `G8esHttpClient` | `g8es_http_client.js` | HTTP | Base client for HTTP operations |
+| `InternalHttpClient` | `internal_http_client.js` | HTTP | General internal service communication |
 
 **Atomicity Warning:** Compound operations (e.g., `incr`, `hset`, `rpush`) are implemented as read-modify-write cycles over HTTP and are **not atomic**.
 
@@ -254,6 +262,7 @@ g8ee uses clients in `components/g8ee/app/clients/`:
 | `KVCacheClient` | `kv_cache_client.py` | HTTP | KV store operations |
 | `PubSubClient` | `pubsub_client.py` | WebSocket | Pub/sub messaging |
 | `BlobClient` | `blob_client.py` | HTTP | Blob store operations |
+| `InternalHttpClient` | `http_client.py` | HTTP | Base client for internal HTTP calls |
 
 ## SQLite Schema
 

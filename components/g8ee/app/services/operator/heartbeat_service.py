@@ -17,39 +17,27 @@ import logging
 from app.clients.pubsub_client import PubSubClient
 from app.errors import ConfigurationError
 from app.constants.events import EventType
-from app.constants.status import OperatorStatus
 from app.constants.channels import PubSubChannel
-from app.models.events import SessionEvent
+from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
-    HeartbeatSSEPayload,
+    HeartbeatSSEEnvelope,
     OperatorDocument,
     OperatorHeartbeat,
-    OperatorPanelListUpdatedPayload,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 
-from typing import TYPE_CHECKING, cast
-
-if TYPE_CHECKING:
-    from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
+from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
 
 logger = logging.getLogger(__name__)
-
-VALID_HEARTBEAT_STATUSES = {
-    OperatorStatus.ACTIVE,
-    OperatorStatus.BOUND,
-    OperatorStatus.STALE,
-    OperatorStatus.OFFLINE,
-}
 
 
 class OperatorHeartbeatService:
 
     def __init__(
         self,
-        operator_data_service: "OperatorDataServiceProtocol",
-        event_service: "EventServiceProtocol",
+        operator_data_service: OperatorDataServiceProtocol,
+        event_service: EventServiceProtocol,
     ):
         self.operator_data_service = operator_data_service
         self.event_service = event_service
@@ -165,8 +153,15 @@ class OperatorHeartbeatService:
                 "operator_session_id": operator_session_id,
                 "system_hostname": payload.system_identity.hostname,
                 "system_os": payload.system_identity.os,
+                "system_architecture": payload.system_identity.architecture,
+                "system_cpu_count": payload.system_identity.cpu_count,
+                "system_memory_mb": payload.system_identity.memory_mb,
                 "system_user": payload.system_identity.current_user,
                 "public_ip": payload.network_info.public_ip,
+                "cpu_percent": payload.performance_metrics.cpu_percent,
+                "memory_percent": payload.performance_metrics.memory_percent,
+                "disk_percent": payload.performance_metrics.disk_percent,
+                "network_latency": payload.performance_metrics.network_latency,
                 "system_fingerprint": payload.system_fingerprint,
             }
         )
@@ -183,16 +178,15 @@ class OperatorHeartbeatService:
         db_success = await self.operator_data_service.update_operator_heartbeat(
             operator_id=operator_id,
             heartbeat=heartbeat,
-            investigation_id=payload.investigation_id or "unknown",
-            case_id=payload.case_id or "unknown",
+            investigation_id=payload.investigation_id,
+            case_id=payload.case_id,
         )
 
         if not db_success:
             return False
 
-        sse_payload = heartbeat.to_sse_payload(operator_id)
-        sse_payload.status = operator.status
-        await self._push_heartbeat_sse(sse_payload, payload, operator)
+        envelope = HeartbeatSSEEnvelope.from_heartbeat(operator_id, operator.status, heartbeat)
+        await self._push_heartbeat_sse(envelope, payload, operator)
 
         logger.info(
             "Heartbeat processed successfully for Operator %s",
@@ -209,7 +203,7 @@ class OperatorHeartbeatService:
         if not ts_result.is_valid:
             return RequestValidationResult(
                 is_valid=False,
-                error=ts_result.error,
+                error=ts_result.error or "Timestamp validation failed",
                 error_code=ts_result.error_code,
             )
         return RequestValidationResult(is_valid=True)
@@ -258,21 +252,6 @@ class OperatorHeartbeatService:
             )
             return None
 
-        if operator.status not in VALID_HEARTBEAT_STATUSES:
-            logger.warning(
-                "Ignoring heartbeat from Operator %s with invalid status: %s",
-                operator_id,
-                operator.status,
-                extra={
-                    "operator_id": operator_id,
-                    "status": operator.status,
-                    "valid_statuses": list(VALID_HEARTBEAT_STATUSES),
-                    "operator_session_id": operator_session_id,
-                    "security_event": "invalid_status_operator_heartbeat",
-                }
-            )
-            return None
-
         logger.info(
             "Operator %s validated for heartbeat",
             operator_id,
@@ -282,48 +261,38 @@ class OperatorHeartbeatService:
 
     async def _push_heartbeat_sse(
         self,
-        sse_payload: HeartbeatSSEPayload,
+        envelope: HeartbeatSSEEnvelope,
         payload: G8eoHeartbeatPayload,
         operator: OperatorDocument,
     ) -> None:
-        web_session_id = operator.web_session_id
-        user_id = operator.user_id
-        if not web_session_id or not user_id:
-            logger.error(
-                "[HEARTBEAT] Cannot push SSE — operator %s has missing web_session_id or user_id (broken bind)",
-                operator.operator_id,
-                extra={
-                    "operator_id": operator.operator_id,
-                    "web_session_id": web_session_id,
-                    "user_id": user_id,
-                },
-            )
-            return
+        event = self._build_heartbeat_event(envelope, payload, operator)
         try:
-            await self.event_service.publish(
-                SessionEvent(
-                    event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-                    payload=sse_payload,
-                    web_session_id=web_session_id,
-                    user_id=user_id,
-                    case_id=payload.case_id,
-                    investigation_id=payload.investigation_id,
-                )
-            )
-            # Always send OPERATOR_PANEL_LIST_UPDATED to ensure Operator Panel reflects current status
-            await self.event_service.publish(
-                SessionEvent(
-                    event_type=EventType.OPERATOR_PANEL_LIST_UPDATED,
-                    payload=OperatorPanelListUpdatedPayload(
-                        operator_id=operator.operator_id,
-                        case_id=payload.case_id,
-                        investigation_id=payload.investigation_id,
-                    ),
-                    web_session_id=web_session_id,
-                    user_id=user_id,
-                    case_id=payload.case_id,
-                    investigation_id=payload.investigation_id,
-                )
-            )
+            await self.event_service.publish(event)
         except Exception as e:
             logger.warning("[HEARTBEAT] SSE push failed (non-blocking): %s", e)
+
+    @staticmethod
+    def _build_heartbeat_event(
+        envelope: HeartbeatSSEEnvelope,
+        payload: G8eoHeartbeatPayload,
+        operator: OperatorDocument,
+    ) -> SessionEvent | BackgroundEvent:
+        """Build the routing event: SessionEvent when the operator is bound to a
+        web session (targeted delivery), BackgroundEvent otherwise (fan-out by user_id).
+        """
+        if operator.bound_web_session_id:
+            return SessionEvent(
+                event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                payload=envelope,
+                web_session_id=operator.bound_web_session_id,
+                user_id=operator.user_id,
+                case_id=payload.case_id,
+                investigation_id=payload.investigation_id,
+            )
+        return BackgroundEvent(
+            event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+            payload=envelope,
+            user_id=operator.user_id,
+            investigation_id=payload.investigation_id,
+            case_id=payload.case_id,
+        )

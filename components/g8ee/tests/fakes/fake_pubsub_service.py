@@ -13,7 +13,7 @@
 
 """Typed fake for PubSubServiceProtocol."""
 
-from typing import Any, Callable, Coroutine
+from typing import Callable, Coroutine
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.protocols import PubSubServiceProtocol
 

@@ -20,12 +20,9 @@
 
 import express from 'express';
 import { SSEPushRequest } from '../../models/request_models.js';
-import { G8eePassthroughEvent } from '../../models/sse_models.js';
-import { OperatorListUpdatedEvent } from '../../models/operator_model.js';
-import { ErrorResponse, SimpleSuccessResponse } from '../../models/response_models.js';
+import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
-import { EventType } from '../../constants/events.js';
 
 /**
  * @param {Object} options
@@ -33,28 +30,9 @@ import { EventType } from '../../constants/events.js';
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
-    const { sseService, operatorService } = services;
+    const { sseService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
-
-    /**
-     * Normalize citation_num values in a CHAT_CITATIONS_READY event to sequential 1-based integers.
-     * g8ee emits non-sequential citation_num values (e.g. 10, 20, 30). The frontend expects
-     * sequential 1-based values. Returns a new event object — does not mutate the input.
-     */
-    function normalizeCitationNums(event) {
-        const sources = event?.grounding_metadata?.sources;
-        if (!Array.isArray(sources) || sources.length === 0) {
-            return event;
-        }
-        return {
-            ...event,
-            grounding_metadata: {
-                ...event.grounding_metadata,
-                sources: sources.map((source, index) => ({ ...source, citation_num: index + 1 })),
-            },
-        };
-    }
 
     /**
      * POST /api/internal/sse/push
@@ -65,73 +43,60 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
             logger.info('[INTERNAL-HTTP] SSE push request received', {
                 webSessionId: redactWebSessionId(pushReq.web_session_id),
+                userId: pushReq.user_id,
                 eventType: pushReq.event.type
             });
 
             logger.info(`[SESSION TRACE] g8ed received SSE push - web_session_id=${redactWebSessionId(pushReq.web_session_id)}, event_type=${pushReq.event.type}`);
 
-            const targetWebSessionId = pushReq.web_session_id;
+            if (pushReq.web_session_id) {
+                // SessionEvent: targeted delivery to a specific web session.
+                const delivered = await sseService.publishEvent(pushReq.web_session_id, pushReq.event, (status) => {
+                    if (status.delivered) {
+                        logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            eventType: pushReq.event.type
+                        });
+                    } else {
+                        logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            eventType: pushReq.event.type
+                        });
+                    }
+                });
 
-            let finalEvent;
-            
-            // Special handling for OPERATOR_PANEL_LIST_UPDATED: replace g8ee's single-operator payload
-            // with g8ed's full operator list for the frontend
-            if (pushReq.event.type === EventType.OPERATOR_PANEL_LIST_UPDATED) {
-                try {
-                    const operatorList = await operatorService.getUserOperators(pushReq.user_id);
-                    finalEvent = new OperatorListUpdatedEvent(operatorList);
-                    logger.info('[INTERNAL-HTTP] Replaced g8ee operator payload with full operator list', {
+                if (!delivered) {
+                    // Targeted session not locally connected. A failed targeted
+                    // push IS an error (the caller expected a specific session).
+                    logger.warn('[INTERNAL-HTTP] Failed to publish SSE event to targeted session', {
                         webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        operatorCount: operatorList.operators?.length || 0
+                        userId: pushReq.user_id
                     });
-                } catch (err) {
-                    logger.error('[INTERNAL-HTTP] Failed to get operator list for OPERATOR_PANEL_LIST_UPDATED', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        error: err.message
-                    });
-                    // Fallback to original event if we can't get the operator list
-                    finalEvent = new G8eePassthroughEvent({ _payload: pushReq.event });
+                    return res.status(500).json(new ErrorResponse({
+                        error: 'Failed to publish event'
+                    }).forWire());
                 }
-            } else {
-                const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
-                    ? normalizeCitationNums(pushReq.event)
-                    : pushReq.event;
-                finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
-            }
 
-            // Forward to SSE service for delivery
-            const published = await sseService.publishEvent(targetWebSessionId, finalEvent, (status) => {
-                if (status.delivered) {
-                    logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        eventType: pushReq.event.type
-                    });
-                } else {
-                    logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        eventType: pushReq.event.type
-                    });
-                }
-            });
-
-            if (published) {
-                logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP', {
+                logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
                     webSessionId: redactWebSessionId(pushReq.web_session_id),
                     eventType: pushReq.event.type
                 });
-                
-                return res.json(new SimpleSuccessResponse({
-                    success: true,
-                    message: 'Event delivered'
-                }).forWire());
-            } else {
-                logger.warn('[INTERNAL-HTTP] Failed to publish SSE event', {
-                    webSessionId: redactWebSessionId(pushReq.web_session_id)
-                });
-                return res.status(500).json(new ErrorResponse({
-                    error: 'Failed to publish event'
-                }).forWire());
+                return res.json(new SSEPushResponse({ success: true, delivered: 1 }).forWire());
             }
+
+            // BackgroundEvent: fan out to all locally connected sessions for this user.
+            // SSEService maintains an in-memory userId -> sessions index, so this is
+            // O(k) in the number of local sessions for that user with no cache lookup.
+            // A zero count is the documented outcome when the user has no connected
+            // sessions and is NOT an error - collapsing it into a 500 would mask real
+            // g8ed outages when BackgroundEvent fan-out is routine.
+            const successCount = await sseService.publishToUser(pushReq.user_id, pushReq.event);
+            logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
+                userId: pushReq.user_id,
+                successCount,
+                eventType: pushReq.event.type
+            });
+            return res.json(new SSEPushResponse({ success: true, delivered: successCount }).forWire());
 
         } catch (error) {
             logger.error('[INTERNAL-HTTP] SSE push failed', {

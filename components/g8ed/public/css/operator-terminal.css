@@ -68,8 +68,8 @@
     border-radius: var(--radius-md);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.1),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-        0 1px 2px rgba(0, 0, 0, 0.2);
+        inset 0 -1px 0 rgba(var(--text-rgb), 0.3),
+        0 1px 2px rgba(var(--text-rgb), 0.2);
     backdrop-filter: blur(12px);
     overflow: hidden;
     color: var(--text-primary);
@@ -200,6 +200,34 @@
     padding-right: 8px;
 }
 
+.operator-terminal .operator-terminal__entry-body a,
+.operator-terminal .operator-terminal__execution-body a,
+.operator-terminal-message .operator-terminal__entry-body a,
+.operator-terminal-message .operator-terminal__execution-body a,
+.anchored-terminal__agent-message-content a,
+.operator-terminal-content a,
+.operator-terminal .message-content a,
+.operator-terminal-message .message-content a,
+.anchored-terminal .message-content a {
+    color: var(--accent-blue-light) !important;
+    text-decoration: none !important;
+    border-bottom: none !important;
+    transition: color var(--transition-fast);
+}
+
+.operator-terminal .operator-terminal__entry-body a:hover,
+.operator-terminal .operator-terminal__execution-body a:hover,
+.operator-terminal-message .operator-terminal__entry-body a:hover,
+.operator-terminal-message .operator-terminal__execution-body a:hover,
+.anchored-terminal__agent-message-content a:hover,
+.operator-terminal-content a:hover,
+.operator-terminal .message-content a:hover,
+.operator-terminal-message .message-content a:hover,
+.anchored-terminal .message-content a:hover {
+    color: var(--accent-blue) !important;
+    text-decoration: underline !important;
+}
+
 .operator-terminal__entry--approval {
     gap: 0;
     padding: 0;
@@ -239,7 +267,7 @@
 
 .approval-compact__icon {
     font-size: 14px;
-    color: var(--accent-yellow, #c9a035);
+    color: var(--accent-yellow);
 }
 
 .approval-compact--intent .approval-compact__icon {
@@ -280,7 +308,7 @@
     word-break: break-word;
     overflow-wrap: break-word;
     padding: 4px 6px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(var(--text-rgb), 0.15);
     border-radius: 3px;
     max-width: 100%;
     overflow-x: auto;
@@ -393,11 +421,11 @@
 }
 
 [data-theme="light"] .approval-compact__command {
-    background: rgba(0, 0, 0, 0.04);
+    background: rgba(var(--text-rgb), 0.04);
 }
 
 [data-theme="light"] .approval-compact__icon {
-    color: var(--accent-yellow-dark, #8a6914);
+    color: var(--accent-yellow-dark);
 }
 
 [data-theme="light"] .approval-compact--intent .approval-compact__icon {

@@ -25,16 +25,13 @@ The `./g8e mcp` command generates ready-to-paste configuration for your AI tool.
 #### Generate Config
 
 ```bash
-# Claude Code
+# First authenticate once
+./g8e login --api-key <key>
+
+# Then generate config
 ./g8e mcp config --client claude-code --email you@example.com
-
-# Windsurf
 ./g8e mcp config --client windsurf --email you@example.com
-
-# Cursor
 ./g8e mcp config --client cursor --email you@example.com
-
-# Generic MCP client
 ./g8e mcp config --client generic --email you@example.com
 ```
 

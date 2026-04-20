@@ -171,11 +171,6 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
             expect(chat.approvalPending).toBe(false);
         });
 
-        it('initializes SentinelModeManager and assigns to window', () => {
-            expect(chat.sentinelModeManager).toBeDefined();
-            expect(window.sentinelModeManager).toBe(chat.sentinelModeManager);
-        });
-
         it('initializes LlmModelManager and assigns to window', () => {
             expect(chat.llmModelManager).toBeDefined();
             expect(window.llmModelManager).toBe(chat.llmModelManager);
@@ -518,13 +513,6 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
         it('attaches click handler to AI stop button', async () => {
             await chat.render();
             expect(chat.aiStopBtn).toBeDefined();
-        });
-
-        it('initializes SentinelModeManager', async () => {
-            await chat.render();
-            const initSpy = vi.spyOn(chat.sentinelModeManager, 'init');
-            chat.bindDOMEvents();
-            expect(initSpy).toHaveBeenCalledOnce();
         });
 
         it('initializes LlmModelManager', async () => {

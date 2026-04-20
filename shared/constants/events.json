@@ -268,10 +268,14 @@
     },
     "tribunal": {
       "session": {
-        "started":   "g8e.v1.ai.tribunal.session.started",
-        "completed": "g8e.v1.ai.tribunal.session.completed",
-        "failed":    "g8e.v1.ai.tribunal.session.failed",
-        "fallback":  { "triggered": "g8e.v1.ai.tribunal.session.fallback.triggered" }
+        "started":               "g8e.v1.ai.tribunal.session.started",
+        "completed":             "g8e.v1.ai.tribunal.session.completed",
+        "disabled":              "g8e.v1.ai.tribunal.session.disabled",
+        "model_not_configured":  "g8e.v1.ai.tribunal.session.model.not_configured",
+        "provider_unavailable":  "g8e.v1.ai.tribunal.session.provider.unavailable",
+        "system_error":          "g8e.v1.ai.tribunal.session.system.error",
+        "generation_failed":     "g8e.v1.ai.tribunal.session.generation.failed",
+        "verifier_failed":       "g8e.v1.ai.tribunal.session.verifier.failed"
       },
       "voting": {
         "started": "g8e.v1.ai.tribunal.voting.started",

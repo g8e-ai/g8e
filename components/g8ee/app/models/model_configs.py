@@ -51,7 +51,6 @@ from app.constants import (
     GEMINI_3_1_PRO_CUSTOM_TOOLS,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_FLASH,
-    GEMINI_DEFAULT_MODEL,
     OLLAMA_DEFAULT_MODEL,
     OLLAMA_GEMMA4_26B,
     OLLAMA_GEMMA4_E2B,
@@ -91,7 +90,6 @@ class LLMModelConfig(G8eBaseModel):
     supports_tools: bool | None = None
     context_window_input: int | None = None
     context_window_output: int | None = None
-    default_temperature: float | None = None
     top_k: int | None = None
     top_p: float | None = None
     max_output_tokens: int | None = None
@@ -133,7 +131,6 @@ GEMINI_3_1_PRO_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    default_temperature=1.0,
     max_output_tokens=64_000,
 )
 
@@ -143,7 +140,6 @@ GEMINI_3_1_PRO_CUSTOM_TOOLS_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    default_temperature=1.0,
     max_output_tokens=64_000,
 )
 
@@ -153,7 +149,6 @@ GEMINI_3_1_FLASH_LITE_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    default_temperature=1.0,
     max_output_tokens=64_000,
 )
 
@@ -163,7 +158,6 @@ GEMINI_3_FLASH_CONFIG = LLMModelConfig(
     supports_tools=True,
     context_window_input=1_000_000,
     context_window_output=64_000,
-    default_temperature=1.0,
     max_output_tokens=64_000,
 )
 

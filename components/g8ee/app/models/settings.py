@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from app.constants import (
@@ -33,7 +32,6 @@ from app.constants import (
     OPENAI_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_MODEL,
     LLMProvider,
     LogLevel,
 )
@@ -42,16 +40,22 @@ from pydantic import field_validator
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel
 
 if TYPE_CHECKING:
-    from app.services.cache.cache_aside import CacheAsideService
+    pass
 
 logger = logging.getLogger(__name__)
 
 class PlatformSettingsDocument(G8eIdentifiableModel):
     """Platform-wide configuration document from g8es 'platform_settings' collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
     settings: G8eePlatformSettings
 
 class UserSettingsDocument(G8eIdentifiableModel):
     """Per-user settings document from g8es 'user_settings' collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: str = Field(..., description="User identifier for these settings")
     settings: G8eeUserSettings
 
@@ -135,7 +139,6 @@ class EvalJudgeSettings(G8eBaseModel):
     )
 
     model: str | None = Field(None, alias="eval_judge_model")
-    temperature: float | None = Field(None, alias="eval_judge_temperature")
     max_output_tokens: int = Field(4096, alias="eval_judge_max_tokens")
 
 class LLMSettings(G8eBaseModel):
@@ -172,12 +175,10 @@ class LLMSettings(G8eBaseModel):
     anthropic_api_key: str | None = Field(None)
     ollama_assistant_model: str | None = Field(None)
 
-    llm_temperature: float | None = Field(None)
     llm_max_tokens: int | None = Field(None)
     llm_command_gen_enabled: bool = Field(True)
     llm_command_gen_verifier: bool = Field(True)
     llm_command_gen_passes: int = Field(3)
-    llm_command_gen_temp: float | None = Field(None)
 
     @property
     def resolved_assistant_model(self) -> str | None:

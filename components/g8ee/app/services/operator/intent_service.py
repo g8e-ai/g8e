@@ -253,8 +253,8 @@ class OperatorIntentService:
             iam_result = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=iam_result))
 
-            if iam_result.status != ExecutionStatus.COMPLETED:
-                failed_intents.append(FailedIntentResult(intent=intent, error=iam_result.error or "Unknown error"))
+            if iam_result and iam_result.status != ExecutionStatus.COMPLETED:
+                failed_intents.append(FailedIntentResult(intent=intent, error=iam_result.error if iam_result else "Unknown error"))
             else:
                 v_action = self._get_verification_action_for_intent(intent)
                 if v_action:
@@ -362,7 +362,7 @@ class OperatorIntentService:
             )
             res = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
-            if res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
+            if res and res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
                 await self.g8ed_client.revoke_intent(op_doc.operator_id, intent, g8e_context)
 
         # Notify completion

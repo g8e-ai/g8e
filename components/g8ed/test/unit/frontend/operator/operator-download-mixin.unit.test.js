@@ -21,6 +21,7 @@ let webSessionService;
 let notificationService;
 let bindCounter;
 let obfuscateApiKey;
+let obfuscateCurlCommand;
 let copyToClipboardWithFeedback;
 
 const TEST_API_KEY = 'dak_abcdefghijklmnopqrstuvwxyz1234567890';
@@ -74,7 +75,10 @@ function buildMockContainer() {
                     <div class="operator-device-link-result initially-hidden" id="device-link-result">
                         <span class="operator-deploy-sublabel">Curl Command</span>
                         <div class="operator-deploy-cmd-row">
-                            <div class="operator-deploy-cmd" id="device-link-curl-cmd"></div>
+                            <div class="operator-deploy-cmd obfuscated" id="device-link-curl-cmd"></div>
+                            <button class="operator-deploy-icon-btn" id="device-link-curl-toggle" type="button" title="Show/Hide">
+                                <span class="material-symbols-outlined">visibility</span>
+                            </button>
                             <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
                                 <span class="material-symbols-outlined">content_copy</span>
                             </button>
@@ -177,6 +181,14 @@ beforeEach(async () => {
             if (!key || key.length < 20) return '••••••••••••••••';
             return key.substring(0, 12) + '••••••••••••' + key.substring(key.length - 4);
         }),
+        obfuscateCurlCommand: vi.fn((cmd) => {
+            if (!cmd) return '••••••••••••••••';
+            const spaceIndex = cmd.indexOf(' ');
+            if (spaceIndex === -1) return '••••••••••••••••';
+            const firstPart = cmd.substring(0, spaceIndex);
+            const lastPart = cmd.substring(cmd.lastIndexOf(' '));
+            return firstPart + ' •••••••••••••••• ' + lastPart;
+        }),
         copyToClipboardWithFeedback: vi.fn(),
     }));
 
@@ -193,7 +205,7 @@ beforeEach(async () => {
     notificationService = nsMod.notificationService;
 
     const uiUtilsMod = await import('@g8ed/public/js/utils/ui-utils.js');
-    ({ bindCounter, obfuscateApiKey, copyToClipboardWithFeedback } = uiUtilsMod);
+    ({ bindCounter, obfuscateApiKey, obfuscateCurlCommand, copyToClipboardWithFeedback } = uiUtilsMod);
 
     // Make bindCounter actually work in tests
     bindCounter.mockImplementation((decId, incId, input, min, max, container) => {
@@ -406,9 +418,10 @@ describe('OperatorDownloadMixin [UNIT - jsdom]', () => {
 
             await vi.waitFor(() => {
                 const curlCmd = container.querySelector('#device-link-curl-cmd');
-                expect(curlCmd.textContent).toContain('curl -fsSL');
-                expect(curlCmd.textContent).toContain(testToken);
-                expect(curlCmd.textContent).toContain('sh -s --');
+                expect(obfuscateCurlCommand).toHaveBeenCalledWith(expect.stringContaining('curl -fsSL'));
+                expect(curlCmd.dataset.curlCommand).toContain('curl -fsSL');
+                expect(curlCmd.dataset.curlCommand).toContain(testToken);
+                expect(curlCmd.classList.contains('obfuscated')).toBe(true);
             });
 
             const tokenDiv = container.querySelector('#device-link-token');

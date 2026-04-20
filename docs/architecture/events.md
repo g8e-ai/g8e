@@ -458,9 +458,13 @@ The protocol defines five top-level domains. Total event count: **241**.
 | Wire Value | Description |
 |------------|-------------|
 | `g8e.v1.ai.tribunal.session.started` | Tribunal session started |
-| `g8e.v1.ai.tribunal.session.completed` | Tribunal session completed |
-| `g8e.v1.ai.tribunal.session.failed` | Tribunal session failed |
-| `g8e.v1.ai.tribunal.session.fallback.triggered` | Tribunal fallback to primary response triggered |
+| `g8e.v1.ai.tribunal.session.completed` | Tribunal session completed successfully |
+| `g8e.v1.ai.tribunal.session.disabled` | Terminal: Tribunal disabled via settings (`llm_command_gen_enabled=False`) |
+| `g8e.v1.ai.tribunal.session.model.not_configured` | Terminal: no model configured for the Tribunal's provider |
+| `g8e.v1.ai.tribunal.session.provider.unavailable` | Terminal: LLM provider failed to initialize (auth, unsupported provider) |
+| `g8e.v1.ai.tribunal.session.system.error` | Terminal: every generation pass failed with a system-class error (auth/network/config) |
+| `g8e.v1.ai.tribunal.session.generation.failed` | Terminal: every generation pass failed for non-system reasons (refusals, hallucinations) |
+| `g8e.v1.ai.tribunal.session.verifier.failed` | Terminal: voting produced a candidate but the verifier rejected it |
 
 ### `ai.tribunal.voting` -- Tribunal Voting
 

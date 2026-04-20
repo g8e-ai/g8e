@@ -18,10 +18,6 @@ import { MockEventBus, MockServiceClient, MockAuthState } from '@test/mocks/mock
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { CssClass } from '@g8ed/public/js/constants/ui-constants.js';
 
-vi.mock('@g8ed/public/js/utils/favicon.js', () => ({
-    initFavicon: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@g8ed/public/js/utils/notification-service.js', () => ({
     notificationService: {
         init: vi.fn(),
