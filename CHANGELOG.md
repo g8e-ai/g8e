@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-04-20
+
+### Added
+- **Tribunal Enhancements:** 5-member tribunal implementation with enhanced context and safety guidelines delivery to the tribunal pipeline
+- **Operator Panel Documentation:** Comprehensive documentation for operator panel paths and features
+- **Operator Panel Tests:** Added test coverage for operator panel path functionality
+
+### Changed
+- **Bound Session Refactoring:** Renamed `web_session_id` to `bound_web_session_id` across all services for clarity and consistency
+- **SSE Validation:** Enhanced Server-Sent Events validation and wire/docs alignment
+- **Heartbeat System:** Improved heartbeat data handling in g8ee and cleaned up flatten_for cruft
+- **Metrics Delivery:** Enhanced metrics delivery to frontend for better operator monitoring
+- **Tribunal Error Handling:** Consolidated Tribunal error-to-event-to-tool-call-failure flow for better error tracking
+- **Temperature Configuration:** Cleaned up temperature settings to be persona-specific
+- **Sentinel Configuration:** Sentinel is now always-on with updated documentation
+
+### Fixed
+- **CLI Authentication:** Improved CLI login flow and authentication handling
+- **CLI Security:** Enhanced CLI security for Ollama-only setups
+- **Operator Panel:** Fixed operator list display, bind/unbind all buttons, and public IP obfuscation
+- **Model Selection:** Fixed model selection drawer in the dashboard
+- **Platform Clean:** Fixed platform clean script for proper cleanup
+- **Frontend Bugs:** General UX improvements and frontend bug fixes
+- **Code Quality:** Ruff linting fixes and removal of dead AgentMetadata enum
+
+---
+
 ## [0.1.1] - 2026-04-16
 
 ### Added
