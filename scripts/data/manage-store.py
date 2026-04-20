@@ -19,16 +19,20 @@ Runs inside g8ep and communicates with g8es directly.
 
 Usage:
     python manage-g8es.py store stats
-    python manage-g8es.py store operators
-    python manage-g8es.py store web_sessions
-    python manage-g8es.py store doc --collection operators --id <id>
-    python manage-g8es.py store kv
-    python manage-g8es.py store kv --pattern "g8e:session:*"
-    python manage-g8es.py store kv-get --key "g8e:session:web:session_123"
     python manage-g8es.py store network
     python manage-g8es.py store find --collection operators --field status --value active
+    python manage-g8es.py store kv list [--pattern "g8e:session:*"]
+    python manage-g8es.py store kv get <key>
     python manage-g8es.py store wipe [--dry-run]
     python manage-g8es.py store get-setting <key>
+    python manage-g8es.py store <collection> list [--limit N] [--fields f1 f2]
+    python manage-g8es.py store <collection> get <id>
+
+Collections:
+    account_locks, api_keys, auth_admin_audit, bound_sessions, cases,
+    console_audit, investigations, login_audit, memories, operator_sessions,
+    operator_usage, operators, organizations, passkey_challenges, settings,
+    tasks, users, web_sessions
 """
 
 import argparse
@@ -363,12 +367,12 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   python manage-g8es.py store stats
-  python manage-g8es.py store operators
-  python manage-g8es.py store doc --collection operators --id <id>
-  python manage-g8es.py store kv --pattern "g8e:session:*"
-  python manage-g8es.py store kv-get --key "g8e:session:web:session_123"
   python manage-g8es.py store network
   python manage-g8es.py store find --collection operators --field status --value active
+  python manage-g8es.py store kv list --pattern "g8e:session:*"
+  python manage-g8es.py store kv get g8e:session:web:session_123
+  python manage-g8es.py store operators list --limit 10
+  python manage-g8es.py store operators get <operator_id>
   python manage-g8es.py store wipe --dry-run
         """
     )
@@ -378,6 +382,7 @@ Examples:
 
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
 
+    # Special commands
     subparsers.add_parser('stats', help='Show database statistics')
 
     sp = subparsers.add_parser('network', help='Show operator network details (IPs, interfaces)')
@@ -389,28 +394,35 @@ Examples:
     sp.add_argument('--value', required=True, help='Exact value to match')
     sp.add_argument('--limit', type=int, default=50)
 
-    for col in COLLECTIONS:
-        sp = subparsers.add_parser(col, help=f'List {col}')
-        sp.add_argument('--limit', type=int, default=50)
-        sp.add_argument('--fields', nargs='+', metavar='FIELD',
-                        help='Fields to display (default: smart summary)')
-
-    sp = subparsers.add_parser('doc', help='Get a single document by collection + id')
-    sp.add_argument('--collection', required=True, help='Collection name')
-    sp.add_argument('--id', dest='doc_id', required=True, help='Document ID')
-
-    sp = subparsers.add_parser('kv', help='List KV store keys')
-    sp.add_argument('--pattern', help='Key pattern (supports * and ? wildcards)')
-    sp.add_argument('--limit', type=int, default=50)
-
-    sp = subparsers.add_parser('kv-get', help='Get a single KV value')
-    sp.add_argument('--key', required=True, help='Key to retrieve')
-
     sp = subparsers.add_parser('wipe', help='Clear all app data (preserves platform settings)')
     sp.add_argument('--dry-run', action='store_true', help='Show what would be deleted without deleting')
 
     sp = subparsers.add_parser('get-setting', help='Read a single platform setting value')
     sp.add_argument('key', help='Setting key (e.g. llm_model)')
+
+    # KV subcommand with list/get
+    kv_parser = subparsers.add_parser('kv', help='KV store operations')
+    kv_subparsers = kv_parser.add_subparsers(dest='kv_action', help='KV action')
+
+    kv_list = kv_subparsers.add_parser('list', help='List KV store keys')
+    kv_list.add_argument('--pattern', help='Key pattern (supports * and ? wildcards)')
+    kv_list.add_argument('--limit', type=int, default=50)
+
+    kv_get = kv_subparsers.add_parser('get', help='Get a single KV value')
+    kv_get.add_argument('key', help='Key to retrieve')
+
+    # Collection subcommands with list/get
+    for col in COLLECTIONS:
+        col_parser = subparsers.add_parser(col, help=f'{col} collection operations')
+        col_subparsers = col_parser.add_subparsers(dest='col_action', help=f'{col} action')
+
+        col_list = col_subparsers.add_parser('list', help=f'List {col}')
+        col_list.add_argument('--limit', type=int, default=50)
+        col_list.add_argument('--fields', nargs='+', metavar='FIELD',
+                              help='Fields to display (default: smart summary)')
+
+        col_get = col_subparsers.add_parser('get', help=f'Get a single {col} document')
+        col_get.add_argument('id', help='Document ID')
 
     return parser
 
@@ -435,21 +447,32 @@ def run(argv: List[str]) -> int:
         elif args.command == 'find':
             exec_find(args.collection, args.field, args.value,
                      limit=args.limit, as_json=args.as_json)
-        elif args.command in COLLECTIONS:
-            exec_list_collection(args.command,
-                                limit=args.limit,
-                                fields=getattr(args, 'fields', None),
-                                as_json=args.as_json)
-        elif args.command == 'doc':
-            exec_doc(args.collection, args.doc_id)
-        elif args.command == 'kv':
-            exec_kv(pattern=args.pattern, limit=args.limit, as_json=args.as_json)
-        elif args.command == 'kv-get':
-            exec_kv_get(args.key)
         elif args.command == 'wipe':
             exec_wipe(dry_run=args.dry_run)
         elif args.command == 'get-setting':
             exec_get_setting(args.key)
+        elif args.command == 'kv':
+            if args.kv_action == 'list':
+                exec_kv(pattern=getattr(args, 'pattern', None), limit=args.limit, as_json=args.as_json)
+            elif args.kv_action == 'get':
+                exec_kv_get(args.key)
+            else:
+                parser.print_help()
+                return 1
+        elif args.command in COLLECTIONS:
+            if args.col_action == 'list':
+                exec_list_collection(args.command,
+                                    limit=args.limit,
+                                    fields=getattr(args, 'fields', None),
+                                    as_json=args.as_json)
+            elif args.col_action == 'get':
+                exec_doc(args.command, args.id)
+            else:
+                parser.print_help()
+                return 1
+        else:
+            parser.print_help()
+            return 1
     except RuntimeError as e:
         print(f'[manage-g8es store] {e}', file=sys.stderr)
         return 1

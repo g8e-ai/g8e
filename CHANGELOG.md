@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-04-16
 
 ### Added
+- **g8ee Model Serialization:** Introduced `UTCDatetime` type for all wire-facing datetime fields, serializing to ISO 8601 with `Z` suffix. Replaced custom `flatten_for_wire()`, `flatten_for_db()`, and `flatten_for_llm()` methods with Pydantic's native `model_dump(mode="json")` for boundary serialization. Added `SessionEventWire` and `BackgroundEventWire` models for SSE event contracts.
+
+### Changed
 - **Multi-Operator Batches:** `batch_id` correlation is now surfaced end-to-end — on `CommandExecutionResult`, approval metadata, and conversation message metadata — so agents and the dashboard can tie per-operator events and follow-up actions back to a single batched approval.
 - **Task Tracking:** Task ID and TDTS tracking added for better correlation and debugging.
 - **Setup Page:** Users can now reuse Gemini API key for Vertex AI search in the setup page.

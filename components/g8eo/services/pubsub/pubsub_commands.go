@@ -60,6 +60,8 @@ type PubSubCommandService struct {
 
 	ShutdownChan chan string
 
+	handlers map[string]func(context.Context, PubSubCommandMessage)
+
 	ctx     context.Context
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -140,8 +142,33 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.history.rawVault = c.RawVault
 	rs.history.historyHandler = c.HistoryHandler
 
+	rs.buildHandlers()
+
 	c.Logger.Info("g8e connectivity initialized")
 	return rs, nil
+}
+
+func (rs *PubSubCommandService) buildHandlers() {
+	rs.handlers = map[string]func(context.Context, PubSubCommandMessage){
+		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
+		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
+		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
+		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
+		constants.Event.Operator.FsList.Requested:           rs.fileOps.HandleFsListRequest,
+		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
+		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
+		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
+		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
+		constants.Event.Operator.FetchFileHistory.Requested: rs.history.HandleFetchFileHistoryRequest,
+		constants.Event.Operator.RestoreFile.Requested:      rs.history.HandleRestoreFileRequest,
+		constants.Event.Operator.ShutdownRequested:          func(ctx context.Context, msg PubSubCommandMessage) { rs.handleShutdownRequest(msg) },
+		constants.Event.Operator.Audit.UserMsg:              rs.audit.HandleUserMsgRequest,
+		constants.Event.Operator.Audit.AIMsg:                rs.audit.HandleAIMsgRequest,
+		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
+		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
+		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
+		constants.Event.Operator.MCP.ToolsCall:              rs.handleMCPToolsCall,
+	}
 }
 
 func (rs *PubSubCommandService) Start(ctx context.Context) error {
@@ -324,46 +351,12 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 }
 
 func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
-	switch cmdMsg.EventType {
-	case constants.Event.Operator.HeartbeatRequested:
-		rs.heartbeat.HandleRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.Command.Requested:
-		rs.commands.HandleExecutionRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.Command.CancelRequested:
-		rs.commands.HandleCancelRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FileEdit.Requested:
-		rs.fileOps.HandleFileEditRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FsList.Requested:
-		rs.fileOps.HandleFsListRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FsRead.Requested:
-		rs.fileOps.HandleFsReadRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.PortCheck.Requested:
-		rs.ports.HandlePortCheckRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FetchLogs.Requested:
-		rs.history.HandleFetchLogsRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FetchHistory.Requested:
-		rs.history.HandleFetchHistoryRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FetchFileHistory.Requested:
-		rs.history.HandleFetchFileHistoryRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.RestoreFile.Requested:
-		rs.history.HandleRestoreFileRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.ShutdownRequested:
-		rs.handleShutdownRequest(cmdMsg)
-	case constants.Event.Operator.Audit.UserMsg:
-		rs.audit.HandleUserMsgRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.Audit.AIMsg:
-		rs.audit.HandleAIMsgRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.Audit.DirectCmd:
-		rs.audit.HandleDirectCmdRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.Audit.DirectCmdResult:
-		rs.audit.HandleDirectCmdResultRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.FetchFileDiff.Requested:
-		rs.history.HandleFetchFileDiffRequest(rs.ctx, cmdMsg)
-	case constants.Event.Operator.MCP.ToolsCall:
-		rs.handleMCPToolsCall(rs.ctx, cmdMsg)
-	default:
-		rs.logger.Warn("Unknown request type")
+	handler, ok := rs.handlers[cmdMsg.EventType]
+	if !ok {
+		rs.logger.Warn("Unknown request type", "event_type", cmdMsg.EventType)
+		return
 	}
+	handler(rs.ctx, cmdMsg)
 }
 
 func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubSubCommandMessage) {
@@ -417,25 +410,13 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 	msg.Payload = g8eMsg.Payload
 	msg.ID = g8eMsg.ID // MCP request ID
 
-	// Now dispatch based on the translated EventType
-	switch g8eMsg.EventType {
-	case constants.Event.Operator.Command.Requested:
-		rs.commands.HandleExecutionRequest(ctx, msg)
-	case constants.Event.Operator.FileEdit.Requested:
-		rs.fileOps.HandleFileEditRequest(ctx, msg)
-	case constants.Event.Operator.FsList.Requested:
-		rs.fileOps.HandleFsListRequest(ctx, msg)
-	case constants.Event.Operator.FsRead.Requested:
-		rs.fileOps.HandleFsReadRequest(ctx, msg)
-	case constants.Event.Operator.PortCheck.Requested:
-		rs.ports.HandlePortCheckRequest(ctx, msg)
-	case constants.Event.Operator.FetchFileHistory.Requested:
-		rs.history.HandleFetchFileHistoryRequest(ctx, msg)
-	case constants.Event.Operator.FetchFileDiff.Requested:
-		rs.history.HandleFetchFileDiffRequest(ctx, msg)
-	default:
+	// Now dispatch based on the translated EventType using the same dispatch table
+	handler, ok := rs.handlers[g8eMsg.EventType]
+	if !ok {
 		rs.logger.Warn("Unsupported MCP tool event type", "event_type", g8eMsg.EventType)
+		return
 	}
+	handler(ctx, msg)
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {

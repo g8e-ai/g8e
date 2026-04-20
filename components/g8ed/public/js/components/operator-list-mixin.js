@@ -14,7 +14,7 @@
 import { devLogger } from '../utils/dev-logger.js';
 import { OperatorStatus } from '../constants/operator-constants.js';
 import { templateLoader } from '../utils/template-loader.js';
-import { timeAgo, parseISOString, formatForDisplay } from '../utils/timestamp.js';
+import { timeAgo, timeAgoShort, parseISOString, formatForDisplay } from '../utils/timestamp.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { webSessionService } from '../utils/web-session-service.js';
 import { OperatorDialogs, OperatorAlerts } from '../constants/operator-messages.js';
@@ -32,6 +32,13 @@ import { showConfirmationModal } from '../utils/ui-utils.js';
  */
 export const OperatorListMixin = {
 
+    _obfuscateIp(ip) {
+        if (!ip || ip === ' - ') return ' - ';
+        const parts = ip.split('.');
+        if (parts.length !== 4) return '•••••••••';
+        return `${parts[0]}.${'•'.repeat(parts[1].length)}.${'•'.repeat(parts[2].length)}.${'•'.repeat(parts[3].length)}`;
+    },
+
     displayOperators(operators) {
         if (!this.operatorList) {
             devLogger.warn('[OPERATOR] displayOperators called but operatorList is null');
@@ -46,12 +53,18 @@ export const OperatorListMixin = {
         const previousSelection = this.selectedMetricsOperatorId;
         const currentWebSessionId = webSessionService.getWebSessionId();
 
+        const expandedOperatorIds = new Set();
+        this.operatorList.querySelectorAll('.operator-list-item.expanded').forEach(el => {
+            const operatorId = el.getAttribute('data-operator-id');
+            if (operatorId) expandedOperatorIds.add(operatorId);
+        });
+
         devLogger.log(`[OPERATOR] Current web session ID: ${currentWebSessionId}`);
         devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`);
 
         const statusPriority = (op) => {
             if (op.is_g8ep) return 0;
-            const isBoundToMe = op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId;
+            const isBoundToMe = op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = op.status === OperatorStatus.BOUND && !isBoundToMe;
             if (isBoundToMe) return 1;
             if (isBoundElsewhere) return 2;
@@ -86,17 +99,20 @@ export const OperatorListMixin = {
             const operatorName = operator.name || 'Unknown';
             const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (systemInfo.hostname || ' - ');
 
-            const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.web_session_id === currentWebSessionId;
+            const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
 
             if (isBoundToMe) {
                 item.classList.add('bound');
-                item.classList.add('expanded');
                 if (!this.boundOperatorIds.includes(operator.operator_id)) {
                     this.boundOperatorIds.push(operator.operator_id);
                 }
             } else if (isBoundElsewhere) {
                 item.classList.add('bound-elsewhere');
+            }
+
+            if (operator.is_g8ep) {
+                item.classList.add('is-g8ep');
             }
 
             const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
@@ -108,12 +124,53 @@ export const OperatorListMixin = {
                 if (!timestamp) return ' - ';
                 const date = parseISOString(timestamp);
                 const diffMs = Date.now() - date.getTime();
-                if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgo(date);
+                if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgoShort(date);
                 return formatForDisplay(date);
             };
 
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';
             const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
+
+            const formatPercent = (value) => {
+                if (value === null || value === undefined) return ' - ';
+                return `${Math.round(value)}%`;
+            };
+
+            const formatLatency = (latency) => {
+                if (latency === null || latency === undefined) return ' - ';
+                if (typeof latency === 'number') return `${latency.toFixed(0)}ms`;
+                return String(latency);
+            };
+
+            const formatUptime = (uptime) => {
+                if (!uptime) return ' - ';
+                if (typeof uptime === 'string') return uptime;
+                if (typeof uptime === 'number') {
+                    const seconds = uptime;
+                    const days = Math.floor(seconds / 86400);
+                    const hours = Math.floor((seconds % 86400) / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    if (days > 0) return `${days}d ${hours}h`;
+                    if (hours > 0) return `${hours}h ${minutes}m`;
+                    return `${minutes}m`;
+                }
+                return ' - ';
+            };
+
+            const cpuPercent = formatPercent(latestSnapshot.cpu_percent);
+            const memoryPercent = formatPercent(latestSnapshot.memory_percent);
+            const diskPercent = formatPercent(latestSnapshot.disk_percent);
+            const networkLatency = formatLatency(latestSnapshot.network_latency);
+            const uptime = formatUptime(latestSnapshot.uptime || latestSnapshot.uptime_seconds);
+
+            const systemOs = systemInfo.os || ' - ';
+            const architecture = systemInfo.architecture || ' - ';
+            const cpuCount = systemInfo.cpu_count !== null && systemInfo.cpu_count !== undefined ? systemInfo.cpu_count : ' - ';
+            const memoryMb = systemInfo.memory_mb !== null && systemInfo.memory_mb !== undefined ? systemInfo.memory_mb : ' - ';
+            const currentUser = systemInfo.current_user || ' - ';
+            const actualPublicIp = systemInfo.public_ip || ' - ';
+            const publicIp = this._obfuscateIp(actualPublicIp);
+            const internalIp = systemInfo.internal_ip || ' - ';
 
             item.classList.add(statusClass);
 
@@ -145,9 +202,11 @@ export const OperatorListMixin = {
                     <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
+                    ${operator.is_g8ep ? `
                     <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">restart_alt</span>
                     </button>
+                    ` : ''}
                     <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">vpn_key</span>
                     </button>
@@ -184,7 +243,19 @@ export const OperatorListMixin = {
                 nameClass: !hasName ? 'not-deployed' : '',
                 operatorTypeIcon,
                 operatorTypeClass,
-                operatorTypeTitle
+                operatorTypeTitle,
+                cpuPercent,
+                memoryPercent,
+                diskPercent,
+                networkLatency,
+                uptime,
+                systemOs,
+                architecture,
+                cpuCount,
+                memoryMb,
+                currentUser,
+                publicIp,
+                internalIp
             });
 
             const toggleBtn = item.querySelector('.operator-toggle-btn');
@@ -192,6 +263,27 @@ export const OperatorListMixin = {
                 toggleBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     item.classList.toggle('expanded');
+                });
+            }
+
+            const ipToggleBtn = item.querySelector('.ip-visibility-toggle');
+            const ipElement = item.querySelector('.operator-item-public-ip');
+            if (ipToggleBtn && ipElement) {
+                ipElement.setAttribute('data-actual-ip', actualPublicIp);
+                ipToggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isVisible = ipElement.getAttribute('data-ip-visible') === 'true';
+                    if (isVisible) {
+                        ipElement.textContent = this._obfuscateIp(actualPublicIp);
+                        ipElement.setAttribute('data-ip-visible', 'false');
+                        ipToggleBtn.textContent = 'visibility_off';
+                        ipToggleBtn.title = 'Show IP';
+                    } else {
+                        ipElement.textContent = actualPublicIp;
+                        ipElement.setAttribute('data-ip-visible', 'true');
+                        ipToggleBtn.textContent = 'visibility';
+                        ipToggleBtn.title = 'Hide IP';
+                    }
                 });
             }
 
@@ -261,6 +353,13 @@ export const OperatorListMixin = {
 
         this.operatorList.replaceChildren(fragment);
 
+        expandedOperatorIds.forEach(operatorId => {
+            const cardElement = this.operatorList.querySelector(`[data-operator-id="${operatorId}"]`);
+            if (cardElement) {
+                cardElement.classList.add('expanded');
+            }
+        });
+
         this._applyDefaultMetricsSelection(sortedOperators, previousSelection);
 
         const startSlot = paginatedOperators.length > 0 ? startIndex + 1 : 0;
@@ -269,6 +368,7 @@ export const OperatorListMixin = {
 
         this.updateBindAllButtonVisibility();
         this.updateUnbindAllButtonVisibility();
+        this.updateOperatorListBarTitle();
     },
 
     renderPaginationControls(totalOperators, startSlot = 1, endSlot = 0) {
@@ -397,7 +497,7 @@ export const OperatorListMixin = {
         }
 
         const boundOps = sortedOperators
-            .filter(op => op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId)
+            .filter(op => op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId)
             .sort((a, b) => (a.name || a.operator_id).localeCompare(b.name || b.operator_id));
 
         if (boundOps.length > 0) {

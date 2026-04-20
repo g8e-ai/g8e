@@ -27,7 +27,7 @@ from app.constants import (
     InternalApiPaths,
 )
 from app.errors import ConfigurationError, NetworkError
-from app.models.events import BackgroundEvent, SessionEvent
+from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.g8ed_client import (
     GrantIntentResponse,
@@ -36,6 +36,7 @@ from app.models.g8ed_client import (
     RevokeIntentResponse,
     SSEPushResponse,
 )
+from app.services.protocols import OperatorDataServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,10 @@ def get_g8ed_url(settings: G8eePlatformSettings) -> str:
 
 class InternalHttpClient:
 
-    def __init__(self, settings: G8eePlatformSettings):
+    def __init__(self, settings: G8eePlatformSettings, operator_data_service: OperatorDataServiceProtocol | None = None):
         self.g8ed_url = get_g8ed_url(settings)
         self._settings = settings
+        self._operator_data_service: OperatorDataServiceProtocol | None = operator_data_service
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.g8ed_url,
@@ -78,6 +80,10 @@ class InternalHttpClient:
         """Access the underlying HTTP client."""
         return self._http
 
+    def set_operator_data_service(self, operator_data_service: OperatorDataServiceProtocol) -> None:
+        """Inject operator_data_service after construction to resolve circular dependency."""
+        self._operator_data_service = operator_data_service
+
     def _auth_headers(self) -> dict[str, str]:
         token = self.settings.auth.internal_auth_token
         if not token:
@@ -96,49 +102,76 @@ class InternalHttpClient:
     async def push_sse_event(
         self,
         event: SessionEvent | BackgroundEvent,
-    ) -> bool:
+    ) -> SSEPushResponse:
+        """POST an event to g8ed for SSE delivery.
+
+        Returns the typed SSEPushResponse so callers can distinguish "accepted,
+        delivered to N sessions" from "accepted, fan-out had zero listeners"
+        (both legitimate success cases). Raises NetworkError only for genuine
+        transport/server failures (non-2xx); the originating HTTP status code
+        is preserved in the error details so real outages are never collapsed
+        into the empty-fan-out success shape.
+        """
+        wire_model = (
+            SessionEventWire.from_session_event(event)
+            if isinstance(event, SessionEvent)
+            else BackgroundEventWire.from_background_event(event)
+        )
+        wire = wire_model.model_dump(mode="json")
+        web_session_id = wire.get("web_session_id")
+        event_type = wire.get("event", {}).get("type") or "None"
+
+        logger.info(
+            "[HTTP-G8ED] Pushing SSE event",
+            extra={
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "event_type": event_type,
+            }
+        )
+
         try:
-            wire = event.flatten_for_wire()
-            web_session_id = wire.get("web_session_id")
-            event_type = wire.get("event", {}).get("type") or "None"
-
-            logger.info(
-                "[HTTP-G8ED] Pushing SSE event",
-                extra={
-                    "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
-                    "event_type": event_type,
-                }
-            )
-
             response = await self._http.post(
                 InternalApiPaths.PREFIX + InternalApiPaths.G8ED_SSE_PUSH,
                 json_data=wire,
                 headers=self._auth_headers(),
             )
-            if response.is_success:
-                result = SSEPushResponse.model_validate(response.json())
-                logger.info(
-                    "[HTTP-G8ED] SSE event delivered",
-                    extra={
-                        "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
-                        "event_type": event_type,
-                        "success": result.success,
-                        "delivered": result.delivered,
-                    }
-                )
-                return result.success
-            logger.error(
-                "[HTTP-G8ED] Failed to deliver SSE event",
-                extra={"status": response.status_code, "error": response.text}
-            )
-            return False
-
         except Exception as e:
             raise NetworkError(
                 f"[HTTP-G8ED] HTTP request failed: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             )
+
+        if not response.is_success:
+            logger.error(
+                "[HTTP-G8ED] Failed to deliver SSE event",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "event_type": event_type,
+                }
+            )
+            raise NetworkError(
+                f"[HTTP-G8ED] SSE push returned HTTP {response.status_code}",
+                component=ComponentName.G8EE,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "event_type": event_type,
+                },
+            )
+
+        result = SSEPushResponse.model_validate(response.json())
+        logger.info(
+            "[HTTP-G8ED] SSE event delivered",
+            extra={
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "event_type": event_type,
+                "success": result.success,
+                "delivered": result.delivered,
+            }
+        )
+        return result
 
     async def grant_intent(
         self,
@@ -156,7 +189,7 @@ class InternalHttpClient:
 
             response = await self._http.post(
                 (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_GRANT_INTENT).format(operator_id=operator_id),
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers=self._auth_headers(),
                 context=context,
             )
@@ -206,7 +239,7 @@ class InternalHttpClient:
 
             response = await self._http.post(
                 (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_REVOKE_INTENT).format(operator_id=operator_id),
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers=self._auth_headers(),
                 context=context,
             )
@@ -235,9 +268,13 @@ class InternalHttpClient:
         context: G8eHttpContext,
     ) -> bool:
         """Delegate to OperatorDataService for proper domain separation."""
-        from app.main import app  # Import here to avoid circular dependency
+        if self._operator_data_service is None:
+            raise ConfigurationError(
+                "operator_data_service not injected into InternalHttpClient",
+                component=ComponentName.G8EE,
+            )
         
-        return await app.state.operator_data_service.bind_operators(
+        return await self._operator_data_service.bind_operators(
             operator_ids=operator_ids,
             web_session_id=web_session_id,
             context=context,

@@ -105,6 +105,8 @@ services:
       - "io.g8e.managed=true"
     environment:
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
+      - G8E_INTERNAL_AUTH_TOKEN
+      - G8E_SESSION_ENCRYPTION_KEY
     ports:
       - "443:443"
       - "80:80"

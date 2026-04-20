@@ -189,7 +189,7 @@ export const OperatorMetricsDisplayMixin = {
 
     updatePanelStatusFromOperatorCounts() {
         const currentWebSessionId = webSessionService.getWebSessionId();
-        const boundOperator = this.operators.find(op => op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId);
+        const boundOperator = this.operators.find(op => op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId);
         const hasBoundOperator = !!boundOperator;
 
         if (hasBoundOperator && this.isConnected) {

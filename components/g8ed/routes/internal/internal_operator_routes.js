@@ -25,7 +25,7 @@ import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../.
  */
 export function createInternalOperatorRouter({ services, authorizationMiddleware }) {
     const { operatorService, g8eNodeOperatorService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -184,7 +184,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/user/:userId/reauth
      */
-    router.post('/user/:userId/reauth', requireInternalOrigin, async (req, res, next) => {
+    router.post('/user/:userId/reauth', requireInternalOrUserAuth, async (req, res, next) => {
         const { userId } = req.params;
 
         logger.info('[INTERNAL-HTTP] g8ep operator reauth requested', { user_id: userId });

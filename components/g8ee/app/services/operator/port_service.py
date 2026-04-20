@@ -19,6 +19,7 @@ Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 
 import logging
 import uuid
+from typing import cast
 
 from app.services.protocols import (
     ExecutionRegistryProtocol,
@@ -99,9 +100,10 @@ class OperatorPortService:
                 target_operator=args.target_operator,
             )
         except (ValidationError, BusinessLogicError, ValueError) as e:
+            logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
             return PortCheckToolResult(
                 success=False,
-                error=str(e),
+                error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                 error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
@@ -149,7 +151,7 @@ class OperatorPortService:
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
                 case_id=case_id,
-                investigation_id=investigation.id if investigation else None,
+                investigation_id=investigation.id if investigation else "",
                 task_id=AITaskId.PORT_CHECK,
                 web_session_id=web_session_id,
                 operator_session_id=operator_session_id,
@@ -244,7 +246,7 @@ class OperatorPortService:
                     success=True,
                     host=payload.host or host,
                     port=payload.port or port,
-                    protocol=payload.protocol or protocol,
+                    protocol=cast(NetworkProtocol, payload.protocol or protocol),
                     is_open=payload.is_open,
                     latency_ms=payload.latency_ms,
                     error=payload.error,
@@ -259,6 +261,6 @@ class OperatorPortService:
             raise
         except Exception as e:
             logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
-            return PortCheckToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return PortCheckToolResult(success=False, error=f"Port check execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
         finally:
             self.execution_registry.release(execution_id)

@@ -70,7 +70,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         if not data:
             return None
         
-        data["id"] = operator_id
         return OperatorDocument.model_validate(data)
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
@@ -79,7 +78,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ValidationError("operator_id is required")
         
         # Convert to dict for storage
-        operator_data = operator.model_dump(exclude={"id"})
+        operator_data = operator.model_dump()
         
         result = await self.cache.create_document(
             collection=self.collection,
@@ -100,7 +99,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         now_timestamp = now()
         updates = {
             "status": status,
-            "created_at": now_timestamp,
         }
         
         operator = await self.get_operator(operator_id)
@@ -119,12 +117,17 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self,
         operator_id: str,
         heartbeat: OperatorHeartbeat,
-        investigation_id: str,
-        case_id: str,
+        investigation_id: str | None,
+        case_id: str | None,
     ) -> bool:
-        """Update Operator heartbeat and system info."""
+        """Update Operator heartbeat and system info.
+
+        investigation_id and case_id are only written when present; absent values
+        are not coerced to sentinel strings so existing values on the document
+        are preserved via merge=True.
+        """
         now_timestamp = now()
-        heartbeat_record = heartbeat.flatten_for_db()
+        heartbeat_record = heartbeat.model_dump(mode="json")
 
         system_info = OperatorSystemInfo(
             hostname=heartbeat.system_identity.hostname,
@@ -133,7 +136,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             cpu_count=heartbeat.system_identity.cpu_count,
             memory_mb=heartbeat.system_identity.memory_mb,
             public_ip=heartbeat.network.public_ip,
-            internal_ip=heartbeat.internal_ip,
+            internal_ip=heartbeat.network.internal_ip,
             interfaces=heartbeat.network.interfaces or [],
             current_user=heartbeat.system_identity.current_user,
             system_fingerprint=heartbeat.system_fingerprint,
@@ -151,12 +154,14 @@ class OperatorDataService(OperatorDataServiceProtocol):
         update_data: dict[str, object] = {
             "last_heartbeat": now_timestamp,
             "updated_at": now_timestamp,
-            "system_info": system_info.flatten_for_db(),
+            "system_info": system_info.model_dump(mode="json"),
             "latest_heartbeat_snapshot": heartbeat_record,
             "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
-            "investigation_id": investigation_id,
-            "case_id": case_id,
         }
+        if investigation_id is not None:
+            update_data["investigation_id"] = investigation_id
+        if case_id is not None:
+            update_data["case_id"] = case_id
 
         result = await self.cache.update_document(
             collection=self.collection,
@@ -178,7 +183,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     ) -> bool:
         """Append command execution result to operator history."""
         now_timestamp = now()
-        result_record = command_result.flatten_for_db()
+        result_record = command_result.model_dump(mode="json")
 
         update_data: dict[str, object] = {
             "updated_at": now_timestamp,
@@ -217,7 +222,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             collection=self.collection,
             document_id=operator_id,
             array_field="activity_log",
-            items_to_add=[activity_entry.flatten_for_db()],
+            items_to_add=[activity_entry.model_dump(mode="json")],
             additional_updates={"updated_at": now()},
         )
 
@@ -256,9 +261,9 @@ class OperatorDataService(OperatorDataServiceProtocol):
         try:
             request_payload = BindOperatorsRequest(operator_ids=operator_ids)
 
-            response = await self.internal_http_client.post(
+            response = await self.internal_http_client.post(  # type: ignore[reportUnknownMemberType]
                 "/api/operators/bind-all",
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers={
                     INTERNAL_AUTH_HEADER: "internal-service",
                     WEB_SESSION_ID_HEADER: web_session_id,

@@ -249,13 +249,8 @@ class SSEConnectionManager {
             return { handled: false, eventType };
         }
 
-        if (eventType === EventType.PLATFORM_SSE_KEEPALIVE_SENT) {
-            if (data.operator_list) {
-                this.eventBus.emit(EventType.OPERATOR_PANEL_LIST_UPDATED, data.operator_list);
-            }
-        }
-
         if (_INFRASTRUCTURE_EVENTS.has(eventType)) {
+            // Keepalive is just a heartbeat - no operator list extraction needed
             return { handled: true, infrastructure: true };
         }
 
@@ -334,7 +329,12 @@ class SSEConnectionManager {
             [EventType.TRIBUNAL_VOTING_REVIEW_STARTED]: ['web_session_id'],
             [EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED]: ['web_session_id'],
             [EventType.TRIBUNAL_SESSION_COMPLETED]: ['web_session_id'],
-            [EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_DISABLED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_SYSTEM_ERROR]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_GENERATION_FAILED]: ['web_session_id'],
+            [EventType.TRIBUNAL_SESSION_VERIFIER_FAILED]: ['web_session_id'],
         };
 
         return fieldMap[eventType] || null;

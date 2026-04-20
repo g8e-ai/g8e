@@ -13,7 +13,6 @@
 
 import pytest
 from app.db import DBClient
-from app.models.settings import G8eePlatformSettings
 
 @pytest.mark.unit
 @pytest.mark.asyncio

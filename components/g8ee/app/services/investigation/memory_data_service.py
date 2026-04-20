@@ -45,7 +45,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
         await self._cache_aside.create_document(
             collection=self.memories_collection,
             document_id=investigation.id,
-            data=memory.flatten_for_db(),
+            data=memory.model_dump(mode="json"),
         )
         logger.info(
             "Created new memory for investigation %s",
@@ -61,7 +61,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
         return memory
 
     async def save_memory(self, memory: InvestigationMemory, is_new: bool) -> None:
-        data = memory.flatten_for_db()
+        data = memory.model_dump(mode="json")
         if is_new:
             await self._cache_aside.create_document(
                 collection=self.memories_collection,
@@ -89,7 +89,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
         try:
             docs = await self._cache_aside.query_documents(
                 collection=self.memories_collection,
-                field_filters=[FieldFilter(field="user_id", op="==", value=user_id).flatten_for_wire()],
+                field_filters=[FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json")],
                 order_by={"created_at": "desc"},
             )
         except Exception as exc:
@@ -108,8 +108,8 @@ class MemoryDataService(MemoryDataServiceProtocol):
             docs = await self._cache_aside.query_documents(
                 collection=self.memories_collection,
                 field_filters=[
-                    FieldFilter(field="user_id", op="==", value=user_id).flatten_for_wire(),
-                    FieldFilter(field="case_id", op="==", value=case_id).flatten_for_wire(),
+                    FieldFilter(field="user_id", op="==", value=user_id).model_dump(mode="json"),
+                    FieldFilter(field="case_id", op="==", value=case_id).model_dump(mode="json"),
                 ],
                 order_by={"created_at": "desc"},
             )

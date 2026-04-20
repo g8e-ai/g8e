@@ -168,7 +168,7 @@ Wire listeners (`_setupWireListeners`) are registered in the constructor before 
 |---|---|---|
 | `OPERATOR_PANEL_LIST_UPDATED` | `_onListUpdated` | Replaces `_operators` array, updates counts and `operatorSessionService`, triggers full re-render |
 | `OPERATOR_STATUS_UPDATED_*` (all 8 variants) | `_onStatusUpdated` | Upserts the operator in `_operators`, recomputes counts, triggers state apply |
-| `OPERATOR_HEARTBEAT_SENT` | `_onHeartbeat` | Sets `_isConnected = true`, records `_lastHeartbeat`, triggers lightweight metrics refresh |
+| `OPERATOR_HEARTBEAT_RECEIVED` | `_onHeartbeat` | Sets `_isConnected = true`, records `_lastHeartbeat`, triggers lightweight metrics refresh |
 
 On `_applyOperatorState`, the cause determines the update path:
 - `heartbeat` — only updates metrics/status for the selected operator and its list card in-place

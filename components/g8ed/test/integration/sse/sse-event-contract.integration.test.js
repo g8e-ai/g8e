@@ -34,7 +34,6 @@ import { fileURLToPath } from 'url';
 import { EventType } from '@g8ed/constants/events.js';
 import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
 import {
-    G8eePassthroughEvent,
     ConnectionEstablishedEvent,
     KeepaliveEvent,
 } from '@g8ed/models/sse_models.js';
@@ -73,7 +72,7 @@ describe('SSE Event Contract Tests [INTEGRATION]', () => {
         sseService = makeSSEService();
         response = new MockSSEResponse();
         response.flushHeaders();
-        await sseService.registerConnection(WEB_SESSION_ID, response);
+        await sseService.registerConnection(WEB_SESSION_ID, 'u-test', response);
     });
 
     afterEach(() => {
@@ -159,17 +158,15 @@ describe('SSE Event Contract Tests [INTEGRATION]', () => {
                 const testResponse = new MockSSEResponse();
                 testResponse.flushHeaders();
                 const testService = makeSSEService();
-                await testService.registerConnection(WEB_SESSION_ID, testResponse);
+                await testService.registerConnection(WEB_SESSION_ID, 'u-test', testResponse);
 
-                await testService.publishEvent(WEB_SESSION_ID, new G8eePassthroughEvent({
-                    _payload: {
-                        ...fixture.data,
-                        type: fixture.type,
-                        investigation_id: INVESTIGATION_ID,
-                        case_id: CASE_ID,
-                        web_session_id: WEB_SESSION_ID,
-                    },
-                }));
+                await testService.publishEvent(WEB_SESSION_ID, {
+                    ...fixture.data,
+                    type: fixture.type,
+                    investigation_id: INVESTIGATION_ID,
+                    case_id: CASE_ID,
+                    web_session_id: WEB_SESSION_ID,
+                });
 
                 const raw = testResponse.getWrittenData().join('');
                 const wire = JSON.parse(raw.split('\n\n').find(f => f.startsWith('data: ')).slice(6).trim());

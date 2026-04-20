@@ -498,7 +498,7 @@ class PubSubClient:
             }
         )
         
-        result = await self.publish(channel, command_data.flatten_for_wire())
+        result = await self.publish(channel, command_data.model_dump(mode="json"))
         
         if result > 0:
             logger.debug(
@@ -646,7 +646,7 @@ class PubSubClient:
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
             )
-            receivers = await self.publish(channel, ping.flatten_for_wire())
+            receivers = await self.publish(channel, ping.model_dump(mode="json"))
             
             is_online = receivers > 0
             logger.debug(

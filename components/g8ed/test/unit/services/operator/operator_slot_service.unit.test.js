@@ -271,7 +271,7 @@ describe('OperatorSlotService', () => {
 
             await service.claimSlot('op-1', {
                 operator_session_id: 'os-1',
-                web_session_id: 'ws-1',
+                bound_web_session_id: 'ws-1',
                 system_info: { hostname: 'test' },
                 operator_type: 'system',
                 status: OperatorStatus.BOUND,
@@ -287,7 +287,7 @@ describe('OperatorSlotService', () => {
 
             await service.claimSlot('op-2', {
                 operator_session_id: 'os-2',
-                web_session_id: 'ws-2',
+                bound_web_session_id: 'ws-2',
                 system_info: { hostname: 'test2' },
                 operator_type: null,
             });

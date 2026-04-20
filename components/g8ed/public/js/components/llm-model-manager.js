@@ -39,15 +39,12 @@ export class LlmModelManager {
         this.defaultAssistantModel = '';
         this.defaultLiteModel = '';
 
-        this.primaryDropdown = null;
-        this.assistantDropdown = null;
-        this.liteDropdown = null;
-        this.primaryTextElement = null;
-        this.assistantTextElement = null;
-        this.liteTextElement = null;
+        this.drawerElement = null;
+        this.drawerTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
         this.liteMenuElement = null;
+        this.activeTab = 'primary';
 
         this.primaryModelMap = new Map();
         this.assistantModelMap = new Map();
@@ -72,12 +69,8 @@ export class LlmModelManager {
     }
 
     setupDOMElements() {
-        this.primaryDropdown = document.getElementById('llm-primary-model-dropdown');
-        this.assistantDropdown = document.getElementById('llm-assistant-model-dropdown');
-        this.liteDropdown = document.getElementById('llm-lite-model-dropdown');
-        this.primaryTextElement = document.getElementById('llm-primary-model-text');
-        this.assistantTextElement = document.getElementById('llm-assistant-model-text');
-        this.liteTextElement = document.getElementById('llm-lite-model-text');
+        this.drawerElement = document.getElementById('llm-model-drawer');
+        this.drawerTextElement = document.getElementById('llm-model-drawer-text');
         this.primaryMenuElement = document.getElementById('llm-primary-model-menu');
         this.assistantMenuElement = document.getElementById('llm-assistant-model-menu');
         this.liteMenuElement = document.getElementById('llm-lite-model-menu');
@@ -88,60 +81,36 @@ export class LlmModelManager {
             return;
         }
 
-        // Primary dropdown toggle
-        if (this.primaryDropdown) {
-            this.primaryDropdown.addEventListener('click', (e) => {
+        // Drawer toggle
+        if (this.drawerElement) {
+            this.drawerElement.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this._toggleDropdown('primary');
+                this._toggleDrawer();
             });
 
-            this.primaryDropdown.addEventListener('keydown', (e) => {
+            this.drawerElement.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    this._toggleDropdown('primary');
+                    this._toggleDrawer();
                 } else if (e.key === 'Escape') {
-                    this._closeAllDropdowns();
+                    this._closeDrawer();
                 }
             });
         }
 
-        // Assistant dropdown toggle
-        if (this.assistantDropdown) {
-            this.assistantDropdown.addEventListener('click', (e) => {
+        // Tab switching
+        const tabs = document.querySelectorAll('.llm-model-drawer__tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this._toggleDropdown('assistant');
+                const tabName = tab.dataset.tab;
+                this._switchTab(tabName);
             });
+        });
 
-            this.assistantDropdown.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this._toggleDropdown('assistant');
-                } else if (e.key === 'Escape') {
-                    this._closeAllDropdowns();
-                }
-            });
-        }
-
-        // Lite dropdown toggle
-        if (this.liteDropdown) {
-            this.liteDropdown.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._toggleDropdown('lite');
-            });
-
-            this.liteDropdown.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    this._toggleDropdown('lite');
-                } else if (e.key === 'Escape') {
-                    this._closeAllDropdowns();
-                }
-            });
-        }
-
-        // Close dropdowns when clicking outside
+        // Close drawer when clicking outside
         document.addEventListener('click', () => {
-            this._closeAllDropdowns();
+            this._closeDrawer();
         });
 
         this.eventBus.on(EventType.LLM_CONFIG_RECEIVED, (data) => {
@@ -159,30 +128,47 @@ export class LlmModelManager {
         this._eventListenersRegistered = true;
     }
 
-    _toggleDropdown(role) {
-        const dropdown = role === 'primary' ? this.primaryDropdown : role === 'assistant' ? this.assistantDropdown : this.liteDropdown;
-        if (!dropdown) {
+    _toggleDrawer() {
+        if (!this.drawerElement) {
             return;
         }
-        const isOpen = dropdown.classList.contains('open');
+        const isOpen = this.drawerElement.classList.contains('open');
 
-        this._closeAllDropdowns();
+        this._closeDrawer();
 
         if (!isOpen) {
-            dropdown.classList.add('open');
+            this.drawerElement.classList.add('open');
         }
     }
 
-    _closeAllDropdowns() {
-        if (this.primaryDropdown) {
-            this.primaryDropdown.classList.remove('open');
+    _closeDrawer() {
+        if (this.drawerElement) {
+            this.drawerElement.classList.remove('open');
         }
-        if (this.assistantDropdown) {
-            this.assistantDropdown.classList.remove('open');
-        }
-        if (this.liteDropdown) {
-            this.liteDropdown.classList.remove('open');
-        }
+    }
+
+    _switchTab(tabName) {
+        this.activeTab = tabName;
+
+        // Update tab active states
+        const tabs = document.querySelectorAll('.llm-model-drawer__tab');
+        tabs.forEach(tab => {
+            if (tab.dataset.tab === tabName) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+
+        // Update tab content visibility
+        const tabContents = document.querySelectorAll('.llm-model-drawer__tab-content');
+        tabContents.forEach(content => {
+            if (content.id === `llm-model-tab-${tabName}`) {
+                content.classList.add('active');
+            } else {
+                content.classList.remove('active');
+            }
+        });
     }
 
     handleConfigReceived(data) {
@@ -203,6 +189,7 @@ export class LlmModelManager {
         }
 
         this._populateDropdowns();
+        this._updateDrawerText();
     }
 
     _populateDropdowns() {
@@ -213,7 +200,6 @@ export class LlmModelManager {
 
     _populateGrouped(role, selectedValue) {
         const menuElement = role === 'primary' ? this.primaryMenuElement : role === 'assistant' ? this.assistantMenuElement : this.liteMenuElement;
-        const textElement = role === 'primary' ? this.primaryTextElement : role === 'assistant' ? this.assistantTextElement : this.liteTextElement;
         const modelMap = role === 'primary' ? this.primaryModelMap : role === 'assistant' ? this.assistantModelMap : this.liteModelMap;
 
         if (!menuElement) return;
@@ -223,9 +209,6 @@ export class LlmModelManager {
         const hasModels = Object.keys(this.providerModels).length > 0;
 
         if (!hasModels) {
-            if (textElement) {
-                textElement.textContent = 'Loading...';
-            }
             return;
         }
 
@@ -251,9 +234,6 @@ export class LlmModelManager {
 
                 if (model.id === selectedValue) {
                     option.classList.add('selected');
-                    if (textElement) {
-                        textElement.textContent = model.label || model.id;
-                    }
                 }
 
                 if (!firstOption) {
@@ -273,23 +253,14 @@ export class LlmModelManager {
         }
 
         if (menuElement.children.length === 0) {
-            if (textElement) {
-                textElement.textContent = 'No models';
-            }
             throw new Error(`[LlmModelManager] No ${role} models available from any configured provider`);
         }
 
         if (!selectedValue) {
-            if (textElement) {
-                textElement.textContent = 'Not configured';
-            }
             throw new Error(`[LlmModelManager] No ${role} model configured in settings`);
         }
 
         if (!modelMap.has(selectedValue)) {
-            if (textElement) {
-                textElement.textContent = 'Invalid model';
-            }
             throw new Error(`[LlmModelManager] Configured ${role} model '${selectedValue}' is not a valid ${role}-tier model for any configured provider`);
         }
     }
@@ -297,26 +268,40 @@ export class LlmModelManager {
     _selectModel(role, modelId, provider, label) {
         if (role === 'primary') {
             this.selectedPrimaryModel = modelId;
-            if (this.primaryTextElement) {
-                this.primaryTextElement.textContent = label;
-            }
         } else if (role === 'assistant') {
             this.selectedAssistantModel = modelId;
-            if (this.assistantTextElement) {
-                this.assistantTextElement.textContent = label;
-            }
         } else {
             this.selectedLiteModel = modelId;
-            if (this.liteTextElement) {
-                this.liteTextElement.textContent = label;
-            }
         }
 
         // Update selected state in UI
         this._updateSelectedState(role, modelId);
 
-        // Close dropdown
-        this._closeAllDropdowns();
+        // Update drawer text to show currently selected models
+        this._updateDrawerText();
+
+        // Close drawer
+        this._closeDrawer();
+    }
+
+    _updateDrawerText() {
+        if (!this.drawerTextElement) return;
+
+        const primaryLabel = this._getModelLabel('primary', this.selectedPrimaryModel);
+        this.drawerTextElement.textContent = primaryLabel;
+    }
+
+    _getModelLabel(role, modelId) {
+        const modelMap = role === 'primary' ? this.primaryModelMap : role === 'assistant' ? this.assistantModelMap : this.liteModelMap;
+        const provider = modelMap.get(modelId);
+        if (provider && this.providerModels[provider]) {
+            const models = this.providerModels[provider][role] || [];
+            const model = models.find(m => m.id === modelId);
+            if (model) {
+                return model.label || model.id;
+            }
+        }
+        return modelId || 'Not set';
     }
 
     _updateSelectedState(role, selectedValue) {
@@ -359,6 +344,8 @@ export class LlmModelManager {
     _syncDropdowns() {
         // Re-populate to update selected state
         this._populateDropdowns();
+        // Update drawer text to reflect current selections
+        this._updateDrawerText();
     }
 
     getPrimaryModel() {
@@ -386,12 +373,8 @@ export class LlmModelManager {
     }
 
     destroy() {
-        this.primaryDropdown = null;
-        this.assistantDropdown = null;
-        this.liteDropdown = null;
-        this.primaryTextElement = null;
-        this.assistantTextElement = null;
-        this.liteTextElement = null;
+        this.drawerElement = null;
+        this.drawerTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
         this.liteMenuElement = null;

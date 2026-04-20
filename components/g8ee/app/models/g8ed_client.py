@@ -15,7 +15,6 @@
 g8ed HTTP client request and response models.
 """
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import Field
@@ -23,17 +22,24 @@ from pydantic import Field
 from app.constants import ToolCallStatus, ThinkingActionType
 from app.utils.timestamp import now
 
-from .base import G8eBaseModel
+from .base import G8eBaseModel, UTCDatetime
 
 
 class SSEPushResponse(G8eBaseModel):
     """Response from POST /api/internal/sse/push.
 
-    Mirrors g8ed internal_sse_routes.js: { success, delivered }
+    Mirrors g8ed internal_sse_routes.js: { success, delivered, error }.
+
+    ``success`` indicates the push was accepted and processed. ``delivered`` is
+    the count of active SSE connections the event was fanned out to — zero is a
+    legitimate outcome for a BackgroundEvent when the user has no connected
+    sessions, not an error.
+
+    Canonical wire shape: shared/models/wire/sse_responses.json (sse_push_response)
     """
 
-    success: bool = Field(description="Whether the push was accepted")
-    delivered: bool = Field(default=False, description="Whether the event was delivered to an active SSE connection")
+    success: bool = Field(description="Whether the push was accepted and processed")
+    delivered: int = Field(default=0, ge=0, description="Number of SSE connections the event was delivered to")
     error: str | None = Field(default=None, description="Error message when unsuccessful")
 
 
@@ -47,7 +53,7 @@ class GrantIntentResponse(G8eBaseModel):
     message: str | None = Field(default=None, description="Human-readable result message")
     operator_id: str | None = Field(default=None, description="Operator ID")
     granted_intents: list[str] = Field(default_factory=list, description="All currently granted intents after this operation")
-    expires_at: datetime | None = Field(default=None, description="Expiry of the granted intent")
+    expires_at: UTCDatetime | None = Field(default=None, description="Expiry of the granted intent")
     error: str | None = Field(default=None, description="Error message when unsuccessful")
 
 
@@ -166,7 +172,7 @@ class AiProcessingStoppedPayload(G8eBaseModel):
     """Payload for EventType.LLM_CHAT_ITERATION_STOPPED."""
 
     reason: str | None = Field(default=None, description="Stop reason")
-    timestamp: datetime | None = Field(default=None, description="When the stop event occurred (UTC)")
+    timestamp: UTCDatetime | None = Field(default=None, description="When the stop event occurred (UTC)")
 
 
 class IntentDeniedPayload(G8eBaseModel):
@@ -180,7 +186,7 @@ class IntentDeniedPayload(G8eBaseModel):
     status: str = Field(default="denied")
     reason: str | None = Field(default=None, description="Denial reason")
     operator_id: str | None = Field(default=None, description="Operator ID")
-    timestamp: datetime = Field(default_factory=now)
+    timestamp: UTCDatetime = Field(default_factory=now)
 
 
 class IntentGrantedPayload(G8eBaseModel):
@@ -193,7 +199,7 @@ class IntentGrantedPayload(G8eBaseModel):
     granted: bool = Field(default=True)
     status: str = Field(default="granted")
     operator_id: str | None = Field(default=None, description="Operator ID")
-    timestamp: datetime = Field(default_factory=now)
+    timestamp: UTCDatetime = Field(default_factory=now)
 
 
 class IntentRevokedPayload(G8eBaseModel):
@@ -203,7 +209,7 @@ class IntentRevokedPayload(G8eBaseModel):
     revoked_intents: list[str] = Field(default_factory=list, description="Revoked intent names")
     justification: str | None = Field(default=None, description="Revocation justification")
     operator_id: str | None = Field(default=None, description="Operator ID")
-    timestamp: datetime = Field(default_factory=now)
+    timestamp: UTCDatetime = Field(default_factory=now)
 
 
 class IntentOperationResult(G8eBaseModel):

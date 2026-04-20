@@ -38,7 +38,6 @@ import pytest_asyncio
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants import ComponentName
-from app.constants.channels import PubSubChannel
 from app.constants.kv_keys import KVKeyPrefix
 from app.db import DBClient
 from app.db.db_service import DBService

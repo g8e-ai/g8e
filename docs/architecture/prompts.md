@@ -140,7 +140,7 @@ declaration = types.ToolDeclaration(
 
 The model sees these descriptions as part of the tool schema, but they operate on the model's behaviour the same way a system-prompt fragment does. **Tool description files follow every authoring convention defined below.**
 
-Tool advertisement is filtered per-mode by `AIToolService.get_tools(agent_mode, model_to_use)`, which walks `TOOL_SPECS` (see `components/g8ee/app/services/ai/tool_registry.py`) and returns only tools whose `agent_modes` contains the active mode and whose name is currently registered.
+Tool advertisement is filtered per-mode by `AIToolService.get_tools(agent_mode, model_to_use)`, which walks `TOOL_SPECS` (see `components/g8ee/app/services/ai/tool_registry.py`) and returns only tools whose `agent_modes` contains the active mode and whose name is currently registered. `OPERATOR_TOOLS` and `AI_UNIVERSAL_TOOLS` (frozensets of tool names) are also exported by `tool_registry.py`, derived from the `TOOL_SPECS` table.
 
 ---
 
@@ -230,8 +230,8 @@ The `<forbidden_operations>` list in `core/safety.txt` is the one exception to t
 1. Create `components/g8ee/app/prompts_data/tools/<tool_name>.txt` following the tool-description structure above.
 2. Add a `TOOL_<NAME>` member to the `PromptFile` enum pointing at the new file.
 3. Add a `_build_<name>_tool` method on `AIToolService` that loads the description via `load_prompt(PromptFile.TOOL_<NAME>)` and attaches it to the `ToolDeclaration`.
-4. Register the tool in `TOOL_SPECS` (`components/g8ee/app/services/ai/tool_registry.py`) with the appropriate `agent_modes`, `builder_attr`, and `handler_attr`.
-5. Add a `_handle_<name>` handler method on `AIToolService`.
+4. Register the tool in `TOOL_SPECS` (`components/g8ee/app/services/ai/tool_registry.py`) with the appropriate `agent_modes`, `builder_attr`, `handler_attr`, and display metadata.
+5. Add a `_handle_<name>` handler method on `AIToolService` with the uniform signature: `(self, tool_args, investigation, g8e_context, request_settings) -> ToolResult`.
 
 ---
 

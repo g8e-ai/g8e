@@ -12,14 +12,13 @@
 # limitations under the License.
 
 import asyncio
-import json
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
 
 from app.clients.pubsub_client import PubSubClient
-from app.constants import ComponentName, PubSubAction, PubSubChannel, PubSubField, PubSubMessageType, PubSubWireEventType
+from app.constants import ComponentName, PubSubAction, PubSubField, PubSubMessageType, PubSubWireEventType
 
 pytestmark = pytest.mark.unit
 

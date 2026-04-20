@@ -18,7 +18,6 @@ from datetime import datetime
 from app.constants import (
     AuthMethod,
     CaseStatus,
-    CloudSubtype,
     ComponentName,
     ComponentStatus,
     EscalationRisk,
@@ -35,7 +34,6 @@ from app.constants import (
 from app.models.auth import AuthenticatedUser
 from app.models.agents.tribunal import (
     CandidateCommand,
-    CommandGenerationResult,
 )
 from app.models.http_context import BoundOperator, G8eHttpContext
 from app.models.cases import CaseModel
@@ -55,10 +53,7 @@ from app.models.operators import (
     OperatorDocument,
     OperatorHeartbeat,
     OperatorSystemInfo,
-    SystemInfoDiskDetails,
     SystemInfoEnvironment,
-    SystemInfoMemoryDetails,
-    SystemInfoOSDetails,
     SystemInfoUserDetails,
 )
 from app.utils.timestamp import now

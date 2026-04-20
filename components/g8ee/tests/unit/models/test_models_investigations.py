@@ -73,18 +73,18 @@ class TestAttachment:
         att = Attachment(filename="report.pdf")
         assert not hasattr(att, "uploaded_at")
 
-    def test_flatten_for_db_includes_id_and_created_at(self):
+    def test_db_dump_includes_id_and_created_at(self):
         att = Attachment(id="att-1", filename="report.pdf", content_type="application/pdf", size=1024)
-        flat = att.flatten_for_db()
+        flat = att.model_dump(mode="json")
         assert flat["id"] == "att-1"
         assert "created_at" in flat
         assert flat["filename"] == "report.pdf"
         assert flat["content_type"] == "application/pdf"
         assert flat["size"] == 1024
 
-    def test_flatten_for_db_omits_none_fields(self):
+    def test_db_dump_omits_none_fields(self):
         att = Attachment(filename="report.pdf")
-        flat = att.flatten_for_db()
+        flat = att.model_dump(mode="json")
         assert "content_type" not in flat
         assert "size" not in flat
         assert "uploaded_by" not in flat

@@ -10,7 +10,7 @@ COPY components/g8ed/package*.json ./
 RUN if [ -f package-lock.json ]; then \
     npm ci; \
     else \
-    npm install; \
+    npm install -g npm@11.12.1; \
     fi
 
 # Prune dev dependencies before copying to final stage

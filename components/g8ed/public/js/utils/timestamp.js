@@ -65,10 +65,27 @@ function _relativeTime(elapsedSeconds) {
     return _rtf.format(-Math.trunc(elapsedSeconds / 31536000), 'year');
 }
 
+function _relativeTimeShort(elapsedSeconds) {
+    const abs = Math.abs(elapsedSeconds);
+    const value = -Math.trunc(elapsedSeconds);
+    if (abs < 60)       return `${Math.abs(value)}s`;
+    if (abs < 3600)     return `${Math.abs(Math.trunc(elapsedSeconds / 60))}min`;
+    if (abs < 86400)    return `${Math.abs(Math.trunc(elapsedSeconds / 3600))}h`;
+    if (abs < 2592000)  return `${Math.abs(Math.trunc(elapsedSeconds / 86400))}d`;
+    if (abs < 31536000) return `${Math.abs(Math.trunc(elapsedSeconds / 2592000))}mo`;
+    return `${Math.abs(Math.trunc(elapsedSeconds / 31536000))}y`;
+}
+
 export function timeAgo(dt) {
     const t = typeof dt === 'string' ? new Date(dt) : dt;
     const elapsed = (Date.now() - t.getTime()) / 1000;
     return _relativeTime(elapsed);
+}
+
+export function timeAgoShort(dt) {
+    const t = typeof dt === 'string' ? new Date(dt) : dt;
+    const elapsed = (Date.now() - t.getTime()) / 1000;
+    return _relativeTimeShort(elapsed);
 }
 
 export function timeUntil(dt) {

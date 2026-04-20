@@ -49,8 +49,7 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
     it('syncs user settings to g8ee when saved for a user', async () => {
         const userId = 'user-123';
         const updates = {
-            llm_model: 'claude-sonnet-4-6',
-            llm_temperature: '0.8'
+            llm_model: 'claude-sonnet-4-6'
         };
 
         // Mock DB success (existing doc with nested structure)
@@ -64,7 +63,6 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
 
         expect(result.success).toBe(true);
         expect(result.saved).toContain('llm_model');
-        expect(result.saved).toContain('llm_temperature');
 
         // Verify DB write uses nested structure with user_id
         expect(cacheAside.updateDocument).toHaveBeenCalledWith(
@@ -75,7 +73,6 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
                 settings: expect.objectContaining({
                     llm: expect.objectContaining({
                         primary_model: 'claude-sonnet-4-6',
-                        llm_temperature: '0.8',
                     }),
                 }),
             })

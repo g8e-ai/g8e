@@ -16,7 +16,6 @@ Unit tests for async_mocks utility.
 """
 
 import asyncio
-import unittest.mock as mock
 
 import pytest
 

@@ -242,6 +242,24 @@ export class OperatorSessionDocument extends SessionDocument {
 }
 
 // ---------------------------------------------------------------------------
+// CliSessionDocument  (CLI session — no operator_id required)
+// ---------------------------------------------------------------------------
+
+export class CliSessionDocument extends SessionDocument {
+    static fields = {
+        // No operator_id required for CLI sessions
+    };
+
+    static _parse(raw = {}) {
+        return G8eIdentifiableModel.parse.call(CliSessionDocument, raw);
+    }
+
+    static parse(raw = {}) {
+        return CliSessionDocument._parse(raw);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DeviceLinkClaim  (single operator slot claim entry within a DeviceLinkData)
 // ---------------------------------------------------------------------------
 

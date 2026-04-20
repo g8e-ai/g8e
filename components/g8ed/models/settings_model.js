@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel } from '../constants/ai.js';
+import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, PROVIDER_MODELS } from '../constants/ai.js';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -130,17 +130,6 @@ export const USER_SETTINGS = Object.freeze([
         default: ''
     }),
     Object.freeze({
-        key: 'openai_endpoint',
-        section: 'llm',
-        label: 'OpenAI Endpoint URL',
-        description: 'API endpoint for OpenAI provider (e.g. https://api.openai.com/v1).',
-        type: 'text',
-        provider: LLMProvider.OPENAI,
-        secret: false,
-        placeholder: 'https://api.openai.com/v1',
-        default: '',
-    }),
-    Object.freeze({
         key: 'openai_api_key',
         section: 'llm',
         label: 'OpenAI API Key',
@@ -170,11 +159,11 @@ export const USER_SETTINGS = Object.freeze([
         key: 'ollama_api_key',
         section: 'llm',
         label: 'Ollama API Key',
-        description: 'API key for Ollama (use "ollama" for local unauthenticated instances).',
+        description: 'API key for Ollama (optional - only required for authenticated instances).',
         type: 'password',
         provider: LLMProvider.OLLAMA,
         secret: true,
-        placeholder: LLMProvider.OLLAMA,
+        placeholder: '',
         default: '',
     }),
 
@@ -233,17 +222,6 @@ export const USER_SETTINGS = Object.freeze([
         default: ''
     }),
     Object.freeze({
-        key: 'anthropic_endpoint',
-        section: 'llm',
-        label: 'Anthropic Endpoint URL',
-        description: 'API endpoint for Anthropic (e.g. https://api.anthropic.com/v1).',
-        type: 'text',
-        provider: LLMProvider.ANTHROPIC,
-        secret: false,
-        placeholder: 'https://api.anthropic.com/v1',
-        default: '',
-    }),
-    Object.freeze({
         key: 'anthropic_api_key',
         section: 'llm',
         label: 'Anthropic API Key',
@@ -255,23 +233,8 @@ export const USER_SETTINGS = Object.freeze([
         default: '',
     }),
     Object.freeze({
-        key: 'llm_temperature',
-        section: 'llm',
-        label: 'Temperature',
-        description: 'LLM sampling temperature (0.0–2.0).',
-        type: 'text',
-        group: 'universal',
-        secret: false,
-        placeholder: '',
-        default: '',
-        validate: v => {
-            const f = parseFloat(v);
-            return !isNaN(f) && isFinite(f) && f >= 0.0 && f <= 2.0;
-        },
-    }),
-    Object.freeze({
         key: 'llm_max_tokens',
-        section: 'llm',
+        section: 'llm_internal',
         label: 'Max Tokens',
         description: 'Maximum tokens per LLM response.',
         type: 'text',
@@ -286,7 +249,7 @@ export const USER_SETTINGS = Object.freeze([
     }),
     Object.freeze({
         key: 'llm_command_gen_enabled',
-        section: 'llm',
+        section: 'llm_internal',
         label: 'Command Generation Enabled',
         description: 'Enable AI command generation and rewriting.',
         type: 'select',
@@ -301,7 +264,7 @@ export const USER_SETTINGS = Object.freeze([
     }),
     Object.freeze({
         key: 'llm_command_gen_verifier',
-        section: 'llm',
+        section: 'llm_internal',
         label: 'Command Generation Verifier',
         description: 'Enable verifier pass in the command generation tribunal.',
         type: 'select',
@@ -316,7 +279,7 @@ export const USER_SETTINGS = Object.freeze([
     }),
     Object.freeze({
         key: 'llm_command_gen_passes',
-        section: 'llm',
+        section: 'llm_internal',
         label: 'Command Generation Passes',
         description: 'Number of generation passes in the tribunal (1–10).',
         type: 'text',
@@ -325,18 +288,6 @@ export const USER_SETTINGS = Object.freeze([
         placeholder: '',
         default: '',
         validate: v => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 10,
-    }),
-    Object.freeze({
-        key: 'llm_command_gen_temp',
-        section: 'llm',
-        label: 'Command Generation Temperature',
-        description: 'Sampling temperature for command generation passes (0.0–2.0).',
-        type: 'text',
-        group: 'universal',
-        secret: false,
-        placeholder: '',
-        default: '',
-        validate: v => !isNaN(parseFloat(v)) && isFinite(v),
     }),
 
     // -------------------------------------------------------------------------
@@ -436,7 +387,7 @@ export const USER_SETTINGS = Object.freeze([
     }),
     Object.freeze({
         key: 'g8e_api_key',
-        section: 'validation',
+        section: 'security',
         label: 'g8e API Key',
         description: 'API key for g8ee external API authentication (optional).',
         type: 'password',
@@ -500,7 +451,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
 
 const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
     [LLMProvider.OPENAI]: ['openai_api_key'],
-    [LLMProvider.OLLAMA]: ['ollama_api_key'],
+    [LLMProvider.OLLAMA]: ['ollama_endpoint'],
     [LLMProvider.GEMINI]: ['gemini_api_key'],
     [LLMProvider.ANTHROPIC]: ['anthropic_api_key'],
 });
@@ -513,9 +464,20 @@ const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
 function validateCrossFieldDependencies(updates) {
     const errors = [];
 
-    const primaryProvider = updates.llm_primary_provider;
-    const assistantProvider = updates.llm_assistant_provider;
-    const liteProvider = updates.llm_lite_provider;
+    // Helper to derive provider from model ID
+    function deriveProviderFromModel(modelId) {
+        if (!modelId || modelId === 'custom' || modelId.trim() === '') return null;
+        for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
+            const allModels = [...config.primary, ...config.assistant];
+            if (allModels.some(m => m.id === modelId)) return provider;
+        }
+        return null;
+    }
+
+    // Derive providers from models (UI now derives these, validation should too)
+    const primaryProvider = updates.llm_primary_provider || deriveProviderFromModel(updates.llm_model);
+    const assistantProvider = updates.llm_assistant_provider || deriveProviderFromModel(updates.llm_assistant_model);
+    const liteProvider = updates.llm_lite_provider || deriveProviderFromModel(updates.llm_lite_model);
 
     if (primaryProvider && primaryProvider !== '') {
         const required = PROVIDER_CREDENTIAL_REQUIREMENTS[primaryProvider];
@@ -652,6 +614,7 @@ export const SETTINGS_PAGE_SECTIONS = Object.freeze([
     Object.freeze({ id: 'llm',        label: 'LLM',                icon: 'psychology' }),
     Object.freeze({ id: 'search',     label: 'Web Search',         icon: 'travel_explore' }),
     Object.freeze({ id: 'validation', label: 'Command Validation', icon: 'verified_user' }),
+    Object.freeze({ id: 'security',   label: 'Security',           icon: 'shield' }),
     Object.freeze({ id: 'advanced',   label: 'Advanced',           icon: 'code' }),
 ]);
 
@@ -666,19 +629,15 @@ const LLM_KEY_MAP = Object.freeze({
     llm_model:              'primary_model',
     llm_assistant_model:    'assistant_model',
     llm_lite_model:         'lite_model',
-    openai_endpoint:        'openai_endpoint',
     openai_api_key:         'openai_api_key',
     ollama_endpoint:        'ollama_endpoint',
     ollama_api_key:         'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
-    anthropic_endpoint:     'anthropic_endpoint',
     anthropic_api_key:      'anthropic_api_key',
-    llm_temperature:        'llm_temperature',
     llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes:   'llm_command_gen_passes',
-    llm_command_gen_temp:     'llm_command_gen_temp',
 });
 
 const SEARCH_KEY_MAP = Object.freeze({
@@ -691,7 +650,6 @@ const SEARCH_KEY_MAP = Object.freeze({
 
 const EVAL_JUDGE_KEY_MAP = Object.freeze({
     eval_judge_model:       'eval_judge_model',
-    eval_judge_temperature: 'eval_judge_temperature',
     eval_judge_max_tokens:  'eval_judge_max_tokens',
 });
 
@@ -730,19 +688,15 @@ const REVERSE_LLM_MAP    = Object.freeze({
     primary_model: 'llm_model',
     assistant_model: 'llm_assistant_model',
     lite_model: 'llm_lite_model',
-    openai_endpoint: 'openai_endpoint',
     openai_api_key: 'openai_api_key',
     ollama_endpoint: 'ollama_endpoint',
     ollama_api_key: 'ollama_api_key',
-    gemini_api_key: 'gemini_api_key',
-    anthropic_endpoint: 'anthropic_endpoint',
-    anthropic_api_key: 'anthropic_api_key',
-    llm_temperature: 'llm_temperature',
-    llm_max_tokens: 'llm_max_tokens',
+    gemini_api_key:         'gemini_api_key',
+    anthropic_api_key:      'anthropic_api_key',
+    llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled: 'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes: 'llm_command_gen_passes',
-    llm_command_gen_temp: 'llm_command_gen_temp',
 });
 const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
 const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));

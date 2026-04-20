@@ -74,7 +74,7 @@ export class Conversation extends G8eIdentifiableModel {
             case_id:          chatRequest.case_id          ?? null,
             investigation_id: chatRequest.investigation_id ?? null,
             user_id:          session.user_id,
-            sentinel_mode:    chatRequest.sentinel_mode !== false,
+            sentinel_mode:    true,
         });
     }
 }

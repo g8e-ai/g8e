@@ -28,7 +28,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventType } from '@g8ed/constants/events.js';
 import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
-import { G8eePassthroughEvent } from '@g8ed/models/sse_models.js';
 import { SSEService } from '@g8ed/services/platform/sse_service.js';
 
 const SESSION_A = 'lifecycle-test-session-a';
@@ -67,7 +66,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     beforeEach(async () => {
         sseService = makeSSEService();
         response = makeResponse();
-        const result = await sseService.registerConnection(SESSION_A, response);
+        const result = await sseService.registerConnection(SESSION_A, 'u-test', response);
         connectionId = result.connectionId;
     });
 
@@ -77,16 +76,14 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     });
 
     describe('delivery to registered connection', () => {
-        it('should write a valid SSE frame for a published G8eePassthroughEvent', async () => {
-            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    content: 'hello',
-                    investigation_id: INVESTIGATION_ID,
-                    case_id: CASE_ID,
-                    web_session_id: SESSION_A,
-                },
-            }));
+        it('should write a valid SSE frame for a published wire event', async () => {
+            await sseService.publishEvent(SESSION_A, {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                content: 'hello',
+                investigation_id: INVESTIGATION_ID,
+                case_id: CASE_ID,
+                web_session_id: SESSION_A,
+            });
 
             const frames = readFrames(response);
             expect(frames).toHaveLength(1);
@@ -100,15 +97,13 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should write all frames for a burst of published events', async () => {
             const COUNT = 10;
             for (let i = 0; i < COUNT; i++) {
-                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                    _payload: {
-                        type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                        content: `chunk-${i}`,
-                        investigation_id: INVESTIGATION_ID,
-                        case_id: CASE_ID,
-                        web_session_id: SESSION_A,
-                    },
-                }));
+                await sseService.publishEvent(SESSION_A, {
+                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                    content: `chunk-${i}`,
+                    investigation_id: INVESTIGATION_ID,
+                    case_id: CASE_ID,
+                    web_session_id: SESSION_A,
+                });
             }
 
             const frames = readFrames(response);
@@ -122,18 +117,16 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     describe('session isolation', () => {
         it('should not write to session B when publishing to session A', async () => {
             const responseB = makeResponse();
-            const regB = await sseService.registerConnection(SESSION_B, responseB);
+            const regB = await sseService.registerConnection(SESSION_B, 'u-test', responseB);
 
             try {
-                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                    _payload: {
-                        type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                        content: 'for-a-only',
-                        investigation_id: INVESTIGATION_ID,
-                        case_id: CASE_ID,
-                        web_session_id: SESSION_A,
-                    },
-                }));
+                await sseService.publishEvent(SESSION_A, {
+                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                    content: 'for-a-only',
+                    investigation_id: INVESTIGATION_ID,
+                    case_id: CASE_ID,
+                    web_session_id: SESSION_A,
+                });
 
                 expect(readFrames(response)).toHaveLength(1);
                 expect(readFrames(responseB)).toHaveLength(0);
@@ -145,27 +138,23 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
 
         it('should write to each session independently when publishing to both', async () => {
             const responseB = makeResponse();
-            const regB = await sseService.registerConnection(SESSION_B, responseB);
+            const regB = await sseService.registerConnection(SESSION_B, 'u-test', responseB);
 
             try {
-                await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                    _payload: {
-                        type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                        content: 'for-a',
-                        investigation_id: INVESTIGATION_ID,
-                        case_id: CASE_ID,
-                        web_session_id: SESSION_A,
-                    },
-                }));
-                await sseService.publishEvent(SESSION_B, new G8eePassthroughEvent({
-                    _payload: {
-                        type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-                        content: 'for-b',
-                        investigation_id: INVESTIGATION_ID,
-                        case_id: CASE_ID,
-                        web_session_id: SESSION_B,
-                    },
-                }));
+                await sseService.publishEvent(SESSION_A, {
+                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                    content: 'for-a',
+                    investigation_id: INVESTIGATION_ID,
+                    case_id: CASE_ID,
+                    web_session_id: SESSION_A,
+                });
+                await sseService.publishEvent(SESSION_B, {
+                    type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+                    content: 'for-b',
+                    investigation_id: INVESTIGATION_ID,
+                    case_id: CASE_ID,
+                    web_session_id: SESSION_B,
+                });
 
                 const framesA = readFrames(response);
                 const framesB = readFrames(responseB);
@@ -188,37 +177,33 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should not write to response after unregisterConnection', async () => {
             sseService.unregisterConnection(SESSION_A, connectionId);
 
-            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    content: 'should not arrive',
-                    investigation_id: INVESTIGATION_ID,
-                    case_id: CASE_ID,
-                    web_session_id: SESSION_A,
-                },
-            }));
+            await sseService.publishEvent(SESSION_A, {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                content: 'should not arrive',
+                investigation_id: INVESTIGATION_ID,
+                case_id: CASE_ID,
+                web_session_id: SESSION_A,
+            });
 
             expect(readFrames(response)).toHaveLength(0);
 
-            const reReg = await sseService.registerConnection(SESSION_A, response);
+            const reReg = await sseService.registerConnection(SESSION_A, 'u-test', response);
             connectionId = reReg.connectionId;
         });
 
         it('should not remove a newer connection when unregistering a stale connectionId', async () => {
             const response2 = makeResponse();
-            const reg2 = await sseService.registerConnection(SESSION_A, response2);
+            const reg2 = await sseService.registerConnection(SESSION_A, 'u-test', response2);
 
             sseService.unregisterConnection(SESSION_A, connectionId);
 
-            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    content: 'reaches-new-connection',
-                    investigation_id: INVESTIGATION_ID,
-                    case_id: CASE_ID,
-                    web_session_id: SESSION_A,
-                },
-            }));
+            await sseService.publishEvent(SESSION_A, {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                content: 'reaches-new-connection',
+                investigation_id: INVESTIGATION_ID,
+                case_id: CASE_ID,
+                web_session_id: SESSION_A,
+            });
 
             expect(readFrames(response2)).toHaveLength(1);
             expect(readFrames(response2)[0].content).toBe('reaches-new-connection');
@@ -233,15 +218,13 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
         it('should not write to a destroyed response', async () => {
             response.destroy();
 
-            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    content: 'unreachable',
-                    investigation_id: INVESTIGATION_ID,
-                    case_id: CASE_ID,
-                    web_session_id: SESSION_A,
-                },
-            }));
+            await sseService.publishEvent(SESSION_A, {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                content: 'unreachable',
+                investigation_id: INVESTIGATION_ID,
+                case_id: CASE_ID,
+                web_session_id: SESSION_A,
+            });
 
             expect(readFrames(response)).toHaveLength(0);
         });
@@ -252,17 +235,15 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
             sseService.unregisterConnection(SESSION_A, connectionId);
 
             const response2 = makeResponse();
-            const reg2 = await sseService.registerConnection(SESSION_A, response2);
+            const reg2 = await sseService.registerConnection(SESSION_A, 'u-test', response2);
 
-            await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    content: 'post-reconnect',
-                    investigation_id: INVESTIGATION_ID,
-                    case_id: CASE_ID,
-                    web_session_id: SESSION_A,
-                },
-            }));
+            await sseService.publishEvent(SESSION_A, {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                content: 'post-reconnect',
+                investigation_id: INVESTIGATION_ID,
+                case_id: CASE_ID,
+                web_session_id: SESSION_A,
+            });
 
             expect(readFrames(response2)).toHaveLength(1);
             expect(readFrames(response2)[0].content).toBe('post-reconnect');

@@ -40,7 +40,7 @@ from app.constants.paths import PATHS
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.factory import get_llm_settings
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.services.ai.eval_judge import EvalJudge, EvalGrade, EvalJudgeError
+from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from tests.evals.shared import AccuracyTestResult, load_and_validate_gold_set
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,6 @@ async def test_ollama_accuracy(
         # Step 2: Build PrimaryLLMSettings (no tools)
         generation_settings = AIGenerationConfigBuilder.build_primary_settings(
             model=model_name,
-            temperature=llm_settings.llm_temperature,
             max_tokens=llm_settings.llm_max_tokens or 4096,
             system_instructions=system_prompt,
             tools=[],

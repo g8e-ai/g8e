@@ -15,11 +15,10 @@
 
 import pytest
 from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.constants import EventType, InvestigationStatus
 from app.constants.message_sender import MessageSender
-from app.llm.llm_types import Content, Part, Role
+from app.llm.llm_types import Content, Role
 from app.models.investigations import (
     AIResponseMetadata,
     ConversationHistoryMessage,

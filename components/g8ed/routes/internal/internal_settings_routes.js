@@ -33,7 +33,7 @@ import { ErrorResponse, InternalSettingsResponse, SettingsUpdateResponse } from 
  */
 export function createInternalSettingsRouter({ services, authorizationMiddleware }) {
     const { settingsService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -44,7 +44,7 @@ export function createInternalSettingsRouter({ services, authorizationMiddleware
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.get('/', requireInternalOrigin, async (req, res, next) => {
+    router.get('/', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const userId = req.query.user_id;
             let settings_data;
@@ -107,7 +107,7 @@ export function createInternalSettingsRouter({ services, authorizationMiddleware
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.put('/', requireInternalOrigin, async (req, res, next) => {
+    router.put('/', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const updates = req.body?.settings;
             const userId = req.body?.user_id;

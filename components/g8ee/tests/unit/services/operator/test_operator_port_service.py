@@ -30,16 +30,14 @@ import asyncio
 
 import pytest
 
-from app.constants import CommandErrorType, EventType, NetworkProtocol, OperatorStatus
+from app.constants import CommandErrorType, EventType, OperatorStatus
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_payloads import CheckPortArgs
 from app.models.operators import OperatorDocument, OperatorSystemInfo
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
-from app.models.tool_results import PortCheckToolResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
     build_enriched_context,
-    build_minimal_operator_document,
     build_g8e_http_context,
 )
 from tests.fakes.fake_event_service import FakeEventService
@@ -62,7 +60,7 @@ def _make_operator(
     return OperatorDocument(
         operator_id=operator_id,
         user_id="user-1",
-        web_session_id="ws-1",
+        bound_web_session_id="ws-1",
         operator_session_id=operator_session_id,
         current_hostname=hostname,
         status=OperatorStatus.BOUND,

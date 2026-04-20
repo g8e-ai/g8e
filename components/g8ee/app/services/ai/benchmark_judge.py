@@ -27,8 +27,12 @@ Design principles (aligned with OSWorld / SWE-bench methodology):
   - Grade the syntactic payload, not the text reasoning.
   - Binary pass/fail per scenario. No partial credit.
   - Regex matching against expected command flags and arguments.
-  - Tribunal delta tracking: measure whether the Tribunal improved
-    the Primary Agent's initial command.
+
+Note on Tribunal: Sage never proposes commands; the Tribunal produces
+the final command string from Sage's natural-language request. The
+benchmark grades the Tribunal's final command directly against the
+scenario's expected payload. There is no "delta vs. Sage's proposal"
+metric because Sage has no proposal to compare against.
 """
 
 import logging
@@ -56,21 +60,21 @@ class PayloadMatcher(BaseModel):
 
 
 class BenchmarkGrade(BaseModel):
-    """Result of a deterministic benchmark evaluation."""
+    """Result of a deterministic benchmark evaluation.
+
+    The Tribunal's final command (`tribunal_final_command`) and pipeline
+    outcome (`tribunal_outcome`) are recorded for analysis when a Tribunal
+    run produced the command. There is no pre-Tribunal delta because Sage
+    does not propose commands.
+    """
     passed: bool = Field(description="True if ALL payload matchers matched")
     tool_called: bool = Field(description="True if the expected tool was called at all")
     matchers_total: int = Field(ge=0, description="Total number of payload matchers")
     matchers_passed: int = Field(ge=0, description="Number of matchers that passed")
     failures: list[str] = Field(default_factory=list, description="List of matcher failure descriptions")
 
-    tribunal_original_command: str | None = Field(default=None, description="Command before Tribunal refinement")
-    tribunal_final_command: str | None = Field(default=None, description="Command after Tribunal refinement")
+    tribunal_final_command: str | None = Field(default=None, description="Final command produced by the Tribunal")
     tribunal_outcome: str | None = Field(default=None, description="Tribunal pipeline outcome")
-    tribunal_improved: bool | None = Field(default=None, description="True if the Tribunal changed the command")
-    tribunal_pre_score: bool | None = Field(
-        default=None,
-        description="Would the pre-Tribunal command have passed the matchers?",
-    )
 
 
 class ToolCallCapture(BaseModel):
@@ -80,10 +84,14 @@ class ToolCallCapture(BaseModel):
 
 
 class TribunalCapture(BaseModel):
-    """Captured Tribunal pipeline result for delta tracking."""
-    original_command: str = Field(description="Command proposed by the Primary Agent")
-    final_command: str = Field(description="Command after Tribunal refinement")
-    outcome: str = Field(description="Tribunal pipeline outcome (VERIFIED, CONSENSUS, etc.)")
+    """Captured Tribunal pipeline result attached to a benchmark grade.
+
+    Sage never proposes commands; this records the Tribunal's output so the
+    benchmark can surface `final_command` and the pipeline `outcome` in the
+    grade for downstream analysis. There is no `original_command` field.
+    """
+    final_command: str = Field(description="Final command produced by the Tribunal")
+    outcome: str = Field(description="Tribunal pipeline outcome (VERIFIED, CONSENSUS, VERIFICATION_FAILED)")
     vote_score: float | None = Field(default=None, ge=0.0, le=1.0)
     verifier_passed: bool | None = Field(default=None)
     verifier_revision: str | None = Field(default=None)
@@ -189,15 +197,8 @@ class BenchmarkJudge:
             best_grade = self._grade_single_call(scenario, matching_calls)
 
         if tribunal:
-            best_grade.tribunal_original_command = tribunal.original_command
             best_grade.tribunal_final_command = tribunal.final_command
             best_grade.tribunal_outcome = tribunal.outcome
-            best_grade.tribunal_improved = tribunal.final_command != tribunal.original_command
-
-            pre_tribunal_args = dict(matching_calls[0].args)
-            pre_tribunal_args["command"] = tribunal.original_command
-            pre_passed, _ = _match_payload(pre_tribunal_args, scenario.expected_payload)
-            best_grade.tribunal_pre_score = (pre_passed == len(scenario.expected_payload))
 
         return best_grade
 
@@ -317,34 +318,27 @@ def compute_benchmark_percentage(grades: list[BenchmarkGrade]) -> float:
     return sum(1 for g in grades if g.passed) / len(grades)
 
 
-def compute_tribunal_delta(grades: list[BenchmarkGrade]) -> dict[str, object]:
-    """Compute aggregate Tribunal improvement statistics.
+def compute_tribunal_stats(grades: list[BenchmarkGrade]) -> dict[str, object]:
+    """Compute aggregate Tribunal pass-rate statistics.
 
-    Returns a dict with:
-      - total_with_tribunal: scenarios where the Tribunal was active
-      - tribunal_improved_count: scenarios where the Tribunal changed the command
-      - tribunal_improved_accuracy: scenarios where pre-Tribunal would have failed
-        but post-Tribunal passed
-      - improvement_rate: tribunal_improved_accuracy / total_with_tribunal
+    Sage does not propose commands, so there is no pre/post delta. This reports
+    how the Tribunal's command fared against the scenario matchers:
+
+      - total_with_tribunal: scenarios where a Tribunal run was captured
+      - tribunal_passed_count: scenarios where the Tribunal's command passed all matchers
+      - tribunal_pass_rate: tribunal_passed_count / total_with_tribunal
     """
     tribunal_grades = [g for g in grades if g.tribunal_outcome is not None]
     if not tribunal_grades:
         return {
             "total_with_tribunal": 0,
-            "tribunal_improved_count": 0,
-            "tribunal_improved_accuracy": 0,
-            "improvement_rate": 0.0,
+            "tribunal_passed_count": 0,
+            "tribunal_pass_rate": 0.0,
         }
 
-    improved_count = sum(1 for g in tribunal_grades if g.tribunal_improved)
-    accuracy_improved = sum(
-        1 for g in tribunal_grades
-        if g.tribunal_improved and g.passed and g.tribunal_pre_score is False
-    )
-
+    passed_count = sum(1 for g in tribunal_grades if g.passed)
     return {
         "total_with_tribunal": len(tribunal_grades),
-        "tribunal_improved_count": improved_count,
-        "tribunal_improved_accuracy": accuracy_improved,
-        "improvement_rate": accuracy_improved / len(tribunal_grades) if tribunal_grades else 0.0,
+        "tribunal_passed_count": passed_count,
+        "tribunal_pass_rate": passed_count / len(tribunal_grades),
     }

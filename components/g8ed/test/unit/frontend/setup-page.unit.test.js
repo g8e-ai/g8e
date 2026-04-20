@@ -443,7 +443,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('shows error for no provider keys entered', () => {
             setupPage._validateStep(2);
             const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('Enter at least one provider API key');
+            expect(text.textContent).toBe('Configure at least one provider (API key or Ollama endpoint)');
         });
 
         it('returns true for step 2 with Gemini key and models selected', () => {
@@ -637,6 +637,75 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             const firstSelected = setupPage._selectedModels.primary;
             document.getElementById('openai_api_key').value = 'key2';
             setupPage._updateModelDropdowns();
+            expect(setupPage._selectedModels.primary).toBe(firstSelected);
+        });
+
+        it('auto-selects sensible defaults when Gemini API key is entered', () => {
+            setupPage._selectedModels = { primary: '', assistant: '', lite: '' };
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange('gemini');
+            
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            const assistantText = document.getElementById('assistant_model').querySelector('.llm-model-dropdown__text');
+            const liteText = document.getElementById('lite_model').querySelector('.llm-model-dropdown__text');
+            
+            expect(primaryText.textContent).toBe('Gemini 3.1 Pro');
+            expect(assistantText.textContent).toBe('Gemini 3 Flash');
+            expect(liteText.textContent).toBe('Gemini 3.1 Flash Lite');
+        });
+
+        it('auto-selects sensible defaults when Anthropic API key is entered', () => {
+            setupPage._selectedModels = { primary: '', assistant: '', lite: '' };
+            document.getElementById('anthropic_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange('anthropic');
+            
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            const assistantText = document.getElementById('assistant_model').querySelector('.llm-model-dropdown__text');
+            const liteText = document.getElementById('lite_model').querySelector('.llm-model-dropdown__text');
+            
+            expect(primaryText.textContent).toBe('Claude Opus 4.6');
+            expect(assistantText.textContent).toBe('Claude Sonnet 4.6');
+            expect(liteText.textContent).toBe('Claude Haiku 4.5');
+        });
+
+        it('auto-selects sensible defaults when OpenAI API key is entered', () => {
+            setupPage._selectedModels = { primary: '', assistant: '', lite: '' };
+            document.getElementById('openai_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange('openai');
+            
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            const assistantText = document.getElementById('assistant_model').querySelector('.llm-model-dropdown__text');
+            const liteText = document.getElementById('lite_model').querySelector('.llm-model-dropdown__text');
+            
+            expect(primaryText.textContent).toBe('GPT-5.4 Pro');
+            expect(assistantText.textContent).toBe('GPT-5.4');
+            expect(liteText.textContent).toBe('GPT-5.4 Mini');
+        });
+
+        it('auto-selects sensible defaults when Ollama URL is entered', () => {
+            setupPage._selectedModels = { primary: '', assistant: '', lite: '' };
+            document.getElementById('ollama_url').value = '192.168.1.100:11434';
+            setupPage._onProviderKeyChange('ollama');
+            
+            const primaryText = document.getElementById('primary_model').querySelector('.llm-model-dropdown__text');
+            const assistantText = document.getElementById('assistant_model').querySelector('.llm-model-dropdown__text');
+            const liteText = document.getElementById('lite_model').querySelector('.llm-model-dropdown__text');
+            
+            expect(primaryText.textContent).toBe('Qwen 3.5 122B');
+            expect(assistantText.textContent).toBe('GLM 5.1');
+            expect(liteText.textContent).toBe('Llama 3.2 3B');
+        });
+
+        it('does not override existing model selection when provider key is entered', () => {
+            document.getElementById('gemini_api_key').value = 'key1';
+            setupPage._onProviderKeyChange('gemini');
+            const firstSelected = setupPage._selectedModels.primary;
+            
+            // Enter a different provider key
+            document.getElementById('openai_api_key').value = 'key2';
+            setupPage._onProviderKeyChange('openai');
+            
+            // Should preserve the first selection since it's still available
             expect(setupPage._selectedModels.primary).toBe(firstSelected);
         });
     });
@@ -953,7 +1022,6 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(settings.gemini_api_key).toBe('test-gemini-key');
             expect(settings.anthropic_api_key).toBe('test-anthropic-key');
             expect(settings.openai_api_key).toBe('test-openai-key');
-            expect(settings.openai_endpoint).toBe('https://api.openai.com/v1');
         });
 
         it('derives llm_primary_provider and llm_assistant_provider from selected models', () => {

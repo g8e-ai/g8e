@@ -25,7 +25,7 @@ import asyncio
 import unittest.mock as mock
 
 import pytest
-from google.api_core.exceptions import GoogleAPICallError, ServiceUnavailable, InvalidArgument
+from google.api_core.exceptions import ServiceUnavailable, InvalidArgument
 
 from app.errors import NetworkError
 from app.models.grounding import (
@@ -34,8 +34,7 @@ from app.models.grounding import (
     GroundingSegment,
     GroundingSupport,
 )
-from app.services.ai.grounding.web_search_provider import WebSearchProvider, SearchClientProtocol
-from tests.utils.async_mocks import SafeToThreadMock, SafeWaitForMock
+from app.services.ai.grounding.web_search_provider import WebSearchProvider
 
 pytestmark = [pytest.mark.unit]
 

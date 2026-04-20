@@ -14,12 +14,12 @@
 import { logger } from '../../utils/logger.js';
 import { DeviceLinkError } from '../../constants/auth.js';
 import { OperatorStatus } from '../../constants/operator.js';
+import { EventType } from '../../constants/events.js';
 import { G8eHttpContext, BoundOperatorContext, UnbindOperatorsRequest } from '../../models/request_models.js';
 import {
     BindOperatorsResponse,
     UnbindOperatorsResponse,
 } from '../../models/operator_model.js';
-import { now } from '../../models/base.js';
 
 export class BindOperatorsService {
     /**
@@ -28,8 +28,9 @@ export class BindOperatorsService {
      * @param {Object} options.bindingService - BoundSessionsService instance
      * @param {Object} options.operatorSessionService - OperatorSessionService instance
      * @param {Object} options.webSessionService - WebSessionService instance
+     * @param {Object} options.sseService - SSEService instance (optional)
      */
-    constructor({ operatorService, bindingService, operatorSessionService, webSessionService }) {
+    constructor({ operatorService, bindingService, operatorSessionService, webSessionService, sseService }) {
         if (!operatorService) throw new Error('operatorService is required');
         if (!bindingService) throw new Error('bindingService is required');
         if (!operatorSessionService) throw new Error('operatorSessionService is required');
@@ -39,6 +40,7 @@ export class BindOperatorsService {
         this.bindingService = bindingService;
         this.operatorSessionService = operatorSessionService;
         this.webSessionService = webSessionService;
+        this.sseService = sseService;
     }
 
     async bindOperator(bindReq) {
@@ -81,10 +83,10 @@ export class BindOperatorsService {
                     continue;
                 }
 
-                // 1. Update Operator document (status + web_session_id)
+                // 1. Update Operator document (status + bound_web_session_id)
                 await this.operatorService.operatorDataService.updateOperator(operatorId, { 
                     status: OperatorStatus.BOUND,
-                    web_session_id: webSessionId 
+                    bound_web_session_id: webSessionId 
                 });
 
                 // 2. Update Web Session document
@@ -107,6 +109,7 @@ export class BindOperatorsService {
                             BoundOperatorContext.parse({
                                 operator_id:         contextWrapper.operator_id,
                                 operator_session_id: contextWrapper.operator_session_id,
+                                bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
                                 system_info:         contextWrapper.system_info,
@@ -127,12 +130,18 @@ export class BindOperatorsService {
             }
         }
 
-        if (bound.length > 0) {
-            await this.operatorService.broadcastOperatorListToSession(userId, webSessionId).catch(() => {});
-        }
-
         const success = bound.length > 0 || failed.length === 0;
         const statusCode = failed.length === operatorIds.length ? 400 : (failed.length > 0 ? 207 : 200);
+
+        // Emit updated operator list after successful bind
+        if (bound.length > 0 && this.sseService) {
+            try {
+                const operatorList = await this.operatorService.getUserOperators(userId);
+                await this.sseService.publishEvent(webSessionId, operatorList);
+            } catch (error) {
+                logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after bind', { error: error.message });
+            }
+        }
 
         return new BindOperatorsResponse({
             success,
@@ -182,10 +191,10 @@ export class BindOperatorsService {
 
                 const operatorSessionId = operator.operator_session_id;
 
-                // 1. Update Operator document (status + web_session_id)
+                // 1. Update Operator document (status + bound_web_session_id)
                 await this.operatorService.operatorDataService.updateOperator(operatorId, { 
                     status: OperatorStatus.ACTIVE,
-                    web_session_id: null 
+                    bound_web_session_id: null 
                 });
 
                 // 2. Update Web Session document
@@ -210,6 +219,7 @@ export class BindOperatorsService {
                             BoundOperatorContext.parse({
                                 operator_id:         contextWrapper.operator_id,
                                 operator_session_id: contextWrapper.operator_session_id,
+                                bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
                                 system_info:         contextWrapper.system_info,
@@ -231,12 +241,18 @@ export class BindOperatorsService {
             }
         }
 
-        if (unbound.length > 0) {
-            await this.operatorService.broadcastOperatorListToSession(userId, webSessionId).catch(() => {});
-        }
-
         const success = unbound.length > 0 || failed.length === 0;
         const statusCode = failed.length === operatorIds.length ? 400 : (failed.length > 0 ? 207 : 200);
+
+        // Emit updated operator list after successful unbind
+        if (unbound.length > 0 && this.sseService) {
+            try {
+                const operatorList = await this.operatorService.getUserOperators(userId);
+                await this.sseService.publishEvent(webSessionId, operatorList);
+            } catch (error) {
+                logger.warn('[OPERATOR-BIND-SERVICE] Failed to emit operator list after unbind', { error: error.message });
+            }
+        }
 
         return new UnbindOperatorsResponse({
             success,

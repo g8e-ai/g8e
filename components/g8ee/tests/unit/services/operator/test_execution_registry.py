@@ -13,7 +13,6 @@
 
 import asyncio
 import pytest
-from unittest.mock import MagicMock
 from app.services.operator.execution_registry import ExecutionRegistryService
 
 @pytest.mark.asyncio

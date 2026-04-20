@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { now } from '../../models/base.js';
 import { OperatorAuthResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
@@ -21,7 +20,6 @@ import {
     OperatorAuthError,
     AuthError,
     BEARER_PREFIX,
-    OperatorSessionRole,
     AuthMode,
 } from '../../constants/auth.js';
 import { SessionType } from '../../constants/session.js';
@@ -39,6 +37,7 @@ export class OperatorAuthService {
      * @param {Object} options.userService - UserService instance
      * @param {Object} options.operatorService - OperatorDataService instance
      * @param {Object} options.operatorSessionService - OperatorSessionService instance
+     * @param {Object} options.cliSessionService - CliSessionService instance
      * @param {Object} options.bindingService - BoundSessionsService instance
      * @param {Object} options.webSessionService - WebSessionService instance
      */
@@ -47,6 +46,7 @@ export class OperatorAuthService {
         userService,
         operatorService,
         operatorSessionService,
+        cliSessionService,
         bindingService,
         webSessionService,
     }) {
@@ -54,12 +54,13 @@ export class OperatorAuthService {
         this.userService = userService;
         this.operatorService = operatorService;
         this.operatorSessionService = operatorSessionService;
+        this.cliSessionService = cliSessionService;
         this.bindingService = bindingService;
         this.webSessionService = webSessionService;
     }
 
     async authenticateOperator({ authorizationHeader, body }) {
-        const { system_info, runtime_config, auth_mode, operator_session_id: deviceLinkSessionId } = body;
+        const { system_info, runtime_config, auth_mode, operator_session_id: deviceLinkSessionId } = body || {};
 
         if (auth_mode === AuthMode.OPERATOR_SESSION && deviceLinkSessionId) {
             return this._authenticateViaDeviceLink(deviceLinkSessionId, system_info, authorizationHeader);
@@ -189,37 +190,23 @@ export class OperatorAuthService {
         const keyData = keyValidation.data;
         const { user_id, organization_id, operator_id } = keyData;
 
-        if (!operator_id) {
-            logger.error('[OPERATOR-AUTH] Download-only API key used for Operator auth', {
+        // Download-only keys (no operator_id) are allowed for CLI authentication
+        // but cannot claim operator slots or run operators
+        const isDownloadOnlyKey = !operator_id;
+        if (isDownloadOnlyKey) {
+            logger.info('[OPERATOR-AUTH] Download-only API key used for CLI authentication', {
                 api_key_prefix: api_key.substring(0, 10) + '...',
                 user_id,
                 client_name: keyData.client_name,
             });
-            return {
-                success: false,
-                statusCode: 403,
-                error: ApiKeyError.DOWNLOAD_ONLY,
-                code: ApiKeyError.DOWNLOAD_ONLY_CODE,
-                message: 'This is a DOWNLOAD-ONLY API key (G8E_DOWNLOAD_KEY). It can download the binary but cannot run operators. To run an operator, use an OPERATOR API key (G8E_OPERATOR_API_KEY) from an Operator slot in the Operator Panel.',
-                key_type: 'download',
-                help: {
-                    steps: [
-                        'Visit the g8e dashboard',
-                        'Open the Operator Panel',
-                        'Click on an Available or Offline Operator slot',
-                        'Copy an API key shown in the Operator details',
-                    ],
-                    env_var: 'G8E_OPERATOR_API_KEY',
-                },
-            };
+        } else {
+            logger.info('[OPERATOR-AUTH] API key validated successfully', {
+                user_id,
+                organization_id,
+                operator_id,
+                client_name: keyData.client_name,
+            });
         }
-
-        logger.info('[OPERATOR-AUTH] API key validated successfully', {
-            user_id,
-            organization_id,
-            operator_id,
-            client_name: keyData.client_name,
-        });
 
         try {
             await this.apiKeyService.recordUsage(api_key);
@@ -239,6 +226,18 @@ export class OperatorAuthService {
                 error: ApiKeyError.USER_NOT_FOUND,
                 message: 'User record does not exist. Please ensure user is registered.',
             };
+        }
+
+        // For download-only keys, skip operator validation and create CLI-only session
+        if (isDownloadOnlyKey) {
+            return this._completeCliAuthentication({
+                api_key,
+                user,
+                user_id,
+                organization_id,
+                system_info,
+                runtime_config,
+            });
         }
 
         const operator = await this.operatorService.getOperator(operator_id);
@@ -283,6 +282,65 @@ export class OperatorAuthService {
         });
     }
 
+    async _completeCliAuthentication({
+        api_key,
+        user,
+        user_id,
+        organization_id,
+        system_info,
+        runtime_config,
+    }) {
+        const sessionData = {
+            user_id: user.id,
+            user_data: {
+                email: user.email,
+                name: user.name,
+                picture: user.profile_picture,
+                id: user.id,
+                organization_id: user.organization_id,
+                roles: user.roles,
+            },
+            api_key,
+            organization_id,
+        };
+
+        const session = await this.cliSessionService.createSession(sessionData);
+        const operator_session_id = session.id;
+
+        logger.info('[OPERATOR-AUTH] CLI-only session created (no operator slot claimed)', {
+            operatorSessionId: redactWebSessionId(operator_session_id),
+            user_id,
+            organization_id,
+        });
+
+        const config = DEFAULT_OPERATOR_CONFIG;
+
+        logger.info('[OPERATOR-AUTH] CLI authentication successful', {
+            operatorSessionId: redactWebSessionId(operator_session_id),
+            user_id,
+            organization_id,
+        });
+
+        return {
+            success: true,
+            response: new OperatorAuthResponse({
+                success: true,
+                operator_session_id,
+                operator_id: null, // No operator for CLI-only auth
+                user_id,
+                api_key,
+                config,
+                session: {
+                    id: operator_session_id,
+                    expires_at: session.expires_at,
+                    created_at: session.created_at,
+                },
+                operator_cert: null,
+                operator_cert_key: null,
+            }),
+        };
+    }
+
     async _completeAuthentication({
         api_key,
         user,
@@ -318,7 +376,7 @@ export class OperatorAuthService {
             organization_id,
         });
 
-        const web_session_id = operator.web_session_id || null;
+        const bound_web_session_id = operator.bound_web_session_id || null;
         const parsedSystemInfo = SystemInfo.parse(system_info || {});
 
         const claimStatus = operator.status === OperatorStatus.BOUND
@@ -327,7 +385,7 @@ export class OperatorAuthService {
 
         await this.operatorService.claimOperatorSlot(operator_id, {
             operator_session_id,
-            web_session_id,
+            bound_web_session_id,
             system_info: parsedSystemInfo,
             operator_type: operator.operator_type || null,
             status: claimStatus,
@@ -337,13 +395,14 @@ export class OperatorAuthService {
 
         try {
             const g8eContext = G8eHttpContext.parse({
-                web_session_id:  web_session_id || operator_session_id,
+                web_session_id:  bound_web_session_id || operator_session_id,
                 user_id,
                 organization_id,
                 bound_operators: [
                     BoundOperatorContext.parse({
                         operator_id,
                         operator_session_id,
+                        bound_web_session_id,
                         status:        claimStatus,
                         operator_type: operator.operator_type || null,
                         system_info:   parsedSystemInfo,

@@ -66,7 +66,7 @@ function createMockOperator(overrides = {}) {
             internal_ip: '192.168.1.100',
             public_ip: '203.0.113.1',
         },
-        web_session_id: TEST_WEB_SESSION_ID,
+        bound_web_session_id: TEST_WEB_SESSION_ID,
         ...overrides,
     };
 }
@@ -541,11 +541,23 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             document.body.appendChild(overlay);
         });
 
+        function addCheckboxesToOverlay(overlay, operatorIds) {
+            operatorIds.forEach(id => {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'operator-select-checkbox';
+                checkbox.setAttribute('data-operator-id', id);
+                checkbox.checked = true;
+                overlay.appendChild(checkbox);
+            });
+        }
+
         it('calls operatorPanelService.bindAllOperators with operator IDs', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
             const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ bound_operator_ids: [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2] }),
@@ -564,6 +576,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
             const activeOperators = [createMockOperator()];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ bound_operator_ids: [TEST_OPERATOR_ID] }),
@@ -582,6 +595,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
             const activeOperators = [createMockOperator()];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({}),
@@ -600,6 +614,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
             const activeOperators = [createMockOperator()];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: false,
                 json: async () => ({ error: 'Bind all failed' }),
@@ -613,6 +628,48 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 expect.any(Object),
                 'bind-result-feedback',
                 expect.objectContaining({ resultClass: 'error' })
+            );
+            vi.useRealTimers();
+        });
+
+        it('binds only selected operators when some checkboxes are unchecked', async () => {
+            vi.useFakeTimers();
+            const ctx = createMixinContext();
+            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
+            const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
+            checkboxes[1].checked = false;
+            operatorPanelService.bindAllOperators.mockResolvedValue({
+                ok: true,
+                json: async () => ({ bound_operator_ids: [TEST_OPERATOR_ID] }),
+            });
+
+            const p = ctx.executeBindAll(overlay, activeOperators);
+            await vi.runAllTimersAsync();
+            await p;
+
+            expect(operatorPanelService.bindAllOperators).toHaveBeenCalledWith([TEST_OPERATOR_ID]);
+            vi.useRealTimers();
+        });
+
+        it('shows error when no operators are selected', async () => {
+            vi.useFakeTimers();
+            const ctx = createMixinContext();
+            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const activeOperators = [createMockOperator()];
+            addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
+            const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
+            checkboxes[0].checked = false;
+
+            const p = ctx.executeBindAll(overlay, activeOperators).catch(() => {});
+            await vi.runAllTimersAsync();
+            await p;
+
+            expect(templateLoader.renderTo).toHaveBeenCalledWith(
+                expect.any(Object),
+                'bind-result-feedback',
+                expect.objectContaining({ resultClass: 'error', message: 'No operators selected' })
             );
             vi.useRealTimers();
         });
@@ -704,8 +761,8 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('calls showConfirmationModal with bound operators', async () => {
             const ctx = createMixinContext();
             ctx.operators = [
-                createMockOperator({ status: OperatorStatus.BOUND, web_session_id: TEST_WEB_SESSION_ID }),
-                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, web_session_id: 'other_session' }),
+                createMockOperator({ status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID }),
+                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: 'other_session' }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             global.window = { authState: { getWebSessionId: () => TEST_WEB_SESSION_ID } };

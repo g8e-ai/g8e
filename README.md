@@ -2,7 +2,7 @@
 
 # g8e
 
-### governance architecture for trustless environments
+**governance architecture for trustless environments**
 
 Self-hosted. Air-gap capable. Zero cloud dependencies.<br/>
 The AI reasons. You decide. The architecture enforces it.
@@ -39,11 +39,11 @@ No long-lived credentials. No implicit trust from network position. Trust is mat
 
 **III. Safety is Structural, Not Verbal**
 
-System prompts are suggestions. g8e enforces safety at the binary and network layers, where prompt injection cannot reach. Sentinel's 58 MITRE ATT&CK-mapped threat detectors block dangerous commands before any process is spawned. Privilege escalation is unconditionally forbidden. The AI cannot opt out of governance.
+System prompts are suggestions. g8e enforces safety at the binary and network layers, where prompt injection cannot reach. Sentinel's 46 MITRE ATT&CK-mapped threat detectors block dangerous commands before any process is spawned. Privilege escalation is unconditionally forbidden. The AI cannot opt out of governance.
 
 **IV. Data Stays Where It Belongs**
 
-The remote host is the system of record. Raw command output never leaves the machine. The AI receives only what passes through Sentinel's 27 scrubbing patterns — credentials, PII, and secrets are replaced with safe placeholders before any data crosses a network boundary toward any model provider.
+The remote host is the system of record. Raw command output never leaves the machine. The AI receives only what passes through Sentinel's 28 scrubbing patterns — credentials, PII, and secrets are replaced with safe placeholders before any data crosses a network boundary toward any model provider.
 
 **V. Presence is Ephemeral**
 
@@ -71,9 +71,9 @@ You describe what you want in natural language. The AI fans out across your boun
 
 The Tribunal is a heterogeneous multi-model consensus pipeline that refines every proposed command before human review:
 
-1. **Parallel Generation** — Three independent AI passes — Axiom (The Minimalist), Concord (The Archivist), Variance (The Adversary) — each propose a candidate command for the same intent. Diversity comes from the distinct personas, not from per-pass temperature overrides (all passes use the configured model's default temperature, which many providers, e.g. Gemini 3+, require to be fixed at 1.0).
+1. **Parallel Generation** — Up to five independent AI passes — Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), Nemesis (The Adversary) — each propose a candidate command for the same intent. Diversity comes from the distinct personas, not from per-pass temperature overrides (three passes are enabled by default).
 2. **Weighted Vote** — Candidates are normalized, grouped, and scored by position-decay weighting. The strongest consensus wins.
-3. **Verification** — A separate convergent verifier persona evaluates the winner against the original intent and either confirms it (`ok`) or emits a minimal revision.
+3. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent and either confirms it (`ok`) or emits a minimal revision.
 4. **Human Approval** — The refined command halts. You see exactly what will run, on which system, and why. You approve or deny.
 5. **Execution** — The Operator executes locally, records the full output to an encrypted local vault, scrubs the output through Sentinel, and returns only the sanitized result to the AI for its next reasoning step.
 
@@ -84,9 +84,10 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that refines ever
   g8ee (AI Engine) ── investigates ── reasons ── proposes command
    │
    ├── Tribunal Pass 0 · Axiom     ──┐
-   ├── Tribunal Pass 1 · Concord   ──┼── Weighted Vote ── Verifier
-   └── Tribunal Pass 2 · Variance  ──┘         │
-                                               ▼
+   ├── Tribunal Pass 1 · Concord   ──┤
+   ├── Tribunal Pass 2 · Variance  ──┼── Weighted Vote ── Verifier
+   ├── Tribunal Pass 3 · Pragma    ──┤         │
+   └── Tribunal Pass 4 · Nemesis   ──┘         ▼
                                     ┌─── Your Approval ───┐
                                     │  "df -h /var/log"   │
                                     │  on: prod-node-3    │
@@ -108,7 +109,7 @@ The platform is four containers and a binary. The binary is the most interesting
 
 | Component | Language | What It Does |
 |-----------|----------|-------------|
-| **g8es** | Go | The Operator binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, and the platform's own certificate authority. One binary, zero external dependencies. |
+| **g8es** | Go | The Operator binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, and the platform's own certificate authority. One binary, zero external dependencies. |
 | **g8ee** | Python | AI engine. ReAct reasoning loop, multi-provider LLM abstraction (Gemini, Anthropic, OpenAI, Ollama), Tribunal pipeline, Sentinel integration, and the entire tool-calling control plane. |
 | **g8ed** | Node.js | Web dashboard and the single external entry point. FIDO2 passkey auth, SSE streaming, mTLS gateway for Operators, and the human approval interface. |
 | **g8ep** | Multi | Test runner and build environment. Compiles Operator binaries for all architectures, runs the full test suite, and handles fleet deployment. |
@@ -144,7 +145,7 @@ The platform is four containers and a binary. The binary is the most interesting
 
 - **Authentication**: FIDO2/WebAuthn passkeys only. Passwords are not supported and never will be.
 - **Transport**: TLS 1.3 everywhere. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certificates issued at claim time.
-- **Sentinel**: 58 pre-execution threat detectors (MITRE ATT&CK-mapped). 27 post-execution scrubbing patterns. Indirect prompt injection defense.
+- **Sentinel**: 46 pre-execution threat detectors (MITRE ATT&CK-mapped). 28 post-execution scrubbing patterns. Indirect prompt injection defense.
 - **Sessions**: Encrypted cookies, idle timeout, absolute timeout, IP tracking, replay protection with timestamp + nonce validation.
 - **Operator Binding**: System fingerprint permanently bound on first auth. Stolen API keys cannot be used from a different machine.
 - **Compliance Alignment**: NSA Zero Trust Implementation Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.
@@ -211,7 +212,7 @@ We aim to someday drive the standards for secure, private, and safe human-driven
 ./g8e platform wipe        # Wipe app data, restart fresh
 
 ./g8e operator build       # Compile Operator for all architectures
-./g8e test                 # Run all test suites
+./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ./g8e test g8ee            # AI engine tests (Python/pytest)
 ./g8e test g8ed            # Dashboard tests (Node/Vitest)
 ./g8e test g8eo            # Operator tests (Go)

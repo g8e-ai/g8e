@@ -37,7 +37,6 @@ class TestOperatorDataService:
 
     @pytest.fixture
     def service(self, mock_cache_aside_service, mock_g8ed_http_client):
-        from app.models.cache import CacheOperationResult
         return OperatorDataService(mock_cache_aside_service, mock_g8ed_http_client)
 
     @pytest.fixture
@@ -48,8 +47,10 @@ class TestOperatorDataService:
         operator_id = "op-123"
         mock_cache.get_document.return_value = {
             "operator_id": operator_id,
+            "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
-            "system_info": {"hostname": "test-host"}
+            "system_info": {"hostname": "test-host"},
+            "bound_web_session_id": None,
         }
 
         result = await service.get_operator(operator_id)
@@ -87,6 +88,7 @@ class TestOperatorDataService:
         existing_hb = now()
         mock_cache.get_document.return_value = {
             "operator_id": operator_id,
+            "user_id": "user-test",
             "status": OperatorStatus.BOUND,
             "last_heartbeat": existing_hb
         }

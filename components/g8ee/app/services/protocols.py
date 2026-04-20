@@ -87,7 +87,7 @@ from app.models.command_payloads import (
 )
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.models.tool_results import ToolResult
-from app.models.g8ed_client import IntentOperationResult
+from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
@@ -351,10 +351,14 @@ class OperatorDataServiceProtocol(Protocol):
         self,
         operator_id: str,
         heartbeat: OperatorHeartbeat,
-        investigation_id: str,
-        case_id: str,
+        investigation_id: str | None,
+        case_id: str | None,
     ) -> bool:
-        """Update operator heartbeat and session status."""
+        """Update operator heartbeat and session status.
+
+        investigation_id/case_id are None when the heartbeat arrives outside an
+        investigation context; callers MUST NOT coerce absence to sentinel strings.
+        """
         ...
 
     async def append_command_result(self, operator_id: str, command_result: CommandResultRecord) -> bool:
@@ -502,7 +506,7 @@ class InvestigationServiceProtocol(Protocol):
 
 @runtime_checkable
 class G8edClientProtocol(Protocol):
-    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> bool: ...
+    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse: ...
     async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
     async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
     async def bind_operators(self, operator_ids: list[str], web_session_id: str, context: G8eHttpContext) -> bool: ...
@@ -541,6 +545,7 @@ class OperatorHeartbeatServiceProtocol(Protocol):
     async def stop(self) -> None: ...
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
+    def set_pubsub_client(self, client: PubSubClient) -> None: ...
 
 @runtime_checkable
 class ApprovalServiceProtocol(Protocol):
@@ -624,7 +629,7 @@ class ToolExecutorProtocol(Protocol):
     async def execute_tool_call(
         self,
         tool_name: str,
-        args: dict[str, Any],
+        tool_args: dict[str, Any],
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,

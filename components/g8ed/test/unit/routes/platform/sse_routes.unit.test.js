@@ -113,6 +113,7 @@ describe('SSE Routes [UNIT]', () => {
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
             expect(mockSSEService.registerConnection).toHaveBeenCalledWith(
                 'ws_123',
+                'user_123',
                 res,
                 expect.objectContaining({ ip: '127.0.0.1' })
             );

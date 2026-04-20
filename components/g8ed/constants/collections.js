@@ -35,6 +35,7 @@ export const Collections = Object.freeze({
     USERS:                c['users'],
     WEB_SESSIONS:         c['web_sessions'],
     OPERATOR_SESSIONS:    c['operator_sessions'],
+    CLI_SESSIONS:         c['cli_sessions'],
     LOGIN_AUDIT:          c['login_audit'],
     AUTH_ADMIN_AUDIT:     c['auth_admin_audit'],
     ACCOUNT_LOCKS:        c['account_locks'],

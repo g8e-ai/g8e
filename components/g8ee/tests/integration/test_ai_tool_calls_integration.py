@@ -49,7 +49,7 @@ from app.constants import (
 from app.constants.status import OperatorToolName
 from app.errors import  ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileHistoryToolResult,
@@ -195,7 +195,7 @@ class TestCommandExecutionTools:
                 "command": "ls -la",
                 "working_directory": "/home/user",
                 "timeout_seconds": 30,
-                "justification": "List files in directory",
+                "guidelines": "List files in directory",
             }
 
             # Execute tool call
@@ -215,12 +215,12 @@ class TestCommandExecutionTools:
             mock_operator_command_service.execute_command.assert_called_once()
             call_args = mock_operator_command_service.execute_command.call_args[1]
             
-            # Check the OperatorCommandArgs payload
+            # Check the ExecutorCommandArgs payload
             assert "args" in call_args
             args = call_args["args"]
             assert "ls -la" in args.command
             assert args.timeout_seconds == 30
-            assert args.justification == "List files in directory"
+            assert args.guidelines == "List files in directory"
         finally:
             tool_service.reset_invocation_context(context_token)
 

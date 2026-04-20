@@ -25,7 +25,6 @@ These are pure unit tests — no external infrastructure required.
 import json
 
 import pytest
-from app.models.base import ValidationError
 
 from app.constants import (
     CACHE_PREFIX,
@@ -76,10 +75,14 @@ from app.constants import (
     VersionStability,
     AgentMode,
 )
+from app.constants.settings import (
+    CommandGenerationOutcome,
+    ApprovalErrorType,
+    AttachmentType,
+)
 from app.models.agent import (
     AgentStreamContext,
     OperatorContext,
-    StreamChunkFromModelType,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -830,13 +833,6 @@ class TestSessionTypeMatchesSharedJSON:
     def test_operator_value(self, status):
         assert status["session.type"]["operator"] == SessionType.OPERATOR
 
-    def test_web_is_string(self):
-        assert isinstance(SessionType.WEB, str)
-        assert str(SessionType.WEB.value) == "web"
-
-    def test_operator_is_string(self):
-        assert isinstance(SessionType.OPERATOR, str)
-        assert str(SessionType.OPERATOR.value) == "operator"
 
     def test_all_members_covered(self, status):
         json_keys = set(status["session.type"].keys())
@@ -1471,8 +1467,23 @@ class TestEventTypeMatchesSharedJSON:
     def test_tribunal_session_completed(self, ev):
         assert ev["ai"]["tribunal"]["session"]["completed"] == EventType.TRIBUNAL_SESSION_COMPLETED
 
-    def test_tribunal_session_fallback_triggered(self, ev):
-        assert ev["ai"]["tribunal"]["session"]["fallback"]["triggered"] == EventType.TRIBUNAL_SESSION_FALLBACK_TRIGGERED
+    def test_tribunal_session_disabled(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["disabled"] == EventType.TRIBUNAL_SESSION_DISABLED
+
+    def test_tribunal_session_model_not_configured(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["model_not_configured"] == EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
+
+    def test_tribunal_session_provider_unavailable(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["provider_unavailable"] == EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE
+
+    def test_tribunal_session_system_error(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["system_error"] == EventType.TRIBUNAL_SESSION_SYSTEM_ERROR
+
+    def test_tribunal_session_generation_failed(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["generation_failed"] == EventType.TRIBUNAL_SESSION_GENERATION_FAILED
+
+    def test_tribunal_session_verifier_failed(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["verifier_failed"] == EventType.TRIBUNAL_SESSION_VERIFIER_FAILED
 
     def test_tribunal_voting_pass_completed(self, ev):
         assert ev["ai"]["tribunal"]["voting"]["pass"]["completed"] == EventType.TRIBUNAL_VOTING_PASS_COMPLETED
@@ -1542,6 +1553,69 @@ class TestOperatorTypeValidation:
     def test_operator_context_accepts_string_coercion(self):
         ctx = OperatorContext(operator_id="op-1", operator_type="system")
         assert ctx.operator_type == OperatorType.SYSTEM
+
+
+class TestCommandGenerationOutcomeMatchesSharedJSON:
+    def test_consensus(self, status):
+        assert status["tribunal.outcome"]["consensus"] == CommandGenerationOutcome.CONSENSUS
+
+    def test_verified(self, status):
+        assert status["tribunal.outcome"]["verified"] == CommandGenerationOutcome.VERIFIED
+
+    def test_verification_failed(self, status):
+        assert status["tribunal.outcome"]["verification.failed"] == CommandGenerationOutcome.VERIFICATION_FAILED
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["tribunal.outcome"].keys())
+        enum_count = len(CommandGenerationOutcome)
+        assert enum_count == len(json_keys), (
+            f"CommandGenerationOutcome has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestApprovalErrorTypeMatchesSharedJSON:
+    def test_approval_publish_failure(self, status):
+        assert status["approval.error.type"]["approval.publish.failure"] == ApprovalErrorType.APPROVAL_PUBLISH_FAILURE
+
+    def test_approval_exception(self, status):
+        assert status["approval.error.type"]["approval.exception"] == ApprovalErrorType.APPROVAL_EXCEPTION
+
+    def test_approval_timeout(self, status):
+        assert status["approval.error.type"]["approval.timeout"] == ApprovalErrorType.APPROVAL_TIMEOUT
+
+    def test_invalid_intent(self, status):
+        assert status["approval.error.type"]["invalid.intent"] == ApprovalErrorType.INVALID_INTENT
+
+    def test_intent_approval_exception(self, status):
+        assert status["approval.error.type"]["intent.approval.exception"] == ApprovalErrorType.INTENT_APPROVAL_EXCEPTION
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["approval.error.type"].keys())
+        enum_count = len(ApprovalErrorType)
+        assert enum_count == len(json_keys), (
+            f"ApprovalErrorType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
+
+
+class TestAttachmentTypeMatchesSharedJSON:
+    def test_pdf(self, status):
+        assert status["attachment.type"]["pdf"] == AttachmentType.PDF
+
+    def test_image(self, status):
+        assert status["attachment.type"]["image"] == AttachmentType.IMAGE
+
+    def test_text(self, status):
+        assert status["attachment.type"]["text"] == AttachmentType.TEXT
+
+    def test_other(self, status):
+        assert status["attachment.type"]["other"] == AttachmentType.OTHER
+
+    def test_all_members_covered(self, status):
+        json_keys = set(status["attachment.type"].keys())
+        enum_count = len(AttachmentType)
+        assert enum_count == len(json_keys), (
+            f"AttachmentType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
+        )
 
 
 

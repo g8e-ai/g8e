@@ -12,15 +12,15 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from app.services.infra.settings_service import SettingsService
 from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
     DB_COLLECTION_SETTINGS,
 )
-from app.models.settings import G8eePlatformSettings, PlatformSettingsDocument, UserSettingsDocument
-from app.constants.settings import GEMINI_3_1_PRO, LLMProvider
+from app.models.settings import G8eePlatformSettings
+from app.constants.settings import LLMProvider
 
 @pytest.mark.asyncio
 class TestG8eeSettingsOverlayIntegration:
@@ -103,7 +103,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -187,7 +186,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -213,7 +211,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },
@@ -305,7 +302,6 @@ class TestG8eeSettingsOverlayIntegration:
                 },
                 "eval_judge": {
                     "model": None,
-                    "temperature": 0.0,
                     "max_output_tokens": 4096
                 }
             },

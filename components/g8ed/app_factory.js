@@ -42,6 +42,7 @@ import { createAuditRouter } from './routes/platform/audit_routes.js';
 import { createConsoleRouter } from './routes/platform/console_routes.js';
 import { createSettingsRouter } from './routes/platform/settings_routes.js';
 import { createSystemRouter } from './routes/platform/system_routes.js';
+import { LLMProvider, PROVIDER_MODELS } from './constants/ai.js';
 import { createOperatorRouter } from './routes/operator/operator_routes.js';
 import { createOperatorApprovalRouter } from './routes/operator/operator_approval_routes.js';
 import { createOperatorAuthRouter } from './routes/operator/operator_auth_routes.js';
@@ -226,10 +227,10 @@ export function createG8edApp({
 
     // Favicon
     app.get('/favicon.ico', (req, res) => {
-        const faviconPath = path.join(staticPath, 'media', 'g8e.ai.logo.tiny.png');
+        const faviconPath = path.join(staticPath, 'media', 'favicon.ico');
         if (fs.existsSync(faviconPath)) {
             res.sendFile(faviconPath, {
-                headers: { 'Content-Type': 'image/png' }
+                headers: { 'Content-Type': 'image/x-icon' }
             });
         } else {
             res.status(404).send('Favicon not found');
@@ -440,7 +441,13 @@ function mountRoutes(app, {
         });
 
         app.get('/settings', requirePageAdmin(), async (req, res) => {
-            res.render('settings', { devLogsEnabled: await withDevLogs(req) });
+            res.render('settings', {
+                devLogsEnabled: await withDevLogs(req),
+                llmCatalog: {
+                    providers: LLMProvider,
+                    providerModels: PROVIDER_MODELS,
+                },
+            });
         });
 
         app.get('/console', requirePageAdmin(), async (req, res) => {

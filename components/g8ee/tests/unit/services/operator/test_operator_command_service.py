@@ -24,7 +24,6 @@ Covers the service's own responsibilities:
 
 """
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -289,7 +288,7 @@ class TestExecuteCommandTargetSystems:
             operator_session_id=session_id,
             current_hostname=hostname,
             operator_type=OperatorType.SYSTEM,
-            web_session_id="ws-1",
+            bound_web_session_id="ws-1",
         )
 
     def _make_investigation(self, operators):
@@ -316,7 +315,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_single_operator_target_systems_populated(self):
         """With a single operator, target_systems must contain that operator."""
-        from app.models.agent import OperatorCommandArgs
+        from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
 
@@ -326,7 +325,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = OperatorCommandArgs(command="ls", justification="test")
+        args = ExecutorCommandArgs(command="ls", request="test")
 
         from app.models.settings import G8eeUserSettings, LLMSettings
         request_settings = G8eeUserSettings(llm=LLMSettings())
@@ -340,7 +339,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_target_operators_arg_populates_target_systems(self):
         """When target_operators is set, target_systems must reflect all resolved operators."""
-        from app.models.agent import OperatorCommandArgs
+        from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
 
@@ -351,9 +350,9 @@ class TestExecuteCommandTargetSystems:
         op2 = self._make_operator("op-2", "sess-2", "web-2")
         investigation = self._make_investigation([op1, op2])
         g8e_context = self._make_g8e_context()
-        args = OperatorCommandArgs(
+        args = ExecutorCommandArgs(
             command="uptime",
-            justification="batch check",
+            request="batch check",
             target_operator="op-1",
             target_operators=["op-1", "op-2"],
         )
@@ -370,7 +369,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_batch_fans_out_to_all_resolved_operators(self):
         """Batch execution dispatches one message per operator and aggregates per-host results."""
-        from app.models.agent import OperatorCommandArgs
+        from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
 
@@ -382,9 +381,9 @@ class TestExecuteCommandTargetSystems:
         op3 = self._make_operator("op-3", "sess-3", "host-3")
         investigation = self._make_investigation([op1, op2, op3])
         g8e_context = self._make_g8e_context()
-        args = OperatorCommandArgs(
+        args = ExecutorCommandArgs(
             command="uptime",
-            justification="batch health check",
+            request="batch health check",
             target_operators=["all"],
         )
 
@@ -411,7 +410,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_target_operators_without_target_operator_does_not_raise(self):
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
-        from app.models.agent import OperatorCommandArgs
+        from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
 
@@ -422,9 +421,9 @@ class TestExecuteCommandTargetSystems:
         op2 = self._make_operator("op-2", "sess-2", "host-2")
         investigation = self._make_investigation([op1, op2])
         g8e_context = self._make_g8e_context()
-        args = OperatorCommandArgs(
+        args = ExecutorCommandArgs(
             command="uname -a",
-            justification="multi-host",
+            request="multi-host",
             target_operators=["op-1", "op-2"],
         )
 
@@ -440,7 +439,7 @@ class TestExecuteCommandTargetSystems:
 
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
-        from app.models.agent import OperatorCommandArgs
+        from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
 
@@ -450,7 +449,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-abc", "sess-abc", "db-server")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = OperatorCommandArgs(command="df -h", justification="disk check")
+        args = ExecutorCommandArgs(command="df -h", request="disk check")
 
         from app.models.settings import G8eeUserSettings, LLMSettings
         request_settings = G8eeUserSettings(llm=LLMSettings())

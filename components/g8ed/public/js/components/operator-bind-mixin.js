@@ -19,6 +19,7 @@ import { EventType } from '../constants/events.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { escapeHtml } from '../utils/html.js';
 import { showConfirmationModal } from '../utils/ui-utils.js';
+import { webSessionService } from '../utils/web-session-service.js';
 
 /**
  * BindOperatorsMixin - Operator bind/unbind operations and confirmation overlays.
@@ -65,6 +66,15 @@ export const BindOperatorsMixin = {
                 this.updateStatus(result.operator.status || OperatorStatus.BOUND);
             }
 
+            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            if (operatorIndex !== -1) {
+                const currentWebSessionId = webSessionService.getWebSessionId();
+                this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
+                if (typeof this.displayOperators === 'function') {
+                    this.displayOperators(this.operators);
+                }
+            }
+
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to bind operator:', error);
             notificationService.error(`Failed to bind operator: ${error.message}`);
@@ -97,6 +107,14 @@ export const BindOperatorsMixin = {
 
             this.updateBindAllButtonVisibility();
             this.updateUnbindAllButtonVisibility();
+
+            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            if (operatorIndex !== -1) {
+                this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
+                if (typeof this.displayOperators === 'function') {
+                    this.displayOperators(this.operators);
+                }
+            }
 
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to unbind operator:', error);
@@ -235,6 +253,10 @@ export const BindOperatorsMixin = {
         const operatorsListHtml = activeOperators.map(op => this._createBindAllOperatorItem(op)).join('');
         const htmlContent = `
             <div class="bind-all-operators-container">
+                <div class="bind-all-operators-header">
+                    <input type="checkbox" id="select-all-operators" class="select-all-checkbox" checked>
+                    <label for="select-all-operators">Select All</label>
+                </div>
                 <div class="bind-all-operators-list">
                     ${operatorsListHtml}
                 </div>
@@ -255,6 +277,25 @@ export const BindOperatorsMixin = {
             htmlContent,
             onConfirm: async (overlay) => {
                 await this.executeBindAll(overlay, activeOperators);
+            },
+            onRender: (overlay) => {
+                const selectAllCheckbox = overlay.querySelector('#select-all-operators');
+                const operatorCheckboxes = overlay.querySelectorAll('.operator-select-checkbox');
+
+                if (selectAllCheckbox && operatorCheckboxes.length > 0) {
+                    selectAllCheckbox.addEventListener('change', (e) => {
+                        operatorCheckboxes.forEach(cb => {
+                            cb.checked = e.target.checked;
+                        });
+                    });
+
+                    operatorCheckboxes.forEach(cb => {
+                        cb.addEventListener('change', () => {
+                            const allChecked = Array.from(operatorCheckboxes).every(c => c.checked);
+                            selectAllCheckbox.checked = allChecked;
+                        });
+                    });
+                }
             }
         });
 
@@ -269,9 +310,29 @@ export const BindOperatorsMixin = {
         if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
         try {
-            const operatorIds = activeOperators.map(op => op.operator_id);
+            const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
+            const selectedOperatorIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    selectedOperatorIds.push(cb.getAttribute('data-operator-id'));
+                }
+            });
+
+            if (selectedOperatorIds.length === 0) {
+                if (feedbackContainer) {
+                    await templateLoader.renderTo(feedbackContainer, 'bind-result-feedback', { 
+                        resultClass: 'error', 
+                        icon: 'error', 
+                        message: 'No operators selected' 
+                    });
+                }
+                if (processingIndicator) processingIndicator.classList.add('initially-hidden');
+                await new Promise(r => setTimeout(r, 2000));
+                throw new Error('No operators selected');
+            }
+
             const service = this.operatorPanelService || operatorPanelService;
-            const response = await service.bindAllOperators(operatorIds);
+            const response = await service.bindAllOperators(selectedOperatorIds);
 
             if (!response) {
                 throw new Error('No response from operator panel service');
@@ -285,14 +346,25 @@ export const BindOperatorsMixin = {
             const result = await response.json();
             devLogger.log('[OPERATOR] Bind-all completed successfully:', result);
 
-            for (const opId of result.bound_operator_ids || operatorIds) {
+            for (const opId of result.bound_operator_ids || selectedOperatorIds) {
                 if (!this.boundOperatorIds.includes(opId)) {
                     this.boundOperatorIds.push(opId);
                 }
             }
 
+            const currentWebSessionId = webSessionService.getWebSessionId();
+            for (const opId of result.bound_operator_ids || selectedOperatorIds) {
+                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                if (operatorIndex !== -1) {
+                    this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
+                }
+            }
+            if (typeof this.displayOperators === 'function') {
+                this.displayOperators(this.operators);
+            }
+
             if (feedbackContainer) {
-                const boundCount = result.bound_count || operatorIds.length;
+                const boundCount = result.bound_count || selectedOperatorIds.length;
                 const label = `${boundCount} operator${boundCount !== 1 ? 's' : ''} bound successfully`;
                 await templateLoader.renderTo(feedbackContainer, 'bind-result-feedback', { 
                     resultClass: 'success', 
@@ -363,7 +435,7 @@ export const BindOperatorsMixin = {
         const currentWebSessionId = window.authState?.getWebSessionId();
 
         const boundOperators = this.operators.filter(op =>
-            (op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId) ||
+            (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
             (op.status === OperatorStatus.STALE && this.boundOperatorIds.includes(op.operator_id))
         );
 
@@ -431,6 +503,16 @@ export const BindOperatorsMixin = {
 
             for (const opId of result.unbound_operator_ids || operatorIds) {
                 this.boundOperatorIds = this.boundOperatorIds.filter(id => id !== opId);
+            }
+
+            for (const opId of result.unbound_operator_ids || operatorIds) {
+                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                if (operatorIndex !== -1) {
+                    this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
+                }
+            }
+            if (typeof this.displayOperators === 'function') {
+                this.displayOperators(this.operators);
             }
 
             if (feedbackContainer) {

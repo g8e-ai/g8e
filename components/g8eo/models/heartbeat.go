@@ -43,6 +43,7 @@ type HeartbeatNetworkInterface struct {
 
 type HeartbeatNetworkInfo struct {
 	PublicIP           string                      `json:"public_ip"`
+	InternalIP         string                      `json:"internal_ip"`
 	Interfaces         []string                    `json:"interfaces"`
 	ConnectivityStatus []HeartbeatNetworkInterface `json:"connectivity_status"`
 }
@@ -82,8 +83,8 @@ type HeartbeatOSDetails struct {
 
 type HeartbeatUserDetails struct {
 	Username string `json:"username"`
-	UID      string `json:"uid"`
-	GID      string `json:"gid"`
+	UID      int    `json:"uid"`
+	GID      int    `json:"gid"`
 	Home     string `json:"home"`
 	Name     string `json:"name"`
 	Shell    string `json:"shell"`

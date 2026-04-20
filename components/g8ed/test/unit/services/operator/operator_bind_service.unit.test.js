@@ -34,7 +34,6 @@ describe('BindOperatorsService', () => {
                 getOperator: vi.fn(),
                 getOperatorWithSessionContext: vi.fn(),
                 relayRegisterOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
-                broadcastOperatorListToSession: vi.fn().mockResolvedValue(),
                 operatorDataService: {
                     updateOperator: vi.fn(),
                 },
@@ -102,7 +101,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -116,7 +114,7 @@ describe('BindOperatorsService', () => {
             expect(result.bound_count).toBe(1);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-123', {
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
             expect(mocks.bindingService.bind).toHaveBeenCalledWith('os-123', 'ws-123', 'u-123', 'op-123');
             expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(G8eHttpContext));
@@ -138,7 +136,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -152,7 +149,7 @@ describe('BindOperatorsService', () => {
             expect(result.unbound_count).toBe(1);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-123', {
                 status: OperatorStatus.ACTIVE,
-                web_session_id: null
+                bound_web_session_id: null
             });
             expect(mocks.bindingService.unbind).toHaveBeenCalledWith('os-123', 'ws-123', 'op-123');
             expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(G8eHttpContext));
@@ -186,7 +183,6 @@ describe('BindOperatorsService', () => {
                 .mockResolvedValueOnce(g8eContext1)
                 .mockResolvedValueOnce(g8eContext2);
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-2'], 
@@ -202,11 +198,11 @@ describe('BindOperatorsService', () => {
             expect(mocks.bindingService.bind).toHaveBeenCalledTimes(2);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', {
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-2', {
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
         });
 
@@ -226,7 +222,6 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(op1, { id: 'os-1' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValueOnce(g8eContextWrapper);
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-missing'], 
@@ -264,7 +259,6 @@ describe('BindOperatorsService', () => {
                 .mockResolvedValueOnce(OperatorWithSessionContext.create(op1, { id: 'os-1' }, { id: 'ws-123' }))
                 .mockResolvedValueOnce(OperatorWithSessionContext.create(op2, { id: 'os-2' }, { id: 'ws-123' }));
 
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({ 
                 operator_ids: ['op-1', 'op-2'], 
@@ -280,11 +274,11 @@ describe('BindOperatorsService', () => {
             expect(mocks.bindingService.unbind).toHaveBeenCalledTimes(2);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', {
                 status: OperatorStatus.ACTIVE,
-                web_session_id: null
+                bound_web_session_id: null
             });
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-2', {
                 status: OperatorStatus.ACTIVE,
-                web_session_id: null
+                bound_web_session_id: null
             });
         });
     });
@@ -302,7 +296,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-reg-1' }, { id: 'ws-reg-1' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             await service.bindOperators(new BindOperatorsRequest({
                 operator_ids: ['op-reg-1'],
@@ -313,7 +306,7 @@ describe('BindOperatorsService', () => {
             const updateCall = mocks.operatorService.operatorDataService.updateOperator.mock.calls[0];
             expect(updateCall[0]).toBe('op-reg-1');
             expect(updateCall[1].status).toBe(OperatorStatus.BOUND);
-            expect(updateCall[1].web_session_id).toBe('ws-reg-1');
+            expect(updateCall[1].bound_web_session_id).toBe('ws-reg-1');
         });
 
         it('unbind transitions operator status from BOUND to ACTIVE', async () => {
@@ -322,13 +315,12 @@ describe('BindOperatorsService', () => {
                 user_id: 'u-1',
                 operator_session_id: 'os-reg-2',
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-reg-2'
+                bound_web_session_id: 'ws-reg-2'
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-reg-2' }, { id: 'ws-reg-2' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             await service.unbindOperators(new UnbindOperatorsRequest({
                 operator_ids: ['op-reg-2'],
@@ -339,7 +331,7 @@ describe('BindOperatorsService', () => {
             const updateCall = mocks.operatorService.operatorDataService.updateOperator.mock.calls[0];
             expect(updateCall[0]).toBe('op-reg-2');
             expect(updateCall[1].status).toBe(OperatorStatus.ACTIVE);
-            expect(updateCall[1].web_session_id).toBeNull();
+            expect(updateCall[1].bound_web_session_id).toBeNull();
         });
     });
 
@@ -356,7 +348,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-wrapper-1' }, { id: 'ws-wrapper-1' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-wrapper-1'],
@@ -370,7 +361,7 @@ describe('BindOperatorsService', () => {
             expect(result.success).toBe(true);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-wrapper-1', {
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-wrapper-1'
+                bound_web_session_id: 'ws-wrapper-1'
             });
         });
     });
@@ -382,7 +373,7 @@ describe('BindOperatorsService', () => {
                 user_id: 'u-123',
                 operator_session_id: 'os-already-bound',
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.bindingService.getBoundOperatorSessionIds.mockResolvedValue(['os-already-bound']);
@@ -409,7 +400,7 @@ describe('BindOperatorsService', () => {
                 user_id: 'u-123',
                 operator_session_id: 'os-already-1',
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
             const op2 = new OperatorDocument({
                 operator_id: 'op-new-2',
@@ -425,7 +416,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(op2, { id: 'os-new-2' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-already-1', 'op-new-2'],
@@ -440,7 +430,7 @@ describe('BindOperatorsService', () => {
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledTimes(1);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-new-2', {
                 status: OperatorStatus.BOUND,
-                web_session_id: 'ws-123'
+                bound_web_session_id: 'ws-123'
             });
         });
     });
@@ -483,7 +473,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-wrapper' }, { id: 'ws-unbind-wrapper' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = {
                 operator_ids: ['op-unbind-wrapper'],
@@ -497,7 +486,7 @@ describe('BindOperatorsService', () => {
             expect(result.success).toBe(true);
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-unbind-wrapper', {
                 status: OperatorStatus.ACTIVE,
-                web_session_id: null
+                bound_web_session_id: null
             });
         });
 
@@ -512,7 +501,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-instance' }, { id: 'ws-unbind-instance' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-instance'],
@@ -584,7 +572,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(op1, { id: 'os-unbind-1' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-1', 'op-missing'],
@@ -609,7 +596,6 @@ describe('BindOperatorsService', () => {
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-no-session-unbind'],
@@ -625,7 +611,7 @@ describe('BindOperatorsService', () => {
             expect(mocks.bindingService.unbind).not.toHaveBeenCalled();
             expect(mocks.operatorService.operatorDataService.updateOperator).toHaveBeenCalledWith('op-no-session-unbind', {
                 status: OperatorStatus.ACTIVE,
-                web_session_id: null
+                bound_web_session_id: null
             });
             expect(mocks.webSessionService.unbindOperatorFromWebSession).toHaveBeenCalledWith('ws-123', 'op-no-session-unbind');
         });
@@ -645,7 +631,6 @@ describe('BindOperatorsService', () => {
                 OperatorWithSessionContext.create(operator, { id: 'os-relay-fail' }, { id: 'ws-123' })
             );
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-relay-fail'],
@@ -673,7 +658,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-broadcast-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession.mockRejectedValue(new Error('SSE down'));
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-broadcast-fail'],
@@ -700,7 +684,6 @@ describe('BindOperatorsService', () => {
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-relay-fail' }, { id: 'ws-123' })
             );
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-relay-fail'],
@@ -727,7 +710,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
                 OperatorWithSessionContext.create(operator, { id: 'os-unbind-broadcast-fail' }, { id: 'ws-123' })
             );
-            mocks.operatorService.broadcastOperatorListToSession.mockRejectedValue(new Error('SSE down'));
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-unbind-broadcast-fail'],
@@ -754,7 +736,6 @@ describe('BindOperatorsService', () => {
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.bindingService.getBoundOperatorSessionIds.mockResolvedValue([]);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-null-context'],
@@ -778,7 +759,6 @@ describe('BindOperatorsService', () => {
             });
             mocks.operatorService.getOperator.mockResolvedValue(operator);
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(null);
-            mocks.operatorService.broadcastOperatorListToSession = vi.fn().mockResolvedValue();
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-null-context-unbind'],

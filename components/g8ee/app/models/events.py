@@ -20,8 +20,9 @@ All events published to g8ed are represented as one of two typed envelopes:
   case_id, and investigation_id are all required — the caller must have all
   three or the event cannot be constructed.
 
-- BackgroundEvent: system-initiated, no browser session. g8ed routes by
-  investigation_id. investigation_id is required; case_id is optional.
+- BackgroundEvent: system-initiated, no browser session. g8ed fans the event
+  out to every active SSE session owned by user_id. investigation_id and
+  case_id are optional correlation hints carried inside the payload.
 
 The EventService.publish() method accepts the union type and dispatches
 accordingly. publish_event_to_g8ed() no longer exists.
@@ -48,48 +49,63 @@ class SessionEvent(G8eBaseModel):
     investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
     task_id: str | None = Field(default=None, description="AI task ID for routing")
 
-    def flatten_for_wire(self) -> dict[str, Any]:
-        data: dict[str, Any] = self.payload.flatten_for_wire()
-        data["web_session_id"] = self.web_session_id
-        data["user_id"] = self.user_id
-        if self.case_id is not None:
-            data["case_id"] = self.case_id
-        if self.investigation_id is not None:
-            data["investigation_id"] = self.investigation_id
-        return {
-            "web_session_id": self.web_session_id,
-            "user_id": self.user_id,
-            "event": {
-                "type": self.event_type,
-                "data": data,
-            },
-        }
-
 
 class BackgroundEvent(G8eBaseModel):
     """System-initiated event with no connected browser session.
 
-    g8ed routes by investigation_id. Use this for background/async events
-    where no web_session_id is available at publish time.
+    g8ed fans the event out to every active SSE session owned by user_id.
+    investigation_id and case_id are optional correlation hints carried inside
+    the payload — they do not drive routing.
     """
 
     event_type: EventType = Field(description="g8ed event type")
     payload: G8eBaseModel = Field(description="Typed event-specific payload")
-    investigation_id: str = Field(description="Investigation correlation ID")
-    user_id: str = Field(description="User ID associated with the investigation")
+    user_id: str = Field(description="User ID to fan out to")
+    investigation_id: str | None = Field(default=None, description="Investigation correlation ID")
     case_id: str | None = Field(default=None, description="Case correlation ID")
     task_id: str | None = Field(default=None, description="AI task ID for routing")
 
-    def flatten_for_wire(self) -> dict[str, Any]:
-        data: dict[str, Any] = self.payload.flatten_for_wire()
-        data["investigation_id"] = self.investigation_id
-        data["user_id"] = self.user_id
-        if self.case_id is not None:
-            data["case_id"] = self.case_id
-        return {
-            "user_id": self.user_id,
-            "event": {
-                "type": self.event_type,
-                "data": data,
-            },
-        }
+
+class _SSEEventBody(G8eBaseModel):
+    type: EventType
+    data: dict[str, Any]
+
+
+class SessionEventWire(G8eBaseModel):
+    web_session_id: str
+    user_id: str
+    event: _SSEEventBody
+
+    @classmethod
+    def from_session_event(cls, se: SessionEvent) -> "SessionEventWire":
+        data = se.payload.model_dump(mode="json")
+        data["web_session_id"] = se.web_session_id
+        data["user_id"] = se.user_id
+        if se.case_id is not None:
+            data["case_id"] = se.case_id
+        if se.investigation_id is not None:
+            data["investigation_id"] = se.investigation_id
+        if se.task_id is not None:
+            data["task_id"] = se.task_id
+        return cls(
+            web_session_id=se.web_session_id,
+            user_id=se.user_id,
+            event=_SSEEventBody(type=se.event_type, data=data),
+        )
+
+
+class BackgroundEventWire(G8eBaseModel):
+    user_id: str
+    event: _SSEEventBody
+
+    @classmethod
+    def from_background_event(cls, be: BackgroundEvent) -> "BackgroundEventWire":
+        data = be.payload.model_dump(mode="json")
+        data["user_id"] = be.user_id
+        if be.investigation_id is not None:
+            data["investigation_id"] = be.investigation_id
+        if be.case_id is not None:
+            data["case_id"] = be.case_id
+        if be.task_id is not None:
+            data["task_id"] = be.task_id
+        return cls(user_id=be.user_id, event=_SSEEventBody(type=be.event_type, data=data))

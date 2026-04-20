@@ -15,7 +15,9 @@ g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coord
 ```
 ChatPipelineService
   ├── g8eEngine            — Streaming orchestrator with tool calling loop
-  │     ├── AIToolService    — Tool registration and execution
+  │     ├── agent_tool_loop — Sequential function execution and Tribunal routing
+  │     │     └── TribunalInvoker — Natural-language command refinement pipeline
+  │     ├── AIToolService    — Tool registration (TOOL_SPECS) and execution dispatch
   │     │     └── WebSearchProvider — Vertex AI Search (Discovery Engine) executor
   │     └── GroundingService — Provider-native grounding extraction, inline citation insertion
   ├── AIResponseAnalyzer      — Risk analysis (command, file op, error)
@@ -110,18 +112,18 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 | `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
 | `generate_content_lite` | `GenerateContentResponse` | Triage, eval |
 
-Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` (`LLMSettings`) — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_assistant=False)` factory constructs a provider from user settings on each request. The `is_assistant` flag determines whether to use the `primary_provider` or `assistant_provider` configuration.
+Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_assistant=False)` factory constructs a provider from user settings on each request. The `is_assistant` flag determines whether to use the `primary_provider` or `assistant_provider` configuration.
 
-`StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types.
+`StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types. `StreamChunkData` carries the typed payload for every chunk type, including labels, icons, and categories for tool calls.
 
 ### Provider Implementations
 
 | Provider | Module | Streaming Model |
 |----------|--------|-----------------|
 | `GeminiProvider` | `app/llm/providers/gemini.py` | Opens the SDK stream with tenacity retry on the connection step only, then yields `StreamChunkFromModel` objects immediately as each SDK chunk arrives — no buffering |
-| `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. **Message constraints:** messages must strictly alternate between user and assistant — consecutive same-role Content objects are merged. Every `tool_result` must carry the `tool_use_id` from the preceding assistant's `tool_use` block. Empty text blocks are dropped. |
-| `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; enables `think=true` for primary model calls to support Ollama's thinking feature; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
-| `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
+| `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. **Hardened Message handling:** messages must strictly alternate between user and assistant — consecutive same-role Content objects are merged. Every `tool_result` must carry the `tool_use_id` from the preceding assistant's `tool_use` block. Empty text blocks are dropped. |
+| `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; selects the reasoning dialect via `LLMModelConfig.thinking_dialect` (`NONE` or `NATIVE_TOGGLE`); extracts `thinking` field from responses and streams it as `thought=True` chunks. |
+| `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; translates `ThinkingLevel` into `reasoning.effort` for reasoning models; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
 
 **Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagate to the retry guard, which prevents re-attempting a partially-delivered response.
 
@@ -142,7 +144,10 @@ stream_response
   └── _stream_with_tool_loop       (ReAct loop — runs until no pending tool calls)
         ├── _process_provider_turn      (consumes one provider stream, owns thinking state)
         │     yields: TEXT, THINKING, THINKING_UPDATE, THINKING_END, TOOL_CALL chunks
-        └── _execute_turn_tool_calls (sequential function execution)
+        └── execute_turn_tool_calls (sequential function execution)
+              └── orchestrate_tool_execution (Tribunal routing & dispatch)
+                    ├── TribunalInvoker (for run_commands_with_operator)
+                    └── AIToolService.execute_tool_call (uniform handler dispatch)
               yields: TOOL_CALL, TOOL_RESULT chunks
         final yields: CITATIONS (if grounding used), COMPLETE
 ```
@@ -273,19 +278,22 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 
 ### Pull and Enrichment
 
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object the AI receives on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
+`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object that Triage (The Gatekeeper) and Sage (The Architect) receive on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
 
 **Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
 
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; the AI proceeds without it.
+**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; Triage (The Gatekeeper) and Sage (The Architect) proceed without it.
 
 **Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
 
 **Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, disk, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields.
 
+**Step 5 — conversation history:** The `InvestigationModel` (and thus `EnrichedInvestigationContext`) includes a `conversation_history` field containing all user and AI messages for the investigation. During chat pipeline preparation (`ChatPipelineService._prepare_chat_context`), conversation history is fetched separately via `get_chat_messages` and converted to LLM contents via `build_contents_from_history`. This ensures Triage (The Gatekeeper) and Sage (The Architect) receive the full conversation context on every turn. Conversation history can also be retrieved on-demand by Sage, Dash, or other agents via the `query_investigation_context` tool with `data_type="conversation_history"`.
+
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records
 - `memory` — the attached `InvestigationMemory` (or `None`)
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn)
 
 For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
 
@@ -330,10 +338,10 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### Gemini Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemini-3.1-pro` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-pro-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3-flash` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
-| `gemini-3.1-flash-lite` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-pro-preview-customtools` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3-flash-preview` | HIGH, MEDIUM, LOW | Yes | 1,000,000 | 64,000 |
+| `gemini-3.1-flash-lite-preview` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 1,000,000 | 64,000 |
 
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
@@ -344,13 +352,14 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### Ollama Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemma4-26b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `nemotron-3-30b` | HIGH, MEDIUM, LOW, MINIMAL | Yes | 128,000 | 8,192 |
-| `qwen3.5-122b` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
-| `glm-5.1` | HIGH, MEDIUM, LOW | Yes | 256,000 | 8,192 |
-| `llama-3.2-3b` | - | Yes | 32,768 | 8,192 |
-| `qwen3.5-2b` | - | Yes | 32,768 | 8,192 |
-| `llama3:8b` | - | Yes | 128,000 | 8,192 |
+| `gemma4:26b` | HIGH, OFF | Yes | 128,000 | 8,192 |
+| `nemotron-3-nano:30b` | HIGH, OFF | Yes | 128,000 | 8,192 |
+| `qwen3.5:122b` | HIGH, OFF | Yes | 256,000 | 8,192 |
+| `glm-5.1:cloud` | HIGH, OFF | Yes | 256,000 | 8,192 |
+| `llama3.2:3b` | - | Yes | 32,768 | 8,192 |
+| `qwen3.5:2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
+| `gemma4:e4b` | HIGH, OFF | Yes | 32,768 | 8,192 |
+| `gemma4:e2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
 
 ### Model Roles
 
@@ -385,25 +394,38 @@ Before invoking the primary model, g8ee classifies each incoming message as `sim
 
 ## Function Tools
 
+### Tool Registration Registry (`TOOL_SPECS`)
+
+g8ee uses a single-source declarative registry for AI tools in `app/services/ai/tool_registry.py`. Each `ToolSpec` entry in `TOOL_SPECS` carries everything the platform needs to know about a tool:
+
+- **Name** — The `OperatorToolName` enum value.
+- **Scope** — `UNIVERSAL` (no bound operator required) or `OPERATOR_GATED` (bound-operator auth required; also the Tribunal routing set).
+- **Agent Modes** — The set of `AgentMode` values in which the tool is exposed to the LLM.
+- **Builder/Handler** — Method names on `AIToolService` that build the declaration and dispatch execution.
+- **Display Metadata** — Label, icon, and category used for UI rendering.
+
+Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this one registry.
+
 ### Active Tools
 
-| Tool | Approval Required | Purpose |
-|------|-------------------|---------|
-| `run_commands_with_operator` | Yes | Execute shell commands on target systems |
-| `file_create_on_operator` | Yes | Create new files with content |
-| `file_write_on_operator` | Yes | Replace entire file contents |
-| `file_update_on_operator` | Yes | Surgical find-and-replace within files |
-| `file_read_on_operator` | No | Read file content (with optional line ranges) |
-| `list_files_and_directories_with_detailed_metadata` | No | Directory listing with metadata |
-| `fetch_file_history` | No | Retrieve file edit history and commit information |
-| `fetch_file_diff` | No | Retrieve specific file diffs and change details |
-| `check_port_status` | No | Check TCP/UDP port reachability |
-| `grant_intent_permission` | Yes (via intent flow) | Request AWS intent permissions for cloud operators |
-| `revoke_intent_permission` | Yes (via intent flow) | Revoke AWS intent permissions |
-| `query_investigation_context` | No | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
-| `search_web` | No | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
+| Tool | Approval Required | Scope | Purpose |
+|------|-------------------|-------|---------|
+| `run_commands_with_operator` | Yes | Gated | Execute shell commands on target systems (via Tribunal) |
+| `file_create_on_operator` | Yes | Gated | Create new files with content |
+| `file_write_on_operator` | Yes | Gated | Replace entire file contents |
+| `file_update_on_operator` | Yes | Gated | Surgical find-and-replace within files |
+| `file_read_on_operator` | No | Gated | Read file content (with optional line ranges) |
+| `list_files_and_directories_with_detailed_metadata` | No | Gated | Directory listing with metadata |
+| `fetch_file_history` | No | Gated | Retrieve file edit history and commit information |
+| `fetch_file_diff` | No | Gated | Retrieve specific file diffs and change details |
+| `check_port_status` | No | Gated | Check TCP/UDP port reachability |
+| `grant_intent_permission` | Yes (via intent flow) | Gated | Request AWS intent permissions for cloud operators |
+| `revoke_intent_permission` | Yes (via intent flow) | Gated | Revoke AWS intent permissions |
+| `query_investigation_context` | No | Universal | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
+| `get_command_constraints` | No | Universal | Retrieve whitelisted/blacklisted command patterns |
+| `g8e_web_search` | No | Universal | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
 
-Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures across multi-step operations.
+Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures and ensure accurate tracking of intermediate steps.
 
 ---
 
@@ -411,7 +433,9 @@ Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequenti
 
 ### Operator Service Layer
 
-`OperatorCommandService` (`app/services/operator/command_service.py`) is the entry point for operator tool execution. It is a pure injection target — business logic is owned by focused sub-services stored on `app.state` at startup.
+`OperatorCommandService` (`app/services/operator/command_service.py`) is the entry point for operator tool execution. It is a pure injection target — business logic is owned by focused sub-services.
+
+`AIToolService` handles the dispatch from the AI loop. It uses a `_tool_handlers` dispatch table and uniform `_handle_*` methods for every tool. For `run_commands_with_operator`, it routes through `TribunalInvoker` to refine the natural-language request into a precise shell command.
 
 `OperatorApprovalService` (`app/services/operator/approval_service.py`) is a first-class service on `app.state.approval_service`, independently constructed in `main.py` and injected into `OperatorCommandService.build()`. The g8ee router for `/api/internal/operator/approval/respond` depends on `OperatorApprovalService` directly — approval responses do not pass through `OperatorCommandService`.
 
@@ -435,6 +459,7 @@ Approval responses use `handle_approval_response(OperatorApprovalResponse)` — 
 | `OperatorIntentService` | AWS intent permission grant and revocation |
 | `OperatorLFAAService` | Local-First Audit Architecture event dispatch |
 | `OperatorPortService` | TCP/UDP port reachability checks |
+| `TribunalInvoker` | Command generation pipeline coordinator (Sage -> Executor) |
 
 All service contracts are defined as `Protocol` types in `app/services/protocols.py`. The circular dependency between `OperatorPubSubService` and `OperatorResultHandlerService` is resolved by the factory via a single post-construction assignment — no `None` injection.
 
@@ -903,53 +928,47 @@ When using a Gemini provider with the `google_search` SDK tool enabled in `Gener
 
 ---
 
-## Configuration Reference
+### Configuration Reference
 
-### Config Source
+#### Config Source
 
-g8ee loads its runtime configuration from the `platform_settings` document in g8es (`components` collection, document ID `platform_settings`), under a `settings` key. This is read asynchronously at startup via `Settings.from_db(cache_aside_service)` with up to 20 retries (3s interval) before falling back to hardcoded defaults.
+g8ee loads its runtime configuration from the `platform_settings` and `user_settings` documents in g8es. All settings documents use a **nested structure** matching g8ee's Pydantic models. g8ed's `updateUserSettings()` structures flat UI input into nested before writing. g8ee reads the nested document directly via `UserSettingsDocument.model_validate()`.
 
-SSL/TLS cert paths (`SSLSettings`) are not loaded from g8es — they are resolved from the filesystem at property access time and configured at the container/deployment level.
+#### platform_settings & user_settings Schema
 
-**Boolean coercion:** all boolean fields in `platform_settings` are stored as strings. The values `"false"`, `"False"`, `"FALSE"`, and `"0"` map to `False`; all other non-empty strings map to `True`. This matches g8ed's `USER_SETTINGS` `select` options exactly.
+The following sections are read from the `settings` map inside the settings documents.
 
-### Service Connections
-
-These are deployment-level configuration (environment variables / Docker Compose — not stored in g8es):
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `G8E_INTERNAL_HTTP_URL` | `https://g8es` | g8ed HTTP URL |
-| `G8E_INTERNAL_PUBSUB_URL` | `wss://g8es` | g8es WebSocket pub/sub URL |
-
-### platform_settings Keys
-
-The following keys are read from the `settings` map inside the `platform_settings` g8es document. g8ed owns writing this document; g8ee reads it. All values are strings; booleans use `"true"`/`"false"`, numbers use their string representation.
-
-#### LLM Provider (`LLMSettings`)
+##### LLM Provider (`LLMSettings`)
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `llm_provider` | `ollama` | The active LLM provider (`ollama`, `openai`, `anthropic`, `gemini`) |
-| `ollama_model` | `gemma4:e4b` | The model name for Ollama |
-| `ollama_assistant_model` | `gemma4:e4b` | The assistant model name for Ollama |
-| `ollama_endpoint` | `host.docker.internal:11434` | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
-| `openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
-| `openai_api_key` | - | OpenAI API key |
-| `anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |
-| `anthropic_api_key` | - | Anthropic API key |
-| `gemini_api_key` | - | Google Gemini API key |
-| `llm_temperature` | `1.0` | Sampling temperature |
-| `llm_max_tokens` | `1000000` | Maximum tokens per response |
+| `llm.primary_provider` | `ollama` | The active primary LLM provider (`ollama`, `openai`, `anthropic`, `gemini`). Alias: `llm_primary_provider`. |
+| `llm.assistant_provider` | `ollama` | The active assistant LLM provider. Alias: `llm_assistant_provider`. |
+| `llm.primary_model` | `gemma4-e4b` | The model name for the primary workflow. Alias: `llm_model`. |
+| `llm.assistant_model` | `gemma4-e4b` | The model name for assistant tasks (Triage, Tribunal, Memory). Alias: `llm_assistant_model`. |
+| `llm.ollama_endpoint` | `host.docker.internal:11434` | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
+| `llm.openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
+| `llm.openai_api_key` | - | OpenAI API key |
+| `llm.anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |
+| `llm.anthropic_api_key` | - | Anthropic API key |
+| `llm.gemini_api_key` | - | Google Gemini API key |
+| `llm.llm_max_tokens` | - | Maximum tokens per response |
+| `llm.llm_command_gen_enabled` | `true` | Enable/disable LLM-powered command generation (Tribunal) |
 
-#### Other Settings
+##### Search Settings (`SearchSettings`)
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `vertex_search_enabled` | `false` | Enable/disable Vertex AI Search |
-| `vertex_search_project_id` | - | GCP Project ID for Vertex Search |
-| `vertex_search_engine_id` | - | Discovery Engine ID |
-| `vertex_search_api_key` | - | API Key for Vertex Search |
+| `search.enabled` | `false` | Enable/disable Vertex AI Search. Alias: `vertex_search_enabled`. |
+| `search.project_id` | - | GCP Project ID for Vertex Search. |
+| `search.engine_id` | - | Discovery Engine ID. |
+| `search.api_key` | - | API Key for Vertex Search. |
+
+##### Evaluation Judge (`EvalJudgeSettings`)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `eval_judge.eval_judge_model` | - | The model used for grading agent performance. |
 
 #### Tribunal Command Generator (`LLMSettings`)
 

@@ -43,20 +43,25 @@ class EventService:
             },
         )
 
-        success = await self.g8ed_client.push_sse_event(event)
+        result = await self.g8ed_client.push_sse_event(event)
 
-        if success:
-            logger.info(
-                "[HTTP-G8ED] Event delivered successfully",
-                extra={"event_type": event.event_type, "web_session_id": web_session_id}
+        if not result.success:
+            raise NetworkError(
+                f"Failed to deliver event '{event.event_type.value}' to g8ed: {result.error or 'unknown error'}",
+                code=ErrorCode.API_RESPONSE_ERROR,
+                component="g8ee",
+                details={"event_type": event.event_type.value, "response_error": result.error},
             )
-            return EVENT_PUBLISH_SUCCESS
 
-        raise NetworkError(
-            f"Failed to deliver event '{event.event_type.value}' to g8ed",
-            code=ErrorCode.API_RESPONSE_ERROR,
-            component="g8ee",
+        logger.info(
+            "[HTTP-G8ED] Event accepted by g8ed",
+            extra={
+                "event_type": event.event_type,
+                "web_session_id": web_session_id,
+                "delivered": result.delivered,
+            },
         )
+        return EVENT_PUBLISH_SUCCESS
 
     async def publish_command_event(
         self,

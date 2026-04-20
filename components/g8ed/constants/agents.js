@@ -69,28 +69,29 @@ export const TribunalMember = Object.freeze({
     AXIOM:   _AGENTS['tribunal.members'].axiom,
     CONCORD: _AGENTS['tribunal.members'].concord,
     VARIANCE: _AGENTS['tribunal.members'].variance,
+    PRAGMA:  _AGENTS['tribunal.members'].pragma,
+    NEMESIS: _AGENTS['tribunal.members'].nemesis,
 });
 
 /**
- * Agent Metadata
- * First-class persona definitions for all agents.
- * Each entry contains: id, display_name, icon, description, role, model_tier,
- * temperature, tools, identity, purpose, autonomy.
+ * Verifier Reason
+ * The Verifier's stated reason for its verdict in Tribunal SSE payloads.
  */
-export const AgentMetadata = Object.freeze({
-    TRIAGE:           _AGENTS['agent.metadata'].triage,
-    PRIMARY:          _AGENTS['agent.metadata'].primary,
-    ASSISTANT:        _AGENTS['agent.metadata'].assistant,
-    TRIBUNAL:         _AGENTS['agent.metadata'].tribunal,
-    VERIFIER:         _AGENTS['agent.metadata'].verifier,
-    TITLE_GENERATOR:  _AGENTS['agent.metadata'].title_generator,
-    AXIOM:            _AGENTS['agent.metadata'].axiom,
-    CONCORD:          _AGENTS['agent.metadata'].concord,
-    VARIANCE:         _AGENTS['agent.metadata'].variance,
-    MEMORY_GENERATOR: _AGENTS['agent.metadata'].memory_generator,
-    EVAL_JUDGE:       _AGENTS['agent.metadata'].eval_judge,
-    RESPONSE_ANALYZER: _AGENTS['agent.metadata'].response_analyzer,
-    RESPONSE_ANALYZER_COMMAND_RISK: _AGENTS['agent.metadata'].response_analyzer_command_risk,
-    RESPONSE_ANALYZER_ERROR: _AGENTS['agent.metadata'].response_analyzer_error,
-    RESPONSE_ANALYZER_FILE_RISK: _AGENTS['agent.metadata'].response_analyzer_file_risk,
+export const VerifierReason = Object.freeze({
+    OK:                _AGENTS['tribunal.verifier_reason'].ok,
+    REVISED:           _AGENTS['tribunal.verifier_reason'].revised,
+    EMPTY_RESPONSE:    _AGENTS['tribunal.verifier_reason'].empty_response,
+    NO_VALID_REVISION: _AGENTS['tribunal.verifier_reason'].no_valid_revision,
+    VERIFIER_ERROR:    _AGENTS['tribunal.verifier_reason'].verifier_error,
 });
+
+/**
+ * Tribunal Outcome
+ * Terminal outcomes the Tribunal pipeline can produce.
+ */
+export const TribunalOutcome = Object.freeze({
+    CONSENSUS:           _AGENTS['tribunal.outcome'].consensus,
+    VERIFIED:            _AGENTS['tribunal.outcome'].verified,
+    VERIFICATION_FAILED: _AGENTS['tribunal.outcome'].verification_failed,
+});
+

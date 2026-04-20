@@ -211,7 +211,7 @@
 }
 
 .operator-detail-section {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(var(--text-rgb), 0.02);
     border-radius: 4px;
     padding: 0.25rem 0.35rem;
     border: 1px solid rgba(var(--accent-blue-solid-rgb), 0.08);
@@ -223,7 +223,7 @@
     gap: 0.2rem;
     margin-bottom: 0.15rem;
     padding-bottom: 0.1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(var(--text-rgb), 0.03);
 }
 
 .operator-detail-section-icon {
@@ -232,7 +232,7 @@
 }
 
 .operator-detail-section-title {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -247,12 +247,12 @@
 }
 
 .operator-detail-label {
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-tertiary);
 }
 
 .operator-detail-value {
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 400;
     color: var(--text-secondary);
     font-family: var(--font-mono);
@@ -323,12 +323,12 @@
 }
 
 .storage-bar-label {
-    font-size: 12px;
+    font-size: 14px;
     color: var(--text-tertiary);
 }
 
 .storage-bar-value {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     font-family: var(--font-mono);
@@ -337,7 +337,7 @@
 .storage-bar {
     width: 100%;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--text-rgb), 0.1);
     border-radius: 2px;
     overflow: hidden;
 }
@@ -455,7 +455,7 @@
         grid-row: 1;
         margin: 0;
         padding: 0.2rem 0.4rem;
-        background: rgba(0, 0, 0, 0.2);
+        background: rgba(var(--text-rgb), 0.2);
         border-radius: 4px;
     }
     

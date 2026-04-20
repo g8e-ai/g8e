@@ -32,7 +32,7 @@ Run with:
     ./scripts/testing/run_tests.sh g8ee -- tests/unit/services/ai/test_agent.py
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -42,30 +42,23 @@ from app.constants import (
     AGENT_RETRY_DELAY_SECONDS,
     DEFAULT_FINISH_REASON,
 )
-from app.errors import ExternalServiceError, ValidationError
-from app.llm.llm_types import Content, Part, Role
+from app.errors import ValidationError
 from app.models.agent import (
-    AgentStreamContext,
     StreamChunkData,
     StreamChunkFromModel,
     StreamChunkFromModelType,
-    TokenUsage,
-    TurnResult,
 )
 from app.models.tool_results import SearchWebResult
 from app.models.grounding import GroundingMetadata
 from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_tool_loop import ToolCallResponse
 from tests.fakes.agent_helpers import (
-    FakeMultiTurnStreamProvider,
-    FakeStreamProvider,
     make_agent_streaming_context,
     make_g8e_agent,
     make_gen_config,
     make_provider_chunk,
     make_g8ed_event_service,
 )
-from tests.fakes.factories import build_g8e_http_context
 
 pytestmark = pytest.mark.unit
 

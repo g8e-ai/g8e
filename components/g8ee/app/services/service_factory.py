@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast, Any, TypedDict, Optional
 
 from app.services.ai.agent import g8eEngine
 from app.services.ai.chat_pipeline import ChatPipelineService
-from app.services.ai.chat_task_manager import BackgroundTaskManager, ChatTaskManager
+from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.services.ai.grounding import GroundingService, WebSearchProvider
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.request_builder import AIRequestBuilder
@@ -29,6 +29,22 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
+from app.services.infra.http_service import HTTPService
+from app.services.infra.internal_http_client import InternalHttpClient
+from app.services.infra.g8ed_event_service import EventService
+from app.services.protocols import (
+    HTTPServiceProtocol,
+    InvestigationServiceProtocol,
+    InvestigationDataServiceProtocol,
+    OperatorDataServiceProtocol,
+    MemoryDataServiceProtocol,
+    OperatorHeartbeatServiceProtocol,
+    ExecutionRegistryProtocol,
+    EventServiceProtocol,
+    AIResponseAnalyzerProtocol,
+    ToolExecutorProtocol,
+    ApprovalServiceProtocol,
+)
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.data.case_data_service import CaseDataService
@@ -39,64 +55,56 @@ from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
     from app.clients.pubsub_client import PubSubClient
-    from app.services.infra.g8ed_event_service import EventService
-    from app.services.infra.internal_http_client import InternalHttpClient
-    from app.services.protocols import (
-        InvestigationServiceProtocol,
-        InvestigationDataServiceProtocol,
-        OperatorDataServiceProtocol,
-        MemoryDataServiceProtocol,
-        HTTPServiceProtocol,
-        OperatorHeartbeatServiceProtocol,
-        ExecutionRegistryProtocol,
-        EventServiceProtocol,
-        PubSubServiceProtocol,
-        AIResponseAnalyzerProtocol,
-        ToolExecutorProtocol,
-        ApprovalServiceProtocol,
-    )
+    from app.services.investigation.investigation_service import InvestigationService
+    from app.services.investigation.investigation_data_service import InvestigationDataService
+    from app.services.operator.operator_data_service import OperatorDataService
+    from app.services.investigation.memory_data_service import MemoryDataService
+    from app.services.operator.heartbeat_service import OperatorHeartbeatService
+    from app.services.operator.execution_registry import ExecutionRegistryService
+    from app.services.ai.response_analyzer import AIResponseAnalyzer
+    from app.services.operator.approval_service import OperatorApprovalService
 
 
 class CoreServices(TypedDict):
-    http_service: "HTTPServiceProtocol"
-    internal_http_client: "InternalHttpClient"
-    g8ed_event_service: "EventServiceProtocol"
+    http_service: HTTPService | HTTPServiceProtocol
+    internal_http_client: InternalHttpClient
+    g8ed_event_service: EventService | EventServiceProtocol
 
 
 class DataServices(TypedDict):
-    investigation_data_service: "InvestigationDataServiceProtocol"
-    operator_data_service: "OperatorDataServiceProtocol"
-    memory_data_service: "MemoryDataServiceProtocol"
+    investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
+    operator_data_service: OperatorDataService | OperatorDataServiceProtocol
+    memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
 
 
 class DomainServices(TypedDict):
-    investigation_service: "InvestigationServiceProtocol"
+    investigation_service: InvestigationService | InvestigationServiceProtocol
     memory_generation_service: MemoryGenerationService
 
 
 class OperatorServices(TypedDict):
-    heartbeat_service: "OperatorHeartbeatServiceProtocol"
-    execution_registry: "ExecutionRegistryProtocol"
+    heartbeat_service: OperatorHeartbeatService | OperatorHeartbeatServiceProtocol
+    execution_registry: ExecutionRegistryService | ExecutionRegistryProtocol
 
 
 class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
     cache_aside_service: CacheAsideService
     operator_cache_aside_service: CacheAsideService
     attachment_service: AttachmentService
-    response_analyzer: "AIResponseAnalyzerProtocol"
+    response_analyzer: AIResponseAnalyzer | AIResponseAnalyzerProtocol
     grounding_service: GroundingService
     web_search_provider: Optional[WebSearchProvider]
-    approval_service: "ApprovalServiceProtocol"
+    approval_service: OperatorApprovalService | ApprovalServiceProtocol
     operator_command_service: OperatorCommandService
-    tool_service: "ToolExecutorProtocol"
-    tool_executor: "ToolExecutorProtocol"
+    tool_service: ToolExecutorProtocol
+    tool_executor: ToolExecutorProtocol
     mcp_gateway_service: MCPGatewayService
     request_builder: AIRequestBuilder
     g8e_agent: g8eEngine
     chat_task_manager: BackgroundTaskManager
     chat_pipeline: ChatPipelineService
-    memory_service: "MemoryDataServiceProtocol"
+    memory_service: MemoryDataService | MemoryDataServiceProtocol
 
 
 class ServiceFactory:
@@ -112,14 +120,14 @@ class ServiceFactory:
         from app.services.infra.g8ed_event_service import EventService
 
         # Create HTTP service first to manage all HTTP clients
-        http_service: "HTTPServiceProtocol" = HTTPService()
+        http_service: HTTPService = HTTPService()
 
         internal_http_client = InternalHttpClient(settings)
 
         # Register g8ed HTTP client with the HTTP service
         http_service.set_http_client(internal_http_client.client, "g8ed")
 
-        g8ed_event_service: "EventServiceProtocol" = EventService(
+        g8ed_event_service: EventService = EventService(
             internal_http_client=internal_http_client
         )
 
@@ -142,8 +150,11 @@ class ServiceFactory:
 
         operator_data_service = OperatorDataService(
             cache=cache_aside_service,
-            internal_http_client=core_services['internal_http_client'],
+            internal_http_client=core_services['internal_http_client'],  # type: ignore[arg-type]
         )
+
+        # Inject operator_data_service into internal_http_client to resolve circular dependency
+        core_services['internal_http_client'].set_operator_data_service(operator_data_service)
 
         memory_data_service = MemoryDataService(
             cache_aside_service=cache_aside_service
@@ -152,7 +163,7 @@ class ServiceFactory:
         case_data_service = CaseDataService(
             settings=settings,
             cache=cache_aside_service,
-            event_service=core_services['g8ed_event_service'],
+            event_service=cast(EventService, core_services['g8ed_event_service']),
         )
 
         return DataServices(
@@ -217,7 +228,7 @@ class ServiceFactory:
         operator_services = ServiceFactory.create_operator_services(core_services, data_services)
 
         attachment_service = AttachmentService(
-            blob_service=blob_service,
+            blob_service=blob_service,  # type: ignore[arg-type]
             settings=settings,
         )
         response_analyzer = AIResponseAnalyzer()
@@ -240,14 +251,14 @@ class ServiceFactory:
 
         operator_command_service = OperatorCommandService.build(
             cache_aside_service=cache_aside_service,
-            operator_data_service=data_services['operator_data_service'],
-            investigation_service=domain_services['investigation_service'],
-            g8ed_event_service=core_services['g8ed_event_service'],
-            execution_registry=operator_services['execution_registry'],
+            operator_data_service=data_services['operator_data_service'],  # type: ignore[arg-type]
+            investigation_service=domain_services['investigation_service'],  # type: ignore[arg-type]
+            g8ed_event_service=core_services['g8ed_event_service'],  # type: ignore[arg-type]
+            execution_registry=operator_services['execution_registry'],  # type: ignore[arg-type]
             settings=settings,
-            ai_response_analyzer=response_analyzer,
+            ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services['internal_http_client'],
-            approval_service=approval_service,
+            approval_service=approval_service,  # type: ignore[arg-type]
         )
 
         if pubsub_client is not None:
@@ -256,15 +267,15 @@ class ServiceFactory:
 
         tool_executor = AIToolService(
             operator_command_service=operator_command_service,
-            investigation_service=domain_services['investigation_service'],
+            investigation_service=cast(InvestigationService, domain_services['investigation_service']),
             web_search_provider=web_search_provider,
             platform_settings=settings,
         )
 
         mcp_gateway_service = MCPGatewayService(
             tool_service=tool_executor,
-            investigation_service=domain_services['investigation_service'],
-            operator_data_service=data_services['operator_data_service'],
+            investigation_service=domain_services['investigation_service'],  # type: ignore[arg-type]
+            operator_data_service=data_services['operator_data_service'],  # type: ignore[arg-type]
         )
 
         request_builder = AIRequestBuilder(
@@ -280,11 +291,11 @@ class ServiceFactory:
         chat_task_manager = BackgroundTaskManager()
 
         chat_pipeline = ChatPipelineService(
-            g8ed_event_service=core_services['g8ed_event_service'],
-            investigation_service=domain_services['investigation_service'],
+            g8ed_event_service=core_services['g8ed_event_service'],  # type: ignore[arg-type]
+            investigation_service=domain_services['investigation_service'],  # type: ignore[arg-type]
             request_builder=request_builder,
             g8e_agent=g8e_agent,
-            memory_service=data_services['memory_data_service'],
+            memory_service=data_services['memory_data_service'],  # type: ignore[arg-type]
             memory_generation_service=domain_services['memory_generation_service'],
         )
 
@@ -329,17 +340,9 @@ class ServiceFactory:
     @staticmethod
     async def start_services(services: AllServices) -> None:
         """Run lifecycle start hooks for services that require them."""
-        operator_command_service = services.get('operator_command_service')
-        if operator_command_service is not None:
-            await operator_command_service.start_pubsub_listeners()
-
-        http_service = services.get('http_service')
-        if http_service is not None:
-            await http_service.start()
-
-        heartbeat_service = services.get('heartbeat_service')
-        if heartbeat_service is not None:
-            await heartbeat_service.start()
+        await services['operator_command_service'].start_pubsub_listeners()
+        await services['http_service'].start()
+        await services['heartbeat_service'].start()
 
     @staticmethod
     async def stop_services(services: AllServices) -> None:
@@ -348,34 +351,26 @@ class ServiceFactory:
         _logger = _logging.getLogger(__name__)
 
         # First, await all background tasks to ensure they complete before cleanup
-        chat_task_manager = services.get('chat_task_manager')
-        if chat_task_manager is not None:
-            try:
-                _logger.info("Awaiting background task completion before service shutdown")
-                await chat_task_manager.wait_all(timeout=5.0)
-            except TimeoutError:
-                _logger.warning("Background tasks did not complete within 5s timeout, proceeding with shutdown")
-            except Exception as exc:
-                _logger.error("Error awaiting background tasks: %s", exc)
+        try:
+            _logger.info("Awaiting background task completion before service shutdown")
+            await services['chat_task_manager'].wait_all(timeout=5.0)
+        except TimeoutError:
+            _logger.warning("Background tasks did not complete within 5s timeout, proceeding with shutdown")
+        except Exception as exc:
+            _logger.error("Error awaiting background tasks: %s", exc)
 
-        heartbeat_service = services.get('heartbeat_service')
-        if heartbeat_service is not None:
-            try:
-                await heartbeat_service.stop()
-            except Exception as exc:
-                _logger.error("Error stopping heartbeat service: %s", exc)
+        try:
+            await services['heartbeat_service'].stop()
+        except Exception as exc:
+            _logger.error("Error stopping heartbeat service: %s", exc)
 
-        http_service = services.get('http_service')
-        if http_service is not None:
-            try:
-                await http_service.stop()
-            except Exception as exc:
-                _logger.error("Error stopping HTTP service: %s", exc)
+        try:
+            await services['http_service'].stop()
+        except Exception as exc:
+            _logger.error("Error stopping HTTP service: %s", exc)
 
-        operator_command_service = services.get('operator_command_service')
-        if operator_command_service is not None:
-            try:
-                await operator_command_service.stop_pubsub_listeners()
-            except Exception as exc:
-                _logger.error("Error stopping pubsub listeners: %s", exc)
+        try:
+            await services['operator_command_service'].stop_pubsub_listeners()
+        except Exception as exc:
+            _logger.error("Error stopping pubsub listeners: %s", exc)
 

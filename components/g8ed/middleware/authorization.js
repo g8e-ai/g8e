@@ -178,9 +178,66 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
         throw new AuthorizationError(AuthError.FORBIDDEN_INTERNAL);
     };
 
+    /**
+     * Restrict to internal Docker container calls OR CLI-authenticated calls
+     * 
+     * Accepts either INTERNAL_AUTH_TOKEN (for platform-to-platform calls)
+     * or X-Operator-Session-Id (for CLI scripts authenticated via login).
+     */
+    const requireInternalOrUserAuth = async (req, res, next) => {
+        const internalAuthToken = req.headers[INTERNAL_AUTH_HEADER];
+        const expectedToken = settingsService?.getInternalAuthToken() || null;
+        const operatorSessionId = req.headers['x-operator-session-id'];
+
+        // Try internal auth token first (platform-to-platform)
+        if (internalAuthToken && expectedToken) {
+            const tokenBuffer = Buffer.from(internalAuthToken);
+            const expectedBuffer = Buffer.from(expectedToken);
+            if (tokenBuffer.length === expectedBuffer.length &&
+                crypto.timingSafeEqual(tokenBuffer, expectedBuffer)) {
+                return next();
+            }
+        }
+
+        // Try operator session ID (CLI scripts authenticated via login)
+        if (operatorSessionId) {
+            try {
+                // Validate the operator session against g8es
+                const session = await operatorService.validateOperatorSession(operatorSessionId);
+                if (session) {
+                    // Store user context from the session
+                    req.userId = session.user_id;
+                    req.operatorId = session.operator_id;
+                    return next();
+                }
+            } catch (error) {
+                logger.warn('[AUTH] Operator session validation failed', {
+                    operatorSessionId,
+                    endpoint: req.path,
+                    error: error.message
+                });
+            }
+        }
+
+        // Localhost health checks are allowed without a token
+        const ip = req.ip?.replace(/^::ffff:/, '') || req.ip;
+        if (process.env.NODE_ENV !== 'production' && (ip === '127.0.0.1' || ip === '::1') && req.originalUrl.startsWith('/health')) {
+            return next();
+        }
+
+        logger.warn('[AUTH] Internal endpoint access denied', {
+            endpoint: req.path,
+            method: req.method,
+            ip: req.ip
+        });
+
+        throw new AuthorizationError(AuthError.FORBIDDEN_INTERNAL);
+    };
+
     return {
         requireOwnership,
         requireOperatorOwnership,
-        requireInternalOrigin
+        requireInternalOrigin,
+        requireInternalOrUserAuth
     };
 }

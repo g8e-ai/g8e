@@ -18,20 +18,91 @@
     <div class="operator-item-expandable">
         <div class="operator-item-details-row">
             <div class="operator-detail-item">
-                <span class="detail-label">Status</span>
-                <span class="status-text {{statusClass}}">{{statusDisplay}}</span>
+                <span class="detail-label">STATUS</span>
+                <div class="status-with-icon">
+                    <span class="status-dot {{statusClass}}"></span>
+                    <span class="status-text {{statusClass}}">{{statusDisplay}}</span>
+                </div>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">First Deployed</span>
+                <span class="detail-label">DEPLOYED</span>
                 <span class="detail-value">{{firstDeployedText}}</span>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">Last Heartbeat</span>
+                <span class="detail-label">HEARTBEAT</span>
                 <span class="detail-value">{{lastHeartbeatText}}</span>
             </div>
             <div class="operator-detail-item">
-                <span class="detail-label">Operator Name</span>
-                <span class="operator-item-fingerprint {{nameClass}}">{{operatorName}}</span>
+                <span class="detail-label">OPERATOR</span>
+                <span class="detail-value {{nameClass}}">{{operatorName}}</span>
+            </div>
+        </div>
+        <div class="operator-item-expanded-details">
+            <div class="operator-detail-section">
+                <div class="detail-section-title">System Resources</div>
+                <div class="operator-detail-grid">
+                    <div class="operator-detail-item">
+                        <span class="detail-label">CPU</span>
+                        <span class="detail-value">{{cpuPercent}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Memory</span>
+                        <span class="detail-value">{{memoryPercent}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Disk</span>
+                        <span class="detail-value">{{diskPercent}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Network Latency</span>
+                        <span class="detail-value">{{networkLatency}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Uptime</span>
+                        <span class="detail-value">{{uptime}}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="operator-detail-section">
+                <div class="detail-section-title">System Information</div>
+                <div class="operator-detail-grid">
+                    <div class="operator-detail-item">
+                        <span class="detail-label">OS</span>
+                        <span class="detail-value">{{systemOs}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Architecture</span>
+                        <span class="detail-value">{{architecture}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">CPU Count</span>
+                        <span class="detail-value">{{cpuCount}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Memory (MB)</span>
+                        <span class="detail-value">{{memoryMb}}</span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Current User</span>
+                        <span class="detail-value">{{currentUser}}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="operator-detail-section">
+                <div class="detail-section-title">Network</div>
+                <div class="operator-detail-grid">
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Public IP</span>
+                        <span class="detail-value ip-value-container">
+                            <span class="operator-item-public-ip">{{publicIp}}</span>
+                            <span class="ip-visibility-toggle material-symbols-outlined" title="Show IP">visibility_off</span>
+                        </span>
+                    </div>
+                    <div class="operator-detail-item">
+                        <span class="detail-label">Internal IP</span>
+                        <span class="detail-value">{{internalIp}}</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

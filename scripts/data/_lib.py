@@ -60,25 +60,18 @@ def _create_ssl_context() -> Optional[ssl.SSLContext]:
 # Authentication
 # =============================================================================
 
-def get_internal_auth_token() -> str:
-    """Load internal auth token from env or shared SSL volume."""
+def get_auth_token() -> str:
+    """Load operator session token from env (set by g8e login)."""
+    # User session token from g8e login
+    token = os.environ.get('OPERATOR_SESSION_ID')
+    if token:
+        return token
+
+    # Fallback to internal auth token for platform-internal use only
     token = os.environ.get('G8E_INTERNAL_AUTH_TOKEN')
     if token:
         return token
 
-    token_path = Path('/g8es/internal_auth_token')
-    if token_path.exists():
-        try:
-            return token_path.read_text().strip()
-        except Exception:
-            pass
-
-    token_path_ssl = Path('/g8es/ssl/internal_auth_token')
-    if token_path_ssl.exists():
-        try:
-            return token_path_ssl.read_text().strip()
-        except Exception:
-            pass
     return ''
 
 
@@ -91,9 +84,9 @@ def g8es_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
-    token = get_internal_auth_token()
+    token = get_auth_token()
     if token:
-        headers['X-Internal-Auth'] = token
+        headers['X-Operator-Session-Id'] = token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
@@ -151,13 +144,10 @@ def kv_delete_pattern(pattern: str) -> int:
 # g8ed internal API client — for resource management (users, operators, etc.)
 # =============================================================================
 
-INTERNAL_AUTH_HEADER = 'x-internal-auth'
-
-
 def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
     data = json.dumps(body).encode() if body is not None else None
     headers = {
-        INTERNAL_AUTH_HEADER: get_internal_auth_token() or '',
+        'X-Operator-Session-Id': get_auth_token() or '',
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     }

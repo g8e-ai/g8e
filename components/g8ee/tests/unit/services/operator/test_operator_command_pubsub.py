@@ -22,7 +22,6 @@ from app.constants import EventType, ExecutionStatus, PubSubChannel
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from tests.fakes.builder import build_command_service
-from tests.fakes.fake_g8es_clients import FakeKVClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

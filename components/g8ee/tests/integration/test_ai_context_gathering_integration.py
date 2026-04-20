@@ -49,37 +49,25 @@ All tests use real g8es and cache services — no mocks allowed per testing guid
 import asyncio
 import logging
 import pytest
-from datetime import datetime, timezone, UTC
+from datetime import datetime, UTC
 import uuid
 
 from app.constants import (
     CloudSubtype,
-    ComponentName,
-    EventType,
     OperatorStatus,
     OperatorType,
-    AgentMode,
-    DB_COLLECTION_INVESTIGATIONS,
-    DB_COLLECTION_OPERATORS,
-    DB_COLLECTION_MEMORIES,
     InvestigationStatus,
     Priority,
 )
-from app.errors import ResourceNotFoundError, ExternalServiceError
-from app.models.http_context import G8eHttpContext, BoundOperator
+from app.errors import ResourceNotFoundError
+from app.models.http_context import BoundOperator
 from app.models.investigations import (
     EnrichedInvestigationContext,
-    InvestigationModel,
     InvestigationCreateRequest,
 )
 from app.models.memory import InvestigationMemory
 from app.models.operators import (
-    OperatorDocument,
     OperatorSystemInfo,
-    OperatorHeartbeat,
-    HeartbeatSystemIdentity,
-    HeartbeatUptimeInfo,
-    HeartbeatPerformanceMetrics,
     SystemInfoOSDetails,
     SystemInfoUserDetails,
     SystemInfoMemoryDetails,
@@ -88,14 +76,9 @@ from app.models.operators import (
 )
 from app.models.agent import OperatorContext
 from app.services.investigation.investigation_service import (
-    InvestigationService,
     extract_system_context,
     extract_all_operators_context,
 )
-from app.services.investigation.investigation_data_service import InvestigationDataService
-from app.services.investigation.memory_data_service import MemoryDataService
-from app.services.operator.operator_data_service import OperatorDataService
-from app.clients.http_client import HTTPClient 
 from tests.fakes.factories import (
     create_investigation_data,
     create_investigation_memory,

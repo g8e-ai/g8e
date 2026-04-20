@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import pytest
-from pydantic import ValidationError
 
 from app.constants import EVENT_PUBLISH_SUCCESS, EventType
 from app.errors import NetworkError
@@ -181,6 +180,56 @@ class TestPublishEventToG8ed:
             )
 
         assert exc_info.value.get_http_status() == 500
+
+    async def test_publish_zero_delivered_is_success(self, service, mock_g8ed_http_client):
+        """Regression: fan-out with zero active sessions must not raise.
+
+        BackgroundEvent fan-out to a user with no connected sessions returns
+        delivered=0 and success=True. That is documented behavior, not a
+        failure - it must not be collapsed into NetworkError.
+        """
+        from app.models.g8ed_client import SSEPushResponse
+
+        mock_g8ed_http_client.set_push_sse_event_response(
+            SSEPushResponse(success=True, delivered=0)
+        )
+
+        result = await service.publish(
+            BackgroundEvent(
+                event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                payload=_SimplePayload(status="ok"),
+                investigation_id="inv-bg",
+                user_id="user-no-sessions",
+            )
+        )
+
+        assert result == EVENT_PUBLISH_SUCCESS
+
+    async def test_publish_transport_error_preserves_status(self, service, mock_g8ed_http_client):
+        """Genuine transport failures propagate the NetworkError raised by the client.
+
+        The HTTP status code set by InternalHttpClient is preserved in the
+        error details - a real g8ed 500 must remain distinguishable from a
+        zero-delivery success.
+        """
+        transport_err = NetworkError(
+            "[HTTP-G8ED] SSE push returned HTTP 500",
+            component="g8ee",
+            details={"status_code": 500, "response": "crash"},
+        )
+        mock_g8ed_http_client.set_push_sse_event_exception(transport_err)
+
+        with pytest.raises(NetworkError) as exc_info:
+            await service.publish(
+                BackgroundEvent(
+                    event_type=EventType.LLM_CHAT_ITERATION_FAILED,
+                    payload=_SimplePayload(data="test"),
+                    investigation_id="inv-err",
+                    user_id="user-err",
+                )
+            )
+
+        assert exc_info.value.error_detail.details["status_code"] == 500
 
     async def test_publish_with_complex_payload(self, service, mock_g8ed_http_client):
         complex_payload = _ComplexPayload(

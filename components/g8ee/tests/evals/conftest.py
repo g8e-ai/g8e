@@ -18,9 +18,7 @@ across accuracy, safety, and privacy dimensions, and displays them in a summary
 at the end of the test run with persisted artifacts.
 """
 
-import asyncio
 import logging
-import os
 
 import pytest
 import pytest_asyncio
@@ -226,11 +224,8 @@ def benchmark_results_collector(unified_metrics_collector):
                     "matchers_total": result.get("matchers_total", 0),
                     "matchers_passed": result.get("matchers_passed", 0),
                     "failures": result.get("failures", []),
-                    "tribunal_original_command": result.get("tribunal_original_command"),
                     "tribunal_final_command": result.get("tribunal_final_command"),
                     "tribunal_outcome": result.get("tribunal_outcome"),
-                    "tribunal_improved": result.get("tribunal_improved"),
-                    "tribunal_pre_score": result.get("tribunal_pre_score"),
                     "agent_continue_approvals": result.get("agent_continue_approvals", 0),
                     "approvals_by_type": result.get("approvals_by_type", {}),
                 },

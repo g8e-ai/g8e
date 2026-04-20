@@ -25,13 +25,11 @@ Each `LLMModelConfig` entry in `components/g8ee/app/models/model_configs.py` dec
 Two shapes matter:
 
 * **`[]` — no thinking capability.**  
-  The model cannot reason, so the translator returns a disabled result for every desired level, and the provider omits every thinking-related field. Ollama Gemma, Ollama Llama, and the generic OpenAI default fall in this category.
+  The model cannot reason, so the translator returns a disabled result for every desired level, and the provider omits every thinking-related field. Ollama Llama and the generic OpenAI default fall in this category.
 * **`[OFF, ...]` — opt-in thinking.**  
-  `OFF` is the caller's way to say "skip thinking for this call". Most cloud models (Anthropic, Gemini) use this shape.
+  `OFF` is the caller's way to say "skip thinking for this call". Most cloud models (Anthropic, Gemini) and reasoning-capable self-hosted models (Ollama Qwen, Gemma 4, GLM, Nemotron) use this shape.
 * **`[...]` (no `OFF`) — always-on reasoning.**  
   The model has no off switch at the API layer. Callers that request `OFF` are clamped to the model's lowest supported level. This shape is reserved for future always-on reasoning models.
-
-A derived `supports_thinking` read-only `@property` on `LLMModelConfig` is provided for ergonomics (`any non-empty list` == `True`). Do not set it directly — tests and application code must mutate the levels list.
 
 ## Clamping
 
@@ -60,7 +58,7 @@ Emits `thinking = {"type": "enabled", "budget_tokens": N}`. The budget is resolv
 1. Looking up `config.thinking_budgets[clamped_level]` first (per-model override).
 2. Falling back to `ANTHROPIC_DEFAULT_THINKING_BUDGETS[clamped_level]`.
 
-When thinking is enabled the provider also forces `temperature=1.0` and drops `top_k`/`top_p`, matching Anthropic's API contract.
+When thinking is enabled the provider drops `top_k`/`top_p`, matching Anthropic's API contract.
 
 #### max_tokens uplift
 
@@ -72,7 +70,7 @@ Emits `reasoning.effort` as one of `"minimal" | "low" | "medium" | "high"`. When
 
 ### Ollama (`translate_for_ollama`)
 
-Ollama hosts a heterogeneous zoo of model families. A single `think=True` kwarg does not work uniformly across Qwen, Llama, Gemma, and Nemotron, so the model config declares a `thinking_dialect`:
+Ollama hosts a heterogeneous zoo of model families. A single `think=True` kwarg does not work uniformly across Qwen, Llama, Gemma 4, and Nemotron, so the model config declares a `thinking_dialect`:
 
 | Dialect         | Wire Behaviour                                                 |
 |-----------------|----------------------------------------------------------------|
@@ -87,7 +85,7 @@ Primary, assistant, and lite code paths all route through `_apply_think_kwarg` s
 
 1. Looks up the `LLMModelConfig`.
 2. Clamps `desired_level` to the model's supported set.
-3. Returns `ThinkingConfig(thinking_level=clamped, include_thoughts=include_thoughts_if_supported)`.
+3. Returns `ThinkingConfig(thinking_level=clamped, include_thoughts=include_thoughts)`.
 
 `HIGH` is the default because the Proposer and other primary agents want the most capable reasoning the model can offer. Lower-stakes agents (triage, memory updates, title generation) use `get_lite_generation_config` which forces `ThinkingLevel.OFF`.
 
@@ -96,7 +94,7 @@ Primary, assistant, and lite code paths all route through `_apply_think_kwarg` s
 1. Declare the `LLMModelConfig` in `app/models/model_configs.py`.
 2. Set `supported_thinking_levels` to exactly what the model accepts. Leave it `[]` for non-reasoning models.
 3. If the provider is Anthropic and the model benefits from non-default budgets, set `thinking_budgets`.
-4. If the provider is Ollama, set `thinking_dialect` (`NONE` for non-reasoning families; `NATIVE_TOGGLE` for Qwen/GLM/Nemotron).
+4. If the provider is Ollama, set `thinking_dialect` (`NONE` for non-reasoning families; `NATIVE_TOGGLE` for Qwen, Gemma 4, GLM, Nemotron).
 5. Register the config in `MODEL_REGISTRY.configs`.
 
 Translators and the request builder pick up the new entry automatically — no provider-adapter code should need changes for standard additions.

@@ -46,6 +46,7 @@ trap _footer EXIT
 COMPONENT=""
 COVERAGE=false
 PYRIGHT=false
+RUFF=false
 E2E=false
 PARALLEL=""
 EXTRA_ARGS=()
@@ -60,6 +61,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
+            echo "  --ruff                    Run ruff lint check (g8ee only)"
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
@@ -68,6 +70,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --coverage) COVERAGE=true; shift ;;
         --pyright)  PYRIGHT=true;  shift ;;
+        --ruff)     RUFF=true;     shift ;;
         --e2e)      E2E=true;      shift ;;
         -j|--parallel)
             if [[ $# -lt 2 || "$2" == -* || "$2" == "--" ]]; then
@@ -186,6 +189,9 @@ run_g8ee() {
     cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
+    fi
+    if [[ "$RUFF" == "true" ]]; then
+        python -m ruff check .
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")

@@ -24,7 +24,6 @@ E2E fixtures are in tests/e2e/conftest.py.
 
 import logging
 import os
-import sys
 
 import pytest
 import pytest_asyncio
@@ -39,10 +38,9 @@ from app.db.db_service import DBService
 from app.constants import CloudSubtype, ComponentName, InvestigationStatus, LLMProvider, OperatorType, ThinkingLevel
 from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
 from app.models.settings import LLMSettings, SearchSettings
-from app.models.model_configs import MODEL_REGISTRY, get_model_config
+from app.models.model_configs import MODEL_REGISTRY
 from tests.fakes.builder import (
     create_mock_cache_aside_service,
-    build_command_service,
 )
 from tests.fakes.factories import (
     build_enriched_context,
@@ -261,7 +259,6 @@ def _llm_settings_from_env() -> LLMSettings | None:
     assistant_endpoint = os.environ.get("TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
-    temperature_str = os.environ.get("TEST_LLM_TEMPERATURE", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
     kwargs: dict = {"provider": provider, "assistant_provider": assistant_provider}
@@ -269,11 +266,6 @@ def _llm_settings_from_env() -> LLMSettings | None:
         kwargs["primary_model"] = primary
     if assistant:
         kwargs["assistant_model"] = assistant
-    if temperature_str:
-        try:
-            kwargs["llm_temperature"] = float(temperature_str)
-        except ValueError:
-            logger.warning("TEST_LLM_TEMPERATURE=%s is not a valid float, ignoring", temperature_str)
     if max_tokens_str:
         try:
             kwargs["llm_max_tokens"] = int(max_tokens_str)
@@ -756,6 +748,7 @@ def cloud_operator_doc():
     )
     return OperatorDocument(
         operator_id="cloud-op-1",
+        user_id="test-user",
         operator_session_id="session-cloud-op-1",
         operator_type=OperatorType.CLOUD,
         cloud_subtype=CloudSubtype.AWS,
@@ -792,6 +785,7 @@ def binary_operator_doc():
     )
     return OperatorDocument(
         operator_id="binary-op-1",
+        user_id="test-user",
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.SYSTEM,
         cloud_subtype=None,
@@ -831,9 +825,8 @@ def provider_config():
     a default configuration for isolated unit tests.
     """
     from app.llm.llm_types import GenerateContentConfig
-    from app.constants import LLM_DEFAULT_TEMPERATURE, LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
     return GenerateContentConfig(
-        temperature=LLM_DEFAULT_TEMPERATURE,
         max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     )
 

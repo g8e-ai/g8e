@@ -284,7 +284,7 @@ class g8eEngine:
         while True:
             loop_turn += 1
             if loop_turn > AGENT_MAX_TOOL_TURNS:
-                if self._approval_service is None or context.g8e_context is None:
+                if self._approval_service is None:
                     logger.error(
                         "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
                         AGENT_MAX_TOOL_TURNS,

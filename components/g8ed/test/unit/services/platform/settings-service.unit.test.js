@@ -177,14 +177,6 @@ describe('SettingsService [UNIT]', () => {
             expect(doc.user_id).toBe('user-1');
         });
 
-        it('validates settings against schema', async () => {
-            const result = await service.updateUserSettings('user-1', { 
-                llm_temperature: '2.5', // Invalid (> 2.0)
-                llm_primary_provider: LLMProvider.OPENAI  // Valid
-            });
-            expect(result.saved).toContain('llm_primary_provider');
-            expect(result.saved).not.toContain('llm_temperature');
-        });
 
         it('writes user_id at document level', async () => {
             await service.updateUserSettings('user-1', { llm_primary_provider: LLMProvider.GEMINI });
@@ -254,7 +246,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
                 llm_primary_provider: LLMProvider.GEMINI,
                 llm_assistant_provider: LLMProvider.OLLAMA,
                 gemini_api_key: 'gemini-key',
-                ollama_api_key: 'ollama-key'
+                ollama_endpoint: '127.0.0.1:11434'
             });
             expect(result.errors).toHaveLength(0);
         });
@@ -265,7 +257,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
                 llm_assistant_provider: LLMProvider.OLLAMA,
                 gemini_api_key: 'gemini-key'
             });
-            expect(result.errors).toContain('ollama_api_key is required when ollama is set as assistant provider');
+            expect(result.errors).toContain('ollama_endpoint is required when ollama is set as assistant provider');
         });
 
         it('passes when provider fields are empty or not set', () => {
@@ -277,9 +269,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
         });
 
         it('passes when provider fields are not present in updates', () => {
-            const result = validateUserSettings({
-                llm_temperature: '0.7'
-            });
+            const result = validateUserSettings({});
             expect(result.errors).toHaveLength(0);
         });
     });

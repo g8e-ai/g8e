@@ -22,8 +22,6 @@ What is verified:
 - The generated title is a non-empty string within the max_length cap
 - The title is relevant to the input message (contains at least one key word)
 - A greeting-only message produces a short title without hallucinated topics
-- The config used has temperature=0.1 and stop_sequences=["\n"] so the
-  model stays on-topic and does not produce multi-line output
 """
 
 import pytest

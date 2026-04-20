@@ -12,7 +12,6 @@
 // limitations under the License.
 
 import { EventBus } from './utils/eventbus.js';
-import { initFavicon } from './utils/favicon.js';
 import { AuthManager } from './components/auth.js';
 import { ChatComponent } from './components/chat.js';
 import { OperatorPanel } from './components/operator-panel.js';
@@ -40,7 +39,6 @@ class g8eApp {
     }
 
     init() {
-        initFavicon().catch(e => console.warn('[App] Favicon init failed:', e));
         this.serviceClient = window.serviceClient;
         notificationService.init();
 

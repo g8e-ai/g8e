@@ -27,7 +27,7 @@ RUN set -ex; \
 COPY components/g8ed/package.json components/g8ed/package-lock.json ./
 COPY components/g8ed/vitest.config.js /app/g8ed-vitest.config.js
 
-RUN npm config set update-notifier false \
+RUN npm config set update-notifier false -g \
     && npm ci \
     && chown -R g8e:g8e /app/components/g8ed
 

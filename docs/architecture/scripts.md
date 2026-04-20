@@ -66,13 +66,14 @@ Manages the Docker Compose services. All subcommands run on the host.
 Manages the Operator binary build and deployment.
 
 ```bash
-./g8e operator init                          # Build the operator binary inside g8eo-test-runner
-./g8e operator build                         # Rebuild the operator binary inside g8eo-test-runner
-./g8e operator build-all                     # Build all operator architectures with compression (for distribution)
-./g8e operator deploy <user@host>            # Copy operator to remote host via scp
-./g8e operator stream <host...>              # Stream-inject operator to one or more remote hosts
-./g8e operator ssh-config                    # Configure ~/.ssh/config for high-concurrency streaming
-./g8e operator reauth --user-id <id>         # Kill and relaunch the g8ep operator for a user
+./g8e login --api-key <key>                                   # Authenticate once (saves session locally)
+./g8e operator init                                          # Build the operator binary inside g8eo-test-runner
+./g8e operator build                                         # Rebuild the operator binary inside g8eo-test-runner
+./g8e operator build-all                                     # Build all operator architectures with compression (for distribution)
+./g8e operator deploy <user@host>                            # Copy operator to remote host via scp
+./g8e operator stream <host...>                              # Stream-inject operator to one or more remote hosts
+./g8e operator ssh-config                                    # Configure ~/.ssh/config for high-concurrency streaming
+./g8e operator reauth --user-id <id>                        # Kill and relaunch the g8ep operator for a user
 ```
 
 | Subcommand | Delegates to | Notes |
@@ -423,6 +424,7 @@ Query the g8es document store and KV store via the HTTP API. Runs inside g8ep an
 ### LFAA Audit Vault (`audit`)
 
 Query the operator's Local-First Audit Architecture (LFAA) vault (SQLite).
+Requires `--container NAME` (for operator containers with local storage) or `--db-path PATH` or `--volume NAME`.
 
 ```bash
 ./g8e data audit --container operator-test-1 stats
@@ -549,10 +551,11 @@ Interactive wizard to configure LLM providers (Ollama, OpenAI, Anthropic, Gemini
 Configures SSH directory mounting for operator streaming. The ssh-config subcommand configures ~/.ssh/config for high-concurrency operator streaming with multiplexing.
 
 ```bash
-./g8e ssh setup                              # Mount SSH directory into g8ep
-./g8e operator ssh-config                    # Configure ~/.ssh/config for streaming
-./g8e operator ssh-config --print           # Print the stanza without writing
-./g8e operator ssh-config --force            # Replace existing stanza
+./g8e login --api-key <key>                                   # Authenticate once
+./g8e ssh setup                                              # Mount SSH directory into g8ep
+./g8e operator ssh-config                                    # Configure ~/.ssh/config for streaming
+./g8e operator ssh-config --print                           # Print the stanza without writing
+./g8e operator ssh-config --force                            # Replace existing stanza
 ```
 
 The ssh-config subcommand creates:

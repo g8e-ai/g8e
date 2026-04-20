@@ -28,12 +28,10 @@
         "gemini_api_key":        { "type": "string",  "required": false },
         "anthropic_endpoint":    { "type": "string",  "required": false },
         "anthropic_api_key":     { "type": "string",  "required": false },
-        "llm_temperature":       { "type": "number",  "required": false },
         "llm_max_tokens":        { "type": "integer", "required": false },
         "llm_command_gen_enabled":  { "type": "boolean", "required": false },
         "llm_command_gen_verifier": { "type": "boolean", "required": false },
-        "llm_command_gen_passes":   { "type": "integer", "required": false },
-        "llm_command_gen_temp":     { "type": "number",  "required": false }
+        "llm_command_gen_passes":   { "type": "integer", "required": false }
       },
       "search": {
         "_description": "Maps to g8ee SearchSettings model.",
@@ -46,7 +44,6 @@
       "eval_judge": {
         "_description": "Maps to g8ee EvalJudgeSettings model. Keys use alias names.",
         "eval_judge_model":       { "type": "string",  "required": false },
-        "eval_judge_temperature": { "type": "number",  "required": false },
         "eval_judge_max_tokens":  { "type": "integer", "required": false }
       }
     },

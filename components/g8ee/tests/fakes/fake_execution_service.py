@@ -22,9 +22,8 @@ from app.services.protocols import ExecutionServiceProtocol
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(
     operator_id="fake-operator",
+    user_id="fake-user",
     name="Fake Operator",
-    session_id="fake-session",
-    component="g8ee"
 )
 
 

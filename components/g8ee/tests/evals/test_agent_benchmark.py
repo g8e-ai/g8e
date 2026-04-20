@@ -123,7 +123,6 @@ def _extract_tribunal_from_events(
             payload = event.payload
             if isinstance(payload, TribunalSessionCompletedPayload):
                 return TribunalCapture(
-                    original_command=payload.original_command,
                     final_command=payload.final_command,
                     outcome=payload.outcome,
                     vote_score=payload.vote_score,
@@ -331,11 +330,8 @@ async def test_agent_benchmark(
         result_data.failures = grade.failures
 
         if grade.tribunal_outcome is not None:
-            result_data.tribunal_original_command = grade.tribunal_original_command
             result_data.tribunal_final_command = grade.tribunal_final_command
             result_data.tribunal_outcome = grade.tribunal_outcome
-            result_data.tribunal_improved = grade.tribunal_improved
-            result_data.tribunal_pre_score = grade.tribunal_pre_score
 
         result_data.agent_continue_approvals = approval_tracker.count(ApprovalType.AGENT_CONTINUE)
         result_data.approvals_by_type = {
@@ -362,9 +358,9 @@ async def test_agent_benchmark(
         if grade.failures:
             for f in grade.failures:
                 logger.info("[BENCH_RESULT] FAILURE: %s", f[:200])
-        if grade.tribunal_improved:
+        if grade.tribunal_outcome:
             logger.info("[BENCH_RESULT] Tribunal: %s -> %s",
-                grade.tribunal_original_command, grade.tribunal_final_command)
+                grade.tribunal_final_command, grade.tribunal_outcome)
         logger.info("=" * 60)
 
         assert grade.passed, (

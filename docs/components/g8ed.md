@@ -139,7 +139,7 @@ g8ed connects to g8es using two separate transports — one per concern.
 
 ### KV Key Schema
 
-All keys follow the versioned format `g8e:{type}:{...segments}`. The `v1` prefix (`CACHE_PREFIX` from `constants/kv_keys.js`) allows atomic namespace invalidation by bumping the version. **Never construct key strings manually — always use `KVKey` builders from `constants/kv_keys.js`.**
+All keys follow the format `g8e:{domain}:{...segments}`. The `g8e` prefix (`CACHE_PREFIX` from `constants/kv_keys.js`) allows atomic namespace invalidation by bumping the version in `shared/constants/kv_keys.json`. **Never construct key strings manually — always use `KVKey` builders from `constants/kv_keys.js`.**
 
 For the complete KV key namespace (all patterns, builders, owners, TTLs), document collection registry, and cache-aside implementation details, see [architecture/storage.md](../architecture/storage.md).
 
@@ -468,7 +468,7 @@ GET /setup  →  renders views/setup.ejs
 
   Step 2 — AI Providers
     User enters API keys/URLs for any subset of providers
-    (Gemini / Anthropic / OpenAI / Ollama — Ollama uses host:port, not an API key).
+    (Gemini / Anthropic / OpenAI / Ollama — Ollama host:port is required; API key is optional).
     Three custom dropdowns (Primary / Assistant / Lite model) populate from the
     union of configured providers; each model id is server-driven from the
     injected catalog. The user may also type a custom model id via "Custom…".
@@ -611,18 +611,19 @@ Route handlers and other services interact with these via the main `OperatorServ
 
 ### OperatorSlot Projection for SSE Optimization
 
-Operator list events (`OPERATOR_PANEL_LIST_UPDATED`, keepalive operator_list payloads) use `OperatorSlot` projections instead of full `OperatorDocument` objects to reduce SSE payload size. `OperatorSlot` is a lightweight model containing only the ~10 fields needed by the operator list UI:
+Operator list events use `OperatorSlot` projections instead of full `OperatorDocument` objects to reduce SSE payload size. `OperatorSlot` is a lightweight model containing only the ~10 fields needed by the operator list UI:
 
 - `operator_id` — unique identifier
 - `name` — operator name
 - `status` — current status
 - `status_display` — human-readable status string
 - `status_class` — CSS class for status badge
-- `web_session_id` — bound web session (if any)
+- `bound_web_session_id` — bound web session (if any)
 - `is_g8ep` — g8e node operator flag
 - `first_deployed` — first deployment timestamp
 - `last_heartbeat` — last heartbeat timestamp
 - `system_info` — minimal system info (hostname, os, internal_ip, public_ip)
+- `latest_heartbeat_snapshot` — most recent performance metrics snapshot
 
 **Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
 
@@ -639,10 +640,10 @@ When the browser establishes a new SSE connection, `SSEService.pushInitialState(
 
 1. **LLM config push** — reads user/platform settings to determine the active provider, then assembles provider-specific models lists and publishes an `LLMConfigEvent`.
 2. **Investigation list push** — queries g8ee via `InternalHttpClient` and publishes an `InvestigationListEvent` for case navigation.
+3. **Operator list push** — queries the `operators` collection and publishes an `OperatorListUpdatedEvent` containing all user operators.
 
 Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handles:
 1. **Operator list repair** — repairs any stale `BOUND` web session links (tab swap detection).
-2. **Operator list broadcast** — pushes the full operator list to the new session.
 
 `SSEService` receives its dependencies at construction time (or via `setDependencies` in `initialization.js`) to avoid circularity.
 
@@ -659,11 +660,9 @@ g8eo (every 30s)
 g8es pub/sub  →  g8ee (OperatorHeartbeatService)
                       │ write last_heartbeat, latest_heartbeat_snapshot to g8es
                       │ detect staleness, set offline status (g8ee is source of truth)
-                      │ HTTP POST /api/internal/operators/:id/heartbeat
+                      │ HTTP POST /api/internal/sse/push
                       ▼
                     g8ed
-                      │ invalidate KV cache (cacheAside.invalidateDocument)
-                      │ computeStatusDisplayFields()
                       │ broadcast SSE operator.heartbeat
                       ▼
                     Browser (operator-panel.js)
@@ -676,7 +675,12 @@ g8es pub/sub  →  g8ee (OperatorHeartbeatService)
 - `latest_heartbeat_snapshot` — most recent metrics for UI
 - `system_info` — static system data
 
-**Heartbeat payload fields (from g8ee to g8ed):** `operator_id`, `timestamp`, `heartbeat_type`, `status`, `system_identity` (hostname, os, arch, cpu_count, memory_mb), `performance_metrics` (cpu_percent, memory_percent, disk_percent, network_latency), `network_info`, `uptime_info`, `os_details`, `user_details`, `environment`, `disk_details`, `memory_details`
+**Heartbeat SSE envelope (g8ee → g8ed → browser):** canonical shape in `shared/models/wire/heartbeat_sse.json`. The envelope splits authorship:
+
+- **Envelope (g8ee-owned):** `operator_id`, `status` (authoritative value from `OperatorDocument`).
+- **`metrics` (g8eo-authored telemetry):** `timestamp`, `heartbeat_type`, system identity (`hostname`, `os`, `architecture`, `cpu_count`, `memory_mb`, `current_user`), performance (`cpu_percent`, `memory_percent`, `disk_percent`, `network_latency`, `memory_used_mb`, `memory_total_mb`, `disk_used_gb`, `disk_total_gb`), network (`public_ip`, `internal_ip`, `interfaces`), uptime (`uptime`, `uptime_seconds`), version (`operator_version`, `version_status`), capability flags (`local_storage_enabled`, `git_available`, `ledger_enabled`), and nested detail objects (`os_details`, `user_details`, `disk_details`, `memory_details`, `environment`).
+
+The typed producer is `HeartbeatSSEEnvelope` in `components/g8ee/app/models/operators.py`. The browser reads `data.operator_id`, `data.status`, and `data.metrics.*`.
 
 ### Batch Command Approval
 
@@ -823,6 +827,81 @@ The following deprecated patterns have been eliminated:
 - `ErrorResponse.data` field - removed to prevent future anti-patterns
 
 All new response models must declare explicit fields and avoid generic containers.
+
+---
+
+## Frontend Model Architecture
+
+The browser uses a parallel model tier to the server-side `G8eBaseModel` hierarchy. Frontend models extend `FrontendBaseModel` (from `public/js/models/base.js`) and are used for data received from the wire (SSE events, API responses) in the browser.
+
+### FrontendBaseModel
+
+`FrontendBaseModel` mirrors the server-side `G8eBaseModel` API with browser-specific adaptations:
+
+- **Field definition:** Uses the same `F` tokens (`string`, `boolean`, `number`, `date`, `object`, `array`, `any`)
+- **Validation:** `parse(raw)` validates and coerces incoming wire data, throwing on validation errors
+- **Serialization:** `forWire()` converts models to plain JSON (Date → ISO string) for outbound fetch
+- **Date handling:** Date objects live inside the application boundary; serialized to ISO strings by `forWire()`
+
+### Frontend Model Files
+
+Browser-side models are organized in `public/js/models/`:
+
+| File | Purpose |
+|------|---------|
+| `base.js` | `FrontendBaseModel` and `FrontendIdentifiableModel` base classes |
+| `agent-models.js` | AI pipeline result models (TriageResult, CommandGenerationResult, etc.) |
+| `operator-models.js` | Operator domain models for browser (HeartbeatSnapshot, etc.) |
+
+### Boundary Enforcement
+
+**Critical rule:** Browser code must never import from server-side directories. All imports in `public/js/**/*.js` must resolve to files within `public/js/`. Cross-boundary imports (e.g., `../../../models/operator_model.js`) cause 404 errors because server files are outside the Express static root (`components/g8ed/public/`).
+
+When adding a new model needed by the browser:
+1. Create a browser-side model in `public/js/models/` extending `FrontendBaseModel`
+2. Mirror the server model's fields and factory methods (e.g., `empty()`, `fromHeartbeat()`)
+3. Add frontend unit tests in `test/unit/frontend/models/`
+4. Update browser imports to use the new browser-side path
+
+### Example: HeartbeatSnapshot
+
+The `HeartbeatSnapshot` model in `public/js/models/operator-models.js` mirrors the server-side model:
+
+```javascript
+export class HeartbeatSnapshot extends FrontendBaseModel {
+    static fields = {
+        timestamp:       { type: F.date,   default: null },
+        cpu_percent:     { type: F.number, default: null },
+        memory_percent:  { type: F.number, default: null },
+        disk_percent:    { type: F.number, default: null },
+        network_latency: { type: F.any,    default: null },
+        uptime:          { type: F.any,    default: null },
+        uptime_seconds:  { type: F.any,    default: null },
+    };
+
+    static empty() {
+        return HeartbeatSnapshot.parse({});
+    }
+
+    static fromHeartbeat(heartbeat, timestamp) {
+        const hb = heartbeat || {};
+        const perf = hb.performance_metrics || {};
+        const uptime = hb.uptime_info || {};
+
+        return HeartbeatSnapshot.parse({
+            timestamp,
+            cpu_percent:     perf.cpu_percent ?? null,
+            memory_percent:  perf.memory_percent ?? null,
+            disk_percent:    perf.disk_percent ?? null,
+            network_latency: perf.network_latency ?? null,
+            uptime:          uptime.uptime ?? null,
+            uptime_seconds:  uptime.uptime_seconds ?? null,
+        });
+    }
+}
+```
+
+This model is used by `operator-panel.js` to process heartbeat SSE events in the browser.
 
 ---
 
@@ -1038,7 +1117,6 @@ All guarded by `requireInternalOrigin` which validates `X-Internal-Auth` using `
 | `/api/internal/operators/:id/status` | GET | Get operator status |
 | `/api/internal/operators/:id` | GET | Get operator details |
 | `/api/internal/operators/:id/with-session-context` | GET | Get operator with session context |
-| `/api/internal/operators/:id/heartbeat` | POST | Invalidate KV cache and broadcast heartbeat SSE |
 | `/api/internal/operators/:id/context` | POST | Update operator context |
 | `/api/internal/operators/:id/reset-cache` | POST | Reset operator to fresh state |
 | `/api/internal/session/:sessionId` | GET | Get session by ID |
@@ -1126,7 +1204,7 @@ SSE event type constants follow a strict naming convention:
 
 **Initialization order in `app.js`:**
 1. `SSEConnectionManager` constructed — registers the `EventType`
-2. `OperatorPanel` constructed — immediately calls `_setupWireListeners()`, which subscribes to `EventType.OPERATOR_PANEL_LIST_UPDATED`, `EventType.OPERATOR_HEARTBEAT_SENT`, and all `OPERATOR_STATUS_UPDATED_*` events on the `EventBus`
+2. `OperatorPanel` constructed — immediately calls `_setupWireListeners()`, which subscribes to `EventType.OPERATOR_PANEL_LIST_UPDATED`, `EventType.OPERATOR_HEARTBEAT_RECEIVED`, and all `OPERATOR_STATUS_UPDATED_*` events on the `EventBus`
 3. SSE connection opens (on `EventType.PLATFORM_AUTH_COMPONENT_INITIALIZED_AUTHSTATE`)
 4. `OperatorPanel.init()` called (on `EventType.PLATFORM_AUTH_COMPONENT_INITIALIZED_CHAT`) — renders DOM, then applies any `_pendingRender` payload that arrived before render
 
@@ -1170,12 +1248,12 @@ Component-specific styles go in dedicated CSS files (`chat.css`, `operator-panel
 
 ### File Attachments
 
-g8ed uses a **local-first attachment model**. Files are read as base64 on the client and stored in g8es KV by g8ed. Only metadata (with g8es key references) is forwarded to G8EE.
+g8ed uses a **local-first attachment model**. Files are read as base64 on the client and stored in the g8es Blob Store by g8ed. Only metadata (with g8es key references) is forwarded to G8EE.
 
 **Flow:**
 1. Client reads file via `FileReader` as base64; image previews use `data:` URIs (CSP-compliant — no `blob:` URLs)
-2. On send: g8ed receives base64, stores in g8es KV via `AttachmentService`, forwards only metadata + `g8es_key` to g8ee
-3. g8ee retrieves base64 from g8es KV on demand for LLM processing
+2. On send: g8ed receives base64, stores in g8es Blob Store via `AttachmentService`, then writes metadata to g8es KV. Forwards only metadata + `kv_key` to g8ee.
+3. g8ee retrieves base64 from the g8es Blob Store on demand (via metadata hydration) for LLM processing.
 
 **Security controls:**
 - Type whitelist, 10 MB per file, 30 MB total per investigation

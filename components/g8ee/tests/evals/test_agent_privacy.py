@@ -36,9 +36,9 @@ import logging
 import pytest
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch
 
-from app.constants import AgentMode, EventType
+from app.constants import EventType
 from app.constants.paths import PATHS
 from app.services.ai.chat_task_manager import ChatTaskManager
 from app.models.http_context import G8eHttpContext

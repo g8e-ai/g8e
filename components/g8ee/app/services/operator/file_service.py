@@ -122,9 +122,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
                     success=False, 
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -241,7 +242,7 @@ class OperatorFileService:
             # Notify completion/failure
             completion_event_type = (
                 EventType.OPERATOR_FILE_EDIT_COMPLETED 
-                if internal_result.status == ExecutionStatus.COMPLETED 
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
                 else EventType.OPERATOR_FILE_EDIT_FAILED
             )
 
@@ -252,9 +253,9 @@ class OperatorFileService:
                     operation=op_name,
                     execution_id=exec_id,
                     operator_session_id=operator_session_id,
-                    status=internal_result.status,
-                    error=internal_result.error,
-                    stderr=internal_result.stderr,
+                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                    error=internal_result.error if internal_result else "Execution result is None",
+                    stderr=internal_result.stderr if internal_result else None,
                     content=getattr(args, "content", None) or getattr(args, "new_content", None),
                     approval_id=getattr(approval_result, "approval_id", None) if "approval_result" in locals() else None,
                 ),
@@ -263,14 +264,14 @@ class OperatorFileService:
             )
 
             return FileEditResult(
-                success=internal_result.status == ExecutionStatus.COMPLETED,
+                success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
                 file_path=file_path,
                 operation=operation,
-                error=internal_result.error,
+                error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e, exc_info=True)
-            return FileEditResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FileEditResult(success=False, error=f"File edit execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
 
     async def execute_fetch_file_history(
         self,
@@ -291,9 +292,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileHistoryToolResult(
                     success=False,
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -349,7 +351,7 @@ class OperatorFileService:
                 # Notify completion/failure
                 completion_event_type = (
                     EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED 
-                    if internal_result.status == ExecutionStatus.COMPLETED 
+                    if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
                     else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
                 )
 
@@ -358,9 +360,9 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_history {file_path}",
-                        status=internal_result.status,
-                        output=internal_result.output,
-                        error=internal_result.error,
+                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                        output=internal_result.output if internal_result else None,
+                        error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
@@ -373,22 +375,22 @@ class OperatorFileService:
                 if envelope and isinstance(envelope.payload, FetchFileHistoryResultPayload):
                     history = envelope.payload.history or []
                     return FetchFileHistoryToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED,
+                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
                         file_path=file_path,
                         history=history,
-                        error=internal_result.error,
+                        error=internal_result.error if internal_result else "Execution result is None",
                     )
 
                 return FetchFileHistoryToolResult(
-                    success=internal_result.status == ExecutionStatus.COMPLETED,
+                    success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
                     file_path=file_path,
-                    error=internal_result.error,
+                    error=internal_result.error if internal_result else "Execution result is None",
                 )
             finally:
                 self.execution_registry.release(exec_id)
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True)
-            return FetchFileHistoryToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FetchFileHistoryToolResult(success=False, error=f"File history fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
 
     async def execute_fetch_file_diff(
         self,
@@ -409,9 +411,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileDiffToolResult(
                     success=False,
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -467,7 +470,7 @@ class OperatorFileService:
                 # Notify completion/failure
                 completion_event_type = (
                     EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED 
-                    if internal_result.status == ExecutionStatus.COMPLETED 
+                    if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
                     else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
                 )
 
@@ -476,9 +479,9 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_diff {file_path}",
-                        status=internal_result.status,
-                        output=internal_result.output,
-                        error=internal_result.error,
+                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                        output=internal_result.output if internal_result else None,
+                        error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,
                         operator_session_id=operator_session_id,
                     ),
@@ -491,20 +494,20 @@ class OperatorFileService:
                 if envelope and isinstance(envelope.payload, FetchFileDiffResultPayload):
                     diff = envelope.payload.diff
                     return FetchFileDiffToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED,
+                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
                         diff=diff,
                         total=1 if diff else 0,
-                        error=internal_result.error,
+                        error=internal_result.error if internal_result else "Execution result is None",
                         operator_session_id=operator_session_id,
                     )
 
                 return FetchFileDiffToolResult(
-                    success=internal_result.status == ExecutionStatus.COMPLETED,
-                    error=internal_result.error,
+                    success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+                    error=internal_result.error if internal_result else "Execution result is None",
                     operator_session_id=operator_session_id,
                 )
             finally:
                 self.execution_registry.release(exec_id)
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e, exc_info=True)
-            return FetchFileDiffToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FetchFileDiffToolResult(success=False, error=f"File diff fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)

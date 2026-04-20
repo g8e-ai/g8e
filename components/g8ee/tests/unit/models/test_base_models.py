@@ -23,6 +23,7 @@ from app.models.base import (
     G8eBaseModel,
     G8eIdentifiableModel,
     G8eTimestampedModel,
+    UTCDatetime,
     _to_iso_z,
 )
 
@@ -101,37 +102,35 @@ class TestG8eBaseModel:
         assert '"name"' in json_str
         assert '"value"' not in json_str
 
-    def test_flatten_for_llm_returns_dict(self):
+    def test_llm_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_llm()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
         assert result["value"] == 42
 
-    def test_flatten_for_db_returns_dict(self):
+    def test_db_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_db()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
 
-    def test_flatten_for_wire_returns_dict(self):
+    def test_wire_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_wire()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
 
     def test_flatten_excludes_none_fields(self):
         m = _SampleModel(name="test", value=None)
-        assert "value" not in m.flatten_for_llm()
-        assert "value" not in m.flatten_for_db()
-        assert "value" not in m.flatten_for_wire()
+        assert "value" not in m.model_dump(mode="json")
 
     def test_flatten_serializes_nested_model(self):
         class _Outer(G8eBaseModel):
             inner: _SampleModel
 
         m = _Outer(inner=_SampleModel(name="nested", value=7))
-        result = m.flatten_for_wire()
+        result = m.model_dump(mode="json")
         assert isinstance(result["inner"], dict)
         assert result["inner"]["name"] == "nested"
 
@@ -163,6 +162,42 @@ class TestToIsoZ:
     def test_matches_iso_z_pattern(self):
         dt = datetime(2026, 3, 4, 23, 59, 59, tzinfo=UTC)
         assert _ISO_Z_RE.match(_to_iso_z(dt))
+
+
+class TestUTCDatetime:
+
+    class _ModelWithUTCDatetime(G8eBaseModel):
+        timestamp: UTCDatetime | None = None
+
+    def test_utc_datetime_emits_z_suffix_on_model_dump_json(self):
+        dt = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+        m = self._ModelWithUTCDatetime(timestamp=dt)
+        dumped = m.model_dump(mode="json")
+        assert dumped["timestamp"].endswith("Z")
+        assert "+" not in dumped["timestamp"]
+
+    def test_naive_datetime_treated_as_utc_and_emits_z_suffix(self):
+        dt = datetime(2026, 1, 15, 10, 30, 0)
+        m = self._ModelWithUTCDatetime(timestamp=dt)
+        dumped = m.model_dump(mode="json")
+        assert dumped["timestamp"].endswith("Z")
+
+    def test_none_datetime_emits_none(self):
+        m = self._ModelWithUTCDatetime(timestamp=None)  # type: ignore[arg-type]
+        dumped = m.model_dump(mode="json", exclude_none=False)
+        assert dumped["timestamp"] is None
+
+    def test_microseconds_preserved_in_z_suffix_output(self):
+        dt = datetime(2026, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
+        m = self._ModelWithUTCDatetime(timestamp=dt)
+        dumped = m.model_dump(mode="json")
+        assert ".123456Z" in dumped["timestamp"]
+
+    def test_matches_iso_z_pattern(self):
+        dt = datetime(2026, 3, 4, 23, 59, 59, tzinfo=UTC)
+        m = self._ModelWithUTCDatetime(timestamp=dt)
+        dumped = m.model_dump(mode="json")
+        assert _ISO_Z_RE.match(dumped["timestamp"])
 
 
 class TestG8eTimestampedModel:
@@ -202,7 +237,7 @@ class TestG8eTimestampedModel:
 
     def test_serialize_datetime_uses_z_suffix(self):
         m = self._TimestampedChild()
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert isinstance(dumped["created_at"], str)
         assert dumped["created_at"].endswith("Z"), f"Expected Z suffix, got: {dumped['created_at']}"
         assert "+" not in dumped["created_at"]
@@ -210,19 +245,19 @@ class TestG8eTimestampedModel:
     def test_serialize_datetime_updated_at_uses_z_suffix(self):
         m = self._TimestampedChild()
         m.update_timestamp()
-        dumped = m.model_dump(exclude_none=False)
+        dumped = m.model_dump(mode="json", exclude_none=False)
         assert isinstance(dumped["updated_at"], str)
         assert dumped["updated_at"].endswith("Z"), f"Expected Z suffix, got: {dumped['updated_at']}"
 
     def test_updated_at_excluded_from_dump_when_none(self):
         m = self._TimestampedChild()
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert "updated_at" not in dumped
 
     def test_serialize_datetime_accepts_string_passthrough(self):
         iso = "2026-01-15T10:30:00+00:00"
         m = self._TimestampedChild(created_at=iso)  # type: ignore[arg-type]
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert isinstance(dumped["created_at"], str)
 
     def test_created_at_can_be_provided_explicitly(self):
@@ -232,7 +267,7 @@ class TestG8eTimestampedModel:
 
     def test_created_at_matches_iso_z_pattern(self):
         m = self._TimestampedChild()
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert _ISO_Z_RE.match(dumped["created_at"]), f"Pattern mismatch: {dumped['created_at']}"
 
 
@@ -307,9 +342,9 @@ class TestG8eIdentifiableModel:
         id_val = self._IdentifiableChild.generate_id(prefix="test")
         assert id_val.startswith("test-")
 
-    def test_flatten_for_db_includes_id(self):
+    def test_db_dump_includes_id(self):
         m = self._IdentifiableChild(label="x")
-        result = m.flatten_for_db()
+        result = m.model_dump(mode="json")
         assert "id" in result
         assert result["id"] == m.id
 
@@ -381,7 +416,7 @@ class TestG8eAuditableModel:
         assert m.updated_by == "updater-svc"
         assert m.updated_at is not None
 
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert dumped["created_by"] == "creator-svc"
         assert dumped["updated_by"] == "updater-svc"
         assert isinstance(dumped["created_at"], str)

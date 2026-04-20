@@ -42,6 +42,9 @@ class SSEService {
     constructor({ settingsService, internalHttpClient, boundSessionsService, investigationService } = {}) {
         this.localConnections = new Map();
         this.connectionsPerSession = new Map();
+        // userId -> Set<webSessionId> for O(1) user-scoped fan-out.
+        // Only tracks connections local to this g8ed instance.
+        this.userSessions = new Map();
         this._settingsService = settingsService;
         this._internalHttpClient = internalHttpClient;
         this._boundSessionsService = boundSessionsService;
@@ -68,8 +71,16 @@ class SSEService {
      * Register a new SSE connection (local to this instance)
      * Returns a unique connectionId that must be passed to unregisterConnection
      * to prevent stale connection cleanup from removing a newer active connection.
+     *
+     * @param {string} webSessionId - WebSession ID
+     * @param {string} userId - User ID that owns this session (required for user-scoped fan-out)
+     * @param {Object} response - Express response object
+     * @param {Object} [metadata={}] - Optional metadata for logging
      */
-    async registerConnection(webSessionId, response, metadata = {}) {
+    async registerConnection(webSessionId, userId, response, metadata = {}) {
+        if (!userId) {
+            throw new Error('SSEService.registerConnection requires a userId');
+        }
         // Generate unique connection ID to prevent stale cleanup race condition
         const connectionId = `${webSessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -84,13 +95,21 @@ class SSEService {
             });
         }
 
-        // Store response object with its unique connection ID
-        this.localConnections.set(webSessionId, { response, connectionId });
+        // Store response object with its unique connection ID and owning userId
+        this.localConnections.set(webSessionId, { response, connectionId, userId });
 
         // Track per-session connection count (local)
         const currentCount = this.connectionsPerSession.get(webSessionId) || 0;
         const newCount = isReplacing ? currentCount : currentCount + 1;
         this.connectionsPerSession.set(webSessionId, newCount);
+
+        // Maintain user -> sessions index for O(1) user-scoped fan-out
+        let sessions = this.userSessions.get(userId);
+        if (!sessions) {
+            sessions = new Set();
+            this.userSessions.set(userId, sessions);
+        }
+        sessions.add(webSessionId);
 
         logger.info('[SSE-SERVICE] Connection registered', {
             webSessionId: redactWebSessionId(webSessionId),
@@ -117,9 +136,11 @@ class SSEService {
      */
     unregisterConnection(webSessionId, connectionId) {
         const existing = this.localConnections.get(webSessionId);
+        let removedUserId = null;
 
         // Only remove if this is the same connection that's currently registered
         if (existing && existing.connectionId === connectionId) {
+            removedUserId = existing.userId;
             this.localConnections.delete(webSessionId);
             logger.info('[SSE-SERVICE] Connection unregistered', {
                 webSessionId: redactWebSessionId(webSessionId),
@@ -141,6 +162,17 @@ class SSEService {
         } else {
             this.connectionsPerSession.set(webSessionId, count - 1);
         }
+
+        // Clean up user->sessions index only when the connection was actually removed
+        if (removedUserId) {
+            const sessions = this.userSessions.get(removedUserId);
+            if (sessions) {
+                sessions.delete(webSessionId);
+                if (sessions.size === 0) {
+                    this.userSessions.delete(removedUserId);
+                }
+            }
+        }
     }
 
     /**
@@ -149,14 +181,11 @@ class SSEService {
      * Fire-and-forget: returns true even when no connection is present.
      *
      * @param {string} webSessionId - WebSession ID
-     * @param {G8eBaseModel} eventData - Typed SSE model instance — serialized via .forWire() at this boundary
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      * @param {Function} deliveryCallback - Optional callback invoked with delivery status: {delivered, webSessionId, eventType}
      */
     async publishEvent(webSessionId, eventData, deliveryCallback = null) {
-        if (!(eventData instanceof G8eBaseModel)) {
-            throw new Error(`SSEService.publishEvent requires a G8eBaseModel instance, got ${typeof eventData}`);
-        }
-        const wire = eventData.forWire();
+        const wire = this._toWire(eventData);
         const delivered = await this.sendToLocal(webSessionId, wire);
         if (!delivered) {
             logger.warn('[SSE-SERVICE] No active SSE connection for session', {
@@ -183,17 +212,48 @@ class SSEService {
     }
 
     /**
+     * Fan out an event to every locally connected SSE session owned by a user.
+     * O(k) in the number of local sessions for that user — no cache or DB lookups.
+     *
+     * @param {string} userId
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
+     * @returns {Promise<number>} Number of sessions the event was successfully delivered to
+     */
+    async publishToUser(userId, eventData) {
+        const wire = this._toWire(eventData);
+        const sessions = this.userSessions.get(userId);
+        if (!sessions || sessions.size === 0) {
+            logger.info('[SSE-SERVICE] No active local sessions for user', {
+                userId,
+                eventType: wire.type
+            });
+            return 0;
+        }
+        let successCount = 0;
+        for (const webSessionId of sessions) {
+            if (await this.sendToLocal(webSessionId, wire)) {
+                successCount++;
+            }
+        }
+
+        logger.info('[SSE-SERVICE] Event fanned out to user sessions', {
+            userId,
+            successCount,
+            totalLocalSessions: sessions.size,
+            eventType: wire.type
+        });
+        return successCount;
+    }
+
+    /**
      * Broadcast event to all sessions (rare use case)
      *
-     * @param {G8eBaseModel} eventData - Typed SSE model instance — serialized via .forWire() at this boundary
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      */
     async broadcastEvent(eventData) {
-        if (!(eventData instanceof G8eBaseModel)) {
-            throw new Error(`SSEService.broadcastEvent requires a G8eBaseModel instance, got ${typeof eventData}`);
-        }
+        const wire = this._toWire(eventData);
         try {
             const broadcastId = `broadcast_${Date.now()}`;
-            const wire = eventData.forWire();
             logger.info('[SSE-SERVICE] Broadcasting event', {
                 broadcastId,
                 eventType: wire.type
@@ -240,12 +300,33 @@ class SSEService {
     }
 
     /**
+     * Internal: convert eventData to wire format.
+     * Accepts G8eBaseModel instances (calls forWire()) or plain wire objects (validates type field).
+     *
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
+     * @returns {object} Wire format object with type field
+     * @private
+     */
+    _toWire(eventData) {
+        if (eventData instanceof G8eBaseModel) {
+            return eventData.forWire();
+        }
+        if (!eventData || typeof eventData !== 'object') {
+            throw new Error(`SSEService: eventData must be a G8eBaseModel instance or plain object, got ${typeof eventData}`);
+        }
+        if (typeof eventData.type !== 'string' || eventData.type.trim() === '') {
+            throw new Error(`SSEService: eventData must have a non-empty string 'type' field, got ${JSON.stringify(eventData.type)}`);
+        }
+        return eventData;
+    }
+
+    /**
      * Internal: send a pre-serialized wire payload to the local connection.
-     * Only called from publishEvent and broadcastEvent after .forWire() has been applied.
+     * Only called from publishEvent and broadcastEvent after _toWire() has been applied.
      * Returns false if no active connection exists or delivery fails.
      *
      * @param {string} webSessionId - WebSession ID
-     * @param {object} wire - Plain object produced by .forWire()
+     * @param {object} wire - Plain object with type field
      */
     async sendToLocal(webSessionId, wire) {
         try {
@@ -455,6 +536,7 @@ class SSEService {
         this.healthy = false;
         this.localConnections.clear();
         this.connectionsPerSession.clear();
+        this.userSessions.clear();
         logger.info('[SSE-SERVICE] SSE service closed');
     }
 }

@@ -24,7 +24,6 @@ from app.llm.llm_types import (
     Part,
     PrimaryLLMSettings,
     StreamChunkFromModel,
-    ToolCall,
     ToolGroup,
 )
 from app.llm.provider import LLMProvider

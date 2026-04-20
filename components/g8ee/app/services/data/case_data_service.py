@@ -118,7 +118,7 @@ class CaseDataService:
             await self.cache.create_document(
                 collection=self.cases_collection,
                 document_id=case_id,
-                data=case.flatten_for_db(),
+                data=case.model_dump(mode="json"),
             )
 
             logger.info(f"Case created: {case_id}", extra={"case_id": case_id})
@@ -190,7 +190,7 @@ class CaseDataService:
         Returns:
             Updated CaseModel
         """
-        update_fields = updates.flatten_for_db()
+        update_fields = updates.model_dump(mode="json")
 
         if not update_fields:
             raise BusinessLogicError(
@@ -211,7 +211,7 @@ class CaseDataService:
         updated = existing.model_copy(update={**update_fields, "updated_at": updated_at})
 
         try:
-            db_payload = updated.flatten_for_db()
+            db_payload = updated.model_dump(mode="json")
             await self.cache.update_document(
                 collection=self.cases_collection,
                 document_id=case_id,
@@ -324,7 +324,7 @@ class CaseDataService:
 
         results = await self.cache.query_documents(
             collection=self.cases_collection,
-            field_filters=[f.flatten_for_wire() for f in filters],
+            field_filters=[f.model_dump(mode="json") for f in filters],
             order_by={"created_at": "asc"},
             limit=query.limit
         )
@@ -344,6 +344,6 @@ class CaseDataService:
 
         return await self.cache.query_documents(
             collection=self.tasks_collection,
-            field_filters=[f.flatten_for_wire() for f in filters],
+            field_filters=[f.model_dump(mode="json") for f in filters],
             order_by={"created_at": "desc"}
         )

@@ -19,7 +19,7 @@ from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants.status import ComponentName, CommandErrorType, ExecutionStatus
 from app.constants.events import EventType
 from app.constants.status import AITaskId
-from app.models.agent import OperatorCommandArgs
+from app.models.agent import ExecutorCommandArgs
 from app.models.command_payloads import (
     CheckPortArgs,
     FileEditPayload,
@@ -246,7 +246,7 @@ class OperatorCommandService:
 
     async def execute_command(
         self,
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
@@ -258,7 +258,14 @@ class OperatorCommandService:
         dispatches correlated by a batch_id. For N==1 the return shape matches legacy behavior.
         """
         command = args.command.strip()
-        justification = args.justification.strip()
+        # Sage never writes `command` directly; the Tribunal produces it from
+        # Sage's request+guidelines. The approval UI still shows a "justification"
+        # line to the user, which in the new model is Sage's natural-language
+        # request (plus optional guidelines).
+        justification_parts = [args.request.strip()] if args.request else []
+        if args.guidelines and args.guidelines.strip():
+            justification_parts.append(f"Guidelines: {args.guidelines.strip()}")
+        justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
 
         logger.info("[COMMAND] Starting execution: %s", command)
 
@@ -267,8 +274,9 @@ class OperatorCommandService:
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
+            logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
             return CommandExecutionResult(
-                success=False, error=str(e), error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
         # All resolved operators must have a live session.
@@ -463,10 +471,10 @@ class OperatorCommandService:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
                         cancel_event.set()
-                    await _publish_failed(exec_id, op_id, op_session_id, hostname, str(e))
+                    await _publish_failed(exec_id, op_id, op_session_id, hostname, f"Command execution failed: {e}")
                     return BatchOperatorExecutionResult(
                         hostname=hostname, operator_id=op_id, execution_id=exec_id,
-                        success=False, error=str(e),
+                        success=False, error=f"Command execution failed: {e}. Check operator status and retry.",
                     )
 
                 completion_event_type = (
@@ -528,7 +536,7 @@ class OperatorCommandService:
     def _resolve_targets(
         self,
         operator_documents: list[OperatorDocument],
-        args: OperatorCommandArgs,
+        args: ExecutorCommandArgs,
     ) -> list[OperatorDocument]:
         """Unified resolution for singular (`target_operator`) and batch (`target_operators`)."""
         if args.target_operators:

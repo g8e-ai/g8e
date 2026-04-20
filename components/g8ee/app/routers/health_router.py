@@ -20,7 +20,6 @@ Provides health check endpoints following the standard g8e pattern.
 import logging
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
 
 from app.utils.timestamp import now_iso
 

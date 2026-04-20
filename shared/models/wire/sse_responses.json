@@ -1,0 +1,27 @@
+{
+  "_comment": "Canonical response shapes for SSE push operations. g8ee pushes SSE events to g8ed for delivery to web sessions. Consumers: g8ee (Python), g8ed (JS).",
+
+  "sse_push_response": {
+    "_description": "Response from POST /api/internal/sse/push. Indicates whether the push was accepted and how many SSE connections it was delivered to.",
+    "fields": {
+      "success": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether the push was accepted and processed"
+      },
+      "delivered": {
+        "type": "number",
+        "required": false,
+        "default": 0,
+        "minimum": 0,
+        "description": "Number of SSE connections the event was delivered to. Zero is legitimate for BackgroundEvents when the user has no connected sessions."
+      },
+      "error": {
+        "type": ["string", "null"],
+        "required": false,
+        "default": null,
+        "description": "Error message when unsuccessful"
+      }
+    }
+  }
+}
