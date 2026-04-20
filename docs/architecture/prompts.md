@@ -1,3 +1,8 @@
+---
+title: Prompts
+parent: Architecture
+---
+
 # Prompts
 
 g8ee's system prompts and tool descriptions are plain-text files under `components/g8ee/app/prompts_data/`, loaded at runtime by a small file loader and composed into the final LLM system prompt by `build_modular_system_prompt`. This document covers file layout, loader mechanics, assembly order, mode selection, the tool-description pipeline, and the authoring conventions every prompt file is expected to follow.

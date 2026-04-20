@@ -1,3 +1,8 @@
+---
+title: Builds
+parent: Architecture
+---
+
 # Builds, Dependencies, and Startup Sequence
 
 This document explains the g8e component dependency chain, the reason each component exists in the order it does, and what every build and startup step actually produces. Understanding why the order matters requires understanding what each component is and what it provides to the rest of the stack.

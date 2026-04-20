@@ -1,3 +1,8 @@
+---
+title: Operator
+parent: Architecture
+---
+
 # g8e Operator Binary
 
 The Operator (`g8e.operator`) is the language-agnostic, platform-agnostic execution binary for the g8e platform. The reference implementation is a statically compiled, self-contained Go binary — approximately **4 MB** — with no external runtime dependencies and no installation required. Deploy it on a host, run it, and the platform has a fully capable Operator. Any client that follows the g8e events protocol can act as an Operator.

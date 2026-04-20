@@ -1,3 +1,9 @@
+---
+title: Python SDK
+parent: Anthropic
+grand_parent: Reference
+---
+
 # Python SDK
 
 Install and configure the Anthropic Python SDK with sync and async client support

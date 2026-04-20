@@ -1,3 +1,8 @@
+---
+title: Storage
+parent: Architecture
+---
+
 # Data Storage Architecture
 
 This document is the deep-reference storage guide for the g8e platform. It covers exact storage topology, SQLite schemas, document model fields, KV key namespaces, cache-aside mechanics, vault encryption internals, data flows, and retention policies. It is the single authoritative source for all storage implementation details.

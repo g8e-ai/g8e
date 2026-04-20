@@ -1,3 +1,9 @@
+---
+title: Home
+layout: default
+permalink: /
+---
+
 <div align="center">
 
 # g8e

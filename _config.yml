@@ -1,0 +1,76 @@
+title: g8e
+description: governance architecture for trustless environments
+url: https://g8e.ai
+
+remote_theme: just-the-docs/just-the-docs
+
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-sitemap
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: false
+
+# just-the-docs configuration
+color_scheme: dark
+search_enabled: true
+search:
+  heading_level: 3
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+  tokenizer_separator: /[\s\-/]+/
+  rel_url: true
+  button: false
+
+heading_anchors: true
+
+aux_links:
+  "GitHub":
+    - "https://github.com/g8e-ai/g8e"
+aux_links_new_tab: true
+
+nav_external_links:
+  - title: GitHub Repo
+    url: https://github.com/g8e-ai/g8e
+    hide_icon: false
+
+footer_content: 'g8e &middot; <a href="https://github.com/g8e-ai/g8e">GitHub</a>'
+
+# Only serve docs + README from Pages; keep everything else out.
+exclude:
+  - components/
+  - scripts/
+  - shared/
+  - demo/
+  - .github/
+  - .ruff_cache/
+  - tests/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/
+  - docker-compose.yml
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+  - CODE_OF_CONDUCT.md
+  - SECURITY.md
+  - LICENSE
+  - VERSION
+  - g8e
+
+include:
+  - README.md
+
+defaults:
+  - scope:
+      path: "docs"
+    values:
+      layout: default
+  - scope:
+      path: ""
+    values:
+      layout: default

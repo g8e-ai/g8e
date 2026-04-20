@@ -1,3 +1,9 @@
+---
+title: Function Calling
+parent: Gemini
+grand_parent: Reference
+---
+
 # Function calling with the Gemini API
 
 Function calling lets you connect models to external tools and APIs.

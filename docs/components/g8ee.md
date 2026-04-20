@@ -1,3 +1,8 @@
+---
+title: g8ee
+parent: Components
+---
+
 # g8ee
 
 g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
