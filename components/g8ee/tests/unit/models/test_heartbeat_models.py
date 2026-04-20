@@ -631,19 +631,19 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
         return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
 
     def test_envelope_top_level_shape(self):
-        data = self._make_envelope().flatten_for_wire()
+        data = self._make_envelope().model_dump(mode="json")
         assert set(data.keys()) == {"operator_id", "status", "metrics"}
 
     def test_status_is_string_on_wire(self):
-        data = self._make_envelope().flatten_for_wire()
+        data = self._make_envelope().model_dump(mode="json")
         assert data["status"] == OperatorStatus.ACTIVE.value
 
     def test_metrics_is_plain_dict(self):
-        data = self._make_envelope().flatten_for_wire()
+        data = self._make_envelope().model_dump(mode="json")
         assert isinstance(data["metrics"], dict)
 
     def test_nested_models_serialized_to_dicts(self):
-        metrics = self._make_envelope().flatten_for_wire()["metrics"]
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
         assert isinstance(metrics["os_details"], dict)
         assert isinstance(metrics["user_details"], dict)
         assert isinstance(metrics["disk_details"], dict)
@@ -651,11 +651,11 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
         assert isinstance(metrics["environment"], dict)
 
     def test_heartbeat_type_is_string_on_wire(self):
-        metrics = self._make_envelope().flatten_for_wire()["metrics"]
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
         assert metrics["heartbeat_type"] == HeartbeatType.AUTOMATIC.value
 
     def test_timestamp_is_iso_string_on_wire(self):
-        metrics = self._make_envelope().flatten_for_wire()["metrics"]
+        metrics = self._make_envelope().model_dump(mode="json")["metrics"]
         assert isinstance(metrics["timestamp"], str)
         assert metrics["timestamp"].endswith("Z")
 
@@ -669,7 +669,7 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
         )
         data = HeartbeatSSEEnvelope.from_heartbeat(
             "op-min", OperatorStatus.ACTIVE, hb
-        ).flatten_for_wire()
+        ).model_dump(mode="json")
         metrics = data["metrics"]
         assert "hostname" not in metrics
         assert "cpu_percent" not in metrics

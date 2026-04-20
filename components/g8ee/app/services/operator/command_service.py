@@ -274,8 +274,9 @@ class OperatorCommandService:
         try:
             target_operator_docs = self._resolve_targets(operator_documents, args)
         except (ValidationError, BusinessLogicError, ValueError) as e:
+            logger.error("[COMMAND] Operator resolution failed: %s", e, exc_info=True)
             return CommandExecutionResult(
-                success=False, error=str(e), error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
+                success=False, error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.", error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
         # All resolved operators must have a live session.
@@ -470,10 +471,10 @@ class OperatorCommandService:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
                         cancel_event.set()
-                    await _publish_failed(exec_id, op_id, op_session_id, hostname, str(e))
+                    await _publish_failed(exec_id, op_id, op_session_id, hostname, f"Command execution failed: {e}")
                     return BatchOperatorExecutionResult(
                         hostname=hostname, operator_id=op_id, execution_id=exec_id,
-                        success=False, error=str(e),
+                        success=False, error=f"Command execution failed: {e}. Check operator status and retry.",
                     )
 
                 completion_event_type = (

@@ -53,9 +53,9 @@ class TestChatThinkingPayload:
         payload = ChatThinkingPayload(action_type=ThinkingActionType.UPDATE)
         assert payload.thinking is None
 
-    def test_flatten_for_wire_includes_action_type(self):
+    def test_wire_dump_includes_action_type(self):
         payload = ChatThinkingPayload(thinking="step 1", action_type=ThinkingActionType.UPDATE)
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["action_type"] == "update"
         assert wire["thinking"] == "step 1"
 
@@ -66,7 +66,7 @@ class TestChatThinkingPayload:
 
     def test_wire_value_is_string(self):
         payload = ChatThinkingPayload(action_type=ThinkingActionType.START)
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["action_type"] == "start"
         assert isinstance(wire["action_type"], str)
 
@@ -89,20 +89,20 @@ class TestAISearchWebPayload:
         assert payload.execution_id == "exec-abc"
         assert payload.status == ToolCallStatus.STARTED
 
-    def test_flatten_for_wire_includes_all_fields(self):
+    def test_wire_dump_includes_all_fields(self):
         payload = AISearchWebPayload(
             query="disk usage",
             execution_id="exec-xyz",
             status=ToolCallStatus.STARTED,
         )
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["query"] == "disk usage"
         assert wire["execution_id"] == "exec-xyz"
         assert wire["status"] == "started"
 
     def test_wire_status_is_string(self):
         payload = AISearchWebPayload(status=ToolCallStatus.COMPLETED)
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["status"] == "completed"
         assert isinstance(wire["status"], str)
 
@@ -125,20 +125,20 @@ class TestOperatorNetworkPortCheckPayload:
         assert payload.port == "443"
         assert payload.execution_id == "exec-port-001"
 
-    def test_flatten_for_wire_includes_all_fields(self):
+    def test_wire_dump_includes_all_fields(self):
         payload = OperatorNetworkPortCheckPayload(
             port="8080",
             execution_id="exec-port-xyz",
             status=ToolCallStatus.STARTED,
         )
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["port"] == "8080"
         assert wire["execution_id"] == "exec-port-xyz"
         assert wire["status"] == "started"
 
     def test_wire_status_is_string(self):
         payload = OperatorNetworkPortCheckPayload(status=ToolCallStatus.COMPLETED)
-        wire = payload.flatten_for_wire()
+        wire = payload.model_dump(mode="json")
         assert wire["status"] == "completed"
         assert isinstance(wire["status"], str)
 

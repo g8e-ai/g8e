@@ -237,7 +237,12 @@ async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_s
         result = await agent.triage(request)
 
     assert result.complexity == TriageComplexityClassification.COMPLEX
-    assert result.intent_summary == "Error during triage: LLM Down"
+    assert "Triage unavailable: classification failed" in result.intent_summary
+    assert "LLM Down" in result.intent_summary
+    assert "Escalating to full LLM" in result.intent_summary
+    assert result.error_code == "CLASSIFICATION_ERROR"
+    assert result.error_class == "Exception"
+    assert result.error_message == "LLM Down"
 
 
 async def test_triage_cleans_markdown_json_blocks(fake_provider, mock_settings):
@@ -326,7 +331,7 @@ async def test_triage_defaults_posture_to_normal_when_field_missing(fake_provide
     assert result.posture_confidence == TriageConfidence.LOW
 
 
-async def test_triage_fallback_returns_normal_posture(fake_provider, mock_settings):
+async def test_triage_escalation_returns_normal_posture(fake_provider, mock_settings):
     """Malformed LLM output must fall back to NORMAL posture — a failed read
     is not the same as detecting adversarial intent."""
     fake_provider.add_response("not json at all")

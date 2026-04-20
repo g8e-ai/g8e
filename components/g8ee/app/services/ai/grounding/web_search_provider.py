@@ -429,8 +429,8 @@ class WebSearchProvider:
                     attempt + 1, WEB_SEARCH_CLIENT_MAX_RETRIES + 1, e,
                 )
             except Exception as e:
-                logger.error("[WEB_SEARCH] Unexpected error: %s", e)
-                return SearchWebResult(success=False, query=query, error=str(e))
+                logger.error("[WEB_SEARCH] Unexpected error: %s", e, exc_info=True)
+                return SearchWebResult(success=False, query=query, error=f"Web search failed: {e}. Retry or use alternative information source.")
 
             attempt += 1
             if attempt <= WEB_SEARCH_CLIENT_MAX_RETRIES:

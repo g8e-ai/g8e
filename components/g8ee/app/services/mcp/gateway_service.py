@@ -17,6 +17,8 @@ import asyncio
 import logging
 from typing import Any
 
+from pydantic import BaseModel
+
 from app.constants.prompts import AgentMode
 from app.constants.settings import MCP_TOOL_CALL_TIMEOUT_SECONDS
 from app.constants.status import OperatorStatus
@@ -182,8 +184,8 @@ class MCPGatewayService:
             is_error = True
         elif hasattr(result, "output") and result.output:
             text_content = str(result.output)
-        elif hasattr(result, "flatten_for_wire"):
-            text_content = result.flatten_for_wire()
+        elif isinstance(result, BaseModel):
+            text_content = str(result.model_dump(mode="json"))
         else:
             text_content = str(result)
 

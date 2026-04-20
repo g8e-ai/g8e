@@ -27,7 +27,7 @@ from app.constants import (
     InternalApiPaths,
 )
 from app.errors import ConfigurationError, NetworkError
-from app.models.events import BackgroundEvent, SessionEvent
+from app.models.events import BackgroundEvent, BackgroundEventWire, SessionEvent, SessionEventWire
 from app.models.http_context import G8eHttpContext
 from app.models.g8ed_client import (
     GrantIntentResponse,
@@ -36,6 +36,7 @@ from app.models.g8ed_client import (
     RevokeIntentResponse,
     SSEPushResponse,
 )
+from app.services.protocols import OperatorDataServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,10 @@ def get_g8ed_url(settings: G8eePlatformSettings) -> str:
 
 class InternalHttpClient:
 
-    def __init__(self, settings: G8eePlatformSettings):
+    def __init__(self, settings: G8eePlatformSettings, operator_data_service: OperatorDataServiceProtocol | None = None):
         self.g8ed_url = get_g8ed_url(settings)
         self._settings = settings
+        self._operator_data_service: OperatorDataServiceProtocol | None = operator_data_service
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.g8ed_url,
@@ -78,6 +80,10 @@ class InternalHttpClient:
         """Access the underlying HTTP client."""
         return self._http
 
+    def set_operator_data_service(self, operator_data_service: OperatorDataServiceProtocol) -> None:
+        """Inject operator_data_service after construction to resolve circular dependency."""
+        self._operator_data_service = operator_data_service
+
     def _auth_headers(self) -> dict[str, str]:
         token = self.settings.auth.internal_auth_token
         if not token:
@@ -106,7 +112,12 @@ class InternalHttpClient:
         is preserved in the error details so real outages are never collapsed
         into the empty-fan-out success shape.
         """
-        wire = event.flatten_for_wire()
+        wire_model = (
+            SessionEventWire.from_session_event(event)
+            if isinstance(event, SessionEvent)
+            else BackgroundEventWire.from_background_event(event)
+        )
+        wire = wire_model.model_dump(mode="json")
         web_session_id = wire.get("web_session_id")
         event_type = wire.get("event", {}).get("type") or "None"
 
@@ -178,7 +189,7 @@ class InternalHttpClient:
 
             response = await self._http.post(
                 (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_GRANT_INTENT).format(operator_id=operator_id),
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers=self._auth_headers(),
                 context=context,
             )
@@ -228,7 +239,7 @@ class InternalHttpClient:
 
             response = await self._http.post(
                 (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_REVOKE_INTENT).format(operator_id=operator_id),
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers=self._auth_headers(),
                 context=context,
             )
@@ -257,9 +268,13 @@ class InternalHttpClient:
         context: G8eHttpContext,
     ) -> bool:
         """Delegate to OperatorDataService for proper domain separation."""
-        from app.main import app  # Import here to avoid circular dependency
+        if self._operator_data_service is None:
+            raise ConfigurationError(
+                "operator_data_service not injected into InternalHttpClient",
+                component=ComponentName.G8EE,
+            )
         
-        return await app.state.operator_data_service.bind_operators(
+        return await self._operator_data_service.bind_operators(
             operator_ids=operator_ids,
             web_session_id=web_session_id,
             context=context,

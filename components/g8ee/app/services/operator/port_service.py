@@ -100,9 +100,10 @@ class OperatorPortService:
                 target_operator=args.target_operator,
             )
         except (ValidationError, BusinessLogicError, ValueError) as e:
+            logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
             return PortCheckToolResult(
                 success=False,
-                error=str(e),
+                error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                 error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
@@ -260,6 +261,6 @@ class OperatorPortService:
             raise
         except Exception as e:
             logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
-            return PortCheckToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return PortCheckToolResult(success=False, error=f"Port check execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
         finally:
             self.execution_registry.release(execution_id)

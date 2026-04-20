@@ -262,13 +262,15 @@ Every component derives its own strongly-typed model classes from the canonical 
 
 Inside the application boundary, data lives as typed model instances — never as raw dicts or unstructured JSON. Models are only flattened to plain objects when crossing a boundary:
 
-| Boundary | g8ed method | g8ee method |
-|---|---|---|
-| Database write | `model.forDB()` | `model.flatten_for_db()` |
-| KV cache write | `model.forKV()` | `model.flatten_for_db()` (uses same method) |
-| Outbound HTTP / pub-sub | `model.forWire()` | `model.flatten_for_wire()` |
-| Browser response | `model.forClient()` | `model.model_dump()` |
-| LLM tool response | — | `model.flatten_for_llm()` |
+| Boundary | g8ee method |
+|---|---|
+| Database write | `model.model_dump(mode="json")` |
+| KV cache write | `model.model_dump(mode="json")` |
+| Outbound HTTP / pub-sub | `model.model_dump(mode="json")` |
+| Browser response | `model.model_dump()` |
+| LLM tool response | `model.model_dump(mode="json")` |
+
+All datetime fields use the `UTCDatetime` type which serializes to ISO 8601 with `Z` suffix (e.g., `2026-01-15T10:30:00.123456Z`).
 
 Passing raw dicts between services, storing unvalidated JSON in the database, or constructing ad-hoc objects at call sites are all prohibited. If a shape crosses a wire boundary, it must have a corresponding entry in `shared/models/` and a typed model class in the consuming component.
 

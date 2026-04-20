@@ -336,6 +336,7 @@ export class SimpleSuccessResponse extends G8eBaseModel {
 // count of active SSE connections the event was fanned out to. Zero is a
 // legitimate outcome for a BackgroundEvent when the user has no connected
 // sessions and MUST NOT be surfaced as an error.
+// Aligned with shared/models/wire/sse_responses.json (sse_push_response)
 
 export class SSEPushResponse extends G8eBaseModel {
     static fields = {

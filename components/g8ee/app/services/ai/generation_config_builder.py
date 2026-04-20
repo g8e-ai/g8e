@@ -226,10 +226,6 @@ class AIGenerationConfigBuilder:
             response_format=response_format,
         )
 
-        logger.info(
-            f" [BUILD_CONFIG] lite model={model}, max_tokens={effective_max_tokens}"
-        )
-
     @staticmethod
     def build_config(
         model: str,

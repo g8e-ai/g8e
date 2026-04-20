@@ -51,7 +51,7 @@ from app.models.investigations import (
     ConversationMessageMetadata,
 )
 from app.llm.prompts import build_modular_system_prompt
-from app.llm.utils import resolve_model
+from app.llm.utils import resolve_model, ModelOverrideResolver
 
 from ..infra.g8ed_event_service import EventService
 from .agent import g8eEngine
@@ -104,8 +104,7 @@ class ChatPipelineService:
         request_settings: G8eeUserSettings,
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
-        llm_primary_model: str,
-        llm_assistant_model: str,
+        model_overrides: ModelOverrideResolver,
     ) -> AgentStreamContext:
         """Assemble all inputs required for a chat turn.
 
@@ -174,7 +173,7 @@ class ChatPipelineService:
             conversation_history=prior_history,
             attachments=attachments,
             settings=request_settings,
-            model_override=llm_primary_model,
+            model_override=model_overrides.for_triage(),
         )
         triage_result = await self.triage_agent.triage(triage_request)
 
@@ -182,8 +181,8 @@ class ChatPipelineService:
 
         model_to_use = resolve_model(
             tier="primary" if needs_main_model else "assistant",
-            primary_override=llm_primary_model,
-            assistant_override=llm_assistant_model,
+            primary_override=model_overrides.for_main_generation(needs_main_model=True),
+            assistant_override=model_overrides.for_main_generation(needs_main_model=False),
             settings_primary_model=request_settings.llm.primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
         )
@@ -456,14 +455,17 @@ class ChatPipelineService:
         logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
+        model_overrides = ModelOverrideResolver(
+            primary_model=llm_primary_model,
+            assistant_model=llm_assistant_model,
+        )
         ctx = await self._prepare_chat_context(
             message=message,
             g8e_context=g8e_context,
             request_settings=resolved_settings,
             attachments=attachments,
             sentinel_mode=sentinel_mode,
-            llm_primary_model=llm_primary_model,
-            llm_assistant_model=llm_assistant_model,
+            model_overrides=model_overrides,
         )
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 

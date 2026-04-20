@@ -52,9 +52,9 @@ UTCDatetime = Annotated[
 def recursive_serialize(value: Any) -> Any:
     """Recursively convert Pydantic models to plain dicts for boundary crossing.
 
-    Used by flatten_for_db(), flatten_for_llm(), and flatten_for_wire(). Not for
-    use inside the application boundary — models stay as models until a boundary
-    is crossed.
+    Intended for dict/list inputs only (e.g., raw DB responses). For models,
+    use ``model.model_dump(mode="json")`` directly. Used by CacheAsideService
+    to flatten datetime-bearing dicts returned from the DB (cache_aside.py:281).
     """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json", exclude_none=True)
@@ -78,16 +78,15 @@ class G8eBaseModel(BaseModel):
 
     Enum fields remain enum instances inside the application boundary. They are
     only coerced to their string values when crossing a wire/DB/LLM boundary
-    via the ``flatten_for_*`` methods (which call ``recursive_serialize`` with
-    ``mode="json"``). This preserves typed-object invariants required by the
-    developer guide: identity comparisons (``is``/``in``) and ``match``
+    via ``model.model_dump(mode="json")``. This preserves typed-object invariants
+    required by the developer guide: identity comparisons (``is``/``in``) and ``match``
     statements on enum-typed fields work uniformly whether the object was
     constructed in memory or parsed from a wire payload.
 
-    Boundary methods — use these instead of calling model_dump() directly at boundaries:
-    - ``flatten_for_llm()``  — before Part.from_tool_response in agent.py
-    - ``flatten_for_db()``   — before db_client.create_document / update_document
-    - ``flatten_for_wire()`` — before pubsub_client.publish / outbound HTTP POST to external services
+    Boundary serialization — use ``model.model_dump(mode="json")`` at all boundaries:
+    - Wire boundary (pubsub_client.publish, outbound HTTP POST): ``model.model_dump(mode="json")``
+    - DB boundary (db_client.create_document / update_document): ``model.model_dump(mode="json")``
+    - LLM boundary (before Part.from_tool_response in agent.py): ``model.model_dump(mode="json")``
     """
 
     model_config = ConfigDict(
@@ -102,27 +101,6 @@ class G8eBaseModel(BaseModel):
     def model_dump_json(self, **kwargs: Any) -> str:
         kwargs.setdefault("exclude_none", True)
         return super().model_dump_json(**kwargs)
-
-    def flatten_for_llm(self) -> dict[str, Any]:
-        """Serialize for the LLM boundary (before Part.from_tool_response).
-
-        Subclasses override to control exactly what the LLM sees.
-        """
-        return recursive_serialize(self)
-
-    def flatten_for_db(self) -> dict[str, Any]:
-        """Serialize for the DB write boundary (before create_document / update_document).
-
-        Subclasses override to control exactly what is persisted.
-        """
-        return recursive_serialize(self)
-
-    def flatten_for_wire(self) -> dict[str, Any]:
-        """Serialize for the HTTP/pub-sub wire boundary (before any outbound payload).
-
-        Subclasses override to control exactly what goes on the wire.
-        """
-        return recursive_serialize(self)
 
 
 class G8eTimestampedModel(G8eBaseModel):

@@ -464,7 +464,7 @@ async def execute_turn_tool_calls(
             data=tool_result.result_info,
         )
 
-        flattened = tool_result.result.flatten_for_llm()
+        flattened = tool_result.result.model_dump(mode="json")
         logger.info(
             "[FUNCTION_RESPONSE] %s: success=%s output_len=%d exit_code=%s",
             tool_result.tool_name,

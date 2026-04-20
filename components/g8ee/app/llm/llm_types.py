@@ -251,7 +251,7 @@ class ToolGroup(G8eBaseModel):
     tools: list[ToolDeclaration] = []
     google_search: bool = False
 
-    def flatten_for_llm(self) -> list:
+    def to_genai_tools(self) -> list:
         """Convert ToolGroup to google.genai Tool format for LLM boundary."""
         from app.llm.providers.gemini import genai_types
 

@@ -94,12 +94,12 @@ class TestErrorCauseDetail:
         assert detail.cause_message == "something went wrong"
         assert detail.cause_stack_trace == ["line 1", "line 2"]
 
-    def test_flatten_for_wire_includes_all_fields(self):
+    def test_wire_dump_includes_all_fields(self):
         detail = ErrorCauseDetail(
             cause_message="msg",
             cause_stack_trace=["frame"],
         )
-        wire = detail.flatten_for_wire()
+        wire = detail.model_dump(mode="json")
         assert wire["cause_message"] == "msg"
         assert wire["cause_stack_trace"] == ["frame"]
 
@@ -139,20 +139,20 @@ class TestErrorDetail:
         assert detail.cause is not None
         assert detail.cause.cause_message == "root"
 
-    def test_flatten_for_wire_omits_none(self):
+    def test_wire_dump_omits_none(self):
         detail = ErrorDetail(
             code=ErrorCode.GENERIC_ERROR,
             message="test",
             category=ErrorCategory.INTERNAL,
             source="test",
         )
-        wire = detail.flatten_for_wire()
+        wire = detail.model_dump(mode="json")
         assert "component" not in wire
         assert "trace_id" not in wire
         assert "execution_id" not in wire
         assert "cause" not in wire
 
-    def test_flatten_for_wire_includes_set_fields(self):
+    def test_wire_dump_includes_set_fields(self):
         detail = ErrorDetail(
             code=ErrorCode.VALIDATION_ERROR,
             message="bad input",
@@ -161,7 +161,7 @@ class TestErrorDetail:
             trace_id="trace-1",
             source="test",
         )
-        wire = detail.flatten_for_wire()
+        wire = detail.model_dump(mode="json")
         assert wire["component"] == "api"
         assert wire["trace_id"] == "trace-1"
 
@@ -193,7 +193,7 @@ class TestErrorBodyAndResponse:
             severity=ErrorSeverity.MEDIUM,
         )
         response = ErrorResponse(error=body, trace_id="trace-1")
-        wire = response.flatten_for_wire()
+        wire = response.model_dump(mode="json")
         assert "error" in wire
         assert wire["trace_id"] == "trace-1"
         assert "execution_id" not in wire
@@ -205,7 +205,7 @@ class TestErrorBodyAndResponse:
             category=ErrorCategory.INTERNAL,
             severity=ErrorSeverity.MEDIUM,
         )
-        wire = ErrorResponse(error=body).flatten_for_wire()
+        wire = ErrorResponse(error=body).model_dump(mode="json")
         assert "trace_id" not in wire
         assert "execution_id" not in wire
 

@@ -19,7 +19,7 @@ communication via g8es pub/sub.
 """
 
 from datetime import datetime
-from typing import Union
+from typing import Literal, Union
 from uuid import uuid4
 
 from pydantic import Field, field_serializer, field_validator
@@ -28,8 +28,25 @@ from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatTy
 
 from .base import G8eBaseModel, UTCDatetime, _to_iso_z
 from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
+from .mcp import JSONRPCRequest
 
 from app.utils.timestamp import now, parse_iso
+
+# Import outbound payload types
+from app.models.command_payloads import (
+    G8eCommandPayload,
+    CommandPayload,
+    CommandCancelPayload,
+    FileEditPayload,
+    FsListPayload,
+    FsReadPayload,
+    FetchLogsPayload,
+    FetchHistoryPayload,
+    FetchFileHistoryPayload,
+    FetchFileDiffPayload,
+    RestoreFilePayload,
+    DirectCommandAuditPayload,
+)
 
 
 class ExecutionResultsPayload(G8eBaseModel):
@@ -416,6 +433,24 @@ G8eoResultPayload = Union[
 ]
 
 
+# Union type for all outbound payloads from g8ee to g8eo
+# Uses discriminator field 'payload_type' for type-safe parsing
+G8eOutboundPayload = Union[
+    CommandPayload,
+    CommandCancelPayload,
+    FileEditPayload,
+    FsListPayload,
+    FsReadPayload,
+    FetchLogsPayload,
+    FetchHistoryPayload,
+    FetchFileHistoryPayload,
+    FetchFileDiffPayload,
+    RestoreFilePayload,
+    DirectCommandAuditPayload,
+    JSONRPCRequest,
+]
+
+
 class G8eoResultEnvelope(G8eBaseModel):
     """Inbound-only envelope parsed from the g8eo results pub/sub channel.
 
@@ -434,7 +469,11 @@ class G8eoResultEnvelope(G8eBaseModel):
 
 
 class G8eMessage(G8eBaseModel):
-    """Standardized message for g8es pub/sub communication between g8e components."""
+    """Standardized message for g8es pub/sub communication between g8e components.
+    
+    The payload field uses a Union discriminator pattern for type-safe parsing.
+    Consumers can parse inbound messages without knowing the concrete type in advance.
+    """
 
     id: str = Field(..., description="Unique message identifier")
     timestamp: UTCDatetime = Field(default_factory=now, description="When the message was created (UTC)")
@@ -449,10 +488,8 @@ class G8eMessage(G8eBaseModel):
     operator_session_id: str | None = Field(default=None, description="Operator session ID for g8eo Operator identification")
     operator_id: str | None = Field(default=None, description="Operator ID for g8eo Operator identification")
     api_key: str | None = Field(default=None, description="Operator API key carried on pub/sub messages for identity continuity")
-    payload: G8eBaseModel | None = Field(default=None, description="Typed payload for this message")
-
-    @field_serializer("payload")
-    def serialize_payload(self, v: G8eBaseModel | None) -> dict | None:
-        if v is None:
-            return None
-        return v.flatten_for_wire()
+    payload: G8eOutboundPayload | None = Field(
+        default=None, 
+        discriminator="payload_type",
+        description="Typed payload for this message — uses discriminator for type-safe parsing"
+    )

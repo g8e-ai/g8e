@@ -12,7 +12,40 @@
 # limitations under the License.
 
 import ipaddress
+from dataclasses import dataclass
 from urllib.parse import urlparse
+
+
+@dataclass(frozen=True)
+class ModelOverrideResolver:
+    """Encapsulates primary and assistant model overrides to prevent conflation.
+
+    This prevents the bug where the wrong override string is passed to the wrong
+    consumer (e.g., passing primary model to triage which should use assistant model).
+
+    Users can assign any model to any role - this class does not validate model
+    capabilities, it only ensures the correct override string reaches the correct consumer.
+    """
+
+    primary_model: str | None
+    assistant_model: str | None
+
+    def for_triage(self) -> str | None:
+        """Returns the model override for triage (assistant tier)."""
+        return self.assistant_model
+
+    def for_main_generation(
+        self, needs_primary: bool
+    ) -> str | None:
+        """Returns the appropriate model override based on triage result.
+
+        Args:
+            needs_primary: True if triage classified the request as COMPLEX
+
+        Returns:
+            The primary model override if needs_primary, otherwise assistant model override
+        """
+        return self.primary_model if needs_primary else self.assistant_model
 
 
 def schema_to_dict(schema) -> dict:

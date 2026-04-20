@@ -122,9 +122,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
                     success=False, 
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -270,7 +271,7 @@ class OperatorFileService:
             )
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_file_edit: %s", e, exc_info=True)
-            return FileEditResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FileEditResult(success=False, error=f"File edit execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
 
     async def execute_fetch_file_history(
         self,
@@ -291,9 +292,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileHistoryToolResult(
                     success=False,
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -388,7 +390,7 @@ class OperatorFileService:
                 self.execution_registry.release(exec_id)
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True)
-            return FetchFileHistoryToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FetchFileHistoryToolResult(success=False, error=f"File history fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
 
     async def execute_fetch_file_diff(
         self,
@@ -409,9 +411,10 @@ class OperatorFileService:
                     target_operator=args.target_operator,
                 )
             except Exception as e:
+                logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileDiffToolResult(
                     success=False,
-                    error=str(e),
+                    error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
@@ -507,4 +510,4 @@ class OperatorFileService:
                 self.execution_registry.release(exec_id)
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e, exc_info=True)
-            return FetchFileDiffToolResult(success=False, error=str(e), error_type=CommandErrorType.EXECUTION_ERROR)
+            return FetchFileDiffToolResult(success=False, error=f"File diff fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)

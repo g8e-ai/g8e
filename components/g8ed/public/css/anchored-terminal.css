@@ -260,7 +260,6 @@
     align-items: center;
     padding: 6px 12px;
     margin: 4px 0;
-    width: 100%;
     font-family: var(--font-sans, system-ui, sans-serif);
     font-size: 12px;
     transition: opacity 0.3s ease, transform 0.3s ease;

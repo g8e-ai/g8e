@@ -92,8 +92,8 @@ def test_build_tool_call_request_serialization():
     )
     
     # Serialize to wire format (what gets sent to g8ep)
-    wire_payload = g8e_msg.flatten_for_wire()
-    
+    wire_payload = g8e_msg.model_dump(mode="json")
+
     # Verify the method field is preserved in the serialized payload
     assert "payload" in wire_payload
     assert wire_payload["payload"]["method"] == "tools/call"

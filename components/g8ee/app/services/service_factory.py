@@ -153,6 +153,9 @@ class ServiceFactory:
             internal_http_client=core_services['internal_http_client'],  # type: ignore[arg-type]
         )
 
+        # Inject operator_data_service into internal_http_client to resolve circular dependency
+        core_services['internal_http_client'].set_operator_data_service(operator_data_service)
+
         memory_data_service = MemoryDataService(
             cache_aside_service=cache_aside_service
         )

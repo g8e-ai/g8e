@@ -608,7 +608,7 @@ class GeminiProvider(LLMProvider):
         genai_tools = []
         if primary_llm_settings.tools:
             for tool_group in primary_llm_settings.tools:
-                genai_tools.extend(tool_group.flatten_for_llm())
+                genai_tools.extend(tool_group.to_genai_tools())
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
         try:
@@ -637,7 +637,7 @@ class GeminiProvider(LLMProvider):
         genai_tools = []
         if primary_llm_settings.tools:
             for tool_group in primary_llm_settings.tools:
-                genai_tools.extend(tool_group.flatten_for_llm())
+                genai_tools.extend(tool_group.to_genai_tools())
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
         try:

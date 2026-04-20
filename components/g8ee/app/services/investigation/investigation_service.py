@@ -370,7 +370,7 @@ class InvestigationService:
             patch["technical_context"] = investigation.technical_context
         if "sentinel_mode" in changes:
             patch["sentinel_mode"] = investigation.sentinel_mode
-        patch["history_trail"] = [e.flatten_for_db() for e in investigation.history_trail]
+        patch["history_trail"] = [e.model_dump(mode="json") for e in investigation.history_trail]
 
         await self.investigation_data_service.update_investigation_raw(investigation_id, patch)
         logger.info(f"Updated investigation {investigation_id}")

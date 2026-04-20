@@ -705,10 +705,10 @@ class AIToolService:
             )
             
         except Exception as e:
-            logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e)
+            logger.error("[QUERY_INVESTIGATION_CONTEXT] Failed: %s", e, exc_info=True)
             return InvestigationContextResult(
                 success=False,
-                error=str(e),
+                error=f"Investigation context query failed: {e}. Retry or check investigation ID.",
                 error_type=CommandErrorType.EXECUTION_ERROR,
                 data_type=args.data_type,
                 investigation_id=investigation_id,

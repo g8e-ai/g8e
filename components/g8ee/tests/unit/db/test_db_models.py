@@ -49,14 +49,14 @@ class TestFieldFilter:
         f = FieldFilter(field="status", op="in", value=[InvestigationStatus.OPEN, InvestigationStatus.CLOSED])
         assert f.value == [InvestigationStatus.OPEN, InvestigationStatus.CLOSED]
 
-    def test_flatten_for_db_produces_plain_dict(self):
+    def test_db_dump_produces_plain_dict(self):
         f = FieldFilter(field="case_id", op="==", value="case-abc")
-        d = f.flatten_for_db()
+        d = f.model_dump(mode="json")
         assert d == {"field": "case_id", "op": "==", "value": "case-abc"}
 
-    def test_flatten_for_wire_produces_wire_safe_dict(self):
+    def test_wire_dump_produces_wire_safe_dict(self):
         f = FieldFilter(field="status", op="==", value=InvestigationStatus.OPEN)
-        d = f.flatten_for_wire()
+        d = f.model_dump(mode="json")
         assert isinstance(d, dict)
         assert "field" in d and "op" in d and "value" in d
 

@@ -835,13 +835,6 @@ class TestSessionTypeMatchesSharedJSON:
     def test_operator_value(self, status):
         assert status["session.type"]["operator"] == SessionType.OPERATOR
 
-    def test_web_is_string(self):
-        assert isinstance(SessionType.WEB, str)
-        assert str(SessionType.WEB.value) == "web"
-
-    def test_operator_is_string(self):
-        assert isinstance(SessionType.OPERATOR, str)
-        assert str(SessionType.OPERATOR.value) == "operator"
 
     def test_all_members_covered(self, status):
         json_keys = set(status["session.type"].keys())

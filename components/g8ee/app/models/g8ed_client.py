@@ -35,6 +35,8 @@ class SSEPushResponse(G8eBaseModel):
     the count of active SSE connections the event was fanned out to — zero is a
     legitimate outcome for a BackgroundEvent when the user has no connected
     sessions, not an error.
+
+    Canonical wire shape: shared/models/wire/sse_responses.json (sse_push_response)
     """
 
     success: bool = Field(description="Whether the push was accepted and processed")

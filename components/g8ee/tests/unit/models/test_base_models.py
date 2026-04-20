@@ -102,37 +102,35 @@ class TestG8eBaseModel:
         assert '"name"' in json_str
         assert '"value"' not in json_str
 
-    def test_flatten_for_llm_returns_dict(self):
+    def test_llm_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_llm()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
         assert result["value"] == 42
 
-    def test_flatten_for_db_returns_dict(self):
+    def test_db_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_db()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
 
-    def test_flatten_for_wire_returns_dict(self):
+    def test_wire_dump_returns_dict(self):
         m = _SampleModel(name="test", value=42)
-        result = m.flatten_for_wire()
+        result = m.model_dump(mode="json")
         assert isinstance(result, dict)
         assert result["name"] == "test"
 
     def test_flatten_excludes_none_fields(self):
         m = _SampleModel(name="test", value=None)
-        assert "value" not in m.flatten_for_llm()
-        assert "value" not in m.flatten_for_db()
-        assert "value" not in m.flatten_for_wire()
+        assert "value" not in m.model_dump(mode="json")
 
     def test_flatten_serializes_nested_model(self):
         class _Outer(G8eBaseModel):
             inner: _SampleModel
 
         m = _Outer(inner=_SampleModel(name="nested", value=7))
-        result = m.flatten_for_wire()
+        result = m.model_dump(mode="json")
         assert isinstance(result["inner"], dict)
         assert result["inner"]["name"] == "nested"
 
@@ -344,9 +342,9 @@ class TestG8eIdentifiableModel:
         id_val = self._IdentifiableChild.generate_id(prefix="test")
         assert id_val.startswith("test-")
 
-    def test_flatten_for_db_includes_id(self):
+    def test_db_dump_includes_id(self):
         m = self._IdentifiableChild(label="x")
-        result = m.flatten_for_db()
+        result = m.model_dump(mode="json")
         assert "id" in result
         assert result["id"] == m.id
 
@@ -418,7 +416,7 @@ class TestG8eAuditableModel:
         assert m.updated_by == "updater-svc"
         assert m.updated_at is not None
 
-        dumped = m.model_dump()
+        dumped = m.model_dump(mode="json")
         assert dumped["created_by"] == "creator-svc"
         assert dumped["updated_by"] == "updater-svc"
         assert isinstance(dumped["created_at"], str)

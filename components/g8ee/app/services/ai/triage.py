@@ -88,7 +88,10 @@ class TriageAgent:
 
             if not model:
                 logger.warning("[TRIAGE] No model available, defaulting to complex")
-                return self._fallback_result("No model configured for triage.")
+                return self._escalation_result(
+                    "Triage unavailable: no assistant model configured. Configure an assistant model in settings or provide model_override to enable triage.",
+                    error_code="MODEL_UNAVAILABLE",
+                )
 
             conversation_tail = self._build_conversation_tail(request.conversation_history)
 
@@ -113,7 +116,12 @@ class TriageAgent:
                 result = self._parse_response(response.text)
             except OllamaEmptyResponseError as exc:
                 logger.warning("[TRIAGE] No response from assistant model, defaulting to complex: %s", exc)
-                return self._fallback_result("Could not determine intent (no model response).")
+                return self._escalation_result(
+                    f"Triage unavailable: assistant model returned empty response ({exc}). Check model availability and connectivity, then retry.",
+                    error_code="MODEL_EMPTY_RESPONSE",
+                    error_class=exc.__class__.__name__,
+                    error_message=str(exc),
+                )
 
             try:
 
@@ -127,11 +135,21 @@ class TriageAgent:
                 return result
             except (ValueError, Exception) as e:
                 logger.warning("[TRIAGE] Failed to parse model response: %s. Response: %r", e, response.text)
-                return self._fallback_result("Could not parse intent summary from model response.")
+                return self._escalation_result(
+                    f"Triage unavailable: failed to parse model response ({e}). Escalating to full LLM for complexity classification.",
+                    error_code="PARSE_FAILURE",
+                    error_class=e.__class__.__name__,
+                    error_message=str(e),
+                )
 
         except Exception as exc:
             logger.exception("[TRIAGE] Classification failed, defaulting to complex")
-            return self._fallback_result(f"Error during triage: {exc}")
+            return self._escalation_result(
+                f"Triage unavailable: classification failed ({exc}). Escalating to full LLM for complexity classification. Check provider configuration and retry.",
+                error_code="CLASSIFICATION_ERROR",
+                error_class=exc.__class__.__name__,
+                error_message=str(exc),
+                )
 
     def _build_conversation_tail(self, history: list[ConversationHistoryMessage]) -> str:
         """Return the last few turns of conversation as a compact string."""
@@ -150,8 +168,18 @@ class TriageAgent:
 
         return "\n".join(lines) or TRIAGE_EMPTY_CONVERSATION
 
-    def _fallback_result(self, summary: str) -> TriageResult:
-        """Create a safe fallback result when triage fails."""
+    def _escalation_result(
+        self,
+        summary: str,
+        error_code: str | None = None,
+        error_class: str | None = None,
+        error_message: str | None = None,
+    ) -> TriageResult:
+        """Create an escalation result when triage fails.
+        
+        When triage cannot determine complexity, we escalate to COMPLEX (full LLM)
+        as a safe default. This is more conservative than assuming SIMPLE.
+        """
         return TriageResult(
             complexity=TriageComplexityClassification.COMPLEX,
             complexity_confidence=TriageConfidence.LOW,
@@ -160,6 +188,9 @@ class TriageAgent:
             intent_summary=summary,
             request_posture=TriageRequestPosture.NORMAL,
             posture_confidence=TriageConfidence.LOW,
+            error_code=error_code,
+            error_class=error_class,
+            error_message=error_message,
         )
 
     def _parse_response(self, text: str) -> TriageResult:

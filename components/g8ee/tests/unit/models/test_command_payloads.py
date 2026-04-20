@@ -53,36 +53,36 @@ class TestFsListPayload:
     def test_is_g8e_base_model(self):
         assert issubclass(FsListPayload, G8eBaseModel)
 
-    def test_flatten_for_wire_includes_set_fields(self):
+    def test_wire_dump_includes_set_fields(self):
         p = FsListPayload(path="/app", execution_id="exec-1", max_depth=1, max_entries=50)
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert wire["path"] == "/app"
         assert wire["execution_id"] == "exec-1"
         assert wire["max_depth"] == 1
         assert wire["max_entries"] == 50
 
-    def test_flatten_for_wire_excludes_none_fields(self):
+    def test_wire_dump_excludes_none_fields(self):
         p = FsListPayload(path="/app")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "execution_id" not in wire
         assert "max_depth" not in wire
         assert "max_entries" not in wire
 
-    def test_flatten_for_wire_only_canonical_fields(self):
+    def test_wire_dump_only_canonical_fields(self):
         p = FsListPayload(path=".", execution_id="x", max_depth=0, max_entries=100)
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"path", "execution_id", "max_depth", "max_entries"}
 
-    def test_flatten_for_wire_no_non_canonical_fields(self):
+    def test_wire_dump_no_non_canonical_fields(self):
         p = FsListPayload(path="/tmp")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
         p = FsListPayload(path="/tmp", user_id="u-1", source="tool_call", requested_at="2026-01-01T00:00:00Z")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire
         assert "requested_at" not in wire
@@ -113,34 +113,34 @@ class TestFsReadPayload:
     def test_is_g8e_base_model(self):
         assert issubclass(FsReadPayload, G8eBaseModel)
 
-    def test_flatten_for_wire_includes_set_fields(self):
+    def test_wire_dump_includes_set_fields(self):
         p = FsReadPayload(path="/etc/passwd", execution_id="exec-2", max_size=4096)
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert wire["path"] == "/etc/passwd"
         assert wire["execution_id"] == "exec-2"
         assert wire["max_size"] == 4096
 
-    def test_flatten_for_wire_excludes_none_optional_fields(self):
+    def test_wire_dump_excludes_none_optional_fields(self):
         p = FsReadPayload(path="/app/log.txt")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "execution_id" not in wire
         assert "max_size" not in wire
 
-    def test_flatten_for_wire_only_canonical_fields(self):
+    def test_wire_dump_only_canonical_fields(self):
         p = FsReadPayload(path="/app/main.py", execution_id="e", max_size=102400)
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"path", "execution_id", "max_size"}
 
-    def test_flatten_for_wire_no_non_canonical_fields(self):
+    def test_wire_dump_no_non_canonical_fields(self):
         p = FsReadPayload(path="/var/log/app.log")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
         p = FsReadPayload(path="/tmp/test.txt", user_id="u-1", source="tool_call")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire
 
@@ -168,33 +168,33 @@ class TestFetchLogsPayload:
     def test_is_g8e_base_model(self):
         assert issubclass(FetchLogsPayload, G8eBaseModel)
 
-    def test_flatten_for_wire_includes_set_fields(self):
+    def test_wire_dump_includes_set_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="raw")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-xyz"
         assert wire["sentinel_mode"] == "raw"
 
-    def test_flatten_for_wire_excludes_none_sentinel_mode(self):
+    def test_wire_dump_excludes_none_sentinel_mode(self):
         p = FetchLogsPayload(execution_id="exec-xyz")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-xyz"
         assert "sentinel_mode" not in wire
 
-    def test_flatten_for_wire_only_canonical_fields(self):
+    def test_wire_dump_only_canonical_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="scrubbed")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"execution_id", "sentinel_mode"}
 
-    def test_flatten_for_wire_no_non_canonical_fields(self):
+    def test_wire_dump_no_non_canonical_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
         p = FetchLogsPayload(execution_id="exec-xyz", source="tool_call", requested_at="2026-01-01T00:00:00Z")
-        wire = p.flatten_for_wire()
+        wire = p.model_dump(mode="json")
         assert "source" not in wire
         assert "requested_at" not in wire
 

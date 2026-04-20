@@ -558,7 +558,7 @@ class TestG8edHttpClientTypedModels:
         )
         await client.grant_intent("op-123", "ec2_discovery", context)
 
-        expected = IntentRequestPayload(intent="ec2_discovery").flatten_for_wire()
+        expected = IntentRequestPayload(intent="ec2_discovery").model_dump(mode="json")
         assert mock_http._captured_json_data == expected
 
     async def test_revoke_intent_sends_typed_request_payload(self, mock_settings):
@@ -580,7 +580,7 @@ class TestG8edHttpClientTypedModels:
         )
         await client.revoke_intent("op-123", "s3_write", context)
 
-        expected = IntentRequestPayload(intent="s3_write").flatten_for_wire()
+        expected = IntentRequestPayload(intent="s3_write").model_dump(mode="json")
         assert mock_http._captured_json_data == expected
 
     async def test_grant_intent_response_parses_granted_intents(self):
@@ -643,10 +643,10 @@ class TestG8edHttpClientBindOperatorUsesEnum:
 
         client = self._make_client(_MockHTTP(), mock_settings)
         
-        # Mock app.state.operator_data_service
-        from app.main import app
-        app.state.operator_data_service = MagicMock()
-        app.state.operator_data_service.bind_operators = AsyncMock(return_value=True)
+        # Mock operator_data_service and inject it
+        mock_operator_service = MagicMock()
+        mock_operator_service.bind_operators = AsyncMock(return_value=True)
+        client.set_operator_data_service(mock_operator_service)
         
         context = G8eHttpContext(
             web_session_id="web-session-test",

@@ -21,6 +21,7 @@ import logging
 
 from app.constants.events import EventType
 from app.constants.status import ComponentName, AITaskId
+from app.models.command_payloads import DirectCommandAuditPayload
 from app.models.pubsub_messages import G8eMessage
 from app.models.http_context import G8eHttpContext
 from app.services.protocols import PubSubServiceProtocol
@@ -110,12 +111,11 @@ class OperatorLFAAService:
             web_session_id=g8e_context.web_session_id,
             operator_session_id=bound.operator_session_id,
             operator_id=bound.operator_id,
-            payload={  # type: ignore[arg-type]
-                "command": command,
-                "execution_id": execution_id,
-                "operator_session_id": bound.operator_session_id,
-                "type": "direct_terminal_exec",
-            },
+            payload=DirectCommandAuditPayload(
+                command=command,
+                execution_id=execution_id,
+                operator_session_id=bound.operator_session_id,
+            ),
         )
         return await self.send_audit_event(g8e_message)
 

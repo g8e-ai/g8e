@@ -124,7 +124,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     ) -> bool:
         """Update Operator heartbeat and system info."""
         now_timestamp = now()
-        heartbeat_record = heartbeat.flatten_for_db()
+        heartbeat_record = heartbeat.model_dump(mode="json")
 
         system_info = OperatorSystemInfo(
             hostname=heartbeat.system_identity.hostname,
@@ -151,7 +151,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         update_data: dict[str, object] = {
             "last_heartbeat": now_timestamp,
             "updated_at": now_timestamp,
-            "system_info": system_info.flatten_for_db(),
+            "system_info": system_info.model_dump(mode="json"),
             "latest_heartbeat_snapshot": heartbeat_record,
             "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
             "investigation_id": investigation_id,
@@ -178,7 +178,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     ) -> bool:
         """Append command execution result to operator history."""
         now_timestamp = now()
-        result_record = command_result.flatten_for_db()
+        result_record = command_result.model_dump(mode="json")
 
         update_data: dict[str, object] = {
             "updated_at": now_timestamp,
@@ -217,7 +217,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             collection=self.collection,
             document_id=operator_id,
             array_field="activity_log",
-            items_to_add=[activity_entry.flatten_for_db()],
+            items_to_add=[activity_entry.model_dump(mode="json")],
             additional_updates={"updated_at": now()},
         )
 
@@ -258,7 +258,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
             response = await self.internal_http_client.post(  # type: ignore[reportUnknownMemberType]
                 "/api/operators/bind-all",
-                json_data=request_payload.flatten_for_wire(),
+                json_data=request_payload.model_dump(mode="json"),
                 headers={
                     INTERNAL_AUTH_HEADER: "internal-service",
                     WEB_SESSION_ID_HEADER: web_session_id,
