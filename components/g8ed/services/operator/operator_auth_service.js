@@ -385,7 +385,7 @@ export class OperatorAuthService {
 
         await this.operatorService.claimOperatorSlot(operator_id, {
             operator_session_id,
-            web_session_id: bound_web_session_id,
+            bound_web_session_id,
             system_info: parsedSystemInfo,
             operator_type: operator.operator_type || null,
             status: claimStatus,

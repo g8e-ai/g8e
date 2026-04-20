@@ -236,7 +236,7 @@ describe('OperatorAuthService', () => {
 
             expect(mocks.operatorService.claimOperatorSlot).toHaveBeenCalledWith(operatorId, expect.objectContaining({
                 operator_session_id: 'os-123',
-                web_session_id: 'ws-123',
+                bound_web_session_id: 'ws-123',
             }));
 
             expect(mocks.userService.updateUserOperator).toHaveBeenCalledWith(

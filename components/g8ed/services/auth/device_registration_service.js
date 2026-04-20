@@ -131,7 +131,7 @@ export class DeviceRegistrationService {
 
         const claimed = await this._operatorService.claimOperatorSlot(operator_id, {
             operator_session_id,
-            web_session_id,
+            bound_web_session_id: web_session_id,
             system_info,
             operator_type,
         });

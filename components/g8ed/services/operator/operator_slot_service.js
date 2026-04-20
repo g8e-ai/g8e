@@ -194,7 +194,7 @@ export class OperatorSlotService {
      * Claim an operator slot for an active session.
      * Authority for transitioning an AVAILABLE slot to ACTIVE.
      */
-    async claimSlot(operatorId, { operator_session_id, web_session_id, system_info, operator_type, status }) {
+    async claimSlot(operatorId, { operator_session_id, bound_web_session_id, system_info, operator_type, status }) {
         const ts = now();
         const info = system_info instanceof SystemInfo
             ? system_info
@@ -205,7 +205,7 @@ export class OperatorSlotService {
         const updateData = {
             status: status || OperatorStatus.ACTIVE,
             operator_session_id,
-            bound_web_session_id: web_session_id,
+            bound_web_session_id,
             system_info: info,
             claimed: true,
             updated_at: ts,
@@ -228,7 +228,7 @@ export class OperatorSlotService {
             actor: SourceComponent.G8ED,
             details: {
                 operator_session_id,
-                bound_web_session_id: web_session_id,
+                bound_web_session_id,
                 hostname: info.hostname,
                 fingerprint: info.system_fingerprint
             }

@@ -2,7 +2,7 @@
 
 # g8e
 
-### governance architecture for trustless environments
+**governance architecture for trustless environments**
 
 Self-hosted. Air-gap capable. Zero cloud dependencies.<br/>
 The AI reasons. You decide. The architecture enforces it.
