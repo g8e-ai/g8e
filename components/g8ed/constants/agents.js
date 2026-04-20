@@ -95,28 +95,3 @@ export const TribunalOutcome = Object.freeze({
     VERIFICATION_FAILED: _AGENTS['tribunal.outcome'].verification_failed,
 });
 
-/**
- * Agent Metadata
- * First-class persona definitions for all agents.
- * Each entry contains: id, display_name, icon, description, role, model_tier,
- * tools, identity, purpose, autonomy.
- */
-export const AgentMetadata = Object.freeze({
-    TRIAGE:              _AGENTS['agent.metadata'].triage,
-    SAGE:                _AGENTS['agent.metadata'].sage,
-    DASH:                _AGENTS['agent.metadata'].dash,
-    TRIBUNAL:            _AGENTS['agent.metadata'].tribunal,
-    AUDITOR:             _AGENTS['agent.metadata'].auditor,
-    SCRIBE:              _AGENTS['agent.metadata'].scribe,
-    AXIOM:               _AGENTS['agent.metadata'].axiom,
-    CONCORD:             _AGENTS['agent.metadata'].concord,
-    VARIANCE:            _AGENTS['agent.metadata'].variance,
-    PRAGMA:              _AGENTS['agent.metadata'].pragma,
-    NEMESIS:             _AGENTS['agent.metadata'].nemesis,
-    CODEX:               _AGENTS['agent.metadata'].codex,
-    JUDGE:               _AGENTS['agent.metadata'].judge,
-    WARDEN:              _AGENTS['agent.metadata'].warden,
-    WARDEN_COMMAND_RISK: _AGENTS['agent.metadata'].warden_command_risk,
-    WARDEN_ERROR:        _AGENTS['agent.metadata'].warden_error,
-    WARDEN_FILE_RISK:    _AGENTS['agent.metadata'].warden_file_risk,
-});

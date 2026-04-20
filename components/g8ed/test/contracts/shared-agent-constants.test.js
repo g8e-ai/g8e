@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, AgentMetadata, TribunalMember, VerifierReason } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, VerifierReason } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -104,61 +104,7 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
-    describe('AgentMetadata constants', () => {
-        it('TRIAGE metadata matches JSON', () => {
-            expect(AgentMetadata.TRIAGE).toEqual(_AGENTS['agent.metadata'].triage);
-        });
-        it('SAGE metadata matches JSON', () => {
-            expect(AgentMetadata.SAGE).toEqual(_AGENTS['agent.metadata'].sage);
-        });
-        it('DASH metadata matches JSON', () => {
-            expect(AgentMetadata.DASH).toEqual(_AGENTS['agent.metadata'].dash);
-        });
-        it('TRIBUNAL metadata matches JSON', () => {
-            expect(AgentMetadata.TRIBUNAL).toEqual(_AGENTS['agent.metadata'].tribunal);
-        });
-        it('AUDITOR metadata matches JSON', () => {
-            expect(AgentMetadata.AUDITOR).toEqual(_AGENTS['agent.metadata'].auditor);
-        });
-        it('SCRIBE metadata matches JSON', () => {
-            expect(AgentMetadata.SCRIBE).toEqual(_AGENTS['agent.metadata'].scribe);
-        });
-        it('AXIOM metadata matches JSON', () => {
-            expect(AgentMetadata.AXIOM).toEqual(_AGENTS['agent.metadata'].axiom);
-        });
-        it('CONCORD metadata matches JSON', () => {
-            expect(AgentMetadata.CONCORD).toEqual(_AGENTS['agent.metadata'].concord);
-        });
-        it('VARIANCE metadata matches JSON', () => {
-            expect(AgentMetadata.VARIANCE).toEqual(_AGENTS['agent.metadata'].variance);
-        });
-        it('PRAGMA metadata matches JSON', () => {
-            expect(AgentMetadata.PRAGMA).toEqual(_AGENTS['agent.metadata'].pragma);
-        });
-        it('NEMESIS metadata matches JSON', () => {
-            expect(AgentMetadata.NEMESIS).toEqual(_AGENTS['agent.metadata'].nemesis);
-        });
-        it('CODEX metadata matches JSON', () => {
-            expect(AgentMetadata.CODEX).toEqual(_AGENTS['agent.metadata'].codex);
-        });
-        it('JUDGE metadata matches JSON', () => {
-            expect(AgentMetadata.JUDGE).toEqual(_AGENTS['agent.metadata'].judge);
-        });
-        it('WARDEN metadata matches JSON', () => {
-            expect(AgentMetadata.WARDEN).toEqual(_AGENTS['agent.metadata'].warden);
-        });
-        it('WARDEN_COMMAND_RISK metadata matches JSON', () => {
-            expect(AgentMetadata.WARDEN_COMMAND_RISK).toEqual(_AGENTS['agent.metadata'].warden_command_risk);
-        });
-        it('WARDEN_ERROR metadata matches JSON', () => {
-            expect(AgentMetadata.WARDEN_ERROR).toEqual(_AGENTS['agent.metadata'].warden_error);
-        });
-        it('WARDEN_FILE_RISK metadata matches JSON', () => {
-            expect(AgentMetadata.WARDEN_FILE_RISK).toEqual(_AGENTS['agent.metadata'].warden_file_risk);
-        });
-    });
-
-    describe('AgentMetadata persona fields', () => {
+    describe('agent.metadata persona fields', () => {
         const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'tools', 'identity', 'purpose', 'autonomy'];
         const ALL_AGENT_KEYS = ['triage', 'sage', 'dash', 'tribunal', 'auditor', 'scribe', 'axiom', 'concord', 'variance', 'pragma', 'nemesis', 'codex', 'judge', 'warden', 'warden_command_risk', 'warden_error', 'warden_file_risk'];
 
