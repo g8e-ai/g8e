@@ -269,7 +269,11 @@ class OperatorHeartbeatService:
         try:
             await self.event_service.publish(event)
         except Exception as e:
-            logger.warning("[HEARTBEAT] SSE push failed (non-blocking): %s", e)
+            logger.warning(
+                "[HEARTBEAT] SSE push failed (non-blocking): %s",
+                e,
+                exc_info=True,
+            )
 
     @staticmethod
     def _build_heartbeat_event(

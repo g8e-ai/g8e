@@ -293,7 +293,7 @@ export class OperatorPanel {
         this.downloadCollapsible = document.getElementById('operator-download-collapsible');
         this.downloadCollapsibleBar = document.getElementById('operator-download-collapsible-bar');
         this.downloadCollapsibleContent = document.getElementById('operator-download-collapsible-content');
-        this.downloadSectionExpanded = true;
+        this.downloadSectionExpanded = false;
         this.downloadSectionPopulated = false;
 
         // Operator list state
