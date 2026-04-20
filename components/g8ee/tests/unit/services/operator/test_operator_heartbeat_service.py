@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import json
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -538,6 +539,38 @@ class TestPushHeartbeatSSE:
         mock_event_service.publish.side_effect = Exception("network down")
 
         await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+
+    async def test_sse_exception_is_logged_with_traceback(
+        self, service, mock_event_service, caplog
+    ):
+        """Regression: swallowed SSE-push failures must preserve the traceback
+        so opaque errors (e.g. AttributeError on client internals) remain
+        diagnosable instead of appearing as a one-line warning."""
+        operator = OperatorDocument(
+            operator_id="op-333",
+            status=OperatorStatus.ACTIVE,
+            bound_web_session_id="web-111",
+            user_id="user-1",
+        )
+        envelope = HeartbeatSSEEnvelope(
+            operator_id="op-333",
+            status=OperatorStatus.ACTIVE,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+        )
+        mock_event_service.publish.side_effect = AttributeError(
+            "'InternalHttpClient' object has no attribute '_context'"
+        )
+
+        with caplog.at_level(logging.WARNING):
+            await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+
+        sse_records = [r for r in caplog.records if "SSE push failed" in r.getMessage()]
+        assert sse_records, "expected warning log for swallowed SSE failure"
+        record = sse_records[0]
+        assert record.exc_info is not None, (
+            "SSE push failure must be logged with exc_info to preserve traceback"
+        )
+        assert record.exc_info[0] is AttributeError
 
 
 
