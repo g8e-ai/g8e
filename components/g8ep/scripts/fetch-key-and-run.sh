@@ -14,6 +14,7 @@ LOG_LEVEL="${G8E_LOG_LEVEL:-info}"
 PUBSUB_URL="${G8E_OPERATOR_PUBSUB_URL:-}"
 G8ES_URL="https://g8es:9000/db/settings/platform_settings"
 OPERATOR_BINARY="/home/g8e/g8e.operator"
+OPERATOR_META="/home/g8e/g8e.operator.meta"
 BLOB_URL="https://g8es:9000/blob/operator-binary"
 
 RETRY_DELAY=2
@@ -25,6 +26,23 @@ _detect_arch() {
         i?86)    echo "386" ;;
         *)       echo "amd64" ;;
     esac
+}
+
+_fetch_metadata() {
+    local arch
+    arch=$(_detect_arch)
+    local meta_url="${BLOB_URL}/linux-${arch}/meta"
+
+    local response
+    response=$(curl -sf \
+        -H "X-Internal-Auth: ${AUTH_TOKEN}" \
+        --cacert "${SSL_DIR}/ca.crt" \
+        "${meta_url}" 2>/dev/null) || {
+        echo "[g8ep] Failed to fetch operator binary metadata" >&2
+        return 1
+    }
+
+    echo "$response"
 }
 
 _fetch_binary() {
@@ -49,6 +67,13 @@ _fetch_binary() {
     local size
     size=$(ls -lh "${OPERATOR_BINARY}" | awk '{print $5}')
     echo "[g8ep] Operator binary downloaded (${size})" >&2
+
+    local metadata
+    metadata=$(_fetch_metadata)
+    if [ -n "$metadata" ]; then
+        echo "$metadata" > "${OPERATOR_META}"
+        echo "[g8ep] Operator binary metadata saved" >&2
+    fi
 }
 
 # Readiness gating: wait indefinitely for Operator API key to be available
@@ -78,7 +103,32 @@ while true; do
     sleep "$RETRY_DELAY"
 done
 
+should_download=false
+
 if [ ! -x "${OPERATOR_BINARY}" ]; then
+    echo "[g8ep] Operator binary not found or not executable, downloading..." >&2
+    should_download=true
+else
+    current_metadata=$(_fetch_metadata)
+    if [ -z "$current_metadata" ]; then
+        echo "[g8ep] Could not fetch current metadata, skipping update check" >&2
+    else
+        if [ ! -f "${OPERATOR_META}" ]; then
+            echo "[g8ep] No local metadata found, downloading to establish baseline..." >&2
+            should_download=true
+        else
+            local_metadata=$(cat "${OPERATOR_META}")
+            if [ "$current_metadata" != "$local_metadata" ]; then
+                echo "[g8ep] Operator binary metadata changed, re-downloading..." >&2
+                should_download=true
+            else
+                echo "[g8ep] Operator binary up to date" >&2
+            fi
+        fi
+    fi
+fi
+
+if [ "$should_download" = true ]; then
     _fetch_binary
 fi
 

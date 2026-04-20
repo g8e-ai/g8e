@@ -107,9 +107,14 @@ export class SettingsPage {
         const roles = ['primary', 'assistant', 'lite'];
         roles.forEach(role => {
             const dropdown = document.getElementById(`${role}_model`);
-            if (!dropdown) return;
+            if (!dropdown) {
+                console.error(`[SettingsPage] Dropdown element not found: ${role}_model`);
+                return;
+            }
+            console.log(`[SettingsPage] Initializing dropdown: ${role}_model`, dropdown);
 
             dropdown.addEventListener('click', (e) => {
+                console.log(`[SettingsPage] Dropdown clicked: ${role}`, e);
                 e.stopPropagation();
                 this._toggleDropdown(role);
             });
@@ -131,14 +136,24 @@ export class SettingsPage {
 
     _toggleDropdown(role) {
         const dropdown = document.getElementById(`${role}_model`);
-        if (!dropdown || dropdown.classList.contains('disabled')) return;
+        console.log(`[SettingsPage] _toggleDropdown called for: ${role}`, dropdown);
+        if (!dropdown) {
+            console.error(`[SettingsPage] Dropdown not found in _toggleDropdown: ${role}_model`);
+            return;
+        }
+        if (dropdown.classList.contains('disabled')) {
+            console.log(`[SettingsPage] Dropdown is disabled: ${role}`);
+            return;
+        }
 
         const isOpen = dropdown.classList.contains('open');
+        console.log(`[SettingsPage] Dropdown ${role} isOpen: ${isOpen}`);
         this._closeAllDropdowns();
 
         if (!isOpen) {
             dropdown.classList.add('open');
             dropdown.setAttribute('aria-expanded', 'true');
+            console.log(`[SettingsPage] Opened dropdown: ${role}`);
         }
     }
 
@@ -496,8 +511,11 @@ export class SettingsPage {
         });
         panel.appendChild(specificContainer);
 
-        this._initModelDropdowns();
-        this._updateModelDropdowns();
+        // Use requestAnimationFrame to ensure DOM is fully rendered before initializing dropdowns
+        requestAnimationFrame(() => {
+            this._initModelDropdowns();
+            this._updateModelDropdowns();
+        });
     }
 
     _buildModelDropdownField(role, label, iconName) {

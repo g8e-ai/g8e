@@ -11,7 +11,11 @@ Test running is handled by dedicated per-component test-runner containers (`g8ee
 
 It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-compose.yml`.
 
-**Operator binary:** The `g8e.operator` binary lives at `/home/g8e/g8e.operator`. When the binary is not present, `fetch-key-and-run.sh` automatically downloads the platform-matching binary from the g8es blob store (`/blob/operator-binary/linux-{arch}`). g8es bakes and uploads binaries for all architectures on startup, so a fresh `./g8e platform setup` or `./g8e platform up` is sufficient. To compile a fresh binary manually, use `./g8e operator build`.
+**Operator binary:** The `g8e.operator` binary lives at `/home/g8e/g8e.operator`. The `fetch-key-and-run.sh` script automatically downloads the platform-matching binary from the g8es blob store (`/blob/operator-binary/linux-{arch}`) when:
+- The binary is not present or not executable
+- The blob metadata (created_at, size, content_type) differs from the previously downloaded version
+
+The script tracks blob metadata in `/home/g8e/g8e.operator.meta` to detect changes. After running `./g8e operator build`, g8ep will automatically re-download the updated binary on the next operator start. g8es bakes and uploads binaries for all architectures on startup, so a fresh `./g8e platform setup` or `./g8e platform up` is sufficient.
 
 ---
 
