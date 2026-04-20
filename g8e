@@ -303,9 +303,14 @@ _ensure_authenticated() {
 # Commands that require authentication
 # Note: operator deploy/stream need auth, but other operator subcommands don't
 # security, data, mcp commands need auth for g8ed internal API access
+# Skip auth for 'test' command when running in CI (trusted environment)
 AUTH_REQUIRED_COMMANDS=("test" "security" "data" "mcp")
 if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
-    _ensure_authenticated
+    if [[ "$TOP" == "test" && "${CI:-}" == "true" ]]; then
+        echo "[g8e] Running in CI mode - skipping authentication for tests"
+    else
+        _ensure_authenticated
+    fi
 fi
 
 # Special case: operator deploy and stream need auth

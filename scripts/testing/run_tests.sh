@@ -190,6 +190,9 @@ run_g8ee() {
     if [[ "$PYRIGHT" == "true" ]]; then
         python -m pyright --project pyrightconfig.services.json
     fi
+    if [[ "$RUFF" == "true" ]]; then
+        python -m ruff check .
+    fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
     [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("--log-cli-level=INFO")

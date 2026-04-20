@@ -263,6 +263,7 @@ class RiskThreshold(str, Enum):
 class SessionType(str, Enum):
     WEB = "web"
     OPERATOR = "operator"
+    CLI = "cli"
 
 class Severity(int, Enum):
     LOW = 1

@@ -58,7 +58,14 @@ class TestSSEPushResponseFieldsMatchSharedJSON:
         assert "delivered" in SSEPushResponse.model_fields
         assert not SSEPushResponse.model_fields["delivered"].is_required()
         assert SSEPushResponse.model_fields["delivered"].default == 0
-        assert SSEPushResponse.model_fields["delivered"].ge == 0
+        # In Pydantic v2, numeric constraints are in metadata
+        metadata = SSEPushResponse.model_fields["delivered"].metadata
+        ge_constraint = None
+        for m in metadata:
+            if hasattr(m, 'ge'):
+                ge_constraint = m.ge
+                break
+        assert ge_constraint == 0
 
     def test_error_field_exists_and_optional_with_default_null(self):
         """error field must exist and be optional with default null."""

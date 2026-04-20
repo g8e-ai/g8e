@@ -70,7 +70,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         if not data:
             return None
         
-        data["id"] = operator_id
         return OperatorDocument.model_validate(data)
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
@@ -79,7 +78,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ValidationError("operator_id is required")
         
         # Convert to dict for storage
-        operator_data = operator.model_dump(exclude={"id"})
+        operator_data = operator.model_dump()
         
         result = await self.cache.create_document(
             collection=self.collection,
@@ -100,7 +99,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         now_timestamp = now()
         updates = {
             "status": status,
-            "created_at": now_timestamp,
         }
         
         operator = await self.get_operator(operator_id)

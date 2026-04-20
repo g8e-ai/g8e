@@ -288,7 +288,7 @@ class TestExecuteCommandTargetSystems:
             operator_session_id=session_id,
             current_hostname=hostname,
             operator_type=OperatorType.SYSTEM,
-            web_session_id="ws-1",
+            bound_web_session_id="ws-1",
         )
 
     def _make_investigation(self, operators):

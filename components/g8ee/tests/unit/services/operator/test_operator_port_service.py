@@ -60,7 +60,7 @@ def _make_operator(
     return OperatorDocument(
         operator_id=operator_id,
         user_id="user-1",
-        web_session_id="ws-1",
+        bound_web_session_id="ws-1",
         operator_session_id=operator_session_id,
         current_hostname=hostname,
         status=OperatorStatus.BOUND,

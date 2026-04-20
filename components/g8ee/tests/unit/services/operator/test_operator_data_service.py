@@ -49,7 +49,8 @@ class TestOperatorDataService:
             "operator_id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
-            "system_info": {"hostname": "test-host"}
+            "system_info": {"hostname": "test-host"},
+            "bound_web_session_id": None,
         }
 
         result = await service.get_operator(operator_id)

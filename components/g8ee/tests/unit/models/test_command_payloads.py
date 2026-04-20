@@ -71,7 +71,7 @@ class TestFsListPayload:
     def test_wire_dump_only_canonical_fields(self):
         p = FsListPayload(path=".", execution_id="x", max_depth=0, max_entries=100)
         wire = p.model_dump(mode="json")
-        assert set(wire.keys()) <= {"path", "execution_id", "max_depth", "max_entries"}
+        assert set(wire.keys()) <= {"path", "execution_id", "max_depth", "max_entries", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
         p = FsListPayload(path="/tmp")
@@ -129,7 +129,7 @@ class TestFsReadPayload:
     def test_wire_dump_only_canonical_fields(self):
         p = FsReadPayload(path="/app/main.py", execution_id="e", max_size=102400)
         wire = p.model_dump(mode="json")
-        assert set(wire.keys()) <= {"path", "execution_id", "max_size"}
+        assert set(wire.keys()) <= {"path", "execution_id", "max_size", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
         p = FsReadPayload(path="/var/log/app.log")
@@ -183,7 +183,7 @@ class TestFetchLogsPayload:
     def test_wire_dump_only_canonical_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="scrubbed")
         wire = p.model_dump(mode="json")
-        assert set(wire.keys()) <= {"execution_id", "sentinel_mode"}
+        assert set(wire.keys()) <= {"execution_id", "sentinel_mode", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
         p = FetchLogsPayload(execution_id="exec-xyz")

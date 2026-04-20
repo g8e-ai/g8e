@@ -73,9 +73,7 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.objectContaining({
-                _payload: event
-            }), expect.any(Function));
+            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', event, expect.any(Function));
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 delivered: 1
@@ -125,9 +123,7 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
-            expect(publishedEvent._payload).toEqual(event);
-            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
+            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', event, expect.any(Function));
         });
 
         it('should return 500 if an error occurs', async () => {
@@ -191,9 +187,7 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
-            expect(publishedEvent._payload).toEqual(event);
-            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
+            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', event, expect.any(Function));
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 delivered: 1
@@ -214,9 +208,7 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockSSEService.publishToUser).toHaveBeenCalledWith('user-456', expect.objectContaining({
-                _payload: event
-            }));
+            expect(mockSSEService.publishToUser).toHaveBeenCalledWith('user-456', event);
             expect(mockSSEService.publishEvent).not.toHaveBeenCalled();
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
@@ -288,9 +280,7 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
-            expect(publishedEvent._payload).toEqual(event);
-            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
+            expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', event, expect.any(Function));
         });
     });
 });
