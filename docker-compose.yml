@@ -354,7 +354,7 @@ services:
       labels:
         - "io.g8e.managed=true"
     container_name: g8ep
-    hostname: g8e_pod
+    hostname: g8ep
     user: "1001:1001"
     labels:
       - "io.g8e.managed=true"
