@@ -246,7 +246,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
                 llm_primary_provider: LLMProvider.GEMINI,
                 llm_assistant_provider: LLMProvider.OLLAMA,
                 gemini_api_key: 'gemini-key',
-                ollama_api_key: 'ollama-key'
+                ollama_endpoint: '127.0.0.1:11434'
             });
             expect(result.errors).toHaveLength(0);
         });
@@ -257,7 +257,7 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
                 llm_assistant_provider: LLMProvider.OLLAMA,
                 gemini_api_key: 'gemini-key'
             });
-            expect(result.errors).toContain('ollama_api_key is required when ollama is set as assistant provider');
+            expect(result.errors).toContain('ollama_endpoint is required when ollama is set as assistant provider');
         });
 
         it('passes when provider fields are empty or not set', () => {

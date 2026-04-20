@@ -184,6 +184,7 @@ export class BoundSessionsService {
             boundOperators.push(BoundOperatorContext.parse({
                 operator_id: operatorIds[i],
                 operator_session_id: operatorSessionIds[i],
+                bound_web_session_id: webSessionId,
                 status: operator.status,
             }).forWire());
         }
@@ -241,6 +242,7 @@ export class BoundSessionsService {
                 boundOperators.push(BoundOperatorContext.parse({
                     operator_id: operatorIds[i],
                     operator_session_id: operatorSessionIds[i],
+                    bound_web_session_id: webSessionId,
                     status: operator.status,
                 }).forWire());
             }

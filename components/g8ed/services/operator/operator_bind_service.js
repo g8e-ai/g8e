@@ -109,6 +109,7 @@ export class BindOperatorsService {
                             BoundOperatorContext.parse({
                                 operator_id:         contextWrapper.operator_id,
                                 operator_session_id: contextWrapper.operator_session_id,
+                                bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
                                 system_info:         contextWrapper.system_info,
@@ -218,6 +219,7 @@ export class BindOperatorsService {
                             BoundOperatorContext.parse({
                                 operator_id:         contextWrapper.operator_id,
                                 operator_session_id: contextWrapper.operator_session_id,
+                                bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
                                 system_info:         contextWrapper.system_info,

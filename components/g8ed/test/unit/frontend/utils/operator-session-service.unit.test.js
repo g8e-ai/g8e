@@ -24,7 +24,7 @@ beforeEach(async () => {
 function makeOperator(overrides = {}) {
     return {
         operator_id: 'op-abc',
-        web_session_id: 'ws-xyz',
+        bound_web_session_id: 'ws-xyz',
         status: OperatorStatus.BOUND,
         ...overrides,
     };
@@ -215,19 +215,19 @@ describe('OperatorSessionService — isBound() [UNIT]', () => {
 
 describe('OperatorSessionService — getBoundOperatorForSession() [UNIT]', () => {
     it('returns the matching BOUND operator for the given webSessionId', () => {
-        const op = makeOperator({ web_session_id: 'ws-1' });
+        const op = makeOperator({ bound_web_session_id: 'ws-1' });
         operatorSessionService.setBoundOperators([op]);
         expect(operatorSessionService.getBoundOperatorForSession('ws-1')).toBe(op);
     });
 
     it('returns null when no operator matches the webSessionId', () => {
-        operatorSessionService.setBoundOperators([makeOperator({ web_session_id: 'ws-other' })]);
+        operatorSessionService.setBoundOperators([makeOperator({ bound_web_session_id: 'ws-other' })]);
         expect(operatorSessionService.getBoundOperatorForSession('ws-no-match')).toBeNull();
     });
 
     it('returns null when the matching operator is not BOUND', () => {
         operatorSessionService.setBoundOperators([
-            makeOperator({ web_session_id: 'ws-1', status: OperatorStatus.STALE }),
+            makeOperator({ bound_web_session_id: 'ws-1', status: OperatorStatus.STALE }),
         ]);
         expect(operatorSessionService.getBoundOperatorForSession('ws-1')).toBeNull();
     });
@@ -243,7 +243,7 @@ describe('OperatorSessionService — getBoundOperatorForSession() [UNIT]', () =>
     });
 
     it('returns null when webSessionId is an empty string', () => {
-        operatorSessionService.setBoundOperators([makeOperator({ web_session_id: '' })]);
+        operatorSessionService.setBoundOperators([makeOperator({ bound_web_session_id: '' })]);
         expect(operatorSessionService.getBoundOperatorForSession('')).toBeNull();
     });
 
@@ -252,15 +252,15 @@ describe('OperatorSessionService — getBoundOperatorForSession() [UNIT]', () =>
     });
 
     it('matches only by exact webSessionId — does not return a different session', () => {
-        const op1 = makeOperator({ operator_id: 'op-1', web_session_id: 'ws-1' });
-        const op2 = makeOperator({ operator_id: 'op-2', web_session_id: 'ws-2' });
+        const op1 = makeOperator({ operator_id: 'op-1', bound_web_session_id: 'ws-1' });
+        const op2 = makeOperator({ operator_id: 'op-2', bound_web_session_id: 'ws-2' });
         operatorSessionService.setBoundOperators([op1, op2]);
         expect(operatorSessionService.getBoundOperatorForSession('ws-2')).toBe(op2);
         expect(operatorSessionService.getBoundOperatorForSession('ws-1')).toBe(op1);
     });
 
     it('returns null after clearBoundOperators()', () => {
-        operatorSessionService.setBoundOperators([makeOperator({ web_session_id: 'ws-1' })]);
+        operatorSessionService.setBoundOperators([makeOperator({ bound_web_session_id: 'ws-1' })]);
         operatorSessionService.clearBoundOperators();
         expect(operatorSessionService.getBoundOperatorForSession('ws-1')).toBeNull();
     });

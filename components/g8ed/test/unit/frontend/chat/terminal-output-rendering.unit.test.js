@@ -809,16 +809,16 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
     describe('showTribunal', () => {
         const WIDGET_ID = 'tribunal-show-test';
-        const TEST_COMMAND = 'apt-get update && apt-get install -y tcpdump';
+        const TEST_REQUEST = 'install tcpdump via apt & verify';
 
-        it('renders the initial command literally via textContent', async () => {
-            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: TEST_COMMAND, webSessionId: WEB_SESSION_ID });
+        it('renders the request literally via textContent (no double-escaping)', async () => {
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, request: TEST_REQUEST, webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(WIDGET_ID);
             const commandEl = widget.querySelector('.tribunal__command');
 
-            expect(commandEl.textContent).toBe(TEST_COMMAND);
-            // Check innerHTML to ensure no double escaping of &
+            expect(commandEl.textContent).toBe(TEST_REQUEST);
+            // Guard against double-escaping of & in the template renderer
             expect(commandEl.innerHTML).not.toContain('&amp;amp;');
         });
 

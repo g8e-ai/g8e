@@ -151,6 +151,7 @@ export class DeviceRegistrationService {
                 BoundOperatorContext.parse({
                     operator_id,
                     operator_session_id,
+                    bound_web_session_id: web_session_id,
                     status:        OperatorStatus.ACTIVE,
                     operator_type,
                     system_info,

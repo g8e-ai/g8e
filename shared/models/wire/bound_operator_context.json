@@ -14,6 +14,11 @@
         "required": false,
         "description": "Operator session identifier for this binding"
       },
+      "bound_web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session ID this operator is bound to (for binding validation)"
+      },
       "status": {
         "type": "string",
         "required": false,

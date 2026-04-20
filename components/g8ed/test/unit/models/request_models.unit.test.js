@@ -365,13 +365,22 @@ describe('SSEPushRequest [UNIT - PURE LOGIC]', () => {
         expect(req.event).toEqual({ type: 'test', data: {} });
     });
 
-    it('throws when web_session_id is missing', () => {
+    it('accepts BackgroundEvent fan-out shape (no web_session_id)', () => {
+        const req = SSEPushRequest.parse({
+            user_id: 'user-456',
+            event: { type: 'test', data: {} },
+        });
+        expect(req.web_session_id).toBeNull();
+        expect(req.user_id).toBe('user-456');
+    });
+
+    it('throws when user_id is missing', () => {
         expect(() => SSEPushRequest.parse({ event: {} }))
-            .toThrow('web_session_id is required');
+            .toThrow('user_id is required');
     });
 
     it('throws when event is missing', () => {
-        expect(() => SSEPushRequest.parse({ web_session_id: 'ws-123' }))
+        expect(() => SSEPushRequest.parse({ web_session_id: 'ws-123', user_id: 'user-456' }))
             .toThrow('event is required');
     });
 });
@@ -1348,6 +1357,7 @@ describe('BoundOperatorContext [UNIT - PURE LOGIC]', () => {
         });
         expect(req.operator_id).toBe('op-123');
         expect(req.operator_session_id).toBe('ops-456');
+        expect(req.bound_web_session_id).toBeNull();
         expect(req.status).toBeNull();
     });
 
@@ -1355,8 +1365,11 @@ describe('BoundOperatorContext [UNIT - PURE LOGIC]', () => {
         const req = BoundOperatorContext.parse({
             operator_id: 'op-123',
             operator_session_id: 'ops-456',
+            bound_web_session_id: 'web-789',
             status: 'ACTIVE',
         });
+        expect(req.operator_session_id).toBe('ops-456');
+        expect(req.bound_web_session_id).toBe('web-789');
         expect(req.status).toBe('ACTIVE');
     });
 
@@ -1371,6 +1384,13 @@ describe('BoundOperatorContext [UNIT - PURE LOGIC]', () => {
             operator_id: 'op-123',
         });
         expect(result.operator_session_id).toBeNull();
+    });
+
+    it('allows bound_web_session_id to be missing (optional)', () => {
+        const result = BoundOperatorContext.parse({
+            operator_id: 'op-123',
+        });
+        expect(result.bound_web_session_id).toBeNull();
     });
 });
 

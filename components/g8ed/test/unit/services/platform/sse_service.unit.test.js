@@ -126,9 +126,14 @@ describe('SSEService [UNIT]', () => {
             expect(result).toBe(true);
         });
 
-        it('throws if event is not a G8eBaseModel', async () => {
-            await expect(service.publishEvent('s1', { type: 'wrong' }))
-                .rejects.toThrow('requires a G8eBaseModel instance');
+        it('throws if event is neither G8eBaseModel nor object with type field', async () => {
+            await expect(service.publishEvent('s1', 'not-an-object'))
+                .rejects.toThrow('must be a G8eBaseModel instance or plain object');
+        });
+
+        it('throws if plain object event is missing a type field', async () => {
+            await expect(service.publishEvent('s1', { data: {} }))
+                .rejects.toThrow("must have a non-empty string 'type' field");
         });
 
         it('calls delivery callback with delivered=true when event is successfully delivered', async () => {
@@ -231,9 +236,14 @@ describe('SSEService [UNIT]', () => {
             expect(count).toBe(0);
         });
 
-        it('throws when event is not a G8eBaseModel', async () => {
-            await expect(service.publishToUser('user-A', { type: 'wrong' }))
-                .rejects.toThrow('requires a G8eBaseModel instance');
+        it('throws when event is neither G8eBaseModel nor object with type field', async () => {
+            await expect(service.publishToUser('user-A', null))
+                .rejects.toThrow('must be a G8eBaseModel instance or plain object');
+        });
+
+        it('throws when plain object event is missing a type field', async () => {
+            await expect(service.publishToUser('user-A', { data: {} }))
+                .rejects.toThrow("must have a non-empty string 'type' field");
         });
 
         it('removes the user-sessions entry when the last session disconnects', async () => {
@@ -279,9 +289,14 @@ describe('SSEService [UNIT]', () => {
             expect(count).toBe(0);
         });
 
-        it('throws if event is not G8eBaseModel', async () => {
-            await expect(service.broadcastEvent({}))
-                .rejects.toThrow('requires a G8eBaseModel instance');
+        it('throws if event is neither G8eBaseModel nor object with type field', async () => {
+            await expect(service.broadcastEvent(null))
+                .rejects.toThrow('must be a G8eBaseModel instance or plain object');
+        });
+
+        it('throws if plain object event is missing a type field', async () => {
+            await expect(service.broadcastEvent({ data: {} }))
+                .rejects.toThrow("must have a non-empty string 'type' field");
         });
     });
 

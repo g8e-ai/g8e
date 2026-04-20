@@ -98,7 +98,7 @@ describe('OperatorService', () => {
                 user_id: 'u-1',
                 status: OperatorStatus.ACTIVE,
                 operator_session_id: 'os-1', 
-                web_session_id: 'ws-1' 
+                bound_web_session_id: 'ws-1' 
             });
             mocks.operatorDataService.getOperator.mockResolvedValue(operator);
             
@@ -113,7 +113,7 @@ describe('OperatorService', () => {
             expect(result).toBeInstanceOf(OperatorWithSessionContext);
             expect(result.operator_id).toBe('op-1');
             expect(result.operator_session_id).toBe('os-1');
-            expect(result.web_session_id).toBe('ws-1');
+            expect(result.bound_web_session_id).toBe('ws-1');
         });
     });
 
@@ -134,7 +134,7 @@ describe('OperatorService', () => {
     describe('getUserOperators', () => {
         it('should return OperatorSlot projections for the panel list', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', web_session_id: 'ws-1' }),
+                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
                 new OperatorDocument({ operator_id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
@@ -154,7 +154,7 @@ describe('OperatorService', () => {
             expect(slot.status).toBe(OperatorStatus.ACTIVE);
             expect(slot.status_display).toBe('ACTIVE');
             expect(slot.status_class).toBe('active');
-            expect(slot.web_session_id).toBe('ws-1');
+            expect(slot.bound_web_session_id).toBe('ws-1');
 
             expect(slot).not.toHaveProperty('api_key');
             expect(slot).not.toHaveProperty('history_trail');
@@ -168,7 +168,7 @@ describe('OperatorService', () => {
             const userId = 'u-1';
             const webSessionId = 'ws-new';
             const operators = [
-                { operator_id: 'op-1', status: OperatorStatus.BOUND, web_session_id: 'ws-old' },
+                { operator_id: 'op-1', status: OperatorStatus.BOUND, bound_web_session_id: 'ws-old' },
                 { operator_id: 'op-2', status: OperatorStatus.ACTIVE }
             ];
             
@@ -184,7 +184,7 @@ describe('OperatorService', () => {
     describe('updateWebSessionLink', () => {
         it('should update operator document via data service', async () => {
             await service.updateWebSessionLink('op-1', 'ws-1');
-            expect(mocks.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', { web_session_id: 'ws-1' });
+            expect(mocks.operatorDataService.updateOperator).toHaveBeenCalledWith('op-1', { bound_web_session_id: 'ws-1' });
         });
     });
 

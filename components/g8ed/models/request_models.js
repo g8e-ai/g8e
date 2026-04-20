@@ -560,6 +560,7 @@ export class BoundOperatorContext extends G8eBaseModel {
     static fields = {
         operator_id:         { type: F.string, required: true },
         operator_session_id: { type: F.string, default: null },
+        bound_web_session_id: { type: F.string, default: null },
         status:              { type: F.string, default: null },
     };
 }

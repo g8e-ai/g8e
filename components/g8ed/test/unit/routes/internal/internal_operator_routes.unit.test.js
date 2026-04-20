@@ -38,7 +38,8 @@ describe('Internal Operator Routes [UNIT]', () => {
             relaunchG8ENodeOperatorForUser: vi.fn()
         };
         mockAuthorizationMiddleware = {
-            requireInternalOrigin: vi.fn((req, res, next) => next())
+            requireInternalOrigin: vi.fn((req, res, next) => next()),
+            requireInternalOrUserAuth: vi.fn((req, res, next) => next())
         };
 
         router = createInternalOperatorRouter({

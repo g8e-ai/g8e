@@ -443,7 +443,7 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('shows error for no provider keys entered', () => {
             setupPage._validateStep(2);
             const text = document.getElementById('setup-status-msg');
-            expect(text.textContent).toBe('Enter at least one provider API key');
+            expect(text.textContent).toBe('Configure at least one provider (API key or Ollama endpoint)');
         });
 
         it('returns true for step 2 with Gemini key and models selected', () => {

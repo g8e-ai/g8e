@@ -38,6 +38,7 @@ class BoundOperator(G8eBaseModel):
     """
     operator_id: str = Field(..., description="Unique operator identifier")
     operator_session_id: str | None = Field(default=None, description="Operator session identifier")
+    bound_web_session_id: str | None = Field(default=None, description="Web session ID this operator is bound to")
     status: OperatorStatus | None = Field(default=None, description="Operator status")
 
 

@@ -402,6 +402,7 @@ export class OperatorAuthService {
                     BoundOperatorContext.parse({
                         operator_id,
                         operator_session_id,
+                        bound_web_session_id,
                         status:        claimStatus,
                         operator_type: operator.operator_type || null,
                         system_info:   parsedSystemInfo,

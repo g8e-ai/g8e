@@ -121,6 +121,7 @@ class TestBoundOperatorsRoundTrip:
             {
                 "operator_id": "op-001",
                 "operator_session_id": "sess-op-001",
+                "bound_web_session_id": "web-session-001",
                 "status": "bound",
             }
         ]
@@ -132,12 +133,13 @@ class TestBoundOperatorsRoundTrip:
         assert isinstance(op, BoundOperator)
         assert op.operator_id == "op-001"
         assert op.operator_session_id == "sess-op-001"
+        assert op.bound_web_session_id == "web-session-001"
         assert op.status == OperatorStatus.BOUND
 
     async def test_multiple_bound_operators_parsed(self):
         operators = [
-            {"operator_id": "op-001", "operator_session_id": "sess-op-001", "status": "bound"},
-            {"operator_id": "op-002", "operator_session_id": "sess-op-002", "status": "bound"},
+            {"operator_id": "op-001", "operator_session_id": "sess-op-001", "bound_web_session_id": "web-session-001", "status": "bound"},
+            {"operator_id": "op-002", "operator_session_id": "sess-op-002", "bound_web_session_id": "web-session-001", "status": "bound"},
         ]
         headers = _base_headers(bound_operators=json.dumps(operators))
         ctx = await get_g8e_http_context(_make_request(headers))
@@ -147,12 +149,13 @@ class TestBoundOperatorsRoundTrip:
         assert ctx.bound_operators[1].operator_id == "op-002"
 
     async def test_operator_without_session_id_allowed(self):
-        operators = [{"operator_id": "op-003", "status": "bound"}]
+        operators = [{"operator_id": "op-003", "bound_web_session_id": "web-session-001", "status": "bound"}]
         headers = _base_headers(bound_operators=json.dumps(operators))
         ctx = await get_g8e_http_context(_make_request(headers))
 
         assert ctx.bound_operators[0].operator_id == "op-003"
         assert ctx.bound_operators[0].operator_session_id is None
+        assert ctx.bound_operators[0].bound_web_session_id == "web-session-001"
 
     async def test_has_bound_operator_true_when_status_bound(self):
         operators = [{"operator_id": "op-004", "status": "bound"}]

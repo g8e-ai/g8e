@@ -233,7 +233,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
         expect(info.operator_id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
-        expect(info.web_session_id).toBeNull();
+        expect(info.bound_web_session_id).toBeNull();
         expect(info.is_active).toBe(false);
     });
 
@@ -260,7 +260,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
             operator_id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
-            web_session_id: 'ws-789',
+            bound_web_session_id: 'ws-789',
             operator_session_id: 'os-101',
             last_heartbeat: new Date('2026-01-01T00:00:00.000Z'),
             system_info: new SystemInfo({ hostname: 'test-host' }),
@@ -274,7 +274,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
         expect(info.operator_id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
-        expect(info.web_session_id).toBe('ws-789');
+        expect(info.bound_web_session_id).toBe('ws-789');
         expect(info.operator_session_id).toBe('os-101');
         expect(info.is_active).toBe(true);
         expect(info.current_hostname).toBe('test-host');
@@ -414,7 +414,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             system_info: systemInfo,
             name: 'Test Operator',
             operator_session_id: 'os-789',
-            web_session_id: 'ws-101',
+            bound_web_session_id: 'ws-101',
             api_key: 'key-abc',
             runtime_config: { timeout: 30 },
             slot_number: 1,
@@ -453,10 +453,10 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             operator_id: 'op-123',
             user_id: 'user-456',
             operator_session_id: 'very-long-operator-session-id-12345',
-            web_session_id: 'very-long-web-session-id-67890',
+            bound_web_session_id: 'very-long-web-session-id-67890',
         });
         expect(doc.history_trail[0].details.operator_session_id).toBe('very-long-op...');
-        expect(doc.history_trail[0].details.web_session_id).toBe('very-long-we...');
+        expect(doc.history_trail[0].details.bound_web_session_id).toBe('very-long-we...');
     });
 
     it('forCreate() handles null session IDs in history', () => {
@@ -465,7 +465,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             user_id: 'user-456',
         });
         expect(doc.history_trail[0].details.operator_session_id).toBeNull();
-        expect(doc.history_trail[0].details.web_session_id).toBeNull();
+        expect(doc.history_trail[0].details.bound_web_session_id).toBeNull();
     });
 
     it('forSlot() creates slot with is_slot=true', () => {
@@ -872,7 +872,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         expect(context.user_id).toBe('user-456');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
         expect(context.operator_session_id).toBeNull();
-        expect(context.web_session_id).toBeNull();
+        expect(context.bound_web_session_id).toBeNull();
         expect(context.system_info).toBeInstanceOf(SystemInfo);
         expect(context.organization_id).toBeNull();
         expect(context.case_id).toBeNull();
@@ -897,7 +897,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             operator_session_id: 'os-789',
-            web_session_id: 'ws-101',
+            bound_web_session_id: 'ws-101',
             system_info: new SystemInfo({ hostname: 'test-host' }),
             organization_id: 'org-111',
             case_id: 'case-222',
@@ -911,7 +911,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         const context = OperatorWithSessionContext.create(operator, operatorSession, webSession);
         expect(context.operator_id).toBe('op-123');
         expect(context.operator_session_id).toBe('os-new-789');
-        expect(context.web_session_id).toBe('ws-new-101');
+        expect(context.bound_web_session_id).toBe('ws-new-101');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
         expect(context.system_info.hostname).toBe('test-host');
         expect(context.user_id).toBe('user-456');
@@ -928,11 +928,11 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             operator_session_id: 'os-789',
-            web_session_id: 'ws-101',
+            bound_web_session_id: 'ws-101',
         });
         const context = OperatorWithSessionContext.create(operator, null, null);
         expect(context.operator_session_id).toBe('os-789');
-        expect(context.web_session_id).toBe('ws-101');
+        expect(context.bound_web_session_id).toBe('ws-101');
     });
 
     it('create() handles missing operator session ID', () => {

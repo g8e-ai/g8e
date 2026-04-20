@@ -78,6 +78,12 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         it('VARIANCE member matches JSON', () => {
             expect(TribunalMember.VARIANCE).toBe(_AGENTS['tribunal.members'].variance);
         });
+        it('PRAGMA member matches JSON', () => {
+            expect(TribunalMember.PRAGMA).toBe(_AGENTS['tribunal.members'].pragma);
+        });
+        it('NEMESIS member matches JSON', () => {
+            expect(TribunalMember.NEMESIS).toBe(_AGENTS['tribunal.members'].nemesis);
+        });
     });
 
     describe('VerifierReason constants', () => {
@@ -102,20 +108,20 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         it('TRIAGE metadata matches JSON', () => {
             expect(AgentMetadata.TRIAGE).toEqual(_AGENTS['agent.metadata'].triage);
         });
-        it('PRIMARY metadata matches JSON', () => {
-            expect(AgentMetadata.PRIMARY).toEqual(_AGENTS['agent.metadata'].primary);
+        it('SAGE metadata matches JSON', () => {
+            expect(AgentMetadata.SAGE).toEqual(_AGENTS['agent.metadata'].sage);
         });
-        it('ASSISTANT metadata matches JSON', () => {
-            expect(AgentMetadata.ASSISTANT).toEqual(_AGENTS['agent.metadata'].assistant);
+        it('DASH metadata matches JSON', () => {
+            expect(AgentMetadata.DASH).toEqual(_AGENTS['agent.metadata'].dash);
         });
         it('TRIBUNAL metadata matches JSON', () => {
             expect(AgentMetadata.TRIBUNAL).toEqual(_AGENTS['agent.metadata'].tribunal);
         });
-        it('VERIFIER metadata matches JSON', () => {
-            expect(AgentMetadata.VERIFIER).toEqual(_AGENTS['agent.metadata'].verifier);
+        it('AUDITOR metadata matches JSON', () => {
+            expect(AgentMetadata.AUDITOR).toEqual(_AGENTS['agent.metadata'].auditor);
         });
-        it('TITLE_GENERATOR metadata matches JSON', () => {
-            expect(AgentMetadata.TITLE_GENERATOR).toEqual(_AGENTS['agent.metadata'].title_generator);
+        it('SCRIBE metadata matches JSON', () => {
+            expect(AgentMetadata.SCRIBE).toEqual(_AGENTS['agent.metadata'].scribe);
         });
         it('AXIOM metadata matches JSON', () => {
             expect(AgentMetadata.AXIOM).toEqual(_AGENTS['agent.metadata'].axiom);
@@ -126,29 +132,35 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         it('VARIANCE metadata matches JSON', () => {
             expect(AgentMetadata.VARIANCE).toEqual(_AGENTS['agent.metadata'].variance);
         });
-        it('MEMORY_GENERATOR metadata matches JSON', () => {
-            expect(AgentMetadata.MEMORY_GENERATOR).toEqual(_AGENTS['agent.metadata'].memory_generator);
+        it('PRAGMA metadata matches JSON', () => {
+            expect(AgentMetadata.PRAGMA).toEqual(_AGENTS['agent.metadata'].pragma);
         });
-        it('EVAL_JUDGE metadata matches JSON', () => {
-            expect(AgentMetadata.EVAL_JUDGE).toEqual(_AGENTS['agent.metadata'].eval_judge);
+        it('NEMESIS metadata matches JSON', () => {
+            expect(AgentMetadata.NEMESIS).toEqual(_AGENTS['agent.metadata'].nemesis);
         });
-        it('RESPONSE_ANALYZER metadata matches JSON', () => {
-            expect(AgentMetadata.RESPONSE_ANALYZER).toEqual(_AGENTS['agent.metadata'].response_analyzer);
+        it('CODEX metadata matches JSON', () => {
+            expect(AgentMetadata.CODEX).toEqual(_AGENTS['agent.metadata'].codex);
         });
-        it('RESPONSE_ANALYZER_COMMAND_RISK metadata matches JSON', () => {
-            expect(AgentMetadata.RESPONSE_ANALYZER_COMMAND_RISK).toEqual(_AGENTS['agent.metadata'].response_analyzer_command_risk);
+        it('JUDGE metadata matches JSON', () => {
+            expect(AgentMetadata.JUDGE).toEqual(_AGENTS['agent.metadata'].judge);
         });
-        it('RESPONSE_ANALYZER_ERROR metadata matches JSON', () => {
-            expect(AgentMetadata.RESPONSE_ANALYZER_ERROR).toEqual(_AGENTS['agent.metadata'].response_analyzer_error);
+        it('WARDEN metadata matches JSON', () => {
+            expect(AgentMetadata.WARDEN).toEqual(_AGENTS['agent.metadata'].warden);
         });
-        it('RESPONSE_ANALYZER_FILE_RISK metadata matches JSON', () => {
-            expect(AgentMetadata.RESPONSE_ANALYZER_FILE_RISK).toEqual(_AGENTS['agent.metadata'].response_analyzer_file_risk);
+        it('WARDEN_COMMAND_RISK metadata matches JSON', () => {
+            expect(AgentMetadata.WARDEN_COMMAND_RISK).toEqual(_AGENTS['agent.metadata'].warden_command_risk);
+        });
+        it('WARDEN_ERROR metadata matches JSON', () => {
+            expect(AgentMetadata.WARDEN_ERROR).toEqual(_AGENTS['agent.metadata'].warden_error);
+        });
+        it('WARDEN_FILE_RISK metadata matches JSON', () => {
+            expect(AgentMetadata.WARDEN_FILE_RISK).toEqual(_AGENTS['agent.metadata'].warden_file_risk);
         });
     });
 
     describe('AgentMetadata persona fields', () => {
         const REQUIRED_PERSONA_FIELDS = ['role', 'model_tier', 'tools', 'identity', 'purpose', 'autonomy'];
-        const ALL_AGENT_KEYS = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
+        const ALL_AGENT_KEYS = ['triage', 'sage', 'dash', 'tribunal', 'auditor', 'scribe', 'axiom', 'concord', 'variance', 'pragma', 'nemesis', 'codex', 'judge', 'warden', 'warden_command_risk', 'warden_error', 'warden_file_risk'];
 
         ALL_AGENT_KEYS.forEach(agentKey => {
             describe(`${agentKey} agent`, () => {
@@ -210,7 +222,7 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
 
         it('agent.metadata contains all agents', () => {
-            const expectedAgents = ['triage', 'primary', 'assistant', 'tribunal', 'verifier', 'title_generator', 'axiom', 'concord', 'variance', 'memory_generator', 'eval_judge', 'response_analyzer', 'response_analyzer_command_risk', 'response_analyzer_error', 'response_analyzer_file_risk'];
+            const expectedAgents = ['triage', 'sage', 'dash', 'tribunal', 'auditor', 'scribe', 'axiom', 'concord', 'variance', 'pragma', 'nemesis', 'codex', 'judge', 'warden', 'warden_command_risk', 'warden_error', 'warden_file_risk'];
             const actualAgents = Object.keys(_AGENTS['agent.metadata']);
             expect(actualAgents.sort()).toEqual(expectedAgents.sort());
         });

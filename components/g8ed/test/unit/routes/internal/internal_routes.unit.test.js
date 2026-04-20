@@ -22,7 +22,8 @@ describe('Internal Routes [UNIT]', () => {
 
     beforeEach(() => {
         mockAuthorizationMiddleware = {
-            requireInternalOrigin: vi.fn((req, res, next) => next())
+            requireInternalOrigin: vi.fn((req, res, next) => next()),
+            requireInternalOrUserAuth: vi.fn((req, res, next) => next())
         };
 
         // Other services are just passed through to sub-routers, so we can use empty mocks

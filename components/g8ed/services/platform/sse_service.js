@@ -251,9 +251,9 @@ class SSEService {
      * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      */
     async broadcastEvent(eventData) {
+        const wire = this._toWire(eventData);
         try {
             const broadcastId = `broadcast_${Date.now()}`;
-            const wire = this._toWire(eventData);
             logger.info('[SSE-SERVICE] Broadcasting event', {
                 broadcastId,
                 eventType: wire.type
