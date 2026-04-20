@@ -200,6 +200,34 @@
     padding-right: 8px;
 }
 
+.operator-terminal .operator-terminal__entry-body a,
+.operator-terminal .operator-terminal__execution-body a,
+.operator-terminal-message .operator-terminal__entry-body a,
+.operator-terminal-message .operator-terminal__execution-body a,
+.anchored-terminal__agent-message-content a,
+.operator-terminal-content a,
+.operator-terminal .message-content a,
+.operator-terminal-message .message-content a,
+.anchored-terminal .message-content a {
+    color: var(--accent-blue-light) !important;
+    text-decoration: none !important;
+    border-bottom: none !important;
+    transition: color var(--transition-fast);
+}
+
+.operator-terminal .operator-terminal__entry-body a:hover,
+.operator-terminal .operator-terminal__execution-body a:hover,
+.operator-terminal-message .operator-terminal__entry-body a:hover,
+.operator-terminal-message .operator-terminal__execution-body a:hover,
+.anchored-terminal__agent-message-content a:hover,
+.operator-terminal-content a:hover,
+.operator-terminal .message-content a:hover,
+.operator-terminal-message .message-content a:hover,
+.anchored-terminal .message-content a:hover {
+    color: var(--accent-blue) !important;
+    text-decoration: underline !important;
+}
+
 .operator-terminal__entry--approval {
     gap: 0;
     padding: 0;
