@@ -177,7 +177,7 @@ i=1
 while [[ $i -le $# ]]; do
     arg="${!i}"
     case "$arg" in
-        --api-key)
+        --api-key|-k)
             if [[ $i -lt $# ]]; then
                 ((i++))
                 API_KEY="${!i}"
@@ -329,7 +329,7 @@ case "$TOP" in
         while [[ $i -lt ${#ORIGINAL_ARGS[@]} ]]; do
             arg="${ORIGINAL_ARGS[$i]}"
             case "$arg" in
-                --api-key)
+                --api-key|-k)
                     ((i++))
                     if [[ $i -lt ${#ORIGINAL_ARGS[@]} ]]; then
                         _LOGIN_API_KEY="${ORIGINAL_ARGS[$i]}"
@@ -351,10 +351,21 @@ case "$TOP" in
         set -e
 
         if [[ -z "$_LOGIN_API_KEY" && -z "$_LOGIN_DEVICE_TOKEN" ]]; then
-            echo "[g8e] login requires --api-key or --device-token" >&2
-            echo "  Usage: ./g8e login --api-key <key>" >&2
-            echo "         ./g8e login --device-token <token>" >&2
-            exit 1
+            printf "  Enter credential (API key or device token): "
+            read -s credential
+            echo
+            if [[ -z "$credential" ]]; then
+                echo "[g8e] No credential provided" >&2
+                exit 1
+            fi
+            if [[ "$credential" == dlk_* ]]; then
+                _LOGIN_DEVICE_TOKEN="$credential"
+            elif [[ "$credential" == g8e_* ]]; then
+                _LOGIN_API_KEY="$credential"
+            else
+                echo "[g8e] Invalid credential format (must start with dlk_ or g8e_)" >&2
+                exit 1
+            fi
         fi
 
         _authenticate_user "$_LOGIN_API_KEY" "$_LOGIN_DEVICE_TOKEN" true
