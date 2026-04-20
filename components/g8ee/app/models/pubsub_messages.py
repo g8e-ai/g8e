@@ -267,6 +267,7 @@ class NetworkConnectivityStatus(G8eBaseModel):
 class G8eoHeartbeatNetworkInfo(G8eBaseModel):
     """network_info block from heartbeat.json."""
     public_ip: str | None = None
+    internal_ip: str | None = None
     interfaces: list[str] | None = None
     connectivity_status: list[NetworkConnectivityStatus] | None = None
 
@@ -370,7 +371,6 @@ class G8eoHeartbeatPayload(G8eBaseModel):
     case_id: str | None = None
     investigation_id: str | None = None
     user_id: str | None = None
-    internal_ip: str | None = None
     system_fingerprint: str | None = None
 
     system_identity: G8eoHeartbeatSystemIdentity = Field(default_factory=G8eoHeartbeatSystemIdentity)

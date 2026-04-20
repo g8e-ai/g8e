@@ -45,11 +45,11 @@ const PROVIDER_MODELS = {
     gemini: {
         label: 'Gemini',
         all: [
-            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
         ],
         primary: [
-            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Flagship)' },
+            { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
             { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
         ],
         assistant: [
@@ -214,6 +214,12 @@ describe('LlmModelManager [UNIT]', () => {
                     emitConfig(eventBus);
                 }
             }).not.toThrow();
+        });
+
+        it('updates drawer text after config is received', () => {
+            emitConfig(eventBus);
+
+            expect(drawerText.textContent).toBe('Gemini 3.1 Pro');
         });
     });
 

@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorService } from '@g8ed/services/operator/operator_service.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
-import { OperatorDocument, OperatorWithSessionContext, OperatorSlot } from '@g8ed/models/operator_model.js';
+import { OperatorDocument, OperatorWithSessionContext, OperatorSlot, OperatorListUpdatedEvent } from '@g8ed/models/operator_model.js';
 import { EventType } from '@g8ed/constants/events.js';
 
 describe('OperatorService', () => {
@@ -141,6 +141,7 @@ describe('OperatorService', () => {
 
             const result = await service.getUserOperators('u-1');
 
+            expect(result).toBeInstanceOf(OperatorListUpdatedEvent);
             expect(result.type).toBe(EventType.OPERATOR_PANEL_LIST_UPDATED);
             expect(result.operators).toHaveLength(2);
             expect(result.active_count).toBe(1);

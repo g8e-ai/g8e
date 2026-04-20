@@ -18,7 +18,7 @@ from app.clients.pubsub_client import PubSubClient
 from app.errors import ConfigurationError
 from app.constants.events import EventType
 from app.constants.channels import PubSubChannel
-from app.models.events import SessionEvent
+from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEPayload,
     OperatorDocument,
@@ -268,27 +268,42 @@ class OperatorHeartbeatService:
     ) -> None:
         web_session_id = operator.bound_web_session_id
         user_id = operator.user_id
-        if not web_session_id or not user_id:
-            logger.info(
-                "[HEARTBEAT] Skipping SSE push for operator %s - web_session_id only present for BOUND operators (operator is ACTIVE, not bound)",
+
+        if not user_id:
+            logger.warning(
+                "[HEARTBEAT] Skipping SSE push for operator %s - missing user_id",
                 operator.operator_id,
                 extra={
                     "operator_id": operator.operator_id,
-                    "web_session_id": web_session_id,
                     "user_id": user_id,
                 },
             )
             return
+
         try:
-            await self.event_service.publish(
-                SessionEvent(
-                    event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-                    payload=sse_payload,
-                    web_session_id=web_session_id,
-                    user_id=user_id,
-                    case_id=payload.case_id,
-                    investigation_id=payload.investigation_id,
+            if web_session_id:
+                # BOUND operator: use SessionEvent for targeted delivery
+                await self.event_service.publish(
+                    SessionEvent(
+                        event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                        payload=sse_payload,
+                        web_session_id=web_session_id,
+                        user_id=user_id,
+                        case_id=payload.case_id,
+                        investigation_id=payload.investigation_id,
+                    )
                 )
-            )
+            else:
+                # ACTIVE (unbound) operator: use BackgroundEvent for delivery by user_id
+                investigation_id = payload.investigation_id or ""
+                await self.event_service.publish(
+                    BackgroundEvent(
+                        event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                        payload=sse_payload,
+                        investigation_id=investigation_id,
+                        user_id=user_id,
+                        case_id=payload.case_id,
+                    )
+                )
         except Exception as e:
             logger.warning("[HEARTBEAT] SSE push failed (non-blocking): %s", e)

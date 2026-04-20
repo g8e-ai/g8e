@@ -122,27 +122,7 @@ export class OperatorPanel {
     }
 
     _onListUpdated(data) {
-        // Defense-in-depth: OPERATOR_PANEL_LIST_UPDATED must carry the full-list
-        // shape (operators array + counts). Ignore any payload that lacks an
-        // operators array so a malformed publisher cannot wipe panel state.
-        if (!data || !Array.isArray(data.operators)) {
-            devLogger.warn('[OPERATOR-PANEL] Ignoring OPERATOR_PANEL_LIST_UPDATED without operators array', data);
-            return;
-        }
-        // Preserve merged heartbeat data when updating from keepalive
-        // to prevent heartbeat snapshots from being overwritten by backend data
-        this._operators = data.operators.map(newOp => {
-            const existingOp = this._operators.find(op => op.operator_id === newOp.operator_id);
-            if (existingOp && existingOp.latest_heartbeat_snapshot) {
-                // Preserve the heartbeat snapshot if the new data doesn't have it
-                return {
-                    ...newOp,
-                    latest_heartbeat_snapshot: newOp.latest_heartbeat_snapshot || existingOp.latest_heartbeat_snapshot,
-                    system_info: newOp.system_info || existingOp.system_info
-                };
-            }
-            return newOp;
-        });
+        this._operators = data.operators;
         this._totalOperatorCount = data.total_count || 0;
         this._activeOperatorCount = data.active_count || 0;
         this._usedSlots = data.used_slots || 0;
@@ -197,9 +177,9 @@ export class OperatorPanel {
                     disk_details: data.disk_details,
                     memory_details: data.memory_details,
                     environment: data.environment,
-                    cpu_count: data.cpu_count || data.user_details?.cpu_count,
-                    memory_mb: data.memory_total_mb || data.memory_details?.total_mb,
-                    current_user: data.user_details?.username
+                    cpu_count: data.cpu_count,
+                    memory_mb: data.memory_mb,
+                    current_user: data.current_user
                 },
                 last_heartbeat: data.timestamp
             };

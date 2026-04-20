@@ -364,6 +364,7 @@ async function _doInitialize() {
             bindingService: getBindingService(),
             operatorSessionService: getOperatorSessionService(),
             webSessionService: getWebSessionService(),
+            sseService: getSSEService(),
         });
         
         operatorAuthService = new OperatorAuthService({

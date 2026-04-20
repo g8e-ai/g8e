@@ -66,6 +66,7 @@
     "network_info": {
       "_description": "Current network state of the operator host.",
       "public_ip": { "type": "string" },
+      "internal_ip": { "type": "string" },
       "interfaces": {
         "type": "array",
         "items": "string",

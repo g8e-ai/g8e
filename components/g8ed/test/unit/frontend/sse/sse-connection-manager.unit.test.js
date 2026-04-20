@@ -99,37 +99,21 @@ describe('SSEConnectionManager.handleSSEEvent — infrastructure events [FRONTEN
         expect(eventBus.getEmittedEvents()).toHaveLength(0);
     });
 
-    it('does not emit on eventBus for PLATFORM_SSE_KEEPALIVE_SENT without operator_list', () => {
+    it('does not emit on eventBus for PLATFORM_SSE_KEEPALIVE_SENT', () => {
         const { manager, eventBus } = makeManager();
 
         const result = manager.handleSSEEvent({
             type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
             serverTime: Date.now(),
+            operator_list: {
+                operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
+                total_count: 1,
+                active_count: 1,
+            },
         });
 
         expect(result).toEqual({ handled: true, infrastructure: true });
         expect(eventBus.getEmittedEvents()).toHaveLength(0);
-    });
-
-    it('emits OPERATOR_PANEL_LIST_UPDATED when keepalive contains operator_list', () => {
-        const { manager, eventBus } = makeManager();
-
-        const operatorList = {
-            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
-            total_count: 1,
-            active_count: 1,
-        };
-
-        const result = manager.handleSSEEvent({
-            type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
-            serverTime: Date.now(),
-            operator_list: operatorList,
-        });
-
-        expect(result).toEqual({ handled: true, infrastructure: true });
-        const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_PANEL_LIST_UPDATED);
-        expect(emitted).toHaveLength(1);
-        expect(emitted[0].payload).toEqual(operatorList);
     });
 });
 

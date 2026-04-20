@@ -189,6 +189,7 @@ export class LlmModelManager {
         }
 
         this._populateDropdowns();
+        this._updateDrawerText();
     }
 
     _populateDropdowns() {

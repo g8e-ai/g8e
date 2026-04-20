@@ -20,6 +20,7 @@ import {
     OperatorWithSessionContext, 
     GrantedIntent, 
     OperatorSlot,
+    OperatorListUpdatedEvent,
 } from '../../models/operator_model.js';
 import { now } from '../../models/base.js';
 import { EventType } from '../../constants/events.js';
@@ -201,7 +202,7 @@ class OperatorService {
         const { usedSlots } = this.calculateSlotUsage(stats.operators);
         const slots = stats.operators.map(op => OperatorSlot.fromOperator(op));
 
-        return {
+        return new OperatorListUpdatedEvent({
             type: EventType.OPERATOR_PANEL_LIST_UPDATED,
             operators: slots,
             total_count: slots.length,
@@ -209,7 +210,7 @@ class OperatorService {
             used_slots: usedSlots,
             max_slots: slots.length,
             timestamp: now(),
-        };
+        });
     }
 
     /**

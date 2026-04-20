@@ -13,7 +13,7 @@
 
 import express from 'express';
 import { now } from '../../models/base.js';
-import { ConnectionEstablishedEvent, KeepaliveEvent, OperatorListData } from '../../models/sse_models.js';
+import { ConnectionEstablishedEvent, KeepaliveEvent } from '../../models/sse_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { EventType, SSE_KEEPALIVE_INTERVAL_MS } from '../../constants/events.js';
@@ -148,27 +148,25 @@ export function createSSERouter({
             });
         };
 
-        // Helper function to send keepalive with operator list
+        // Helper function to send keepalive (heartbeat only, no operator list)
         const sendKeepalive = async () => {
-            let operatorList = null;
-            try {
-                const rawOperatorList = await resolvedOperatorService.getUserOperators(req.userId);
-                operatorList = rawOperatorList ? OperatorListData.parse(rawOperatorList) : null;
-            } catch (e) {
-                logger.error(`[G8ED-SSE] Failed to fetch operator list for keepalive:`, e);
-            }
-
             await sseService.publishEvent(connectionId, new KeepaliveEvent({
                 type: EventType.PLATFORM_SSE_KEEPALIVE_SENT,
                 timestamp: now(),
                 serverTime: Date.now(),
-                operator_list: operatorList
             }));
         };
 
-        // Send immediate keepalive to provide operator list right away
-        sendKeepalive().catch(error => {
-            logger.error(`[G8ED-SSE] Initial keepalive failed for ${connectionId}:`, error);
+        // Send initial operator list when SSE connection is established
+        (async () => {
+            try {
+                const operatorList = await resolvedOperatorService.getUserOperators(req.userId);
+                await sseService.publishEvent(connectionId, operatorList);
+            } catch (error) {
+                logger.warn('[G8ED-SSE] Failed to send initial operator list', { error: error.message });
+            }
+        })().catch(error => {
+            logger.error(`[G8ED-SSE] Initial operator list failed for ${connectionId}:`, error);
             cleanupConnection();
         });
 

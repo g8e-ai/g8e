@@ -16,7 +16,7 @@ import { createInternalOperatorRouter } from '@g8ed/routes/internal/internal_ope
 import { OperatorStatus } from '@g8ed/constants/operator.js';
 import { DeviceLinkError } from '@g8ed/constants/auth.js';
 import { mockOperators } from '@test/fixtures/operators.fixture.js';
-import { OperatorSlot } from '@g8ed/models/operator_model.js';
+import { OperatorSlot, OperatorListUpdatedEvent } from '@g8ed/models/operator_model.js';
 
 describe('Internal Operator Routes [UNIT]', () => {
     let router;
@@ -182,12 +182,14 @@ describe('Internal Operator Routes [UNIT]', () => {
             const req = createMockReq({ params: { userId: 'user_123' } });
             const res = createMockRes();
 
-            mockOperatorService.getUserOperators.mockResolvedValue({
-                type: 'operator.list.updated',
-                operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.AVAILABLE })],
-                total_count: 1,
-                active_count: 1
-            });
+            mockOperatorService.getUserOperators.mockResolvedValue(
+                new OperatorListUpdatedEvent({
+                    type: 'operator.list.updated',
+                    operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.AVAILABLE })],
+                    total_count: 1,
+                    active_count: 1
+                })
+            );
 
             await getRoute()(req, res);
 

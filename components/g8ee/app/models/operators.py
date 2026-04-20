@@ -266,6 +266,7 @@ class HeartbeatNetworkInterface(G8eBaseModel):
 class HeartbeatNetworkInfo(G8eBaseModel):
     """Network information from Operator heartbeat."""
     public_ip: str | None = Field(default=None, description="Public IP address")
+    internal_ip: str | None = Field(default=None, description="Internal/private IP address")
     interfaces: list[str] | None = Field(default=None, description="List of network interface names")
     connectivity_status: list[HeartbeatNetworkInterface] | None = Field(default=None, description="Active network interfaces with IP and MTU")
 
@@ -380,7 +381,6 @@ class OperatorHeartbeat(G8eBaseModel):
     )
 
     # Network identity fields (top-level in g8eo payload, not nested under network_info)
-    internal_ip: str | None = Field(default=None, description="Primary internal/private IP address")
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
     fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
 
@@ -426,6 +426,7 @@ class OperatorHeartbeat(G8eBaseModel):
             ),
             network=HeartbeatNetworkInfo(
                 public_ip=payload.network_info.public_ip,
+                internal_ip=payload.network_info.internal_ip,
                 interfaces=payload.network_info.interfaces,
                 connectivity_status=[
                     HeartbeatNetworkInterface(name=s.name, ip=s.ip, mtu=s.mtu)
@@ -475,7 +476,6 @@ class OperatorHeartbeat(G8eBaseModel):
                 used_mb=payload.memory_details.used_mb,
                 percent=payload.memory_details.percent,
             ),
-            internal_ip=payload.internal_ip,
             system_fingerprint=payload.system_fingerprint,
             fingerprint_details=SystemInfoFingerprintDetails.model_validate(
                 payload.fingerprint_details
@@ -506,6 +506,7 @@ class OperatorHeartbeat(G8eBaseModel):
             disk_used_gb=self.performance.disk_used_gb,
             disk_total_gb=self.performance.disk_total_gb,
             public_ip=self.network.public_ip,
+            internal_ip=self.network.internal_ip,
             interfaces=self.network.interfaces,
             uptime=self.uptime.uptime_display,
             uptime_seconds=self.uptime.uptime_seconds,
@@ -520,6 +521,8 @@ class OperatorHeartbeat(G8eBaseModel):
             memory_details=self.memory_details,
             environment=self.environment,
             cpu_count=self.system_identity.cpu_count,
+            memory_mb=self.system_identity.memory_mb,
+            current_user=self.system_identity.current_user,
         )
 
 
@@ -810,6 +813,9 @@ class HeartbeatSSEPayload(G8eBaseModel):
     hostname: str | None = Field(default=None, description="System hostname")
     os: str | None = Field(default=None, description="Operating system name")
     architecture: str | None = Field(default=None, description="CPU architecture")
+    cpu_count: int | None = Field(default=None, description="Number of CPU cores")
+    memory_mb: int | None = Field(default=None, description="Total memory in MB from system_identity")
+    current_user: str | None = Field(default=None, description="Current user from system_identity")
     cpu_percent: float | None = Field(default=None, description="CPU usage percentage")
     memory_percent: float | None = Field(default=None, description="Memory usage percentage")
     disk_percent: float | None = Field(default=None, description="Disk usage percentage")
@@ -819,6 +825,7 @@ class HeartbeatSSEPayload(G8eBaseModel):
     disk_used_gb: float | None = Field(default=None, description="Disk used in GB")
     disk_total_gb: float | None = Field(default=None, description="Total disk in GB")
     public_ip: str | None = Field(default=None, description="Public IP address")
+    internal_ip: str | None = Field(default=None, description="Internal/private IP address")
     interfaces: list[str] | None = Field(default=None, description="Network interface names")
     uptime: str | None = Field(default=None, description="Human-readable uptime string")
     uptime_seconds: int | None = Field(default=None, description="Uptime in seconds")
@@ -832,6 +839,28 @@ class HeartbeatSSEPayload(G8eBaseModel):
     disk_details: HeartbeatDiskDetails | None = Field(default=None, description="Disk details")
     memory_details: HeartbeatMemoryDetails | None = Field(default=None, description="Memory details")
     environment: HeartbeatEnvironment | None = Field(default=None, description="Environment context")
+
+    def flatten_for_wire(self) -> dict[str, Any]:
+        """Serialize nested Pydantic model fields to dicts for wire transmission.
+
+        Overrides base flatten_for_wire() to ensure nested model fields (os_details,
+        user_details, disk_details, memory_details, environment) are serialized as
+        plain dicts rather than being left as Pydantic model instances or converted
+        to JSON strings.
+        """
+        data = super().flatten_for_wire()
+        # Explicitly serialize nested Pydantic models to dicts
+        if self.os_details is not None:
+            data["os_details"] = self.os_details.model_dump(mode="json", exclude_none=True)
+        if self.user_details is not None:
+            data["user_details"] = self.user_details.model_dump(mode="json", exclude_none=True)
+        if self.disk_details is not None:
+            data["disk_details"] = self.disk_details.model_dump(mode="json", exclude_none=True)
+        if self.memory_details is not None:
+            data["memory_details"] = self.memory_details.model_dump(mode="json", exclude_none=True)
+        if self.environment is not None:
+            data["environment"] = self.environment.model_dump(mode="json", exclude_none=True)
+        return data
 
 
 # =============================================================================

@@ -43,6 +43,7 @@ type HeartbeatNetworkInterface struct {
 
 type HeartbeatNetworkInfo struct {
 	PublicIP           string                      `json:"public_ip"`
+	InternalIP         string                      `json:"internal_ip"`
 	Interfaces         []string                    `json:"interfaces"`
 	ConnectivityStatus []HeartbeatNetworkInterface `json:"connectivity_status"`
 }

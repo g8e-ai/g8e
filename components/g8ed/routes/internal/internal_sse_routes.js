@@ -32,7 +32,7 @@ import { EventType } from '../../constants/events.js';
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
-    const { sseService } = services;
+    const { sseService, webSessionService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -64,46 +64,76 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
             logger.info('[INTERNAL-HTTP] SSE push request received', {
                 webSessionId: redactWebSessionId(pushReq.web_session_id),
+                userId: pushReq.user_id,
                 eventType: pushReq.event.type
             });
 
             logger.info(`[SESSION TRACE] g8ed received SSE push - web_session_id=${redactWebSessionId(pushReq.web_session_id)}, event_type=${pushReq.event.type}`);
-
-            const targetWebSessionId = pushReq.web_session_id;
 
             const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
                 ? normalizeCitationNums(pushReq.event)
                 : pushReq.event;
             const finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
 
-            // Forward to SSE service for delivery
-            const published = await sseService.publishEvent(targetWebSessionId, finalEvent, (status) => {
-                if (status.delivered) {
-                    logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        eventType: pushReq.event.type
-                    });
-                } else {
-                    logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
+            let published = false;
+
+            if (pushReq.web_session_id) {
+                // SessionEvent: targeted delivery to specific web session
+                published = await sseService.publishEvent(pushReq.web_session_id, finalEvent, (status) => {
+                    if (status.delivered) {
+                        logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            eventType: pushReq.event.type
+                        });
+                    } else {
+                        logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            eventType: pushReq.event.type
+                        });
+                    }
+                });
+
+                if (published) {
+                    logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
                         webSessionId: redactWebSessionId(pushReq.web_session_id),
                         eventType: pushReq.event.type
                     });
                 }
-            });
+            } else {
+                // BackgroundEvent: broadcast to all sessions for this user
+                const sessionIds = await webSessionService.getUserActiveSessions(pushReq.user_id);
+
+                if (sessionIds.length === 0) {
+                    logger.info('[INTERNAL-HTTP] No active sessions for user, skipping broadcast', {
+                        userId: pushReq.user_id,
+                        eventType: pushReq.event.type
+                    });
+                } else {
+                    let successCount = 0;
+                    for (const sessionId of sessionIds) {
+                        if (await sseService.publishEvent(sessionId, finalEvent)) {
+                            successCount++;
+                        }
+                    }
+                    published = successCount > 0;
+                    logger.info('[INTERNAL-HTTP] SSE event broadcast to user sessions', {
+                        userId: pushReq.user_id,
+                        successCount,
+                        totalSessions: sessionIds.length,
+                        eventType: pushReq.event.type
+                    });
+                }
+            }
 
             if (published) {
-                logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP', {
-                    webSessionId: redactWebSessionId(pushReq.web_session_id),
-                    eventType: pushReq.event.type
-                });
-                
                 return res.json(new SimpleSuccessResponse({
                     success: true,
                     message: 'Event delivered'
                 }).forWire());
             } else {
                 logger.warn('[INTERNAL-HTTP] Failed to publish SSE event', {
-                    webSessionId: redactWebSessionId(pushReq.web_session_id)
+                    webSessionId: redactWebSessionId(pushReq.web_session_id),
+                    userId: pushReq.user_id
                 });
                 return res.status(500).json(new ErrorResponse({
                     error: 'Failed to publish event'

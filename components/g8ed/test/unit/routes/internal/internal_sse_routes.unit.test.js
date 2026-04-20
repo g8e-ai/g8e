@@ -171,7 +171,7 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
         });
 
-        it('should pass through OPERATOR_PANEL_LIST_UPDATED event as-is since keepalive provides full list', async () => {
+        it('should pass through OPERATOR_PANEL_LIST_UPDATED event as-is', async () => {
             const event = {
                 type: EventType.OPERATOR_PANEL_LIST_UPDATED,
                 operator_id: 'g8ee-operator-123',

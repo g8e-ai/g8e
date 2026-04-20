@@ -556,19 +556,37 @@ export class OperatorDocument extends G8eIdentifiableModel {
 
 export class OperatorSlotSystemInfo extends G8eBaseModel {
     static fields = {
-        hostname:    { type: F.string, default: null },
-        os:          { type: F.string, default: null },
-        internal_ip: { type: F.string, default: null },
-        public_ip:   { type: F.string, default: null },
+        hostname:       { type: F.string,  default: null },
+        os:             { type: F.string,  default: null },
+        architecture:   { type: F.string,  default: null },
+        cpu_count:      { type: F.number,  default: null },
+        memory_mb:      { type: F.number,  default: null },
+        current_user:   { type: F.string,  default: null },
+        internal_ip:    { type: F.string,  default: null },
+        public_ip:      { type: F.string,  default: null },
+        os_details:     { type: F.object,  default: null },
+        user_details:   { type: F.object,  default: null },
+        disk_details:   { type: F.object,  default: null },
+        memory_details: { type: F.object,  default: null },
+        environment:    { type: F.object,  default: null },
     };
 
     static fromSystemInfo(systemInfo) {
         if (!systemInfo) return new OperatorSlotSystemInfo({});
         return new OperatorSlotSystemInfo({
-            hostname:    systemInfo.hostname ?? null,
-            os:          systemInfo.os ?? null,
-            internal_ip: systemInfo.internal_ip ?? null,
-            public_ip:   systemInfo.public_ip ?? null,
+            hostname:       systemInfo.hostname ?? null,
+            os:             systemInfo.os ?? null,
+            architecture:   systemInfo.architecture ?? null,
+            cpu_count:      systemInfo.cpu_count ?? null,
+            memory_mb:      systemInfo.memory_mb ?? null,
+            current_user:   systemInfo.current_user ?? null,
+            internal_ip:    systemInfo.internal_ip ?? null,
+            public_ip:      systemInfo.public_ip ?? null,
+            os_details:     systemInfo.os_details ?? null,
+            user_details:   systemInfo.user_details ?? null,
+            disk_details:   systemInfo.disk_details ?? null,
+            memory_details: systemInfo.memory_details ?? null,
+            environment:    systemInfo.environment ?? null,
         });
     }
 }
@@ -589,6 +607,7 @@ export class OperatorSlot extends G8eBaseModel {
         first_deployed: { type: F.date,    default: null },
         last_heartbeat: { type: F.date,    default: null },
         system_info:    { type: F.object,  model: OperatorSlotSystemInfo, default: () => new OperatorSlotSystemInfo({}) },
+        latest_heartbeat_snapshot: { type: F.object, default: null },
     };
 
     static fromOperator(operator) {
@@ -604,6 +623,7 @@ export class OperatorSlot extends G8eBaseModel {
             first_deployed: operator.first_deployed ?? null,
             last_heartbeat: operator.last_heartbeat ?? null,
             system_info:    OperatorSlotSystemInfo.fromSystemInfo(operator.system_info),
+            latest_heartbeat_snapshot: operator.latest_heartbeat_snapshot ?? null,
         });
     }
 }

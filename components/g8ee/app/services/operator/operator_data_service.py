@@ -133,7 +133,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             cpu_count=heartbeat.system_identity.cpu_count,
             memory_mb=heartbeat.system_identity.memory_mb,
             public_ip=heartbeat.network.public_ip,
-            internal_ip=heartbeat.internal_ip,
+            internal_ip=heartbeat.network.internal_ip,
             interfaces=heartbeat.network.interfaces or [],
             current_user=heartbeat.system_identity.current_user,
             system_fingerprint=heartbeat.system_fingerprint,

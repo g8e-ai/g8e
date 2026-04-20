@@ -182,7 +182,7 @@ export class UnlockAccountRequest extends G8eBaseModel {
 
 export class SSEPushRequest extends G8eBaseModel {
     static fields = {
-        web_session_id: { type: F.string, required: true },
+        web_session_id: { type: F.string, default: null },
         user_id:        { type: F.string, required: true },
         event:          { type: F.object, required: true },
     };
