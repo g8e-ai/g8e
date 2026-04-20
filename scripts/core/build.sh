@@ -438,58 +438,60 @@ fi
 # ─── clean ────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "clean" ]]; then
-    echo "Cleaning managed Docker resources..."
+    echo "Cleaning ALL g8e Docker resources..."
 
     FILTER_MANAGED="label=io.g8e.managed=true"
 
-    # 1. Identify and remove containers
+    # 1. Stop and remove all containers with io.g8e.managed=true label
+    echo "Stopping and removing containers..."
     containers=$(docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null)
     if [[ -n "$containers" ]]; then
-        echo "Removing containers..."
+        echo "$containers" | xargs -r docker stop 2>/dev/null || true
         echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
     fi
 
-    # 2. Identify and remove volumes
+    # 2. Remove all volumes with io.g8e.managed=true label
+    echo "Removing volumes..."
     volumes=$(docker volume ls -q --filter "$FILTER_MANAGED" 2>/dev/null)
     if [[ -n "$volumes" ]]; then
-        echo "Removing managed volumes..."
-        echo "$volumes" | xargs -r docker volume rm 2>/dev/null || true
+        echo "$volumes" | xargs -r docker volume rm -f 2>/dev/null || true
     fi
 
-    # 3. Identify and remove networks
+    # 3. Remove all networks with io.g8e.managed=true label
+    echo "Removing networks..."
     networks=$(docker network ls -q --filter "$FILTER_MANAGED" 2>/dev/null)
     if [[ -n "$networks" ]]; then
-        echo "Removing managed networks..."
         echo "$networks" | xargs -r docker network rm 2>/dev/null || true
     fi
 
-    # 4. Identify and remove images
+    # 4. Remove all images with io.g8e.managed=true label (including intermediate layers)
+    echo "Removing images..."
     images=$(docker images -q --filter "$FILTER_MANAGED" 2>/dev/null | sort -u)
     if [[ -n "$images" ]]; then
-        echo "Removing managed images..."
         echo "$images" | xargs -r docker rmi -f 2>/dev/null || true
     fi
 
-    # 5. Final prune for any orphaned project resources (anonymous volumes, etc.)
-    echo "Pruning remaining project-labeled resources..."
-    docker image prune -f --filter "label=com.docker.compose.project=g8e" 2>/dev/null || true
-    docker volume prune -f --filter "label=com.docker.compose.project=g8e" 2>/dev/null || true
+    # 5. Remove all build cache for the g8e project
+    echo "Removing build cache..."
+    docker builder prune -af --filter "label=com.docker.compose.project=g8e" 2>/dev/null || true
 
-    # 6. Prune dangling images (untagged intermediate layers not caught by label filters)
+    # 6. Prune any remaining dangling images (catches untagged intermediate layers)
     echo "Pruning dangling images..."
-    docker image prune -f 2>/dev/null || true
+    docker image prune -af 2>/dev/null || true
 
-    # 7. Prune orphaned networks not covered by label filters
+    # 7. Prune any remaining orphaned networks
     echo "Pruning orphaned networks..."
     docker network prune -f 2>/dev/null || true
 
-    # 8. Prune dangling build cache layers (preserves base image cache)
-    # Removing this to prevent wiping the ubuntu apt-get cache layers
-    # echo "Pruning dangling build cache..."
-    # docker builder prune -f 2>/dev/null || true
+    # 8. Prune any remaining buildx cache
+    echo "Pruning buildx cache..."
+    docker buildx prune -af 2>/dev/null || true
 
     echo ""
-    echo "Done."
+    echo "All g8e Docker resources removed."
+    echo ""
+    echo "Current Docker disk usage:"
+    docker system df
     exit 0
 fi
 
