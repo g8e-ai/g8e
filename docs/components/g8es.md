@@ -1,3 +1,8 @@
+---
+title: g8es
+parent: Components
+---
+
 # g8es — g8e Data Bus
 
 ## Overview

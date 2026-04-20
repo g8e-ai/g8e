@@ -24,6 +24,33 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
+// mergeExecutionID ensures every outbound LFAA payload carries an execution_id
+// matching the inbound msg.ID. g8ee correlates operator responses by either
+// payload.execution_id or the top-level envelope id; injecting it here makes
+// every LFAA response correlatable without each typed payload having to define
+// its own ExecutionID field. Typed payloads that already set execution_id are
+// preserved unchanged.
+func mergeExecutionID(raw json.RawMessage, executionID string) json.RawMessage {
+	if executionID == "" || len(raw) == 0 {
+		return raw
+	}
+	var asMap map[string]interface{}
+	if err := json.Unmarshal(raw, &asMap); err != nil || asMap == nil {
+		return raw
+	}
+	if existing, ok := asMap["execution_id"]; ok {
+		if s, isStr := existing.(string); isStr && s != "" {
+			return raw
+		}
+	}
+	asMap["execution_id"] = executionID
+	merged, err := json.Marshal(asMap)
+	if err != nil {
+		return raw
+	}
+	return merged
+}
+
 // publishLFAATypedResponseTo builds a G8eMessage from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
@@ -44,6 +71,7 @@ func publishLFAATypedResponseTo(
 		logger.Error("Failed to build LFAA typed response", "error", err)
 		return
 	}
+	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, payload)
@@ -99,6 +127,7 @@ func publishLFAAErrorTo(
 		logger.Error("Failed to build LFAA error message", "error", err)
 		return
 	}
+	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, &payload)
@@ -145,6 +174,7 @@ func publishLFAAResponseTo(
 		logger.Error("Failed to build LFAA response", "error", err)
 		return
 	}
+	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, responseJSON)

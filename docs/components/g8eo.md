@@ -1,3 +1,8 @@
+---
+title: g8eo
+parent: Components
+---
+
 # g8eo — g8e Operator
 
 g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, platform-agnostic, secure, real-time command execution and file management for remote system operations. Any client that adheres to the g8e events protocol can act as an Operator.

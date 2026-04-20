@@ -1,3 +1,8 @@
+---
+title: Events
+parent: Reference
+---
+
 # g8e Event Type Reference
 
 Reference guide for g8e platform event type definitions. All inter-component communication uses these event types.

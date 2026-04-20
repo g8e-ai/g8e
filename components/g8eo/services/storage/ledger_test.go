@@ -429,6 +429,20 @@ func TestLedgerService_GetFileHistory(t *testing.T) {
 	}
 }
 
+// Regression: callers (e.g. HistoryHandler) may hold a nil *LedgerService when
+// the operator was started without local storage. Public methods must degrade
+// to an error instead of panicking on the auditVault deref inside gitReady().
+func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
+	var lms *LedgerService
+
+	assert.NotPanics(t, func() {
+		history, err := lms.GetFileHistory("/some/file", 10)
+		assert.Error(t, err)
+		assert.Nil(t, history)
+		assert.Contains(t, err.Error(), "disabled")
+	})
+}
+
 func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	lms := NewLedgerService(nil, nil, testutil.NewTestLogger())
 

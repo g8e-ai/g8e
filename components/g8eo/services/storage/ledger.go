@@ -66,7 +66,13 @@ func (lms *LedgerService) IsEncryptionEnabled() bool {
 }
 
 // gitReady returns true if the ledger can perform git operations.
+// Nil-safe: a nil receiver or nil auditVault short-circuits to false so callers
+// that forward requests to an unconfigured ledger (e.g. HistoryHandler built
+// without local storage) degrade gracefully instead of panicking.
 func (lms *LedgerService) gitReady() bool {
+	if lms == nil {
+		return false
+	}
 	return lms.auditVault != nil && lms.auditVault.IsEnabled() && lms.auditVault.IsGitAvailable()
 }
 

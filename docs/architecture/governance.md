@@ -1,3 +1,8 @@
+---
+title: Governance
+parent: Architecture
+---
+
 # **The Tribunal Governance Model**
 
 ## **1. Core Philosophy**

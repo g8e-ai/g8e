@@ -1,3 +1,8 @@
+---
+title: Thinking Levels
+parent: Architecture
+---
+
 # Thinking Levels Abstraction
 
 g8ee addresses four LLM providers (Anthropic, Gemini, OpenAI, Ollama), each of which exposes a different mechanism for enabling extended reasoning ("thinking", "reasoning effort", "extended thinking"). Rather than let per-provider vocabulary leak into the agent layer, g8ee defines a single canonical vocabulary and a per-provider translation layer that maps intent to wire format.

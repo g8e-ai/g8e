@@ -1,3 +1,9 @@
+---
+title: Documentation
+has_children: false
+permalink: /docs/
+---
+
 # g8e Documentation Index
 
 Documentation for the g8e AI governance platform, organized by category.

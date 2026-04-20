@@ -1,3 +1,8 @@
+---
+title: MCP
+parent: Architecture
+---
+
 # Model Context Protocol (MCP) Integration
 
 g8e implements the Model Context Protocol (MCP) as a provider-agnostic translation layer on top of its internal event system. The platform is designed to support multiple protocol translators (MCP, and future protocols) through a unified event-based architecture.
