@@ -1,0 +1,24 @@
+theme: minima
+
+title: g8e Documentation
+description: AI governance platform documentation
+
+# Navigation
+header_pages:
+  - index.md
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge
+
+# Plugins
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
