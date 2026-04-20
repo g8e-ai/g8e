@@ -64,7 +64,7 @@ export const OperatorListMixin = {
 
         const statusPriority = (op) => {
             if (op.is_g8ep) return 0;
-            const isBoundToMe = op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId;
+            const isBoundToMe = op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = op.status === OperatorStatus.BOUND && !isBoundToMe;
             if (isBoundToMe) return 1;
             if (isBoundElsewhere) return 2;
@@ -497,7 +497,7 @@ export const OperatorListMixin = {
         }
 
         const boundOps = sortedOperators
-            .filter(op => op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId)
+            .filter(op => op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId)
             .sort((a, b) => (a.name || a.operator_id).localeCompare(b.name || b.operator_id));
 
         if (boundOps.length > 0) {

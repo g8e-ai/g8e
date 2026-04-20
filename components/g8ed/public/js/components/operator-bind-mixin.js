@@ -435,7 +435,7 @@ export const BindOperatorsMixin = {
         const currentWebSessionId = window.authState?.getWebSessionId();
 
         const boundOperators = this.operators.filter(op =>
-            (op.status === OperatorStatus.BOUND && op.web_session_id === currentWebSessionId) ||
+            (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
             (op.status === OperatorStatus.STALE && this.boundOperatorIds.includes(op.operator_id))
         );
 

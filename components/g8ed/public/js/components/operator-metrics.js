@@ -46,7 +46,7 @@ export class OperatorMetrics {
         this.disk = snapshot.disk_percent ?? metrics.disk_percent ?? systemInfo.disk_details?.percent ?? null;
         this.networkLatency = snapshot.network_latency ?? metrics.network_latency ?? null;
 
-        this.uptime = snapshot.uptime ?? uptime.uptime ?? uptime.uptime_string ?? null;
+        this.uptime = snapshot.uptime ?? uptime.uptime ?? null;
         this.uptimeSeconds = snapshot.uptime_seconds ?? uptime.uptime_seconds ?? null;
 
         this.version = version.g8eo_version || actualData.g8eo_version || null;

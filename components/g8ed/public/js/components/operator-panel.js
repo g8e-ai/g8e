@@ -149,22 +149,23 @@ export class OperatorPanel {
         if (!authState?.isAuthenticated) return;
 
         const heartbeat = data.data || {};
-        this._lastHeartbeat = heartbeat.timestamp ? new Date(heartbeat.timestamp).getTime() : Date.now();
+        const heartbeatTimestamp = heartbeat.metrics?.timestamp ?? null;
+        this._lastHeartbeat = heartbeatTimestamp ? new Date(heartbeatTimestamp).getTime() : Date.now();
         this._isConnected = true;
-        devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
+        devLogger.log('[OPERATOR-PANEL] Heartbeat:', heartbeat.operator_id);
 
-        const operatorIndex = this._operators.findIndex(op => op.operator_id === data.operator_id);
+        const operatorIndex = this._operators.findIndex(op => op.operator_id === heartbeat.operator_id);
         if (operatorIndex !== -1) {
             const existingOperator = this._operators[operatorIndex];
 
             this._operators[operatorIndex] = {
                 ...existingOperator,
-                status: data.status ?? existingOperator.status,
-                latest_heartbeat_snapshot: HeartbeatSnapshot.fromHeartbeat(
-                    heartbeat,
-                    heartbeat.timestamp ? new Date(heartbeat.timestamp) : new Date()
-                ),
-                last_heartbeat: heartbeat.timestamp,
+                status: heartbeat.status ?? existingOperator.status,
+                latest_heartbeat_snapshot: HeartbeatSnapshot.parse({
+                    timestamp: heartbeatTimestamp ? new Date(heartbeatTimestamp) : new Date(),
+                    ...(heartbeat.metrics || {})
+                }),
+                last_heartbeat: heartbeatTimestamp,
             };
         }
 

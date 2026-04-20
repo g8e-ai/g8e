@@ -26,26 +26,18 @@ describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
         expect(snapshot.uptime_seconds).toBeNull();
     });
 
-    it('fromHeartbeat() extracts performance metrics from canonical wire format', () => {
-        const heartbeat = {
-            performance_metrics: {
-                cpu_percent: 75.5,
-                memory_percent: 60.2,
-                disk_percent: 45.0,
-                network_latency: 25,
-                memory_used_mb: 9830,
-                memory_total_mb: 16384,
-                disk_used_gb: 250.5,
-                disk_total_gb: 500.0,
-            },
-            uptime_info: {
-                uptime: '2 days, 3 hours',
-                uptime_seconds: 183600,
-            },
+    it('parse() extracts metrics from flat SSE envelope structure', () => {
+        const metrics = {
+            timestamp: new Date('2026-01-01T00:00:00.000Z'),
+            cpu_percent: 75.5,
+            memory_percent: 60.2,
+            disk_percent: 45.0,
+            network_latency: 25,
+            uptime: '2 days, 3 hours',
+            uptime_seconds: 183600,
         };
-        const timestamp = new Date('2026-01-01T00:00:00.000Z');
-        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
-        expect(snapshot.timestamp).toBe(timestamp);
+        const snapshot = HeartbeatSnapshot.parse(metrics);
+        expect(snapshot.timestamp).toEqual(new Date('2026-01-01T00:00:00.000Z'));
         expect(snapshot.cpu_percent).toBe(75.5);
         expect(snapshot.memory_percent).toBe(60.2);
         expect(snapshot.disk_percent).toBe(45.0);
@@ -54,10 +46,8 @@ describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
         expect(snapshot.uptime_seconds).toBe(183600);
     });
 
-    it('fromHeartbeat() handles missing performance_metrics', () => {
-        const heartbeat = {};
-        const timestamp = new Date();
-        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
+    it('parse() handles missing metrics with null defaults', () => {
+        const snapshot = HeartbeatSnapshot.parse({});
         expect(snapshot.cpu_percent).toBeNull();
         expect(snapshot.memory_percent).toBeNull();
         expect(snapshot.disk_percent).toBeNull();
@@ -66,32 +56,14 @@ describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
         expect(snapshot.uptime_seconds).toBeNull();
     });
 
-    it('fromHeartbeat() uses uptime_string as fallback for uptime', () => {
-        const heartbeat = {
-            uptime_info: {
-                uptime_string: '1h 30m',
-                uptime_seconds: 5400,
-            },
+    it('parse() extracts uptime fields from flat structure', () => {
+        const metrics = {
+            uptime: '1h 30m',
+            uptime_seconds: 5400,
         };
-        const timestamp = new Date();
-        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
+        const snapshot = HeartbeatSnapshot.parse(metrics);
         expect(snapshot.uptime).toBe('1h 30m');
         expect(snapshot.uptime_seconds).toBe(5400);
-    });
-
-    it('fromHeartbeat() handles null performance_metrics and uptime_info blocks', () => {
-        const heartbeat = {
-            performance_metrics: null,
-            uptime_info: null,
-        };
-        const timestamp = new Date();
-        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
-        expect(snapshot.cpu_percent).toBeNull();
-        expect(snapshot.memory_percent).toBeNull();
-        expect(snapshot.disk_percent).toBeNull();
-        expect(snapshot.network_latency).toBeNull();
-        expect(snapshot.uptime).toBeNull();
-        expect(snapshot.uptime_seconds).toBeNull();
     });
 
     it('parse() validates and creates valid HeartbeatSnapshot', () => {

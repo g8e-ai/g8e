@@ -894,7 +894,7 @@ export class HeartbeatSnapshot extends FrontendBaseModel {
             memory_percent:  perf.memory_percent ?? null,
             disk_percent:    perf.disk_percent ?? null,
             network_latency: perf.network_latency ?? null,
-            uptime:          uptime.uptime ?? uptime.uptime_string ?? null,
+            uptime:          uptime.uptime ?? null,
             uptime_seconds:  uptime.uptime_seconds ?? null,
         });
     }

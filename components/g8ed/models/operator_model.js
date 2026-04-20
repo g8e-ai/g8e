@@ -140,42 +140,6 @@ export class SystemInfo extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// HeartbeatSnapshot
-// ---------------------------------------------------------------------------
-
-export class HeartbeatSnapshot extends G8eBaseModel {
-    static fields = {
-        timestamp:       { type: F.date,   default: null },
-        cpu_percent:     { type: F.number, default: null },
-        memory_percent:  { type: F.number, default: null },
-        disk_percent:    { type: F.number, default: null },
-        network_latency: { type: F.any,    default: null },
-        uptime:          { type: F.any,    default: null },
-        uptime_seconds:  { type: F.any,    default: null },
-    };
-
-    static empty() {
-        return HeartbeatSnapshot.parse({});
-    }
-
-    static fromHeartbeat(heartbeat, timestamp) {
-        const hb = heartbeat || {};
-        const perf = hb.performance_metrics || {};
-        const uptime = hb.uptime_info || {};
-
-        return HeartbeatSnapshot.parse({
-            timestamp,
-            cpu_percent:     perf.cpu_percent ?? null,
-            memory_percent:  perf.memory_percent ?? null,
-            disk_percent:    perf.disk_percent ?? null,
-            network_latency: perf.network_latency ?? null,
-            uptime:          uptime.uptime ?? uptime.uptime_string ?? null,
-            uptime_seconds:  uptime.uptime_seconds ?? null,
-        });
-    }
-}
-
-// ---------------------------------------------------------------------------
 // HistoryEntry
 // ---------------------------------------------------------------------------
 
