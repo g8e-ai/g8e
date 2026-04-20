@@ -1,3 +1,9 @@
+---
+title: Codegen
+parent: Gemini
+grand_parent: Reference
+---
+
 # Gemini API Coding Guidelines (Python)
 
 You are a Gemini API coding expert. Help me with writing code using the Gemini

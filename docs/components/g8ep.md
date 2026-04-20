@@ -1,3 +1,8 @@
+---
+title: g8ep
+parent: Components
+---
+
 # g8e node
 
 g8ep is the always-on sidecar container for operator management, platform scripts, and security tooling.

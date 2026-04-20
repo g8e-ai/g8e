@@ -157,11 +157,19 @@ export const OperatorListMixin = {
                 return ' - ';
             };
 
-            const cpuPercent = formatPercent(latestSnapshot.cpu_percent);
-            const memoryPercent = formatPercent(latestSnapshot.memory_percent);
-            const diskPercent = formatPercent(latestSnapshot.disk_percent);
-            const networkLatency = formatLatency(latestSnapshot.network_latency);
-            const uptime = formatUptime(latestSnapshot.uptime || latestSnapshot.uptime_seconds);
+            // latest_heartbeat_snapshot is the serialized g8ee OperatorHeartbeat
+            // (nested: performance.*, uptime.uptime_display, etc). The SSE
+            // heartbeat envelope (HeartbeatSnapshot) is flat, so fall back to
+            // flat keys for operators whose snapshot was last updated via SSE.
+            const perf = latestSnapshot.performance || latestSnapshot;
+            const uptimeInfo = latestSnapshot.uptime && typeof latestSnapshot.uptime === 'object'
+                ? latestSnapshot.uptime
+                : latestSnapshot;
+            const cpuPercent = formatPercent(perf.cpu_percent);
+            const memoryPercent = formatPercent(perf.memory_percent);
+            const diskPercent = formatPercent(perf.disk_percent);
+            const networkLatency = formatLatency(perf.network_latency);
+            const uptime = formatUptime(uptimeInfo.uptime_display || uptimeInfo.uptime || uptimeInfo.uptime_seconds);
 
             const systemOs = systemInfo.os || ' - ';
             const architecture = systemInfo.architecture || ' - ';

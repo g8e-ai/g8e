@@ -1,3 +1,8 @@
+---
+title: g8ed
+parent: Components
+---
+
 # g8ed — g8e Dashboard
 
 ## Overview

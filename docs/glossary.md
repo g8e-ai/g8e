@@ -1,3 +1,7 @@
+---
+title: Glossary
+---
+
 # g8e Glossary
 
 Essential terminology for understanding the g8e platform. Terms are organized alphabetically.

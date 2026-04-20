@@ -1,3 +1,9 @@
+---
+title: Prompt Engineering
+parent: Gemini
+grand_parent: Reference
+---
+
 *Prompt design* is the process of creating prompts, or natural language requests,
 that elicit accurate, high quality responses from a language model.
 

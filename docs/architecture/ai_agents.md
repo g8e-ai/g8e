@@ -1,3 +1,8 @@
+---
+title: AI Agents
+parent: Architecture
+---
+
 # g8e AI AIs — g8ee Deep Dive
 
 g8ee AI AI architecture — investigation context, dynamic system prompts, memory, operation recording, chat turn flow, service breakdown, prompts, tools, LLM providers, and configuration.

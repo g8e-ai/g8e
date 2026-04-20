@@ -195,19 +195,24 @@ class ConsoleMetricsService {
                     if (status === OperatorStatus.ACTIVE || status === OperatorStatus.BOUND) {
                         healthyCount++;
                     }
-                    
-                    if (heartbeat.network_latency) {
-                        totalLatency += heartbeat.network_latency;
+
+                    // latest_heartbeat_snapshot is the persisted g8ee OperatorHeartbeat
+                    // (nested: performance.*). Fall back to flat keys for snapshots
+                    // written by the in-memory SSE HeartbeatMetrics envelope shape.
+                    const perf = heartbeat.performance || heartbeat;
+
+                    if (perf.network_latency !== null && perf.network_latency !== undefined) {
+                        totalLatency += perf.network_latency;
                         latencyCount++;
                     }
 
-                    if (heartbeat.cpu_percent !== undefined) {
-                        avgCpu += heartbeat.cpu_percent;
+                    if (perf.cpu_percent !== null && perf.cpu_percent !== undefined) {
+                        avgCpu += perf.cpu_percent;
                         metricsCount++;
                     }
 
-                    if (heartbeat.memory_percent !== undefined) {
-                        avgMemory += heartbeat.memory_percent;
+                    if (perf.memory_percent !== null && perf.memory_percent !== undefined) {
+                        avgMemory += perf.memory_percent;
                     }
                 }
             }

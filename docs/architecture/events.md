@@ -1,3 +1,8 @@
+---
+title: Events
+parent: Architecture
+---
+
 # g8e Event Type Specification
 
 Official wire-protocol event type reference for the g8e platform. All inter-component communication uses these event types.

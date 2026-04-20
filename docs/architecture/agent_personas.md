@@ -1,3 +1,8 @@
+---
+title: Agent Personas
+parent: Architecture
+---
+
 # Agent Persona System
 
 ## Overview

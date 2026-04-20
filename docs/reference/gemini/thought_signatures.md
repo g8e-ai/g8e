@@ -1,3 +1,9 @@
+---
+title: Thought Signatures
+parent: Gemini
+grand_parent: Reference
+---
+
 # Thought Signatures
 
 > [!IMPORTANT]

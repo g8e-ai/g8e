@@ -1,3 +1,8 @@
+---
+title: Security
+parent: Architecture
+---
+
 # Security Architecture
 
 g8e is a local-only, air-gapped, portable platform. It runs entirely via `docker-compose` on-premises — no cloud deployment, no SaaS backend, no external network dependency. This document is the deep-reference security guide for the platform, covering every enforcement layer in detail.

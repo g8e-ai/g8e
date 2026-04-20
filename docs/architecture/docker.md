@@ -1,3 +1,8 @@
+---
+title: Docker
+parent: Architecture
+---
+
 # Docker Architecture
 
 ## Overview

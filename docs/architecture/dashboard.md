@@ -1,3 +1,8 @@
+---
+title: Dashboard
+parent: Architecture
+---
+
 # Dashboard
 
 The dashboard is the primary UI surface in g8ed. It is served at `/chat` and consists of four main areas: the Header (with profile dropdown), the Operator Panel, the chat/message area, and the Terminal. All components communicate exclusively through `EventBus` — no component holds a direct reference to another.

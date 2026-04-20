@@ -1,3 +1,7 @@
+---
+title: g8e Help
+---
+
 g8e CLI
 
 AUTHENTICATION

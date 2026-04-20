@@ -301,8 +301,10 @@ class TestRunCommandsWire:
         )
         payload = result["payload"]
         assert payload["status"] == "completed", payload
-        assert marker in (payload.get("output") or ""), (
-            f"Command output missing marker {marker!r}: {payload}"
+        # Operator publishes stdout/stderr on the ExecutionResultsPayload wire
+        # contract; no legacy "output" alias exists.
+        assert marker in (payload.get("stdout") or ""), (
+            f"Command stdout missing marker {marker!r}: {payload}"
         )
 
 
@@ -450,9 +452,14 @@ class TestFetchFileHistoryWire:
         )
         event_type = result["event_type"]
         if event_type == EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED.value:
-            err = (result["payload"].get("error_message") or "").lower()
-            if "not available" in err:
-                pytest.skip("g8ep operator was started without a history handler")
+            # LFAA error payloads use "error"; typed failure payloads use
+            # "error_message". Accept either.
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
             # Other failure kinds are a legitimate signal worth asserting on.
         assert event_type in (
             EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED.value,
@@ -472,7 +479,8 @@ class TestFetchFileDiffWire:
         )
         event_type = result["event_type"]
         if event_type == EventType.OPERATOR_FILE_DIFF_FETCH_FAILED.value:
-            err = (result["payload"].get("error_message") or "").lower()
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
             if "not available" in err:
                 pytest.skip("g8ep operator was started without a local store")
         assert event_type in (

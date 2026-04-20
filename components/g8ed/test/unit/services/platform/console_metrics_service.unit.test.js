@@ -90,6 +90,33 @@ describe('ConsoleMetricsService [UNIT]', () => {
             expect(stats.health.avgLatencyMs).toBe(15);
             expect(stats.health.avgCpuPercent).toBe(10);
         });
+
+        it('reads metrics from the nested OperatorHeartbeat shape (performance.*)', async () => {
+            // Canonical persisted shape is g8ee OperatorHeartbeat with nested
+            // performance.cpu_percent / memory_percent / network_latency.
+            const operators = [
+                {
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: {
+                        performance: { cpu_percent: 40, memory_percent: 50, network_latency: 12 },
+                    },
+                },
+                {
+                    status: OperatorStatus.BOUND,
+                    latest_heartbeat_snapshot: {
+                        performance: { cpu_percent: 60, memory_percent: 70, network_latency: 18 },
+                    },
+                },
+            ];
+            cacheAside.queryDocuments.mockResolvedValue(operators);
+
+            const stats = await service.getOperatorStats();
+
+            expect(stats.health.healthy).toBe(2);
+            expect(stats.health.avgLatencyMs).toBe(15);
+            expect(stats.health.avgCpuPercent).toBe(50);
+            expect(stats.health.avgMemoryPercent).toBe(60);
+        });
     });
 
     describe('getSystemHealth', () => {

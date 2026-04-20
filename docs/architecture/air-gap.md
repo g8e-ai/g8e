@@ -1,3 +1,8 @@
+---
+title: Air Gap
+parent: Architecture
+---
+
 # Air-Gap Architecture
 
 g8e is designed to run with zero cloud dependencies at **runtime** when configured with a local LLM provider. This document catalogs all external dependencies, categorizes them by lifecycle phase, and describes the air-gap deployment path.

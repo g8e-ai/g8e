@@ -1,3 +1,9 @@
+---
+title: Thinking
+parent: Gemini
+grand_parent: Reference
+---
+
 # Gemini thinking
 
 The [Gemini 3 and 2.5 series models](https://ai.google.dev/gemini-api/docs/models) use an internal

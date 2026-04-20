@@ -1,3 +1,8 @@
+---
+title: About
+parent: Architecture
+---
+
 # Origins, Governance, and Philosophy
 
 g8e is the governance layer for AI-powered operations in mission-critical infrastructure. It provides the cryptographic control, threat detection, and non-bypassable human oversight needed to deploy AI into production without compromising security or handing over the keys.

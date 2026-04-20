@@ -1,3 +1,7 @@
+---
+title: Docs Guidelines
+---
+
 # g8e Documentation Guidelines
 
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.

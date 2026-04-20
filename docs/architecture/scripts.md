@@ -1,3 +1,8 @@
+---
+title: Scripts
+parent: Architecture
+---
+
 # g8e Scripts
 
 Organized scripts for managing the g8e platform.
