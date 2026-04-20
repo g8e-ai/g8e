@@ -280,15 +280,17 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             expect(content).not.toMatch(/--ca-url/);
         });
 
-        it('fetch-key-and-run.sh downloads binary from blob store when not present locally', () => {
+        it('fetch-key-and-run.sh downloads binary from blob store and tracks metadata', () => {
             if (!fs.existsSync(scriptPath)) {
                 console.warn('[SKIP] fetch-key-and-run.sh not found in test environment');
                 return;
             }
             const content = fs.readFileSync(path.join(scriptsDir, 'fetch-key-and-run.sh'), 'utf-8');
             expect(content).toMatch(/BLOB_URL="https:\/\/g8es:9000\/blob\/operator-binary"/);
+            expect(content).toMatch(/OPERATOR_META="\/home\/g8e\/g8e.operator.meta"/);
+            expect(content).toMatch(/_fetch_metadata/);
             expect(content).toMatch(/_fetch_binary/);
-            expect(content).toMatch(/if \[ ! -x "\$\{OPERATOR_BINARY\}" \]/);
+            expect(content).toMatch(/metadata changed/);
         });
 
         it('fetch-key-and-run.sh passes --working-dir /home/g8e to the operator binary', () => {
