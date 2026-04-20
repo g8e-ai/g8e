@@ -830,6 +830,81 @@ All new response models must declare explicit fields and avoid generic container
 
 ---
 
+## Frontend Model Architecture
+
+The browser uses a parallel model tier to the server-side `G8eBaseModel` hierarchy. Frontend models extend `FrontendBaseModel` (from `public/js/models/base.js`) and are used for data received from the wire (SSE events, API responses) in the browser.
+
+### FrontendBaseModel
+
+`FrontendBaseModel` mirrors the server-side `G8eBaseModel` API with browser-specific adaptations:
+
+- **Field definition:** Uses the same `F` tokens (`string`, `boolean`, `number`, `date`, `object`, `array`, `any`)
+- **Validation:** `parse(raw)` validates and coerces incoming wire data, throwing on validation errors
+- **Serialization:** `forWire()` converts models to plain JSON (Date → ISO string) for outbound fetch
+- **Date handling:** Date objects live inside the application boundary; serialized to ISO strings by `forWire()`
+
+### Frontend Model Files
+
+Browser-side models are organized in `public/js/models/`:
+
+| File | Purpose |
+|------|---------|
+| `base.js` | `FrontendBaseModel` and `FrontendIdentifiableModel` base classes |
+| `agent-models.js` | AI pipeline result models (TriageResult, CommandGenerationResult, etc.) |
+| `operator-models.js` | Operator domain models for browser (HeartbeatSnapshot, etc.) |
+
+### Boundary Enforcement
+
+**Critical rule:** Browser code must never import from server-side directories. All imports in `public/js/**/*.js` must resolve to files within `public/js/`. Cross-boundary imports (e.g., `../../../models/operator_model.js`) cause 404 errors because server files are outside the Express static root (`components/g8ed/public/`).
+
+When adding a new model needed by the browser:
+1. Create a browser-side model in `public/js/models/` extending `FrontendBaseModel`
+2. Mirror the server model's fields and factory methods (e.g., `empty()`, `fromHeartbeat()`)
+3. Add frontend unit tests in `test/unit/frontend/models/`
+4. Update browser imports to use the new browser-side path
+
+### Example: HeartbeatSnapshot
+
+The `HeartbeatSnapshot` model in `public/js/models/operator-models.js` mirrors the server-side model:
+
+```javascript
+export class HeartbeatSnapshot extends FrontendBaseModel {
+    static fields = {
+        timestamp:       { type: F.date,   default: null },
+        cpu_percent:     { type: F.number, default: null },
+        memory_percent:  { type: F.number, default: null },
+        disk_percent:    { type: F.number, default: null },
+        network_latency: { type: F.any,    default: null },
+        uptime:          { type: F.any,    default: null },
+        uptime_seconds:  { type: F.any,    default: null },
+    };
+
+    static empty() {
+        return HeartbeatSnapshot.parse({});
+    }
+
+    static fromHeartbeat(heartbeat, timestamp) {
+        const hb = heartbeat || {};
+        const perf = hb.performance_metrics || {};
+        const uptime = hb.uptime_info || {};
+
+        return HeartbeatSnapshot.parse({
+            timestamp,
+            cpu_percent:     perf.cpu_percent ?? null,
+            memory_percent:  perf.memory_percent ?? null,
+            disk_percent:    perf.disk_percent ?? null,
+            network_latency: perf.network_latency ?? null,
+            uptime:          uptime.uptime ?? uptime.uptime_string ?? null,
+            uptime_seconds:  uptime.uptime_seconds ?? null,
+        });
+    }
+}
+```
+
+This model is used by `operator-panel.js` to process heartbeat SSE events in the browser.
+
+---
+
 ## Attachments
 
 Attachments uploaded with a chat message are stored in the g8es Blob Store. Metadata is stored in g8es KV at `g8e:investigation:{inv_id}:attachment:{att_id}` (1h TTL). An ordered index of attachment IDs for the investigation is maintained at `g8e:investigation:{inv_id}:attachment.index`.

@@ -18,7 +18,7 @@ import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
 import { escapeHtml } from '../utils/html.js';
-import { HeartbeatSnapshot, SystemInfo } from '../../../models/operator_model.js';
+import { HeartbeatSnapshot } from '../models/operator-models.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
 import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
@@ -156,8 +156,7 @@ export class OperatorPanel {
         const operatorIndex = this._operators.findIndex(op => op.operator_id === data.operator_id);
         if (operatorIndex !== -1) {
             const existingOperator = this._operators[operatorIndex];
-            const existingSystemInfo = existingOperator.system_info || {};
-            
+
             this._operators[operatorIndex] = {
                 ...existingOperator,
                 status: data.status ?? existingOperator.status,
