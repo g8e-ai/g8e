@@ -227,24 +227,6 @@ _load_env() {
     fi
 }
 
-_ensure_secrets_key() {
-    local secrets_file="$HOME/.g8e/secrets_key"
-    if [[ -z "${G8E_SECRETS_KEY:-}" ]]; then
-        if [[ -f "$secrets_file" ]]; then
-            G8E_SECRETS_KEY=$(cat "$secrets_file" | tr -d '[:space:]')
-            export G8E_SECRETS_KEY
-        else
-            # Generate a new 32-byte (64 hex chars) secrets key
-            G8E_SECRETS_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-            mkdir -p "$HOME/.g8e"
-            echo "$G8E_SECRETS_KEY" > "$secrets_file"
-            chmod 600 "$secrets_file"
-            export G8E_SECRETS_KEY
-            echo "  Generated new G8E_SECRETS_KEY and saved to $secrets_file"
-        fi
-    fi
-}
-
 _preflight() {
     _load_env
 
@@ -384,7 +366,6 @@ fi
 # Use 'clean' to remove everything including SSL.
 
 if [[ "$COMMAND" == "reset" ]]; then
-    _ensure_secrets_key
     REBUILD_COMPONENTS=(g8es g8ee g8ed)
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
@@ -519,7 +500,6 @@ _preflight
 # ─── up ───────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "up" ]]; then
-    _ensure_secrets_key
     UP_COMPONENTS=("${REBUILD_COMPONENTS[@]}")
     if [[ ${#UP_COMPONENTS[@]} -eq 0 ]]; then
         UP_COMPONENTS=(g8es g8ee g8ed g8ep)
@@ -550,7 +530,6 @@ fi
 # on container start, g8es uploads them to the blob store automatically.
 
 if [[ "$COMMAND" == "setup" ]]; then
-    _ensure_secrets_key
     echo "Stopping all managed containers..."
     docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
     docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true

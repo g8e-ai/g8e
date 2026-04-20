@@ -159,11 +159,11 @@ export const USER_SETTINGS = Object.freeze([
         key: 'ollama_api_key',
         section: 'llm',
         label: 'Ollama API Key',
-        description: 'API key for Ollama (use "ollama" for local unauthenticated instances).',
+        description: 'API key for Ollama (optional - only required for authenticated instances).',
         type: 'password',
         provider: LLMProvider.OLLAMA,
         secret: true,
-        placeholder: LLMProvider.OLLAMA,
+        placeholder: '',
         default: '',
     }),
 
@@ -451,7 +451,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
 
 const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
     [LLMProvider.OPENAI]: ['openai_api_key'],
-    [LLMProvider.OLLAMA]: ['ollama_api_key'],
+    [LLMProvider.OLLAMA]: ['ollama_endpoint'],
     [LLMProvider.GEMINI]: ['gemini_api_key'],
     [LLMProvider.ANTHROPIC]: ['anthropic_api_key'],
 });

@@ -228,7 +228,7 @@ export class SetupPage {
         if (step === 2) {
             const active = this._getActiveProviders();
             if (active.length === 0) {
-                this._showStatus('error', 'Enter at least one provider API key');
+                this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
                 return false;
             }
             const primary = this._selectedModels.primary;

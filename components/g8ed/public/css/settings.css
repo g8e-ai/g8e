@@ -638,6 +638,7 @@ body[data-theme="light"] .settings-divider-text {
 .llm-model-dropdown.custom-dropdown {
     position: relative;
     width: 100%;
+    min-height: 40px;
 }
 
 .setup-model-dropdown {

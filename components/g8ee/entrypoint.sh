@@ -3,29 +3,15 @@
 
 set -e
 
-# Encryption/decryption helper functions
-_decrypt_secret() {
-    local encrypted="$1"
-    local key="$2"
-    if [ -z "$key" ]; then
-        echo "$encrypted"
-        return
-    fi
-    python3 /usr/local/bin/encrypt_secret.py decrypt "$encrypted" "$key"
-}
-
 SSL_DIR="/g8es"
 
 # Load security tokens into environment if files exist
-# Secrets are encrypted in volume, decrypt them
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
-    encrypted_token=$(cat "${SSL_DIR}/internal_auth_token" | tr -d ' \n\r')
-    export G8E_INTERNAL_AUTH_TOKEN=$(_decrypt_secret "$encrypted_token" "$G8E_SECRETS_KEY")
+    export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d ' \n\r')
 fi
 
 if [ -f "${SSL_DIR}/session_encryption_key" ]; then
-    encrypted_key=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
-    export G8E_SESSION_ENCRYPTION_KEY=$(_decrypt_secret "$encrypted_key" "$G8E_SECRETS_KEY")
+    export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
 fi
 
 # Wait for g8es to be ready

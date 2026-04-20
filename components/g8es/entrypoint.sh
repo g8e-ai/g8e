@@ -1,27 +1,13 @@
 #!/bin/sh
 set -e
 
-# Encryption/decryption helper functions
-_decrypt_secret() {
-    local encrypted="$1"
-    local key="$2"
-    if [ -z "$key" ]; then
-        echo "$encrypted"
-        return
-    fi
-    python3 /usr/local/bin/encrypt_secret.py decrypt "$encrypted" "$key"
-}
-
 # Load security tokens into environment if files exist
-# Secrets are encrypted in volume, decrypt them
 if [ -f /ssl/internal_auth_token ]; then
-    encrypted_token=$(cat /ssl/internal_auth_token | tr -d ' \n\r')
-    export G8E_INTERNAL_AUTH_TOKEN=$(_decrypt_secret "$encrypted_token" "$G8E_SECRETS_KEY")
+    export G8E_INTERNAL_AUTH_TOKEN=$(cat /ssl/internal_auth_token | tr -d ' \n\r')
 fi
 
 if [ -f /ssl/session_encryption_key ]; then
-    encrypted_key=$(cat /ssl/session_encryption_key | tr -d ' \n\r')
-    export G8E_SESSION_ENCRYPTION_KEY=$(_decrypt_secret "$encrypted_key" "$G8E_SECRETS_KEY")
+    export G8E_SESSION_ENCRYPTION_KEY=$(cat /ssl/session_encryption_key | tr -d ' \n\r')
 fi
 
 # ---------------------------------------------------------------------------
@@ -42,8 +28,6 @@ _upload_operator_binaries() {
         echo "[ENTRYPOINT] WARNING: No internal auth token — skipping operator binary upload"
         return
     fi
-    # Decrypt the token if it's encrypted
-    AUTH_TOKEN=$(_decrypt_secret "$AUTH_TOKEN" "$G8E_SECRETS_KEY")
 
     BLOB_URL="https://localhost:9000/blob/operator-binary"
 

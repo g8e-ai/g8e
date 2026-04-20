@@ -54,7 +54,7 @@ RUN set -ex; \
         { echo "apk add failed, retrying in 5s... ($i/3)"; sleep 5; }; \
     done
 
-RUN pip install --no-cache-dir --break-system-packages requests aiohttp cryptography
+RUN pip install --no-cache-dir requests aiohttp
 
 WORKDIR /app
 
@@ -71,8 +71,7 @@ RUN mkdir -p /var/log/supervisor \
     && chown -R g8e:g8e /var/log/supervisor
 
 COPY components/g8ep/scripts/entrypoint.sh /entrypoint.sh
-COPY shared/encrypt_secret.py /usr/local/bin/encrypt_secret.py
-RUN chmod +x /entrypoint.sh /usr/local/bin/encrypt_secret.py
+RUN chmod +x /entrypoint.sh
 
 USER g8e
 

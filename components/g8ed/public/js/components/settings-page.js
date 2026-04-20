@@ -168,22 +168,8 @@ export class SettingsPage {
             const prevValue = this.selectedModels[role] || '';
             if (text && !prevValue) text.textContent = 'Select a Model';
 
-            // Get active providers based on provider keys that have values
-            const activeProviders = [];
-            for (const provider of Object.keys(PROVIDER_MODELS)) {
-                const providerSettings = this.allSettings.filter(s => s.provider === provider);
-                const hasKey = providerSettings.some(s => {
-                    const value = this.dirty.get(s.key) || s.value;
-                    return value && value !== '';
-                });
-                if (hasKey) activeProviders.push(provider);
-            }
-
-            if (activeProviders.length === 0) {
-                if (text) text.textContent = 'Configure provider API keys first';
-                dropdown.classList.add('disabled');
-                return;
-            }
+            // Show all providers regardless of API key configuration
+            const activeProviders = Object.keys(PROVIDER_MODELS);
 
             dropdown.classList.remove('disabled');
 

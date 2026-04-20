@@ -14,11 +14,8 @@
 package listen
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -52,39 +49,14 @@ func (m *SecretManager) InitPlatformSettings() error {
 	tokenPath := filepath.Join(m.sslDir, "internal_auth_token")
 	sessionKeyPath := filepath.Join(m.sslDir, "session_encryption_key")
 
-	// Get encryption key from environment (if set)
-	secretsKey := os.Getenv("G8E_SECRETS_KEY")
-
 	var internalAuthToken string
 	if data, err := os.ReadFile(tokenPath); err == nil {
-		encrypted := strings.TrimSpace(string(data))
-		// Try to decrypt if key is available
-		if secretsKey != "" {
-			if decrypted, err := m.decryptSecret(encrypted, secretsKey); err == nil {
-				internalAuthToken = decrypted
-			} else {
-				// If decryption fails, assume it's plain text (backward compatibility)
-				internalAuthToken = encrypted
-			}
-		} else {
-			internalAuthToken = encrypted
-		}
+		internalAuthToken = strings.TrimSpace(string(data))
 	}
 
 	var sessionEncryptionKey string
 	if data, err := os.ReadFile(sessionKeyPath); err == nil {
-		encrypted := strings.TrimSpace(string(data))
-		// Try to decrypt if key is available
-		if secretsKey != "" {
-			if decrypted, err := m.decryptSecret(encrypted, secretsKey); err == nil {
-				sessionEncryptionKey = decrypted
-			} else {
-				// If decryption fails, assume it's plain text (backward compatibility)
-				sessionEncryptionKey = encrypted
-			}
-		} else {
-			sessionEncryptionKey = encrypted
-		}
+		sessionEncryptionKey = strings.TrimSpace(string(data))
 	}
 
 	var exists bool
@@ -202,33 +174,13 @@ func (m *SecretManager) InitPlatformSettings() error {
 		}
 	}
 
-	// Encrypt secrets before writing to disk if key is available
-	var tokenToWrite, keyToWrite string
-	if secretsKey != "" {
-		if encrypted, err := m.encryptSecret(internalAuthToken, secretsKey); err == nil {
-			tokenToWrite = encrypted
-		} else {
-			m.logger.Warn("[SecretManager] Failed to encrypt internal_auth_token, writing plain text", "error", err)
-			tokenToWrite = internalAuthToken
-		}
-		if encrypted, err := m.encryptSecret(sessionEncryptionKey, secretsKey); err == nil {
-			keyToWrite = encrypted
-		} else {
-			m.logger.Warn("[SecretManager] Failed to encrypt session_encryption_key, writing plain text", "error", err)
-			keyToWrite = sessionEncryptionKey
-		}
-	} else {
-		tokenToWrite = internalAuthToken
-		keyToWrite = sessionEncryptionKey
-	}
-
-	if tokenToWrite != "" {
-		if err := m.writeSecretFile(tokenPath, tokenToWrite, "internal_auth_token"); err != nil {
+	if internalAuthToken != "" {
+		if err := m.writeSecretFile(tokenPath, internalAuthToken, "internal_auth_token"); err != nil {
 			return err
 		}
 	}
-	if keyToWrite != "" {
-		if err := m.writeSecretFile(sessionKeyPath, keyToWrite, "session_encryption_key"); err != nil {
+	if sessionEncryptionKey != "" {
+		if err := m.writeSecretFile(sessionKeyPath, sessionEncryptionKey, "session_encryption_key"); err != nil {
 			return err
 		}
 	}
@@ -370,97 +322,4 @@ func (m *SecretManager) generateSecureToken(bytes int) string {
 		return fmt.Sprintf("%0*x", bytes*2, time.Now().UnixNano())
 	}
 	return hex.EncodeToString(tokenBytes)
-}
-
-// encryptSecret encrypts a plaintext value using AES-256-GCM
-// Returns base64-encoded ciphertext with format: iv:ciphertext
-func (m *SecretManager) encryptSecret(plaintext, keyHex string) (string, error) {
-	if keyHex == "" {
-		return plaintext, nil
-	}
-
-	// Convert hex key to bytes
-	key, err := hex.DecodeString(keyHex)
-	if err != nil {
-		return "", fmt.Errorf("invalid encryption key: %w", err)
-	}
-	if len(key) != 32 {
-		return "", fmt.Errorf("encryption key must be 32 bytes (64 hex chars)")
-	}
-
-	// Create cipher block
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
-	}
-
-	// Create GCM mode
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
-	}
-
-	// Generate random nonce (12 bytes for GCM)
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("failed to generate nonce: %w", err)
-	}
-
-	// Encrypt and seal
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
-
-	// Format: base64(nonce + ciphertext)
-	combined := append(nonce, ciphertext...)
-	return base64.StdEncoding.EncodeToString(combined), nil
-}
-
-// decryptSecret decrypts a ciphertext value using AES-256-GCM
-// Expects base64-encoded ciphertext with format: iv:ciphertext
-func (m *SecretManager) decryptSecret(ciphertext, keyHex string) (string, error) {
-	if keyHex == "" {
-		return ciphertext, nil
-	}
-
-	// Convert hex key to bytes
-	key, err := hex.DecodeString(keyHex)
-	if err != nil {
-		return "", fmt.Errorf("invalid encryption key: %w", err)
-	}
-	if len(key) != 32 {
-		return "", fmt.Errorf("encryption key must be 32 bytes (64 hex chars)")
-	}
-
-	// Create cipher block
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
-	}
-
-	// Create GCM mode
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
-	}
-
-	// Decode base64
-	combined, err := base64.StdEncoding.DecodeString(ciphertext)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
-	}
-
-	// Extract nonce and ciphertext
-	nonceSize := gcm.NonceSize()
-	if len(combined) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertextBytes := combined[:nonceSize], combined[nonceSize:]
-
-	// Decrypt
-	plaintext, err := gcm.Open(nil, nonce, ciphertextBytes, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to decrypt: %w", err)
-	}
-
-	return string(plaintext), nil
 }

@@ -71,7 +71,7 @@ Host Filesystem / AWS / Target System
 | **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
-| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) encrypted with AES-256-GCM at rest on the `g8es-ssl` volume using `G8E_SECRETS_KEY`, mirrored into the `platform_settings` document for consistency** |
+| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
 
 ### Network Isolation
@@ -95,18 +95,6 @@ All components resolve configuration values in the following order (highest prio
 
 **Exception: Bootstrap Secrets**
 For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
-
-#### Bootstrap Secrets Encryption
-
-To prevent unauthorized access to secrets via `docker exec` or direct volume inspection, bootstrap secrets are encrypted at rest on the `g8es-ssl` volume using AES-256-GCM:
-
-- **Encryption Key**: `G8E_SECRETS_KEY` is a 32-byte (64 hex chars) key generated during first-time setup and stored in `~/.g8e/secrets_key` with `0600` permissions
-- **Encryption**: g8es encrypts secrets before writing to the volume using Go's `crypto/aes` and `crypto/cipher` packages with GCM mode
-- **Decryption**: g8ed, g8ee, and g8ep entrypoints decrypt secrets at startup using Python's `cryptography` library (compatible AES-256-GCM implementation)
-- **Format**: Encrypted secrets are base64-encoded with the nonce prepended (12 bytes for GCM)
-- **Backward Compatibility**: If `G8E_SECRETS_KEY` is not set, secrets are stored/retrieved in plain text (existing installations continue to work)
-
-This ensures that even if an attacker gains Docker host access and can execute `docker exec`, they cannot read the actual secrets without the encryption key, which is only available in the container environment and the local `~/.g8e/secrets_key` file.
 
 #### Bootstrap Secrets Handling
 
