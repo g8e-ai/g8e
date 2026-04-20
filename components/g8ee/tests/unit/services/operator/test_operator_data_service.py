@@ -37,7 +37,6 @@ class TestOperatorDataService:
 
     @pytest.fixture
     def service(self, mock_cache_aside_service, mock_g8ed_http_client):
-        from app.models.cache import CacheOperationResult
         return OperatorDataService(mock_cache_aside_service, mock_g8ed_http_client)
 
     @pytest.fixture

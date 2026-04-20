@@ -65,7 +65,6 @@ from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
 from app.models.agents.title_generator import CaseTitleResult
 from app.services.ai.triage import TriageAgent
-from app.services.service_factory import ServiceFactory
 from tests.fakes.factories import (
     create_investigation_data,
 )

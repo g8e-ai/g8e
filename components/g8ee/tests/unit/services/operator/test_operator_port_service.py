@@ -30,16 +30,14 @@ import asyncio
 
 import pytest
 
-from app.constants import CommandErrorType, EventType, NetworkProtocol, OperatorStatus
+from app.constants import CommandErrorType, EventType, OperatorStatus
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_payloads import CheckPortArgs
 from app.models.operators import OperatorDocument, OperatorSystemInfo
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
-from app.models.tool_results import PortCheckToolResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
     build_enriched_context,
-    build_minimal_operator_document,
     build_g8e_http_context,
 )
 from tests.fakes.fake_event_service import FakeEventService

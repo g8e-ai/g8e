@@ -35,10 +35,8 @@ Thinking API split:
 """
 
 import asyncio
-import base64
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
 
 import httpx
 from google.genai import types as genai_types
@@ -49,7 +47,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from app.constants import GeminiRole, LLM_DEFAULT_MAX_OUTPUT_TOKENS
 from app.llm.llm_types import (
     AssistantLLMSettings,
     Candidate,
@@ -68,10 +65,9 @@ from app.llm.llm_types import (
     SdkSearchEntryPoint,
     StreamChunkFromModel,
     ThoughtSignature,
-    ToolGroup,
     UsageMetadata,
 )
-from app.models.base import G8eBaseModel, Field, field_serializer, field_validator
+from app.models.base import G8eBaseModel, Field
 from app.models.model_configs import get_model_config
 from app.llm.thinking import translate_for_gemini
 

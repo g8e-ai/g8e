@@ -11,8 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from app.services.mcp.types import JSONRPCRequest, JSONRPCResponse, JSONRPCError, CallToolParams, CallToolResult, Content
+from app.services.mcp.types import JSONRPCRequest, JSONRPCResponse, JSONRPCError, CallToolResult, Content
 
 def test_jsonrpc_request_validation():
     # Valid request

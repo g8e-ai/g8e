@@ -24,7 +24,6 @@ Covers the service's own responsibilities:
 
 """
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest

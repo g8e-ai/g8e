@@ -51,7 +51,6 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
         
         operator_command_service._approval_service.set_on_approval_requested(_auto_approve_callback)
 
-    from tests.fakes.fake_investigation_service import FakeInvestigationService
     memory_data_service = MagicMock(spec=MemoryDataServiceProtocol)
 
     # We use a real InvestigationService wired to the same fakes if possible

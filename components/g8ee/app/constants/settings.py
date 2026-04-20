@@ -12,7 +12,6 @@
 # limitations under the License.
 
 from enum import Enum
-from app.constants.agents import TribunalMember
 from app.constants.shared import _AGENTS, _STATUS
 
 

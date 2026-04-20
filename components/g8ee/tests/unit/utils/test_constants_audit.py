@@ -25,19 +25,16 @@ import json
 import pytest
 
 from app.constants import (
-    CACHE_PREFIX,
-    ComponentName,
     EventType,
     ExecutionStatus,
     InvestigationStatus,
-    OperatorStatus,
 )
 from app.models.operators import (
     BatchCommandBroadcastEvent,
     CommandExecutingBroadcastEvent,
     CommandFailedBroadcastEvent,
 )
-from tests.fakes.factories import build_g8e_http_context, create_investigation_data
+from tests.fakes.factories import create_investigation_data
 
 pytestmark = [pytest.mark.unit]
 
@@ -72,7 +69,6 @@ class TestCacheVersionNotRedefinedLocally:
 
     def test_cache_aside_key_matches_constants_cache_prefix(self):
         from tests.fakes.builder import create_mock_cache_aside_service
-        from app.services.cache.cache_aside import CacheAsideService
 
         svc = create_mock_cache_aside_service()
         key = svc._make_key("operators", "op-abc")

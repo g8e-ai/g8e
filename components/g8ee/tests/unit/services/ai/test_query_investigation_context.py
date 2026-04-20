@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import CommandErrorType
 from app.models.investigations import EnrichedInvestigationContext, InvestigationModel

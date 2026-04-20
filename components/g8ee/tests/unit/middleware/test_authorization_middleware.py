@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import Request, Response
 
-from app.constants import ComponentName
 from app.errors import AuthorizationError, ServiceUnavailableError
 from app.middleware.authorization import AuthorizationMiddleware
 from tests.fakes.factories import (

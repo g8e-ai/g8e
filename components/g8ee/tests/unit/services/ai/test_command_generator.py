@@ -21,14 +21,10 @@ from app.constants import (
     LLMProvider,
     TribunalMember,
     ComponentName,
-    OLLAMA_DEFAULT_MODEL,
-    OPENAI_DEFAULT_MODEL,
-    ANTHROPIC_DEFAULT_MODEL,
-    GEMINI_DEFAULT_MODEL,
     EventType,
     VerifierReason,
 )
-from app.llm.llm_types import Content, Role
+from app.llm.llm_types import Role
 from app.models.model_configs import LLMModelConfig
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.agent import OperatorContext

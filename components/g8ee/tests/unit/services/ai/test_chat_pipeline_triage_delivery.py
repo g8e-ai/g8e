@@ -307,7 +307,6 @@ async def test_prepare_chat_context_passes_assistant_model_to_triage():
     """
     from app.models.agents.triage import TriageRequest, TriageResult
     from app.models.settings import G8eeUserSettings, LLMSettings
-    from app.constants import AgentMode
 
     svc = _make_pipeline()
     svc.investigation_service.get_investigation_context = AsyncMock(

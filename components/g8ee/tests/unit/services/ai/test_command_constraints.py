@@ -34,11 +34,11 @@ from unittest.mock import AsyncMock, MagicMock
 import logging
 import pytest
 
-from app.constants import AgentMode, CommandErrorType, OperatorToolName
+from app.constants import AgentMode, OperatorToolName
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import CommandValidationSettings, G8eePlatformSettings, G8eeUserSettings
-from app.models.tool_results import CommandConstraintsResult, CommandExecutionResult
+from app.models.settings import CommandValidationSettings, G8eeUserSettings
+from app.models.tool_results import CommandConstraintsResult
 from app.services.ai.tool_service import AIToolService
 from app.utils.whitelist_validator import CommandWhitelistValidator, CommandValidationResult
 from app.utils.blacklist_validator import CommandBlacklistValidator, CommandBlacklistResult

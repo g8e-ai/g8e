@@ -25,7 +25,6 @@ Covers:
 """
 
 import json
-from pathlib import Path
 
 import pytest
 
@@ -363,7 +362,6 @@ class TestLoadWhitelistErrors:
         # Use a fresh instance to avoid global state issues
         from app.errors import ConfigurationError
         from unittest.mock import patch
-        import app.utils.whitelist_validator as wv_module
         with patch("app.utils.whitelist_validator.Path.exists", return_value=False):
             with pytest.raises(ConfigurationError, match="Required whitelist configuration not found"):
                 CommandWhitelistValidator(whitelist_path=None)

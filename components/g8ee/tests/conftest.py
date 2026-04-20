@@ -24,7 +24,6 @@ E2E fixtures are in tests/e2e/conftest.py.
 
 import logging
 import os
-import sys
 
 import pytest
 import pytest_asyncio
@@ -39,10 +38,9 @@ from app.db.db_service import DBService
 from app.constants import CloudSubtype, ComponentName, InvestigationStatus, LLMProvider, OperatorType, ThinkingLevel
 from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
 from app.models.settings import LLMSettings, SearchSettings
-from app.models.model_configs import MODEL_REGISTRY, get_model_config
+from app.models.model_configs import MODEL_REGISTRY
 from tests.fakes.builder import (
     create_mock_cache_aside_service,
-    build_command_service,
 )
 from tests.fakes.factories import (
     build_enriched_context,

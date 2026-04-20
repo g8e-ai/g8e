@@ -28,8 +28,6 @@ import pytest
 
 from app.constants.channels import PubSubChannel
 from app.constants.events import EventType
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
-from app.constants import ComponentName
 
 logger = logging.getLogger(__name__)
 

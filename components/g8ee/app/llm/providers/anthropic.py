@@ -37,7 +37,7 @@ from app.llm.llm_types import (
     ToolGroup,
     UsageMetadata,
 )
-from app.models.base import G8eBaseModel, Field
+from app.models.base import G8eBaseModel
 
 from ..provider import LLMProvider
 from ..utils import schema_to_dict

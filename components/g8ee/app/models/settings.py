@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from app.constants import (
@@ -33,7 +32,6 @@ from app.constants import (
     OPENAI_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_MODEL,
     LLMProvider,
     LogLevel,
 )
@@ -42,7 +40,7 @@ from pydantic import field_validator
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel
 
 if TYPE_CHECKING:
-    from app.services.cache.cache_aside import CacheAsideService
+    pass
 
 logger = logging.getLogger(__name__)
 

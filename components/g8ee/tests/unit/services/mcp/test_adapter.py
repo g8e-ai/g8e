@@ -11,9 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from app.services.mcp.adapter import build_tool_call_request, parse_tool_call_result
-from app.services.mcp.types import CallToolResult, Content, JSONRPCRequest
+from app.services.mcp.types import CallToolResult, JSONRPCRequest
 
 def test_build_tool_call_request():
     tool_name = "run_commands_with_operator"

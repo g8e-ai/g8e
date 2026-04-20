@@ -15,7 +15,6 @@
 g8ed HTTP client request and response models.
 """
 
-from datetime import datetime
 from typing import Any
 
 from pydantic import Field

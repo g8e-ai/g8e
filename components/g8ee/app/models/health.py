@@ -11,11 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from datetime import datetime
 
 from app.constants import HealthStatus
 
-from .base import Field, G8eBaseModel, UTCDatetime
+from .base import G8eBaseModel, UTCDatetime
 
 
 class DependencyStatus(G8eBaseModel):

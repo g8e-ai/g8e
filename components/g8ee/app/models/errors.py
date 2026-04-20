@@ -12,7 +12,6 @@
 # limitations under the License.
 
 from typing import Any
-from datetime import datetime
 
 from pydantic import field_validator
 from app.constants import ErrorCategory, ErrorCode, ErrorSeverity

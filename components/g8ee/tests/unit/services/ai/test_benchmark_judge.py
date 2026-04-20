@@ -35,7 +35,6 @@ from app.services.ai.benchmark_judge import (
     BenchmarkScenario,
     PayloadMatcher,
     ToolCallCapture,
-    TribunalCapture,
     compute_benchmark_percentage,
     _match_payload,
 )

@@ -31,7 +31,6 @@ from app.constants import (
 )
 from app.llm.llm_types import (
     AssistantLLMSettings,
-    Candidate,
     Content,
     LiteLLMSettings,
     Part,
@@ -46,7 +45,6 @@ from app.llm.llm_types import (
     ToolResponse,
     ToolDeclaration,
     ToolGroup,
-    UsageMetadata,
     Schema,
     Type,
 )

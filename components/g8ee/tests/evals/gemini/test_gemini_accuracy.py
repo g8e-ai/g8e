@@ -38,7 +38,7 @@ from app.constants import LLMProvider
 from app.constants.paths import PATHS
 from app.llm.prompts import build_modular_system_prompt
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.services.ai.eval_judge import EvalJudge, EvalGrade, EvalJudgeError
+from app.services.ai.eval_judge import EvalJudge, EvalJudgeError
 from tests.evals.shared import AccuracyTestResult, load_and_validate_gold_set
 
 logger = logging.getLogger(__name__)

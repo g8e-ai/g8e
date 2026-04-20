@@ -36,7 +36,6 @@ from app.services.ai.agent_tool_loop import TribunalInvoker
 from app.services.ai.command_generator import (
     CommandGenerationResult,
     TribunalDisabledError,
-    TribunalModelNotConfiguredError,
 )
 from app.services.ai.tool_service import AIToolService
 from app.utils.whitelist_validator import CommandWhitelistValidator

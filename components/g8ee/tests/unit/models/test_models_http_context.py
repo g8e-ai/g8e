@@ -29,7 +29,6 @@ from app.constants import (
     ComponentName,
     HealthStatus,
     OperatorStatus,
-    OperatorType,
 )
 from app.models.auth import AuthenticatedUser
 from app.models.health import (
@@ -42,7 +41,6 @@ from app.models.http_context import (
     BoundOperator,
     G8eHttpContext,
 )
-from app.models.operators import OperatorSystemInfo
 
 pytestmark = [pytest.mark.unit]
 

@@ -13,7 +13,6 @@
 
 """Typed fake for MemoryDataServiceProtocol."""
 
-from unittest.mock import AsyncMock, MagicMock
 from app.models.investigations import InvestigationModel
 from app.models.memory import InvestigationMemory
 from app.services.protocols import MemoryDataServiceProtocol

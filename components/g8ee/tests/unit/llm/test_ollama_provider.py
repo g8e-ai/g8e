@@ -18,9 +18,7 @@ Tests SSL verification strategy, close behavior, construction, and content gener
 """
 
 from unittest.mock import patch, MagicMock, AsyncMock
-import json
 
-import httpx
 import pytest
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel

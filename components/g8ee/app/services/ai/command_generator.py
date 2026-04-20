@@ -60,7 +60,7 @@ Nemesis adversary), not from numerical parameters.
 import asyncio
 import logging
 from collections import defaultdict
-from typing import Any, List, NoReturn
+from typing import List, NoReturn
 
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.base import G8eBaseModel
@@ -102,7 +102,6 @@ from app.models.agents.tribunal import (
     TribunalVotingCompletedPayload,
     TribunalSessionCompletedPayload,
 )
-from app.errors import OllamaEmptyResponseError
 from app.models.events import SessionEvent
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member

@@ -21,10 +21,9 @@ file.operation, network.protocol, risk.level).
 When adding or renaming a field, update shared/models/tool_results.json first.
 """
 
-from datetime import datetime
 from typing import Any, Optional, Union
 
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from app.constants import (
     CommandErrorType,

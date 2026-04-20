@@ -32,7 +32,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants.prompts import AgentMode
-from app.constants.settings import MCP_TOOL_CALL_TIMEOUT_SECONDS
 from app.constants.status import OperatorStatus, OperatorToolName
 from app.models.tool_results import CommandExecutionResult
 from app.services.ai.tool_service import AIToolService

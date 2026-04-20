@@ -19,14 +19,14 @@ communication via g8es pub/sub.
 """
 
 from datetime import datetime
-from typing import Literal, Union
+from typing import Union
 from uuid import uuid4
 
-from pydantic import Field, field_serializer, field_validator
+from pydantic import Field, field_validator
 
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
 
-from .base import G8eBaseModel, UTCDatetime, _to_iso_z
+from .base import G8eBaseModel, UTCDatetime
 from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
 from .mcp import JSONRPCRequest
 
@@ -34,7 +34,6 @@ from app.utils.timestamp import now, parse_iso
 
 # Import outbound payload types
 from app.models.command_payloads import (
-    G8eCommandPayload,
     CommandPayload,
     CommandCancelPayload,
     FileEditPayload,

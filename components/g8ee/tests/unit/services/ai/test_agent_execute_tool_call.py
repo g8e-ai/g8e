@@ -42,7 +42,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import app.services.ai.agent_tool_loop as agent_tool_loop_module
-from app.constants import NEW_CASE_ID, CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
+from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
 from app.models.agents.tribunal import TribunalSystemError
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
@@ -80,8 +80,6 @@ def _make_tool_executor() -> MagicMock:
     mock_user_settings.command_validation = CommandValidationSettings()
     executor._user_settings = mock_user_settings
     
-    from app.utils.whitelist_validator import CommandWhitelistValidator
-    from app.utils.blacklist_validator import CommandBlacklistValidator
     from app.utils.validators import get_whitelist_validator, get_blacklist_validator
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()

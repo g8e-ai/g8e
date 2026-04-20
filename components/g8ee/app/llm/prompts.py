@@ -15,9 +15,8 @@
 
 import logging
 
-from ..constants import CloudSubtype, EventType, ExecutionStatus, OperatorType, PromptFile, PromptSection
+from ..constants import CloudSubtype, OperatorType, PromptFile, PromptSection
 from ..constants.prompts import InvestigationContextLabel
-from ..constants.message_sender import MessageSender
 from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext

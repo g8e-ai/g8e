@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, Annotated
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_validator
 
 __all__ = [
     "ConfigDict",

@@ -23,7 +23,7 @@ Covers:
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from tests.fakes.fake_llm_provider import FakeLLMProvider
 from app.constants import (
@@ -32,12 +32,10 @@ from app.constants import (
     TriageIntentClassification,
     TriageRequestPosture,
     AgentMode,
-    GeminiRole,
 )
 
-from app.llm import llm_types as types
 from app.models.attachments import AttachmentMetadata
-from app.models.agents.triage import TriageResult, TriageRequest
+from app.models.agents.triage import TriageRequest
 from app.services.ai.triage import TriageAgent
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]

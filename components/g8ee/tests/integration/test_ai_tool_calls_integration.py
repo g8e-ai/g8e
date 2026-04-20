@@ -49,7 +49,7 @@ from app.constants import (
 from app.constants.status import OperatorToolName
 from app.errors import  ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandExecutionResult,
     FetchFileHistoryToolResult,

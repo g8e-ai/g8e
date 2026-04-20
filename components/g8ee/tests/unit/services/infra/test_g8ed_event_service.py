@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import pytest
-from pydantic import ValidationError
 
 from app.constants import EVENT_PUBLISH_SUCCESS, EventType
 from app.errors import NetworkError

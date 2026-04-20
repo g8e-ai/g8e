@@ -12,8 +12,6 @@
 # limitations under the License.
 
 import json
-import logging
-from datetime import datetime
 from typing import Any, TYPE_CHECKING
 
 from fastapi import Request
@@ -22,7 +20,6 @@ from app.constants import (
     NEW_CASE_ID,
     ComponentName,
     OperatorStatus,
-    OperatorType,
     G8eHeaders,
 )
 from app.utils.ids import generate_execution_id
@@ -31,7 +28,7 @@ from app.utils.timestamp import now
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator
 
 if TYPE_CHECKING:
-    from app.errors import AuthenticationError
+    pass
 
 
 class BoundOperator(G8eBaseModel):

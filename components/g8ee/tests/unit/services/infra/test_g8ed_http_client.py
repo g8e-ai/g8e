@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.models.settings import AuthSettings, G8eePlatformSettings
+from app.models.settings import AuthSettings
 from app.constants import (
     INTERNAL_AUTH_HEADER,
     ComponentName,

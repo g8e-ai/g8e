@@ -25,7 +25,6 @@ These are pure unit tests — no external infrastructure required.
 import json
 
 import pytest
-from app.models.base import ValidationError
 
 from app.constants import (
     CACHE_PREFIX,
@@ -84,7 +83,6 @@ from app.constants.settings import (
 from app.models.agent import (
     AgentStreamContext,
     OperatorContext,
-    StreamChunkFromModelType,
 )
 
 pytestmark = [pytest.mark.unit]
