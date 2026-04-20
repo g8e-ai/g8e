@@ -20,7 +20,7 @@ from app.constants.events import EventType
 from app.constants.channels import PubSubChannel
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
-    HeartbeatSSEPayload,
+    HeartbeatSSEEnvelope,
     OperatorDocument,
     OperatorHeartbeat,
 )
@@ -185,9 +185,8 @@ class OperatorHeartbeatService:
         if not db_success:
             return False
 
-        sse_payload = heartbeat.to_sse_payload(operator_id)
-        sse_payload.status = operator.status
-        await self._push_heartbeat_sse(sse_payload, payload, operator)
+        envelope = HeartbeatSSEEnvelope.from_heartbeat(operator_id, operator.status, heartbeat)
+        await self._push_heartbeat_sse(envelope, payload, operator)
 
         logger.info(
             "Heartbeat processed successfully for Operator %s",
@@ -262,48 +261,46 @@ class OperatorHeartbeatService:
 
     async def _push_heartbeat_sse(
         self,
-        sse_payload: HeartbeatSSEPayload,
+        envelope: HeartbeatSSEEnvelope,
         payload: G8eoHeartbeatPayload,
         operator: OperatorDocument,
     ) -> None:
-        web_session_id = operator.bound_web_session_id
-        user_id = operator.user_id
-
-        if not user_id:
+        if not operator.user_id:
             logger.warning(
                 "[HEARTBEAT] Skipping SSE push for operator %s - missing user_id",
                 operator.operator_id,
-                extra={
-                    "operator_id": operator.operator_id,
-                    "user_id": user_id,
-                },
+                extra={"operator_id": operator.operator_id},
             )
             return
 
+        event = self._build_heartbeat_event(envelope, payload, operator)
         try:
-            if web_session_id:
-                # BOUND operator: use SessionEvent for targeted delivery
-                await self.event_service.publish(
-                    SessionEvent(
-                        event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-                        payload=sse_payload,
-                        web_session_id=web_session_id,
-                        user_id=user_id,
-                        case_id=payload.case_id,
-                        investigation_id=payload.investigation_id,
-                    )
-                )
-            else:
-                # ACTIVE (unbound) operator: use BackgroundEvent for delivery by user_id
-                investigation_id = payload.investigation_id or ""
-                await self.event_service.publish(
-                    BackgroundEvent(
-                        event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
-                        payload=sse_payload,
-                        investigation_id=investigation_id,
-                        user_id=user_id,
-                        case_id=payload.case_id,
-                    )
-                )
+            await self.event_service.publish(event)
         except Exception as e:
             logger.warning("[HEARTBEAT] SSE push failed (non-blocking): %s", e)
+
+    @staticmethod
+    def _build_heartbeat_event(
+        envelope: HeartbeatSSEEnvelope,
+        payload: G8eoHeartbeatPayload,
+        operator: OperatorDocument,
+    ) -> SessionEvent | BackgroundEvent:
+        """Build the routing event: SessionEvent when the operator is bound to a
+        web session (targeted delivery), BackgroundEvent otherwise (fan-out by user_id).
+        """
+        if operator.bound_web_session_id:
+            return SessionEvent(
+                event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+                payload=envelope,
+                web_session_id=operator.bound_web_session_id,
+                user_id=operator.user_id,
+                case_id=payload.case_id,
+                investigation_id=payload.investigation_id,
+            )
+        return BackgroundEvent(
+            event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
+            payload=envelope,
+            user_id=operator.user_id,
+            investigation_id=payload.investigation_id,
+            case_id=payload.case_id,
+        )

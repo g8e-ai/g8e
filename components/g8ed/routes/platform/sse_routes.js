@@ -83,6 +83,7 @@ export function createSSERouter({
         try {
             const result = await sseService.registerConnection(
                 connectionId,
+                req.userId,
                 res,
                 {
                     ip: req.ip,

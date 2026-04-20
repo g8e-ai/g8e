@@ -19,12 +19,12 @@ from pydantic import Field
 from app.constants import CaseStatus, ComponentName, EventType, Priority, Severity
 
 from .attachments import AttachmentMetadata
-from .base import G8eBaseModel, G8eIdentifiableModel
+from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
 
 class HistoryEntry(G8eBaseModel):
     """Entry in the case history trail"""
-    timestamp: datetime = Field(..., description="When the event occurred")
+    timestamp: UTCDatetime = Field(..., description="When the event occurred")
     event_type: EventType = Field(..., description="Type of event")
     source_component: ComponentName = Field(..., description="Component that initiated the event")
     summary: str = Field(..., description="Human-readable description of the event")
@@ -117,7 +117,7 @@ class CaseCreatedPayload(G8eBaseModel):
 
 class CaseEventPayload(G8eBaseModel):
     """Typed payload for case SSE events pushed to g8ed."""
-    updated_at: datetime = Field(..., description="When the case was last updated")
+    updated_at: UTCDatetime = Field(..., description="When the case was last updated")
     title: str | None = Field(default=None, description="Updated title")
     description: str | None = Field(default=None, description="Updated description")
     status: CaseStatus | None = Field(default=None, description="Updated status")

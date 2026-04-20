@@ -87,7 +87,7 @@ async function pipelineRun(event) {
     const sseService = makeSSEService();
     const mockResponse = new MockSSEResponse();
     mockResponse.flushHeaders();
-    await sseService.registerConnection(WEB_SESSION_ID, mockResponse);
+    await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
     const eventBus = new MockEventBus();
     const manager = new SSEConnectionManager(eventBus);
@@ -606,7 +606,7 @@ describe('SSE pipeline — multi-event sequence [INTEGRATION - jsdom]', () => {
         const sseService = makeSSEService();
         const mockResponse = new MockSSEResponse();
         mockResponse.flushHeaders();
-        await sseService.registerConnection(WEB_SESSION_ID, mockResponse);
+        await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
         const eventBus = new MockEventBus();
         const manager = new SSEConnectionManager(eventBus);
@@ -668,7 +668,7 @@ describe('SSE pipeline — multi-event sequence [INTEGRATION - jsdom]', () => {
         const sseService = makeSSEService();
         const mockResponse = new MockSSEResponse();
         mockResponse.flushHeaders();
-        await sseService.registerConnection(WEB_SESSION_ID, mockResponse);
+        await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
         const eventBus = new MockEventBus();
         const manager = new SSEConnectionManager(eventBus);
@@ -766,7 +766,7 @@ describe('SSE pipeline — G8eePassthroughEvent wire shape contract [INTEGRATION
         const sseService = makeSSEService();
         const mockResponse = new MockSSEResponse();
         mockResponse.flushHeaders();
-        await sseService.registerConnection(WEB_SESSION_ID, mockResponse);
+        await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
         const innerPayload = {
             type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
@@ -789,7 +789,7 @@ describe('SSE pipeline — G8eePassthroughEvent wire shape contract [INTEGRATION
         const sseService = makeSSEService();
         const mockResponse = new MockSSEResponse();
         mockResponse.flushHeaders();
-        await sseService.registerConnection(WEB_SESSION_ID, mockResponse);
+        await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
         const innerPayload = {
             type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,

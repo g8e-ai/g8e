@@ -21,7 +21,7 @@
 import express from 'express';
 import { SSEPushRequest } from '../../models/request_models.js';
 import { G8eePassthroughEvent } from '../../models/sse_models.js';
-import { ErrorResponse, SimpleSuccessResponse } from '../../models/response_models.js';
+import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import { EventType } from '../../constants/events.js';
@@ -32,7 +32,7 @@ import { EventType } from '../../constants/events.js';
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
-    const { sseService, webSessionService } = services;
+    const { sseService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -75,11 +75,9 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
                 : pushReq.event;
             const finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
 
-            let published = false;
-
             if (pushReq.web_session_id) {
-                // SessionEvent: targeted delivery to specific web session
-                published = await sseService.publishEvent(pushReq.web_session_id, finalEvent, (status) => {
+                // SessionEvent: targeted delivery to a specific web session.
+                const delivered = await sseService.publishEvent(pushReq.web_session_id, finalEvent, (status) => {
                     if (status.delivered) {
                         logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
                             webSessionId: redactWebSessionId(pushReq.web_session_id),
@@ -93,52 +91,38 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
                     }
                 });
 
-                if (published) {
-                    logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
+                if (!delivered) {
+                    // Targeted session not locally connected. A failed targeted
+                    // push IS an error (the caller expected a specific session).
+                    logger.warn('[INTERNAL-HTTP] Failed to publish SSE event to targeted session', {
                         webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        eventType: pushReq.event.type
+                        userId: pushReq.user_id
                     });
+                    return res.status(500).json(new ErrorResponse({
+                        error: 'Failed to publish event'
+                    }).forWire());
                 }
-            } else {
-                // BackgroundEvent: broadcast to all sessions for this user
-                const sessionIds = await webSessionService.getUserActiveSessions(pushReq.user_id);
 
-                if (sessionIds.length === 0) {
-                    logger.info('[INTERNAL-HTTP] No active sessions for user, skipping broadcast', {
-                        userId: pushReq.user_id,
-                        eventType: pushReq.event.type
-                    });
-                } else {
-                    let successCount = 0;
-                    for (const sessionId of sessionIds) {
-                        if (await sseService.publishEvent(sessionId, finalEvent)) {
-                            successCount++;
-                        }
-                    }
-                    published = successCount > 0;
-                    logger.info('[INTERNAL-HTTP] SSE event broadcast to user sessions', {
-                        userId: pushReq.user_id,
-                        successCount,
-                        totalSessions: sessionIds.length,
-                        eventType: pushReq.event.type
-                    });
-                }
-            }
-
-            if (published) {
-                return res.json(new SimpleSuccessResponse({
-                    success: true,
-                    message: 'Event delivered'
-                }).forWire());
-            } else {
-                logger.warn('[INTERNAL-HTTP] Failed to publish SSE event', {
+                logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
                     webSessionId: redactWebSessionId(pushReq.web_session_id),
-                    userId: pushReq.user_id
+                    eventType: pushReq.event.type
                 });
-                return res.status(500).json(new ErrorResponse({
-                    error: 'Failed to publish event'
-                }).forWire());
+                return res.json(new SSEPushResponse({ success: true, delivered: 1 }).forWire());
             }
+
+            // BackgroundEvent: fan out to all locally connected sessions for this user.
+            // SSEService maintains an in-memory userId -> sessions index, so this is
+            // O(k) in the number of local sessions for that user with no cache lookup.
+            // A zero count is the documented outcome when the user has no connected
+            // sessions and is NOT an error - collapsing it into a 500 would mask real
+            // g8ed outages when BackgroundEvent fan-out is routine.
+            const successCount = await sseService.publishToUser(pushReq.user_id, finalEvent);
+            logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
+                userId: pushReq.user_id,
+                successCount,
+                eventType: pushReq.event.type
+            });
+            return res.json(new SSEPushResponse({ success: true, delivered: successCount }).forWire());
 
         } catch (error) {
             logger.error('[INTERNAL-HTTP] SSE push failed', {

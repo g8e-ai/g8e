@@ -28,7 +28,7 @@ from app.constants import (
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
 
-from .base import Field, G8eBaseModel, field_validator
+from .base import Field, G8eBaseModel, UTCDatetime, field_validator
 
 if TYPE_CHECKING:
     from app.errors import AuthenticationError
@@ -75,7 +75,7 @@ class G8eHttpContext(G8eBaseModel):
         default_factory=generate_execution_id,
         description="Unique execution identifier for tracking"
     )
-    timestamp: datetime = Field(
+    timestamp: UTCDatetime = Field(
         default_factory=now,
         description="Timestamp of context creation"
     )

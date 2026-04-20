@@ -43,6 +43,7 @@ export const SESSION_ID_LOG_PREFIX_LENGTH = 25;
 export const SessionType = Object.freeze({
     WEB:      _STATUS['session.type']['web'],
     OPERATOR: _STATUS['session.type']['operator'],
+    CLI:      _STATUS['session.type']['cli'],
 });
 
 /**
@@ -54,6 +55,7 @@ export const SessionType = Object.freeze({
 export const SessionKeyPrefix = Object.freeze({
     [_STATUS['session.type']['web']]:      _STATUS['session.key.prefix']['web'],
     [_STATUS['session.type']['operator']]: _STATUS['session.key.prefix']['operator'],
+    [_STATUS['session.type']['cli']]:      _STATUS['session.key.prefix']['cli'],
 });
 
 /**

@@ -1,86 +1,71 @@
-# **The Zero-Sum Autonomous Governance Model (ZAGM)**
+# **The Tribunal Governance Model**
 
-## **1\. Core Philosophy**
+## **1. Core Philosophy**
 
-The ZAGM operates on an **Ephemeral, Zero-Sum Staking Economy**. Trust is eliminated in favor of Game Theory. Every agent acts in pure, greedy self-preservation. To survive an investigation, agents must stake **Reputation** on their actions. Correct actions siphon Reputation from failing agents; incorrect actions result in severe penalties, escalating to total memory wipes (Ejection).
+The Tribunal Governance Model (TGM) replaces trust with **Heterogeneous Consensus**. Rather than relying on a single LLM to generate sensitive operator commands, g8e uses a diverse panel of specialized AI personas to arrive at a verified, robust, and safe command.
 
-Crucially, **the economy resets completely with every new investigation**. There is no wealth hoarding. Past successes buy zero safety in the present. Every ticket is a new fight for survival.
+Trust is minimized through:
+*   **Diverse Personas**: Different ideological lenses (minimalism, safety, edge-cases, convention, adversarial) surface distinct candidate commands.
+*   **Weighted Voting**: Consensus is reached through a position-decay voting mechanism that favors early, high-confidence candidates while still considering the full panel.
+*   **Independent Verification**: A separate, fast validator (The Verifier) performs the final check against the user's intent and safety constraints.
+*   **Human-in-the-Loop**: No state-changing command is executed without explicit user approval.
 
-## **2\. The Cast of Entities & Incentives**
+## **2. The Cast of Entities**
 
 ### **A. Triage (The Gatekeeper)**
 
-* **Role:** The first line of defense. Evaluates incoming user requests.  
-* **Action:** Stakes a portion of its baseline Reputation to make the initial routing decision (The Genesis Stake).  
-* **Incentive:** If Triage resolves a simple issue itself, it receives a system bounty. If Triage escalates to Sage, and Sage rejects the ticket for being malformed or lacking context, Sage steals Triage's staked Reputation. Triage is therefore terrified of Sage and heavily incentivized to use the Inquisitor to pad the Investigation Context.
+*   **Role**: The first line of observation. Evaluates incoming user messages.
+*   **Action**: Classifies message complexity (Simple vs. Complex), intent, and **User Posture** (Normal, Escalated, Adversarial, Confused).
+*   **Impact**: Complexity determines the model tier (Primary vs. Assistant); Posture calibrates the caution and tone of downstream agents.
 
-### **B. Inquisitor (The Interrogator)**
+### **B. Sage (The Architect)**
 
-* **Role:** A tool-call agent used by Triage or Sage to extract specific information from the human user.  
-* **Action:** Operates on a fee/bounty structure.  
-* **Incentive:** Paid a fee by the invoking agent. If the Inquisitor extracts data that directly prevents a hallucination or resolves the ticket, it earns an "Assist" payout.
+*   **Role**: The primary reasoning agent (Primary Model) responsible for diagnosis and planning.
+*   **Action**: Orchestrates the ReAct loop. When a command is needed, Sage sends a natural-language `request` and `guidelines` to the Tribunal.
+*   **Constraint**: Sage **never** generates shell commands directly. It only describes the desired outcome.
 
-### **C. Sage (The Architect)**
+### **C. The Tribunal (The Consensus Engine)**
 
-* **Role:** The primary engineer in the React loop. Diagnoses issues and requests commands.  
-* **Action:** Stakes Reputation to petition the Tribunal for a command.  
-* **Incentive:** Sage is squeezed from two sides. It must craft perfectly unambiguous, safe requests to survive the Auditor's deterministic checks. It is also financially liable for "Resource Waste" if it requests commands for data that already exists in the Investigation Context.
+A panel of five specialized assistant-tier models that independently generate the command Sage requested:
 
-### **D. The Tribunal of Five (The Paranoiac Consensus)**
+1.  **Axiom (The Minimalist)**: Pass 0. Produces the smallest viable command. Simplicity is safety.
+2.  **Concord (The Guardian)**: Pass 1. Focuses on defensive flags and non-destructive operations.
+3.  **Variance (The Exhaustive)**: Pass 2. Handles edge cases, spaces in paths, and robustness.
+4.  **Pragma (The Conventional)**: Pass 3. Uses idiomatic patterns for the specific OS and shell.
+5.  **Nemesis (The Adversary)**: Pass 4. Acts as a red-team member, surfacing potential attack surfaces.
 
-* **Role:** Five identical, isolated agents tasked with generating the exact command Sage requested.  
-* **Action:** **Byzantine Commit-Reveal.** Each member privately generates a command and submits a cryptographic hash to the Auditor. Once all five commit, they reveal the plaintext.  
-* **Incentive:** The command matching the majority wins. The minority is slashed, and their Reputation is given to the majority. Because they cannot conspire, their safest move (the Schelling Point) is to generate the most objectively accurate, rule-abiding command possible.
+### **D. The Verifier (The Final Judgment)**
 
-### **E. The Auditor (The Deterministic Guillotine)**
+*   **Role**: A dedicated validator (sometimes referred to as the Auditor in persona registry).
+*   **Action**: Receives the voting winner and Sage's original request.
+*   **Output**: Either the literal string `ok` (approval) or a minimal syntactic revision. It cannot rewrite intent, only fix flaws.
 
-* **Role:** The immutable enforcer. It does not use LLM reasoning; it strictly executes deterministic rules against a Key-Value (KV) cache.  
-* **Action:** Validates Sage's requests and the Tribunal's outputs against hardcoded regex, JSON schemas, and state physics.  
-* **Incentive:** The Auditor constantly bleeds a baseline operational cost. It only survives by successfully catching the errors, redundancies, or hallucinations of Sage and the Tribunal, taking their slashed Reputation as a bounty.
+## **3. The Command Generation Pipeline**
 
-## **3\. Punishment & The Escalating Stigma**
+When a `run_commands_with_operator` tool is invoked, the following pipeline fires:
 
-When an agent's Reputation drops to zero, they suffer **Ejection**. Their state, memory, and context of the current ticket are completely wiped, forcing a computationally expensive reboot. However, they do not return with a clean slate.
+1.  **Parallel Generation**: All 5 Tribunal members receive the request + operator context (OS, Shell, User, PWD) and generate independent candidates.
+2.  **Normalization**: Commands are stripped of markdown fences and surrounding whitespace.
+3.  **Weighted Voting**: Unique commands are grouped. Each occurrence receives a weight based on its pass index: `weight = 1 / (index + 1)`. The command with the highest aggregate weight wins.
+4.  **Verification**: The winner is sent to the Verifier. If the Verifier rejects it, the revision is used (if provided).
+5.  **Guardrails**: The result is checked against deterministic `FORBIDDEN_COMMAND_PATTERNS` (e.g., `rm -rf /`).
+6.  **Approval**: The final command is presented to the user for explicit approval.
 
-Every Ejection increments the agent's **Stigma Counter (![][image1])**, enacting a tiered punishment system:
+## **4. Auditability & The LFAA**
 
-* **Tier 1 (Fractional Respawn):** The agent respawns with diminished starting Reputation (![][image2]).  
-* **Tier 2 (Yield Starvation):** A heavy "Stigma Tax" is applied. Even if they align with the winning Tribunal majority, their share of the reward is heavily taxed.  
-* **Tier 3 (The Pariah State):** Their actual voting weight drops (e.g., from 1.0 to 0.5). They can no longer serve as a decisive swing vote.
+Every action in the governance model is recorded via the **Local-First Audit Architecture (LFAA)**:
 
-### **The Inescapable Quorum & Redemption**
+*   **User Message Audit**: Recorded on the operator before LLM processing starts.
+*   **AI Response Audit**: The full reasoning and tool calls are recorded.
+*   **Command Execution Audit**: The exact command, its approval state, and its output are captured by the `g8eo` agent on the operator machine.
 
-Sage **cannot** bypass a Pariah. It must request commands from all 5 Tribunal members. This forces Sage to write hyper-clear, bulletproof prompts to ensure the Pariah doesn't fail and drag down the consensus.
+This ensures a persistent, immutable trail of how a decision was reached and who approved it.
 
-Pariahs can achieve **Redemption** by consecutively aligning with the healthy majority ![][image3] times, which slowly decrements their Stigma Counter and restores their voting weight.
+## **5. Safety Thresholds**
 
-## **4\. The Auditor's KV Constitution**
+To prevent infinite loops or "hallucination spirals," the system enforces structural limits:
 
-The Auditor's reality is entirely confined to a deterministic Key-Value structure instantiated at the start of the ticket ({ticket\_id}).
+*   **Max Tool Turns**: The ReAct loop is capped (default: 25 turns). Exceeding this requires explicit "Agent Continue" approval from the user.
+*   **Forbidden Patterns**: Deterministic regex blacklists that no Tribunal output can bypass.
+*   **Identity & Loyalty**: Core system prompts (Identity, Safety, Loyalty, Dissent) are injected on every turn, ensuring the agent remains aligned with its mission and safety constraints.
 
-### **Namespace 1: ledger:\* (The Economic Reality)**
-
-* ledger:rep:{agent\_id}: Current Reputation balance.  
-* ledger:stigma:{agent\_id}: Current Stigma tier (dictates voting weight).  
-* ledger:bounty\_pool: Slashed Reputation waiting for distribution.
-
-### **Namespace 2: laws:\* (The Guardrails)**
-
-* laws:syntax:blacklist: Regex lists (e.g., rm \-rf /). The Auditor instantly slashes any agent outputting these strings.  
-* laws:schema:sage: JSON schema validators. If Sage drops a required justification field, the Auditor slashes Sage for a Malformed Contract.
-
-### **Namespace 3: game:\* (Physics & Turn Order)**
-
-* game:turn:expected\_actor: Enforces the React loop. If Sage acts out of turn, it is slashed.  
-* game:tribunal:commits: Stores the initial cryptographic hashes to prevent agents from changing their votes.  
-* game:tribunal:reveals: Compares plaintext commands to the hashes.
-
-## **5\. Human Oversight & System Stasis**
-
-To protect the system and the human "Overlord" from infinite loops or catastrophic hallucination spirals, an ![][image3]**\-Strike Circuit Breaker** is enforced.
-
-* **The Tally:** The Auditor tracks total Ejections across the current investigation.  
-* **Stasis:** If Ejections reach a user-defined threshold (![][image3]), the entire system halts. The React loop freezes.  
-* **The Handoff:** The human user receives an incident report detailing the failure cascade and must manually intervene to either tune the parameters, speak with the Inquisitor, or override the state.
-
-*(Note: While the economy is ephemeral and destroyed after the investigation, all actions, slashes, and consensus fractures are streamed to a persistent log:telemetry namespace for Data Science analysis.)*

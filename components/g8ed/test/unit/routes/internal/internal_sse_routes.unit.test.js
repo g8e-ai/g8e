@@ -22,7 +22,8 @@ describe('Internal SSE Routes [UNIT]', () => {
 
     beforeEach(() => {
         mockSSEService = {
-            publishEvent: vi.fn()
+            publishEvent: vi.fn(),
+            publishToUser: vi.fn()
         };
         mockAuthorizationMiddleware = {
             requireInternalOrigin: vi.fn((req, res, next) => next())
@@ -197,6 +198,47 @@ describe('Internal SSE Routes [UNIT]', () => {
                 success: true,
                 message: 'Event delivered'
             }));
+        });
+
+        it('should fan out to user sessions when web_session_id is absent (BackgroundEvent)', async () => {
+            const event = { type: EventType.OPERATOR_HEARTBEAT_RECEIVED, operator_id: 'op-1' };
+            const req = createMockReq({
+                body: {
+                    user_id: 'user-456',
+                    event
+                }
+            });
+            const res = createMockRes();
+
+            mockSSEService.publishToUser.mockResolvedValue(2);
+
+            await getRoute()(req, res);
+
+            expect(mockSSEService.publishToUser).toHaveBeenCalledWith('user-456', expect.objectContaining({
+                _payload: event
+            }));
+            expect(mockSSEService.publishEvent).not.toHaveBeenCalled();
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                message: 'Event delivered'
+            }));
+        });
+
+        it('should return 500 when BackgroundEvent fan-out delivers to zero sessions', async () => {
+            const event = { type: EventType.OPERATOR_HEARTBEAT_RECEIVED, operator_id: 'op-1' };
+            const req = createMockReq({
+                body: {
+                    user_id: 'user-456',
+                    event
+                }
+            });
+            const res = createMockRes();
+
+            mockSSEService.publishToUser.mockResolvedValue(0);
+
+            await getRoute()(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(500);
         });
 
         it('should handle malformed event payload gracefully', async () => {

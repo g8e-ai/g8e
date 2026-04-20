@@ -34,7 +34,7 @@ from app.constants import (
     NetworkProtocol,
     RiskLevel,
 )
-from app.models.base import G8eBaseModel
+from app.models.base import G8eBaseModel, UTCDatetime
 
 
 class FsListEntry(G8eBaseModel):
@@ -116,7 +116,7 @@ class CommandInternalResult(G8eBaseModel):
     exit_code: int | None = None
     execution_time_seconds: float | None = None
     operator_id: str | None = None
-    completed_at: datetime | None = None
+    completed_at: UTCDatetime | None = None
     suggestion: str | None = None
     command: str | None = None
 
@@ -239,7 +239,7 @@ class FetchLogsToolResult(G8eBaseModel):
     stdout_size: int = 0
     stderr_size: int = 0
     duration_ms: int | None = None
-    timestamp: datetime | None = None
+    timestamp: UTCDatetime | None = None
 
 
 class AuditSessionMetadata(G8eBaseModel):
@@ -347,7 +347,7 @@ class IntentPermissionResult(G8eBaseModel):
     exit_code: int | None = None
     pending_command: str | None = None
     pending_command_result: Optional["CommandInternalResult"] = None
-    timestamp: datetime | None = None
+    timestamp: UTCDatetime | None = None
     revoked_intents: list[str] | None = None
 
 

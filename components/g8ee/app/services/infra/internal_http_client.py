@@ -96,49 +96,71 @@ class InternalHttpClient:
     async def push_sse_event(
         self,
         event: SessionEvent | BackgroundEvent,
-    ) -> bool:
+    ) -> SSEPushResponse:
+        """POST an event to g8ed for SSE delivery.
+
+        Returns the typed SSEPushResponse so callers can distinguish "accepted,
+        delivered to N sessions" from "accepted, fan-out had zero listeners"
+        (both legitimate success cases). Raises NetworkError only for genuine
+        transport/server failures (non-2xx); the originating HTTP status code
+        is preserved in the error details so real outages are never collapsed
+        into the empty-fan-out success shape.
+        """
+        wire = event.flatten_for_wire()
+        web_session_id = wire.get("web_session_id")
+        event_type = wire.get("event", {}).get("type") or "None"
+
+        logger.info(
+            "[HTTP-G8ED] Pushing SSE event",
+            extra={
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "event_type": event_type,
+            }
+        )
+
         try:
-            wire = event.flatten_for_wire()
-            web_session_id = wire.get("web_session_id")
-            event_type = wire.get("event", {}).get("type") or "None"
-
-            logger.info(
-                "[HTTP-G8ED] Pushing SSE event",
-                extra={
-                    "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
-                    "event_type": event_type,
-                }
-            )
-
             response = await self._http.post(
                 InternalApiPaths.PREFIX + InternalApiPaths.G8ED_SSE_PUSH,
                 json_data=wire,
                 headers=self._auth_headers(),
             )
-            if response.is_success:
-                result = SSEPushResponse.model_validate(response.json())
-                logger.info(
-                    "[HTTP-G8ED] SSE event delivered",
-                    extra={
-                        "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
-                        "event_type": event_type,
-                        "success": result.success,
-                        "delivered": result.delivered,
-                    }
-                )
-                return result.success
-            logger.error(
-                "[HTTP-G8ED] Failed to deliver SSE event",
-                extra={"status": response.status_code, "error": response.text}
-            )
-            return False
-
         except Exception as e:
             raise NetworkError(
                 f"[HTTP-G8ED] HTTP request failed: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
             )
+
+        if not response.is_success:
+            logger.error(
+                "[HTTP-G8ED] Failed to deliver SSE event",
+                extra={
+                    "status": response.status_code,
+                    "error": response.text,
+                    "event_type": event_type,
+                }
+            )
+            raise NetworkError(
+                f"[HTTP-G8ED] SSE push returned HTTP {response.status_code}",
+                component=ComponentName.G8EE,
+                details={
+                    "status_code": response.status_code,
+                    "response": response.text,
+                    "event_type": event_type,
+                },
+            )
+
+        result = SSEPushResponse.model_validate(response.json())
+        logger.info(
+            "[HTTP-G8ED] SSE event delivered",
+            extra={
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
+                "event_type": event_type,
+                "success": result.success,
+                "delivered": result.delivered,
+            }
+        )
+        return result
 
     async def grant_intent(
         self,

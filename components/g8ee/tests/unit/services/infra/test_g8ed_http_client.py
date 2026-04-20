@@ -178,34 +178,55 @@ class TestG8edHttpClientPushSSEEvent:
         )
 
     async def test_push_sse_event_success(self, mock_settings):
-        """Returns True when g8ed confirms delivery."""
+        """Returns typed SSEPushResponse with success=True and delivered count."""
         mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
-            response=MockG8eHTTPResponse(200, {"success": True})
+            response=MockG8eHTTPResponse(200, {"success": True, "delivered": 3})
         )
         result = await client.push_sse_event(self._make_test_event())
-        assert result is True
+        assert isinstance(result, SSEPushResponse)
+        assert result.success is True
+        assert result.delivered == 3
 
-    async def test_push_sse_event_g8ed_returns_failure(self, mock_settings):
-        """Returns False when g8ed reports success=False."""
+    async def test_push_sse_event_zero_delivered_is_success(self, mock_settings):
+        """BackgroundEvent fan-out to zero sessions is a legitimate success — not an error."""
         mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
-            response=MockG8eHTTPResponse(200, {"success": False})
+            response=MockG8eHTTPResponse(200, {"success": True, "delivered": 0})
         )
         result = await client.push_sse_event(self._make_test_event())
-        assert result is False
+        assert result.success is True
+        assert result.delivered == 0
 
-    async def test_push_sse_event_http_error(self, mock_settings):
-        """Returns False on non-2xx response."""
+    async def test_push_sse_event_http_error_raises_with_status(self, mock_settings):
+        """Non-2xx responses raise NetworkError with the originating status code preserved."""
         mock_settings.auth.internal_auth_token = "test-token"
         client = InternalHttpClient(settings=mock_settings)
         client._http = MockG8eHTTPClient(
             response=MockG8eHTTPResponse(503, {"error": "unavailable"})
         )
-        result = await client.push_sse_event(self._make_test_event())
-        assert result is False
+        with pytest.raises(NetworkError) as exc_info:
+            await client.push_sse_event(self._make_test_event())
+        assert exc_info.value.error_detail.details["status_code"] == 503
+
+    async def test_push_sse_event_http_500_raises_not_returns_false(self, mock_settings):
+        """Regression: a genuine 500 from g8ed must not collapse into a success-False shape.
+
+        Previously push_sse_event silently returned False on non-2xx, which
+        EventService.publish then re-raised as a generic NetworkError with no
+        status code — indistinguishable from a zero-delivery fan-out. The fix
+        raises NetworkError with the HTTP status preserved in details.
+        """
+        mock_settings.auth.internal_auth_token = "test-token"
+        client = InternalHttpClient(settings=mock_settings)
+        client._http = MockG8eHTTPClient(
+            response=MockG8eHTTPResponse(500, {"error": "crash"})
+        )
+        with pytest.raises(NetworkError) as exc_info:
+            await client.push_sse_event(self._make_test_event())
+        assert exc_info.value.error_detail.details["status_code"] == 500
 
     async def test_push_sse_event_exception(self, mock_settings):
         """Raises NetworkError on network exception."""
@@ -225,7 +246,8 @@ class TestG8edHttpClientPushSSEEvent:
         client._http = mock_http
 
         event = self._make_test_event(EventType.CASE_CREATED)
-        await client.push_sse_event(event)
+        result = await client.push_sse_event(event)
+        assert result.success is True
 
         assert mock_http._captured_url == "/api/internal/sse/push"
         wire = mock_http._captured_json_data
@@ -577,11 +599,18 @@ class TestG8edHttpClientTypedModels:
         assert result.error == "denied"
 
     async def test_sse_push_response_parses_delivered(self):
-        """SSEPushResponse correctly parses the delivered field."""
-        raw = {"success": True, "delivered": True}
+        """SSEPushResponse correctly parses the delivered count."""
+        raw = {"success": True, "delivered": 2}
         result = SSEPushResponse.model_validate(raw)
         assert result.success is True
-        assert result.delivered is True
+        assert result.delivered == 2
+
+    async def test_sse_push_response_defaults_delivered_to_zero(self):
+        """SSEPushResponse defaults delivered to 0 when absent — legitimate empty fan-out."""
+        raw = {"success": True}
+        result = SSEPushResponse.model_validate(raw)
+        assert result.success is True
+        assert result.delivered == 0
 
 
 # =============================================================================

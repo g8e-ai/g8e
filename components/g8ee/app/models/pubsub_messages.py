@@ -26,7 +26,7 @@ from pydantic import Field, field_serializer, field_validator
 
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
 
-from .base import G8eBaseModel, _to_iso_z
+from .base import G8eBaseModel, UTCDatetime, _to_iso_z
 from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
 
 from app.utils.timestamp import now, parse_iso
@@ -47,7 +47,7 @@ class ExecutionResultsPayload(G8eBaseModel):
     return_code: int | None = Field(default=None, description="Process exit code")
     error_message: str | None = Field(default=None, description="Human-readable error description")
     error_type: str | None = Field(default=None, description="Machine-readable error classification")
-    completed_at: datetime | None = Field(default=None, description="When the command completed (UTC)")
+    completed_at: UTCDatetime | None = Field(default=None, description="When the command completed (UTC)")
 
     @field_validator("completed_at", mode="before")
     @classmethod
@@ -96,7 +96,7 @@ class FileEditResultPayload(G8eBaseModel):
     stderr_hash: str | None = Field(None)
     stored_locally: bool = Field(False)
     return_code: int | None = Field(default=None, description="Process exit code")
-    completed_at: datetime | None = Field(default=None, description="When the file operation completed (UTC)")
+    completed_at: UTCDatetime | None = Field(default=None, description="When the file operation completed (UTC)")
     content: str | None = Field(default=None, description="File content for read operations")
     bytes_written: int | None = Field(None)
     lines_changed: int | None = Field(None)
@@ -171,7 +171,7 @@ class FetchLogsResultPayload(G8eBaseModel):
     stderr: str = Field(default="", description="Stored stderr content")
     stdout_size: int = Field(0)
     stderr_size: int = Field(0)
-    timestamp: datetime | None = Field(default=None, description="When the original command was executed (UTC)")
+    timestamp: UTCDatetime | None = Field(default=None, description="When the original command was executed (UTC)")
     sentinel_mode: str | None = Field(None)
     error: str | None = Field(None)
 
@@ -364,7 +364,7 @@ class G8eoHeartbeatPayload(G8eBaseModel):
     message arrives in command_pubsub.py, then passed typed throughout.
     """
     event_type: EventType | None = None
-    timestamp: datetime | None = None
+    timestamp: UTCDatetime | None = None
     heartbeat_type: HeartbeatType = HeartbeatType.AUTOMATIC
     operator_id: str | None = None
     operator_session_id: str | None = None
@@ -437,7 +437,7 @@ class G8eMessage(G8eBaseModel):
     """Standardized message for g8es pub/sub communication between g8e components."""
 
     id: str = Field(..., description="Unique message identifier")
-    timestamp: datetime = Field(default_factory=now, description="When the message was created (UTC)")
+    timestamp: UTCDatetime = Field(default_factory=now, description="When the message was created (UTC)")
 
     source_component: ComponentName = Field(..., description="Source component that published this message")
     instance_id: str | None = Field(default=None, description="Optional instance identifier for the source component")
@@ -450,10 +450,6 @@ class G8eMessage(G8eBaseModel):
     operator_id: str | None = Field(default=None, description="Operator ID for g8eo Operator identification")
     api_key: str | None = Field(default=None, description="Operator API key carried on pub/sub messages for identity continuity")
     payload: G8eBaseModel | None = Field(default=None, description="Typed payload for this message")
-
-    @field_serializer("timestamp")
-    def serialize_timestamp(self, dt: datetime) -> str:
-        return _to_iso_z(dt)
 
     @field_serializer("payload")
     def serialize_payload(self, v: G8eBaseModel | None) -> dict | None:

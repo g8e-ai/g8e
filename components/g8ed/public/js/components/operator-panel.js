@@ -147,41 +147,42 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        this._lastHeartbeat = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+        const metrics = data.metrics || {};
+        this._lastHeartbeat = metrics.timestamp ? new Date(metrics.timestamp).getTime() : Date.now();
         this._isConnected = true;
         devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
 
-        // Merge heartbeat data into operator object for UI display
         const operatorIndex = this._operators.findIndex(op => op.operator_id === data.operator_id);
         if (operatorIndex !== -1) {
             this._operators[operatorIndex] = {
                 ...this._operators[operatorIndex],
+                status: data.status ?? this._operators[operatorIndex].status,
                 latest_heartbeat_snapshot: {
-                    cpu_percent: data.cpu_percent,
-                    memory_percent: data.memory_percent,
-                    disk_percent: data.disk_percent,
-                    network_latency: data.network_latency,
-                    uptime: data.uptime,
-                    uptime_seconds: data.uptime_seconds,
-                    timestamp: data.timestamp
+                    cpu_percent:     metrics.cpu_percent,
+                    memory_percent:  metrics.memory_percent,
+                    disk_percent:    metrics.disk_percent,
+                    network_latency: metrics.network_latency,
+                    uptime:          metrics.uptime,
+                    uptime_seconds:  metrics.uptime_seconds,
+                    timestamp:       metrics.timestamp,
                 },
                 system_info: {
                     ...this._operators[operatorIndex].system_info,
-                    os: data.os,
-                    architecture: data.architecture,
-                    hostname: data.hostname,
-                    public_ip: data.public_ip,
-                    internal_ip: data.internal_ip,
-                    os_details: data.os_details,
-                    user_details: data.user_details,
-                    disk_details: data.disk_details,
-                    memory_details: data.memory_details,
-                    environment: data.environment,
-                    cpu_count: data.cpu_count,
-                    memory_mb: data.memory_mb,
-                    current_user: data.current_user
+                    os:             metrics.os,
+                    architecture:   metrics.architecture,
+                    hostname:       metrics.hostname,
+                    public_ip:      metrics.public_ip,
+                    internal_ip:    metrics.internal_ip,
+                    os_details:     metrics.os_details,
+                    user_details:   metrics.user_details,
+                    disk_details:   metrics.disk_details,
+                    memory_details: metrics.memory_details,
+                    environment:    metrics.environment,
+                    cpu_count:      metrics.cpu_count,
+                    memory_mb:      metrics.memory_mb,
+                    current_user:   metrics.current_user,
                 },
-                last_heartbeat: data.timestamp
+                last_heartbeat: metrics.timestamp,
             };
         }
 

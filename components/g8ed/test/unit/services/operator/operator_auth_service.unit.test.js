@@ -217,7 +217,7 @@ describe('OperatorAuthService', () => {
             mocks.operatorService.getOperator.mockResolvedValue({ 
                 operator_id: operatorId, 
                 user_id: userId,
-                web_session_id: 'ws-123',
+                bound_web_session_id: 'ws-123',
                 operator_type: 'system',
             });
             mocks.operatorSessionService.createOperatorSession.mockResolvedValue({ 

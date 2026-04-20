@@ -39,7 +39,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('registerConnection', () => {
         it('registers a new connection and returns connectionId', async () => {
-            const result = await service.registerConnection('session_123', mockResponse);
+            const result = await service.registerConnection('session_123', 'u-test', mockResponse);
             
             expect(result.connectionId).toBeDefined();
             expect(service.localConnections.size).toBe(1);
@@ -50,8 +50,8 @@ describe('SSEService [UNIT]', () => {
             const res1 = { writable: true };
             const res2 = { writable: true };
             
-            const reg1 = await service.registerConnection('s1', res1);
-            const reg2 = await service.registerConnection('s1', res2);
+            const reg1 = await service.registerConnection('s1', 'u-test', res1);
+            const reg2 = await service.registerConnection('s1', 'u-test', res2);
             
             expect(reg1.connectionId).not.toBe(reg2.connectionId);
             expect(service.localConnections.size).toBe(1);
@@ -60,8 +60,8 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('supports multiple unique sessions', async () => {
-            await service.registerConnection('s1', { writable: true });
-            await service.registerConnection('s2', { writable: true });
+            await service.registerConnection('s1', 'u-test', { writable: true });
+            await service.registerConnection('s2', 'u-test', { writable: true });
             expect(service.localConnections.size).toBe(2);
             expect(service.connectionsPerSession.size).toBe(2);
         });
@@ -69,7 +69,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('unregisterConnection', () => {
         it('unregisters only if connectionId matches', async () => {
-            const { connectionId } = await service.registerConnection('s1', mockResponse);
+            const { connectionId } = await service.registerConnection('s1', 'u-test', mockResponse);
             
             service.unregisterConnection('s1', 'wrong_id');
             expect(service.localConnections.size).toBe(1);
@@ -79,7 +79,7 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('decrements session count and cleans up map when zero', async () => {
-            const { connectionId } = await service.registerConnection('s1', mockResponse);
+            const { connectionId } = await service.registerConnection('s1', 'u-test', mockResponse);
             expect(service.connectionsPerSession.get('s1')).toBe(1);
             
             service.unregisterConnection('s1', connectionId);
@@ -88,9 +88,9 @@ describe('SSEService [UNIT]', () => {
 
         it('logs skipping unregister if connection was replaced', async () => {
             const res1 = { writable: true };
-            const { connectionId: id1 } = await service.registerConnection('s1', res1);
+            const { connectionId: id1 } = await service.registerConnection('s1', 'u-test', res1);
             const res2 = { writable: true };
-            const { connectionId: id2 } = await service.registerConnection('s1', res2);
+            const { connectionId: id2 } = await service.registerConnection('s1', 'u-test', res2);
 
             service.unregisterConnection('s1', id1);
             expect(service.localConnections.get('s1').connectionId).toBe(id2);
@@ -101,7 +101,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('publishEvent', () => {
         it('writes to response in SSE format', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             const event = new MockEvent({ type: 'test_event', data: { foo: 'bar' } });
             
             await service.publishEvent('s1', event);
@@ -120,7 +120,7 @@ describe('SSEService [UNIT]', () => {
 
         it('returns true even if connection is not writable', async () => {
             const res = { writable: false };
-            await service.registerConnection('s1', res);
+            await service.registerConnection('s1', 'u-test', res);
             const event = new MockEvent({ type: 'test', data: {} });
             const result = await service.publishEvent('s1', event);
             expect(result).toBe(true);
@@ -132,7 +132,7 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('calls delivery callback with delivered=true when event is successfully delivered', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             const event = new MockEvent({ type: 'test', data: {} });
             const callback = vi.fn();
 
@@ -160,7 +160,7 @@ describe('SSEService [UNIT]', () => {
 
         it('calls delivery callback with delivered=false when connection is not writable', async () => {
             const res = { writable: false };
-            await service.registerConnection('s1', res);
+            await service.registerConnection('s1', 'u-test', res);
             const event = new MockEvent({ type: 'test', data: {} });
             const callback = vi.fn();
 
@@ -174,7 +174,7 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('does not throw when delivery callback throws an error', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             const event = new MockEvent({ type: 'test', data: {} });
             const callback = vi.fn(() => {
                 throw new Error('Callback error');
@@ -187,7 +187,7 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('works without callback (backward compatibility)', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             const event = new MockEvent({ type: 'test', data: {} });
 
             const result = await service.publishEvent('s1', event);
@@ -197,13 +197,70 @@ describe('SSEService [UNIT]', () => {
         });
     });
 
+    describe('registerConnection requires userId', () => {
+        it('throws when userId is missing', async () => {
+            await expect(service.registerConnection('s1', undefined, mockResponse))
+                .rejects.toThrow('requires a userId');
+            await expect(service.registerConnection('s1', '', mockResponse))
+                .rejects.toThrow('requires a userId');
+        });
+    });
+
+    describe('publishToUser', () => {
+        it('fans out to every locally connected session for the user', async () => {
+            const res1 = { write: vi.fn(), writable: true, flush: vi.fn() };
+            const res2 = { write: vi.fn(), writable: true, flush: vi.fn() };
+            const resOther = { write: vi.fn(), writable: true, flush: vi.fn() };
+
+            await service.registerConnection('s1', 'user-A', res1);
+            await service.registerConnection('s2', 'user-A', res2);
+            await service.registerConnection('s3', 'user-B', resOther);
+
+            const event = new MockEvent({ type: 'fan_out', data: { x: 1 } });
+            const count = await service.publishToUser('user-A', event);
+
+            expect(count).toBe(2);
+            expect(res1.write).toHaveBeenCalled();
+            expect(res2.write).toHaveBeenCalled();
+            expect(resOther.write).not.toHaveBeenCalled();
+        });
+
+        it('returns 0 when user has no local sessions', async () => {
+            const event = new MockEvent({ type: 'fan_out', data: {} });
+            const count = await service.publishToUser('user-none', event);
+            expect(count).toBe(0);
+        });
+
+        it('throws when event is not a G8eBaseModel', async () => {
+            await expect(service.publishToUser('user-A', { type: 'wrong' }))
+                .rejects.toThrow('requires a G8eBaseModel instance');
+        });
+
+        it('removes the user-sessions entry when the last session disconnects', async () => {
+            const { connectionId } = await service.registerConnection('s1', 'user-A', mockResponse);
+            expect(service.userSessions.get('user-A').size).toBe(1);
+
+            service.unregisterConnection('s1', connectionId);
+            expect(service.userSessions.has('user-A')).toBe(false);
+        });
+
+        it('keeps the user-sessions entry while other sessions remain', async () => {
+            const { connectionId: id1 } = await service.registerConnection('s1', 'user-A', { writable: true });
+            await service.registerConnection('s2', 'user-A', { writable: true });
+
+            service.unregisterConnection('s1', id1);
+            expect(service.userSessions.get('user-A').size).toBe(1);
+            expect(service.userSessions.get('user-A').has('s2')).toBe(true);
+        });
+    });
+
     describe('broadcastEvent', () => {
         it('sends to all registered connections', async () => {
             const res1 = { write: vi.fn(), writable: true, flush: vi.fn() };
             const res2 = { write: vi.fn(), writable: true, flush: vi.fn() };
             
-            await service.registerConnection('s1', res1);
-            await service.registerConnection('s2', res2);
+            await service.registerConnection('s1', 'u-test', res1);
+            await service.registerConnection('s2', 'u-test', res2);
             
             const event = new MockEvent({ type: 'broadcast', data: {} });
             const count = await service.broadcastEvent(event);
@@ -214,7 +271,7 @@ describe('SSEService [UNIT]', () => {
         });
 
         it('returns 0 and logs error if broadcast fails', async () => {
-            await service.registerConnection('s1', { 
+            await service.registerConnection('s1', 'u-test', { 
                 get writable() { throw new Error('Crashed'); } 
             });
             const event = new MockEvent({ type: 'broadcast', data: {} });
@@ -230,13 +287,13 @@ describe('SSEService [UNIT]', () => {
 
     describe('hasLocalConnection', () => {
         it('returns true for healthy connection', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             expect(service.hasLocalConnection('s1')).toBeTruthy();
         });
 
         it('returns false for destroyed connection', async () => {
             mockResponse.destroyed = true;
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             expect(service.hasLocalConnection('s1')).toBeFalsy();
         });
 
@@ -247,7 +304,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('getSessionConnectionCount', () => {
         it('returns correct count', async () => {
-            await service.registerConnection('s1', { writable: true });
+            await service.registerConnection('s1', 'u-test', { writable: true });
             expect(service.getSessionConnectionCount('s1')).toBe(1);
             expect(service.getSessionConnectionCount('none')).toBe(0);
         });
@@ -255,7 +312,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('getStats', () => {
         it('returns service statistics', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             const stats = service.getStats();
             expect(stats).toEqual({
                 localConnections: 1,
@@ -283,7 +340,7 @@ describe('SSEService [UNIT]', () => {
 
     describe('close', () => {
         it('cleans up all connections and sets healthy to false', async () => {
-            await service.registerConnection('s1', mockResponse);
+            await service.registerConnection('s1', 'u-test', mockResponse);
             await service.close();
             expect(service.healthy).toBe(false);
             expect(service.localConnections.size).toBe(0);
@@ -342,7 +399,7 @@ describe('SSEService [UNIT]', () => {
                 writable: true,
                 write: vi.fn(() => { throw new Error('Write failed'); })
             };
-            await service.registerConnection('s1', badResponse);
+            await service.registerConnection('s1', 'u-test', badResponse);
             const result = await service.sendToLocal('s1', { type: 'test' });
             expect(result).toBe(false);
         });

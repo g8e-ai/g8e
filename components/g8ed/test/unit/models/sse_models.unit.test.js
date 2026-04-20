@@ -158,54 +158,6 @@ describe('KeepaliveEvent [UNIT - PURE LOGIC]', () => {
         expect(wire.serverTime).toBe(1234567890);
         expect(typeof wire.timestamp).toBe('string');
     });
-
-    it('defaults operator_list to null when not provided', () => {
-        const event = KeepaliveEvent.parse({ type: 'keepalive' });
-        expect(event.operator_list).toBeNull();
-    });
-
-    it('accepts operator_list when provided', () => {
-        const operatorList = OperatorListData.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            operators: [{ operator_id: 'op-1', status: 'ACTIVE' }],
-            total_count: 1,
-            active_count: 1,
-            used_slots: 1,
-            max_slots: 1,
-        });
-        const event = KeepaliveEvent.parse({
-            type: 'keepalive',
-            operator_list: operatorList,
-        });
-        expect(event.operator_list).toBeInstanceOf(OperatorListData);
-        expect(event.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(event.operator_list.total_count).toBe(1);
-    });
-
-    it('forWire() includes operator_list when provided', () => {
-        const testDate = new Date('2026-04-13T17:21:05.940Z');
-        const operatorList = OperatorListData.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-            operators: [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })],
-            total_count: 1,
-            active_count: 1,
-            used_slots: 1,
-            max_slots: 1,
-            timestamp: testDate,
-        });
-        const event = KeepaliveEvent.parse({
-            type: 'keepalive',
-            operator_list: operatorList,
-        });
-        const wire = event.forWire();
-        expect(wire.operator_list.type).toBe('g8e.v1.operator.panel.list.updated');
-        expect(wire.operator_list.operators[0].operator_id).toBe('op-1');
-        expect(wire.operator_list.operators[0].status).toBe('ACTIVE');
-        expect(wire.operator_list.total_count).toBe(1);
-        expect(wire.operator_list.active_count).toBe(1);
-        expect(wire.operator_list.used_slots).toBe(1);
-        expect(wire.operator_list.max_slots).toBe(1);
-    });
 });
 
 describe('LLMConfigData [UNIT - PURE LOGIC]', () => {

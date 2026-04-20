@@ -327,6 +327,7 @@ export const AuthPaths = Object.freeze({
     REGISTER:         `/${Auth.REGISTER}`,
     OPERATOR_AUTH:    `/${Auth.OPERATOR}`,
     OPERATOR_REFRESH: `/${Auth.OPERATOR}/${Auth.REFRESH}`,
+    OPERATOR_VALIDATE: `/${Auth.OPERATOR}/validate`,
     LINK_GENERATE:    `/${Auth.LINK}/${Auth.GENERATE}`,
     ADMIN_LOCKED_ACCOUNTS: `/${Auth.ADMIN}/${Auth.LOCKED_ACCOUNTS}`,
     ADMIN_UNLOCK_ACCOUNT:  `/${Auth.ADMIN}/${Auth.UNLOCK_ACCOUNT}`,

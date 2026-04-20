@@ -258,7 +258,7 @@ export class OperatorAuthResponse extends G8eBaseModel {
     static fields = {
         success:             { type: F.boolean, required: true },
         operator_session_id: { type: F.string,  required: true },
-        operator_id:         { type: F.string,  required: true },
+        operator_id:         { type: F.string,  default: null },
         user_id:             { type: F.string,  required: true },
         api_key:             { type: F.string,  required: true },
         config:              { type: F.object,  required: true },
@@ -326,6 +326,22 @@ export class SimpleSuccessResponse extends G8eBaseModel {
     static fields = {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  default: null },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// SSEPushResponse
+// ---------------------------------------------------------------------------
+// Canonical response shape for POST /api/internal/sse/push. `delivered` is the
+// count of active SSE connections the event was fanned out to. Zero is a
+// legitimate outcome for a BackgroundEvent when the user has no connected
+// sessions and MUST NOT be surfaced as an error.
+
+export class SSEPushResponse extends G8eBaseModel {
+    static fields = {
+        success:   { type: F.boolean, required: true },
+        delivered: { type: F.number,  default: 0, min: 0 },
+        error:     { type: F.string,  default: null },
     };
 }
 

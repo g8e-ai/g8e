@@ -67,7 +67,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     beforeEach(async () => {
         sseService = makeSSEService();
         response = makeResponse();
-        const result = await sseService.registerConnection(SESSION_A, response);
+        const result = await sseService.registerConnection(SESSION_A, 'u-test', response);
         connectionId = result.connectionId;
     });
 
@@ -122,7 +122,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
     describe('session isolation', () => {
         it('should not write to session B when publishing to session A', async () => {
             const responseB = makeResponse();
-            const regB = await sseService.registerConnection(SESSION_B, responseB);
+            const regB = await sseService.registerConnection(SESSION_B, 'u-test', responseB);
 
             try {
                 await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
@@ -145,7 +145,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
 
         it('should write to each session independently when publishing to both', async () => {
             const responseB = makeResponse();
-            const regB = await sseService.registerConnection(SESSION_B, responseB);
+            const regB = await sseService.registerConnection(SESSION_B, 'u-test', responseB);
 
             try {
                 await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
@@ -200,13 +200,13 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
 
             expect(readFrames(response)).toHaveLength(0);
 
-            const reReg = await sseService.registerConnection(SESSION_A, response);
+            const reReg = await sseService.registerConnection(SESSION_A, 'u-test', response);
             connectionId = reReg.connectionId;
         });
 
         it('should not remove a newer connection when unregistering a stale connectionId', async () => {
             const response2 = makeResponse();
-            const reg2 = await sseService.registerConnection(SESSION_A, response2);
+            const reg2 = await sseService.registerConnection(SESSION_A, 'u-test', response2);
 
             sseService.unregisterConnection(SESSION_A, connectionId);
 
@@ -252,7 +252,7 @@ describe('SSE Connection Lifecycle Tests [INTEGRATION]', () => {
             sseService.unregisterConnection(SESSION_A, connectionId);
 
             const response2 = makeResponse();
-            const reg2 = await sseService.registerConnection(SESSION_A, response2);
+            const reg2 = await sseService.registerConnection(SESSION_A, 'u-test', response2);
 
             await sseService.publishEvent(SESSION_A, new G8eePassthroughEvent({
                 _payload: {

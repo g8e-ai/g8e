@@ -32,6 +32,7 @@ import { KVCacheClient } from './clients/g8es_kv_cache_client.js';
 import { g8esBlobClient } from './platform/g8es_blob_client.js';
 import { WebSessionService } from './auth/web_session_service.js';
 import { OperatorSessionService } from './auth/operator_session_service.js';
+import { CliSessionService } from './auth/cli_session_service.js';
 import { BoundSessionsService } from './auth/bound_sessions_service.js';
 import { CacheAsideService } from './cache/cache_aside_service.js';
 import { ApiKeyService } from './auth/api_key_service.js';
@@ -72,6 +73,7 @@ let pubSubClient = null;
 let cacheAsideService = null;
 let webSessionService = null;
 let operatorSessionService = null;
+let cliSessionService = null;
 let boundSessionsService = null;
 let apiKeyService = null;
 let userService = null;
@@ -220,9 +222,17 @@ async function _doInitialize() {
             cacheAsideService, 
             bootstrapService: settingsSvc.getBootstrapService()
         });
-        operatorSessionService = new OperatorSessionService({ 
-            cacheAsideService, 
+        operatorSessionService = new OperatorSessionService({
+            cacheAsideService,
             bootstrapService: settingsSvc.getBootstrapService()
+        });
+        // auditService is required by CliSessionService; construct it here
+        // (moved up from Phase 6) before dependent services are wired.
+        auditService = new AuditService();
+        cliSessionService = new CliSessionService({
+            cacheAsideService,
+            bootstrapService: settingsSvc.getBootstrapService(),
+            auditService
         });
         apiKeyDataService = new ApiKeyDataService({ 
             cacheAsideService 
@@ -330,8 +340,8 @@ async function _doInitialize() {
             g8eNodeOperatorService: getG8ENodeOperatorService(),
         });
         
-        auditService = new AuditService();
-        
+        // auditService already constructed in Phase 3 for CliSessionService
+
         sessionAuthListener = new SessionAuthListener({
             pubSubClient: getPubSubClient(),
             operatorSessionService: getOperatorSessionService(),
@@ -372,6 +382,7 @@ async function _doInitialize() {
             userService: getUserService(),
             operatorService: getOperatorService(),
             operatorSessionService: getOperatorSessionService(),
+            cliSessionService,
             bindingService: getBindingService(),
             webSessionService: getWebSessionService(),
         });
@@ -440,6 +451,11 @@ export function getWebSessionService() {
 export function getOperatorSessionService() {
     if (!operatorSessionService) throw new Error('OperatorSessionService not initialized. Call initializeServices() first.');
     return operatorSessionService;
+}
+
+export function getCliSessionService() {
+    if (!cliSessionService) throw new Error('CliSessionService not initialized. Call initializeServices() first.');
+    return cliSessionService;
 }
 
 export function getBindingService() {

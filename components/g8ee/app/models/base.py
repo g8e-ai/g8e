@@ -12,10 +12,10 @@
 # limitations under the License.
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Annotated
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_serializer, field_validator
 
 __all__ = [
     "ConfigDict",
@@ -25,6 +25,7 @@ __all__ = [
     "G8eBaseModel",
     "G8eIdentifiableModel",
     "G8eTimestampedModel",
+    "UTCDatetime",
     "_to_iso_z",
     "field_validator",
     "recursive_serialize",
@@ -40,6 +41,12 @@ def _to_iso_z(dt: datetime) -> str:
     else:
         dt = dt.astimezone(UTC)
     return dt.strftime("%Y-%m-%dT%H:%M:%S") + (f".{dt.microsecond:06d}" if dt.microsecond else "") + "Z"
+
+
+UTCDatetime = Annotated[
+    datetime,
+    PlainSerializer(lambda dt: _to_iso_z(dt) if dt else None, return_type=str | None, when_used="json"),
+]
 
 
 def recursive_serialize(value: Any) -> Any:
@@ -126,8 +133,8 @@ class G8eTimestampedModel(G8eBaseModel):
     For persisted entities use ``G8eIdentifiableModel``.
     """
 
-    created_at: datetime = Field(default_factory=now, description="When the entity was created (UTC)")
-    updated_at: datetime | None = Field(default=None, description="When the entity was last updated (UTC)")
+    created_at: UTCDatetime = Field(default_factory=now, description="When the entity was created (UTC)")
+    updated_at: UTCDatetime | None = Field(default=None, description="When the entity was last updated (UTC)")
 
     @field_validator("created_at", "updated_at", mode="before")
     @classmethod
@@ -141,10 +148,6 @@ class G8eTimestampedModel(G8eBaseModel):
             else:
                 return v.astimezone(UTC)
         return v
-
-    @field_serializer("created_at", "updated_at")
-    def serialize_datetime(self, dt: datetime | None) -> str | None:
-        return _to_iso_z(dt) if dt is not None else None
 
     def update_timestamp(self) -> None:
         self.updated_at = now()

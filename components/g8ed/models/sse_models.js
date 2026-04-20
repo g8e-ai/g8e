@@ -60,7 +60,6 @@ export class KeepaliveEvent extends G8eBaseModel {
         type:          { type: F.string,  required: true },
         timestamp:     { type: F.date,    default: () => now() },
         serverTime:    { type: F.number,  default: null },
-        operator_list: { type: F.object,  model: OperatorListData, default: null },
     };
 }
 

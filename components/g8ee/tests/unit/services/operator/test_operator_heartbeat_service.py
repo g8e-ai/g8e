@@ -18,8 +18,13 @@ import pytest
 
 from app.constants import EventType, HeartbeatType, OperatorStatus, PubSubChannel
 from app.errors import ConfigurationError
-from app.models.events import SessionEvent
-from app.models.operators import HeartbeatSSEPayload, OperatorDocument, OperatorHeartbeat
+from app.models.events import BackgroundEvent, SessionEvent
+from app.models.operators import (
+    HeartbeatMetrics,
+    HeartbeatSSEEnvelope,
+    OperatorDocument,
+    OperatorHeartbeat,
+)
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.utils.timestamp import now
@@ -457,15 +462,14 @@ class TestPushHeartbeatSSE:
         operator = OperatorDocument(
             operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
-        sse_payload = HeartbeatSSEPayload(
+        envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            timestamp=now(),
-            heartbeat_type=HeartbeatType.AUTOMATIC,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         payload = _make_payload()
 
-        await service._push_heartbeat_sse(sse_payload, payload, operator)
+        await service._push_heartbeat_sse(envelope, payload, operator)
 
         mock_event_service.publish.assert_called()
         first_call = mock_event_service.publish.call_args_list[0]
@@ -474,22 +478,67 @@ class TestPushHeartbeatSSE:
         assert event.event_type == EventType.OPERATOR_HEARTBEAT_RECEIVED
         assert event.web_session_id == "web-999"
 
-    async def test_skips_publish_when_no_web_session(
+    async def test_skips_publish_when_operator_has_no_user_id(
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
             operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id=None
         )
-        sse_payload = HeartbeatSSEPayload(
+        envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            timestamp=now(),
-            heartbeat_type=HeartbeatType.AUTOMATIC,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
-        await service._push_heartbeat_sse(sse_payload, _make_payload(), operator)
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
 
         mock_event_service.publish.assert_not_called()
+
+    async def test_publishes_background_event_when_unbound_but_has_user_id(
+        self, service, mock_event_service
+    ):
+        operator = OperatorDocument(
+            operator_id="op-222",
+            status=OperatorStatus.ACTIVE,
+            bound_web_session_id=None,
+            user_id="user-7",
+        )
+        envelope = HeartbeatSSEEnvelope(
+            operator_id="op-222",
+            status=OperatorStatus.ACTIVE,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+        )
+
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+
+        mock_event_service.publish.assert_called_once()
+        event = mock_event_service.publish.call_args.args[0]
+        assert isinstance(event, BackgroundEvent)
+        assert event.user_id == "user-7"
+        assert event.investigation_id is None
+
+    async def test_background_event_preserves_investigation_id_when_present(
+        self, service, mock_event_service
+    ):
+        operator = OperatorDocument(
+            operator_id="op-222",
+            status=OperatorStatus.ACTIVE,
+            bound_web_session_id=None,
+            user_id="user-7",
+        )
+        envelope = HeartbeatSSEEnvelope(
+            operator_id="op-222",
+            status=OperatorStatus.ACTIVE,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+        )
+
+        await service._push_heartbeat_sse(
+            envelope, _make_payload(investigation_id="inv-42"), operator
+        )
+
+        event = mock_event_service.publish.call_args.args[0]
+        assert isinstance(event, BackgroundEvent)
+        assert event.investigation_id == "inv-42"
 
     async def test_sse_exception_does_not_propagate(
         self, service, mock_event_service
@@ -497,15 +546,14 @@ class TestPushHeartbeatSSE:
         operator = OperatorDocument(
             operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
-        sse_payload = HeartbeatSSEPayload(
+        envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            timestamp=now(),
-            heartbeat_type=HeartbeatType.AUTOMATIC,
+            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
-        await service._push_heartbeat_sse(sse_payload, _make_payload(), operator)
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
 
 
 

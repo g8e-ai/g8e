@@ -27,7 +27,7 @@ import { operatorAuthRateLimiter, operatorAuthIpBackstopLimiter } from '../../mi
  * @param {Object} options.requestTimestampMiddleware - Request timestamp middleware object
  */
 export function createOperatorAuthRouter({ services, rateLimiters, requestTimestampMiddleware }) {
-    const { operatorAuthService, operatorSessionService } = services;
+    const { operatorAuthService, operatorSessionService, cliSessionService } = services;
     const { requireRequestTimestamp } = requestTimestampMiddleware;
     const { operatorRefreshRateLimiter } = rateLimiters;
     const router = express.Router();
@@ -117,6 +117,54 @@ export function createOperatorAuthRouter({ services, rateLimiters, requestTimest
             return res.status(500).json(new ErrorResponse({
                 error: OperatorAuthError.REFRESH_FAILED,
             }).forClient());
+        }
+    });
+
+    router.post(AuthPaths.OPERATOR_VALIDATE, async (req, res) => {
+        try {
+            const { operator_session_id } = req.body;
+
+            if (!operator_session_id) {
+                return res.status(400).json({ success: false, valid: false, error: 'Missing session_id' });
+            }
+
+            let session = null;
+            let sessionType = null;
+
+            // Try CLI session first (CLI sessions have cli_session_ prefix)
+            if (operator_session_id.startsWith('cli_session_')) {
+                session = await cliSessionService.validateSession(operator_session_id, { ip: req.ip });
+                sessionType = 'CLI';
+            } else {
+                // Try operator session
+                session = await operatorSessionService.validateSession(operator_session_id, { ip: req.ip });
+                sessionType = 'OPERATOR';
+            }
+
+            if (!session) {
+                logger.info('[OPERATOR-AUTH] Session validation failed', {
+                    sessionId: redactWebSessionId(operator_session_id),
+                    sessionType,
+                });
+                return res.status(401).json({ success: false, valid: false, error: 'Invalid or expired session' });
+            }
+
+            logger.info('[OPERATOR-AUTH] Session validated successfully', {
+                sessionId: redactWebSessionId(operator_session_id),
+                sessionType,
+                user_id: session.user_id,
+            });
+
+            return res.json({
+                success: true,
+                valid: true,
+                session_type: sessionType,
+                user_id: session.user_id,
+                operator_id: session.operator_id || null,
+            });
+        } catch (error) {
+            logger.error('[OPERATOR-AUTH] Session validation error', { error: error.message });
+            return res.status(500).json({ success: false, valid: false, error: 'Internal server error' });
         }
     });
 

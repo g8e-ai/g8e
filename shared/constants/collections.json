@@ -5,6 +5,7 @@
     "users": "users",
     "web_sessions": "web_sessions",
     "operator_sessions": "operator_sessions",
+    "cli_sessions": "cli_sessions",
     "login_audit": "login_audit",
     "auth_admin_audit": "auth_admin_audit",
     "account_locks": "account_locks",

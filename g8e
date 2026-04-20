@@ -126,17 +126,16 @@ _credentials_exist() {
 _validate_session() {
     local operator_session_id="$1"
 
-    if [[ -z "$INTERNAL_AUTH_TOKEN" ]]; then
-        return 1
-    fi
-
+    # The /api/auth/operator/validate endpoint authenticates via the session id
+    # itself (no internal auth token required). Use -k to accept the g8ed
+    # self-signed cert; drop -f so we can distinguish empty (network error)
+    # from a JSON error body.
     local validate_url="https://localhost/api/auth/operator/validate"
     local response
 
     response=$(docker exec -i g8ed \
-        curl -sf -X POST \
+        curl -sk -X POST \
         -H 'Content-Type: application/json' \
-        -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
         -d "{\"operator_session_id\":\"$operator_session_id\"}" \
         "$validate_url" 2>/dev/null || true)
 
@@ -225,20 +224,24 @@ _authenticate_user() {
 
     local auth_url="https://localhost/api/auth/operator"
     local response=""
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
     if [[ -n "$device_token" ]]; then
         # Authenticate via device link token
         response=$(docker exec -i g8ed \
-            curl -sf -X POST \
+            curl -sk -X POST \
             -H 'Content-Type: application/json' \
+            -H "X-Request-Timestamp: $timestamp" \
             -d "{\"auth_mode\":\"operator_session\",\"operator_session_id\":\"$device_token\"}" \
             "$auth_url" 2>/dev/null || true)
     else
         # Authenticate via API key
         response=$(docker exec -i g8ed \
-            curl -sf -X POST \
+            curl -sk -X POST \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer $api_key" \
+            -H "X-Request-Timestamp: $timestamp" \
+            -d '{}' \
             "$auth_url" 2>/dev/null || true)
     fi
 
@@ -269,6 +272,9 @@ _authenticate_user() {
         fi
     else
         local error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+        if [[ -z "$error_msg" ]]; then
+            error_msg=$(echo "$response" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
+        fi
         echo "[g8e] Authentication failed: ${error_msg:-Unknown error}" >&2
         exit 1
     fi

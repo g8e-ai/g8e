@@ -42,6 +42,9 @@ class SSEService {
     constructor({ settingsService, internalHttpClient, boundSessionsService, investigationService } = {}) {
         this.localConnections = new Map();
         this.connectionsPerSession = new Map();
+        // userId -> Set<webSessionId> for O(1) user-scoped fan-out.
+        // Only tracks connections local to this g8ed instance.
+        this.userSessions = new Map();
         this._settingsService = settingsService;
         this._internalHttpClient = internalHttpClient;
         this._boundSessionsService = boundSessionsService;
@@ -68,8 +71,16 @@ class SSEService {
      * Register a new SSE connection (local to this instance)
      * Returns a unique connectionId that must be passed to unregisterConnection
      * to prevent stale connection cleanup from removing a newer active connection.
+     *
+     * @param {string} webSessionId - WebSession ID
+     * @param {string} userId - User ID that owns this session (required for user-scoped fan-out)
+     * @param {Object} response - Express response object
+     * @param {Object} [metadata={}] - Optional metadata for logging
      */
-    async registerConnection(webSessionId, response, metadata = {}) {
+    async registerConnection(webSessionId, userId, response, metadata = {}) {
+        if (!userId) {
+            throw new Error('SSEService.registerConnection requires a userId');
+        }
         // Generate unique connection ID to prevent stale cleanup race condition
         const connectionId = `${webSessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -84,13 +95,21 @@ class SSEService {
             });
         }
 
-        // Store response object with its unique connection ID
-        this.localConnections.set(webSessionId, { response, connectionId });
+        // Store response object with its unique connection ID and owning userId
+        this.localConnections.set(webSessionId, { response, connectionId, userId });
 
         // Track per-session connection count (local)
         const currentCount = this.connectionsPerSession.get(webSessionId) || 0;
         const newCount = isReplacing ? currentCount : currentCount + 1;
         this.connectionsPerSession.set(webSessionId, newCount);
+
+        // Maintain user -> sessions index for O(1) user-scoped fan-out
+        let sessions = this.userSessions.get(userId);
+        if (!sessions) {
+            sessions = new Set();
+            this.userSessions.set(userId, sessions);
+        }
+        sessions.add(webSessionId);
 
         logger.info('[SSE-SERVICE] Connection registered', {
             webSessionId: redactWebSessionId(webSessionId),
@@ -117,9 +136,11 @@ class SSEService {
      */
     unregisterConnection(webSessionId, connectionId) {
         const existing = this.localConnections.get(webSessionId);
+        let removedUserId = null;
 
         // Only remove if this is the same connection that's currently registered
         if (existing && existing.connectionId === connectionId) {
+            removedUserId = existing.userId;
             this.localConnections.delete(webSessionId);
             logger.info('[SSE-SERVICE] Connection unregistered', {
                 webSessionId: redactWebSessionId(webSessionId),
@@ -140,6 +161,17 @@ class SSEService {
             this.connectionsPerSession.delete(webSessionId);
         } else {
             this.connectionsPerSession.set(webSessionId, count - 1);
+        }
+
+        // Clean up user->sessions index only when the connection was actually removed
+        if (removedUserId) {
+            const sessions = this.userSessions.get(removedUserId);
+            if (sessions) {
+                sessions.delete(webSessionId);
+                if (sessions.size === 0) {
+                    this.userSessions.delete(removedUserId);
+                }
+            }
         }
     }
 
@@ -180,6 +212,44 @@ class SSEService {
             }
         }
         return true;
+    }
+
+    /**
+     * Fan out an event to every locally connected SSE session owned by a user.
+     * O(k) in the number of local sessions for that user — no cache or DB lookups.
+     *
+     * @param {string} userId
+     * @param {G8eBaseModel} eventData - Typed SSE model instance
+     * @returns {Promise<number>} Number of sessions the event was successfully delivered to
+     */
+    async publishToUser(userId, eventData) {
+        if (!(eventData instanceof G8eBaseModel)) {
+            throw new Error(`SSEService.publishToUser requires a G8eBaseModel instance, got ${typeof eventData}`);
+        }
+        const sessions = this.userSessions.get(userId);
+        if (!sessions || sessions.size === 0) {
+            logger.info('[SSE-SERVICE] No active local sessions for user', {
+                userId,
+                eventType: eventData.forWire().type
+            });
+            return 0;
+        }
+
+        const wire = eventData.forWire();
+        let successCount = 0;
+        for (const webSessionId of sessions) {
+            if (await this.sendToLocal(webSessionId, wire)) {
+                successCount++;
+            }
+        }
+
+        logger.info('[SSE-SERVICE] Event fanned out to user sessions', {
+            userId,
+            successCount,
+            totalLocalSessions: sessions.size,
+            eventType: wire.type
+        });
+        return successCount;
     }
 
     /**
@@ -455,6 +525,7 @@ class SSEService {
         this.healthy = false;
         this.localConnections.clear();
         this.connectionsPerSession.clear();
+        this.userSessions.clear();
         logger.info('[SSE-SERVICE] SSE service closed');
     }
 }

@@ -70,7 +70,6 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Icon**: `type`
 - **Role**: Summarizer
 - **Model Tier**: Assistant
-- **Temperature**: `null` — uses the configured model's `default_temperature`.
 - **Purpose**: Generates concise case titles
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("scribe")` in `title_generator.py`
@@ -166,14 +165,15 @@ from app.utils.agent_persona_loader import get_tribunal_member
 member = _member_for_pass(pass_index)
 member_persona = get_tribunal_member(member.value)
 prompt = member_persona.persona.format(
-    forbidden_patterns_message=_format_forbidden_patterns_message(),
     command_constraints_message=command_constraints_message,
-    intent=intent,
+    forbidden_patterns_message=forbidden_patterns_message,
+    request=request,
+    guidelines=guidelines,
     os=os_name,
     shell=shell,
     user_context=user_context,
     working_directory=working_directory,
-    original_command=original_command,
+    operator_context=operator_context,
 )
 ```
 
@@ -183,12 +183,16 @@ from app.utils.agent_persona_loader import get_agent_persona
 
 verifier_persona = get_agent_persona("auditor")
 prompt = verifier_persona.get_system_prompt().format(
-    forbidden_patterns_message=_format_forbidden_patterns_message(),
     command_constraints_message=command_constraints_message,
-    intent=intent,
-    os=os_name,
-    user_context=user_context,
     candidate_command=candidate_command,
+    forbidden_patterns_message=forbidden_patterns_message,
+    request=request,
+    guidelines=guidelines,
+    os=os_name,
+    shell=shell,
+    user_context=user_context,
+    working_directory=working_directory,
+    operator_context=operator_context,
 )
 ```
 
@@ -206,7 +210,7 @@ All Tribunal / Verifier personas follow the same canonical layout. The
 convention is **XML-style tags for hard structural boundaries, Markdown for
 content inside each section**. This matches the Gemini 3 prompt-engineering
 guidance (see `docs/reference/gemini/prompt_engineering.md`): XML tags keep
-template-substituted user data (`{intent}`, `{original_command}`, ...) from
+template-substituted user data (`{request}`, `{guidelines}`, ...) from
 bleeding into instructions, while Markdown inside each section stays
 human-readable in source.
 
@@ -214,7 +218,7 @@ Ordering rules (Gemini 3 best practice, applied uniformly):
 
 - Critical behavioral instructions first. `<role>` and `<output_contract>` come
   at the top so the model weights them heavily.
-- Context last. `{intent}`, `{system_context}`, `{original_command}`,
+- Context last. `{request}`, `{guidelines}`, `{system_context}`,
   `{candidate_command}` sit at the bottom of the prompt, followed by a short
   transition line that re-anchors the model on the output contract.
 - Platform-injected constraints are grouped in a single `<constraints>`
@@ -246,9 +250,13 @@ Ordering rules (Gemini 3 best practice, applied uniformly):
 {command_constraints_message}
 </constraints>
 
-<intent>
-{intent}
-</intent>
+<request>
+{request}
+</request>
+
+<guidelines>
+{guidelines}
+</guidelines>
 
 <system_context>
 OS: {os}
@@ -257,15 +265,15 @@ User: {user_context}
 Working directory: {working_directory}
 </system_context>
 
-<original_command>
-{original_command}
-</original_command>
+<operator_context>
+{operator_context}
+</operator_context>
 
 Respond now with [exactly the required output format, one sentence].
 ```
 
 The Verifier uses the same pattern with `<candidate_command>` in place of
-`<original_command>` and no `<system_context>` shell/working-directory fields.
+`<operator_context>` and shares the same context fields.
 
 ## Current Prompt File Structure
 

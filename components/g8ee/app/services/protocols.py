@@ -87,7 +87,7 @@ from app.models.command_payloads import (
 )
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.models.tool_results import ToolResult
-from app.models.g8ed_client import IntentOperationResult
+from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
 from app.constants.prompts import AgentMode
 from app.llm import llm_types as types
 
@@ -502,7 +502,7 @@ class InvestigationServiceProtocol(Protocol):
 
 @runtime_checkable
 class G8edClientProtocol(Protocol):
-    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> bool: ...
+    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse: ...
     async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
     async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
     async def bind_operators(self, operator_ids: list[str], web_session_id: str, context: G8eHttpContext) -> bool: ...
