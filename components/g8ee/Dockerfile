@@ -23,9 +23,10 @@ WORKDIR /app/components/g8ee
 RUN set -ex; \
     for i in 1 2 3 4 5; do \
         apt-get update && \
-        apt-get install -y --no-install-recommends curl procps net-tools && break || \
+        apt-get install -y --no-install-recommends curl procps net-tools openssl && break || \
         { echo "apt-get install failed, retrying in 5s... ($i/5)"; sleep 5; }; \
     done \
+    && pip install --no-cache-dir --break-system-packages cryptography \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 g8e \
@@ -37,8 +38,9 @@ COPY components/g8ee/app/ /app/components/g8ee/app/
 COPY components/g8ee/config/ /app/components/g8ee/config/
 COPY components/g8ee/entrypoint.sh /app/components/g8ee/entrypoint.sh
 COPY shared/ /app/shared/
+COPY shared/encrypt_secret.py /usr/local/bin/encrypt_secret.py
 
-RUN chmod +x /app/components/g8ee/entrypoint.sh && \
+RUN chmod +x /app/components/g8ee/entrypoint.sh /usr/local/bin/encrypt_secret.py && \
     mkdir -p /data && chown -R g8e:g8e /data
 
 USER g8e

@@ -11,17 +11,30 @@
 
 set -euo pipefail
 
+# Encryption/decryption helper functions
+_decrypt_secret() {
+    local encrypted="$1"
+    local key="$2"
+    if [ -z "$key" ]; then
+        echo "$encrypted"
+        return
+    fi
+    python3 /usr/local/bin/encrypt_secret.py decrypt "$encrypted" "$key"
+}
+
 SSL_DIR="${G8E_SSL_DIR:-/g8es}"
 
 # Load Internal Auth Token
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
-    export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
+    encrypted_token=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
+    export G8E_INTERNAL_AUTH_TOKEN=$(_decrypt_secret "$encrypted_token" "$G8E_SECRETS_KEY")
     echo "[g8ep] Loaded G8E_INTERNAL_AUTH_TOKEN from volume"
 fi
 
 # Load Session Encryption Key
 if [ -f "${SSL_DIR}/session_encryption_key" ]; then
-    export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SSL_DIR}/session_encryption_key" | tr -d '\n\r')
+    encrypted_key=$(cat "${SSL_DIR}/session_encryption_key" | tr -d '\n\r')
+    export G8E_SESSION_ENCRYPTION_KEY=$(_decrypt_secret "$encrypted_key" "$G8E_SECRETS_KEY")
     echo "[g8ep] Loaded G8E_SESSION_ENCRYPTION_KEY from volume"
 fi
 

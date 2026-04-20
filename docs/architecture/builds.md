@@ -30,7 +30,7 @@ Operator binaries for remote deployment (linux/amd64, linux/arm64, linux/386) ar
 | `g8es` | g8es | `components/g8es/Dockerfile` | Operator binary in `--listen` mode; platform DB + pub/sub + blob store (including operator binaries) |
 | `g8ee` | g8ee | `components/g8ee/Dockerfile` | Python/FastAPI AI backend |
 | `g8ed` | g8ed | `components/g8ed/Dockerfile` | Node.js web frontend; single external HTTPS entry point |
-| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Alpine sidecar; supervises a local operator process and runs platform tooling. Contains no Go toolchain — the operator binary is fetched from the g8es blob store at runtime (or rebuilt via `g8eo-test-runner` when `./g8e operator build` is invoked). |
+| `g8ep` | g8ep | `components/g8ep/Dockerfile` | Alpine sidecar; supervises a local operator process and runs platform tooling. Contains no Go toolchain — the operator binary is fetched from the g8es blob store at runtime (or rebuilt via `g8eo-test-runner` when `./g8e login` then `./g8e operator build` is invoked). |
 
 ---
 
@@ -79,7 +79,7 @@ All component images have no build-time dependencies on each other and build in 
 
 **g8ed image build:** Multi-stage Dockerfile based on `node:22-alpine3.23`. The builder stage runs `npm ci` (falling back to `npm install` if no lockfile) and `npm prune --omit=dev`. The final stage installs only curl (for healthchecks) — npm is not present in the runtime image.
 
-**g8ep image build:** Based on `python:3.13-alpine`. Installs network/security tooling (supervisor, Docker CLI, nmap, tcpdump, bind-tools, etc.) plus `requests` and `aiohttp`. **Go is not installed in g8ep.** Operator binaries for this container come from the g8es blob store at runtime. When `./g8e operator build` or `./g8e operator build-all` is invoked, the compilation happens inside `g8eo-test-runner` (image: `golang:1.26-alpine3.23`), which uploads the result to the g8es blob store.
+**g8ep image build:** Based on `python:3.13-alpine`. Installs network/security tooling (supervisor, Docker CLI, nmap, tcpdump, bind-tools, etc.) plus `requests` and `aiohttp`. **Go is not installed in g8ep.** Operator binaries for this container come from the g8es blob store at runtime. When `./g8e login` then `./g8e operator build` or `./g8e operator build-all` is invoked, the compilation happens inside `g8eo-test-runner` (image: `golang:1.26-alpine3.23`), which uploads the result to the g8es blob store.
 
 **Trigger:**
 ```bash
@@ -101,7 +101,7 @@ All component images have no build-time dependencies on each other and build in 
 
 4. **The pub/sub broker** — operators on remote machines maintain a persistent WebSocket connection to g8es (WSS/TLS). Command dispatch and result delivery for the AI flow through this broker. g8ee and g8ed also connect to this broker for real-time event distribution.
 
-5. **The operator binaries** — cross-compiled and UPX-compressed at image build time, baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads all 3 binaries (linux-amd64, linux-arm64, linux-386) to the blob store (namespace `operator-binary`) via `PUT /blob/operator-binary/linux-{arch}`. Served on demand via `GET /blob/operator-binary/linux-{arch}`. The `./g8e operator build` commands override these by uploading fresh builds from `g8eo-test-runner`.
+5. **The operator binaries** — cross-compiled and UPX-compressed at image build time, baked into the image at `/opt/operator-binaries/`. On container startup, the entrypoint uploads all 3 binaries (linux-amd64, linux-arm64, linux-386) to the blob store (namespace `operator-binary`) via `PUT /blob/operator-binary/linux-{arch}`. Served on demand via `GET /blob/operator-binary/linux-{arch}`. The `./g8e operator build` commands (after `./g8e login`) override these by uploading fresh builds from `g8eo-test-runner`.
 
 **What it runs:**
 ```

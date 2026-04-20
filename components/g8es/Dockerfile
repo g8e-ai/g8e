@@ -37,9 +37,10 @@ FROM alpine:3.23
 
 RUN set -ex; \
     for i in 1 2 3 4 5; do \
-        apk add --no-cache ca-certificates curl && break || \
+        apk add --no-cache ca-certificates curl openssl python3 py3-pip && break || \
         { echo "apk add failed, retrying in 5s... ($i/5)"; sleep 5; }; \
     done \
+    && pip3 install --no-cache-dir --break-system-packages cryptography \
     && addgroup -g 1001 g8e \
     && adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 
@@ -52,7 +53,8 @@ RUN chmod +x /usr/local/bin/g8e.operator \
     && chown -R g8e:g8e /data /ssl
 
 COPY components/g8es/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY shared/encrypt_secret.py /usr/local/bin/encrypt_secret.py
+RUN chmod +x /entrypoint.sh /usr/local/bin/encrypt_secret.py
 
 EXPOSE 9000 9001
 

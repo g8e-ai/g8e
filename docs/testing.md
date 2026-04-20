@@ -27,6 +27,7 @@ We grade the AI's **tool call payloads** against strict boolean criteria. No LLM
 
 ```bash
 # Run all AI benchmarks
+./g8e login --api-key <key>
 ./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_benchmark
 ```
 
@@ -38,6 +39,7 @@ For reasoning and concept application, we use an "LLM-as-a-Judge" pattern. The `
 - **Error separation**: System failures (invalid JSON, missing fields) raise an `EvalJudgeError`. A low score is a valid evaluation; a system error is a test failure.
 
 ```bash
+./g8e login --api-key <key>
 ./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_eval
 ```
 
@@ -54,6 +56,9 @@ All tests are orchestrated via the `./g8e` CLI, which routes each component to i
 ```bash
 # Start the platform infrastructure first
 ./g8e platform start
+
+# Authenticate once
+./g8e login --api-key <key>
 
 # Run a specific component
 ./g8e test g8ee
@@ -105,6 +110,7 @@ The `g8ep` container includes a comprehensive suite of security scan scripts vol
 
 ```bash
 # Run full mTLS and configuration audit (testssl.sh, Nuclei, Trivy, nmap)
+./g8e login --api-key <key>
 ./g8e security mtls-test
 ```
 

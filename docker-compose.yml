@@ -185,6 +185,7 @@ services:
       - G8E_CA_CERT_PATH=/g8es/ca.crt
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
       - G8E_INTERNAL_AUTH_TOKEN
+      - G8E_SECRETS_KEY
     volumes:
       - g8es-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/ssl:noexec,nosuid,nodev
@@ -370,6 +371,7 @@ services:
       - RUNNING_IN_DOCKER=1
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY
+      - G8E_SECRETS_KEY
     volumes:
       - ./components/g8ep/scripts:/app/components/g8ep/scripts
       - ./shared:/app/shared

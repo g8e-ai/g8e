@@ -3,6 +3,17 @@
 
 set -e
 
+# Encryption/decryption helper functions
+_decrypt_secret() {
+    local encrypted="$1"
+    local key="$2"
+    if [ -z "$key" ]; then
+        echo "$encrypted"
+        return
+    fi
+    python3 /usr/local/bin/encrypt_secret.py decrypt "$encrypted" "$key"
+}
+
 # Wait for g8es to be ready and platform_settings to be initialized
 echo "[G8ED-ENTRYPOINT] Waiting for g8es health check and platform_settings..."
 MAX_RETRIES=30
@@ -10,17 +21,20 @@ RETRY_COUNT=0
 SSL_DIR="${G8E_SSL_DIR:-/g8es}"
 
 # Load security tokens into environment if files exist
+# Secrets are encrypted in volume, decrypt them
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
-    export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d ' \n\r')
+    encrypted_token=$(cat "${SSL_DIR}/internal_auth_token" | tr -d ' \n\r')
+    export G8E_INTERNAL_AUTH_TOKEN=$(_decrypt_secret "$encrypted_token" "$G8E_SECRETS_KEY")
 fi
 
 if [ -f "${SSL_DIR}/session_encryption_key" ]; then
-    export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
+    encrypted_key=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
+    export G8E_SESSION_ENCRYPTION_KEY=$(_decrypt_secret "$encrypted_key" "$G8E_SECRETS_KEY")
 fi
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     if [ -f "${SSL_DIR}/internal_auth_token" ] && [ -f "${SSL_DIR}/ca.crt" ]; then
-        INTERNAL_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
+        INTERNAL_TOKEN="$G8E_INTERNAL_AUTH_TOKEN"
         # Check if g8es is responding on the health endpoint
         # AND check if platform_settings is initialized (returns 200 instead of 401)
         if curl -s -f --cacert "${SSL_DIR}/ca.crt" -H "X-Internal-Auth: ${INTERNAL_TOKEN}" https://g8es:9001/db/settings/platform_settings > /dev/null; then

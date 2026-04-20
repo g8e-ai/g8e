@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
 CONTAINER="g8ep"
 
+# Local credential store (like AWS ~/.aws/credentials or gcloud ~/.config/gcloud)
+G8E_CREDENTIALS_DIR="$HOME/.g8e"
+G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
+
 # Test-runner container names
 TR_G8EE="g8ee-test-runner"
 TR_G8ED="g8ed-test-runner"
@@ -43,10 +47,14 @@ _ensure_g8ep() { _ensure_container "$CONTAINER" "${1:-}"; }
 
 _exec_in_pod() {
     _ensure_g8ep "$TOP${SUB:+ $SUB}"
+    local env_args=()
+    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+        env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
+    fi
     if [ -t 0 ] && [ -t 1 ]; then
-        exec docker exec -it "$CONTAINER" "$@"
+        exec docker exec -it "${env_args[@]}" "$CONTAINER" "$@"
     else
-        exec docker exec -i "$CONTAINER" "$@"
+        exec docker exec -i "${env_args[@]}" "$CONTAINER" "$@"
     fi
 }
 
@@ -69,6 +77,80 @@ _exec_in_test_runner() {
     fi
 }
 
+# --- Credential Store Functions ---
+
+_load_credentials() {
+    if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
+        source "$G8E_CREDENTIALS_FILE"
+
+        # Validate the session if platform is running
+        if _g8ep_running && [[ -n "$OPERATOR_SESSION_ID" ]]; then
+            if ! _validate_session "$OPERATOR_SESSION_ID"; then
+                echo "[g8e] Session expired or invalid. Please re-authenticate." >&2
+                _clear_credentials
+                return 1
+            fi
+        fi
+
+        return 0
+    fi
+    return 1
+}
+
+_save_credentials() {
+    local operator_session_id="$1"
+    local user_id="$2"
+    local operator_id="$3"
+
+    mkdir -p "$G8E_CREDENTIALS_DIR"
+    cat > "$G8E_CREDENTIALS_FILE" <<EOF
+export OPERATOR_SESSION_ID="$operator_session_id"
+export USER_ID="$user_id"
+export OPERATOR_ID="$operator_id"
+export G8E_AUTH_TIMESTAMP="$(date +%s)"
+EOF
+    chmod 600 "$G8E_CREDENTIALS_FILE"
+}
+
+_clear_credentials() {
+    if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
+        rm -f "$G8E_CREDENTIALS_FILE"
+    fi
+    unset OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP
+}
+
+_credentials_exist() {
+    [[ -f "$G8E_CREDENTIALS_FILE" ]]
+}
+
+_validate_session() {
+    local operator_session_id="$1"
+
+    if [[ -z "$INTERNAL_AUTH_TOKEN" ]]; then
+        return 1
+    fi
+
+    local validate_url="https://localhost/api/auth/operator/validate"
+    local response
+
+    response=$(docker exec -i g8ed \
+        curl -sf -X POST \
+        -H 'Content-Type: application/json' \
+        -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
+        -d "{\"operator_session_id\":\"$operator_session_id\"}" \
+        "$validate_url" 2>/dev/null || true)
+
+    if [[ -z "$response" ]]; then
+        return 1
+    fi
+
+    if echo "$response" | grep -q '"valid":true'; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 
 _help() {
     local help_file="$SCRIPT_DIR/docs/g8e-help.md"
@@ -85,28 +167,222 @@ if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
     exit 0
 fi
 
+# Save original arguments for login command
+ORIGINAL_ARGS=("$@")
+
+# Parse global authentication flags from all arguments
+API_KEY=""
+DEVICE_TOKEN=""
+filtered_args=()
+i=1
+while [[ $i -le $# ]]; do
+    arg="${!i}"
+    case "$arg" in
+        --api-key)
+            if [[ $i -lt $# ]]; then
+                ((i++))
+                API_KEY="${!i}"
+            fi
+            ((i++))
+            ;;
+        --device-token)
+            if [[ $i -lt $# ]]; then
+                ((i++))
+                DEVICE_TOKEN="${!i}"
+            fi
+            ((i++))
+            ;;
+        *)
+            filtered_args+=("$arg")
+            ((i++))
+            ;;
+    esac
+done
+
+# Reset positional parameters with filtered arguments (without auth flags)
+set -- "${filtered_args[@]}"
+
 TOP="$1"
 SUB="${2:-}"
 
-# --- Authentication ---
-# Pull the internal auth token into memory as a constant for the duration of the run.
-# This ensures that all subcommands have access to the token for internal API calls.
-INTERNAL_AUTH_TOKEN=""
-if [[ "$TOP" != "platform" || ("$SUB" != "start" && "$SUB" != "status" && "$SUB" != "stop" && "$SUB" != "restart" && "$SUB" != "rebuild" && "$SUB" != "reset" && "$SUB" != "wipe" && "$SUB" != "clean") ]]; then
-    if _g8ep_running; then
-        # Use docker exec to read the token directly from the SSL volume mount in g8ep
-        INTERNAL_AUTH_TOKEN=$(docker exec -i "$CONTAINER" cat /g8es/internal_auth_token 2>/dev/null || true)
+# User authentication - authenticate via API key or device link token
+OPERATOR_SESSION_ID=""
+USER_ID=""
+OPERATOR_ID=""
+
+_authenticate_user() {
+    local api_key="$1"
+    local device_token="$2"
+    local save_session="${3:-false}"
+
+    if [[ -z "$api_key" && -z "$device_token" ]]; then
+        echo "[g8e] Authentication required: Provide --api-key or --device-token" >&2
+        echo "  Usage: ./g8e <command> --api-key <key>" >&2
+        echo "         ./g8e <command> --device-token <token>" >&2
+        echo "  Or authenticate once: ./g8e login --api-key <key>" >&2
+        exit 1
     fi
+
+    local auth_url="https://localhost/api/auth/operator"
+    local response=""
+
+    if [[ -n "$device_token" ]]; then
+        # Authenticate via device link token
+        response=$(docker exec -i g8ed \
+            curl -sf -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"auth_mode\":\"operator_session\",\"operator_session_id\":\"$device_token\"}" \
+            "$auth_url" 2>/dev/null || true)
+    else
+        # Authenticate via API key
+        response=$(docker exec -i g8ed \
+            curl -sf -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $api_key" \
+            "$auth_url" 2>/dev/null || true)
+    fi
+
+    if [[ -z "$response" ]]; then
+        echo "[g8e] Authentication failed: No response from auth endpoint" >&2
+        exit 1
+    fi
+
+    # Check if response contains success
+    if echo "$response" | grep -q '"success":true'; then
+        OPERATOR_SESSION_ID=$(echo "$response" | grep -o '"operator_session_id":"[^"]*"' | cut -d'"' -f4)
+        USER_ID=$(echo "$response" | grep -o '"user_id":"[^"]*"' | cut -d'"' -f4)
+        OPERATOR_ID=$(echo "$response" | grep -o '"operator_id":"[^"]*"' | cut -d'"' -f4)
+
+        if [[ -z "$OPERATOR_SESSION_ID" ]]; then
+            echo "[g8e] Authentication failed: No operator_session_id in response" >&2
+            exit 1
+        fi
+
+        export OPERATOR_SESSION_ID
+        export USER_ID
+        export OPERATOR_ID
+
+        # Save to local credential store if requested
+        if [[ "$save_session" == "true" ]]; then
+            _save_credentials "$OPERATOR_SESSION_ID" "$USER_ID" "$OPERATOR_ID"
+            echo "[g8e] Session saved to $G8E_CREDENTIALS_FILE"
+        fi
+    else
+        local error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+        echo "[g8e] Authentication failed: ${error_msg:-Unknown error}" >&2
+        exit 1
+    fi
+}
+
+_ensure_authenticated() {
+    # First, try loading from local credential store
+    if _load_credentials; then
+        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID
+        return 0
+    fi
+
+    # Fall back to command-line flags
+    if [[ -z "$API_KEY" && -z "$DEVICE_TOKEN" ]]; then
+        echo "[g8e] Authentication required." >&2
+        echo "  Options:" >&2
+        echo "    1. Authenticate once: ./g8e login --api-key <key>" >&2
+        echo "    2. Use flags: ./g8e <command> --api-key <key>" >&2
+        echo "    3. Use flags: ./g8e <command> --device-token <token>" >&2
+        exit 1
+    fi
+
+    _authenticate_user "$API_KEY" "$DEVICE_TOKEN" false
+}
+
+# Commands that require authentication
+# Note: operator deploy/stream need auth, but other operator subcommands don't
+# security, data, mcp commands need auth for g8ed internal API access
+AUTH_REQUIRED_COMMANDS=("test" "security" "data" "mcp")
+if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
+    _ensure_authenticated
 fi
-readonly INTERNAL_AUTH_TOKEN
+
+# Special case: operator deploy and stream need auth
+if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream") ]]; then
+    _ensure_authenticated
+fi
 
 case "$TOP" in
+
+    # ------------------------------------------------------------------
+    # login — authenticate and save session locally
+    # ------------------------------------------------------------------
+    login)
+        _banner "login"
+        _LOGIN_API_KEY=""
+        _LOGIN_DEVICE_TOKEN=""
+        # Parse from ORIGINAL_ARGS (before filtering)
+        # Use set +e to prevent early exit on parsing errors
+        set +e
+        i=0
+        while [[ $i -lt ${#ORIGINAL_ARGS[@]} ]]; do
+            arg="${ORIGINAL_ARGS[$i]}"
+            case "$arg" in
+                --api-key)
+                    ((i++))
+                    if [[ $i -lt ${#ORIGINAL_ARGS[@]} ]]; then
+                        _LOGIN_API_KEY="${ORIGINAL_ARGS[$i]}"
+                        ((i++))
+                    fi
+                    ;;
+                --device-token)
+                    ((i++))
+                    if [[ $i -lt ${#ORIGINAL_ARGS[@]} ]]; then
+                        _LOGIN_DEVICE_TOKEN="${ORIGINAL_ARGS[$i]}"
+                        ((i++))
+                    fi
+                    ;;
+                *)
+                    ((i++))
+                    ;;
+            esac
+        done
+        set -e
+
+        if [[ -z "$_LOGIN_API_KEY" && -z "$_LOGIN_DEVICE_TOKEN" ]]; then
+            echo "[g8e] login requires --api-key or --device-token" >&2
+            echo "  Usage: ./g8e login --api-key <key>" >&2
+            echo "         ./g8e login --device-token <token>" >&2
+            exit 1
+        fi
+
+        _authenticate_user "$_LOGIN_API_KEY" "$_LOGIN_DEVICE_TOKEN" true
+        echo "[g8e] Authenticated as user: $USER_ID"
+        exit 0 ;;
+
+    # ------------------------------------------------------------------
+    # logout — clear local session
+    # ------------------------------------------------------------------
+    logout)
+        _banner "logout"
+        if _credentials_exist; then
+            _clear_credentials
+            echo "[g8e] Session cleared from $G8E_CREDENTIALS_FILE"
+        else
+            echo "[g8e] No active session found"
+        fi
+        exit 0 ;;
 
     # ------------------------------------------------------------------
     # platform — manages Docker services; must run on host
     # ------------------------------------------------------------------
     platform)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^platform - Docker services/,/^operator - Build and deploy/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             setup)
                 _banner "platform setup"
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" setup ;;
@@ -156,10 +432,6 @@ case "$TOP" in
                     wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
                     clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
                 esac ;;
-            "")
-                echo "[g8e] missing subcommand for 'platform'" >&2
-                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown platform subcommand: '$SUB'" >&2
                 echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
@@ -203,9 +475,8 @@ case "$TOP" in
                     exit 1
                 fi
 
-                if [[ -z "$INTERNAL_AUTH_TOKEN" ]]; then
-                    echo "[g8e] Authentication failed: Internal auth token not found." >&2
-                    echo "          Ensure the platform is running: ./g8e platform start" >&2
+                if [[ -z "$OPERATOR_SESSION_ID" ]]; then
+                    echo "[g8e] Authentication required. Run: ./g8e login --api-key <key>" >&2
                     exit 1
                 fi
 
@@ -222,7 +493,7 @@ case "$TOP" in
                 RESPONSE="$(docker exec -i g8ed \
                     curl -sf -X POST \
                     -H 'Content-Type: application/json' \
-                    -H "x-internal-auth: $INTERNAL_AUTH_TOKEN" \
+                    -H "x-operator-session-id: $OPERATOR_SESSION_ID" \
                     "https://localhost/api/internal/operators/user/$USER_ID/reauth")"
                 EXIT_CODE=$?
 
@@ -307,7 +578,7 @@ case "$TOP" in
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
                 echo "Fetching linux/${_DEPLOY_ARCH} operator from g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
                 docker exec -i g8ep curl -sf \
-                    -H "X-Internal-Auth: ${INTERNAL_AUTH_TOKEN}" \
+                    -H "X-Operator-Session-Id: ${OPERATOR_SESSION_ID}" \
                     --cacert /g8es/ca.crt \
                     "https://g8es:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
                     | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
@@ -371,9 +642,15 @@ case "$TOP" in
     # ------------------------------------------------------------------
     test)
         _TEST_COMPONENT="${2:-}"
-        if [[ -z "$_TEST_COMPONENT" ]]; then
-            echo "[g8e] Usage: ./g8e test <g8ee|g8ed|g8eo> [OPTIONS] [-- EXTRA_ARGS]" >&2
-            exit 1
+        if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
+            help_file="$SCRIPT_DIR/docs/g8e-help.md"
+            if [[ -f "$help_file" ]]; then
+                awk '/^test - Run component tests/,/^security - Security tools/' "$help_file" | head -n -1
+            else
+                echo "[g8e] Help file not found: $help_file" >&2
+                exit 1
+            fi
+            [[ -z "$_TEST_COMPONENT" ]] && exit 1 || exit 0
         fi
         _TEST_RUNNER="$(_test_runner_for "$_TEST_COMPONENT")"
         if [[ -z "$_TEST_RUNNER" ]]; then
@@ -458,6 +735,16 @@ case "$TOP" in
     # ------------------------------------------------------------------
     security)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^security - Security tools/,/^data - Data management/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             validate)
                 _banner "security validate"
                 _exec_in_pod /app/scripts/security/validate-platform-security.sh "${@:3}" ;;
@@ -495,10 +782,6 @@ case "$TOP" in
                 docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart g8ed g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
-            "")
-                echo "[g8e] missing subcommand for 'security'" >&2
-                echo "  Valid: validate, certs, mtls-test, scan-licenses, passkeys, rotate-internal-token" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown security subcommand: '$SUB'" >&2
                 echo "  Valid: validate, certs, mtls-test, scan-licenses, passkeys, rotate-internal-token" >&2
@@ -510,16 +793,25 @@ case "$TOP" in
     # ------------------------------------------------------------------
     data)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^data - Data management/,/^llm - LLM tooling/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             users|operators|store|settings|audit|device-links)
                 _banner "data $SUB ${@:3}"
                 _exec_in_pod python3 /app/scripts/data/manage-g8es.py "$SUB" "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'data'" >&2
-                echo "  Valid: users, operators, store, settings, audit, device-links" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown data subcommand: '$SUB'" >&2
                 echo "  Valid: users, operators, store, settings, audit, device-links" >&2
+                echo ""
+                echo "  For store: ./g8e data store <collection> list|get" >&2
+                echo "             ./g8e data store stats|network|find|kv|wipe|get-setting" >&2
                 exit 1 ;;
         esac ;;
 
@@ -533,16 +825,22 @@ case "$TOP" in
             exit 1
         fi
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^demo - Fleet demo/,/^DETAILED HELP/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
                 exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
             shell)
                 _banner "demo shell"
                 exec make -C "$DEMO_DIR" shell "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'demo'" >&2
-                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown demo subcommand: '$SUB'" >&2
                 echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
@@ -554,13 +852,19 @@ case "$TOP" in
     # ------------------------------------------------------------------
     ssh)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^ssh - SSH credentials/,/^aws - AWS credentials/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             setup)
                 _banner "ssh setup"
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'ssh'" >&2
-                echo "  Valid: setup" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown ssh subcommand: '$SUB'" >&2
                 echo "  Valid: setup" >&2
@@ -572,13 +876,19 @@ case "$TOP" in
     # ------------------------------------------------------------------
     aws)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^aws - AWS credentials/,/^demo - Fleet demo/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             setup)
                 _banner "aws setup"
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-aws.sh" "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'aws'" >&2
-                echo "  Valid: setup" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown aws subcommand: '$SUB'" >&2
                 echo "  Valid: setup" >&2
@@ -590,16 +900,22 @@ case "$TOP" in
     # ------------------------------------------------------------------
     search)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^search - Web search/,/^ssh - SSH credentials/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             setup)
                 _banner "search setup"
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" "${@:3}" ;;
             disable)
                 _banner "search disable"
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-search.sh" --disable "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'search'" >&2
-                echo "  Valid: setup, disable" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown search subcommand: '$SUB'" >&2
                 echo "  Valid: setup, disable" >&2
@@ -611,18 +927,19 @@ case "$TOP" in
     # ------------------------------------------------------------------
     mcp)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^mcp - MCP integration/,/^search - Web search/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             config|test|status)
                 _banner "mcp $SUB"
                 _exec_in_pod python3 /app/scripts/data/manage-g8es.py mcp "$SUB" "${@:3}" ;;
-            "")
-                echo "[g8e] missing subcommand for 'mcp'" >&2
-                echo "  Valid: config, test, status" >&2
-                echo "" >&2
-                echo "  Examples:" >&2
-                echo "    ./g8e mcp config --client claude-code --email user@example.com" >&2
-                echo "    ./g8e mcp test --email user@example.com" >&2
-                echo "    ./g8e mcp status" >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2
                 echo "  Valid: config, test, status" >&2
@@ -634,11 +951,19 @@ case "$TOP" in
     # ------------------------------------------------------------------
     llm)
         case "$SUB" in
+            -h|--help|"")
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^llm - LLM tooling/,/^mcp - MCP integration/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
             setup|show|get|set|restart)
                 # Forward to setup-llm.sh
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-llm.sh" "$SUB" "${@:3}" ;;
-            "")
-                exec bash "$SCRIPT_DIR/scripts/tools/setup-llm.sh" --help ;;
             *)
                 echo "[g8e] unknown llm subcommand: '$SUB'" >&2
                 echo "  Valid: setup, show, get, set, restart" >&2
