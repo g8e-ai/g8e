@@ -178,8 +178,8 @@ class OperatorHeartbeatService:
         db_success = await self.operator_data_service.update_operator_heartbeat(
             operator_id=operator_id,
             heartbeat=heartbeat,
-            investigation_id=payload.investigation_id or "unknown",
-            case_id=payload.case_id or "unknown",
+            investigation_id=payload.investigation_id,
+            case_id=payload.case_id,
         )
 
         if not db_success:
@@ -265,14 +265,6 @@ class OperatorHeartbeatService:
         payload: G8eoHeartbeatPayload,
         operator: OperatorDocument,
     ) -> None:
-        if not operator.user_id:
-            logger.warning(
-                "[HEARTBEAT] Skipping SSE push for operator %s - missing user_id",
-                operator.operator_id,
-                extra={"operator_id": operator.operator_id},
-            )
-            return
-
         event = self._build_heartbeat_event(envelope, payload, operator)
         try:
             await self.event_service.publish(event)

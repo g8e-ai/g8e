@@ -146,73 +146,6 @@ describe('SystemInfo [UNIT - PURE LOGIC]', () => {
         expect(info.local_storage_enabled).toBe(true);
     });
 
-    it('_extractInternalIp() returns first non-skip IP', () => {
-        const connectivityStatus = [
-            { ip: '172.16.0.1' },
-            { ip: '192.168.1.1' },
-            { ip: '10.0.0.1' },
-        ];
-        const ip = SystemInfo._extractInternalIp(connectivityStatus);
-        expect(ip).toBe('192.168.1.1');
-    });
-
-    it('_extractInternalIp() returns null when all IPs are skipped', () => {
-        const connectivityStatus = [
-            { ip: '172.16.0.1' },
-            { ip: '127.0.0.1' },
-        ];
-        const ip = SystemInfo._extractInternalIp(connectivityStatus);
-        expect(ip).toBeNull();
-    });
-
-    it('_extractInternalIp() returns null for non-array input', () => {
-        const ip = SystemInfo._extractInternalIp(null);
-        expect(ip).toBeNull();
-    });
-
-    it('mergeFromHeartbeat() merges system_identity fields', () => {
-        const existing = new SystemInfo({ hostname: 'old-host' });
-        const heartbeat = {
-            system_identity: { hostname: 'new-host', os: 'linux' },
-        };
-        const merged = SystemInfo.mergeFromHeartbeat(existing, heartbeat);
-        expect(merged.hostname).toBe('new-host');
-        expect(merged.os).toBe('linux');
-    });
-
-    it('mergeFromHeartbeat() preserves existing when heartbeat missing', () => {
-        const existing = new SystemInfo({ hostname: 'old-host', os: 'windows' });
-        const heartbeat = {};
-        const merged = SystemInfo.mergeFromHeartbeat(existing, heartbeat);
-        expect(merged.hostname).toBe('old-host');
-        expect(merged.os).toBe('windows');
-    });
-
-    it('mergeFromHeartbeat() extracts internal_ip from network_info', () => {
-        const existing = new SystemInfo({});
-        const heartbeat = {
-            network_info: {
-                connectivity_status: [
-                    { ip: '172.16.0.1' },
-                    { ip: '192.168.1.1' },
-                ],
-            },
-        };
-        const merged = SystemInfo.mergeFromHeartbeat(existing, heartbeat);
-        expect(merged.internal_ip).toBe('192.168.1.1');
-    });
-
-    it('mergeFromHeartbeat() preserves cloud_provider and is_cloud_operator', () => {
-        const existing = new SystemInfo({
-            cloud_provider: CloudOperatorSubtype.AWS,
-            is_cloud_operator: true,
-        });
-        const heartbeat = {};
-        const merged = SystemInfo.mergeFromHeartbeat(existing, heartbeat);
-        expect(merged.cloud_provider).toBe(CloudOperatorSubtype.AWS);
-        expect(merged.is_cloud_operator).toBe(true);
-    });
-
     it('forCloudOperator() sets cloud fields with explicit subtype', () => {
         const info = SystemInfo.forCloudOperator(CloudOperatorSubtype.AWS);
         expect(info.cloud_provider).toBe(CloudOperatorSubtype.AWS);
@@ -239,13 +172,17 @@ describe('HeartbeatSnapshot [UNIT - PURE LOGIC]', () => {
         expect(snapshot.memory_percent).toBeNull();
     });
 
-    it('fromHeartbeat() extracts performance metrics', () => {
+    it('fromHeartbeat() extracts performance metrics from canonical wire format', () => {
         const heartbeat = {
             performance_metrics: {
                 cpu_percent: 75.5,
                 memory_percent: 60.2,
                 disk_percent: 45.0,
                 network_latency: 25,
+                memory_used_mb: 9830,
+                memory_total_mb: 16384,
+                disk_used_gb: 250.5,
+                disk_total_gb: 500.0,
             },
             uptime_info: {
                 uptime: '2 days, 3 hours',
@@ -269,6 +206,34 @@ describe('HeartbeatSnapshot [UNIT - PURE LOGIC]', () => {
         const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
         expect(snapshot.cpu_percent).toBeNull();
         expect(snapshot.memory_percent).toBeNull();
+    });
+
+    it('fromHeartbeat() uses uptime_string as fallback for uptime', () => {
+        const heartbeat = {
+            uptime_info: {
+                uptime_string: '1h 30m',
+                uptime_seconds: 5400,
+            },
+        };
+        const timestamp = new Date();
+        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
+        expect(snapshot.uptime).toBe('1h 30m');
+        expect(snapshot.uptime_seconds).toBe(5400);
+    });
+
+    it('fromHeartbeat() handles null performance_metrics', () => {
+        const heartbeat = {
+            performance_metrics: null,
+            uptime_info: null,
+        };
+        const timestamp = new Date();
+        const snapshot = HeartbeatSnapshot.fromHeartbeat(heartbeat, timestamp);
+        expect(snapshot.cpu_percent).toBeNull();
+        expect(snapshot.memory_percent).toBeNull();
+        expect(snapshot.disk_percent).toBeNull();
+        expect(snapshot.network_latency).toBeNull();
+        expect(snapshot.uptime).toBeNull();
+        expect(snapshot.uptime_seconds).toBeNull();
     });
 });
 

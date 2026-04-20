@@ -59,6 +59,27 @@ pytestmark = [
 ]
 
 
+def pytest_collection_modifyitems(config, items):
+    """Skip all operator_wire tests if the g8ep operator is not reachable.
+
+    This hook runs at collection time and applies a skip marker to all tests
+    marked with 'operator_wire' if the G8EP_OPERATOR_AVAILABLE env var is not
+    set to 'true'. This allows the skips to group in the test summary.
+
+    The g8ep_operator fixture still performs the actual heartbeat discovery
+    and sets the env var when successful, so this hook just checks the result.
+    """
+    operator_available = os.environ.get("G8EP_OPERATOR_AVAILABLE", "").lower() == "true"
+    skip_reason = (
+        f"No g8ep operator heartbeat within {HEARTBEAT_DISCOVERY_TIMEOUT}s — "
+        f"start the platform (./g8e platform start) and ensure the g8ep container is running."
+    )
+
+    for item in items:
+        if item.get_closest_marker("operator_wire") and not operator_available:
+            item.add_marker(pytest.mark.skip(reason=skip_reason))
+
+
 # ---------------------------------------------------------------------------
 # Tunables
 # ---------------------------------------------------------------------------
@@ -134,11 +155,13 @@ async def g8ep_operator(wire_pubsub_client: PubSubClient) -> AsyncIterator[Disco
         try:
             await asyncio.wait_for(got.wait(), timeout=HEARTBEAT_DISCOVERY_TIMEOUT)
         except asyncio.TimeoutError:
+            os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
             pytest.skip(
                 f"No g8ep operator heartbeat within {HEARTBEAT_DISCOVERY_TIMEOUT}s — "
                 f"start the platform (./g8e platform start) and ensure the g8ep container is running."
             )
 
+        os.environ["G8EP_OPERATOR_AVAILABLE"] = "true"
         discovered = DiscoveredOperator(
             operator_id=holder["operator_id"],
             operator_session_id=holder["operator_session_id"],

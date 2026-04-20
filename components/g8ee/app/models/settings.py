@@ -48,10 +48,16 @@ logger = logging.getLogger(__name__)
 
 class PlatformSettingsDocument(G8eIdentifiableModel):
     """Platform-wide configuration document from g8es 'platform_settings' collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
     settings: G8eePlatformSettings
 
 class UserSettingsDocument(G8eIdentifiableModel):
     """Per-user settings document from g8es 'user_settings' collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
     user_id: str = Field(..., description="User identifier for these settings")
     settings: G8eeUserSettings
 

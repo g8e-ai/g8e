@@ -478,22 +478,6 @@ class TestPushHeartbeatSSE:
         assert event.event_type == EventType.OPERATOR_HEARTBEAT_RECEIVED
         assert event.web_session_id == "web-999"
 
-    async def test_skips_publish_when_operator_has_no_user_id(
-        self, service, mock_event_service
-    ):
-        operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id=None
-        )
-        envelope = HeartbeatSSEEnvelope(
-            operator_id="op-222",
-            status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
-        )
-
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
-
-        mock_event_service.publish.assert_not_called()
-
     async def test_publishes_background_event_when_unbound_but_has_user_id(
         self, service, mock_event_service
     ):

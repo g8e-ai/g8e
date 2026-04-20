@@ -147,7 +147,7 @@ INVESTIGATION = create_enriched_context(
                 memory_mb=4096,
             ),
             user_id="user-exec-test",
-            web_session_id="web-001",
+            bound_web_session_id="web-001",
         )
     ],
 )
@@ -826,6 +826,7 @@ class TestTribunalRefinement:
 
         op = OperatorDocument(
             operator_id="op-linux",
+            user_id="user-os-test",
             operator_session_id="session-op-linux",
             operator_type=OperatorType.SYSTEM,
             status=OperatorStatus.BOUND,
@@ -973,7 +974,7 @@ class TestTargetOperatorResolution:
                         working_directory="/home/g8e",
                     ),
                     user_id="user-multi-test",
-                    web_session_id="web-001",
+                    bound_web_session_id="web-001",
                 ),
                 OperatorDocument(
                     operator_id="op-ubuntu",
@@ -988,7 +989,7 @@ class TestTargetOperatorResolution:
                         shell="bash",
                     ),
                     user_id="user-multi-test",
-                    web_session_id="web-001",
+                    bound_web_session_id="web-001",
                 ),
             ],
         )

@@ -78,7 +78,7 @@ describe('Internal SSE Routes [UNIT]', () => {
             }), expect.any(Function));
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
-                message: 'Event delivered'
+                delivered: 1
             }));
         });
 
@@ -100,13 +100,15 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('web_session_abc123', expect.any(Object), expect.any(Function));
         });
 
-        it('should normalize citation numbers for citations ready event', async () => {
+        it('should forward citations ready event payload as-is (no transport-layer normalization)', async () => {
+            // g8ee is authoritative for citation numbering; g8ed transport MUST NOT mutate payloads.
+            // See g8ee tests: test_citation_numbers_are_sequential_from_one, test_grounding_sources_sequential_citation_numbers.
             const event = {
                 type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
                 grounding_metadata: {
                     sources: [
-                        { citation_num: 10, title: 'Doc A' },
-                        { citation_num: 20, title: 'Doc B' }
+                        { citation_num: 1, title: 'Doc A' },
+                        { citation_num: 2, title: 'Doc B' }
                     ]
                 }
             };
@@ -124,9 +126,7 @@ describe('Internal SSE Routes [UNIT]', () => {
             await getRoute()(req, res);
 
             const publishedEvent = mockSSEService.publishEvent.mock.calls[0][1];
-            const sources = publishedEvent._payload.grounding_metadata.sources;
-            expect(sources[0].citation_num).toBe(1);
-            expect(sources[1].citation_num).toBe(2);
+            expect(publishedEvent._payload).toEqual(event);
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
         });
 
@@ -196,7 +196,7 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).toHaveBeenCalledWith('ws_123', expect.any(Object), expect.any(Function));
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
-                message: 'Event delivered'
+                delivered: 1
             }));
         });
 
@@ -220,11 +220,13 @@ describe('Internal SSE Routes [UNIT]', () => {
             expect(mockSSEService.publishEvent).not.toHaveBeenCalled();
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
-                message: 'Event delivered'
+                delivered: 2
             }));
         });
 
-        it('should return 500 when BackgroundEvent fan-out delivers to zero sessions', async () => {
+        it('should return 200 with delivered:0 when BackgroundEvent fan-out finds no connected sessions', async () => {
+            // Zero-delivery fan-out is a documented legitimate outcome for BackgroundEvents
+            // (user has no locally connected sessions) and MUST NOT be surfaced as an error.
             const event = { type: EventType.OPERATOR_HEARTBEAT_RECEIVED, operator_id: 'op-1' };
             const req = createMockReq({
                 body: {
@@ -238,7 +240,11 @@ describe('Internal SSE Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(res.status).toHaveBeenCalledWith(500);
+            expect(res.status).not.toHaveBeenCalledWith(500);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                delivered: 0
+            }));
         });
 
         it('should handle malformed event payload gracefully', async () => {
@@ -267,9 +273,9 @@ describe('Internal SSE Routes [UNIT]', () => {
         return layer.route.stack[layer.route.stack.length - 1].handle;
     };
 
-    describe('normalizeCitationNums', () => {
+    describe('citations payload pass-through', () => {
 
-        it('should handle missing or empty sources', async () => {
+        it('should forward citations event with empty grounding_metadata unchanged', async () => {
             const event = {
                 type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
                 grounding_metadata: {}

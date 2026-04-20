@@ -181,14 +181,11 @@ class SSEService {
      * Fire-and-forget: returns true even when no connection is present.
      *
      * @param {string} webSessionId - WebSession ID
-     * @param {G8eBaseModel} eventData - Typed SSE model instance — serialized via .forWire() at this boundary
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      * @param {Function} deliveryCallback - Optional callback invoked with delivery status: {delivered, webSessionId, eventType}
      */
     async publishEvent(webSessionId, eventData, deliveryCallback = null) {
-        if (!(eventData instanceof G8eBaseModel)) {
-            throw new Error(`SSEService.publishEvent requires a G8eBaseModel instance, got ${typeof eventData}`);
-        }
-        const wire = eventData.forWire();
+        const wire = this._toWire(eventData);
         const delivered = await this.sendToLocal(webSessionId, wire);
         if (!delivered) {
             logger.warn('[SSE-SERVICE] No active SSE connection for session', {
@@ -219,23 +216,19 @@ class SSEService {
      * O(k) in the number of local sessions for that user — no cache or DB lookups.
      *
      * @param {string} userId
-     * @param {G8eBaseModel} eventData - Typed SSE model instance
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      * @returns {Promise<number>} Number of sessions the event was successfully delivered to
      */
     async publishToUser(userId, eventData) {
-        if (!(eventData instanceof G8eBaseModel)) {
-            throw new Error(`SSEService.publishToUser requires a G8eBaseModel instance, got ${typeof eventData}`);
-        }
+        const wire = this._toWire(eventData);
         const sessions = this.userSessions.get(userId);
         if (!sessions || sessions.size === 0) {
             logger.info('[SSE-SERVICE] No active local sessions for user', {
                 userId,
-                eventType: eventData.forWire().type
+                eventType: wire.type
             });
             return 0;
         }
-
-        const wire = eventData.forWire();
         let successCount = 0;
         for (const webSessionId of sessions) {
             if (await this.sendToLocal(webSessionId, wire)) {
@@ -255,15 +248,12 @@ class SSEService {
     /**
      * Broadcast event to all sessions (rare use case)
      *
-     * @param {G8eBaseModel} eventData - Typed SSE model instance — serialized via .forWire() at this boundary
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
      */
     async broadcastEvent(eventData) {
-        if (!(eventData instanceof G8eBaseModel)) {
-            throw new Error(`SSEService.broadcastEvent requires a G8eBaseModel instance, got ${typeof eventData}`);
-        }
         try {
             const broadcastId = `broadcast_${Date.now()}`;
-            const wire = eventData.forWire();
+            const wire = this._toWire(eventData);
             logger.info('[SSE-SERVICE] Broadcasting event', {
                 broadcastId,
                 eventType: wire.type
@@ -310,12 +300,33 @@ class SSEService {
     }
 
     /**
+     * Internal: convert eventData to wire format.
+     * Accepts G8eBaseModel instances (calls forWire()) or plain wire objects (validates type field).
+     *
+     * @param {G8eBaseModel|object} eventData - Typed SSE model instance OR plain wire object
+     * @returns {object} Wire format object with type field
+     * @private
+     */
+    _toWire(eventData) {
+        if (eventData instanceof G8eBaseModel) {
+            return eventData.forWire();
+        }
+        if (!eventData || typeof eventData !== 'object') {
+            throw new Error(`SSEService: eventData must be a G8eBaseModel instance or plain object, got ${typeof eventData}`);
+        }
+        if (typeof eventData.type !== 'string' || eventData.type.trim() === '') {
+            throw new Error(`SSEService: eventData must have a non-empty string 'type' field, got ${JSON.stringify(eventData.type)}`);
+        }
+        return eventData;
+    }
+
+    /**
      * Internal: send a pre-serialized wire payload to the local connection.
-     * Only called from publishEvent and broadcastEvent after .forWire() has been applied.
+     * Only called from publishEvent and broadcastEvent after _toWire() has been applied.
      * Returns false if no active connection exists or delivery fails.
      *
      * @param {string} webSessionId - WebSession ID
-     * @param {object} wire - Plain object produced by .forWire()
+     * @param {object} wire - Plain object with type field
      */
     async sendToLocal(webSessionId, wire) {
         try {

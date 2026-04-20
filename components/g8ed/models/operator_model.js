@@ -128,46 +128,6 @@ export class SystemInfo extends G8eBaseModel {
         local_storage_enabled:  { type: F.boolean, default: true },
     };
 
-    static _extractInternalIp(connectivityStatus) {
-        if (!Array.isArray(connectivityStatus)) return null;
-        const skip = ['172.', '127.', '::1'];
-        for (const iface of connectivityStatus) {
-            const ip = iface.ip;
-            if (ip && !skip.some(p => ip.startsWith(p))) return ip;
-        }
-        return null;
-    }
-
-    static mergeFromHeartbeat(existing, heartbeat) {
-        const hb = heartbeat || {};
-        const systemIdentity = hb.system_identity || {};
-        const networkInfo = hb.network_info || {};
-        const capabilityFlags = hb.capability_flags || {};
-        const prev = existing || {};
-
-        return SystemInfo.parse({
-            hostname:              systemIdentity.hostname || prev.hostname || null,
-            os:                    systemIdentity.os || prev.os || null,
-            architecture:          systemIdentity.architecture || prev.architecture || null,
-            cpu_count:             systemIdentity.cpu_count || prev.cpu_count || null,
-            memory_mb:             systemIdentity.memory_mb || prev.memory_mb || null,
-            public_ip:             networkInfo.public_ip || prev.public_ip || null,
-            internal_ip:           SystemInfo._extractInternalIp(networkInfo.connectivity_status) || prev.internal_ip || null,
-            interfaces:            networkInfo.interfaces || prev.interfaces || [],
-            current_user:          systemIdentity.current_user || prev.current_user || null,
-            cloud_provider:        prev.cloud_provider || null,
-            is_cloud_operator:     prev.is_cloud_operator || false,
-            system_fingerprint:    prev.system_fingerprint || null,
-            fingerprint_details:   prev.fingerprint_details || null,
-            os_details:            hb.os_details || prev.os_details || null,
-            user_details:          hb.user_details || prev.user_details || null,
-            disk_details:          hb.disk_details || prev.disk_details || null,
-            memory_details:        hb.memory_details || prev.memory_details || null,
-            environment:           hb.environment || prev.environment || null,
-            local_storage_enabled: capabilityFlags.local_storage_enabled ?? prev.local_storage_enabled ?? true,
-        });
-    }
-
     static forCloudOperator(subtype) {
         if (!subtype) {
             throw new Error('SystemInfo.forCloudOperator() requires an explicit cloud subtype');

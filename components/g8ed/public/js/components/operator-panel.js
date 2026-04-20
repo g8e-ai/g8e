@@ -18,6 +18,7 @@ import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
 import { escapeHtml } from '../utils/html.js';
+import { HeartbeatSnapshot, SystemInfo } from '../../../models/operator_model.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
 import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
@@ -147,42 +148,24 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        const metrics = data.metrics || {};
-        this._lastHeartbeat = metrics.timestamp ? new Date(metrics.timestamp).getTime() : Date.now();
+        const heartbeat = data.data || {};
+        this._lastHeartbeat = heartbeat.timestamp ? new Date(heartbeat.timestamp).getTime() : Date.now();
         this._isConnected = true;
         devLogger.log('[OPERATOR-PANEL] Heartbeat:', data.operator_id);
 
         const operatorIndex = this._operators.findIndex(op => op.operator_id === data.operator_id);
         if (operatorIndex !== -1) {
+            const existingOperator = this._operators[operatorIndex];
+            const existingSystemInfo = existingOperator.system_info || {};
+            
             this._operators[operatorIndex] = {
-                ...this._operators[operatorIndex],
-                status: data.status ?? this._operators[operatorIndex].status,
-                latest_heartbeat_snapshot: {
-                    cpu_percent:     metrics.cpu_percent,
-                    memory_percent:  metrics.memory_percent,
-                    disk_percent:    metrics.disk_percent,
-                    network_latency: metrics.network_latency,
-                    uptime:          metrics.uptime,
-                    uptime_seconds:  metrics.uptime_seconds,
-                    timestamp:       metrics.timestamp,
-                },
-                system_info: {
-                    ...this._operators[operatorIndex].system_info,
-                    os:             metrics.os,
-                    architecture:   metrics.architecture,
-                    hostname:       metrics.hostname,
-                    public_ip:      metrics.public_ip,
-                    internal_ip:    metrics.internal_ip,
-                    os_details:     metrics.os_details,
-                    user_details:   metrics.user_details,
-                    disk_details:   metrics.disk_details,
-                    memory_details: metrics.memory_details,
-                    environment:    metrics.environment,
-                    cpu_count:      metrics.cpu_count,
-                    memory_mb:      metrics.memory_mb,
-                    current_user:   metrics.current_user,
-                },
-                last_heartbeat: metrics.timestamp,
+                ...existingOperator,
+                status: data.status ?? existingOperator.status,
+                latest_heartbeat_snapshot: HeartbeatSnapshot.fromHeartbeat(
+                    heartbeat,
+                    heartbeat.timestamp ? new Date(heartbeat.timestamp) : new Date()
+                ),
+                last_heartbeat: heartbeat.timestamp,
             };
         }
 

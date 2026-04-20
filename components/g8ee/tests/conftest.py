@@ -750,6 +750,7 @@ def cloud_operator_doc():
     )
     return OperatorDocument(
         operator_id="cloud-op-1",
+        user_id="test-user",
         operator_session_id="session-cloud-op-1",
         operator_type=OperatorType.CLOUD,
         cloud_subtype=CloudSubtype.AWS,
@@ -786,6 +787,7 @@ def binary_operator_doc():
     )
     return OperatorDocument(
         operator_id="binary-op-1",
+        user_id="test-user",
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.SYSTEM,
         cloud_subtype=None,

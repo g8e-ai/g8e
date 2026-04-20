@@ -181,8 +181,8 @@ class ChatPipelineService:
 
         model_to_use = resolve_model(
             tier="primary" if needs_main_model else "assistant",
-            primary_override=model_overrides.for_main_generation(needs_main_model=True),
-            assistant_override=model_overrides.for_main_generation(needs_main_model=False),
+            primary_override=model_overrides.for_main_generation(needs_primary=True),
+            assistant_override=model_overrides.for_main_generation(needs_primary=False),
             settings_primary_model=request_settings.llm.primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
         )

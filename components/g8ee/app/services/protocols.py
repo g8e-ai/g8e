@@ -351,10 +351,14 @@ class OperatorDataServiceProtocol(Protocol):
         self,
         operator_id: str,
         heartbeat: OperatorHeartbeat,
-        investigation_id: str,
-        case_id: str,
+        investigation_id: str | None,
+        case_id: str | None,
     ) -> bool:
-        """Update operator heartbeat and session status."""
+        """Update operator heartbeat and session status.
+
+        investigation_id/case_id are None when the heartbeat arrives outside an
+        investigation context; callers MUST NOT coerce absence to sentinel strings.
+        """
         ...
 
     async def append_command_result(self, operator_id: str, command_result: CommandResultRecord) -> bool:

@@ -29,7 +29,6 @@ import {
     DirectCommandResponseEvent,
     LogStreamEvent,
     LogStreamConnectedEvent,
-    G8eePassthroughEvent,
 } from '@g8ed/models/sse_models.js';
 import { OperatorSlot } from '@g8ed/models/operator_model.js';
 
@@ -775,84 +774,5 @@ describe('LogStreamConnectedEvent [UNIT - PURE LOGIC]', () => {
         const event = LogStreamConnectedEvent.parse({ type: 'console.log.connected' });
         const wire = event.forWire();
         expect(typeof wire.timestamp).toBe('string');
-    });
-});
-
-describe('G8eePassthroughEvent [UNIT - PURE LOGIC]', () => {
-    it('accepts valid payload with type field', () => {
-        const payload = { type: 'llm.chat.iteration', data: { content: 'test' } };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        expect(event._payload).toEqual(payload);
-    });
-
-    it('throws when _payload is missing', () => {
-        expect(() => G8eePassthroughEvent.parse({}))
-            .toThrow('_payload is required');
-    });
-
-    it('throws when _payload is not an object', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: 'not-an-object' }))
-            .toThrow('_payload must be a plain object');
-    });
-
-    it('throws when _payload is null', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: null }))
-            .toThrow('_payload is required');
-    });
-
-    it('throws when _payload.type is missing', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { data: 'test' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is not a string', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: 123 } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is an empty string', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('throws when _payload.type is only whitespace', () => {
-        expect(() => G8eePassthroughEvent.parse({ _payload: { type: '   ' } }))
-            .toThrow('_payload.type must be a non-empty string');
-    });
-
-    it('accepts _payload.type with value', () => {
-        const event = G8eePassthroughEvent.parse({
-            _payload: { type: 'llm.chat.iteration' },
-        });
-        expect(event._payload.type).toBe('llm.chat.iteration');
-    });
-
-    it('forWire() returns the inner payload directly', () => {
-        const payload = { type: 'llm.chat.iteration', data: { chunk: 'hello' } };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        const wire = event.forWire();
-        expect(wire).toBe(payload);
-        expect(wire).not.toBe(event);
-    });
-
-    it('forWire() preserves the original payload structure', () => {
-        const payload = {
-            type: 'llm.chat.iteration',
-            data: { chunk: 'test', done: false },
-            metadata: { model: 'gemini-2.5-pro' },
-        };
-        const event = G8eePassthroughEvent.parse({ _payload: payload });
-        const wire = event.forWire();
-        expect(wire.type).toBe('llm.chat.iteration');
-        expect(wire.data.chunk).toBe('test');
-        expect(wire.data.done).toBe(false);
-        expect(wire.metadata.model).toBe('gemini-2.5-pro');
-    });
-
-    it('constructor validates _payload', () => {
-        expect(() => new G8eePassthroughEvent({ _payload: { type: 'valid' } }))
-            .not.toThrow();
-        expect(() => new G8eePassthroughEvent({ _payload: {} }))
-            .toThrow('_payload.type must be a non-empty string');
     });
 });

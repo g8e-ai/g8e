@@ -33,7 +33,6 @@
  *   - Missing handler registrations (not caught here — covered in chat-sse-handlers tests)
  *
  * Real components under test:
- *   G8eePassthroughEvent (server model) — forWire() produces the exact wire object
  *   SSEService.publishEvent / sendToLocal — writes the SSE frame to a stream
  *   MockSSEResponse — captures the raw write and parses the SSE frame
  *   SSEConnectionManager.handleSSEEvent — front-end wire parser and eventBus dispatcher
@@ -50,7 +49,6 @@ import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
 import { EventType } from '@g8ed/public/js/constants/events.js';
 import { SSEConnectionManager } from '@g8ed/public/js/utils/sse-connection-manager.js';
 import { SSEService } from '@g8ed/services/platform/sse_service.js';
-import { G8eePassthroughEvent } from '@g8ed/models/sse_models.js';
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -76,7 +74,7 @@ function makeSSEService() {
 }
 
 /**
- * Simulate the full pipeline for a single G8eePassthroughEvent:
+ * Simulate the full pipeline for a single wire event:
  * 1. Register a MockSSEResponse as the SSE connection for WEB_SESSION_ID
  * 2. Call SSEService.publishEvent — writes "data: <json>\n\n" to the response
  * 3. Parse every SSE frame written (exactly as SSEConnectionManager.onmessage does)
@@ -122,7 +120,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED [INTEGRATION -
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
         expect(emitted).toHaveLength(1);
@@ -144,7 +142,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_TEXT_COMPLETED [INTEGRATION - jsdo
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -164,7 +162,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_COMPLETED [INTEGRATION - jsdom]', 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -184,7 +182,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_FAILED [INTEGRATION - jsdom]', () 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_FAILED);
         expect(emitted).toHaveLength(1);
@@ -203,7 +201,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_STOPPED [INTEGRATION - jsdom]', ()
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_STOPPED);
         expect(emitted).toHaveLength(1);
@@ -234,7 +232,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_CITATIONS_RECEIVED [INTEGRATION - 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED);
         expect(emitted).toHaveLength(1);
@@ -258,7 +256,7 @@ describe('SSE pipeline — LLM_CHAT_ITERATION_CITATIONS_RECEIVED [INTEGRATION - 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED);
         expect(emitted).toHaveLength(1);
@@ -284,7 +282,7 @@ describe('SSE pipeline — LLM_TOOL_G8E_WEB_SEARCH_REQUESTED [INTEGRATION - jsdo
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED);
         expect(emitted).toHaveLength(1);
@@ -307,7 +305,7 @@ describe('SSE pipeline — LLM_TOOL_G8E_WEB_SEARCH_COMPLETED [INTEGRATION - jsdo
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -327,7 +325,7 @@ describe('SSE pipeline — LLM_TOOL_G8E_WEB_SEARCH_FAILED [INTEGRATION - jsdom]'
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED);
         expect(emitted).toHaveLength(1);
@@ -352,7 +350,7 @@ describe('SSE pipeline — OPERATOR_NETWORK_PORT_CHECK_REQUESTED [INTEGRATION - 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED);
         expect(emitted).toHaveLength(1);
@@ -373,7 +371,7 @@ describe('SSE pipeline — OPERATOR_NETWORK_PORT_CHECK_COMPLETED [INTEGRATION - 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -393,7 +391,7 @@ describe('SSE pipeline — OPERATOR_NETWORK_PORT_CHECK_FAILED [INTEGRATION - jsd
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED);
         expect(emitted).toHaveLength(1);
@@ -416,7 +414,7 @@ describe('SSE pipeline — OPERATOR_COMMAND_APPROVAL_REQUESTED [INTEGRATION - js
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED);
         expect(emitted).toHaveLength(1);
@@ -436,7 +434,7 @@ describe('SSE pipeline — OPERATOR_COMMAND_STARTED [INTEGRATION - jsdom]', () =
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_COMMAND_STARTED);
         expect(emitted).toHaveLength(1);
@@ -458,7 +456,7 @@ describe('SSE pipeline — OPERATOR_COMMAND_COMPLETED [INTEGRATION - jsdom]', ()
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_COMMAND_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -481,7 +479,7 @@ describe('SSE pipeline — OPERATOR_COMMAND_FAILED [INTEGRATION - jsdom]', () =>
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_COMMAND_FAILED);
         expect(emitted).toHaveLength(1);
@@ -506,7 +504,7 @@ describe('SSE pipeline — OPERATOR_FILE_EDIT_APPROVAL_REQUESTED [INTEGRATION - 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_FILE_EDIT_APPROVAL_REQUESTED);
         expect(emitted).toHaveLength(1);
@@ -526,7 +524,7 @@ describe('SSE pipeline — OPERATOR_FILE_EDIT_STARTED [INTEGRATION - jsdom]', ()
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_FILE_EDIT_STARTED);
         expect(emitted).toHaveLength(1);
@@ -546,7 +544,7 @@ describe('SSE pipeline — OPERATOR_FILE_EDIT_COMPLETED [INTEGRATION - jsdom]', 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_FILE_EDIT_COMPLETED);
         expect(emitted).toHaveLength(1);
@@ -566,7 +564,7 @@ describe('SSE pipeline — OPERATOR_FILE_EDIT_FAILED [INTEGRATION - jsdom]', () 
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_FILE_EDIT_FAILED);
         expect(emitted).toHaveLength(1);
@@ -589,7 +587,7 @@ describe('SSE pipeline — OPERATOR_INTENT_APPROVAL_REQUESTED [INTEGRATION - jsd
             },
         };
 
-        const eventBus = await pipelineRun(new G8eePassthroughEvent({ _payload: payload }));
+        const eventBus = await pipelineRun(payload);
 
         const emitted = eventBus.getEmittedEvents(EventType.OPERATOR_INTENT_APPROVAL_REQUESTED);
         expect(emitted).toHaveLength(1);
@@ -612,30 +610,22 @@ describe('SSE pipeline — multi-event sequence [INTEGRATION - jsdom]', () => {
         const manager = new SSEConnectionManager(eventBus);
 
         const events = [
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    data: { content: 'Part one ', web_session_id: WEB_SESSION_ID, investigation_id: INVESTIGATION_ID },
-                },
-            }),
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-                    data: { content: 'part two.', web_session_id: WEB_SESSION_ID, investigation_id: INVESTIGATION_ID },
-                },
-            }),
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_COMPLETED,
-                    data: { investigation_id: INVESTIGATION_ID, web_session_id: WEB_SESSION_ID, turn: 1 },
-                },
-            }),
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
-                    data: { investigation_id: INVESTIGATION_ID, web_session_id: WEB_SESSION_ID, finish_reason: 'STOP' },
-                },
-            }),
+            {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                data: { content: 'Part one ', web_session_id: WEB_SESSION_ID, investigation_id: INVESTIGATION_ID },
+            },
+            {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
+                data: { content: 'part two.', web_session_id: WEB_SESSION_ID, investigation_id: INVESTIGATION_ID },
+            },
+            {
+                type: EventType.LLM_CHAT_ITERATION_COMPLETED,
+                data: { investigation_id: INVESTIGATION_ID, web_session_id: WEB_SESSION_ID, turn: 1 },
+            },
+            {
+                type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
+                data: { investigation_id: INVESTIGATION_ID, web_session_id: WEB_SESSION_ID, finish_reason: 'STOP' },
+            },
         ];
 
         for (const event of events) {
@@ -674,45 +664,39 @@ describe('SSE pipeline — multi-event sequence [INTEGRATION - jsdom]', () => {
         const manager = new SSEConnectionManager(eventBus);
 
         const events = [
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
-                    data: {
-                        investigation_id: INVESTIGATION_ID,
-                        web_session_id: WEB_SESSION_ID,
-                        query: 'nginx config best practices',
-                        execution_id: 'exec_s_001',
-                        status: 'started',
+            {
+                type: EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
+                data: {
+                    investigation_id: INVESTIGATION_ID,
+                    web_session_id: WEB_SESSION_ID,
+                    query: 'nginx config best practices',
+                    execution_id: 'exec_s_001',
+                    status: 'started',
+                },
+            },
+            {
+                type: EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
+                data: {
+                    investigation_id: INVESTIGATION_ID,
+                    web_session_id: WEB_SESSION_ID,
+                    query: 'nginx config best practices',
+                    execution_id: 'exec_s_001',
+                    status: 'completed',
+                },
+            },
+            {
+                type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
+                data: {
+                    investigation_id: INVESTIGATION_ID,
+                    web_session_id: WEB_SESSION_ID,
+                    grounding_metadata: {
+                        grounding_used: true,
+                        sources: [
+                            { citation_num: 1, title: 'Nginx Docs', url: 'https://nginx.org/docs' },
+                        ],
                     },
                 },
-            }),
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
-                    data: {
-                        investigation_id: INVESTIGATION_ID,
-                        web_session_id: WEB_SESSION_ID,
-                        query: 'nginx config best practices',
-                        execution_id: 'exec_s_001',
-                        status: 'completed',
-                    },
-                },
-            }),
-            new G8eePassthroughEvent({
-                _payload: {
-                    type: EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
-                    data: {
-                        investigation_id: INVESTIGATION_ID,
-                        web_session_id: WEB_SESSION_ID,
-                        grounding_metadata: {
-                            grounding_used: true,
-                            sources: [
-                                { citation_num: 1, title: 'Nginx Docs', url: 'https://nginx.org/docs' },
-                            ],
-                        },
-                    },
-                },
-            }),
+            },
         ];
 
         for (const event of events) {
@@ -743,36 +727,22 @@ describe('SSE pipeline — multi-event sequence [INTEGRATION - jsdom]', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wire shape contract — G8eePassthroughEvent.forWire() shape assertion
-// Proves the server-side model produces the exact shape the frontend expects
+// Wire shape contract — plain wire objects pass through unchanged
+// Proves the wire format is exactly what the frontend expects
 // ---------------------------------------------------------------------------
 
-describe('SSE pipeline — G8eePassthroughEvent wire shape contract [INTEGRATION - jsdom]', () => {
-    it('forWire() returns the inner _payload directly (no outer wrapper)', () => {
-        const innerPayload = {
-            type: EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,
-            data: { content: 'hello', web_session_id: 'session_abc', investigation_id: 'inv_001' },
-        };
-        const event = new G8eePassthroughEvent({ _payload: innerPayload });
-        const wire = event.forWire();
-
-        expect(wire).toBe(innerPayload);
-        expect(wire.type).toBe(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED);
-        expect(wire.data).toBeDefined();
-        expect(wire.data.content).toBe('hello');
-    });
-
-    it('the SSE frame written to the stream is exactly "data: <json>\\n\\n"', async () => {
+describe('SSE pipeline — wire shape contract [INTEGRATION - jsdom]', () => {
+    it('plain wire objects pass through unchanged', async () => {
         const sseService = makeSSEService();
         const mockResponse = new MockSSEResponse();
         mockResponse.flushHeaders();
         await sseService.registerConnection(WEB_SESSION_ID, 'u-test', mockResponse);
 
-        const innerPayload = {
+        const payload = {
             type: EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED,
             data: { investigation_id: INVESTIGATION_ID, web_session_id: WEB_SESSION_ID, finish_reason: 'STOP' },
         };
-        await sseService.publishEvent(WEB_SESSION_ID, new G8eePassthroughEvent({ _payload: innerPayload }));
+        await sseService.publishEvent(WEB_SESSION_ID, payload);
 
         const writtenData = mockResponse.getWrittenData().join('');
         expect(writtenData).toMatch(/^data: /);
@@ -801,7 +771,7 @@ describe('SSE pipeline — G8eePassthroughEvent wire shape contract [INTEGRATION
                 status: 'started',
             },
         };
-        await sseService.publishEvent(WEB_SESSION_ID, new G8eePassthroughEvent({ _payload: innerPayload }));
+        await sseService.publishEvent(WEB_SESSION_ID, innerPayload);
 
         const writtenData = mockResponse.getWrittenData().join('');
         const frame = writtenData.split('\n\n').find(f => f.startsWith('data: '));

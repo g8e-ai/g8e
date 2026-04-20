@@ -20,11 +20,9 @@
 
 import express from 'express';
 import { SSEPushRequest } from '../../models/request_models.js';
-import { G8eePassthroughEvent } from '../../models/sse_models.js';
 import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
-import { EventType } from '../../constants/events.js';
 
 /**
  * @param {Object} options
@@ -35,25 +33,6 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
     const { sseService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
-
-    /**
-     * Normalize citation_num values in a CHAT_CITATIONS_READY event to sequential 1-based integers.
-     * g8ee emits non-sequential citation_num values (e.g. 10, 20, 30). The frontend expects
-     * sequential 1-based values. Returns a new event object — does not mutate the input.
-     */
-    function normalizeCitationNums(event) {
-        const sources = event?.grounding_metadata?.sources;
-        if (!Array.isArray(sources) || sources.length === 0) {
-            return event;
-        }
-        return {
-            ...event,
-            grounding_metadata: {
-                ...event.grounding_metadata,
-                sources: sources.map((source, index) => ({ ...source, citation_num: index + 1 })),
-            },
-        };
-    }
 
     /**
      * POST /api/internal/sse/push
@@ -70,14 +49,9 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
             logger.info(`[SESSION TRACE] g8ed received SSE push - web_session_id=${redactWebSessionId(pushReq.web_session_id)}, event_type=${pushReq.event.type}`);
 
-            const normalizedEvent = pushReq.event.type === EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED
-                ? normalizeCitationNums(pushReq.event)
-                : pushReq.event;
-            const finalEvent = new G8eePassthroughEvent({ _payload: normalizedEvent });
-
             if (pushReq.web_session_id) {
                 // SessionEvent: targeted delivery to a specific web session.
-                const delivered = await sseService.publishEvent(pushReq.web_session_id, finalEvent, (status) => {
+                const delivered = await sseService.publishEvent(pushReq.web_session_id, pushReq.event, (status) => {
                     if (status.delivered) {
                         logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
                             webSessionId: redactWebSessionId(pushReq.web_session_id),
@@ -116,7 +90,7 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
             // A zero count is the documented outcome when the user has no connected
             // sessions and is NOT an error - collapsing it into a 500 would mask real
             // g8ed outages when BackgroundEvent fan-out is routine.
-            const successCount = await sseService.publishToUser(pushReq.user_id, finalEvent);
+            const successCount = await sseService.publishToUser(pushReq.user_id, pushReq.event);
             logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
                 userId: pushReq.user_id,
                 successCount,

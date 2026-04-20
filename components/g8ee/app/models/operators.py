@@ -169,8 +169,10 @@ class OperatorDocument(G8eBaseModel):
     g8ed is the authority — g8ee only reads this document.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     operator_id: str = Field(description="Unique Operator identifier")
-    user_id: str | None = Field(default=None, description="User ID who owns this operator")
+    user_id: str = Field(description="User ID who owns this operator (always set by g8ed)")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")

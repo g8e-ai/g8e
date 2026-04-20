@@ -40,6 +40,7 @@ class TestOperatorCommandValidator:
     async def test_validate_command_execution_active_operator(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.ACTIVE,
         )
 
@@ -52,6 +53,7 @@ class TestOperatorCommandValidator:
     async def test_validate_command_execution_bound_operator(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.BOUND,
         )
 
@@ -64,6 +66,7 @@ class TestOperatorCommandValidator:
     async def test_validate_command_execution_stale_operator(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.STALE,
         )
 
@@ -76,6 +79,7 @@ class TestOperatorCommandValidator:
     async def test_validate_command_execution_stopped_operator_rejected(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.STOPPED,
         )
 
@@ -88,6 +92,7 @@ class TestOperatorCommandValidator:
     async def test_validate_command_execution_offline_operator_rejected(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.OFFLINE,
         )
 
@@ -135,6 +140,7 @@ class TestOperatorCommandValidator:
     async def test_validate_binding_success(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-1",
             bound_web_session_id="web-session-1",
@@ -150,6 +156,7 @@ class TestOperatorCommandValidator:
     async def test_validate_binding_not_bound(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.ACTIVE,
             operator_session_id="op-session-1",
             bound_web_session_id="web-session-1",
@@ -166,6 +173,7 @@ class TestOperatorCommandValidator:
     async def test_validate_binding_web_session_mismatch(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-1",
             bound_web_session_id="web-session-DIFFERENT",
@@ -182,6 +190,7 @@ class TestOperatorCommandValidator:
     async def test_validate_binding_operator_session_mismatch(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.BOUND,
             operator_session_id="op-session-DIFFERENT",
             bound_web_session_id="web-session-1",
@@ -214,6 +223,7 @@ class TestOperatorCommandValidator:
     async def test_check_health_active_operator(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.ACTIVE,
         )
 
@@ -224,6 +234,7 @@ class TestOperatorCommandValidator:
     async def test_check_health_stopped_operator(self, validator, mock_operator_cache):
         mock_operator_cache.get_operator.return_value = OperatorDocument(
             operator_id="op-test-1",
+            user_id="user-test",
             status=OperatorStatus.STOPPED,
         )
 

@@ -119,10 +119,15 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self,
         operator_id: str,
         heartbeat: OperatorHeartbeat,
-        investigation_id: str,
-        case_id: str,
+        investigation_id: str | None,
+        case_id: str | None,
     ) -> bool:
-        """Update Operator heartbeat and system info."""
+        """Update Operator heartbeat and system info.
+
+        investigation_id and case_id are only written when present; absent values
+        are not coerced to sentinel strings so existing values on the document
+        are preserved via merge=True.
+        """
         now_timestamp = now()
         heartbeat_record = heartbeat.model_dump(mode="json")
 
@@ -154,9 +159,11 @@ class OperatorDataService(OperatorDataServiceProtocol):
             "system_info": system_info.model_dump(mode="json"),
             "latest_heartbeat_snapshot": heartbeat_record,
             "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
-            "investigation_id": investigation_id,
-            "case_id": case_id,
         }
+        if investigation_id is not None:
+            update_data["investigation_id"] = investigation_id
+        if case_id is not None:
+            update_data["case_id"] = case_id
 
         result = await self.cache.update_document(
             collection=self.collection,
