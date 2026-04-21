@@ -159,26 +159,26 @@ class LLMSettings(G8eBaseModel):
     assistant_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_assistant_provider", serialization_alias="llm_assistant_provider")
     lite_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_lite_provider", serialization_alias="llm_lite_provider")
 
-    primary_model: str | None = Field(None, alias="llm_model")
-    assistant_model: str | None = Field(None, alias="llm_assistant_model")
-    lite_model: str | None = Field(None, alias="llm_lite_model")
+    primary_model: str | None = Field(default=None, alias="llm_model")
+    assistant_model: str | None = Field(default=None, alias="llm_assistant_model")
+    lite_model: str | None = Field(default=None, alias="llm_lite_model")
 
-    openai_endpoint: str | None = Field(OPENAI_DEFAULT_ENDPOINT)
-    openai_api_key: str | None = Field(None)
+    openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
+    openai_api_key: str | None = Field(default=None)
 
-    ollama_endpoint: str | None = Field(OLLAMA_DEFAULT_ENDPOINT)
-    ollama_api_key: str | None = Field(None)
+    ollama_endpoint: str | None = Field(default=OLLAMA_DEFAULT_ENDPOINT)
+    ollama_api_key: str | None = Field(default=None)
 
-    gemini_api_key: str | None = Field(None)
+    gemini_api_key: str | None = Field(default=None)
 
-    anthropic_endpoint: str | None = Field(ANTHROPIC_DEFAULT_ENDPOINT)
-    anthropic_api_key: str | None = Field(None)
-    ollama_assistant_model: str | None = Field(None)
+    anthropic_endpoint: str | None = Field(default=ANTHROPIC_DEFAULT_ENDPOINT)
+    anthropic_api_key: str | None = Field(default=None)
+    ollama_assistant_model: str | None = Field(default=None)
 
-    llm_max_tokens: int | None = Field(None)
-    llm_command_gen_enabled: bool = Field(True)
-    llm_command_gen_verifier: bool = Field(True)
-    llm_command_gen_passes: int = Field(5)
+    llm_max_tokens: int | None = Field(default=None)
+    llm_command_gen_enabled: bool = Field(default=True)
+    llm_command_gen_verifier: bool = Field(default=True)
+    llm_command_gen_passes: int = Field(default=5)
 
     @property
     def resolved_assistant_model(self) -> str | None:

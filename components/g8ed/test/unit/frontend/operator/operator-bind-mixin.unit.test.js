@@ -919,7 +919,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             const result = ctx._createBindAllOperatorItem(operator);
 
-            expect(result).toContain(operator.operator_id);
+            expect(result).toContain(operator.id);
             expect(result).toContain(operator.system_info.hostname);
             expect(result).toContain(operator.system_info.os);
             expect(result).toContain(operator.system_info.internal_ip);
@@ -942,7 +942,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             const result = ctx._createUnbindAllOperatorItem(operator);
 
-            expect(result).toContain(operator.operator_id);
+            expect(result).toContain(operator.id);
             expect(result).toContain(operator.system_info.hostname);
             expect(result).toContain(operator.system_info.os);
             expect(result).toContain(operator.system_info.public_ip);

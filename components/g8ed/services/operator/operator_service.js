@@ -113,7 +113,7 @@ class OperatorService {
 
     async getOperatorStatusInfo(operatorId) {
         const operator = await this.getOperator(operatorId);
-        return operator ? new OperatorStatusInfo(operator) : null;
+        return operator ? OperatorStatusInfo.fromOperator(operator) : null;
     }
 
     async getOperatorStatus(operatorId) {

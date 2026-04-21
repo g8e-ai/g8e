@@ -69,7 +69,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
 
             const result = await service.getG8ENodeOperatorForUser('user_123');
 
-            expect(result.operator.operator_id).toBe('op_123');
+            expect(result.operator.id).toBe('op_123');
             expect(result.alreadyActive).toBe(true);
             expect(operatorService.queryOperators).toHaveBeenCalledWith(
                 expect.arrayContaining([

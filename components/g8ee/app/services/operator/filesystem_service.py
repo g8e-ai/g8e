@@ -98,7 +98,7 @@ class OperatorFilesystemService:
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
-                operator_id=resolved_operator.operator_id,
+                operator_id=resolved_operator.id,
                 payload=mcp_payload,
             )
 
@@ -151,7 +151,7 @@ class OperatorFilesystemService:
                     status=status if status is not None else ExecutionStatus.FAILED,
                     output=output,
                     error=error,
-                    operator_id=resolved_operator.operator_id,
+                    operator_id=resolved_operator.id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,
@@ -206,7 +206,7 @@ class OperatorFilesystemService:
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
-                operator_id=resolved_operator.operator_id,
+                operator_id=resolved_operator.id,
                 payload=mcp_payload,
             )
 
@@ -259,7 +259,7 @@ class OperatorFilesystemService:
                     status=status if status is not None else ExecutionStatus.FAILED,
                     output=output,
                     error=error,
-                    operator_id=resolved_operator.operator_id,
+                    operator_id=resolved_operator.id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,

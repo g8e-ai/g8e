@@ -102,7 +102,7 @@ class G8ENodeOperatorService {
 
         logger.info('[G8EP-OPERATOR] g8ep operator slot resolved', {
             user_id,
-            operator_id: operator.operator_id,
+            operator_id: operator.id,
             status: operator.status,
             alreadyActive,
         });
@@ -251,7 +251,7 @@ class G8ENodeOperatorService {
         }
 
         const { operator } = slotResult;
-        const operator_id = operator.operator_id;
+        const operator_id = operator.id;
 
         logger.info('[G8EP-OPERATOR] Stopping supervised operator service in g8ep', {
             user_id,
@@ -319,7 +319,7 @@ class G8ENodeOperatorService {
             if (slotResult.alreadyActive) {
                 logger.info('[G8EP-OPERATOR] g8ep operator already active for user — skipping launch', {
                     user_id,
-                    operator_id: slotResult.operator.operator_id
+                    operator_id: slotResult.operator.id
                 });
                 return;
             }
@@ -330,7 +330,7 @@ class G8ENodeOperatorService {
             if (!apiKey) {
                 logger.warn('[G8EP-OPERATOR] Operator slot has no API key — g8ep operator will not be launched', {
                     user_id,
-                    operator_id: operator.operator_id,
+                    operator_id: operator.id,
                 });
                 return;
             }

@@ -55,8 +55,8 @@ export class OperatorSlotService {
                     namePrefix: 'operator',
                     isG8eNode: assignG8eNode,
                 });
-                if (creationResponse.success && creationResponse.id) {
-                    createdSlotIds.push(creationResponse.id);
+                if (creationResponse.success && creationResponse.operator_id) {
+                    createdSlotIds.push(creationResponse.operator_id);
                 }
             }
         }

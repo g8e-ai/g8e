@@ -150,7 +150,7 @@ export class HeartbeatMonitorService {
     }
 
     async _applyTransition(operator, targetStatus, ageMs) {
-        const operatorId = operator.operator_id;
+        const operatorId = operator.id;
         const fromStatus = operator.status;
         try {
             const result = await this._operatorDataService.updateOperator(operatorId, {
@@ -194,7 +194,7 @@ export class HeartbeatMonitorService {
             const event = OperatorStatusUpdatedEvent.parse({
                 type: operatorStatusToEventType(targetStatus),
                 data: OperatorStatusUpdatedData.parse({
-                    operator_id: operator.operator_id,
+                    operator_id: operator.id,
                     status: targetStatus,
                     hostname: operator.system_info?.hostname ?? null,
                     system_fingerprint: operator.system_fingerprint ?? null,
@@ -205,7 +205,7 @@ export class HeartbeatMonitorService {
             await this._sseService.publishToUser(operator.user_id, event);
         } catch (error) {
             logger.warn('[HEARTBEAT-MONITOR] SSE fan-out failed (non-blocking)', {
-                operator_id: operator.operator_id,
+                operator_id: operator.id,
                 target: targetStatus,
                 error: error.message,
             });

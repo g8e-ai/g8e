@@ -207,7 +207,7 @@ export class OperatorStatusInfo extends G8eBaseModel {
 
     static fromOperator(operator) {
         return new OperatorStatusInfo({
-            operator_id:               operator.operator_id,
+            operator_id:               operator.id,
             user_id:                   operator.user_id,
             status:                    operator.status,
             bound_web_session_id:      operator.bound_web_session_id ?? null,
@@ -435,7 +435,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
                 summary:    'New Operator created from API key refresh',
                 actor:      SourceComponent.USER,
                 details:    {
-                    predecessor_operator_id: data.oldOperatorId,
+                    predecessor_operator_id: data.oldId,
                     slot_number:             data.slotNumber,
                     operator_type:           data.operatorType || OperatorType.SYSTEM,
                     slot_cost:               data.slotCost ?? 1,
@@ -536,7 +536,7 @@ export class OperatorSlot extends G8eBaseModel {
     static fromOperator(operator) {
         const s = operator.status ?? OperatorStatus.OFFLINE;
         return new OperatorSlot({
-            operator_id:    operator.operator_id,
+            operator_id:    operator.id,
             name:           operator.name ?? null,
             status:         s,
             status_display: String(s).toUpperCase(),
@@ -756,7 +756,7 @@ export class OperatorWithSessionContext extends G8eBaseModel {
 
     static create(operator, operatorSession, webSession) {
         return new OperatorWithSessionContext({
-            operator_id:         operator.operator_id,
+            operator_id:         operator.id,
             operator_session_id: operatorSession?.id || operator.operator_session_id,
             bound_web_session_id: webSession?.id || operator.bound_web_session_id,
             status:              operator.status,

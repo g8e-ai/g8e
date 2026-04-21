@@ -364,7 +364,7 @@ class DeviceLinkService {
 
             let targetOperatorId;
             if (availableOperator) {
-                targetOperatorId = availableOperator.operator_id;
+                targetOperatorId = availableOperator.id;
             } else {
                 const existingCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
                 targetOperatorId = await this._operatorService.createOperatorSlot({

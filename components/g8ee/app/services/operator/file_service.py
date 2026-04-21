@@ -129,7 +129,7 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FileEditResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
@@ -300,7 +300,7 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FetchFileHistoryToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
@@ -419,7 +419,7 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FetchFileDiffToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)

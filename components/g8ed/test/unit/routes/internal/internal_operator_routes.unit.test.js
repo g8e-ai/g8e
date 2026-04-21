@@ -317,16 +317,16 @@ describe('Internal Operator Routes [UNIT]', () => {
 
         it('should return operator status details', async () => {
             const operator = mockOperators.activeOperator;
-            const req = createMockReq({ params: { operatorId: operator.operator_id } });
+            const req = createMockReq({ params: { operatorId: operator.id } });
             const res = createMockRes();
 
             mockOperatorService.getOperator.mockResolvedValue(operator);
 
             await getRoute()(req, res);
 
-            expect(mockOperatorService.getOperator).toHaveBeenCalledWith(operator.operator_id);
+            expect(mockOperatorService.getOperator).toHaveBeenCalledWith(operator.id);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                operator_id: operator.operator_id
+                operator_id: operator.id
             }));
         });
 

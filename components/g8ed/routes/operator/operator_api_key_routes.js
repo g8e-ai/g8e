@@ -45,7 +45,7 @@ export function createOperatorApiKeyRouter({
 
             res.json(new OperatorApiKeyResponse({
                 success: true,
-                operator_id: operator.operator_id,
+                operator_id: operator.id,
                 api_key: apiKey
             }).forClient());
 

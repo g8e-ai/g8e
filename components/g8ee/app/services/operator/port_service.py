@@ -115,7 +115,7 @@ class OperatorPortService:
                 error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
-        operator_id = resolved_operator.operator_id
+        operator_id = resolved_operator.id
         operator_session_id = resolved_operator.operator_session_id
         if not operator_session_id:
             return PortCheckToolResult(
