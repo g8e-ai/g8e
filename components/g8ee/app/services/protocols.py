@@ -86,6 +86,8 @@ from app.models.command_payloads import (
     CheckPortArgs,
 )
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.models.tool_results import ToolResult
 from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
 from app.constants.prompts import AgentMode
@@ -570,15 +572,22 @@ class ApprovalServiceProtocol(Protocol):
 class ExecutionServiceProtocol(Protocol):
     g8ed_event_service: EventServiceProtocol
     ai_response_analyzer: AIResponseAnalyzerProtocol
+    whitelist_validator: CommandWhitelistValidator
+    blacklist_validator: CommandBlacklistValidator
     async def execute(
         self,
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> CommandInternalResult | None: ...
+    ) -> CommandInternalResult: ...
     def resolve_target_operator(self, operator_documents: list[OperatorDocument], target_operator: str | None) -> OperatorDocument: ...
     def resolve_multiple_operators(self, operator_documents: list[OperatorDocument], target_operators: list[str]) -> list[OperatorDocument]: ...
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]: ...
+    async def send_command_to_operator(
+        self,
+        command_payload: DirectCommandRequest,
+        g8e_context: G8eHttpContext,
+    ) -> DirectCommandResult: ...
 
 @runtime_checkable
 class LFAAServiceProtocol(Protocol):

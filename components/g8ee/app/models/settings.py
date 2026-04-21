@@ -155,9 +155,9 @@ class LLMSettings(G8eBaseModel):
         coerce_numbers_from_str=True,
     )
 
-    primary_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_primary_provider", serialization_alias="llm_primary_provider", validation_alias="provider")
-    assistant_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_assistant_provider", serialization_alias="llm_assistant_provider")
-    lite_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_lite_provider", serialization_alias="llm_lite_provider")
+    primary_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_primary_provider")
+    assistant_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_assistant_provider")
+    lite_provider: LLMProvider = Field(default=LLMProvider.OLLAMA, alias="llm_lite_provider")
 
     primary_model: str | None = Field(default=None, alias="llm_model")
     assistant_model: str | None = Field(default=None, alias="llm_assistant_model")

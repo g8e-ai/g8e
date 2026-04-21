@@ -68,14 +68,14 @@ export class DeviceRegistrationService {
      * Creates the operator session, claims or reconnects the slot, activates, and fires SSE.
      *
      * @param {{
-     *   id:   string,
+     *   operator_id:   string,
      *   deviceInfo:    object,
      *   operator_type: string,
      *   g8eContext:    { web_session_id: string|null, user_id: string, organization_id: string|null },
      * }} params
-     * @returns {Promise<{ success: boolean, operator_session_id?: string, id?: string, system_info?: object, error?: string }>}
+     * @returns {Promise<{ success: boolean, operator_session_id?: string, operator_id?: string, system_info?: object, error?: string }>}
      */
-    async registerDevice({ id, deviceInfo, operator_type = OperatorType.SYSTEM, g8eContext }) {
+    async registerDevice({ operator_id: id, deviceInfo, operator_type = OperatorType.SYSTEM, g8eContext }) {
         const { user_id, web_session_id } = g8eContext;
 
         if (!deviceInfo.system_fingerprint) {
@@ -115,7 +115,7 @@ export class DeviceRegistrationService {
                 organization_id: user.organization_id,
                 roles:           user.roles || [OperatorSessionRole.OPERATOR],
             },
-            id,
+            operator_id: id,
         };
 
         const session = await this._operatorSessionService.createOperatorSession(sessionData);
@@ -149,7 +149,7 @@ export class DeviceRegistrationService {
             organization_id: g8eContext.organization_id || null,
             bound_operators: [
                 BoundOperatorContext.parse({
-                    id,
+                    operator_id: id,
                     operator_session_id,
                     bound_web_session_id: web_session_id,
                     status:        OperatorStatus.ACTIVE,
@@ -163,7 +163,7 @@ export class DeviceRegistrationService {
             const event = OperatorStatusUpdatedEvent.parse({
                 type: EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
                 data: OperatorStatusUpdatedData.parse({
-                    id,
+                    operator_id: id,
                     status: OperatorStatus.ACTIVE,
                     system_info,
                 }),
@@ -190,11 +190,11 @@ export class DeviceRegistrationService {
 
         this._sessionAuthListener.listen({
             operator_session_id,
-            id,
+            operator_id: id,
             user_id,
             organization_id: g8eContext.organization_id || null,
         });
 
-        return { success: true, operator_session_id, id, system_info };
+        return { success: true, operator_session_id, operator_id: id, system_info };
     }
 }

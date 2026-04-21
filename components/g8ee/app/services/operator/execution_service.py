@@ -156,7 +156,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         if not target_operator:
             available = [
                 f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} "
-                f"({op.operator_id}) - {op.operator_type}"
+                f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
             raise ValidationError(
@@ -168,7 +168,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         for op in operator_documents:
-            if op.operator_id == target_operator:
+            if op.id == target_operator:
                 return op
 
         for op in operator_documents:
@@ -186,7 +186,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         available = [
-            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.operator_id})"
+            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.id})"
             for i, op in enumerate(operator_documents)
         ]
         raise ValidationError(
@@ -222,9 +222,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                     operator_documents=operator_documents,
                     target_operator=target,
                 )
-                if op.operator_id and op.operator_id not in resolved_ids:
+                if op.id and op.id not in resolved_ids:
                     resolved.append(op)
-                    resolved_ids.add(op.operator_id)
+                    resolved_ids.add(op.id)
             except (ValidationError, BusinessLogicError):
                 continue
 
@@ -240,7 +240,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         for op in operator_documents:
             hostname: str = op.current_hostname or (op.system_info.hostname if op.system_info else None) or "None"
             systems.append(TargetSystem(
-                operator_id=op.operator_id or "None",
+                operator_id=op.id,
                 hostname=hostname,
                 operator_type=op.operator_type,
             ))

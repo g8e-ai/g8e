@@ -217,7 +217,7 @@ class InvestigationService:
                 "Operators BOUND - context enriched for AI",
                 extra={
                     "operator_count": len(operator_docs),
-                    "operator_ids": [op.operator_id for op in operator_docs],
+                    "operator_ids": [op.id for op in operator_docs],
                 }
             )
         else:
@@ -527,7 +527,7 @@ def _extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
         if hb.environment: environment = hb.environment
 
     return OperatorContext(
-        operator_id=op.operator_id,
+        operator_id=op.id,
         operator_session_id=op.operator_session_id,
         os=sys_info.os if sys_info else None,
         hostname=sys_info.hostname if sys_info else None,
@@ -645,7 +645,7 @@ def extract_operator_context_by_target(
     
     # Try to find operator by operator_id
     for operator_doc in investigation.operator_documents:
-        if operator_doc.operator_id == target_operator:
+        if operator_doc.id == target_operator:
             return _extract_single_operator_context(operator_doc)
     
     # Try to find operator by hostname

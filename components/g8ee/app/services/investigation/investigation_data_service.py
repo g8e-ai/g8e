@@ -363,7 +363,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         raw_history = data.get("conversation_history", [])
         if not isinstance(raw_history, list):
             return []
-        raw_history_typed: list[Any] = raw_history
+        raw_history_typed: list[dict[str, Any]] = raw_history
         messages = [ConversationHistoryMessage.model_validate(m) for m in raw_history_typed]
         messages.sort(key=lambda m: m.timestamp)
 

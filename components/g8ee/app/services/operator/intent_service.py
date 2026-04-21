@@ -145,7 +145,7 @@ class OperatorIntentService:
                 error_type=CommandErrorType.VALIDATION_ERROR
             )
 
-        operator_id = op_doc.operator_id
+        operator_id = op_doc.id
         operator_session_id = op_doc.operator_session_id
         execution_id = generate_intent_execution_id()
 
@@ -357,13 +357,13 @@ class OperatorIntentService:
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=op_doc.operator_session_id,
-                operator_id=op_doc.operator_id,
+                operator_id=op_doc.id,
                 payload=mcp_payload,
             )
             res = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
             if res and res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
-                await self.g8ed_client.revoke_intent(op_doc.operator_id, intent, g8e_context)
+                await self.g8ed_client.revoke_intent(op_doc.id, intent, g8e_context)
 
         # Notify completion
         await self.g8ed_event_service.publish_command_event(
@@ -373,7 +373,7 @@ class OperatorIntentService:
                 command=f"intent_revoke {', '.join(requested_intents)}",
                 status=ExecutionStatus.COMPLETED,
                 output=f"Intent permission revoked: {', '.join(requested_intents)}",
-                operator_id=op_doc.operator_id,
+                operator_id=op_doc.id,
                 operator_session_id=op_doc.operator_session_id,
             ),
             g8e_context,

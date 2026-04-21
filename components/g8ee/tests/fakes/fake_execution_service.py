@@ -15,13 +15,18 @@
 
 from typing import Any
 from app.models.tool_results import CommandInternalResult
-from app.models.operators import OperatorDocument
+from app.models.operators import OperatorDocument, TargetSystem, DirectCommandResult
+from app.models.internal_api import DirectCommandRequest
+from app.models.http_context import G8eHttpContext
+from app.models.pubsub_messages import G8eMessage
 from app.services.protocols import ExecutionServiceProtocol
+from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.blacklist_validator import CommandBlacklistValidator
 
 
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(
-    operator_id="fake-operator",
+    id="fake-operator",
     user_id="fake-user",
     name="Fake Operator",
 )
@@ -42,14 +47,34 @@ class FakeExecutionService:
         resolved_operator: OperatorDocument = _default_operator,
         resolve_error: Exception | None = None,
         g8ed_event_service: Any = None,
+        ai_response_analyzer: Any = None,
+        whitelist_validator: CommandWhitelistValidator | None = None,
+        blacklist_validator: CommandBlacklistValidator | None = None,
     ) -> None:
         self._exit_code = exit_code
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
         self.g8ed_event_service = g8ed_event_service
+        self.ai_response_analyzer = ai_response_analyzer
+        self.whitelist_validator = whitelist_validator
+        self.blacklist_validator = blacklist_validator
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
+        self.send_command_calls: list[dict] = []
+
+    async def execute(
+        self,
+        g8e_message: G8eMessage,
+        g8e_context: G8eHttpContext,
+        timeout_seconds: int = 60,
+    ) -> CommandInternalResult | None:
+        self.execute_calls.append({
+            "g8e_message": g8e_message,
+            "g8e_context": g8e_context,
+            "timeout_seconds": timeout_seconds,
+        })
+        return CommandInternalResult(exit_code=self._exit_code, output=self._output)
 
     async def execute_command_internal(self, **kwargs) -> CommandInternalResult:
         self.execute_calls.append(kwargs)
@@ -57,7 +82,6 @@ class FakeExecutionService:
 
     def resolve_target_operator(
         self,
-        *,
         operator_documents: list[OperatorDocument],
         target_operator: str | None,
     ) -> OperatorDocument:
@@ -68,6 +92,33 @@ class FakeExecutionService:
         if self._resolve_error:
             raise self._resolve_error
         return self._resolved_operator
+
+    def resolve_multiple_operators(
+        self,
+        operator_documents: list[OperatorDocument],
+        target_operators: list[str],
+    ) -> list[OperatorDocument]:
+        return [self._resolved_operator]
+
+    def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
+        return [TargetSystem(
+            operator_id=op.id,
+            hostname=op.current_hostname or "fake-host",
+            operator_type=op.operator_type,
+        ) for op in operator_documents]
+
+    async def send_command_to_operator(
+        self,
+        command_payload: DirectCommandRequest,
+        g8e_context: G8eHttpContext,
+    ) -> DirectCommandResult:
+        self.send_command_calls.append({
+            "command_payload": command_payload,
+            "g8e_context": g8e_context,
+        })
+        return DirectCommandResult(
+            execution_id=command_payload.execution_id,
+        )
 
 
 _: ExecutionServiceProtocol = FakeExecutionService(resolved_operator=_default_operator)

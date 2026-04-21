@@ -246,7 +246,7 @@ class TestSettingsService:
 
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
-                provider=LLMProvider.GEMINI,
+                primary_provider=LLMProvider.GEMINI,
                 primary_model="gemini-2.5-pro",
                 gemini_api_key="test-key",
             )

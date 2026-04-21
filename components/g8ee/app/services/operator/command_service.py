@@ -285,7 +285,7 @@ class OperatorCommandService:
             return CommandExecutionResult(
                 success=False,
                 error="Operator session not found for: "
-                      + ", ".join(op.operator_id or "<unknown>" for op in missing_session),
+                      + ", ".join(op.id for op in missing_session),
                 error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
@@ -320,7 +320,7 @@ class OperatorCommandService:
 
         # Primary operator is the first resolved — used for approval identity fields.
         primary = target_operator_docs[0]
-        primary_operator_id = primary.operator_id or ""
+        primary_operator_id = primary.id
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
         approval_execution_id = generate_command_execution_id()
@@ -405,7 +405,7 @@ class OperatorCommandService:
 
         async def _dispatch(op: OperatorDocument) -> BatchOperatorExecutionResult:
             exec_id = generate_command_execution_id()
-            op_id = op.operator_id or ""
+            op_id = op.id
             op_session_id = op.operator_session_id or ""
             hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
 
@@ -590,7 +590,7 @@ class OperatorCommandService:
         def _section(r: BatchOperatorExecutionResult) -> str:
             header = f"===== {r.hostname} ({r.operator_id}) ====="
             if r.result is not None:
-                body_parts = []
+                body_parts: list[str] = []
                 if r.result.output:
                     body_parts.append(r.result.output)
                 if r.result.stderr:

@@ -283,7 +283,7 @@ class TestExecuteCommandTargetSystems:
     def _make_operator(self, operator_id: str, session_id: str, hostname: str):
         from app.models.operators import OperatorDocument, OperatorType
         return OperatorDocument(
-            operator_id=operator_id,
+            id=operator_id,
             user_id="user-1",
             operator_session_id=session_id,
             current_hostname=hostname,

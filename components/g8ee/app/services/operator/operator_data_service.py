@@ -61,15 +61,15 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS
 
-    async def get_operator(self, id: str) -> OperatorDocument | None:
+    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Get Operator document using cache-aside pattern."""
-        if not id:
-            raise ValidationError("id is required")
+        if not operator_id:
+            raise ValidationError("operator_id is required")
 
-        data = await self.cache.get_document(self.collection, id)
+        data = await self.cache.get_document(self.collection, operator_id)
         if not data:
             return None
-        
+
         return OperatorDocument.model_validate(data)
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
@@ -91,23 +91,23 @@ class OperatorDataService(OperatorDataServiceProtocol):
         
         return True
 
-    async def update_operator_status(self, id: str, status: OperatorStatus) -> bool:
+    async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
         """Update Operator status in both DB and cache."""
-        if not id:
-            raise ValidationError("id is required")
+        if not operator_id:
+            raise ValidationError("operator_id is required")
 
         now_timestamp = now()
         updates: dict[str, object] = {
             "status": status,
         }
-        
-        operator = await self.get_operator(id)
+
+        operator = await self.get_operator(operator_id)
         if operator and status == OperatorStatus.ACTIVE and not operator.last_heartbeat:
             updates["last_heartbeat"] = now_timestamp
 
         result = await self.cache.update_document(
             collection=self.collection,
-            document_id=id,
+            document_id=operator_id,
             data=updates,
             merge=True
         )
@@ -115,7 +115,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
     async def update_operator_heartbeat(
         self,
-        id: str,
+        operator_id: str,
         heartbeat: OperatorHeartbeat,
         investigation_id: str | None,
         case_id: str | None,
@@ -165,20 +165,20 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         result = await self.cache.update_document(
             collection=self.collection,
-            document_id=id,
+            document_id=operator_id,
             data=update_data,
             merge=True,
         )
 
         if result.success:
-            logger.info(f"Updated Operator {id} heartbeat")
+            logger.info(f"Updated Operator {operator_id} heartbeat")
             return True
 
-        raise ExternalServiceError(f"Failed to update Operator {id} heartbeat: {result.error}", service_name="operator_service")
+        raise ExternalServiceError(f"Failed to update Operator {operator_id} heartbeat: {result.error}", service_name="operator_service")
 
     async def append_command_result(
         self,
-        id: str,
+        operator_id: str,
         command_result: CommandResultRecord
     ) -> bool:
         """Append command execution result to operator history."""
@@ -261,9 +261,9 @@ class OperatorDataService(OperatorDataServiceProtocol):
         try:
             request_payload = BindOperatorsRequest(operator_ids=operator_ids)
 
-            response = await self.internal_http_client.post(  # type: ignore[reportUnknownMemberType]
+            response = await self.internal_http_client.post(
                 "/api/operators/bind-all",
-                json_data=request_payload.model_dump(mode="json"),
+                json_data=request_payload,
                 headers={
                     INTERNAL_AUTH_HEADER: "internal-service",
                     WEB_SESSION_ID_HEADER: web_session_id,

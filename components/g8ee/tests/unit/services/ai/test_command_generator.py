@@ -107,26 +107,26 @@ class TestResolveModel:
         assert _resolve_model(llm) == "custom-primary"
 
     def test_raises_when_both_models_none(self):
-        llm = LLMSettings(provider=LLMProvider.OLLAMA)
+        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
         assert llm.assistant_model is None
         assert llm.primary_model is None
         with pytest.raises(TribunalModelNotConfiguredError):
             _resolve_model(llm)
 
     def test_raises_for_openai_when_no_model_configured(self):
-        llm = LLMSettings(provider=LLMProvider.OPENAI)
+        llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             _resolve_model(llm)
         assert exc_info.value.provider == "openai"
 
     def test_raises_for_anthropic_when_no_model_configured(self):
-        llm = LLMSettings(provider=LLMProvider.ANTHROPIC)
+        llm = LLMSettings(primary_provider=LLMProvider.ANTHROPIC)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             _resolve_model(llm)
         assert exc_info.value.provider == "anthropic"
 
     def test_raises_for_gemini_when_no_model_configured(self):
-        llm = LLMSettings(provider=LLMProvider.GEMINI)
+        llm = LLMSettings(primary_provider=LLMProvider.GEMINI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             _resolve_model(llm)
         assert exc_info.value.provider == "gemini"
@@ -149,7 +149,7 @@ class TestTribunalSessionStartedPayloadRegression:
                 )
 
     def test_payload_accepts_resolved_model(self):
-        llm = LLMSettings(provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
+        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
         model = _resolve_model(llm)
         payload = TribunalSessionStartedPayload(
             request="list files",
@@ -416,7 +416,7 @@ class TestGenerateCommandSystemError:
     @pytest.mark.asyncio
     async def test_raises_on_all_system_errors(self):
         llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
@@ -452,7 +452,7 @@ class TestGenerateCommandSystemError:
     async def test_raises_generation_failed_error_on_non_system_errors(self):
         """Non-system errors now raise TribunalGenerationFailedError instead of silent fallback."""
         llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
@@ -536,7 +536,7 @@ class TestMixedErrorFallback:
     async def test_mixed_errors_raise_generation_failed_error(self):
         """1 system error + 2 non-system errors must raise TribunalGenerationFailedError."""
         llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
             llm_command_gen_passes=3,
         )
@@ -594,7 +594,7 @@ class TestTribunalProviderUnavailableError:
     async def test_raises_on_provider_init_failure(self):
         """Provider init failure raises TribunalProviderUnavailableError instead of silent fallback."""
         llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
@@ -631,7 +631,7 @@ class TestTribunalModelNotConfiguredError:
     async def test_raises_on_no_model_configured(self):
         """No model configured raises TribunalModelNotConfiguredError with fallback event."""
         llm = LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -975,13 +975,13 @@ class TestGenerateCommandHappyPath:
 
     @staticmethod
     def _settings(
-        provider=LLMProvider.OLLAMA,
+        primary_provider=LLMProvider.OLLAMA,
         assistant_model="gemma3:1b",
         passes=3,
         verifier=True,
     ):
         llm = LLMSettings(
-            provider=provider,
+            primary_provider=primary_provider,
             assistant_model=assistant_model,
             llm_command_gen_passes=passes,
             llm_command_gen_verifier=verifier,
@@ -1384,12 +1384,12 @@ class TestGenerateCommandVerifierFailure:
 
     @staticmethod
     def _settings(
-        provider=LLMProvider.OLLAMA,
+        primary_provider=LLMProvider.OLLAMA,
         assistant_model="gemma3:1b",
         passes=3,
     ):
         llm = LLMSettings(
-            provider=provider,
+            primary_provider=primary_provider,
             assistant_model=assistant_model,
             llm_command_gen_passes=passes,
             llm_command_gen_verifier=True,

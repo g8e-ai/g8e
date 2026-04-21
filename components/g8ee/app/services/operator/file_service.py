@@ -186,6 +186,7 @@ class OperatorFileService:
                             approval_id=approval_result.approval_id if approval_result else None,
                         ),
                         g8e_context,
+                        task_id=AITaskId.FILE_EDIT,
                     )
                     return FileEditResult(
                         success=False, 
@@ -254,7 +255,7 @@ class OperatorFileService:
                     operation=op_name,
                     execution_id=exec_id,
                     operator_session_id=operator_session_id,
-                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                    status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
                     error=internal_result.error if internal_result else "Execution result is None",
                     stderr=internal_result.stderr if internal_result else None,
                     content=getattr(args, "content", None) or getattr(args, "new_content", None),
@@ -361,7 +362,7 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_history {file_path}",
-                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                        status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
                         output=internal_result.output if internal_result else None,
                         error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,
@@ -480,7 +481,7 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_diff {file_path}",
-                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                        status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
                         output=internal_result.output if internal_result else None,
                         error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,

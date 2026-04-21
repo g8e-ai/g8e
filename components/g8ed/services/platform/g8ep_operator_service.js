@@ -43,6 +43,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus } from '../../constants/operator.js';
+import { OperatorDocument } from '../../models/operator_model.js';
 import {
     G8E_GATEWAY_CONTAINER_NAME,
     G8E_GATEWAY_OPERATOR_LAUNCH_TIMEOUT_MS,
@@ -94,8 +95,9 @@ class G8ENodeOperatorService {
             return null;
         }
 
-        // We use the raw data if it's not a class instance, or just return as is
-        const operator = operatorData;
+        const operator = operatorData instanceof OperatorDocument
+            ? operatorData
+            : OperatorDocument.fromDB(operatorData);
 
         const alreadyActive = operator.status === OperatorStatus.ACTIVE ||
                               operator.status === OperatorStatus.BOUND;

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, cast
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -74,7 +74,7 @@ class MCPGatewayService:
         for group in tool_groups:
             for decl in group.tools:
                 input_schema: dict[str, Any] = (
-                    cast(dict[str, Any], decl.parameters) if isinstance(decl.parameters, dict) else {}
+                    decl.parameters if isinstance(decl.parameters, dict) else {}
                 )
                 mcp_tools.append({
                     "name": decl.name,

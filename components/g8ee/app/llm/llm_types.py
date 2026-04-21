@@ -27,7 +27,7 @@ from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
-from app.models.base import G8eBaseModel
+from app.models.base import ConfigDict, G8eBaseModel
 
 
 @dataclass(frozen=True)
@@ -242,9 +242,22 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
 
 
 class ToolDeclaration(G8eBaseModel):
+    """Provider-agnostic function/tool schema.
+
+    ``parameters`` is either:
+    - A ``Schema`` dataclass (canonical in-memory form for tool schemas derived
+      from Pydantic models via ``schema_from_model``), or
+    - A plain JSON-schema ``dict[str, Any]`` (used when callers pre-build a
+      JSON Schema fragment directly, e.g. MCP adapters and tests).
+
+    Providers consume the union via ``schema_to_dict`` before making wire calls.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     name: str
     description: str
-    parameters: Any
+    parameters: dict[str, Any] | Schema
 
 
 class ToolGroup(G8eBaseModel):
