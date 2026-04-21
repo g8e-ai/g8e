@@ -1,3 +1,11 @@
+---
+title: g8e
+layout: default
+permalink: /
+has_children: false
+nav_order: 1
+---
+
 <div align="center">
 
 # g8e
