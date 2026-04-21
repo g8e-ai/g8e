@@ -57,7 +57,7 @@ describe('OperatorSlotService', () => {
 
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
-                id: newOpId
+                operator_id: newOpId
             });
 
             const result = await service.initializeOperatorSlots(userId, organizationId);
@@ -74,7 +74,7 @@ describe('OperatorSlotService', () => {
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
-                id: 'new-op'
+                operator_id: 'new-op'
             });
 
             await service.initializeOperatorSlots(userId, organizationId);
@@ -95,7 +95,7 @@ describe('OperatorSlotService', () => {
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOp]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
-                id: 'new-op'
+                operator_id: 'new-op'
             });
 
             await service.initializeOperatorSlots(userId, organizationId);
@@ -117,7 +117,7 @@ describe('OperatorSlotService', () => {
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOp]);
             vi.spyOn(service, 'createOperatorSlot').mockResolvedValue({
                 success: true,
-                id: newOpId
+                operator_id: newOpId
             });
 
             const result = await service.initializeOperatorSlots(userId, organizationId);
@@ -164,7 +164,7 @@ describe('OperatorSlotService', () => {
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
                 calls.push(args);
-                return { success: true, id: `op-${args.slotNumber}` };
+                return { success: true, operator_id: `op-${args.slotNumber}` };
             });
 
             await service.initializeOperatorSlots('u-1', 'org-1');
@@ -186,7 +186,7 @@ describe('OperatorSlotService', () => {
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
                 calls.push(args);
-                return { success: true, id: `op-${args.slotNumber}` };
+                return { success: true, operator_id: `op-${args.slotNumber}` };
             });
 
             await service.initializeOperatorSlots('u-1', 'org-1');
@@ -201,7 +201,7 @@ describe('OperatorSlotService', () => {
             const calls = [];
             vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
                 calls.push(args);
-                return { success: true, id: `op-${args.slotNumber}` };
+                return { success: true, operator_id: `op-${args.slotNumber}` };
             });
 
             await service.initializeOperatorSlots('u-1', 'org-1');
@@ -300,9 +300,9 @@ describe('OperatorSlotService', () => {
 
     describe('generateOperatorApiKey', () => {
         it('should generate key with correct prefix and suffix', () => {
-            const operatorId = 'user_operator_1_12345_abcde';
+            const operatorId = '550e8400-e29b-41d4-a716-446655440000';
             const key = service.generateOperatorApiKey(operatorId);
-            
+
             expect(key).toMatch(/^g8e_[a-z0-9]{5,}_[a-f0-9]{64}$/);
         });
     });

@@ -66,7 +66,7 @@ export const BindOperatorsMixin = {
                 this.updateStatus(result.operator.status || OperatorStatus.BOUND);
             }
 
-            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            const operatorIndex = this.operators.findIndex(op => op.id === operatorId);
             if (operatorIndex !== -1) {
                 const currentWebSessionId = webSessionService.getWebSessionId();
                 this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
@@ -108,7 +108,7 @@ export const BindOperatorsMixin = {
             this.updateBindAllButtonVisibility();
             this.updateUnbindAllButtonVisibility();
 
-            const operatorIndex = this.operators.findIndex(op => op.operator_id === operatorId);
+            const operatorIndex = this.operators.findIndex(op => op.id === operatorId);
             if (operatorIndex !== -1) {
                 this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
                 if (typeof this.displayOperators === 'function') {
@@ -124,7 +124,7 @@ export const BindOperatorsMixin = {
 
     async bindOperatorWithConfirmation(operatorId) {
         try {
-            const operator = this.operators.find(op => op.operator_id === operatorId);
+            const operator = this.operators.find(op => op.id === operatorId);
             await this._showBindSingleModal({ operatorId, operator, mode: 'bind' });
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to bind Operator with confirmation:', error);
@@ -133,7 +133,7 @@ export const BindOperatorsMixin = {
 
     async unbindOperatorWithConfirmation(operatorId, isStale = false) {
         try {
-            const operator = this.operators.find(op => op.operator_id === operatorId);
+            const operator = this.operators.find(op => op.id === operatorId);
             await this._showBindSingleModal({
                 operatorId,
                 operator,
@@ -241,7 +241,7 @@ export const BindOperatorsMixin = {
 
         const activeOperators = this.operators.filter(op =>
             op.status === OperatorStatus.ACTIVE &&
-            !this.boundOperatorIds.includes(op.operator_id)
+            !this.boundOperatorIds.includes(op.id)
         );
 
         if (activeOperators.length === 0) {
@@ -354,7 +354,7 @@ export const BindOperatorsMixin = {
 
             const currentWebSessionId = webSessionService.getWebSessionId();
             for (const opId of result.bound_operator_ids || selectedOperatorIds) {
-                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                const operatorIndex = this.operators.findIndex(op => op.id === opId);
                 if (operatorIndex !== -1) {
                     this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.BOUND, bound_web_session_id: currentWebSessionId };
                 }
@@ -396,7 +396,7 @@ export const BindOperatorsMixin = {
         const internalIp = op.system_info?.internal_ip || '-';
         const template = templateLoader.cache.get('bind-all-operator-item');
         return templateLoader.replace(template, {
-            operatorId: op.operator_id,
+            operatorId: op.id,
             hostname,
             os,
             ip: internalIp,
@@ -417,7 +417,7 @@ export const BindOperatorsMixin = {
 
         const unboundActiveCount = this.operators.filter(op =>
             op.status === OperatorStatus.ACTIVE &&
-            !this.boundOperatorIds.includes(op.operator_id)
+            !this.boundOperatorIds.includes(op.id)
         ).length;
 
         if (unboundActiveCount > 0) {
@@ -436,7 +436,7 @@ export const BindOperatorsMixin = {
 
         const boundOperators = this.operators.filter(op =>
             (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
-            (op.status === OperatorStatus.STALE && this.boundOperatorIds.includes(op.operator_id))
+            (op.status === OperatorStatus.STALE && this.boundOperatorIds.includes(op.id))
         );
 
         if (boundOperators.length === 0) {
@@ -485,7 +485,7 @@ export const BindOperatorsMixin = {
         if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
         try {
-            const operatorIds = boundOperators.map(op => op.operator_id);
+            const operatorIds = boundOperators.map(op => op.id);
             const service = this.operatorPanelService || operatorPanelService;
             const response = await service.unbindAllOperators(operatorIds);
 
@@ -506,7 +506,7 @@ export const BindOperatorsMixin = {
             }
 
             for (const opId of result.unbound_operator_ids || operatorIds) {
-                const operatorIndex = this.operators.findIndex(op => op.operator_id === opId);
+                const operatorIndex = this.operators.findIndex(op => op.id === opId);
                 if (operatorIndex !== -1) {
                     this.operators[operatorIndex] = { ...this.operators[operatorIndex], status: OperatorStatus.ACTIVE, bound_web_session_id: null };
                 }
@@ -557,7 +557,7 @@ export const BindOperatorsMixin = {
         const statusClass = isStale ? 'unbind-all-operator-status-stale' : '';
         const template = templateLoader.cache.get('bind-all-operator-item');
         return templateLoader.replace(template, {
-            operatorId: op.operator_id,
+            operatorId: op.id,
             hostname,
             os,
             ip: publicIp,

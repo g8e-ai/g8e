@@ -194,7 +194,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             await ctx.bindOperator(TEST_OPERATOR_ID);
 
             expect(ctx.eventBus.emit).toHaveBeenCalledWith(EventType.OPERATOR_BOUND, {
-                id: TEST_OPERATOR_ID,
+                operator_id: TEST_OPERATOR_ID,
                 operator: mockOperator,
             });
         });
@@ -299,7 +299,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             await ctx.unbindOperator(TEST_OPERATOR_ID);
 
-            expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({ id: TEST_OPERATOR_ID });
+            expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({ operator_id: TEST_OPERATOR_ID });
             updateBindAllSpy.mockRestore();
             updateUnbindAllSpy.mockRestore();
         });
@@ -796,7 +796,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.unbind-all-confirmation-overlay');
-            const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            const boundOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ unbound_operator_ids: [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2] }),
@@ -815,7 +815,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const overlay = document.querySelector('.unbind-all-confirmation-overlay');
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
-            const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            const boundOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ unbound_operator_ids: [TEST_OPERATOR_ID] }),
@@ -927,7 +927,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
         it('uses defaults for missing system_info', () => {
             const ctx = createMixinContext();
-            const operator = { operator_id: TEST_OPERATOR_ID, system_info: null };
+            const operator = { id: TEST_OPERATOR_ID, system_info: null };
 
             const result = ctx._createBindAllOperatorItem(operator);
 

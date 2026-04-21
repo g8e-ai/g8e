@@ -23,7 +23,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         });
 
         const operatorSlot = new OperatorSlot({
-            operator_id: 'op-1',
+            id: 'op-1',
             name: 'node-01',
             status: 'ACTIVE',
             status_display: 'ACTIVE',
@@ -54,7 +54,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         expect(typeof serializedOperator).toBe('object');
 
         // Verify fields are present
-        expect(serializedOperator.operator_id).toBe('op-1');
+        expect(serializedOperator.id).toBe('op-1');
         expect(serializedOperator.name).toBe('node-01');
         expect(serializedOperator.status).toBe('ACTIVE');
 
@@ -129,7 +129,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         });
 
         const operatorSlot = new OperatorSlot({
-            operator_id: 'op-1',
+            id: 'op-1',
             name: 'node-01',
             status: 'ACTIVE',
             system_info: systemInfo,

@@ -47,12 +47,12 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for stop command');
         
         logger.info('[OPERATOR-RELAY] Relaying stop command to g8ee', {
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...'
         });
 
         const request = new StopOperatorRequest({
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id,
             user_id: g8eContext.user_id,
         });
@@ -73,12 +73,12 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for deregistration');
 
         logger.info('[OPERATOR-RELAY] Deregistering operator session heartbeat subscription in g8ee', {
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...',
         });
 
         const request = new OperatorSessionRegistrationRequest({
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id,
         });
 
@@ -101,7 +101,7 @@ export class OperatorRelayService {
 
         logger.info('[OPERATOR-RELAY] Relaying direct command to operator via g8ee', {
             executionId: directCommandRequest.execution_id,
-            operatorId: boundOperator.id
+            operatorId: boundOperator.operator_id
         });
 
         return httpClient.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
@@ -120,13 +120,13 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for registration');
 
         logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in g8ee', {
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 20) + '...',
         });
 
         // Use the context fields for the request
         const request = new OperatorSessionRegistrationRequest({
-            operator_id: boundOperator.id,
+            operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id,
         });
 
@@ -138,7 +138,7 @@ export class OperatorRelayService {
             g8eContext,
         }).catch(err => {
             logger.error('[OPERATOR-RELAY] Operator session registration failed (non-blocking)', {
-                operatorId: boundOperator.id,
+                operatorId: boundOperator.operator_id,
                 error: err.message
             });
         });

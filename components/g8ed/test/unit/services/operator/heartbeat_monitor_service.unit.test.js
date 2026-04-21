@@ -111,7 +111,7 @@ describe('HeartbeatMonitorService.tick', () => {
         );
         const event = sseService.publishToUser.mock.calls[0][1];
         expect(event.type).toBe(EventType.OPERATOR_STATUS_UPDATED_STALE);
-        expect(event.data.id).toBe('op-1');
+        expect(event.data.operator_id).toBe('op-1');
         expect(event.data.status).toBe(OperatorStatus.STALE);
     });
 

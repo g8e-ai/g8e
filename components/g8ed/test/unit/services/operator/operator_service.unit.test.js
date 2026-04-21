@@ -111,7 +111,7 @@ describe('OperatorService', () => {
             const result = await service.getOperatorWithSessionContext('op-1');
 
             expect(result).toBeInstanceOf(OperatorWithSessionContext);
-            expect(result.operator_id).toBe('op-1');
+            expect(result.id).toBe('op-1');
             expect(result.operator_session_id).toBe('os-1');
             expect(result.bound_web_session_id).toBe('ws-1');
         });

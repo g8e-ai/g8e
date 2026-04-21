@@ -43,10 +43,10 @@ describe('OperatorStatusRoutes Unit Tests', () => {
         mockAuthorizationMiddleware = {
             requireOperatorOwnership: vi.fn((req, res, next) => {
                 req.operator = {
-                    operator_id: 'test-op-id',
+                    id: 'test-op-id',
                     operator_session_id: 'test-op-session-id',
                     status: OperatorStatus.ACTIVE,
-                    forClient: () => ({ operator_id: 'test-op-id' })
+                    forClient: () => ({ id: 'test-op-id' })
                 };
                 next();
             })
@@ -72,7 +72,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
         it('successfully initiates g8ep reauth', async () => {
             mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
                 success: true,
-                operator_id: 'new-g8ep-op-id'
+                id: 'new-g8ep-op-id'
             });
 
             const res = await request(app).post('/api/operator/g8ep/reauth');
@@ -119,7 +119,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
         it('returns 400 if operator has no session', async () => {
             mockAuthorizationMiddleware.requireOperatorOwnership.mockImplementation((req, res, next) => {
-                req.operator = { operator_id: 'test-op-id' }; // no operator_session_id
+                req.operator = { id: 'test-op-id' }; // no operator_session_id
                 next();
             });
 

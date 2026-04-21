@@ -68,7 +68,7 @@ export function createOperatorStatusRouter({
             return res.json({
                 success: true,
                 message: 'g8ep reauth initiated',
-                id: result.operator_id
+                id: result.id
             });
 
         } catch (error) {

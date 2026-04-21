@@ -38,7 +38,7 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
         mockAuthorizationMiddleware = {
             requireOperatorOwnership: vi.fn((req, res, next) => {
                 req.operator = {
-                    operator_id: 'test-op-id',
+                    id: 'test-op-id',
                     api_key: 'test-api-key'
                 };
                 next();
@@ -71,7 +71,7 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
 
         it('returns 404 if API key is missing', async () => {
             mockAuthorizationMiddleware.requireOperatorOwnership.mockImplementation((req, res, next) => {
-                req.operator = { operator_id: 'test-op-id' }; // no api_key
+                req.operator = { id: 'test-op-id' }; // no api_key
                 next();
             });
 

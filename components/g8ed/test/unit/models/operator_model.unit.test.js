@@ -226,11 +226,11 @@ describe('CertInfo [UNIT - PURE LOGIC]', () => {
 describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields with defaults', () => {
         const info = OperatorStatusInfo.parse({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
-        expect(info.operator_id).toBe('op-123');
+        expect(info.id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
         expect(info.bound_web_session_id).toBeNull();
@@ -271,7 +271,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
             cloud_subtype: CloudOperatorSubtype.AWS,
         });
         const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.operator_id).toBe('op-123');
+        expect(info.id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
         expect(info.bound_web_session_id).toBe('ws-789');
@@ -542,7 +542,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             operatorType: OperatorType.SYSTEM,
             newApiKey: 'new-key',
             certInfo: certInfo,
-            oldOperatorId: 'op-old',
+            oldId: 'op-old',
             oldCertSerial: 'old-serial-456',
         });
         expect(doc.id).toBe('op-new');
@@ -864,11 +864,11 @@ describe('UnbindOperatorsResponse [UNIT - PURE LOGIC]', () => {
 describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields with defaults', () => {
         const context = OperatorWithSessionContext.parse({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
-        expect(context.operator_id).toBe('op-123');
+        expect(context.id).toBe('op-123');
         expect(context.user_id).toBe('user-456');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
         expect(context.operator_session_id).toBeNull();
@@ -883,7 +883,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('system_info defaults to empty SystemInfo', () => {
         const context = new OperatorWithSessionContext({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
@@ -909,7 +909,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         const webSession = { id: 'ws-new-101' };
 
         const context = OperatorWithSessionContext.create(operator, operatorSession, webSession);
-        expect(context.operator_id).toBe('op-123');
+        expect(context.id).toBe('op-123');
         expect(context.operator_session_id).toBe('os-new-789');
         expect(context.bound_web_session_id).toBe('ws-new-101');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
