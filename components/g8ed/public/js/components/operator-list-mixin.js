@@ -100,9 +100,10 @@ export const OperatorListMixin = {
             item.setAttribute('data-operator-id', operator.operator_id);
 
             const latestSnapshot = operator.latest_heartbeat_snapshot || {};
-            const systemInfo = operator.system_info || {};
+            const identity = latestSnapshot.system_identity || {};
+            const network = latestSnapshot.network || {};
             const operatorName = operator.name || 'Unknown';
-            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (systemInfo.hostname || ' - ');
+            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (identity.hostname || ' - ');
 
             const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
@@ -169,14 +170,14 @@ export const OperatorListMixin = {
             const networkLatency = formatLatency(perf.network_latency);
             const uptime = formatUptime(uptimeInfo.uptime_display ?? uptimeInfo.uptime_seconds);
 
-            const systemOs = systemInfo.os || ' - ';
-            const architecture = systemInfo.architecture || ' - ';
-            const cpuCount = systemInfo.cpu_count !== null && systemInfo.cpu_count !== undefined ? systemInfo.cpu_count : ' - ';
-            const memoryMb = systemInfo.memory_mb !== null && systemInfo.memory_mb !== undefined ? systemInfo.memory_mb : ' - ';
-            const currentUser = systemInfo.current_user || ' - ';
-            const actualPublicIp = systemInfo.public_ip || ' - ';
+            const systemOs = identity.os || ' - ';
+            const architecture = identity.architecture || ' - ';
+            const cpuCount = identity.cpu_count !== null && identity.cpu_count !== undefined ? identity.cpu_count : ' - ';
+            const memoryMb = identity.memory_mb !== null && identity.memory_mb !== undefined ? identity.memory_mb : ' - ';
+            const currentUser = identity.current_user || ' - ';
+            const actualPublicIp = network.public_ip || ' - ';
             const publicIp = this._obfuscateIp(actualPublicIp);
-            const internalIp = systemInfo.internal_ip || ' - ';
+            const internalIp = network.internal_ip || ' - ';
 
             item.classList.add(statusClass);
 
@@ -710,7 +711,7 @@ export const OperatorListMixin = {
         try {
             const operator = this.operators.find(op => op.operator_id === operatorId);
             const operatorName = operator?.name || 'Unknown';
-            const hostname = operator?.system_info?.hostname || 'unknown host';
+            const hostname = operator?.latest_heartbeat_snapshot?.system_identity?.hostname || 'unknown host';
 
             const confirmed = await showConfirmationModal({
                 title: 'Stop Operator',

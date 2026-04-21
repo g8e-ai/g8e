@@ -16,6 +16,7 @@ import re
 
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
+from app.errors import OllamaEmptyResponseError
 from app.llm import get_llm_provider, Role
 from app.llm.structured import parse_structured_response
 from app.utils.agent_persona_loader import get_agent_persona
@@ -130,6 +131,7 @@ class MemoryGenerationService:
             return
 
         provider = get_llm_provider(settings.llm, is_assistant=True)
+
         config = AIGenerationConfigBuilder.build_assistant_settings(
             model=assistant_model,
             max_tokens=None,
@@ -137,8 +139,6 @@ class MemoryGenerationService:
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
         try:
-            from app.errors import OllamaEmptyResponseError
-
             response = await provider.generate_content_assistant(
                 model=assistant_model,
                 contents=contents,
@@ -195,7 +195,7 @@ class MemoryGenerationService:
         conversation_history: list[ConversationHistoryMessage],
         memory: InvestigationMemory,
     ) -> list[types.Content]:
-        contents = []
+        contents: list[types.Content] = []
         
         # Add existing memory context first
         memory_context = (

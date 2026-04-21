@@ -88,7 +88,7 @@ class g8eEngine:
         async for chunk in agent.stream_response(contents, config, model, inputs, ...):
             yield chunk
 
-        await agent.run_with_sse(contents, config, model, inputs, state, event_service, ...)
+        await agent.run_with_sse(inputs, state, event_service, llm_provider, ...)
     """
 
     def __init__(
@@ -112,9 +112,6 @@ class g8eEngine:
 
     async def stream_response(
         self,
-        contents: list[types.Content],
-        generation_config: types.PrimaryLLMSettings,
-        model_name: str,
         inputs: AgentInputs,
         g8ed_event_service: EventService,
         llm_provider: LLMProvider,
@@ -137,6 +134,8 @@ class g8eEngine:
         user_id = inputs.user_id
         g8e_context = inputs.g8e_context
         agent_mode = inputs.agent_mode
+        contents = inputs.contents
+        model_name = inputs.model_to_use
 
         _bound_count = len(g8e_context.bound_operators) if g8e_context else 0
         logger.info(
@@ -167,9 +166,6 @@ class g8eEngine:
                     )
 
                 async for chunk in self._stream_with_tool_loop(
-                    contents=contents,
-                    generation_config=generation_config,
-                    model_name=model_name,
                     inputs=inputs,
                     llm_provider=llm_provider,
                     g8ed_event_service=g8ed_event_service,
@@ -202,9 +198,6 @@ class g8eEngine:
 
     async def run_with_sse(
         self,
-        contents: list[types.Content],
-        generation_config: types.PrimaryLLMSettings,
-        model_name: str,
         inputs: AgentInputs,
         state: AgentStreamState,
         g8ed_event_service: EventService,
@@ -213,6 +206,11 @@ class g8eEngine:
     ) -> None:
         """
         SSE chat path — runs stream_response and delivers events to the browser.
+
+        All request-scoped data (contents, generation_config, model_to_use) is
+        read from ``inputs`` — it is redundant to pass them separately, and
+        doing so creates drift risk where the caller's ``inputs.contents`` and
+        the top-level ``contents`` argument could disagree.
 
         Owns the invocation context lifecycle: starts it before iterating
         stream_response and resets it in finally. This must live here (a normal
@@ -223,24 +221,26 @@ class g8eEngine:
 
         Delegates all SSE translation to agent_sse.deliver_via_sse.
         """
+        if not inputs.g8e_context:
+            raise ValidationError("G8eHttpContext is required for run_with_sse", field="g8e_context", constraint="required")
+        if not inputs.model_to_use:
+            raise ValidationError("inputs.model_to_use is required for run_with_sse", field="model_to_use", constraint="required")
+        if inputs.generation_config is None:
+            raise ValidationError("inputs.generation_config is required for run_with_sse", field="generation_config", constraint="required")
+
         logger.info(
             "[AGENT] run_with_sse: investigation_id=%s case_id=%s model=%s "
             "workflow=%s sentinel_mode=%s contents=%d",
             inputs.investigation_id, inputs.case_id,
-            model_name, inputs.agent_mode,
-            inputs.sentinel_mode, len(contents),
+            inputs.model_to_use, inputs.agent_mode,
+            inputs.sentinel_mode, len(inputs.contents),
         )
-        if not inputs.g8e_context:
-            raise ValidationError("G8eHttpContext is required for run_with_sse", field="g8e_context", constraint="required")
         context_token = self._tool_executor.start_invocation_context(
             g8e_context=inputs.g8e_context,
         )
         try:
             await deliver_via_sse(
                 stream=self.stream_response(
-                    contents=contents,
-                    generation_config=generation_config,
-                    model_name=model_name,
                     inputs=inputs,
                     llm_provider=llm_provider,
                     g8ed_event_service=g8ed_event_service,
@@ -255,9 +255,6 @@ class g8eEngine:
 
     async def _stream_with_tool_loop(
         self,
-        contents: list[types.Content],
-        generation_config: types.PrimaryLLMSettings,
-        model_name: str,
         inputs: AgentInputs,
         llm_provider: LLMProvider,
         g8ed_event_service: EventService,
@@ -275,6 +272,15 @@ class g8eEngine:
 
         Yields CITATIONS and COMPLETE at the end.
         """
+        # Copy contents to avoid mutating inputs.contents (AgentInputs must be immutable)
+        contents = list(inputs.contents)
+        generation_config = inputs.generation_config
+        model_name = inputs.model_to_use
+        
+        # These should be validated by run_with_sse, but add assertions for type safety
+        assert generation_config is not None, "generation_config must not be None"
+        assert model_name is not None, "model_name must not be None"
+        
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
 

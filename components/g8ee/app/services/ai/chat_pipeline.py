@@ -48,8 +48,9 @@ from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
-    AIResponseMetadata,
     ConversationMessageMetadata,
+    ConversationHistoryMessage,
+    EnrichedInvestigationContext,
 )
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
@@ -308,34 +309,59 @@ class ChatPipelineService:
         inputs: AgentInputs,
         state: AgentStreamState,
         user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None = None,
     ) -> None:
-        """Persist AI response to database and trigger memory updates."""
+        """Persist the final AI response and schedule memory update off the response path.
+
+        Memory generation is dispatched as a tracked background task so it cannot
+        block SSE completion or swallow errors silently. If ``task_manager`` is
+        provided, the task is registered (and thus awaitable during cleanup);
+        otherwise it is fired as a detached asyncio task with a done-callback
+        that surfaces failures at WARNING level.
+        """
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, 'investigation_id', 'unknown') if g8e_context else 'None',
             len(state.response_text),
         )
 
-        response_text = state.response_text
-
-        if response_text.strip():
-            await self.investigation_service.add_chat_message(
-                investigation_id=g8e_context.investigation_id or "",
-                content=response_text,
-                sender=MessageSender.AI_PRIMARY,
-                metadata=AIResponseMetadata(
-                    source=EventType.EVENT_SOURCE_AI_PRIMARY,
-                    grounding_metadata=state.grounding_metadata,
-                    token_usage=state.token_usage,
-                ),
-            )
+        persisted = await self.investigation_service.persist_ai_message(
+            investigation_id=g8e_context.investigation_id,
+            text=state.response_text,
+            grounding_metadata=state.grounding_metadata,
+            token_usage=state.token_usage,
+        )
+        if persisted:
             logger.info("[SSE-CHAT] Final AI response persisted to database")
         else:
             logger.info("[SSE-CHAT] Skipping final AI response persistence (empty response_text)")
 
         if inputs.investigation and g8e_context.investigation_id:
-            investigation = inputs.investigation
-            conversation_history = inputs.conversation_history
+            self._dispatch_memory_update(
+                investigation=inputs.investigation,
+                conversation_history=inputs.conversation_history,
+                user_settings=user_settings,
+                task_manager=task_manager,
+            )
+
+    def _dispatch_memory_update(
+        self,
+        investigation: EnrichedInvestigationContext,
+        conversation_history: list[ConversationHistoryMessage],
+        user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None,
+    ) -> None:
+        """Schedule memory generation as a background task so it never blocks persistence.
+
+        Note: ``conversation_history`` is a snapshot from ``_prepare_chat_context``
+        and does NOT include the final AI response row written above — any memory
+        generation that needs the very latest turn must re-read from the DB. The
+        staleness is intentional: we trade a one-turn lag for keeping memory
+        generation off the response path. See ``docs/architecture/ai_agents.md``.
+        """
+        investigation_id = investigation.id
+
+        async def _run_memory_update() -> None:
             try:
                 await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
@@ -344,15 +370,40 @@ class ChatPipelineService:
                 )
                 logger.info(
                     "Background memory update completed for investigation %s",
-                    investigation.id,
-                    extra={"investigation_id": investigation.id, "operation": "memory_update_background_complete"},
+                    investigation_id,
+                    extra={
+                        "investigation_id": investigation_id,
+                        "operation": "memory_update_background_complete",
+                    },
                 )
             except Exception as e:
-                logger.info(
+                logger.warning(
                     "Background memory update failed for investigation %s: %s",
-                    investigation.id, e,
-                    extra={"investigation_id": investigation.id, "error": str(e), "operation": "memory_update_background_failed"},
+                    investigation_id, e,
+                    exc_info=True,
+                    extra={
+                        "investigation_id": investigation_id,
+                        "error": str(e),
+                        "operation": "memory_update_background_failed",
+                    },
                 )
+
+        task = asyncio.create_task(_run_memory_update())
+        if task_manager is not None:
+            task_manager.track_detached(f"memory:{investigation_id}", task)
+        else:
+            def _log_uncaught(t: asyncio.Task[None]) -> None:
+                if t.cancelled():
+                    return
+                exc = t.exception()
+                if exc is not None:
+                    logger.warning(
+                        "Detached memory update task crashed for investigation %s: %s",
+                        investigation_id, exc,
+                        exc_info=exc,
+                    )
+
+            task.add_done_callback(_log_uncaught)
 
     async def run_chat(
         self,
@@ -405,6 +456,7 @@ class ChatPipelineService:
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 user_settings=user_settings,
+                task_manager=_task_manager,
             )
             logger.info("[SSE-CHAT] _run_chat_impl completed successfully")
         except asyncio.CancelledError:
@@ -445,6 +497,7 @@ class ChatPipelineService:
         llm_primary_model: str,
         llm_assistant_model: str,
         user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
         logger.info(
@@ -481,7 +534,11 @@ class ChatPipelineService:
 
         state = AgentStreamState()
 
-        is_assistant_provider = inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+        is_assistant_provider = (
+            inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+            if inputs.triage_result
+            else False
+        )
         llm_provider = get_llm_provider(resolved_settings.llm, is_assistant=is_assistant_provider)
         logger.info("[SSE-CHAT] LLM provider resolved: %s (is_assistant=%s)", type(llm_provider).__name__, is_assistant_provider)
 
@@ -531,21 +588,12 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Running full agent execution")
 
             async def _persist_iteration_text(text: str) -> None:
-                if not g8e_context.investigation_id or not text.strip():
-                    return
-                await self.investigation_service.add_chat_message(
-                    investigation_id=g8e_context.investigation_id,
-                    content=text,
-                    sender=MessageSender.AI_PRIMARY,
-                    metadata=AIResponseMetadata(
-                        source=EventType.EVENT_SOURCE_AI_PRIMARY,
-                    ),
+                await self.investigation_service.persist_ai_message(
+                    investigation_id=inputs.investigation_id,
+                    text=text,
                 )
 
             await self.g8e_agent.run_with_sse(
-                contents=inputs.contents,
-                generation_config=inputs.generation_config,
-                model_name=inputs.model_to_use,
                 inputs=inputs,
                 state=state,
                 g8ed_event_service=self.g8ed_event_service,
@@ -564,6 +612,7 @@ class ChatPipelineService:
             inputs=inputs,
             state=state,
             user_settings=user_settings,
+            task_manager=task_manager,
         )
 
         logger.info(

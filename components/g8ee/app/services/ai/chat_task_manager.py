@@ -60,6 +60,23 @@ class BackgroundTaskManager:
             self._active_tasks[task_id] = task
             logger.info("Tracking task for %s", task_id)
 
+    def track_detached(self, task_id: str, task: asyncio.Task[None]) -> None:
+        """Register a detached background task synchronously.
+
+        This is for fire-and-forget work dispatched from inside a coroutine that
+        must not await (e.g. the response-complete path). The task is stored so
+        ``wait_all`` can await it during shutdown; it is auto-removed by a
+        done-callback once the task finishes. Uses a unique suffix so repeated
+        dispatches for the same logical ID do not collide.
+        """
+        unique_id = f"{task_id}:{id(task)}"
+        self._active_tasks[unique_id] = task
+
+        def _cleanup(_: asyncio.Task[None]) -> None:
+            self._active_tasks.pop(unique_id, None)
+
+        task.add_done_callback(_cleanup)
+
     async def untrack(self, task_id: str) -> None:
         """Remove a task from active tracking."""
         async with self._task_lock:

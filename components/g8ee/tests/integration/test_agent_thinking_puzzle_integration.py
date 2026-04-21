@@ -24,7 +24,7 @@ from app.constants import (
     InvestigationStatus,
 )
 import app.llm.llm_types as types
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
 from tests.fakes.factories import (
@@ -90,23 +90,10 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         bound_operators=[],
     )
     
-    # Create agent context (should be AgentStreamContext)
-    from app.models.settings import G8eeUserSettings, LLMSettings
-    agent_ctx = AgentStreamContext(
-        case_id="case-puzzle-1",
-        investigation_id="inv-puzzle-1",
-        web_session_id="ws-puzzle-1",
-        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-        g8e_context=g8e_context,
-        user_id="user-puzzle-1",
-        investigation=investigation_ctx,
-        request_settings=G8eeUserSettings(llm=LLMSettings()),
-    )
-    
     # Load system prompt
     from app.llm.prompts import load_prompt
     sys_prompt = load_prompt(PromptFile.CORE_IDENTITY)
-    
+
     # Create generation config
     from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
     gen_config = AIGenerationConfigBuilder.build_primary_settings(
@@ -115,23 +102,38 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         system_instructions=sys_prompt,
         tools=[],
     )
-    
+
+    # Create agent inputs (immutable request-scoped data).
+    # contents / generation_config / model_to_use live on AgentInputs now so
+    # run_with_sse does not re-accept them as separate arguments.
+    from app.models.settings import G8eeUserSettings, LLMSettings
+    agent_inputs = AgentInputs(
+        case_id="case-puzzle-1",
+        investigation_id="inv-puzzle-1",
+        web_session_id="ws-puzzle-1",
+        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
+        g8e_context=g8e_context,
+        user_id="user-puzzle-1",
+        investigation=investigation_ctx,
+        request_settings=G8eeUserSettings(llm=LLMSettings()),
+        contents=contents,
+        generation_config=gen_config,
+        model_to_use=model_name,
+    )
+
     # Mock the event service publish method to capture events
     published_events = []
-    
+
     async def mock_publish(event):
         published_events.append(event)
         # Return success without calling real publish
         return "success"
-    
+
     event_service.publish = mock_publish
-    
+
     await agent.run_with_sse(
-        contents=contents,
-        generation_config=gen_config,
-        model_name=model_name,
-        agent_streaming_context=agent_ctx,
-        context=agent_ctx,
+        inputs=agent_inputs,
+        state=AgentStreamState(),
         g8ed_event_service=event_service,
         llm_provider=llm_provider,
     )

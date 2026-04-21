@@ -3,13 +3,13 @@
 
   "_authority": "g8ed (SQLite)",
   "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
-  "_cache_aside": "g8es KV — keyed by g8e:doc:operators:{operator_id}. Cache-aside pattern. SQLite is source of truth.",
+  "_cache_aside": "g8es KV — keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {
-    "_description": "Full operator record as stored in g8ed SQLite and returned by GET /api/internal/operators/:operatorId/status and GET /api/operators/status.",
+    "_description": "Full operator record as stored in g8ed SQLite and returned by GET /api/internal/operators/:id/status and GET /api/operators/status.",
 
     "core_identity": {
-      "operator_id": {
+      "id": {
         "type": "string",
         "required": true,
         "description": "Unique operator identifier (UUID v4)"

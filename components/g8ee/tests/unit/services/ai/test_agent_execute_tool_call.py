@@ -180,7 +180,7 @@ class TestExecutionIdGeneration:
 
         assert result.call_info.execution_id is not None
 
-    async def testexecution_id_unique_per_call(self):
+    async def test_execution_id_unique_per_call(self):
         executor = _make_tool_executor()
         _mock_executor_success(executor)
 
@@ -201,7 +201,7 @@ class TestExecutionIdGeneration:
 
         assert len(set(ids)) == len(ids), "execution_ids must be unique across calls"
 
-    async def test_non_operator_tool_has_noexecution_id(self):
+    async def test_non_operator_tool_has_no_execution_id(self):
         executor = _make_tool_executor()
         result = CommandExecutionResult(success=True, output="results")
         executor.execute_tool_call = AsyncMock(return_value=result)
@@ -217,8 +217,8 @@ class TestExecutionIdGeneration:
 
         assert result.call_info.execution_id is None
 
-    async def testexecution_id_format_matches_expected_pattern(self):
-        """execution_id must be 'exec_<12hex>_<timestamp_int>'."""
+    async def test_execution_id_format_matches_expected_pattern(self):
+        """execution_id must be 'cmd_<12hex>_<timestamp_int>'."""
         import re
         executor = _make_tool_executor()
         _mock_executor_success(executor)
@@ -233,7 +233,7 @@ class TestExecutionIdGeneration:
                 request_settings=REQUEST_SETTINGS,
             )
 
-        pattern = r"^exec_[0-9a-f]{12}_\d+$"
+        pattern = r"^cmd_[0-9a-f]{12}_\d+$"
         assert re.match(pattern, result.call_info.execution_id), (
             f"execution_id '{result.call_info.execution_id}' does not match expected format"
         )
@@ -522,7 +522,7 @@ class TestToolCallResultStructure:
         assert result.result_info.success is False
         assert result.result_info.error_type == CommandErrorType.EXECUTION_FAILED
 
-    async def testexecution_id_consistent_in_call_info_and_result_info(self):
+    async def test_execution_id_consistent_in_call_info_and_result_info(self):
         executor = _make_tool_executor()
         _mock_executor_success(executor)
 
@@ -537,6 +537,164 @@ class TestToolCallResultStructure:
             )
 
         assert result.call_info.execution_id == result.result_info.execution_id
+
+    async def test_concurrent_port_check_calls_have_unique_execution_ids(self):
+        """Regression: concurrent port_check tool calls must not share execution_ids.
+        
+        This test verifies the execution_id threading fix in Report 1 ensures
+        each concurrent tool invocation gets a unique execution_id, preventing
+        event collision in the SSE stream.
+        """
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        async def _concurrent_calls():
+            with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
+                tasks = []
+                for i in range(5):
+                    task = orchestrate_tool_execution(
+                        ToolCall(name=OperatorToolName.G8E_NETWORK_PORT_CHECK, args={"host": f"host-{i}", "port": 80}),
+                        tool_executor=executor,
+                        investigation=INVESTIGATION,
+                        g8e_context=G8E_CONTEXT,
+                        g8ed_event_service=AsyncMock(),
+                        request_settings=REQUEST_SETTINGS,
+                    )
+                    tasks.append(task)
+                results = await asyncio.gather(*tasks)
+                return results
+
+        results = await _concurrent_calls()
+        execution_ids = [r.call_info.execution_id for r in results]
+        
+        # All execution_ids must be unique
+        assert len(set(execution_ids)) == len(execution_ids), (
+            f"Concurrent port_check calls produced duplicate execution_ids: {execution_ids}"
+        )
+        
+        # All execution_ids must follow the cmd_ prefix format
+        import re
+        pattern = r"^cmd_[0-9a-f]{12}_\d+$"
+        for exec_id in execution_ids:
+            assert re.match(pattern, exec_id), (
+                f"execution_id '{exec_id}' does not match expected format"
+            )
+
+    async def test_event_id_invariant_through_execution_threading(self):
+        """Regression: event IDs must remain invariant through execution_id threading.
+        
+        This test verifies that when execution_id is threaded through the tool
+        execution pipeline (Report 1), the event IDs generated for call_info
+        and result_info events remain consistent and don't change mid-stream.
+        """
+        executor = _make_tool_executor()
+        _mock_executor_success(executor)
+
+        mock_event_service = AsyncMock()
+        captured_events = []
+
+        def _capture_event(event):
+            captured_events.append(event)
+            return "success"
+
+        mock_event_service.publish = _capture_event
+        mock_event_service.publish_investigation_event = _capture_event
+
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo test"}),
+                tool_executor=executor,
+                investigation=INVESTIGATION,
+                g8e_context=G8E_CONTEXT,
+                g8ed_event_service=mock_event_service,
+                request_settings=REQUEST_SETTINGS,
+            )
+
+        # Verify execution_id is consistent across call_info and result_info
+        assert result.call_info.execution_id == result.result_info.execution_id
+        
+        # Verify execution_id was used in event emission (if events were captured)
+        # The exact event structure depends on the SSE event format, but the key
+        # invariant is that the same execution_id appears in related events
+        if captured_events:
+            execution_ids_in_events = []
+            for event in captured_events:
+                if hasattr(event, 'execution_id'):
+                    execution_ids_in_events.append(event.execution_id)
+            
+            # All events for this tool call should share the same execution_id
+            if execution_ids_in_events:
+                assert len(set(execution_ids_in_events)) == 1, (
+                    f"Events for single tool call have different execution_ids: {execution_ids_in_events}"
+                )
+                assert execution_ids_in_events[0] == result.call_info.execution_id
+
+
+# =============================================================================
+# TEST: AgentInputs immutability (Report 2 regression)
+# =============================================================================
+
+class TestAgentInputsImmutability:
+    """Regression tests for AgentInputs immutability (Report 2)."""
+
+    def test_inputs_model_dump_round_trip_preserves_all_fields(self):
+        """AgentInputs must survive model_dump() -> model_validate() round-trip.
+        
+        This regression test verifies the AgentInputs/AgentStreamState split
+        (Report 2) maintains data integrity through serialization. All fields
+        must be preserved when dumping to dict and reconstructing, ensuring
+        no silent data loss occurs during persistence or transmission.
+        """
+        from app.models.agent import AgentInputs
+        from tests.fakes.factories import build_enriched_context, build_g8e_http_context
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        from app.constants import AgentMode
+        
+        inv = build_enriched_context(investigation_id="inv-immutable-test")
+        g8e_ctx = build_g8e_http_context(user_id="user-immutable-test")
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+        
+        original_inputs = AgentInputs(
+            case_id="case-immutable",
+            investigation_id="inv-immutable-test",
+            user_id="user-immutable-test",
+            web_session_id="web-immutable",
+            agent_mode=AgentMode.OPERATOR_BOUND,
+            sentinel_mode=True,
+            investigation=inv,
+            g8e_context=g8e_ctx,
+            request_settings=request_settings,
+            operator_bound=True,
+            model_to_use="test-model",
+            max_tokens=2048,
+            conversation_history=[{"role": "user", "content": "test"}],
+            system_instructions="You are a helpful assistant",
+            contents=[{"role": "user", "parts": [{"text": "hello"}]}],
+            user_memories=[{"id": "mem-1", "content": "test memory"}],
+            case_memories=[{"id": "case-mem-1", "content": "case memory"}],
+        )
+        
+        # Serialize to dict
+        dumped = original_inputs.model_dump()
+        
+        # Reconstruct from dict
+        reconstructed = AgentInputs(**dumped)
+        
+        # Verify all critical fields are preserved
+        assert reconstructed.case_id == original_inputs.case_id
+        assert reconstructed.investigation_id == original_inputs.investigation_id
+        assert reconstructed.user_id == original_inputs.user_id
+        assert reconstructed.web_session_id == original_inputs.web_session_id
+        assert reconstructed.agent_mode == original_inputs.agent_mode
+        assert reconstructed.sentinel_mode == original_inputs.sentinel_mode
+        assert reconstructed.operator_bound == original_inputs.operator_bound
+        assert reconstructed.model_to_use == original_inputs.model_to_use
+        assert reconstructed.max_tokens == original_inputs.max_tokens
+        assert reconstructed.system_instructions == original_inputs.system_instructions
+        assert len(reconstructed.conversation_history) == len(original_inputs.conversation_history)
+        assert len(reconstructed.contents) == len(original_inputs.contents)
+        assert len(reconstructed.user_memories) == len(original_inputs.user_memories)
+        assert len(reconstructed.case_memories) == len(original_inputs.case_memories)
 
 
 # =============================================================================

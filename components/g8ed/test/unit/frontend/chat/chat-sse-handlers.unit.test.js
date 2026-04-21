@@ -729,249 +729,6 @@ describe('ChatComponent — addRestoredMessage [FRONTEND - jsdom]', () => {
     });
 });
 
-describe('ChatComponent — handleSearchWebIndicator / handleSearchWebCompleted / handleSearchWebFailed [FRONTEND - jsdom]', () => {
-    let ChatComponent;
-    let eventBus;
-    let chat;
-    let terminalSpy;
-    let authState;
-    let serviceClient;
-
-    const EXECUTION_ID = 'exec-search-001';
-
-    beforeEach(async () => {
-        buildDOM();
-
-        authState = new MockAuthState();
-        authState.setAuthenticated({ id: WEB_SESSION_ID });
-        authState.loading = false;
-        authState.getWebSessionModel = () => ({ id: WEB_SESSION_ID });
-        authState.getWebSessionId = () => WEB_SESSION_ID;
-
-        serviceClient = new MockServiceClient();
-        installGlobals(authState, serviceClient);
-
-        eventBus = new MockEventBus();
-        ({ ChatComponent } = await import('@g8ed/public/js/components/chat.js'));
-
-        chat = new ChatComponent(eventBus);
-        terminalSpy = makeAnchoredTerminalSpy();
-        chat.anchoredTerminal = terminalSpy;
-        chat.casesManager = makeCasesManagerStub();
-        chat.currentUser = { id: WEB_SESSION_ID };
-        chat.currentWebSessionId = WEB_SESSION_ID;
-    });
-
-    afterEach(() => {
-        vi.clearAllMocks();
-        eventBus.removeAllListeners();
-        cleanupGlobals();
-        document.body.innerHTML = '';
-    });
-
-    it('appends an activity indicator with the correct execution_id-based id', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            query: 'CVE-2025-1234',
-        });
-
-        expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
-        const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
-        expect(opts.id).toBe(`search-web-${EXECUTION_ID}`);
-    });
-
-    it('passes the query as detail to appendActivityIndicator', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            query: 'exploit mitigation',
-        });
-
-        const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
-        expect(opts.detail).toBe('exploit mitigation');
-    });
-
-    it('tracks the indicator id keyed by execution_id', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            query: 'test query',
-        });
-
-        expect(chat._searchWebIndicators.get(EXECUTION_ID)).toBe(`search-web-${EXECUTION_ID}`);
-    });
-
-    it('does not append indicator when execution_id is absent', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            query: 'test query',
-        });
-
-        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
-    });
-
-    it('does not append indicator when query is absent (model violation)', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
-    });
-
-    it('handleSearchWebCompleted calls completeActivityIndicator with the tracked id', () => {
-        chat._searchWebIndicators = new Map([[EXECUTION_ID, `search-web-${EXECUTION_ID}`]]);
-
-        chat.handleSearchWebCompleted({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledOnce();
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`search-web-${EXECUTION_ID}`);
-    });
-
-    it('handleSearchWebCompleted removes the execution_id from the tracking map', () => {
-        chat._searchWebIndicators = new Map([[EXECUTION_ID, `search-web-${EXECUTION_ID}`]]);
-
-        chat.handleSearchWebCompleted({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(chat._searchWebIndicators.has(EXECUTION_ID)).toBe(false);
-    });
-
-    it('handleSearchWebFailed calls completeActivityIndicator with the tracked id', () => {
-        chat._searchWebIndicators = new Map([[EXECUTION_ID, `search-web-${EXECUTION_ID}`]]);
-
-        chat.handleSearchWebFailed({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledOnce();
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`search-web-${EXECUTION_ID}`);
-    });
-
-    it('handleSearchWebFailed removes the execution_id from the tracking map', () => {
-        chat._searchWebIndicators = new Map([[EXECUTION_ID, `search-web-${EXECUTION_ID}`]]);
-
-        chat.handleSearchWebFailed({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(chat._searchWebIndicators.has(EXECUTION_ID)).toBe(false);
-    });
-
-    it('handleSearchWebCompleted is a no-op when no indicator was registered for the execution_id', () => {
-        chat.handleSearchWebCompleted({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.completeActivityIndicator).not.toHaveBeenCalled();
-    });
-
-    it('rejects REQUESTED event when investigation_id mismatches', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: 'wrong-inv',
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
-    });
-
-    it('rejects COMPLETED event when investigation_id mismatches', () => {
-        chat._searchWebIndicators = new Map([[EXECUTION_ID, `search-web-${EXECUTION_ID}`]]);
-
-        chat.handleSearchWebCompleted({
-            investigation_id: 'wrong-inv',
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.completeActivityIndicator).not.toHaveBeenCalled();
-        expect(chat._searchWebIndicators.has(EXECUTION_ID)).toBe(true);
-    });
-
-    it('multiple concurrent search indicators are tracked independently', () => {
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: 'exec-a',
-            query: 'query A',
-        });
-        chat.handleSearchWebIndicator({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: 'exec-b',
-            query: 'query B',
-        });
-
-        chat.handleSearchWebCompleted({
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: 'exec-a',
-        });
-
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledOnce();
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith('search-web-exec-a');
-        expect(chat._searchWebIndicators.has('exec-b')).toBe(true);
-    });
-
-    it('G8E_SEARCH_WEB event bus wiring: REQUESTED → COMPLETED completes the indicator', () => {
-        chat.setupSSEListeners();
-
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            query: 'test query',
-        });
-
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`search-web-${EXECUTION_ID}`);
-    });
-
-    it('G8E_SEARCH_WEB event bus wiring: REQUESTED → FAILED completes the indicator', () => {
-        chat.setupSSEListeners();
-
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            query: 'test query',
-        });
-
-        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, {
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-        });
-
-        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`search-web-${EXECUTION_ID}`);
-    });
-});
 
 describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
     let ChatComponent;
@@ -1057,7 +814,6 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
     });
 
     it('clears activity indicators and tracking maps', () => {
-        chat._searchWebIndicators = new Map([['exec-1', 'search-web-exec-1']]);
         chat._portCheckIndicators = new Map([['exec-2', 'port-check-exec-2']]);
         chat._hasResetAutoScrollForSession = new Set([WEB_SESSION_ID]);
 
@@ -1070,7 +826,6 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         });
 
         expect(terminalSpy.clearActivityIndicators).toHaveBeenCalledOnce();
-        expect(chat._searchWebIndicators.size).toBe(0);
         expect(chat._portCheckIndicators.size).toBe(0);
         expect(chat._hasResetAutoScrollForSession.has(WEB_SESSION_ID)).toBe(false);
     });
@@ -1360,7 +1115,7 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
         expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
     });
 
-    it('Generic tool-call indicator is suppressed for g8e_web_search (uses dedicated search-web sidecar)', () => {
+    it('Generic tool-call indicator IS created for g8e_web_search (sidecars removed; generic path owns the indicator)', () => {
         chat.setupSSEListeners();
 
         eventBus.emit(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, {
@@ -1368,9 +1123,14 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
             tool_name: 'g8e_web_search',
+            display_label: 'Searching the web',
+            display_detail: 'CVE-2025-1234',
         });
 
-        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
+        expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
+        const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
+        expect(opts.id).toBe(`tool-${EXECUTION_ID}`);
+        expect(opts.detail).toBe('CVE-2025-1234');
     });
 });
 

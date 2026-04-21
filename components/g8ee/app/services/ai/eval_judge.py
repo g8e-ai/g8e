@@ -37,6 +37,7 @@ from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettin
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
+from app.errors import OllamaEmptyResponseError
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ class EvalGrade(BaseModel):
         return v
 
 
-_JUDGE_RESPONSE_SCHEMA = {
+_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "score": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -168,7 +169,7 @@ class EvalJudge:
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,
             system_instructions="",
-            response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
+            response_format=ResponseFormat.from_pydantic_schema(
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",
             ),
@@ -211,8 +212,6 @@ class EvalJudge:
         settings: LiteLLMSettings,
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
-        from app.errors import OllamaEmptyResponseError
-
         if not self._model:
             raise EvalJudgeError("Model is not set")
         try:
@@ -221,7 +220,7 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
-            if response is None or response.text is None:
+            if response.text is None:
                 raise EvalJudgeError("Judge LLM returned an empty response")
         except OllamaEmptyResponseError as exc:
             raise EvalJudgeError(f"Judge LLM returned an empty response: {exc}") from exc

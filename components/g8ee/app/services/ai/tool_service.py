@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar, Token as ContextVarToken
-from typing import Any
+from typing import Any, Awaitable
 from app.services.operator.command_service import OperatorCommandService
 
 import app.llm.llm_types as types
@@ -112,7 +112,7 @@ class AIToolService:
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
-        self._tool_handlers: dict[str, Callable[..., ToolResult]] = {}
+        self._tool_handlers: dict[str, Callable[..., Awaitable[ToolResult]]] = {}
 
         for spec in TOOL_SPECS:
             if spec.requires_web_search and self.web_search_provider is None:
@@ -765,7 +765,7 @@ class AIToolService:
             blacklisted_substrings = self._blacklist_validator.get_forbidden_substrings()
             blacklisted_patterns = self._blacklist_validator.get_forbidden_patterns()
 
-        parts = []
+        parts: list[str] = []
         if not whitelisting_enabled and not blacklisting_enabled:
             parts.append("No command constraints are currently enforced. All commands are permitted.")
         else:

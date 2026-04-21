@@ -384,6 +384,15 @@ class OperatorDataServiceProtocol(Protocol):
         """Log an approval lifecycle event in the operator activity log."""
         ...
 
+    async def bind_operators(
+        self,
+        operator_ids: list[str],
+        web_session_id: str,
+        context: G8eHttpContext,
+    ) -> bool:
+        """Bind operators to a web session."""
+        ...
+
 
 @runtime_checkable
 class MemoryDataServiceProtocol(Protocol):

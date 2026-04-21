@@ -17,6 +17,7 @@ from typing import TypeVar
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
+from app.errors import OllamaEmptyResponseError
 from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.llm import get_llm_provider, Role
 from app.llm.structured import parse_structured_response
@@ -35,6 +36,113 @@ from app.utils.agent_persona_loader import get_agent_persona
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=G8eBaseModel)
+
+
+# Warden template scaffolding - these hold the context-specific structure
+# that is formatted at runtime, separate from the persona voice in agents.json
+
+WARDEN_COMMAND_RISK_TEMPLATE = """\
+
+<command>
+{command}
+</command>
+
+<justification>
+{justification}
+</justification>
+
+<working_directory>
+{working_dir}
+</working_directory>
+
+<output_format>
+Respond with ONLY a JSON object matching this exact schema, with no prose, no markdown fences, and no additional fields:
+{{"risk_level": "LOW"}}  OR  {{"risk_level": "MEDIUM"}}  OR  {{"risk_level": "HIGH"}}
+</output_format>
+"""
+
+WARDEN_ERROR_TEMPLATE = """\
+
+<failed_command>
+{command}
+</failed_command>
+
+<exit_code>
+{exit_code}
+</exit_code>
+
+<stdout>
+{stdout}
+</stdout>
+
+<stderr>
+{stderr}
+</stderr>
+
+<context>
+Retry Count: {retry_count}
+Working Directory: {working_dir}
+</context>
+
+<auto_fixable_errors>
+- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
+- Permission denied on a LOCAL project file (chmod, chown — NOT SSH auth): chmod / chown scoped to project directory
+- Syntax errors in commands (wrong flags, typos): corrected command
+- Missing directories (No such file or directory for expected paths): mkdir -p
+- Port conflicts (Address already in use): kill process on port or use different port
+</auto_fixable_errors>
+
+<escalate_to_human>
+- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
+- Invalid API keys or credentials: MUST escalate
+- System-level failures: kernel errors, hardware issues
+- Data corruption: file system errors, database corruption
+- Ambiguous errors: multiple possible root causes
+- Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
+- Configuration issues requiring human access: environment setup, server-side config
+</escalate_to_human>
+
+Based on the information above, analyze the failure and fill in ALL response fields.
+"""
+
+WARDEN_FILE_RISK_TEMPLATE = """\
+
+<operation>
+{operation}
+</operation>
+
+<file_path>
+{file_path}
+</file_path>
+
+<content_preview>
+{content_preview}
+</content_preview>
+
+<context>
+Git Status: {git_status}
+Backup Available: {backup_available}
+</context>
+
+<system_file_patterns>
+HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
+HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries
+</system_file_patterns>
+
+<risk_levels>
+LOW: Build artifacts, temp files (/tmp), generated output
+MEDIUM: Project source files, config files (package.json, requirements.txt)
+HIGH: System files, irreversible deletes, dirty git + destructive operation
+</risk_levels>
+
+<blocking_conditions>
+- System file path without explicit override
+- Delete operation with no backup available
+- Dirty git state combined with a destructive operation
+</blocking_conditions>
+
+Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.
+"""
 
 
 class AIResponseAnalyzer:
@@ -85,9 +193,7 @@ class AIResponseAnalyzer:
 
             logger.info("%s completed", log_context)
             return analysis
-
         except Exception as e:
-            from app.errors import OllamaEmptyResponseError
             if isinstance(e, OllamaEmptyResponseError):
                 logger.error("%s: LLM returned no text content: %s", log_context, e)
                 return fallback_no_response()
@@ -106,11 +212,12 @@ class AIResponseAnalyzer:
         resolved_settings = settings
 
         command_risk_persona = get_agent_persona("warden_command_risk")
-        prompt = command_risk_persona.persona.format(
+        template = WARDEN_COMMAND_RISK_TEMPLATE.format(
             command=command,
             justification=justification,
             working_dir=working_dir
         )
+        prompt = f"{command_risk_persona.persona}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -158,7 +265,7 @@ class AIResponseAnalyzer:
             )
 
         error_persona = get_agent_persona("warden_error")
-        prompt = error_persona.persona.format(
+        template = WARDEN_ERROR_TEMPLATE.format(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -166,6 +273,7 @@ class AIResponseAnalyzer:
             retry_count=retry_count,
             working_dir=working_dir
         )
+        prompt = f"{error_persona.persona}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -228,13 +336,14 @@ class AIResponseAnalyzer:
         content_preview = content[:500] if content else "N/A"
 
         file_risk_persona = get_agent_persona("warden_file_risk")
-        prompt = file_risk_persona.persona.format(
+        template = WARDEN_FILE_RISK_TEMPLATE.format(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,
             git_status=git_status,
             backup_available=backup_available
         )
+        prompt = f"{file_risk_persona.persona}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 

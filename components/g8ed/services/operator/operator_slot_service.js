@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus, HistoryEventType, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS, DEFAULT_SLOT_COST } from '../../constants/operator.js';
 import { OperatorDocument, HistoryEntry, SystemInfo, CertInfo, OperatorRefreshKeyResponse, OperatorSlotCreationResponse } from '../../models/operator_model.js';
@@ -54,18 +55,18 @@ export class OperatorSlotService {
                     namePrefix: 'operator',
                     isG8eNode: assignG8eNode,
                 });
-                if (creationResponse.success && creationResponse.operator_id) {
-                    createdSlotIds.push(creationResponse.operator_id);
+                if (creationResponse.success && creationResponse.id) {
+                    createdSlotIds.push(creationResponse.id);
                 }
             }
         }
 
-        const allOperatorIds = liveOperators.map(op => op.operator_id).concat(createdSlotIds);
+        const allOperatorIds = liveOperators.map(op => op.id).concat(createdSlotIds);
         return allOperatorIds;
     }
 
-    async refreshOperatorApiKey(operatorId, userId, broadcastFn) {
-        const oldOperator = await this.operatorDataService.getOperator(operatorId);
+    async refreshOperatorApiKey(id, userId, broadcastFn) {
+        const oldOperator = await this.operatorDataService.getOperator(id);
         if (!oldOperator) return OperatorRefreshKeyResponse.forFailure(DeviceLinkError.OPERATOR_NOT_FOUND);
         if (oldOperator.user_id !== userId) return OperatorRefreshKeyResponse.forFailure('Unauthorized');
 
@@ -81,7 +82,7 @@ export class OperatorSlotService {
         }
 
         if (oldOperator.operator_cert_serial && this.certificateService) {
-            await this.certificateService.revokeCertificate(oldOperator.operator_cert_serial, 'api_key_refresh', operatorId).catch(() => {});
+            await this.certificateService.revokeCertificate(oldOperator.operator_cert_serial, 'api_key_refresh', id).catch(() => {});
         }
 
         const terminateData = {
@@ -92,22 +93,22 @@ export class OperatorSlotService {
             bound_web_session_id: null,
         };
 
-        await this.operatorDataService.updateOperator(operatorId, terminateData);
+        await this.operatorDataService.updateOperator(id, terminateData);
 
         const slotNumber = oldOperator.slot_number;
-        const newOperatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const newApiKey = this.generateOperatorApiKey(newOperatorId);
+        const newId = uuidv4();
+        const newApiKey = this.generateOperatorApiKey(newId);
 
         let newCertInfo = CertInfo.empty();
         if (this.certificateService) {
             try {
-                const certData = await this.certificateService.generateOperatorCertificate(newOperatorId, userId, oldOperator.organization_id);
+                const certData = await this.certificateService.generateOperatorCertificate(newId, userId, oldOperator.organization_id);
                 newCertInfo = CertInfo.fromCertData(certData);
             } catch (e) {}
         }
 
         const newOperatorDoc = OperatorDocument.forRefresh({
-            newOperatorId,
+            id: newId,
             userId,
             organizationId: oldOperator.organization_id,
             name: oldOperator.name || `operator-${slotNumber}`,
@@ -118,17 +119,17 @@ export class OperatorSlotService {
             slotCost: oldOperator.slot_cost ?? 1,
             newApiKey,
             certInfo: newCertInfo,
-            oldOperatorId: operatorId,
+            oldId: id,
             oldCertSerial: oldOperator.operator_cert_serial
         });
 
-        await this.operatorDataService.createOperator(newOperatorId, newOperatorDoc);
+        await this.operatorDataService.createOperator(newId, newOperatorDoc);
 
         if (this.apiKeyService) {
             await this.apiKeyService.issueKey(newApiKey, {
                 user_id: userId,
                 organization_id: oldOperator.organization_id,
-                operator_id: newOperatorId,
+                operator_id: newId,
                 client_name: ApiKeyClientName.OPERATOR,
                 permissions: [ApiKeyPermission.OPERATOR_BOOTSTRAP, ApiKeyPermission.OPERATOR_HEARTBEAT, ApiKeyPermission.OPERATOR_DOWNLOAD],
                 status: ApiKeyStatus.ACTIVE
@@ -137,26 +138,26 @@ export class OperatorSlotService {
 
         await broadcastFn(userId);
 
-        return OperatorRefreshKeyResponse.forSuccess(newApiKey, newOperatorId);
+        return OperatorRefreshKeyResponse.forSuccess(newApiKey, newId);
     }
 
     async createOperatorSlot(params) {
         const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isG8eNode } = params;
-        const operatorId = `${userId}_operator_${slotNumber}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const apiKey = this.generateOperatorApiKey(operatorId);
+        const id = uuidv4();
+        const apiKey = this.generateOperatorApiKey(id);
 
         let certInfo = CertInfo.empty();
         if (this.certificateService) {
             try {
-                const certData = await this.certificateService.generateOperatorCertificate(operatorId, userId, organizationId);
+                const certData = await this.certificateService.generateOperatorCertificate(id, userId, organizationId);
                 certInfo = CertInfo.fromCertData(certData);
             } catch (certError) {
-                logger.warn('[OPERATOR-SLOT] Certificate generation failed at slot creation', { operator_id: operatorId, error: certError.message });
+                logger.warn('[OPERATOR-SLOT] Certificate generation failed at slot creation', { id, error: certError.message });
             }
         }
 
         const operatorDoc = OperatorDocument.forSlot({
-            operator_id: operatorId,
+            id,
             userId,
             organizationId,
             namePrefix,
@@ -168,9 +169,9 @@ export class OperatorSlotService {
             certInfo
         });
 
-        const result = await this.operatorDataService.createOperator(operatorId, operatorDoc);
+        const result = await this.operatorDataService.createOperator(id, operatorDoc);
         if (!result.success) {
-            logger.error('[OPERATOR-SLOT] Failed to create operator slot', { operator_id: operatorId });
+            logger.error('[OPERATOR-SLOT] Failed to create operator slot', { id });
             return OperatorSlotCreationResponse.forFailure('Failed to create operator document');
         }
 
@@ -178,29 +179,29 @@ export class OperatorSlotService {
             await this.apiKeyService.issueKey(apiKey, {
                 user_id: userId,
                 organization_id: organizationId,
-                operator_id: operatorId,
+                operator_id: id,
                 client_name: ApiKeyClientName.OPERATOR,
                 permissions: [ApiKeyPermission.OPERATOR_BOOTSTRAP, ApiKeyPermission.OPERATOR_HEARTBEAT, ApiKeyPermission.OPERATOR_DOWNLOAD],
                 status: ApiKeyStatus.ACTIVE
             }).catch(err => {
-                logger.error('[OPERATOR-SLOT] Failed to issue API key for slot', { operator_id: operatorId, error: err.message });
+                logger.error('[OPERATOR-SLOT] Failed to issue API key for slot', { id, error: err.message });
             });
         }
 
-        return OperatorSlotCreationResponse.forSuccess(operatorId);
+        return OperatorSlotCreationResponse.forSuccess(id);
     }
 
     /**
      * Claim an operator slot for an active session.
      * Authority for transitioning an AVAILABLE slot to ACTIVE.
      */
-    async claimSlot(operatorId, { operator_session_id, bound_web_session_id, system_info, operator_type, status }) {
+    async claimSlot(id, { operator_session_id, bound_web_session_id, system_info, operator_type, status }) {
         const ts = now();
         const info = system_info instanceof SystemInfo
             ? system_info
             : SystemInfo.parse(system_info || {});
 
-        const operator = await this.operatorDataService.getOperator(operatorId);
+        const operator = await this.operatorDataService.getOperator(id);
         
         const updateData = {
             status: status || OperatorStatus.ACTIVE,
@@ -235,14 +236,14 @@ export class OperatorSlotService {
         });
 
         // Atomic update to both state and history
-        return await this.operatorDataService.updateOperator(operatorId, {
+        return await this.operatorDataService.updateOperator(id, {
             ...updateData,
             $push: { history_trail: historyEntry.forDB() }
         });
     }
 
-    generateOperatorApiKey(operatorId) {
-        const operatorSuffix = operatorId.split('_').pop().substring(0, 8);
+    generateOperatorApiKey(id) {
+        const operatorSuffix = id.split('-').pop().substring(0, 8);
         const randomToken = crypto.randomBytes(32).toString('hex');
         return `${API_KEY_PREFIX}${operatorSuffix}_${randomToken}`;
     }

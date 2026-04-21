@@ -1991,3 +1991,45 @@ class TestTribunalEmitter:
                 await emitter.emit(event_type, payload)
 
 
+class TestDefaultConfigCoversAllMembers:
+    """Regression test: default llm_command_gen_passes=5 must cover all five Tribunal members."""
+
+    def test_default_pass_count_covers_all_members(self):
+        """At default config (5 passes), all five Tribunal members must be assigned."""
+        from app.models.settings import LLMSettings
+
+        default_settings = LLMSettings()
+        default_passes = default_settings.llm_command_gen_passes
+
+        # Get the member assigned to each pass index at default config
+        members_for_passes = [_member_for_pass(i) for i in range(default_passes)]
+
+        # Verify we have exactly 5 passes (the new default)
+        assert default_passes == 5, f"Default llm_command_gen_passes should be 5, got {default_passes}"
+
+        # Verify all five distinct members are assigned
+        expected_members = {
+            TribunalMember.AXIOM,
+            TribunalMember.CONCORD,
+            TribunalMember.VARIANCE,
+            TribunalMember.PRAGMA,
+            TribunalMember.NEMESIS,
+        }
+        actual_members = set(members_for_passes)
+
+        assert actual_members == expected_members, (
+            f"Default config should assign all five Tribunal members. "
+            f"Expected {expected_members}, got {actual_members}"
+        )
+
+        # Verify the cycling order matches expectations (Axiom, Concord, Variance, Pragma, Nemesis)
+        expected_order = [
+            TribunalMember.AXIOM,
+            TribunalMember.CONCORD,
+            TribunalMember.VARIANCE,
+            TribunalMember.PRAGMA,
+            TribunalMember.NEMESIS,
+        ]
+        assert members_for_passes == expected_order, (
+            f"Member cycling order should be {expected_order}, got {members_for_passes}"
+        )

@@ -61,9 +61,16 @@ def make_agent_inputs(
     investigation=None,
     g8e_context=None,
     request_settings=None,
+    model_to_use: str = "test-model",
+    generation_config=None,
     **kwargs,
 ) -> AgentInputs:
-    """Build an AgentInputs (immutable request-scoped inputs) with sensible test defaults."""
+    """Build an AgentInputs (immutable request-scoped inputs) with sensible test defaults.
+
+    ``model_to_use`` and ``generation_config`` default to values that satisfy
+    ``run_with_sse``'s field-validation (the method now reads these from inputs
+    directly rather than accepting them as separate arguments).
+    """
     from tests.fakes.factories import build_enriched_context
 
     if investigation is None:
@@ -83,7 +90,52 @@ def make_agent_inputs(
     if request_settings is None:
         request_settings = G8eeUserSettings(llm=LLMSettings())
 
+    if generation_config is None:
+        generation_config = make_gen_config(
+            settings=request_settings,
+            agent_mode=agent_mode,
+        )
+
     return AgentInputs(
+        case_id=case_id,
+        investigation_id=investigation_id,
+        web_session_id=web_session_id,
+        user_id=user_id,
+        agent_mode=agent_mode,
+        sentinel_mode=sentinel_mode,
+        investigation=investigation,
+        g8e_context=g8e_context,
+        request_settings=request_settings,
+        model_to_use=model_to_use,
+        generation_config=generation_config,
+        **kwargs,
+    )
+
+
+def make_agent_stream_state() -> AgentStreamState:
+    """Build a fresh, empty AgentStreamState."""
+    return AgentStreamState()
+
+
+def make_agent_run_args(
+    case_id: str = "case-test-001",
+    investigation_id: str = "inv-test-001",
+    web_session_id: str = "web-test-001",
+    user_id: str = "user-test-001",
+    agent_mode: AgentMode = AgentMode.OPERATOR_BOUND,
+    sentinel_mode: bool = True,
+    investigation=None,
+    g8e_context=None,
+    request_settings=None,
+    **kwargs,
+) -> tuple[AgentInputs, AgentStreamState]:
+    """Build (inputs, state) pair for agent run tests.
+
+    This helper enforces the pairing convention: inputs are immutable request-scoped
+    data, state is the mutable sink populated during the run. Using this helper
+    prevents drift in test code between the two objects.
+    """
+    inputs = make_agent_inputs(
         case_id=case_id,
         investigation_id=investigation_id,
         web_session_id=web_session_id,
@@ -95,11 +147,8 @@ def make_agent_inputs(
         request_settings=request_settings,
         **kwargs,
     )
-
-
-def make_agent_stream_state() -> AgentStreamState:
-    """Build a fresh, empty AgentStreamState."""
-    return AgentStreamState()
+    state = make_agent_stream_state()
+    return inputs, state
 
 
 def make_g8e_agent(

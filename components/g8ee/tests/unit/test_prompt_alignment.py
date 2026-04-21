@@ -67,11 +67,7 @@ _TOOLS_DIR: Path = _PROMPTS_DATA_DIR / "tools"
 # persona — this allowlist is the opt-out for personas whose migration to
 # template-rendered scaffolding has not yet happened. Shrinking this set is
 # the goal; do not grow it without a documented owner.
-_PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset({
-    "warden_command_risk",
-    "warden_error",
-    "warden_file_risk",
-})
+_PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset()
 
 
 # Personas whose persona text must be pure voice — no ``{...}``
@@ -118,20 +114,12 @@ class TestPersonaPlaceholderHygiene:
         )
 
     def test_placeholder_allowlist_is_shrinking(self) -> None:
-        """Every allowlisted persona must still actually carry a placeholder.
-
-        If an allowlist entry no longer needs the opt-out (its scaffolding
-        has been moved into a template), remove it from the allowlist so
-        this test continues to push the frontier forward.
-        """
-        stale: list[str] = []
-        for agent_id in _PERSONA_PLACEHOLDER_ALLOWLIST:
-            persona = get_agent_persona(agent_id)
-            if not _PLACEHOLDER_RE.search(persona.persona):
-                stale.append(agent_id)
-        assert not stale, (
-            f"Allowlisted personas no longer carry placeholders and can "
-            f"leave _PERSONA_PLACEHOLDER_ALLOWLIST: {sorted(stale)}"
+        """The allowlist must be empty - all scaffolding must be in consumer-side templates."""
+        assert len(_PERSONA_PLACEHOLDER_ALLOWLIST) == 0, (
+            f"Persona placeholder allowlist must be empty. "
+            f"Move scaffolding to consumer-side templates and strip "
+            f"placeholders from persona text. "
+            f"Current entries: {sorted(_PERSONA_PLACEHOLDER_ALLOWLIST)}"
         )
 
     def test_allowlist_and_pure_voice_sets_are_disjoint(self) -> None:

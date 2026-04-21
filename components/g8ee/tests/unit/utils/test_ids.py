@@ -42,6 +42,7 @@ from app.constants import (
     INTENT_EXECUTION_ID_PREFIX,
 )
 from app.utils.ids import (
+    COMMAND_EXECUTION_ID_PATTERN,
     generate_approval_id,
     generate_command_execution_id,
     generate_execution_id,
@@ -53,6 +54,7 @@ from app.utils.ids import (
     generate_iam_verify_execution_id,
     generate_intent_approval_id,
     generate_intent_execution_id,
+    is_valid_command_execution_id,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -507,3 +509,42 @@ class TestIdDistinctness:
         assert single.startswith("revoke_")
         assert intent_specific.startswith("iam_revoke_")
         assert single != intent_specific
+
+
+class TestCommandExecutionIdPatternInvariant:
+    """``generate_command_execution_id`` must emit IDs that match
+    ``COMMAND_EXECUTION_ID_PATTERN`` — the pattern is the canonical wire
+    format; drift in the generator must fail loudly rather than silently."""
+
+    def test_generator_output_matches_canonical_pattern(self):
+        for _ in range(50):
+            assert COMMAND_EXECUTION_ID_PATTERN.match(generate_command_execution_id())
+
+    def test_validator_accepts_fresh_generator_output(self):
+        assert is_valid_command_execution_id(generate_command_execution_id())
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            "",  # empty
+            "cmd",  # prefix only
+            "cmd_abc_1700000000",  # hex too short
+            "cmd_0123456789AB_1700000000",  # uppercase hex not allowed
+            "cmd_0123456789ab_17",  # timestamp too short
+            "cmd_0123456789ab_170000000000",  # timestamp too long (12 digits)
+            "exec_0123456789ab_1700000000",  # wrong prefix
+            "cmd_0123456789abz_1700000000",  # non-hex char
+            "cmd_0123456789ab_1700000000_extra",  # trailing segment
+            " cmd_0123456789ab_1700000000",  # leading whitespace
+            "cmd_0123456789ab_1700000000 ",  # trailing whitespace
+        ],
+    )
+    def test_validator_rejects_malformed_values(self, bad_value: str):
+        assert not is_valid_command_execution_id(bad_value), (
+            f"Validator accepted malformed value: {bad_value!r}"
+        )
+
+    def test_validator_rejects_non_string_inputs(self):
+        assert not is_valid_command_execution_id(None)  # type: ignore[arg-type]
+        assert not is_valid_command_execution_id(12345)  # type: ignore[arg-type]
+        assert not is_valid_command_execution_id(["cmd_0123456789ab_1700000000"])  # type: ignore[arg-type]

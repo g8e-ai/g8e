@@ -81,7 +81,7 @@ from app.constants.settings import (
     AttachmentType,
 )
 from app.models.agent import (
-    AgentStreamContext,
+    AgentInputs,
     OperatorContext,
 )
 
@@ -1631,7 +1631,7 @@ class TestAgentModeValidation:
         inv = build_enriched_context(investigation_id="inv-1")
         g8e_ctx = build_g8e_http_context(user_id="user-1")
         request_settings = G8eeUserSettings(llm=LLMSettings())
-        ctx = AgentStreamContext(
+        ctx = AgentInputs(
             investigation=inv,
             g8e_context=g8e_ctx,
             request_settings=request_settings,

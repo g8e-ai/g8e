@@ -445,7 +445,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 Failure modes (missing model, provider error, no consensus, verifier failure) halt the execution and return an error to the AI — there is no fallback to the original reasoning agent because it never proposes a command directly.
 
-Configuration via platform settings: `llm_command_gen_passes` (default: 3), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
+Configuration via platform settings: `llm_command_gen_passes` (default: 5), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
 
 ---
 

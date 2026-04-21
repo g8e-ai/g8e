@@ -159,7 +159,7 @@
     "configuration": {
       "_description": "Environment variable configuration keys for the Tribunal pipeline.",
       "LLM_COMMAND_GEN_ENABLED": { "default": true,  "description": "Master switch — false skips the Tribunal entirely." },
-      "LLM_COMMAND_GEN_PASSES":  { "default": 3,     "description": "Number of parallel generation passes." },
+      "LLM_COMMAND_GEN_PASSES":  { "default": 5,     "description": "Number of parallel generation passes." },
       "LLM_COMMAND_GEN_VERIFIER":{ "default": true,  "description": "Enable/disable the verifier pass." }
     }
   }

@@ -46,7 +46,7 @@ from app.llm.llm_types import (
     ToolCallingConfig,
     ToolConfig,
 )
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
 from app.models.investigations import AIResponseMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -72,17 +72,41 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8e_agent = MagicMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.add_chat_message = AsyncMock(return_value=True)
+
+    async def _fake_persist_ai_message(
+        investigation_id,
+        text,
+        grounding_metadata=None,
+        token_usage=None,
+    ) -> bool:
+        # Mirror the real helper's strip-guard so tests exercise the same
+        # contract as production (whitespace-only text is not persisted).
+        if not investigation_id or not text.strip():
+            return False
+        await svc.investigation_service.add_chat_message(
+            investigation_id=investigation_id,
+            sender=MessageSender.AI_PRIMARY,
+            content=text,
+            metadata=AIResponseMetadata(
+                source=EventType.EVENT_SOURCE_AI_PRIMARY,
+                grounding_metadata=grounding_metadata,
+                token_usage=token_usage,
+            ),
+        )
+        return True
+
+    svc.investigation_service.persist_ai_message = AsyncMock(side_effect=_fake_persist_ai_message)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
     return svc
 
 
-def _make_ctx(triage_result: TriageResult = HIGH_CONFIDENCE_COMPLEX_TRIAGE) -> AgentStreamContext:
+def _make_ctx(triage_result: TriageResult = HIGH_CONFIDENCE_COMPLEX_TRIAGE) -> tuple[AgentInputs, AgentStreamState]:
     inv = build_enriched_context(investigation_id="inv-iter")
     g8e_ctx = build_g8e_http_context(investigation_id="inv-iter", user_id="user-iter")
     request_settings = G8eeUserSettings(llm=LLMSettings())
 
-    return AgentStreamContext(
+    inputs = AgentInputs(
         investigation=inv,
         g8e_context=g8e_ctx,
         request_settings=request_settings,
@@ -112,6 +136,9 @@ def _make_ctx(triage_result: TriageResult = HIGH_CONFIDENCE_COMPLEX_TRIAGE) -> A
         user_memories=[],
         case_memories=[],
     )
+    
+    state = AgentStreamState()
+    return inputs, state
 
 
 def _ai_primary_calls(mock_add: AsyncMock) -> list[dict]:
@@ -126,8 +153,8 @@ def _ai_primary_calls(mock_add: AsyncMock) -> list[dict]:
 async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
     """Every on_iteration_text invocation must produce an AI_PRIMARY row."""
     svc = _make_pipeline()
-    ctx = _make_ctx()
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_ctx()
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     iteration_texts = [
         "First, I'll check the service status.",
@@ -139,8 +166,11 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
         for text in iteration_texts:
             await on_iter(text)
         # Simulate the agent ending on a final wrap-up segment that the SSE
-        # delivery layer leaves in ctx.response_text for _persist_ai_response.
-        ctx.response_text = "All checks completed — service is healthy."
+        # delivery layer leaves in state.response_text for _persist_ai_response.
+        # Mutate the *actual* state instance constructed by _run_chat_impl,
+        # not the outer test fixture — otherwise the final persist path runs
+        # against an empty response_text and no final row is written.
+        kwargs["state"].response_text = "All checks completed — service is healthy."
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
@@ -189,14 +219,14 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
 async def test_final_persist_skipped_when_response_text_is_whitespace_only():
     """Agents ending on a tool result must not produce an empty AI_PRIMARY row."""
     svc = _make_pipeline()
-    ctx = _make_ctx()
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_ctx()
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     async def _fake_run_with_sse(**kwargs):
         on_iter = kwargs["on_iteration_text"]
         await on_iter("Iteration commentary before tool call.")
         # Stream ends on TOOL_RESULT — response_text already cleared by SSE.
-        ctx.response_text = "   "
+        kwargs["state"].response_text = "   "
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
@@ -226,15 +256,15 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
 async def test_iteration_callback_skips_whitespace_only_text():
     """Whitespace-only iteration text must not produce an AI_PRIMARY row."""
     svc = _make_pipeline()
-    ctx = _make_ctx()
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_ctx()
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     async def _fake_run_with_sse(**kwargs):
         on_iter = kwargs["on_iteration_text"]
         # Whitespace-only — should be dropped by the closure's guard.
         await on_iter("   \n  ")
         await on_iter("Real commentary.")
-        ctx.response_text = "Final answer."
+        kwargs["state"].response_text = "Final answer."
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
@@ -259,16 +289,28 @@ async def test_iteration_callback_skips_whitespace_only_text():
 
 
 async def test_iteration_callback_passed_to_run_with_sse():
-    """Regression: _run_chat_impl must wire on_iteration_text into the agent."""
+    """Regression: _run_chat_impl must wire a callback that writes AI_PRIMARY rows.
+
+    It is not enough that *some* callable is passed — the callable must actually
+    produce an ``investigation_service.add_chat_message`` call with
+    ``sender == MessageSender.AI_PRIMARY`` and
+    ``metadata.source == EventType.EVENT_SOURCE_AI_PRIMARY`` when invoked with
+    non-empty text. Otherwise the iteration-persistence contract can silently
+    regress to a no-op.
+    """
     svc = _make_pipeline()
-    ctx = _make_ctx()
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_ctx()
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
 
     async def _fake_run_with_sse(**kwargs):
         captured.update(kwargs)
-        ctx.response_text = "done"
+        # Drive the callback with a realistic iteration-text payload so that
+        # the observable side effect (add_chat_message) is exercised here,
+        # not just parameter passing.
+        await kwargs["on_iteration_text"]("mid-turn commentary")
+        kwargs["state"].response_text = "done"
 
     svc.g8e_agent.run_with_sse = AsyncMock(side_effect=_fake_run_with_sse)
 
@@ -290,3 +332,17 @@ async def test_iteration_callback_passed_to_run_with_sse():
 
     assert "on_iteration_text" in captured
     assert callable(captured["on_iteration_text"])
+
+    primary_calls = _ai_primary_calls(svc.investigation_service.add_chat_message)
+    # Exactly one intermediate row (the callback invocation) plus the final
+    # row from _persist_ai_response.
+    assert [c["content"] for c in primary_calls] == ["mid-turn commentary", "done"]
+
+    intermediate = primary_calls[0]
+    assert intermediate["sender"] == MessageSender.AI_PRIMARY
+    assert intermediate["investigation_id"] == "inv-iter"
+    assert isinstance(intermediate["metadata"], AIResponseMetadata)
+    assert intermediate["metadata"].source == EventType.EVENT_SOURCE_AI_PRIMARY
+    # Intermediate rows never carry aggregate grounding/token-usage.
+    assert intermediate["metadata"].grounding_metadata is None
+    assert intermediate["metadata"].token_usage is None

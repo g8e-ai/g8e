@@ -63,7 +63,7 @@ from app.models.grounding import GroundingMetadata
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.agent_sse import deliver_via_sse
-from tests.fakes.agent_helpers import make_streaming_context, make_g8ed_event_service
+from tests.fakes.agent_helpers import make_agent_run_args, make_g8ed_event_service
 from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 from tests.fakes.fake_web_search_provider import FakeWebSearchProvider
 from tests.fakes.tool_helpers import create_tool_service_fake
@@ -106,15 +106,16 @@ def _g8e_context():
     return build_g8e_http_context()
 
 
-async def _collect_sse_events(chunks, ctx=None):
-    streaming_ctx = ctx or make_streaming_context()
+async def _collect_sse_events(chunks, inputs=None, state=None):
+    if inputs is None or state is None:
+        inputs, state = make_agent_run_args()
     event_svc = make_g8ed_event_service()
 
     async def _gen():
         for c in chunks:
             yield c
 
-    await deliver_via_sse(stream=_gen(), agent_streaming_context=streaming_ctx, g8ed_event_service=event_svc)
+    await deliver_via_sse(stream=_gen(), inputs=inputs, state=state, g8ed_event_service=event_svc)
     # Check both publish and publish_investigation_event calls for compatibility
     events = []
     for call in event_svc.publish.call_args_list:

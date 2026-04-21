@@ -149,13 +149,15 @@ export class TerminalOperatorMixin {
         this.isOperatorBound = true;
         this.boundOperator = operator;
 
+        const identity = operator.latest_heartbeat_snapshot?.system_identity || {};
+
         if (this.hostnameElement) {
-            const hostname = operator.system_info?.hostname || operator.name || 'operator';
+            const hostname = identity.hostname || operator.name || 'operator';
             this.hostnameElement.textContent = hostname;
         }
 
         if (this.promptElement) {
-            const user = operator.system_info?.current_user || '$';
+            const user = identity.current_user || '$';
             this.promptElement.textContent = user === '$' ? '$' : `${user}$`;
         }
 

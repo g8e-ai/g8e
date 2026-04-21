@@ -62,6 +62,7 @@ import logging
 from collections import defaultdict
 from typing import List, NoReturn
 
+from app.errors import OllamaEmptyResponseError
 from app.models.settings import LLMSettings, G8eeUserSettings
 from app.models.base import G8eBaseModel
 from app.models.http_context import G8eHttpContext
@@ -117,7 +118,7 @@ def _format_command_constraints_message(
     blacklisted_commands: List[dict[str, str]] | None,
 ) -> str:
     """Generate a message describing command constraints for Tribunal prompts."""
-    parts = []
+    parts: list[str] = []
     
     if whitelisting_enabled and whitelisted_commands:
         parts.append(
@@ -146,7 +147,7 @@ def _build_operator_context_string(operator_context: OperatorContext | None) -> 
     if not operator_context:
         return "No operator context available"
 
-    parts = []
+    parts: list[str] = []
     if operator_context.hostname:
         parts.append(f"Hostname: {operator_context.hostname}")
     if operator_context.os:
@@ -509,8 +510,6 @@ async def _run_generation_pass(
         response_format=None,
     )
     try:
-        from app.errors import OllamaEmptyResponseError
-
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
@@ -649,8 +648,6 @@ async def _run_verifier(
         response_format=None,
     )
     try:
-        from app.errors import OllamaEmptyResponseError
-
         response = await provider.generate_content_lite(
             model=model,
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
@@ -696,7 +693,6 @@ async def _run_verifier(
     except TribunalVerifierFailedError:
         raise
     except Exception as exc:
-        from app.errors import OllamaEmptyResponseError
         if isinstance(exc, OllamaEmptyResponseError):
             logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate: %s", exc)
             error_msg = f"Verifier returned empty response: {exc}"

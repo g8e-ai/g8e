@@ -254,7 +254,7 @@ class OperatorIntentService:
             iam_results.append(IamIntentResult(intent=intent, result=iam_result))
 
             if iam_result and iam_result.status != ExecutionStatus.COMPLETED:
-                failed_intents.append(FailedIntentResult(intent=intent, error=iam_result.error if iam_result else "Unknown error"))
+                failed_intents.append(FailedIntentResult(intent=intent, error=(iam_result.error if iam_result else None) or "Unknown error"))
             else:
                 v_action = self._get_verification_action_for_intent(intent)
                 if v_action:

@@ -189,6 +189,7 @@ async def test_handle_get_command_constraints_both_disabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -229,6 +230,7 @@ async def test_handle_get_command_constraints_whitelist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -269,6 +271,7 @@ async def test_handle_get_command_constraints_blacklist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -313,6 +316,7 @@ async def test_handle_get_command_constraints_both_enabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -348,6 +352,7 @@ async def test_handle_get_command_constraints_no_platform_settings(
             investigation=mock_investigation,
             g8e_context=mock_g8e_context,
             request_settings=mock_request_settings,
+            execution_id=None,
         )
     
     assert isinstance(result, CommandConstraintsResult)

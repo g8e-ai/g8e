@@ -157,11 +157,10 @@ class TestStreamResponseRetryLoop:
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
+        context.model_to_use = "test-model"
+        context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -196,11 +195,10 @@ class TestStreamResponseRetryLoop:
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
+        context.model_to_use = "test-model"
+        context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -244,11 +242,10 @@ class TestStreamResponseRetryLoop:
 
             mock_sleep.side_effect = capture_sleep
 
+            context.model_to_use = "test-model"
+            context.generation_config = gen_config
             chunks = []
             async for chunk in agent.stream_response(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
@@ -279,11 +276,10 @@ class TestStreamResponseRetryLoop:
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
+        context.model_to_use = "test-model"
+        context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -329,11 +325,10 @@ class TestStreamResponseErrorHandling:
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
+        context.model_to_use = "test-model"
+        context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -364,11 +359,10 @@ class TestStreamResponseErrorHandling:
         gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
+        context.model_to_use = "test-model"
+        context.generation_config = gen_config
         chunks = []
         async for chunk in agent.stream_response(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -401,13 +395,9 @@ class TestRunWithSSEContextVarLifecycle:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
         await agent.run_with_sse(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             state=make_agent_stream_state(),
             g8ed_event_service=g8ed_event_service,
@@ -435,14 +425,10 @@ class TestRunWithSSEContextVarLifecycle:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
         try:
             await agent.run_with_sse(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 state=make_agent_stream_state(),
                 g8ed_event_service=g8ed_event_service,
@@ -469,13 +455,9 @@ class TestRunWithSSEContextVarLifecycle:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
         await agent.run_with_sse(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             state=make_agent_stream_state(),
             g8ed_event_service=g8ed_event_service,
@@ -500,14 +482,10 @@ class TestRunWithSSEValidation:
         context = make_agent_inputs()
         context.g8e_context = None
 
-        gen_config = make_gen_config()
         g8ed_event_service = make_g8ed_event_service()
 
         with pytest.raises(ValidationError) as exc_info:
             await agent.run_with_sse(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 state=make_agent_stream_state(),
                 g8ed_event_service=g8ed_event_service,

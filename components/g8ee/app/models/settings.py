@@ -178,7 +178,7 @@ class LLMSettings(G8eBaseModel):
     llm_max_tokens: int | None = Field(None)
     llm_command_gen_enabled: bool = Field(True)
     llm_command_gen_verifier: bool = Field(True)
-    llm_command_gen_passes: int = Field(3)
+    llm_command_gen_passes: int = Field(5)
 
     @property
     def resolved_assistant_model(self) -> str | None:

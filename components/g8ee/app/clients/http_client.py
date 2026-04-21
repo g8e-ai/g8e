@@ -631,23 +631,23 @@ class HTTPClient:
 
                 raise error
 
-    async def get(self, url: str, params, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
+    async def get(self, url: str, params: Optional[dict[str, Any]], context: G8eHttpContext, **kwargs: Any) -> AiohttpResponse:
         return await self.request("GET", url, params=params, context=context, **kwargs)
 
-    async def post(self, url: str, json_data=None, data=None, context: Optional[G8eHttpContext] = None, **kwargs) -> AiohttpResponse:
+    async def post(self, url: str, json_data: Any = None, data: Any = None, context: Optional[G8eHttpContext] = None, **kwargs: Any) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("POST", url, json_data=json_data, context=context, **kwargs)
         return await self.request("POST", url, json_data=None, context=context, **kwargs) if data is None else await self.request("POST", url, data=data, context=context, **kwargs)
 
-    async def put(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
+    async def put(self, url: str, json_data: Any, data: Any, context: G8eHttpContext, **kwargs: Any) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("PUT", url, json_data=json_data, context=context, **kwargs)
         return await self.request("PUT", url, data=data, context=context, **kwargs)
 
-    async def delete(self, url: str, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
+    async def delete(self, url: str, context: G8eHttpContext, **kwargs: Any) -> AiohttpResponse:
         return await self.request("DELETE", url, context=context, **kwargs)
 
-    async def patch(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
+    async def patch(self, url: str, json_data: Any, data: Any, context: G8eHttpContext, **kwargs: Any) -> AiohttpResponse:
         if json_data is not None:
             return await self.request("PATCH", url, json_data=json_data, context=context, **kwargs)
         return await self.request("PATCH", url, data=data, context=context, **kwargs)

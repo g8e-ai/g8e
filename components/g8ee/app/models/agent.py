@@ -108,8 +108,6 @@ class ExecutorCommandArgs(TargetedOperatorArgs):
     target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
-    execution_id: str | None = Field(default=None, alias="execution_id")
-    web_session_id: str | None = Field(default=None, alias="_web_session_id")
 
 class OperatorContext(G8eBaseModel):
     """Typed system context extracted from a single OperatorDocument model."""
@@ -154,7 +152,7 @@ class AgentInputs(G8eBaseModel):
     AgentStreamState; splitting the two prevents load-bearing writes to
     request inputs from sneaking in unnoticed.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
     case_id: str | None = None
     investigation_id: str | None = None
@@ -188,7 +186,7 @@ class AgentStreamState(G8eBaseModel):
     AgentInputs makes the authoritative post-run fields obvious at every
     call site and prevents accidental in-place mutation of request inputs.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
 
     response_text: str = ""
     token_usage: TokenUsage | None = None

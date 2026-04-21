@@ -36,8 +36,8 @@ from app.constants import StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
+    make_agent_run_args,
     make_g8ed_event_service,
-    make_streaming_context,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -78,7 +78,7 @@ async def _stream(*chunks: StreamChunkFromModel):
 
 async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():
     """TEXT before TOOL_RESULT should be flushed via the callback, then cleared."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-1",
         investigation_id="inv-iter-1",
         web_session_id="web-iter-1",
@@ -99,7 +99,8 @@ async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():
             _text("Now interpreting the result."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
@@ -109,12 +110,12 @@ async def test_callback_invoked_once_per_tool_iteration_with_accumulated_text():
     ]
     # response_text cleared after TOOL_RESULT, then accumulated again from the
     # post-tool TEXT chunk; that final segment is left for _persist_ai_response.
-    assert ctx.response_text == "Now interpreting the result."
+    assert state.response_text == "Now interpreting the result."
 
 
 async def test_callback_invoked_once_per_iteration_across_multiple_tool_loops():
     """Each TOOL_RESULT flushes its own iteration's text."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-2",
         investigation_id="inv-iter-2",
         web_session_id="web-iter-2",
@@ -137,18 +138,19 @@ async def test_callback_invoked_once_per_iteration_across_multiple_tool_loops():
             _text("Final wrap-up."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
     assert persisted == ["Iteration 1 commentary.", "Iteration 2 commentary."]
-    assert ctx.response_text == "Final wrap-up."
+    assert state.response_text == "Final wrap-up."
 
 
 async def test_callback_skipped_when_iteration_text_is_whitespace_only():
     """Tool calls with no preceding narration must not produce empty AI rows."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-3",
         investigation_id="inv-iter-3",
         web_session_id="web-iter-3",
@@ -169,18 +171,19 @@ async def test_callback_skipped_when_iteration_text_is_whitespace_only():
             _text("Real narration after the tool."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
     assert persisted == []
-    assert ctx.response_text == "Real narration after the tool."
+    assert state.response_text == "Real narration after the tool."
 
 
 async def test_callback_not_invoked_when_no_tool_results():
     """Single-turn streams (no tools) leave persistence to _persist_ai_response."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-4",
         investigation_id="inv-iter-4",
         web_session_id="web-iter-4",
@@ -197,18 +200,19 @@ async def test_callback_not_invoked_when_no_tool_results():
             _text("Here is your direct answer."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
 
     assert persisted == []
-    assert ctx.response_text == "Here is your direct answer."
+    assert state.response_text == "Here is your direct answer."
 
 
 async def test_callback_failure_does_not_abort_stream():
     """Persistence errors must be swallowed so the live SSE stream continues."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-5",
         investigation_id="inv-iter-5",
         web_session_id="web-iter-5",
@@ -229,7 +233,8 @@ async def test_callback_failure_does_not_abort_stream():
             _text("Post-tool wrap-up."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
         on_iteration_text=_on_iteration_text,
     )
@@ -238,12 +243,12 @@ async def test_callback_failure_does_not_abort_stream():
     assert invocations == ["Pre-tool reasoning."]
     # ...the buffer was still cleared after the failed attempt...
     # ...and the rest of the stream was processed normally.
-    assert ctx.response_text == "Post-tool wrap-up."
+    assert state.response_text == "Post-tool wrap-up."
 
 
 async def test_omitting_callback_preserves_legacy_behavior():
     """The new parameter is optional — passing nothing must not break the flow."""
-    ctx = make_streaming_context(
+    inputs, state = make_agent_run_args(
         case_id="case-iter-6",
         investigation_id="inv-iter-6",
         web_session_id="web-iter-6",
@@ -259,10 +264,11 @@ async def test_omitting_callback_preserves_legacy_behavior():
             _text("Final segment."),
             _complete(),
         ),
-        agent_streaming_context=ctx,
+        inputs=inputs,
+        state=state,
         g8ed_event_service=event_svc,
     )
 
     # Without the callback the intermediate text is lost (legacy behavior),
     # but the stream still completes and the final segment is preserved.
-    assert ctx.response_text == "Final segment."
+    assert state.response_text == "Final segment."

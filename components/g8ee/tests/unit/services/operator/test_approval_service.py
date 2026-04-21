@@ -995,3 +995,41 @@ class TestAudit:
 
         operator_data_service.add_operator_approval.assert_not_called()
         investigation_data_service.add_approval_record.assert_called_once()
+
+    async def test_audit_populates_event_type_in_metadata(self):
+        """Contract test: add_approval_record sets metadata.event_type to the event_type parameter."""
+        g8ed_event_service = MagicMock(spec=EventServiceProtocol)
+        operator_data_service = AsyncMock(spec=OperatorDataServiceProtocol)
+        investigation_data_service = AsyncMock(spec=InvestigationDataServiceProtocol)
+        service = OperatorApprovalService(
+            g8ed_event_service=g8ed_event_service,
+            operator_data_service=operator_data_service,
+            investigation_data_service=investigation_data_service,
+        )
+
+        g8e_context = G8eHttpContext(
+            case_id="case-1",
+            investigation_id="inv-1",
+            web_session_id="session-1",
+            user_id="user-1",
+            source_component="g8ee",
+        )
+        metadata = ApprovalMetadata(
+            execution_id="exec-1",
+            approval_id="app-1",
+            command="ls -la",
+            justification="test",
+        )
+
+        await service._audit(
+            operator_id=None,
+            event_type=EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED,
+            metadata=metadata,
+            g8e_context=g8e_context,
+            log_tag="APPROVAL",
+        )
+
+        investigation_data_service.add_approval_record.assert_called_once()
+        call_args = investigation_data_service.add_approval_record.call_args
+        assert call_args.kwargs["event_type"] == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED
+        assert call_args.kwargs["metadata"].event_type == EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED

@@ -318,7 +318,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 **`deliver_via_sse`** (`components/g8ee/app/services/ai/agent_sse.py`)
 - Translates `StreamChunkFromModel` objects into g8ed `EventService` pub/sub calls
 - Maps stream chunk types to EventType constants (full table in [components/g8ee.md → SSE Delivery Pipeline](../components/g8ee.md#sse-delivery-pipeline)):
-  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` (per chunk) and accumulates into `AgentStreamContext.response_text`
+  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` (per chunk) and accumulates into `AgentStreamState.response_text`
   - `THINKING` / `THINKING_END` → `LLM_CHAT_ITERATION_THINKING_STARTED` (with `action_type` of `START`/`UPDATE`/`END`)
   - `RETRY` → `LLM_CHAT_ITERATION_RETRY`
   - `TOOL_CALL` → `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always) plus tool-specific events (e.g. `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
@@ -394,7 +394,12 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
   - `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` → `handleCitationsReady`
   - `LLM_CHAT_ITERATION_FAILED` → `handleChatError`
   - `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` → `handleSearchWebIndicator`
-  - `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` → `handleNetworkPortCheckIndicator`
+  - `OPERATOR_NETWORK_PORT_CHECK_STARTED` → `handleNetworkPortCheckIndicator`
+    (note: `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` is intentionally NOT
+    subscribed; `STARTED` owns the port-check indicator lifecycle — the
+    REQUESTED event is emitted by agent_sse for backward compatibility and
+    is used elsewhere as the MCP dispatch event to the operator, and would
+    arrive after STARTED/COMPLETED in the stream, orphaning its indicator.)
 
 **`thinking.js`** (`components/g8ed/public/js/components/thinking.js`)
 - Handles `LLM_CHAT_ITERATION_THINKING_STARTED` events
@@ -753,7 +758,7 @@ flowchart TD
 | Setting | DB Key | Default | Description |
 |---|---|---|---|
 | `LLM_COMMAND_GEN_ENABLED` | `llm_command_gen_enabled` | `true` | Master switch — `false` skips the Tribunal entirely |
-| `LLM_COMMAND_GEN_PASSES` | `llm_command_gen_passes` | `3` | Number of parallel generation passes |
+| `LLM_COMMAND_GEN_PASSES` | `llm_command_gen_passes` | `5` | Number of parallel generation passes |
 | `LLM_COMMAND_GEN_VERIFIER` | `llm_command_gen_verifier` | `true` | Enable/disable the verifier pass |
 
 #### Pipeline Stages

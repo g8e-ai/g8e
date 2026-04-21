@@ -21,6 +21,7 @@ assistant model before committing to the full main LLM.
 import logging
 import app.llm.llm_types as types
 from app.llm import Role, get_llm_provider
+from app.errors import OllamaEmptyResponseError
 from app.llm.structured import parse_structured_response
 from app.constants import (
     TRIAGE_CONVERSATION_TAIL_LIMIT,
@@ -106,13 +107,17 @@ class TriageAgent:
             )
 
             try:
-                from app.errors import OllamaEmptyResponseError
-
                 response = await provider.generate_content_lite(
                     model=model,
                     contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
                     lite_llm_settings=config,
                 )
+                if not response.text:
+                    logger.warning("[TRIAGE] Empty response text from assistant model, defaulting to complex")
+                    return self._escalation_result(
+                        "Triage unavailable: assistant model returned empty text. Check model availability and connectivity, then retry.",
+                        error_code="MODEL_EMPTY_RESPONSE",
+                    )
                 result = self._parse_response(response.text)
             except OllamaEmptyResponseError as exc:
                 logger.warning("[TRIAGE] No response from assistant model, defaulting to complex: %s", exc)
@@ -156,7 +161,7 @@ class TriageAgent:
         if not history:
             return TRIAGE_EMPTY_CONVERSATION
 
-        lines = []
+        lines: list[str] = []
         for msg in history[-TRIAGE_CONVERSATION_TAIL_LIMIT:]:
             content = (msg.content or "").strip()
             if not content:

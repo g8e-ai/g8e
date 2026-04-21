@@ -25,6 +25,8 @@ from typing import Optional
 
 from pydantic import ConfigDict, Field, PrivateAttr, field_validator
 
+from app.models.http_context import G8eHttpContext
+
 from app.constants import (
     ApprovalErrorType,
     ApprovalType,
@@ -163,14 +165,14 @@ class OperatorDocument(G8eBaseModel):
     """g8ee read-side projection of the g8ed OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
-    Populated from g8es KV cache keyed by KVKey.doc(Collections.OPERATORS, operator_id) or
-    GET /api/internal/operators/:operatorId/status.
+    Populated from g8es KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
+    GET /api/internal/operators/:id/status.
     g8ed is the authority — g8ee only reads this document.
     """
 
     model_config = ConfigDict(extra="ignore")
 
-    operator_id: str = Field(description="Unique Operator identifier")
+    id: str = Field(description="Unique Operator identifier")
     user_id: str = Field(description="User ID who owns this operator (always set by g8ed)")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
@@ -583,7 +585,7 @@ class ApprovalRequestBase(G8eBaseModel):
     Carries identity, routing, and timeout fields that every approval
     type needs. Type-specific subclasses add their own payload fields.
     """
-    g8e_context: "G8eHttpContext" = Field(description="HTTP context with session/case/investigation identity")
+    g8e_context: G8eHttpContext = Field(description="HTTP context with session/case/investigation identity")
     timeout_seconds: int = Field(description="Approval timeout in seconds")
     justification: str = Field(description="AI justification for the operation")
     execution_id: str = Field(description="Unique execution identifier for tracking")

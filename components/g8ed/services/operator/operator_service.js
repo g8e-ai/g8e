@@ -96,7 +96,7 @@ class OperatorService {
      */
     calculateSlotUsage(operators, excludeOperatorId = null) {
         const claimedOperators = operators.filter(op =>
-            op.operator_id !== excludeOperatorId &&
+            op.id !== excludeOperatorId &&
             (op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND)
         );
         const usedSlots = claimedOperators.length;
@@ -225,11 +225,11 @@ class OperatorService {
             for (const op of allOperators) {
                 if (op.status === OperatorStatus.BOUND && op.bound_web_session_id && op.bound_web_session_id !== webSessionId) {
                     logger.info('[OPERATOR-SERVICE] Updating BOUND Operator bound_web_session_id on reconnect', {
-                        operator_id: op.operator_id,
+                        id: op.id,
                         old_bound_web_session_id: redactWebSessionId(op.bound_web_session_id),
                         new_bound_web_session_id: redactWebSessionId(webSessionId)
                     });
-                    await this.updateWebSessionLink(op.operator_id, webSessionId);
+                    await this.updateWebSessionLink(op.id, webSessionId);
                 }
             }
 
@@ -263,7 +263,7 @@ class OperatorService {
         
         await this.operatorDataService.deleteOperator(operatorId);
         const freshOperator = OperatorDocument.forReset({
-            operator_id: operatorId,
+            id: operatorId,
             user_id: existing.user_id,
             organization_id: existing.organization_id,
             name: existing.name,
@@ -295,7 +295,7 @@ class OperatorService {
             await this.relay.deregisterOperatorSessionInG8ee(g8eContext).catch(() => {});
         }
 
-        return { success: true, operator_id: operatorId, error: null };
+        return { success: true, id: operatorId, error: null };
     }
 
     async getGrantedIntentsWithDetails(operatorId) {

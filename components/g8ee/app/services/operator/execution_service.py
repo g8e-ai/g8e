@@ -210,7 +210,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         # This rescues LLMs that pass e.g. ['all', 'web-1'] or ['*'] and makes whole-fleet
         # intent robust against enumeration mistakes.
         _fleet_sentinels = {"all", "*", "fleet", "every", "everyone"}
-        if any(isinstance(t, str) and t.strip().lower() in _fleet_sentinels for t in target_operators):
+        if any(t.strip().lower() in _fleet_sentinels for t in target_operators):
             return operator_documents
 
         resolved: list[OperatorDocument] = []

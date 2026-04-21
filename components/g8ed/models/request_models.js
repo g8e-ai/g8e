@@ -536,7 +536,7 @@ export class SessionAuthResponse extends G8eBaseModel {
     static fields = {
         success:             { type: F.boolean, required: true },
         operator_session_id: { type: F.string,  default: null },
-        operator_id:         { type: F.string,  default: null },
+        id:                  { type: F.string,  default: null },
         user_id:             { type: F.string,  default: null },
         organization_id:     { type: F.string,  default: null },
         api_key:             { type: F.string,  default: null },

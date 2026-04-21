@@ -106,9 +106,9 @@ class MCPGatewayService:
             result = await asyncio.wait_for(
                 self._tool_service.execute_tool_call(
                     tool_name=tool_name,
-                    args=arguments,
-                    g8e_context=g8e_context,
+                    tool_args=arguments,
                     investigation=investigation,
+                    g8e_context=g8e_context,
                     request_settings=user_settings or default_settings,
                 ),
                 timeout=MCP_TOOL_CALL_TIMEOUT_SECONDS,

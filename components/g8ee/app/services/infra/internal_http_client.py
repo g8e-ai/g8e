@@ -118,8 +118,8 @@ class InternalHttpClient:
             else BackgroundEventWire.from_background_event(event)
         )
         wire = wire_model.model_dump(mode="json")
-        web_session_id = wire.get("web_session_id")
-        event_type = wire.get("event", {}).get("type") or "None"
+        web_session_id: str | None = wire.get("web_session_id")
+        event_type: str = wire.get("event", {}).get("type") or "None"
 
         logger.info(
             "[HTTP-G8ED] Pushing SSE event",

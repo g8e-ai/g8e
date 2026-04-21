@@ -188,14 +188,14 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 
 | `StreamChunkFromModelType` | SSE event(s) published | Side effect |
 |-------------------|--------------------|--------------|
-| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `AgentStreamContext.response_text` |
-| `THINKING` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=START` on the first chunk of a thinking burst, `UPDATE` thereafter) | `AgentStreamContext.set_thinking_started()` |
-| `THINKING_END` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=END`) | `AgentStreamContext.set_thinking_ended()` |
+| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `AgentStreamState.response_text` |
+| `THINKING` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=START` on the first chunk of a thinking burst, `UPDATE` thereafter) | Sets `thinking_started=True` on `AgentStreamState` |
+| `THINKING_END` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=END`) | Sets `thinking_ended=True` on `AgentStreamState` |
 | `RETRY` | `LLM_CHAT_ITERATION_RETRY` (carries `attempt`, `max_attempts`) | — |
-| `TOOL_CALL` | `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always, for every tool); plus `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` (search_web only) or `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only) | — |
-| `TOOL_RESULT` | `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always, for every tool); `LLM_TOOL_G8E_WEB_SEARCH_COMPLETED` / `_FAILED` (search_web only); `LLM_CHAT_ITERATION_COMPLETED` (turn tick, increments `_turn`) | Awaits `on_iteration_text(response_text)` if provided and the buffer is non-whitespace, then clears `AgentStreamContext.response_text` so the next iteration's text starts fresh |
-| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamContext` |
-| `COMPLETE` | none in-loop; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the loop exits with the post-loop `response_text`, finish reason, citation metadata, and aggregate token usage | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
+| `TOOL_CALL` | `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always, for every tool); plus `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` (search_web only). `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` is intentionally NOT emitted here: the TOOL_CALL chunk is yielded after the port check has already executed, so a sidecar REQUESTED event would arrive after `port_service`'s STARTED / COMPLETED / FAILED and would only create an orphaned UI indicator. The port-check indicator lifecycle is owned by STARTED / COMPLETED / FAILED (emitted from `port_service`). | — |
+| `TOOL_RESULT` | `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always, for every tool); `LLM_TOOL_G8E_WEB_SEARCH_COMPLETED` / `_FAILED` (search_web only); `LLM_CHAT_ITERATION_COMPLETED` (turn tick, increments `_turn`) | Awaits `on_iteration_text(response_text)` if provided and the buffer is non-whitespace, then clears `AgentStreamState.response_text` so the next iteration's text starts fresh |
+| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamState` |
+| `COMPLETE` | none in-loop; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the loop exits with the post-loop `response_text`, finish reason, citation metadata, and aggregate token usage | Stores `token_usage` and `finish_reason` on `AgentStreamState` |
 | `ERROR` | `LLM_CHAT_ITERATION_FAILED` (carries provider error message) | Sets internal `error_occurred=True` and breaks the loop; the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED` is suppressed |
 
 `deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive. Wrapping `try/except` translates `asyncio.CancelledError` and any uncaught `Exception` raised by the generator into `LLM_CHAT_ITERATION_FAILED` events; `CancelledError` is re-raised after the event is published, all other exceptions are swallowed so the SSE channel remains usable.
@@ -998,7 +998,7 @@ The following sections are read from the `settings` map inside the settings docu
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `command_gen_enabled` | `true` | Master switch for Tribunal command generation |
-| `command_gen_passes` | `3` | Number of independent generation passes (1–10) |
+| `command_gen_passes` | `5` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
 Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature` (resolved via `_temperature_for_pass` → `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Hardcoding per-member temperatures is incompatible with providers that require fixed temperatures (e.g. Gemini 3+ requires 1.0). Per-member diversity comes from the distinct Axiom/Concord/Variance personas in `shared/constants/agents.json`, not from sampling temperature.

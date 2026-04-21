@@ -14,19 +14,12 @@
 /**
  * OperatorMetrics - Extracts normalized Operator metrics from a raw operator payload.
  *
- * Canonical sources (each field reads from exactly one place — no unions):
- *   operator.system_info                 - persisted OperatorSystemInfo; static identity
- *                                          (hostname, os, architecture, current_user,
- *                                          public_ip, internal_ip, interfaces, cpu_count,
- *                                          memory_mb, *_details, environment).
- *   operator.latest_heartbeat_snapshot   - persisted OperatorHeartbeat (nested).
- *     .performance.{cpu_percent, memory_percent, disk_percent, network_latency,
- *                   memory_used_mb, memory_total_mb, disk_used_gb, disk_total_gb}
- *     .uptime.{uptime_display, uptime_seconds}
- *     .version_info.{operator_version, status}
- *
- * Both the persisted document and the SSE envelope metrics share this one shape
- * (shared/models/wire/heartbeat.json#operator_heartbeat). No flat projection exists.
+ * Single source of truth: operator.latest_heartbeat_snapshot (OperatorHeartbeat,
+ * shared/models/wire/heartbeat.json#operator_heartbeat). Same shape whether read
+ * from the persisted operator document or the SSE envelope. All identity,
+ * performance, network, and detail fields are read from this one nested object —
+ * never from operator.system_info, which is a stale, redundant projection that
+ * does not update on every heartbeat and causes identity fields to blank out.
  */
 export class OperatorMetrics {
     constructor(rawData) {
@@ -37,20 +30,23 @@ export class OperatorMetrics {
     _extractData() {
         const actualData = this.rawData.data || this.rawData;
 
-        const systemInfo = actualData.system_info || {};
         const snapshot = actualData.latest_heartbeat_snapshot || {};
+        const identity = snapshot.system_identity || {};
+        const network = snapshot.network || {};
         const perf = snapshot.performance || {};
         const uptime = snapshot.uptime || {};
         const version = snapshot.version_info || {};
 
-        this.hostname = systemInfo.hostname ?? null;
-        this.os = systemInfo.os ?? null;
-        this.architecture = systemInfo.architecture ?? null;
-        this.currentUser = systemInfo.current_user ?? null;
-        this.publicIp = systemInfo.public_ip ?? null;
-        this.internalIp = systemInfo.internal_ip ?? null;
-        this.interfaces = systemInfo.interfaces ?? null;
-        this.cpuCount = systemInfo.cpu_count ?? null;
+        this.hostname = identity.hostname ?? null;
+        this.os = identity.os ?? null;
+        this.architecture = identity.architecture ?? null;
+        this.currentUser = identity.current_user ?? null;
+        this.cpuCount = identity.cpu_count ?? null;
+        this.memoryMb = identity.memory_mb ?? null;
+
+        this.publicIp = network.public_ip ?? null;
+        this.internalIp = network.internal_ip ?? null;
+        this.interfaces = network.interfaces ?? null;
 
         this.cpu = perf.cpu_percent ?? null;
         this.memory = perf.memory_percent ?? null;
@@ -67,46 +63,11 @@ export class OperatorMetrics {
         this.version = version.operator_version ?? null;
         this.status = version.status ?? null;
 
-        this.osDetails = systemInfo.os_details ?? null;
-        this.userDetails = systemInfo.user_details ?? null;
-        this.diskDetails = systemInfo.disk_details ?? null;
-        this.memoryDetails = systemInfo.memory_details ?? null;
-        this.environment = systemInfo.environment ?? null;
-    }
-
-    _findValue(getters) {
-        for (const getter of getters) {
-            try {
-                const value = getter();
-                if (value !== undefined && value !== null) return value;
-            } catch (e) {
-                // continue
-            }
-        }
-        return undefined;
-    }
-
-    _findInObject(obj, paths) {
-        if (!obj || typeof obj !== 'object') return undefined;
-        for (const path of paths) {
-            if (path.includes('.')) {
-                const parts = path.split('.');
-                let current = obj;
-                let found = true;
-                for (const part of parts) {
-                    if (current && typeof current === 'object' && part in current) {
-                        current = current[part];
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                if (found && current !== undefined) return current;
-            } else {
-                if (path in obj && obj[path] !== undefined) return obj[path];
-            }
-        }
-        return undefined;
+        this.osDetails = snapshot.os_details ?? null;
+        this.userDetails = snapshot.user_details ?? null;
+        this.diskDetails = snapshot.disk_details ?? null;
+        this.memoryDetails = snapshot.memory_details ?? null;
+        this.environment = snapshot.environment ?? null;
     }
 
     getCpuDisplay() {

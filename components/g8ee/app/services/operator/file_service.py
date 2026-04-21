@@ -183,7 +183,7 @@ class OperatorFileService:
                             status=ExecutionStatus.DENIED,
                             error=approval_result.reason or "Denied by user",
                             error_type=CommandErrorType.APPROVAL_DENIED,
-                            approval_id=approval_result.approval_id,
+                            approval_id=approval_result.approval_id if approval_result else None,
                         ),
                         g8e_context,
                     )

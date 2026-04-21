@@ -40,7 +40,7 @@ from app.llm.llm_types import (
     ToolCallingConfig,
 )
 from app.llm.utils import ModelOverrideResolver
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.factories import (
@@ -79,24 +79,13 @@ def _make_pipeline() -> ChatPipelineService:
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
     return svc
 
-def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
+def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentStreamState]:
     inv = build_enriched_context(investigation_id="inv-1")
     g8e_ctx = build_g8e_http_context(user_id="user-1")
     from app.models.settings import G8eeUserSettings, LLMSettings
     request_settings = G8eeUserSettings(llm=LLMSettings())
     
-    streaming = AgentStreamContext(
-        investigation=inv,
-        g8e_context=g8e_ctx,
-        request_settings=request_settings,
-        case_id="case-1",
-        investigation_id="inv-1",
-        web_session_id="web-1",
-        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-        sentinel_mode=True,
-    )
-    
-    agent_ctx = AgentStreamContext(
+    inputs = AgentInputs(
         investigation=inv,
         g8e_context=g8e_ctx,
         request_settings=request_settings,
@@ -105,13 +94,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         user_id="user-1",
         web_session_id="web-1",
         agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-    )
-    
-    return AgentStreamContext(
-        investigation=inv,
-        g8e_context=g8e_ctx,
-        request_settings=request_settings,
-        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
+        sentinel_mode=True,
         operator_bound=False,
         model_to_use="lite-model",
         max_tokens=None,
@@ -129,12 +112,13 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
             thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         ),
-        streaming_context=streaming,
-        agent_context=agent_ctx,
         user_memories=[],
         case_memories=[],
         triage_result=triage_result,
     )
+    
+    state = AgentStreamState()
+    return inputs, state
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -143,10 +127,10 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
 async def test_run_chat_impl_short_circuits_correctly():
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     
     # Mock _prepare_chat_context to return our prepared context
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
     # Mock get_llm_provider to avoid actual LLM client creation
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
         await svc._run_chat_impl(
@@ -267,8 +251,8 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
 
@@ -375,8 +359,8 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
@@ -416,8 +400,8 @@ async def test_run_chat_impl_selects_assistant_provider_for_simple_complexity():
         intent_confidence=TriageConfidence.HIGH,
         intent_summary="ok",
     )
-    ctx = _make_chat_context(triage_result=simple_triage_result)
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_chat_context(triage_result=simple_triage_result)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
 

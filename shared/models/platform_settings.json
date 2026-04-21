@@ -36,7 +36,7 @@
       "llm_command_gen_passes": {
         "type": "integer",
         "required": false,
-        "default": 3
+        "default": 5
       },
       "google_search_enabled": {
         "type": "boolean",

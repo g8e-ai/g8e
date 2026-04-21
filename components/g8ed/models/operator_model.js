@@ -235,7 +235,6 @@ export class OperatorStatusInfo extends G8eBaseModel {
 
 export class OperatorDocument extends G8eIdentifiableModel {
     static fields = {
-        operator_id:                  { type: F.string,  required: true },
         user_id:                      { type: F.string,  required: true },
         organization_id:              { type: F.string,  default: null },
         component:                    { type: F.string,  default: SourceComponent.G8EO },
@@ -331,7 +330,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
             : new SystemInfo(data.system_info || {});
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
             component:                 SourceComponent.G8EO,
@@ -374,7 +373,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
                 : new SystemInfo({});
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
             component:                 SourceComponent.G8EO,
@@ -409,7 +408,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         const _now = now();
 
         return new OperatorDocument({
-            operator_id:               data.newOperatorId,
+            id:                       data.id,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
             component:                 SourceComponent.G8EO,
@@ -451,7 +450,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         const _now = now();
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
             component:                 SourceComponent.G8EO,

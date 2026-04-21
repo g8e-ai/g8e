@@ -52,6 +52,7 @@ class ConversationMessageMetadata(G8eBaseModel):
     The base class is kept for backward compat and for cases where the category
     cannot be statically determined (e.g. deserialization from DB).
     """
+    event_type: EventType | None = Field(default=None, description="Event type for frontend filtering")
     execution_id: str | None = Field(default=None, description="Operator execution ID")
     command: str | None = Field(default=None, description="Operator command string")
     status: ExecutionStatus | None = Field(default=None, description="Execution status")

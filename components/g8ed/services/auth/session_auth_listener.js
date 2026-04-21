@@ -40,10 +40,10 @@ export class SessionAuthListener {
      * Subscribe to the session auth channel for this operator_session_id and
      * respond with bootstrap config once. Called fire-and-forget after device registration.
      *
-     * @param {{ operator_session_id: string, operator_id: string, user_id: string, organization_id: string|null }} g8eContext
+     * @param {{ operator_session_id: string, id: string, user_id: string, organization_id: string|null }} g8eContext
      */
     listen(g8eContext) {
-        const { operator_session_id, operator_id, user_id, organization_id } = g8eContext;
+        const { operator_session_id, id, user_id, organization_id } = g8eContext;
         const sessionHash     = crypto.createHash('sha256').update(operator_session_id).digest('hex');
         const authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         const responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
@@ -75,13 +75,13 @@ export class SessionAuthListener {
                         return;
                     }
 
-                    const operator = await this._operatorService.getOperator(operator_id);
+                    const operator = await this._operatorService.getOperator(id);
                     const api_key  = operator?.api_key || null;
 
                     await subscriber.publish(responseChannel, new SessionAuthResponse({
                         success:            true,
                         operator_session_id,
-                        operator_id,
+                        id,
                         user_id,
                         organization_id,
                         api_key,
@@ -91,7 +91,7 @@ export class SessionAuthListener {
                     }).forKV());
 
                     logger.info('[SESSION-AUTH-LISTENER] Auth response published', {
-                        operator_id,
+                        id,
                         operator_session_id: operator_session_id.substring(0, 12) + '...',
                     });
                 } catch (err) {
@@ -109,7 +109,7 @@ export class SessionAuthListener {
 
             subscriber.subscribe(authChannel);
             logger.info('[SESSION-AUTH-LISTENER] Listening for session auth', {
-                operator_id,
+                id,
                 channel: authChannel,
             });
         } catch (err) {

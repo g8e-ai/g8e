@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.clients.http_client import HTTPClient
@@ -61,12 +61,12 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS
 
-    async def get_operator(self, operator_id: str) -> OperatorDocument | None:
+    async def get_operator(self, id: str) -> OperatorDocument | None:
         """Get Operator document using cache-aside pattern."""
-        if not operator_id:
-            raise ValidationError("operator_id is required")
+        if not id:
+            raise ValidationError("id is required")
 
-        data = await self.cache.get_document(self.collection, operator_id)
+        data = await self.cache.get_document(self.collection, id)
         if not data:
             return None
         
@@ -74,48 +74,48 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
         """Create a new Operator document in the database."""
-        if not operator.operator_id:
-            raise ValidationError("operator_id is required")
+        if not operator.id:
+            raise ValidationError("id is required")
         
         # Convert to dict for storage
         operator_data = operator.model_dump()
         
         result = await self.cache.create_document(
             collection=self.collection,
-            document_id=operator.operator_id,
+            document_id=operator.id,
             data=operator_data
         )
         
         if not result.success:
-            raise ExternalServiceError(f"Failed to create Operator {operator.operator_id}: {result.error}", service_name="operator_service")
+            raise ExternalServiceError(f"Failed to create Operator {operator.id}: {result.error}", service_name="operator_service")
         
         return True
 
-    async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
+    async def update_operator_status(self, id: str, status: OperatorStatus) -> bool:
         """Update Operator status in both DB and cache."""
-        if not operator_id:
-            raise ValidationError("operator_id is required")
+        if not id:
+            raise ValidationError("id is required")
 
         now_timestamp = now()
-        updates = {
+        updates: dict[str, object] = {
             "status": status,
         }
         
-        operator = await self.get_operator(operator_id)
+        operator = await self.get_operator(id)
         if operator and status == OperatorStatus.ACTIVE and not operator.last_heartbeat:
             updates["last_heartbeat"] = now_timestamp
 
         result = await self.cache.update_document(
             collection=self.collection,
-            document_id=operator_id,
-            data=cast(dict[str, object], updates),
+            document_id=id,
+            data=updates,
             merge=True
         )
         return result.success
 
     async def update_operator_heartbeat(
         self,
-        operator_id: str,
+        id: str,
         heartbeat: OperatorHeartbeat,
         investigation_id: str | None,
         case_id: str | None,
@@ -165,20 +165,20 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         result = await self.cache.update_document(
             collection=self.collection,
-            document_id=operator_id,
+            document_id=id,
             data=update_data,
             merge=True,
         )
 
         if result.success:
-            logger.info(f"Updated Operator {operator_id} heartbeat")
+            logger.info(f"Updated Operator {id} heartbeat")
             return True
 
-        raise ExternalServiceError(f"Failed to update Operator {operator_id} heartbeat: {result.error}", service_name="operator_service")
+        raise ExternalServiceError(f"Failed to update Operator {id} heartbeat: {result.error}", service_name="operator_service")
 
     async def append_command_result(
         self,
-        operator_id: str,
+        id: str,
         command_result: CommandResultRecord
     ) -> bool:
         """Append command execution result to operator history."""
