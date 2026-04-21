@@ -115,6 +115,31 @@ describe('SSE Event Contract Tests [INTEGRATION]', () => {
             }
         });
 
+        it('should have no unknown fields in fixture data (schema validation)', () => {
+            const knownFields = new Set([
+                'web_session_id', 'investigation_id', 'case_id', 'execution_id',
+                'content', 'error', 'query', 'results', 'port', 'host', 'is_open',
+                'grounding_used', 'chunks', 'sources_count', 'query_list',
+                'command', 'output', 'exit_code', 'success', 'agent_mode',
+                'request', 'guidelines', 'model', 'num_passes', 'members',
+                'reason', 'candidate_command', 'passed', 'revision',
+                'final_command', 'outcome', 'vote_score'
+            ]);
+
+            for (const [key, fixture] of Object.entries(sharedSSEEvents)) {
+                const dataFields = Object.keys(fixture.data);
+                for (const field of dataFields) {
+                    if (!knownFields.has(field)) {
+                        throw new Error(
+                            `Unknown field "${field}" in fixture "${key}". ` +
+                            `This indicates a field name mismatch. ` +
+                            `Known fields: ${Array.from(knownFields).join(', ')}`
+                        );
+                    }
+                }
+            }
+        });
+
         it('should have fixture type strings that match EventType constants', () => {
             const mapping = {
                 text_chunk_received:                EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED,

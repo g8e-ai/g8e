@@ -142,7 +142,7 @@ export class TerminalOperatorMixin {
     }
 
     setOperatorBound(operator) {
-        if (this.isOperatorBound && this.boundOperator?.operator_id === operator?.operator_id) {
+        if (this.isOperatorBound && this.boundOperator?.id === operator?.id) {
             return;
         }
 

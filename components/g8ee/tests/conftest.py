@@ -747,7 +747,7 @@ def cloud_operator_doc():
         HeartbeatEnvironment,
     )
     return OperatorDocument(
-        operator_id="cloud-op-1",
+        id="cloud-op-1",
         user_id="test-user",
         operator_session_id="session-cloud-op-1",
         operator_type=OperatorType.CLOUD,
@@ -784,7 +784,7 @@ def binary_operator_doc():
         HeartbeatEnvironment,
     )
     return OperatorDocument(
-        operator_id="binary-op-1",
+        id="binary-op-1",
         user_id="test-user",
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.SYSTEM,

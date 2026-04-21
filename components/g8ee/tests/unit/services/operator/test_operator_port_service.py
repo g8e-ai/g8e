@@ -58,7 +58,7 @@ def _make_operator(
     hostname: str = "host-1",
 ) -> OperatorDocument:
     return OperatorDocument(
-        operator_id=operator_id,
+        id=operator_id,
         user_id="user-1",
         bound_web_session_id="ws-1",
         operator_session_id=operator_session_id,

@@ -1,6 +1,8 @@
 {
   "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats, system_info) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
 
+  "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
+
   "_authority": "g8ed (SQLite)",
   "_consumers": ["g8ee (Python OperatorDocument)", "g8eo (identity fields at auth time)"],
   "_cache_aside": "g8es KV — keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
@@ -12,7 +14,7 @@
       "id": {
         "type": "string",
         "required": true,
-        "description": "Unique operator identifier (UUID v4)"
+        "description": "Unique operator identifier (UUID v4). Mapped to 'operator_id' in wire format models and projections (see _comment.field_naming above)."
       },
       "user_id": {
         "type": "string",
@@ -310,8 +312,9 @@
 
   "operator_status_info": {
     "_description": "Lightweight projection of OperatorDocument returned by GET /api/operators/status and GET /api/internal/operators/:id/status. g8ee's OperatorDocument model maps to this shape.",
+    "_comment.field_mapping": "Wire format projections use 'operator_id' instead of 'id' for clarity in cross-component contexts. This field maps directly to OperatorDocument.core_identity.id (see _comment.field_naming above).",
     "fields": {
-      "operator_id": { "type": "string", "required": true },
+      "operator_id": { "type": "string", "required": true, "description": "Maps from OperatorDocument.core_identity.id" },
       "user_id": { "type": "string", "required": false },
       "status": { "type": "string", "required": true },
       "web_session_id": { "type": "string", "required": false },

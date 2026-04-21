@@ -58,7 +58,7 @@ function createMixinContext(overrides = {}) {
 
 function createMockOperator(overrides = {}) {
     return {
-        operator_id: TEST_OPERATOR_ID,
+        id: TEST_OPERATOR_ID,
         status: OperatorStatus.ACTIVE,
         system_info: {
             hostname: 'test-host',
@@ -194,7 +194,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             await ctx.bindOperator(TEST_OPERATOR_ID);
 
             expect(ctx.eventBus.emit).toHaveBeenCalledWith(EventType.OPERATOR_BOUND, {
-                operator_id: TEST_OPERATOR_ID,
+                id: TEST_OPERATOR_ID,
                 operator: mockOperator,
             });
         });
@@ -299,7 +299,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             await ctx.unbindOperator(TEST_OPERATOR_ID);
 
-            expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({ operator_id: TEST_OPERATOR_ID });
+            expect(operatorPanelService.unbindOperator).toHaveBeenCalledWith({ id: TEST_OPERATOR_ID });
             updateBindAllSpy.mockRestore();
             updateUnbindAllSpy.mockRestore();
         });
@@ -499,8 +499,8 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('calls showConfirmationModal with active operators', async () => {
             const ctx = createMixinContext();
             ctx.operators = [
-                createMockOperator({ operator_id: TEST_OPERATOR_ID, status: OperatorStatus.ACTIVE }),
-                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
+                createMockOperator({ id: TEST_OPERATOR_ID, status: OperatorStatus.ACTIVE }),
+                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID_2];
             showConfirmationModal.mockResolvedValue(true);
@@ -556,7 +556,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
-            const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            const activeOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: true,
@@ -636,7 +636,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
-            const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
+            const activeOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
             checkboxes[1].checked = false;
@@ -702,7 +702,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ status: OperatorStatus.ACTIVE }),
-                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.ACTIVE }),
+                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.ACTIVE }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID];
 
@@ -762,7 +762,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID }),
-                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: 'other_session' }),
+                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: 'other_session' }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             global.window = { authState: { getWebSessionId: () => TEST_WEB_SESSION_ID } };

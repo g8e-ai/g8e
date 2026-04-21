@@ -23,7 +23,7 @@ const THRESHOLD_SECONDS = 60;
 
 function makeOperator(overrides = {}) {
     return {
-        operator_id: 'op-1',
+        id: 'op-1',
         user_id: 'user-1',
         status: OperatorStatus.BOUND,
         last_heartbeat: new Date(Date.now() - 10_000),
@@ -111,7 +111,7 @@ describe('HeartbeatMonitorService.tick', () => {
         );
         const event = sseService.publishToUser.mock.calls[0][1];
         expect(event.type).toBe(EventType.OPERATOR_STATUS_UPDATED_STALE);
-        expect(event.data.operator_id).toBe('op-1');
+        expect(event.data.id).toBe('op-1');
         expect(event.data.status).toBe(OperatorStatus.STALE);
     });
 
@@ -172,8 +172,8 @@ describe('HeartbeatMonitorService.tick', () => {
     it('ignores operators whose status is not monitored', async () => {
         operatorDataService.queryOperators.mockResolvedValue([
             makeOperator({ status: OperatorStatus.AVAILABLE, last_heartbeat: new Date(0) }),
-            makeOperator({ operator_id: 'op-2', status: OperatorStatus.TERMINATED, last_heartbeat: new Date(0) }),
-            makeOperator({ operator_id: 'op-3', status: OperatorStatus.STOPPED, last_heartbeat: new Date(0) }),
+            makeOperator({ id: 'op-2', status: OperatorStatus.TERMINATED, last_heartbeat: new Date(0) }),
+            makeOperator({ id: 'op-3', status: OperatorStatus.STOPPED, last_heartbeat: new Date(0) }),
         ]);
 
         await service.tick();

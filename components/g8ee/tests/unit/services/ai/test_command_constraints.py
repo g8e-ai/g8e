@@ -328,45 +328,6 @@ async def test_handle_get_command_constraints_both_enabled(
     assert "Whitelisting ENABLED" in result.message
     assert "Blacklisting ENABLED" in result.message
 
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_handle_get_command_constraints_no_platform_settings(
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
-    caplog,
-):
-    """Test handler returns empty data when platform_settings is None and logs warning."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-    )
-    
-    with caplog.at_level(logging.WARNING):
-        result = await tool_service._handle_get_command_constraints(
-            tool_args={},
-            investigation=mock_investigation,
-            g8e_context=mock_g8e_context,
-            request_settings=mock_request_settings,
-            execution_id=None,
-        )
-    
-    assert isinstance(result, CommandConstraintsResult)
-    assert result.success is True
-    assert result.whitelisting_enabled is False
-    assert result.blacklisting_enabled is False
-    
-    assert any(
-        "platform_settings is None" in record.message
-        for record in caplog.records
-        if record.levelname == "WARNING"
-    )
-
-
 # =============================================================================
 # TESTS: CommandBlacklistValidator Public Methods
 # =============================================================================

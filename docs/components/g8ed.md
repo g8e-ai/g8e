@@ -608,7 +608,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 | Subservice | Responsibility |
 |------------|----------------|
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login or on-demand via Device Link. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login or upfront when Device Links are created to fulfill the slot limit. |
 | `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration, Approvals). |
 | `notifications` | SSE event broadcasting to browser sessions (Operator list updates). |
 
@@ -752,11 +752,13 @@ Device Link is the **recommended** way to deploy operators. The user generates a
 
 **User flow:**
 1. User clicks "Add Operator" → "Device Link" in the Operator Panel
-2. g8ed generates a `dlk_<32-char>` token and returns an operator command
-3. User runs the command on the target system
-4. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
-5. g8ed resolves or provisions a slot, then provides the `operator_id` to the binary during the bootstrap response
-6. Operator activates immediately — no browser approval needed
+2. User specifies the number of operator slots needed (`max_uses`)
+3. g8ed generates a `dlk_<32-char>` token and automatically provisions any missing operator slots to fulfill the requested slot limit
+4. g8ed returns an operator command with the device link token
+5. User runs the command on the target system
+6. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
+7. g8ed assigns an available operator slot and provides the `operator_id` to the binary during the bootstrap response
+8. Operator activates immediately — no browser approval needed
 7. Operator appears in the panel as active
 
 **Token format:** `dlk_[A-Za-z0-9_-]{32}` — 24 cryptographically random bytes, validated by regex before any g8es operations.

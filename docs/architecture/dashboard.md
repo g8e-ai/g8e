@@ -252,7 +252,7 @@ Platform selection is a stacked overlay (`downloadMenuStack`) — users select O
 
 `OperatorDeviceLinkMixin` manages deployment tokens (device links) within the download overlay.
 
-`_initDeviceLinkDeploymentSection(overlay)` loads available slot count and existing tokens. Available slots = `maxSlots - usedSlots`. Creating a device link (`_createDeviceLink`) calls `POST /api/operator/device-link` with name, max registrations, and expiry. Token creation shows the resulting token string in a revealed panel. Existing tokens can be revoked or deleted via their respective API calls. The create form is re-shown via "Create another" after a token is generated.
+`_initDeviceLinkDeploymentSection(overlay)` loads available slot count and existing tokens. Available slots = `maxSlots - usedSlots`. Creating a device link (`_createDeviceLink`) calls `POST /api/operator/device-link` with name, max registrations, and expiry. When a device link is created, g8ed automatically provisions any missing operator slots to fulfill the requested `max_uses` limit. Token creation shows the resulting token string in a revealed panel. Existing tokens can be revoked or deleted via their respective API calls. The create form is re-shown via "Create another" after a token is generated.
 
 ### Device Authorization
 

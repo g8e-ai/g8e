@@ -142,6 +142,7 @@ export class ChatComponent {
 
             this.anchoredTerminal?.clearActivityIndicators();
             this._portCheckIndicators?.clear();
+            this._searchWebIndicators?.clear();
             this.pendingCitations.delete(this.currentWebSessionId);
             this.hideAIStopButton();
 
@@ -234,6 +235,7 @@ export class ChatComponent {
         this.approvalPending = false;
         this.hideAIStopButton();
         this._portCheckIndicators?.clear();
+        this._searchWebIndicators?.clear();
         this.pendingCitations.clear();
         this.streamingContent.clear();
         this._hasResetAutoScrollForSession.clear();

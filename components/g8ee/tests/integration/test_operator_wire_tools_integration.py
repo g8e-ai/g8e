@@ -198,10 +198,10 @@ async def publish_and_wait(
     do not cross-talk.
     """
     results_channel = PubSubChannel.results(
-        g8ep_operator.id, g8ep_operator.operator_session_id,
+        g8ep_operator.operator_id, g8ep_operator.operator_session_id,
     )
     cmd_channel = PubSubChannel.cmd(
-        g8ep_operator.id, g8ep_operator.operator_session_id,
+        g8ep_operator.operator_id, g8ep_operator.operator_session_id,
     )
 
     # A single subscription serves every invocation. Each call gets its own

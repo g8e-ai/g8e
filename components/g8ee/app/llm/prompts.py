@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def _format_operator_doc(op_doc, index: int) -> str:
     """Format a single operator document for investigation context."""
     sys_info = op_doc.system_info
-    op_id = op_doc.operator_id or f"operator_{index + 1}"
+    op_id = op_doc.id or f"operator_{index + 1}"
     hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
     
     details = [

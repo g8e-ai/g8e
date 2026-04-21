@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Schema for SSE event fixtures. Validates the structure of shared SSE event test fixtures to ensure field name consistency across components.",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "required": ["type", "data"],
+    "properties": {
+      "type": {
+        "type": "string",
+        "description": "Event type identifier matching EventType constants"
+      },
+      "data": {
+        "type": "object",
+        "description": "Event payload data",
+        "required": ["web_session_id"],
+        "properties": {
+          "web_session_id": {
+            "type": "string",
+            "description": "Browser session identifier"
+          },
+          "investigation_id": {
+            "type": "string",
+            "description": "Investigation identifier (required for non-platform events)"
+          },
+          "case_id": {
+            "type": "string",
+            "description": "Case identifier (required for non-platform events)"
+          },
+          "execution_id": {
+            "type": "string",
+            "description": "Execution identifier for command/tool events"
+          },
+          "content": {
+            "type": "string",
+            "description": "Text content for LLM events"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message for failed events"
+          },
+          "query": {
+            "type": "string",
+            "description": "Search query for web search events"
+          },
+          "results": {
+            "type": "array",
+            "description": "Search results for web search completed events",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "url": { "type": "string" },
+                "snippet": { "type": "string" }
+              }
+            }
+          },
+          "port": {
+            "type": "string",
+            "description": "Port number for port check events"
+          },
+          "host": {
+            "type": "string",
+            "description": "Hostname for port check events"
+          },
+          "is_open": {
+            "type": "boolean",
+            "description": "Port open status for port check completed events"
+          },
+          "grounding_used": {
+            "type": "boolean",
+            "description": "Whether grounding was used for citations"
+          },
+          "chunks": {
+            "type": "array",
+            "description": "Citation chunks",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "uri": { "type": "string" },
+                    "title": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "sources_count": {
+            "type": "number",
+            "description": "Number of sources"
+          },
+          "query_list": {
+            "type": "array",
+            "description": "List of queries used",
+            "items": { "type": "string" }
+          },
+          "command": {
+            "type": "string",
+            "description": "Command string for operator command events"
+          },
+          "output": {
+            "type": "string",
+            "description": "Command output for completed events"
+          },
+          "exit_code": {
+            "type": "number",
+            "description": "Exit code for command events"
+          },
+          "success": {
+            "type": "boolean",
+            "description": "Success flag for command events"
+          },
+          "agent_mode": {
+            "type": "string",
+            "description": "Agent mode for LLM iteration started"
+          },
+          "request": {
+            "type": "string",
+            "description": "Request for tribunal events"
+          },
+          "guidelines": {
+            "type": "string",
+            "description": "Guidelines for tribunal events"
+          },
+          "model": {
+            "type": "string",
+            "description": "Model for tribunal events"
+          },
+          "num_passes": {
+            "type": "number",
+            "description": "Number of passes for tribunal events"
+          },
+          "members": {
+            "type": "array",
+            "description": "Tribunal members",
+            "items": { "type": "string" }
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for tribunal verifier failed"
+          },
+          "candidate_command": {
+            "type": "string",
+            "description": "Candidate command for tribunal events"
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Passed flag for tribunal voting"
+          },
+          "revision": {
+            "type": ["string", "null"],
+            "description": "Revision for tribunal voting"
+          },
+          "final_command": {
+            "type": "string",
+            "description": "Final command for tribunal session completed"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "Outcome for tribunal session completed"
+          },
+          "vote_score": {
+            "type": "number",
+            "description": "Vote score for tribunal events"
+          }
+        }
+      }
+    }
+  }
+}

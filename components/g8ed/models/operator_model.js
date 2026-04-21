@@ -187,7 +187,7 @@ export class CertInfo extends G8eBaseModel {
 
 export class OperatorStatusInfo extends G8eBaseModel {
     static fields = {
-        operator_id:               { type: F.string, required: true },
+        id:                       { type: F.string, required: true },
         user_id:                   { type: F.string, required: true },
         status:                    { type: F.string, required: true },
         bound_web_session_id:      { type: F.string, default: null },
@@ -207,7 +207,7 @@ export class OperatorStatusInfo extends G8eBaseModel {
 
     static fromOperator(operator) {
         return new OperatorStatusInfo({
-            operator_id:               operator.id,
+            id:                       operator.id,
             user_id:                   operator.user_id,
             status:                    operator.status,
             bound_web_session_id:      operator.bound_web_session_id ?? null,
@@ -520,7 +520,7 @@ export class OperatorSlotSystemInfo extends G8eBaseModel {
 
 export class OperatorSlot extends G8eBaseModel {
     static fields = {
-        operator_id:    { type: F.string,  required: true },
+        id:            { type: F.string,  required: true },
         name:           { type: F.string,  default: null },
         status:         { type: F.string,  default: null },
         status_display: { type: F.string,  default: null },
@@ -536,7 +536,7 @@ export class OperatorSlot extends G8eBaseModel {
     static fromOperator(operator) {
         const s = operator.status ?? OperatorStatus.OFFLINE;
         return new OperatorSlot({
-            operator_id:    operator.id,
+            id:            operator.id,
             name:           operator.name ?? null,
             status:         s,
             status_display: String(s).toUpperCase(),
@@ -741,7 +741,7 @@ export class UnbindOperatorsResponse extends G8eBaseModel {
 
 export class OperatorWithSessionContext extends G8eBaseModel {
     static fields = {
-        operator_id:         { type: F.string,  required: true },
+        id:                 { type: F.string,  required: true },
         operator_session_id: { type: F.string,  default: null },
         bound_web_session_id: { type: F.string,  default: null },
         status:              { type: F.string,  required: true },

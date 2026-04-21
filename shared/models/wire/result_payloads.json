@@ -3,6 +3,8 @@
 
   "_comment.wire_format": "g8eo wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. g8ee and g8ed read `event_type` from the envelope to select the correct payload deserializer.",
 
+  "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
+
   "execution_result": {
     "_description": "Payload for event_type: g8e.v1.operator.command.completed | g8e.v1.operator.command.failed. Final result of a command execution.",
     "_event_types": ["g8e.v1.operator.command.completed", "g8e.v1.operator.command.failed"],

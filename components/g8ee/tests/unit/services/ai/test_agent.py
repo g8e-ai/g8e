@@ -516,14 +516,12 @@ class TestStreamWithToolLoop:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -561,14 +559,12 @@ class TestStreamWithToolLoop:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -591,14 +587,12 @@ class TestStreamWithToolLoop:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -655,9 +649,6 @@ class TestMaxTurnLimitApproval:
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
@@ -711,9 +702,6 @@ class TestMaxTurnLimitApproval:
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
@@ -743,9 +731,6 @@ class TestMaxTurnLimitApproval:
 
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
@@ -784,14 +769,12 @@ class TestTokenAccumulation:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -819,14 +802,12 @@ class TestTokenAccumulation:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -897,9 +878,6 @@ class TestGroundingMetadata:
         with patch("app.services.ai.agent.execute_turn_tool_calls", side_effect=mock_execute):
             chunks = []
             async for chunk in agent._stream_with_tool_loop(
-                contents=[],
-                generation_config=gen_config,
-                model_name="test-model",
                 inputs=context,
                 g8ed_event_service=g8ed_event_service,
                 llm_provider=provider,
@@ -922,14 +900,12 @@ class TestGroundingMetadata:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -960,14 +936,12 @@ class TestCompleteEmission:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,
@@ -992,14 +966,12 @@ class TestCompleteEmission:
 
         agent = make_g8e_agent(fn_handler=tool_executor)
         context = make_agent_inputs()
-        gen_config = make_gen_config()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
         g8ed_event_service = make_g8ed_event_service()
 
         chunks = []
         async for chunk in agent._stream_with_tool_loop(
-            contents=[],
-            generation_config=gen_config,
-            model_name="test-model",
             inputs=context,
             g8ed_event_service=g8ed_event_service,
             llm_provider=provider,

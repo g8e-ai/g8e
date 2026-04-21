@@ -1,12 +1,14 @@
 {
   "_comment": "Canonical wire envelope for the OPERATOR_HEARTBEAT_RECEIVED SSE event pushed from g8ee to g8ed (and fanned out to the browser). Authorship split: g8eo authors the telemetry inside `metrics`; g8ee owns the envelope (`operator_id`, `status`). `metrics` is the same nested OperatorHeartbeat shape that is persisted on the operator document — no flat projection, no divergence. Producers: g8ee `HeartbeatSSEEnvelope` (components/g8ee/app/models/operators.py). Consumers: g8ed `EventService` forwards the envelope unchanged to the browser; the browser parses `data.metrics` as a HeartbeatSnapshot (mirror of OperatorHeartbeat).",
 
+  "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
+
   "envelope": {
     "_description": "Top-level envelope authored by g8ee.",
     "operator_id": {
       "type": "string",
       "required": true,
-      "description": "Operator identifier. Matches the `operator_id` field on the persisted OperatorDocument."
+      "description": "Operator identifier. Maps from OperatorDocument.core_identity.id."
     },
     "status": {
       "type": "string",

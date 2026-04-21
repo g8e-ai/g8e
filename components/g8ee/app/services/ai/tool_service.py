@@ -737,13 +737,6 @@ class AIToolService:
     ) -> ToolResult:
         logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
 
-        if self._platform_settings is None:
-            logger.warning(
-                "[GET_COMMAND_CONSTRAINTS] platform_settings is None - "
-                "command constraints will be reported as disabled. "
-                "This may indicate a configuration error."
-            )
-
         cv = self._user_settings.command_validation if self._user_settings else None
         whitelisting_enabled = cv.enable_whitelisting if cv else False
         blacklisting_enabled = cv.enable_blacklisting if cv else False

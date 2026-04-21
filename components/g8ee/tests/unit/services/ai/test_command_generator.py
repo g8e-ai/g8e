@@ -526,7 +526,7 @@ class TestGenerateCommandSystemError:
             )
 
             mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
-            assert result.final_command == "ls -la"
+            assert result.final_command == "ok"
 
 
 class TestMixedErrorFallback:

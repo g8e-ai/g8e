@@ -222,13 +222,13 @@ async def seed_operator_if_bound(
     operator_doc = build_production_operator_document(operator_id=operator_id)
 
     bound_operators = [build_bound_operator(
-        operator_id=operator_doc.operator_id,
+        operator_id=operator_doc.id,
         operator_session_id=operator_doc.operator_session_id,
         status=OperatorStatus.BOUND,
     )]
 
     await operator_data_service.create_operator(operator_doc)
-    logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.operator_id)
-    cleanup.track_operator(operator_doc.operator_id)
+    logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.id)
+    cleanup.track_operator(operator_doc.id)
 
     return bound_operators

@@ -211,6 +211,8 @@ class OperatorApprovalService:
         log_tag: str,
     ) -> None:
         """Record an approval lifecycle event to both operator activity_log and conversation_history."""
+        # Ensure event_type is set on metadata for audit trail
+        metadata.event_type = event_type
         if operator_id:
             try:
                 await self.operator_data_service.add_operator_approval(

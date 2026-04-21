@@ -47,12 +47,12 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for stop command');
         
         logger.info('[OPERATOR-RELAY] Relaying stop command to g8ee', {
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...'
         });
 
         const request = new StopOperatorRequest({
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id,
             user_id: g8eContext.user_id,
         });
@@ -101,7 +101,7 @@ export class OperatorRelayService {
 
         logger.info('[OPERATOR-RELAY] Relaying direct command to operator via g8ee', {
             executionId: directCommandRequest.execution_id,
-            operatorId: boundoperator.id
+            operatorId: boundOperator.id
         });
 
         return httpClient.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
@@ -138,7 +138,7 @@ export class OperatorRelayService {
             g8eContext,
         }).catch(err => {
             logger.error('[OPERATOR-RELAY] Operator session registration failed (non-blocking)', {
-                operatorId: boundoperator.id,
+                operatorId: boundOperator.id,
                 error: err.message
             });
         });

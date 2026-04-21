@@ -34,7 +34,7 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-G8ES_BASE_URL = 'https://g8es'
+G8ES_BASE_URL = 'https://g8es:9000'
 G8ED_BASE_URL = 'https://g8ed'
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
@@ -62,13 +62,8 @@ def _create_ssl_context() -> Optional[ssl.SSLContext]:
 
 def get_auth_token() -> str:
     """Load operator session token from env (set by g8e login)."""
-    # User session token from g8e login
+    # User session token from g8e login - this is the ONLY auth method
     token = os.environ.get('OPERATOR_SESSION_ID')
-    if token:
-        return token
-
-    # Fallback to internal auth token for platform-internal use only
-    token = os.environ.get('G8E_INTERNAL_AUTH_TOKEN')
     if token:
         return token
 

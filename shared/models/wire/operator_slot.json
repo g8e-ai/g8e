@@ -1,13 +1,15 @@
 {
   "_comment": "Canonical OperatorSlot wire format for SSE operator list events. This is a lightweight projection of OperatorDocument containing only the fields needed by the operator panel list UI (~10 fields vs 50+ in full OperatorDocument). Consumers: g8ed (JS OperatorSlot in operator_model.js), g8ee (Python TBD), g8eo (Go TBD).",
 
+  "_comment.field_naming": "FIELD NAMING: Wire format projections use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
+
   "operator_slot": {
     "_description": "Lightweight operator projection for SSE operator list events. Reduces payload size significantly compared to full OperatorDocument.",
     "fields": {
       "operator_id": {
         "type": "string",
         "required": true,
-        "description": "Durable operator identifier"
+        "description": "Durable operator identifier. Maps from OperatorDocument.core_identity.id."
       },
       "name": {
         "type": "string",

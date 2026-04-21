@@ -346,7 +346,10 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             lines.append(f"- [{entry.timestamp}] {entry.summary}")
             if entry.details:
                 if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
-                    status = str(entry.details.status) if entry.details.status else "unknown"
+                    status = entry.details.status
+                    if hasattr(status, 'value'):
+                        status = status.value
+                    status = status if status else "unknown"
                 else:
                     status = "success" if entry.details.approved else "failed"
                 lines.append(f"  Result: {status}")

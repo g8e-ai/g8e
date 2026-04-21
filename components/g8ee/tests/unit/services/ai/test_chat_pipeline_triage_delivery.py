@@ -75,6 +75,7 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.add_chat_message = AsyncMock()
+    svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
     return svc
@@ -184,10 +185,10 @@ async def test_run_chat_impl_short_circuits_correctly():
     svc.g8e_agent.run_with_sse.assert_not_called()
     
     # 3. Verify persistence
-    # _persist_ai_response should have been called via add_chat_message on investigation_service
-    svc.investigation_service.add_chat_message.assert_called_once()
-    call_args = svc.investigation_service.add_chat_message.call_args
-    assert call_args.kwargs["content"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
+    # _persist_ai_response calls persist_ai_message, which persists the follow-up question
+    svc.investigation_service.persist_ai_message.assert_called_once()
+    call_args = svc.investigation_service.persist_ai_message.call_args
+    assert call_args.kwargs["text"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     assert call_args.kwargs["investigation_id"] == "inv-1"
 
 

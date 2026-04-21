@@ -52,6 +52,7 @@ describe('DeviceLinkService', () => {
         mockOperatorService = {
             getOperator: vi.fn(),
             createOperatorSlot: vi.fn(),
+            terminateOperator: vi.fn(),
             collectionName: Collections.OPERATORS
         };
         mockWebSessionService = {
@@ -127,6 +128,14 @@ describe('DeviceLinkService', () => {
 
     describe('createLink', () => {
         it('should successfully create a multi-use active link', async () => {
+            mockCache.queryDocuments.mockResolvedValue([
+                { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-2', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-3', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-4', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-5', status: OperatorStatus.AVAILABLE }
+            ]);
+
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
                 organization_id: mockG8eContext.organization_id,
@@ -144,6 +153,13 @@ describe('DeviceLinkService', () => {
         });
 
         it('should create link without name', async () => {
+            mockCache.queryDocuments.mockResolvedValue(
+                Array.from({ length: DEFAULT_DEVICE_LINK_MAX_USES }, (_, i) => ({
+                    operator_id: `op-${i}`,
+                    status: OperatorStatus.AVAILABLE
+                }))
+            );
+
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
                 organization_id: mockG8eContext.organization_id,
@@ -196,6 +212,90 @@ describe('DeviceLinkService', () => {
 
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.TTL_INVALID);
+        });
+
+        it('should generate operator slots when max_uses exceeds current slot count', async () => {
+            mockCache.queryDocuments.mockResolvedValue([
+                { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-2', status: OperatorStatus.ACTIVE }
+            ]);
+            mockOperatorService.createOperatorSlot
+                .mockResolvedValueOnce('new-op-1')
+                .mockResolvedValueOnce('new-op-2')
+                .mockResolvedValueOnce('new-op-3');
+
+            const result = await service.createLink({
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 5
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockOperatorService.createOperatorSlot).toHaveBeenCalledTimes(3);
+            expect(mockOperatorService.createOperatorSlot).toHaveBeenNthCalledWith(1, expect.objectContaining({
+                userId: mockG8eContext.user_id,
+                organizationId: mockG8eContext.organization_id,
+                slotNumber: 3,
+                operatorType: OperatorType.SYSTEM
+            }));
+        });
+
+        it('should not generate slots when current slot count is sufficient', async () => {
+            mockCache.queryDocuments.mockResolvedValue([
+                { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-2', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-3', status: OperatorStatus.AVAILABLE }
+            ]);
+
+            const result = await service.createLink({
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 3
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockOperatorService.createOperatorSlot).not.toHaveBeenCalled();
+        });
+
+        it('should ignore terminated operators when counting current slots', async () => {
+            mockCache.queryDocuments.mockResolvedValue([
+                { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+                { operator_id: 'op-2', status: OperatorStatus.TERMINATED },
+                { operator_id: 'op-3', status: OperatorStatus.TERMINATED }
+            ]);
+            mockOperatorService.createOperatorSlot.mockResolvedValue('new-op-1');
+
+            const result = await service.createLink({
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 2
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockOperatorService.createOperatorSlot).toHaveBeenCalledTimes(1);
+        });
+
+        it('should rollback created slots if slot creation fails', async () => {
+            mockCache.queryDocuments.mockResolvedValue([
+                { operator_id: 'op-1', status: OperatorStatus.AVAILABLE }
+            ]);
+            mockOperatorService.createOperatorSlot
+                .mockResolvedValueOnce('new-op-1')
+                .mockResolvedValueOnce('new-op-2')
+                .mockResolvedValueOnce(null);
+            mockOperatorService.terminateOperator.mockResolvedValue({ success: true });
+
+            const result = await service.createLink({
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 5
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe(DeviceLinkError.SLOT_CREATE_FAILED);
+            expect(mockOperatorService.createOperatorSlot).toHaveBeenCalledTimes(3);
+            expect(mockOperatorService.terminateOperator).toHaveBeenCalledWith('new-op-1');
+            expect(mockOperatorService.terminateOperator).toHaveBeenCalledWith('new-op-2');
         });
     });
 

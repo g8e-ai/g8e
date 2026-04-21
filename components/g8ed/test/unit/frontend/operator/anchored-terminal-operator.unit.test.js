@@ -69,7 +69,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('resets state when called on already bound operator', () => {
             const ctx = createMixinContext();
             ctx.isOperatorBound = true;
-            ctx.boundOperator = { operator_id: 'op_123' };
+            ctx.boundOperator = { id: 'op_123' };
             
             ctx.initOperatorState();
             
@@ -84,7 +84,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             ctx.bindEventBusListeners();
             
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             ctx.eventBus.emit(EventType.OPERATOR_STATUS_UPDATED_BOUND, { operator: testOperator });
             
             expect(ctx.setOperatorBound).toHaveBeenCalledWith(testOperator);
@@ -140,7 +140,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             ctx.bindEventBusListeners();
             
-            const testData = { operator: { operator_id: 'op_123' } };
+            const testData = { operator: { id: 'op_123' } };
             ctx.eventBus.emit(EventType.OPERATOR_BOUND, testData);
             
             expect(ctx.handleOperatorBound).toHaveBeenCalledWith(testData);
@@ -347,15 +347,15 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             const testData = {
                 operators: [
-                    { operator_id: 'op_1', status: OperatorStatus.BOUND, name: 'bound-op' },
-                    { operator_id: 'op_2', status: OperatorStatus.AVAILABLE, name: 'available-op' },
+                    { id: 'op_1', status: OperatorStatus.BOUND, name: 'bound-op' },
+                    { id: 'op_2', status: OperatorStatus.AVAILABLE, name: 'available-op' },
                 ],
             };
             
             ctx.handleOperatorListUpdate(testData);
             
             expect(ctx.setOperatorBound).toHaveBeenCalledWith(
-                expect.objectContaining({ operator_id: 'op_1', status: OperatorStatus.BOUND })
+                expect.objectContaining({ id: 'op_1', status: OperatorStatus.BOUND })
             );
         });
 
@@ -364,14 +364,14 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             const testData = {
                 operators: [
-                    { operator_id: 'op_1', is_bound: true, name: 'bound-op' },
+                    { id: 'op_1', is_bound: true, name: 'bound-op' },
                 ],
             };
             
             ctx.handleOperatorListUpdate(testData);
             
             expect(ctx.setOperatorBound).toHaveBeenCalledWith(
-                expect.objectContaining({ operator_id: 'op_1', is_bound: true })
+                expect.objectContaining({ id: 'op_1', is_bound: true })
             );
         });
 
@@ -380,8 +380,8 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             const testData = {
                 operators: [
-                    { operator_id: 'op_1', status: OperatorStatus.AVAILABLE },
-                    { operator_id: 'op_2', status: OperatorStatus.ACTIVE },
+                    { id: 'op_1', status: OperatorStatus.AVAILABLE },
+                    { id: 'op_2', status: OperatorStatus.ACTIVE },
                 ],
             };
             
@@ -430,7 +430,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('calls setOperatorBound with operator from data', () => {
             const ctx = createMixinContext({ setOperatorBound: vi.fn() });
             
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             ctx.handleOperatorBound({ operator: testOperator });
             
             expect(ctx.setOperatorBound).toHaveBeenCalledWith(testOperator);
@@ -466,7 +466,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
     describe('setOperatorBound', () => {
         it('sets isOperatorBound to true', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             
             ctx.setOperatorBound(testOperator);
             
@@ -475,7 +475,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('stores bound operator', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             
             ctx.setOperatorBound(testOperator);
             
@@ -485,7 +485,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates hostnameElement with hostname from system_info', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 name: 'test-op',
                 system_info: { hostname: 'test-host' },
             };
@@ -498,7 +498,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates hostnameElement with operator name when system_info.hostname is missing', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 name: 'test-op',
                 system_info: {},
             };
@@ -511,7 +511,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates hostnameElement with "operator" fallback when name is missing', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 system_info: {},
             };
             
@@ -524,7 +524,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.hostnameElement = null;
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 name: 'test-op',
                 system_info: { hostname: 'test-host' },
             };
@@ -535,7 +535,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates promptElement with current_user from system_info', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 system_info: { current_user: 'ubuntu' },
             };
             
@@ -547,7 +547,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates promptElement with "$" when current_user is "$"', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 system_info: { current_user: '$' },
             };
             
@@ -559,7 +559,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
         it('updates promptElement with "$" when current_user is missing', () => {
             const ctx = createMixinContext();
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 system_info: {},
             };
             
@@ -572,7 +572,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.promptElement = null;
             const testOperator = {
-                operator_id: 'op_123',
+                id: 'op_123',
                 system_info: { current_user: 'ubuntu' },
             };
             
@@ -581,7 +581,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('calls updateInputState', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123' };
+            const testOperator = { id: 'op_123' };
             
             ctx.setOperatorBound(testOperator);
             
@@ -590,7 +590,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('calls appendSystemMessage with connection message', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             
             ctx.setOperatorBound(testOperator);
             
@@ -599,7 +599,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('calls appendSystemMessage with "operator" fallback when name is missing', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123' };
+            const testOperator = { id: 'op_123' };
             
             ctx.setOperatorBound(testOperator);
             
@@ -608,10 +608,10 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('does nothing if already bound to same operator', () => {
             const ctx = createMixinContext();
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
+            const testOperator = { id: 'op_123', name: 'test-op' };
             
             ctx.isOperatorBound = true;
-            ctx.boundOperator = { operator_id: 'op_123', name: 'test-op' };
+            ctx.boundOperator = { id: 'op_123', name: 'test-op' };
             ctx.updateInputState = vi.fn();
             ctx.appendSystemMessage = vi.fn();
             
@@ -623,10 +623,10 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('updates operator when bound to different operator', () => {
             const ctx = createMixinContext();
-            const newOperator = { operator_id: 'op_456', name: 'new-op' };
+            const newOperator = { id: 'op_456', name: 'new-op' };
             
             ctx.isOperatorBound = true;
-            ctx.boundOperator = { operator_id: 'op_123', name: 'old-op' };
+            ctx.boundOperator = { id: 'op_123', name: 'old-op' };
             
             ctx.setOperatorBound(newOperator);
             
@@ -647,7 +647,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
 
         it('clears boundOperator', () => {
             const ctx = createMixinContext();
-            ctx.boundOperator = { operator_id: 'op_123' };
+            ctx.boundOperator = { id: 'op_123' };
             
             ctx.setOperatorUnbound();
             

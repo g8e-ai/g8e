@@ -313,8 +313,13 @@ if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
     fi
 fi
 
-# Special case: operator deploy and stream need auth
-if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream") ]]; then
+# Special case: operator deploy, stream, and reauth need auth
+# platform settings needs auth for g8ed internal API access
+if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream" || "$SUB" == "reauth") ]]; then
+    _ensure_authenticated
+fi
+
+if [[ "$TOP" == "platform" && "$SUB" == "settings" ]]; then
     _ensure_authenticated
 fi
 
@@ -494,11 +499,6 @@ case "$TOP" in
                     echo "[g8e] operator reauth requires --user-id <id> or --email <email>" >&2
                     echo "  Usage: ./g8e operator reauth --user-id <id>" >&2
                     echo "         ./g8e operator reauth --email <email>" >&2
-                    exit 1
-                fi
-
-                if [[ -z "$OPERATOR_SESSION_ID" ]]; then
-                    echo "[g8e] Authentication required. Run: ./g8e login --api-key <key>" >&2
                     exit 1
                 fi
 

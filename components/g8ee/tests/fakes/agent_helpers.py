@@ -88,7 +88,7 @@ def make_agent_inputs(
         )
 
     if request_settings is None:
-        request_settings = G8eeUserSettings(llm=LLMSettings())
+        request_settings = G8eeUserSettings(llm=LLMSettings(primary_model="test-model"))
 
     if generation_config is None:
         generation_config = make_gen_config(
@@ -230,19 +230,16 @@ def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) 
 async def collect_stream_from_model_chunks(
     agent: g8eEngine,
     inputs: AgentInputs,
-    gen_config=None,
-    model_name: str = "test-model",
     g8ed_event_service: Any = None,
     llm_provider: Any = None,
 ) -> list[StreamChunkFromModel]:
     """Consume agent._stream_with_tool_loop and return all yielded chunks."""
-    if gen_config is None:
-        gen_config = make_gen_config(agent_mode=inputs.agent_mode or AgentMode.OPERATOR_NOT_BOUND)
+    if inputs.generation_config is None:
+        inputs.generation_config = make_gen_config(agent_mode=inputs.agent_mode or AgentMode.OPERATOR_NOT_BOUND)
+    if inputs.model_to_use is None:
+        inputs.model_to_use = "test-model"
     chunks: list[StreamChunkFromModel] = []
     async for chunk in agent._stream_with_tool_loop(
-        contents=[],
-        generation_config=gen_config,
-        model_name=model_name,
         inputs=inputs,
         g8ed_event_service=g8ed_event_service or make_g8ed_event_service(),
         llm_provider=llm_provider,

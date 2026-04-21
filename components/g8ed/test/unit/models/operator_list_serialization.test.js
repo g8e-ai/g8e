@@ -54,7 +54,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         expect(typeof serializedOperator).toBe('object');
 
         // Verify fields are present
-        expect(serializedoperator.id).toBe('op-1');
+        expect(serializedOperator.operator_id).toBe('op-1');
         expect(serializedOperator.name).toBe('node-01');
         expect(serializedOperator.status).toBe('ACTIVE');
 

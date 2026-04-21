@@ -161,6 +161,44 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
         }
 
+        const allOperators = await this._cache_aside.queryDocuments(
+            this._operatorService.collectionName,
+            [{ field: 'user_id', operator: '==', value: user_id }]
+        );
+        const currentSlotCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
+
+        if (max_uses > currentSlotCount) {
+            const slotsToCreate = max_uses - currentSlotCount;
+            const createdSlotIds = [];
+
+            for (let i = 0; i < slotsToCreate; i++) {
+                const slotNumber = currentSlotCount + i + 1;
+                const operatorId = await this._operatorService.createOperatorSlot({
+                    userId: user_id,
+                    organizationId: organization_id,
+                    slotNumber: slotNumber,
+                    operatorType: OperatorType.SYSTEM,
+                    cloudSubtype: null,
+                    namePrefix: 'operator',
+                    isG8eNode: false,
+                });
+
+                if (!operatorId) {
+                    for (const id of createdSlotIds) {
+                        await this._operatorService.terminateOperator(id).catch(() => {});
+                    }
+                    return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
+                }
+                createdSlotIds.push(operatorId);
+            }
+
+            logger.info('[DEVICE-LINK] Generated operator slots for device link', {
+                user_id,
+                slots_created: slotsToCreate,
+                total_slots: max_uses
+            });
+        }
+
         const token = `dlk_${crypto.randomBytes(24).toString('base64url')}`;
         const createdAt = now();
         const expiresAt = addSeconds(createdAt, ttl_seconds);

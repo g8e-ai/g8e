@@ -58,7 +58,7 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
 # an entry requires adding a ``ToolSpec`` in ``tool_registry.TOOL_SPECS``
 # and the corresponding ``_build_*`` / ``_handle_*`` methods on
 # ``AIToolService``. See ``docs/architecture/ai_agents.md``.
-from app.constants.tool_registry_pending import PENDING_RESTORATION
+from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 
 
 def test_pending_restoration_tools_are_not_in_operator_tools():
@@ -70,7 +70,7 @@ def test_pending_restoration_tools_are_not_in_operator_tools():
     ``_assert_tool_registry_invariants`` already catches at startup — this test
     pins the contract and fails loudly if the invariant drifts.
     """
-    assert PENDING_RESTORATION.isdisjoint(OPERATOR_TOOLS)
+    assert _PENDING_RESTORATION.isdisjoint(OPERATOR_TOOLS)
 
 
 def test_every_operator_tool_name_has_a_spec_or_is_pending():

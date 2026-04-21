@@ -130,3 +130,66 @@ class TestAgentInputsContentsShallowCopyInvariant:
             "introduced. Reconsider the corresponding doc claim at "
             "_stream_with_tool_loop."
         )
+
+
+class TestAgentInputsImmutability:
+    """Regression tests for AgentInputs immutability (Report 2)."""
+
+    def test_inputs_model_dump_round_trip_preserves_all_fields(self):
+        """AgentInputs must survive model_dump() -> model_validate() round-trip.
+
+        This regression test verifies the AgentInputs/AgentStreamState split
+        (Report 2) maintains data integrity through serialization. All fields
+        must be preserved when dumping to dict and reconstructing, ensuring
+        no silent data loss occurs during persistence or transmission.
+        """
+        from app.models.agent import AgentInputs
+        from tests.fakes.factories import build_enriched_context, build_g8e_http_context
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        from app.constants import AgentMode
+
+        inv = build_enriched_context(investigation_id="inv-immutable-test")
+        g8e_ctx = build_g8e_http_context(user_id="user-immutable-test")
+        request_settings = G8eeUserSettings(llm=LLMSettings())
+
+        original_inputs = AgentInputs(
+            case_id="case-immutable",
+            investigation_id="inv-immutable-test",
+            user_id="user-immutable-test",
+            web_session_id="web-immutable",
+            agent_mode=AgentMode.OPERATOR_BOUND,
+            sentinel_mode=True,
+            investigation=inv,
+            g8e_context=g8e_ctx,
+            request_settings=request_settings,
+            operator_bound=True,
+            model_to_use="test-model",
+            max_tokens=2048,
+            conversation_history=[{"role": "user", "content": "test", "sender": "user"}],
+            system_instructions="You are a helpful assistant",
+            contents=[{"role": "user", "parts": [{"text": "hello"}]}],
+            user_memories=[{"id": "mem-1", "content": "test memory", "case_id": "case-immutable", "investigation_id": "inv-immutable-test", "user_id": "user-immutable-test", "status": "Open", "case_title": "test case"}],
+            case_memories=[{"id": "case-mem-1", "content": "case memory", "case_title": "test case", "case_id": "case-immutable", "investigation_id": "inv-immutable-test", "user_id": "user-immutable-test", "status": "Open"}],
+        )
+
+        # Serialize to dict
+        dumped = original_inputs.model_dump()
+
+        # Reconstruct from dict
+        reconstructed = AgentInputs(**dumped)
+
+        # Verify all critical fields are preserved
+        assert reconstructed.case_id == original_inputs.case_id
+        assert reconstructed.investigation_id == original_inputs.investigation_id
+        assert reconstructed.user_id == original_inputs.user_id
+        assert reconstructed.web_session_id == original_inputs.web_session_id
+        assert reconstructed.agent_mode == original_inputs.agent_mode
+        assert reconstructed.sentinel_mode == original_inputs.sentinel_mode
+        assert reconstructed.operator_bound == original_inputs.operator_bound
+        assert reconstructed.model_to_use == original_inputs.model_to_use
+        assert reconstructed.max_tokens == original_inputs.max_tokens
+        assert reconstructed.system_instructions == original_inputs.system_instructions
+        assert len(reconstructed.conversation_history) == len(original_inputs.conversation_history)
+        assert len(reconstructed.contents) == len(original_inputs.contents)
+        assert len(reconstructed.user_memories) == len(original_inputs.user_memories)
+        assert len(reconstructed.case_memories) == len(original_inputs.case_memories)

@@ -167,7 +167,7 @@ class AIRequestBuilder:
         model = model_override or settings.llm.primary_model
         if not model:
             raise ConfigurationError(
-                "No LLM model configured. Set a primary_model in platform settings."
+                "No LLM model configured. Set a primary_model in user settings."
             )
         tools = self.tool_executor.get_tools(agent_mode, model) if self.tool_executor else []
 

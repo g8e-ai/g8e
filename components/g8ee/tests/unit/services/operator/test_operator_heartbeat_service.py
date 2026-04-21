@@ -267,7 +267,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
         return _make_service(operator_data_service=mock_operator_data_service)
 
     async def test_cache_hit_returns_operator(self, service, mock_operator_data_service):
-        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.ACTIVE, user_id="user-1", bound_web_session_id="ws-1")
+        operator = OperatorDocument(id="op-222", status=OperatorStatus.ACTIVE, user_id="user-1", bound_web_session_id="ws-1")
         mock_operator_data_service.get_operator.return_value = operator
 
         result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
@@ -290,7 +290,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
         upstream via API-key validation — see test_cache_miss_returns_none.
         """
         for status in OperatorStatus:
-            operator = OperatorDocument(operator_id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
+            operator = OperatorDocument(id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
             mock_operator_data_service.get_operator.return_value = operator
 
             result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
@@ -322,7 +322,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
     @pytest.fixture
     def bound_operator(self):
         return OperatorDocument(
-            operator_id="op-222",
+            id="op-222",
             status=OperatorStatus.ACTIVE,
             user_id="user-333",
             bound_web_session_id="web-999",
@@ -359,7 +359,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
     async def test_sse_payload_status_set_from_operator(
         self, service, mock_operator_data_service, mock_event_service
     ):
-        operator = OperatorDocument(operator_id="op-222", status=OperatorStatus.BOUND, bound_web_session_id="web-999", user_id="user-1")
+        operator = OperatorDocument(id="op-222", status=OperatorStatus.BOUND, bound_web_session_id="web-999", user_id="user-1")
         mock_operator_data_service.get_operator.return_value = operator
 
         await service.process_heartbeat_message("op-222", "op-session-111", _make_payload())
@@ -460,7 +460,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
+            id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
@@ -482,7 +482,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222",
+            id="op-222",
             status=OperatorStatus.ACTIVE,
             bound_web_session_id=None,
             user_id="user-7",
@@ -505,7 +505,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222",
+            id="op-222",
             status=OperatorStatus.ACTIVE,
             bound_web_session_id=None,
             user_id="user-7",
@@ -528,7 +528,7 @@ class TestPushHeartbeatSSE:
         self, service, mock_event_service
     ):
         operator = OperatorDocument(
-            operator_id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
+            id="op-222", status=OperatorStatus.ACTIVE, bound_web_session_id="web-999", user_id="user-1"
         )
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
@@ -546,7 +546,7 @@ class TestPushHeartbeatSSE:
         so opaque errors (e.g. AttributeError on client internals) remain
         diagnosable instead of appearing as a one-line warning."""
         operator = OperatorDocument(
-            operator_id="op-333",
+            id="op-333",
             status=OperatorStatus.ACTIVE,
             bound_web_session_id="web-111",
             user_id="user-1",

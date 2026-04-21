@@ -199,7 +199,7 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
-        assert settings.llm.llm_command_gen_passes == 3
+        assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is True
         assert settings.llm.llm_command_gen_verifier is True
 
@@ -262,7 +262,7 @@ class TestSettingsService:
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
-        assert settings.llm.llm_command_gen_passes == 3
+        assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is True
         assert settings.llm.llm_command_gen_verifier is True
 
