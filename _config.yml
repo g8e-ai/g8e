@@ -74,3 +74,27 @@ defaults:
       path: ""
     values:
       layout: default
+
+# Just the Docs navigation
+nav:
+  - Home:
+    - Home: /
+  - Documentation:
+    - Documentation Index: docs/
+    - Architecture:
+      - About: docs/architecture/about.md
+      - Security: docs/architecture/security.md
+      - AI Control Plane: docs/architecture/ai_control_plane.md
+      - Operator: docs/architecture/operator.md
+      - Prompts: docs/architecture/prompts.md
+      - Storage: docs/architecture/storage.md
+    - Components:
+      - g8eo (Operator): docs/components/g8eo.md
+      - g8ee (AI Engine): docs/components/g8ee.md
+      - g8ed (Dashboard): docs/components/g8ed.md
+      - g8es (Data Bus): docs/components/g8es.md
+      - g8ep (Test Runner): docs/components/g8ep.md
+    - Developer:
+      - Developer Guide: docs/developer.md
+      - Testing Guide: docs/testing.md
+      - Glossary: docs/glossary.md
