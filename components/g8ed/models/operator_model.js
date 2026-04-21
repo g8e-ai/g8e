@@ -756,7 +756,7 @@ export class OperatorWithSessionContext extends G8eBaseModel {
 
     static create(operator, operatorSession, webSession) {
         return new OperatorWithSessionContext({
-            operator_id:         operator.id,
+            id:                  operator.id,
             operator_session_id: operatorSession?.id || operator.operator_session_id,
             bound_web_session_id: webSession?.id || operator.bound_web_session_id,
             status:              operator.status,

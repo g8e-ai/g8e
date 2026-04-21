@@ -64,7 +64,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
 
     describe('getG8ENodeOperatorForUser', () => {
         it('returns operator and active status', async () => {
-            const mockOp = { id: 'op_123', status: OperatorStatus.ACTIVE };
+            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
             operatorService.queryOperators.mockResolvedValue([mockOp]);
 
             const result = await service.getG8ENodeOperatorForUser('user_123');
@@ -161,7 +161,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
 
     describe('relaunchG8ENodeOperatorForUser', () => {
         it('stops, resets, persists new key, and launches', async () => {
-            const mockOp = { id: 'op_123', status: OperatorStatus.ACTIVE };
+            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
             operatorService.queryOperators.mockResolvedValue([mockOp]);
             operatorService.resetOperator.mockResolvedValue({ success: true, operator: { api_key: 'new-key' } });
             mockFetchOk();
@@ -193,7 +193,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
         });
 
         it('returns failure when reset has no API key', async () => {
-            const mockOp = { id: 'op_123', status: OperatorStatus.ACTIVE };
+            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
             operatorService.queryOperators.mockResolvedValue([mockOp]);
             operatorService.resetOperator.mockResolvedValue({ success: true, operator: {} });
             mockFetchOk();
@@ -207,7 +207,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
 
     describe('activateG8ENodeOperatorForUser', () => {
         it('skips launch when operator is already active', async () => {
-            const mockOp = { id: 'op_123', status: OperatorStatus.ACTIVE };
+            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
             operatorService.queryOperators.mockResolvedValue([mockOp]);
 
             await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1');
@@ -217,7 +217,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
         });
 
         it('launches when operator slot is available with API key', async () => {
-            const mockOp = { id: 'op_123', status: 'AVAILABLE', api_key: 'sk-key' };
+            const mockOp = { id: 'op_123', user_id: 'user_123', status: 'AVAILABLE', api_key: 'sk-key' };
             operatorService.queryOperators.mockResolvedValue([mockOp]);
             mockFetchOk();
 

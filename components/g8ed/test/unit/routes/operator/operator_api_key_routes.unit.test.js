@@ -66,7 +66,7 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.api_key).toBe('test-api-key');
-            expect(res.body.operator_id).toBe('test-op-id');
+            expect(res.body.id).toBe('test-op-id');
         });
 
         it('returns 404 if API key is missing', async () => {

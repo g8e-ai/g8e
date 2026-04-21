@@ -68,8 +68,8 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
 
     it('should serialize multiple OperatorSlot instances correctly', () => {
         const slots = [
-            new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' }),
-            new OperatorSlot({ operator_id: 'op-2', status: 'AVAILABLE' }),
+            new OperatorSlot({ id: 'op-1', status: 'ACTIVE' }),
+            new OperatorSlot({ id: 'op-2', status: 'AVAILABLE' }),
         ];
 
         const event = new OperatorListUpdatedEvent({
@@ -84,8 +84,8 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         expect(wire.data.operators).toHaveLength(2);
         expect(wire.data.operators[0] instanceof OperatorSlot).toBe(false);
         expect(wire.data.operators[1] instanceof OperatorSlot).toBe(false);
-        expect(wire.data.operators[0].operator_id).toBe('op-1');
-        expect(wire.data.operators[1].operator_id).toBe('op-2');
+        expect(wire.data.operators[0].id).toBe('op-1');
+        expect(wire.data.operators[1].id).toBe('op-2');
     });
 
     it('should handle JSON.stringify roundtrip correctly', () => {
@@ -95,7 +95,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         });
 
         const operatorSlot = new OperatorSlot({
-            operator_id: 'op-1',
+            id: 'op-1',
             name: 'node-01',
             status: 'ACTIVE',
             system_info: systemInfo,
@@ -114,7 +114,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         // Verify parsed structure
         expect(parsed.type).toBe('g8e.v1.operator.panel.list.updated');
         expect(Array.isArray(parsed.data.operators)).toBe(true);
-        expect(parsed.data.operators[0].operator_id).toBe('op-1');
+        expect(parsed.data.operators[0].id).toBe('op-1');
         expect(typeof parsed.data.operators[0].system_info).toBe('object');
         expect(parsed.data.operators[0].system_info.hostname).toBe('node-01');
     });

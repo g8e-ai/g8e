@@ -73,12 +73,12 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for deregistration');
 
         logger.info('[OPERATOR-RELAY] Deregistering operator session heartbeat subscription in g8ee', {
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...',
         });
 
         const request = new OperatorSessionRegistrationRequest({
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id,
         });
 
@@ -120,13 +120,13 @@ export class OperatorRelayService {
         if (!boundOperator) throw new Error('No bound operator found in context for registration');
 
         logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in g8ee', {
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id?.substring(0, 20) + '...',
         });
 
         // Use the context fields for the request
         const request = new OperatorSessionRegistrationRequest({
-            operator_id: boundoperator.id,
+            operator_id: boundOperator.id,
             operator_session_id: boundOperator.operator_session_id,
         });
 

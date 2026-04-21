@@ -73,7 +73,7 @@ describe('BindOperatorsService', () => {
         });
 
         it('should fail if operator belongs to different user', async () => {
-            mocks.operatorService.getOperator.mockResolvedValue(new OperatorDocument({ operator_id: 'op-123', user_id: 'u-456', status: OperatorStatus.ACTIVE }));
+            mocks.operatorService.getOperator.mockResolvedValue(new OperatorDocument({ id: 'op-123', user_id: 'u-456', status: OperatorStatus.ACTIVE }));
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -89,9 +89,9 @@ describe('BindOperatorsService', () => {
         });
 
         it('should successfully bind and relay to g8ee', async () => {
-            const operator = new OperatorDocument({ 
-                operator_id: 'op-123', 
-                user_id: 'u-123', 
+            const operator = new OperatorDocument({
+                id: 'op-123',
+                user_id: 'u-123',
                 operator_session_id: 'os-123',
                 status: OperatorStatus.ACTIVE
             });

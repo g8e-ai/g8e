@@ -90,7 +90,7 @@ describe('OperatorListData [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const operators = [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })];
+        const operators = [new OperatorSlot({ id: 'op-1', status: 'ACTIVE' })];
         const data = OperatorListData.parse({
             type: 'g8e.v1.operator.panel.list.updated',
             operators: operators,
@@ -99,7 +99,7 @@ describe('OperatorListData [UNIT - PURE LOGIC]', () => {
             used_slots: 1,
             max_slots: 5,
         });
-        expect(data.operators[0].operator_id).toBe('op-1');
+        expect(data.operators[0].id).toBe('op-1');
         expect(data.operators[0].status).toBe('ACTIVE');
         expect(data.total_count).toBe(1);
         expect(data.active_count).toBe(1);

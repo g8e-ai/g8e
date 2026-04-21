@@ -186,7 +186,7 @@ describe('Internal Operator Routes [UNIT]', () => {
             mockOperatorService.getUserOperators.mockResolvedValue(
                 new OperatorListUpdatedEvent({
                     type: 'operator.list.updated',
-                    operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.AVAILABLE })],
+                    operators: [new OperatorSlot({ id: 'op_1', status: OperatorStatus.AVAILABLE })],
                     total_count: 1,
                     active_count: 1
                 })
@@ -326,7 +326,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             expect(mockOperatorService.getOperator).toHaveBeenCalledWith(operator.id);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                operator_id: operator.id
+                id: operator.id
             }));
         });
 

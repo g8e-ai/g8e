@@ -149,7 +149,7 @@ describe('OperatorService', () => {
 
             const slot = result.operators[0];
             expect(slot).toBeInstanceOf(OperatorSlot);
-            expect(slot.operator_id).toBe('op-1');
+            expect(slot.id).toBe('op-1');
             expect(slot.name).toBe('node-01');
             expect(slot.status).toBe(OperatorStatus.ACTIVE);
             expect(slot.status_display).toBe('ACTIVE');
@@ -269,7 +269,7 @@ describe('OperatorService', () => {
             const result = await service.getOperatorStatusInfo('op-1');
 
             expect(result).not.toBeNull();
-            expect(result.operator_id).toBe('op-1');
+            expect(result.id).toBe('op-1');
             expect(result.status).toBe(OperatorStatus.ACTIVE);
         });
 

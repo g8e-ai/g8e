@@ -79,7 +79,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(res.body.operator_id).toBe('new-g8ep-op-id');
+            expect(res.body.id).toBe('new-g8ep-op-id');
             expect(mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser).toHaveBeenCalledWith('test-user-id');
         });
 
@@ -101,7 +101,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
             const res = await request(app).get('/api/operator/test-op-id/details');
 
             expect(res.status).toBe(200);
-            expect(res.body.operator_id).toBe('test-op-id');
+            expect(res.body.id).toBe('test-op-id');
             expect(res.body.status_display).toBe('ACTIVE');
         });
     });
