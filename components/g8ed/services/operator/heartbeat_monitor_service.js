@@ -119,7 +119,12 @@ export class HeartbeatMonitorService {
         if (this._ticking) return;
         this._ticking = true;
         try {
-            const operators = await this._operatorDataService.queryOperators([]);
+            // Bypass the query cache: monitor correctness depends on real-time
+            // last_heartbeat values, and writes come from g8ee (cross-component
+            // cache-aside) so a stale query cache produces false STALE/OFFLINE
+            // transitions. TODO: move last_heartbeat to a dedicated KV key so
+            // heartbeat writes don't go through cache-aside at all.
+            const operators = await this._operatorDataService.queryOperatorsFresh([]);
             const nowMs = now().getTime();
 
             let transitions = 0;

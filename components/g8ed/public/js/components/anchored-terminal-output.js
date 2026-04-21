@@ -21,6 +21,7 @@
 
 import { templateLoader } from '../utils/template-loader.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
+import { TribunalMemberIcons } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -555,9 +556,12 @@ export class TerminalOutputMixin {
         widget.id = id;
         widget.className = 'tribunal';
 
-        const dots = Array.from({ length: numPasses || 3 }, (_, i) =>
-            `<span class="tribunal__dot" data-pass="${i}" title="Pass ${i + 1}"></span>`
-        ).join('');
+        const dots = Array.from({ length: numPasses || 3 }, (_, i) => {
+            const icon = TribunalMemberIcons[i] || 'circle';
+            return `<span class="tribunal__dot" data-pass="${i}" title="Pass ${i + 1}">
+                <span class="material-symbols-outlined tribunal__dot-icon">${icon}</span>
+            </span>`;
+        }).join('');
 
         await templateLoader.renderTo(widget, 'tribunal', { dots });
 

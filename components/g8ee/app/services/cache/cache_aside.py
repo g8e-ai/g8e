@@ -158,7 +158,8 @@ class CacheAsideService(CacheAsideProtocol):
         # Invalidate cache instead of populating it
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
-        
+        await self.invalidate_query_cache(collection)
+
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Cache invalidated for new document",
             extra={"collection": collection, "doc_id": document_id}
@@ -199,6 +200,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Cache invalidated",
@@ -235,6 +237,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Document deleted from cache",
@@ -445,6 +448,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Array append completed, cache invalidated",
@@ -489,9 +493,14 @@ class CacheAsideService(CacheAsideProtocol):
             extra={"operation_count": len(operations)}
         )
 
+        collections_touched: set[str] = set()
         for op in operations:
             key = self._make_key(op.collection, op.document_id)
             await self.kv.delete(key)
+            collections_touched.add(op.collection)
+
+        for collection in collections_touched:
+            await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] KV batch cache invalidated",

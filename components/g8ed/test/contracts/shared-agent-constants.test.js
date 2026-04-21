@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, VerifierReason } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, VerifierReason, TribunalMemberIcons } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -101,6 +101,24 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
         it('VERIFIER_ERROR matches JSON', () => {
             expect(VerifierReason.VERIFIER_ERROR).toBe(_AGENTS['tribunal.verifier_reason'].verifier_error);
+        });
+    });
+
+    describe('TribunalMemberIcons constants', () => {
+        it('Pass 0 (Axiom) icon matches JSON metadata', () => {
+            expect(TribunalMemberIcons[0]).toBe(_AGENTS['agent.metadata'].axiom.icon);
+        });
+        it('Pass 1 (Concord) icon matches JSON metadata', () => {
+            expect(TribunalMemberIcons[1]).toBe(_AGENTS['agent.metadata'].concord.icon);
+        });
+        it('Pass 2 (Variance) icon matches JSON metadata', () => {
+            expect(TribunalMemberIcons[2]).toBe(_AGENTS['agent.metadata'].variance.icon);
+        });
+        it('Pass 3 (Pragma) icon matches JSON metadata', () => {
+            expect(TribunalMemberIcons[3]).toBe(_AGENTS['agent.metadata'].pragma.icon);
+        });
+        it('Pass 4 (Nemesis) icon matches JSON metadata', () => {
+            expect(TribunalMemberIcons[4]).toBe(_AGENTS['agent.metadata'].nemesis.icon);
         });
     });
 

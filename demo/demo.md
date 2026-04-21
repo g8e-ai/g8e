@@ -8,6 +8,26 @@ The g8e platform must be running (`./g8e platform start` from the project root).
 
 ## Quick Start
 
+### Option 1: Demo Mode (Recommended - Pre-authenticated)
+
+```bash
+# One-command setup: builds platform, initializes demo mode, starts fleet, and deploys operators
+./g8e demo start
+
+# Open http://localhost:3000 for the fleet status dashboard
+# Use g8e to find and fix broken nodes
+
+./g8e demo vanish                                  # Remove all operators (zero trace)
+```
+
+The `demo start` command chains:
+1. `./g8e platform setup` - builds and starts the platform
+2. `./g8e demo init` - creates a demo user and device link token
+3. `./g8e demo up` - starts the fleet
+4. `./g8e demo stream` - deploys operators to all nodes
+
+### Option 2: Manual Setup with Custom Token
+
 ```bash
 # Start the fleet
 ./g8e demo up
@@ -21,6 +41,15 @@ The g8e platform must be running (`./g8e platform start` from the project root).
 
 ./g8e demo vanish                                  # Remove all operators (zero trace)
 ```
+
+### Demo Mode Details
+
+The demo mode (`./g8e demo init`) creates:
+- A demo user: `demo@g8e.local`
+- A device link token with 100 max uses and 720 hour (30 day) expiration
+- Stores the token in `demo/.demo-token` for automatic use
+
+Once initialized, `./g8e demo stream` and `./g8e demo deploy` will automatically use the stored token without needing to pass `DEVICE_TOKEN`.
 
 ## The Fleet
 

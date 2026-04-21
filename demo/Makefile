@@ -7,11 +7,19 @@
 COMPOSE := docker compose
 CONTAINER_PREFIX := web-node
 SSH_USER := appuser
+DEMO_TOKEN_FILE := .demo-token
 
 help:
 	@echo "Broken Web App Fleet Demo"
 	@echo ""
 	@echo "Usage: make [target]"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  DEMO MODE (Pre-authenticated)"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "  Use './g8e demo init' to set up demo mode with auto-generated token"
+	@echo "  Use './g8e demo start' for one-command full setup"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "  FLEET LIFECYCLE"
@@ -26,11 +34,12 @@ help:
 	@echo "  OPERATOR DEPLOYMENT"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  deploy DEVICE_TOKEN=dlk_xxx  - Deploy operators via API download (device link)"
-	@echo "  stream DEVICE_TOKEN=dlk_xxx  - Deploy operators via SSH streaming (auto-configures SSH)"
-	@echo "  discover-hosts              - List discovered demo fleet hosts"
-	@echo "  vanish                      - Remove all operators (zero trace)"
-	@echo "  operators                   - Show operator status on all nodes"
+	@echo "  deploy [DEVICE_TOKEN=...]  - Deploy operators via API download (device link)"
+	@echo "  stream [DEVICE_TOKEN=...]  - Deploy operators via SSH streaming (auto-configures SSH)"
+	@echo "                            - If demo mode is initialized, token is auto-loaded"
+	@echo "  discover-hosts            - List discovered demo fleet hosts"
+	@echo "  vanish                    - Remove all operators (zero trace)"
+	@echo "  operators                 - Show operator status on all nodes"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "  FLEET INSPECTION"
@@ -142,7 +151,16 @@ nginx-check:
 	done
 
 deploy:
-	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make deploy DEVICE_TOKEN=dlk_xxx" && exit 1)
+	@if [ -z "$(DEVICE_TOKEN)" ]; then \
+		if [ -f "$(DEMO_TOKEN_FILE)" ]; then \
+			export DEVICE_TOKEN=$$(cat "$(DEMO_TOKEN_FILE)"); \
+			echo "Using stored demo token from $(DEMO_TOKEN_FILE)"; \
+		else \
+			echo "Usage: make deploy DEVICE_TOKEN=dlk_xxx"; \
+			echo "   or: ./g8e demo init  (to set up demo mode with auto token)"; \
+			exit 1; \
+		fi; \
+	fi
 	@echo "Deploying operators to all 10 nodes..."
 	@for i in $$(seq -f "%02g" 1 10); do \
 		echo "  Deploying to node-$$i..."; \
@@ -162,12 +180,25 @@ discover-hosts:
 	@docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort
 
 stream:
-	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make stream DEVICE_TOKEN=dlk_xxx" && exit 1)
+	@if [ -z "$(DEVICE_TOKEN)" ]; then \
+		if [ -f "$(DEMO_TOKEN_FILE)" ]; then \
+			export DEVICE_TOKEN=$$(cat "$(DEMO_TOKEN_FILE)"); \
+			echo "Using stored demo token from $(DEMO_TOKEN_FILE)"; \
+		else \
+			echo "Usage: make stream DEVICE_TOKEN=dlk_xxx"; \
+			echo "   or: ./g8e demo init  (to set up demo mode with auto token)"; \
+			exit 1; \
+		fi; \
+	fi
 	@echo "Configuring SSH in g8ep..."
 	@$(MAKE) -s setup-ssh
 	@echo "Discovering demo fleet hosts..."
 	@HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
-	if [ -z "$$HOSTS" ]; then echo "No demo nodes found. Run './g8e demo up' first." && exit 1; fi; \
+	if [ -z "$$HOSTS" ]; then \
+		echo "No demo nodes found. Starting fleet..."; \
+		$(MAKE) -s up; \
+		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+	fi; \
 	echo "  Streaming to: $$HOSTS"; \
 	docker exec g8ep /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \

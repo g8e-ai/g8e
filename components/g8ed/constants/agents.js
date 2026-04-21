@@ -95,3 +95,15 @@ export const TribunalOutcome = Object.freeze({
     VERIFICATION_FAILED: _AGENTS['tribunal.outcome'].verification_failed,
 });
 
+/**
+ * Tribunal Member Icons
+ * Icon names for each tribunal member, indexed by pass number.
+ */
+export const TribunalMemberIcons = Object.freeze({
+    0: 'minimize-2',
+    1: 'shield',
+    2: 'layers',
+    3: 'code',
+    4: 'alert-triangle',
+});
+

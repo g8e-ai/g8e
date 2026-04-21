@@ -17,9 +17,8 @@ import {
     OperatorSlotSystemInfo,
     OperatorSlot,
     OperatorListUpdatedEvent,
-    OperatorStatusUpdatedData,
     OperatorStatusUpdatedEvent,
-    HeartbeatSSEEvent,
+    HeartbeatSSEEnvelope,
 } from '../../../../public/js/models/operator-models.js';
 
 describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
@@ -197,13 +196,12 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
 });
 
 describe('OperatorListUpdatedEvent [FRONTEND UNIT]', () => {
-    it('parse() requires type field', () => {
-        expect(() => OperatorListUpdatedEvent.parse({})).toThrow();
-    });
+    // These models represent the INNER `data` payload the browser receives after
+    // sse-connection-manager strips the `{ type, data }` transport envelope.
+    // See operator-models.js for the contract note.
 
-    it('parse() extracts list event fields', () => {
+    it('parse() extracts list event fields from flat payload', () => {
         const event = OperatorListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
             operators: [
                 { operator_id: 'op-1', status: 'active' },
                 { operator_id: 'op-2', status: 'available' },
@@ -213,7 +211,6 @@ describe('OperatorListUpdatedEvent [FRONTEND UNIT]', () => {
             used_slots: 1,
             max_slots: 5,
         });
-        expect(event.type).toBe('g8e.v1.operator.panel.list.updated');
         expect(event.operators).toHaveLength(2);
         expect(event.operators[0]).toBeInstanceOf(OperatorSlot);
         expect(event.operators[0].operator_id).toBe('op-1');
@@ -226,7 +223,6 @@ describe('OperatorListUpdatedEvent [FRONTEND UNIT]', () => {
 
     it('parse() parses operators array through OperatorSlot', () => {
         const event = OperatorListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
             operators: [
                 { operator_id: 'op-1', status: 'active' },
             ],
@@ -234,10 +230,8 @@ describe('OperatorListUpdatedEvent [FRONTEND UNIT]', () => {
         expect(event.operators[0]).toBeInstanceOf(OperatorSlot);
     });
 
-    it('parse() handles missing fields with defaults', () => {
-        const event = OperatorListUpdatedEvent.parse({
-            type: 'g8e.v1.operator.panel.list.updated',
-        });
+    it('parse() handles empty payload with defaults', () => {
+        const event = OperatorListUpdatedEvent.parse({});
         expect(event.operators).toEqual([]);
         expect(event.total_count).toBe(0);
         expect(event.active_count).toBe(0);
@@ -247,71 +241,55 @@ describe('OperatorListUpdatedEvent [FRONTEND UNIT]', () => {
 });
 
 describe('OperatorStatusUpdatedEvent [FRONTEND UNIT]', () => {
-    it('parse() requires type field', () => {
+    it('parse() requires operator_id and status', () => {
         expect(() => OperatorStatusUpdatedEvent.parse({})).toThrow();
+        expect(() => OperatorStatusUpdatedEvent.parse({ operator_id: 'op-1' })).toThrow();
     });
 
-    it('parse() extracts status event fields', () => {
+    it('parse() extracts flat status payload', () => {
         const event = OperatorStatusUpdatedEvent.parse({
-            type: 'g8e.v1.operator.status.updated.active',
-            data: {
-                operator_id: 'op-123',
-                status: 'active',
-                hostname: 'test-host',
-                total_count: 5,
-                active_count: 2,
-            },
+            operator_id: 'op-123',
+            status: 'active',
+            hostname: 'test-host',
+            total_count: 5,
+            active_count: 2,
         });
-        expect(event.type).toBe('g8e.v1.operator.status.updated.active');
-        expect(event.data).toBeInstanceOf(OperatorStatusUpdatedData);
-        expect(event.data.operator_id).toBe('op-123');
-        expect(event.data.status).toBe('active');
-        expect(event.data.hostname).toBe('test-host');
-        expect(event.data.total_count).toBe(5);
-        expect(event.data.active_count).toBe(2);
-    });
-
-    it('parse() requires operator_id and status in data', () => {
-        expect(() => OperatorStatusUpdatedEvent.parse({
-            type: 'g8e.v1.operator.status.updated.active',
-            data: {},
-        })).toThrow();
+        expect(event.operator_id).toBe('op-123');
+        expect(event.status).toBe('active');
+        expect(event.hostname).toBe('test-host');
+        expect(event.total_count).toBe(5);
+        expect(event.active_count).toBe(2);
     });
 });
 
-describe('HeartbeatSSEEvent [FRONTEND UNIT]', () => {
-    it('parse() requires type and operator_id', () => {
-        expect(() => HeartbeatSSEEvent.parse({})).toThrow();
+describe('HeartbeatSSEEnvelope [FRONTEND UNIT]', () => {
+    it('parse() requires operator_id and status', () => {
+        expect(() => HeartbeatSSEEnvelope.parse({})).toThrow();
+        expect(() => HeartbeatSSEEnvelope.parse({ operator_id: 'op-1' })).toThrow();
     });
 
-    it('parse() requires operator_id', () => {
-        expect(() => HeartbeatSSEEvent.parse({ type: 'test' })).toThrow();
-    });
-
-    it('parse() extracts heartbeat event fields', () => {
-        const event = HeartbeatSSEEvent.parse({
-            type: 'g8e.v1.operator.heartbeat.received',
+    it('parse() extracts envelope fields and coerces metrics into HeartbeatSnapshot', () => {
+        const env = HeartbeatSSEEnvelope.parse({
             operator_id: 'op-123',
-            data: {
-                status: 'active',
-                metrics: {
-                    timestamp: '2026-01-01T00:00:00.000Z',
-                    performance: { cpu_percent: 50 },
-                },
+            status: 'active',
+            metrics: {
+                timestamp: '2026-01-01T00:00:00.000Z',
+                performance: { cpu_percent: 50 },
             },
         });
-        expect(event.type).toBe('g8e.v1.operator.heartbeat.received');
-        expect(event.operator_id).toBe('op-123');
-        expect(event.data.status).toBe('active');
-        expect(event.data.metrics.performance.cpu_percent).toBe(50);
+        expect(env.operator_id).toBe('op-123');
+        expect(env.status).toBe('active');
+        expect(env.metrics).toBeInstanceOf(HeartbeatSnapshot);
+        expect(env.metrics.performance.cpu_percent).toBe(50);
+        expect(env.metrics.timestamp).toEqual(new Date('2026-01-01T00:00:00.000Z'));
     });
 
-    it('parse() allows null data', () => {
-        const event = HeartbeatSSEEvent.parse({
-            type: 'g8e.v1.operator.heartbeat.received',
+    it('parse() defaults metrics to an empty HeartbeatSnapshot when omitted', () => {
+        const env = HeartbeatSSEEnvelope.parse({
             operator_id: 'op-123',
+            status: 'active',
         });
-        expect(event.operator_id).toBe('op-123');
-        expect(event.data).toBeNull();
+        expect(env.metrics).toBeInstanceOf(HeartbeatSnapshot);
+        expect(env.metrics.performance.cpu_percent).toBeNull();
     });
 });

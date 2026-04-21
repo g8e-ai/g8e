@@ -358,11 +358,6 @@ export const OperatorListMixin = {
                 });
             }
 
-            // Operator selection disabled - UX needs improvement for explicit selection
-            // item.addEventListener('click', () => {
-            //     this._selectMetricsOperator(operator.operator_id);
-            // });
-
             fragment.appendChild(item);
         });
 

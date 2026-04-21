@@ -71,7 +71,7 @@ describe('HeartbeatMonitorService.tick', () => {
 
     beforeEach(() => {
         operatorDataService = {
-            queryOperators: vi.fn().mockResolvedValue([]),
+            queryOperatorsFresh: vi.fn().mockResolvedValue([]),
             updateOperator: vi.fn().mockResolvedValue({ success: true }),
         };
         sseService = {
@@ -95,7 +95,7 @@ describe('HeartbeatMonitorService.tick', () => {
             status: OperatorStatus.BOUND,
             last_heartbeat: new Date(Date.now() - (THRESHOLD_SECONDS + 30) * 1000),
         });
-        operatorDataService.queryOperators.mockResolvedValue([op]);
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([op]);
 
         await service.tick();
 
@@ -116,7 +116,7 @@ describe('HeartbeatMonitorService.tick', () => {
     });
 
     it('transitions a stale ACTIVE operator to OFFLINE', async () => {
-        operatorDataService.queryOperators.mockResolvedValue([makeOperator({
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([makeOperator({
             status: OperatorStatus.ACTIVE,
             last_heartbeat: new Date(Date.now() - (THRESHOLD_SECONDS + 10) * 1000),
         })]);
@@ -130,7 +130,7 @@ describe('HeartbeatMonitorService.tick', () => {
     });
 
     it('recovers STALE -> BOUND when heartbeat is fresh', async () => {
-        operatorDataService.queryOperators.mockResolvedValue([makeOperator({
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([makeOperator({
             status: OperatorStatus.STALE,
             last_heartbeat: new Date(Date.now() - 5_000),
         })]);
@@ -144,7 +144,7 @@ describe('HeartbeatMonitorService.tick', () => {
     });
 
     it('recovers OFFLINE -> ACTIVE when heartbeat is fresh', async () => {
-        operatorDataService.queryOperators.mockResolvedValue([makeOperator({
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([makeOperator({
             status: OperatorStatus.OFFLINE,
             last_heartbeat: new Date(Date.now() - 5_000),
         })]);
@@ -158,7 +158,7 @@ describe('HeartbeatMonitorService.tick', () => {
     });
 
     it('does not touch operators without a last_heartbeat', async () => {
-        operatorDataService.queryOperators.mockResolvedValue([makeOperator({
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([makeOperator({
             status: OperatorStatus.BOUND,
             last_heartbeat: null,
         })]);
@@ -170,7 +170,7 @@ describe('HeartbeatMonitorService.tick', () => {
     });
 
     it('ignores operators whose status is not monitored', async () => {
-        operatorDataService.queryOperators.mockResolvedValue([
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([
             makeOperator({ status: OperatorStatus.AVAILABLE, last_heartbeat: new Date(0) }),
             makeOperator({ id: 'op-2', status: OperatorStatus.TERMINATED, last_heartbeat: new Date(0) }),
             makeOperator({ id: 'op-3', status: OperatorStatus.STOPPED, last_heartbeat: new Date(0) }),
@@ -183,7 +183,7 @@ describe('HeartbeatMonitorService.tick', () => {
 
     it('skips SSE fan-out but still persists when publish fails', async () => {
         sseService.publishToUser.mockRejectedValue(new Error('sse down'));
-        operatorDataService.queryOperators.mockResolvedValue([makeOperator({
+        operatorDataService.queryOperatorsFresh.mockResolvedValue([makeOperator({
             status: OperatorStatus.BOUND,
             last_heartbeat: new Date(Date.now() - (THRESHOLD_SECONDS + 10) * 1000),
         })]);
@@ -194,7 +194,7 @@ describe('HeartbeatMonitorService.tick', () => {
 
     it('coalesces concurrent ticks', async () => {
         let resolveQuery;
-        operatorDataService.queryOperators.mockImplementation(
+        operatorDataService.queryOperatorsFresh.mockImplementation(
             () => new Promise(resolve => { resolveQuery = resolve; }),
         );
 
@@ -203,7 +203,7 @@ describe('HeartbeatMonitorService.tick', () => {
         resolveQuery([]);
         await Promise.all([first, second]);
 
-        expect(operatorDataService.queryOperators).toHaveBeenCalledTimes(1);
+        expect(operatorDataService.queryOperatorsFresh).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -215,7 +215,7 @@ describe('HeartbeatMonitorService lifecycle', () => {
 
     it('start() is idempotent and stop() clears the timer', () => {
         const svc = new HeartbeatMonitorService({
-            operatorDataService: { queryOperators: vi.fn().mockResolvedValue([]), updateOperator: vi.fn() },
+            operatorDataService: { queryOperatorsFresh: vi.fn().mockResolvedValue([]), updateOperator: vi.fn() },
             sseService: { publishToUser: vi.fn() },
             intervalMs: 1_000_000,
         });

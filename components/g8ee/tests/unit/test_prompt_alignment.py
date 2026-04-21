@@ -241,7 +241,7 @@ class TestEveryActiveToolHasADescriptionFile:
     def test_every_active_tool_has_a_description_file(self) -> None:
         pending = self._pending_restoration()
         missing: list[str] = []
-        for member in OperatorToolName:
+        for member in OperatorToolName.__members__.values():
             if member.value in pending:
                 continue
             tool_file = _TOOLS_DIR / f"{member.value}.txt"
@@ -259,7 +259,7 @@ class TestEveryActiveToolHasADescriptionFile:
         ``OperatorToolName`` value. An orphan file means a tool was renamed
         or removed without cleaning up its description — a stale artifact
         that confuses future readers."""
-        enum_values = {member.value for member in OperatorToolName}
+        enum_values = {member.value for member in OperatorToolName.__members__.values()}
         orphans: list[str] = []
         for path in sorted(_TOOLS_DIR.glob("*.txt")):
             if path.stem not in enum_values:

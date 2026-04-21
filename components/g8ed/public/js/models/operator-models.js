@@ -153,9 +153,18 @@ export class OperatorSlot extends FrontendBaseModel {
     };
 }
 
+// ---------------------------------------------------------------------------
+// SSE payload models — mirror the INNER `data` body the browser receives.
+//
+// The SSE transport envelope `{ type, data }` is unwrapped by
+// sse-connection-manager before these models ever see it (the manager emits
+// `eventBus.emit(type, data.data)`). Therefore these models MUST NOT declare
+// a top-level `type` or re-nested `data` field — doing so would re-introduce
+// the old wrap/unwrap workaround in every handler.
+// ---------------------------------------------------------------------------
+
 export class OperatorListUpdatedEvent extends FrontendBaseModel {
     static fields = {
-        type:         { type: F.string, required: true },
         operators:    { type: F.array,  items: OperatorSlot, default: () => [] },
         total_count:  { type: F.number, default: 0 },
         active_count: { type: F.number, default: 0 },
@@ -165,7 +174,7 @@ export class OperatorListUpdatedEvent extends FrontendBaseModel {
     };
 }
 
-export class OperatorStatusUpdatedData extends FrontendBaseModel {
+export class OperatorStatusUpdatedEvent extends FrontendBaseModel {
     static fields = {
         operator_id:         { type: F.string, required: true },
         status:              { type: F.string, required: true },
@@ -179,19 +188,12 @@ export class OperatorStatusUpdatedData extends FrontendBaseModel {
     };
 }
 
-export class OperatorStatusUpdatedEvent extends FrontendBaseModel {
+// Canonical wire shape: shared/models/wire/heartbeat_sse.json#envelope.
+// Producer: g8ee HeartbeatSSEEnvelope (components/g8ee/app/models/operators.py).
+export class HeartbeatSSEEnvelope extends FrontendBaseModel {
     static fields = {
-        type:         { type: F.string, required: true },
-        data:         { type: F.object, model: OperatorStatusUpdatedData, default: null },
-        timestamp:    { type: F.date,   default: null },
-    };
-}
-
-export class HeartbeatSSEEvent extends FrontendBaseModel {
-    static fields = {
-        type:        { type: F.string, required: true },
-        data:        { type: F.any,    default: null },
         operator_id: { type: F.string, required: true },
-        timestamp:   { type: F.date,   default: null },
+        status:      { type: F.string, required: true },
+        metrics:     { type: F.object, model: HeartbeatSnapshot, default: () => HeartbeatSnapshot.empty() },
     };
 }

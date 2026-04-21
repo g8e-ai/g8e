@@ -14,19 +14,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Regression coverage for OperatorPanel state-mutation handlers
-// (_onHeartbeat, _onStatusUpdated). Bugs fixed together with the JS
-// OperatorSlot model renaming its identifier to `operator_id` (canonical
-// wire field per shared/models/wire/operator_slot.json):
+// (_onHeartbeat, _onStatusUpdated).
 //
-//   1. _onHeartbeat was matching slots by the (non-existent) `operator_id`
-//      against slots whose field was named `id`, so findIndex always
-//      returned -1 and latest_heartbeat_snapshot was never populated on
-//      the panel — every row rendered with blank CPU/Memory/Disk/etc.
-//
-//   2. _onStatusUpdated only mutated aggregate counts; it never updated
-//      the matching slot's status, so status.updated.{active,offline,...}
-//      events had no effect on individual operator badges until a full
-//      list refresh.
+// Payloads here mirror what sse-connection-manager actually emits on the
+// eventBus: the INNER `data` body only, with the `{ type, data }` transport
+// envelope already stripped. For heartbeat this is the flat envelope shape
+// from shared/models/wire/heartbeat_sse.json (operator_id, status, metrics).
+// For status-updated this is the flat OperatorStatusUpdatedEvent shape.
 
 let OperatorPanel;
 let HeartbeatSnapshot;
@@ -74,15 +68,12 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onHeartbeat({
-            type: 'g8e.v1.operator.heartbeat.received',
             operator_id: 'op-1',
-            data: {
-                status: OperatorStatus.ACTIVE,
-                metrics: {
-                    timestamp: '2026-04-21T21:30:10.683Z',
-                    performance: { cpu_percent: 42.1, memory_percent: 60.3, disk_percent: 55.2, network_latency: 12 },
-                    system_identity: { hostname: 'host-a', os: 'linux' },
-                },
+            status: OperatorStatus.ACTIVE,
+            metrics: {
+                timestamp: '2026-04-21T21:30:10.683Z',
+                performance: { cpu_percent: 42.1, memory_percent: 60.3, disk_percent: 55.2, network_latency: 12 },
+                system_identity: { hostname: 'host-a', os: 'linux' },
             },
         });
 
@@ -94,7 +85,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         expect(updated.latest_heartbeat_snapshot.performance.network_latency).toBe(12);
         expect(updated.latest_heartbeat_snapshot.system_identity.hostname).toBe('host-a');
         expect(updated.status).toBe(OperatorStatus.ACTIVE);
-        expect(updated.last_heartbeat).toBe('2026-04-21T21:30:10.683Z');
+        expect(updated.last_heartbeat).toEqual(new Date('2026-04-21T21:30:10.683Z'));
 
         // Unrelated slot untouched
         expect(panel._operators[1].latest_heartbeat_snapshot).toBeNull();

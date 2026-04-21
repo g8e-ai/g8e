@@ -116,11 +116,37 @@ aws - AWS credentials (host)
   setup
 
 demo - Fleet demo (host)
-  up, down, status, clean
-  health, nginx-check, operators
-  logs, shell N=<nn>
-  deploy, stream
-  discover-hosts, vanish, dashboard
+  Demo mode (pre-authenticated):
+    init            Initialize demo mode: creates demo user and device link token
+    start           One-command setup: platform setup + demo init + demo up + demo stream
+  Fleet lifecycle:
+    up              Build and start all 10 demo nodes + dashboard
+    down            Stop all demo nodes
+    status          Show container status for all demo nodes
+    clean           Remove all demo containers and networks
+  Operator deployment:
+    deploy          Deploy operators via API download (DEVICE_TOKEN optional if demo mode initialized)
+    stream          Deploy operators via SSH streaming (DEVICE_TOKEN optional if demo mode initialized)
+    discover-hosts  List discovered demo fleet hosts
+    operators       Show operator status across the fleet
+    vanish          Remove all operators (zero trace cleanup)
+  Inspection:
+    health          Check Flask backend health on all nodes
+    nginx-check     Check nginx status and HTTP response codes
+    logs            Follow all container logs
+    shell N=<nn>    Shell into a specific node (e.g., shell N=01)
+    dashboard       Print fleet dashboard URL (http://localhost:3000)
+
+  Examples:
+    ./g8e demo start                                  # Full setup: platform + demo + operators (recommended)
+    ./g8e demo init                                   # Initialize demo mode with pre-authenticated token
+    ./g8e demo up                                     # Start the fleet
+    ./g8e demo stream                                 # Deploy operators (uses stored token if demo mode initialized)
+    ./g8e demo stream DEVICE_TOKEN=dlk_xxx            # Deploy operators with custom token
+    ./g8e demo operators                              # Check operator status
+    ./g8e demo shell N=06                             # Debug broken node
+    ./g8e demo vanish                                 # Clean up operators
+    ./g8e demo clean                                  # Remove everything
 
 DETAILED HELP
   ./g8e operator --help

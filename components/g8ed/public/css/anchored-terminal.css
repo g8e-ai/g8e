@@ -407,12 +407,20 @@
 }
 
 .tribunal__dot {
-    width: 8px;
-    height: 8px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: var(--border-color);
     transition: background 0.2s ease, transform 0.2s ease;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tribunal__dot-icon {
+    font-size: 14px;
+    color: var(--text-secondary);
 }
 
 .tribunal__dot--ok {
@@ -420,8 +428,16 @@
     transform: scale(1.15);
 }
 
+.tribunal__dot--ok .tribunal__dot-icon {
+    color: white;
+}
+
 .tribunal__dot--fail {
     background: var(--accent-red);
+}
+
+.tribunal__dot--fail .tribunal__dot-icon {
+    color: white;
 }
 
 .tribunal__status {
