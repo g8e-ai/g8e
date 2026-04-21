@@ -647,11 +647,11 @@ class OperatorCommandService:
             args=args, g8e_context=g8e_context, investigation=investigation
         )
 
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
-        return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation)
+    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileHistoryToolResult:
+        return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation, execution_id)
 
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
-        return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation)
+    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileDiffToolResult:
+        return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation, execution_id)
 
     async def send_command_to_operator(
         self,

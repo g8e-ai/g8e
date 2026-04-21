@@ -653,6 +653,7 @@ class TestFileSystemTools:
             call_args = mock_operator_command_service.execute_fetch_file_history.call_args[1]
             
             assert "args" in call_args
+            assert "execution_id" in call_args
             args = call_args["args"]
             assert args.file_path == "/tmp/test.txt"
             assert args.limit == 10
@@ -764,6 +765,7 @@ class TestFileSystemTools:
             call_args = mock_operator_command_service.execute_fetch_file_diff.call_args[1]
             
             assert "args" in call_args
+            assert "execution_id" in call_args
             args = call_args["args"]
             assert args.file_path == "/tmp/test.txt"
             assert args.target_operator == "op-123"

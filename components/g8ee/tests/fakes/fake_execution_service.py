@@ -22,6 +22,7 @@ from app.models.pubsub_messages import G8eMessage
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.constants.status import ExecutionStatus
 
 
 # Create a default operator for the protocol instance
@@ -68,17 +69,17 @@ class FakeExecutionService:
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> CommandInternalResult | None:
+    ) -> CommandInternalResult:
         self.execute_calls.append({
             "g8e_message": g8e_message,
             "g8e_context": g8e_context,
             "timeout_seconds": timeout_seconds,
         })
-        return CommandInternalResult(exit_code=self._exit_code, output=self._output)
+        return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
 
     async def execute_command_internal(self, **kwargs) -> CommandInternalResult:
         self.execute_calls.append(kwargs)
-        return CommandInternalResult(exit_code=self._exit_code, output=self._output)
+        return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
 
     def resolve_target_operator(
         self,

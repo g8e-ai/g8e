@@ -48,7 +48,6 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
 from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import G8eMessage
-from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -140,10 +139,14 @@ class OperatorFileService:
             risk_analysis: FileOperationRiskAnalysis | None = None
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 try:
+                    from app.models.tool_results import FileOperationRiskContext
+                    from app.models.settings import G8eeUserSettings, LLMSettings
                     risk_analysis = await self.ai_response_analyzer.analyze_file_operation_risk(
                         operation=operation,
                         file_path=file_path,
                         content=args.content or args.new_content,
+                        context=FileOperationRiskContext(),
+                        settings=G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
                         return FileEditResult(
@@ -255,7 +258,7 @@ class OperatorFileService:
                     operation=op_name,
                     execution_id=exec_id,
                     operator_session_id=operator_session_id,
-                    status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
+                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
                     error=internal_result.error if internal_result else "Execution result is None",
                     stderr=internal_result.stderr if internal_result else None,
                     content=getattr(args, "content", None) or getattr(args, "new_content", None),
@@ -280,6 +283,7 @@ class OperatorFileService:
         args: FetchFileHistoryArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
+        execution_id: str,
     ) -> FetchFileHistoryToolResult:
         """Fetch file history from operator ledger."""
         try:
@@ -306,7 +310,7 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileHistoryToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = generate_command_execution_id()
+            exec_id = execution_id
             self.execution_registry.allocate(exec_id)
 
             try:
@@ -362,7 +366,7 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_history {file_path}",
-                        status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
+                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
                         output=internal_result.output if internal_result else None,
                         error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,
@@ -399,6 +403,7 @@ class OperatorFileService:
         args: FetchFileDiffArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
+        execution_id: str,
     ) -> FetchFileDiffToolResult:
         """Fetch file diff from operator ledger."""
         try:
@@ -425,7 +430,7 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileDiffToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = generate_command_execution_id()
+            exec_id = execution_id
             self.execution_registry.allocate(exec_id)
 
             try:
@@ -481,7 +486,7 @@ class OperatorFileService:
                     CommandResultBroadcastEvent(
                         execution_id=exec_id,
                         command=f"file_diff {file_path}",
-                        status=internal_result.status if internal_result and internal_result.status else ExecutionStatus.FAILED,
+                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
                         output=internal_result.output if internal_result else None,
                         error=internal_result.error if internal_result else "Execution result is None",
                         operator_id=operator_id,

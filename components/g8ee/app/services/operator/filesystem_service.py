@@ -128,14 +128,9 @@ class OperatorFilesystemService:
                 entries = envelope.payload.entries or []
 
             # Notify completion/failure
-            if internal_result is None:
-                status = ExecutionStatus.FAILED
-                output = None
-                error = "Execution returned no result"
-            else:
-                status = internal_result.status
-                output = internal_result.output
-                error = internal_result.error
+            status = internal_result.status
+            output = internal_result.output
+            error = internal_result.error
 
             completion_event_type = (
                 EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED
@@ -236,14 +231,9 @@ class OperatorFilesystemService:
                 content = envelope.payload.content
 
             # Notify completion/failure
-            if internal_result is None:
-                status = ExecutionStatus.FAILED
-                output = None
-                error = "Execution returned no result"
-            else:
-                status = internal_result.status
-                output = internal_result.output
-                error = internal_result.error
+            status = internal_result.status
+            output = internal_result.output
+            error = internal_result.error
 
             completion_event_type = (
                 EventType.OPERATOR_FILESYSTEM_READ_COMPLETED

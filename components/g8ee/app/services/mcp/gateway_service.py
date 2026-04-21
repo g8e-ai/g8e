@@ -104,8 +104,10 @@ class MCPGatewayService:
             # MCP callers may not provide user settings; use defaults if missing
             # G8eeUserSettings requires llm field; LLMSettings defaults to OLLAMA provider.
             from app.models.settings import LLMSettings
+            from app.utils.ids import generate_command_execution_id
             default_settings = G8eeUserSettings(llm=LLMSettings())
             
+            execution_id = generate_command_execution_id()
             result = await asyncio.wait_for(
                 self._tool_service.execute_tool_call(
                     tool_name=tool_name,
@@ -113,6 +115,7 @@ class MCPGatewayService:
                     investigation=investigation,
                     g8e_context=g8e_context,
                     request_settings=user_settings or default_settings,
+                    execution_id=execution_id,
                 ),
                 timeout=MCP_TOOL_CALL_TIMEOUT_SECONDS,
             )

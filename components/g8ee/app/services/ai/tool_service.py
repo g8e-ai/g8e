@@ -72,7 +72,6 @@ from app.models.command_payloads import (
 )
 
 from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.ids import generate_command_execution_id
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from .grounding.web_search_provider import WebSearchProvider
 from ..investigation.investigation_service import InvestigationService
@@ -445,7 +444,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = ExecutorCommandArgs.model_validate(tool_args)
         logger.info("[RUN_OPERATOR_COMMANDS] Executing command: %s", args.command)
@@ -461,7 +460,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE, "create_if_missing": True})
         logger.info("[FILE_CREATE] File path: %s", args.file_path)
@@ -477,7 +476,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.WRITE})
         logger.info("[FILE_WRITE] File path: %s", args.file_path)
@@ -493,7 +492,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.READ})
         logger.info("[FILE_READ] File path: %s", args.file_path)
@@ -509,7 +508,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FileEditPayload.model_validate({**tool_args, "operation": FileOperation.REPLACE})
         logger.info("[FILE_UPDATE] File path: %s", args.file_path)
@@ -525,12 +524,12 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FetchFileHistoryArgs.model_validate(tool_args)
         logger.info("[FETCH_FILE_HISTORY] File path: %s", args.file_path)
         result = await self._execute_fetch_file_history(
-            args, investigation, g8e_context
+            args, investigation, g8e_context, execution_id
         )
         logger.info("[FETCH_FILE_HISTORY] Result: %s", result)
         return result
@@ -541,12 +540,12 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FetchFileDiffArgs.model_validate(tool_args)
         logger.info("[FETCH_FILE_DIFF] File path: %s", args.file_path)
         result = await self._execute_fetch_file_diff(
-            args, investigation, g8e_context
+            args, investigation, g8e_context, execution_id
         )
         logger.info("[FETCH_FILE_DIFF] Result: %s", result)
         return result
@@ -557,7 +556,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         if self.web_search_provider is None:
             raise ConfigurationError("g8e_web_search called but WebSearchProvider is not configured")
@@ -573,7 +572,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = CheckPortArgs.model_validate(tool_args)
         logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
@@ -590,7 +589,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = FsListArgs.model_validate(tool_args)
         logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
@@ -608,7 +607,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = GrantIntentArgs.model_validate(tool_args)
         logger.info("[REQUEST_INTENT] Intent: %s", args.intent_name)
@@ -624,7 +623,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = RevokeIntentArgs.model_validate(tool_args)
         logger.info("[REVOKE_INTENT] Intent: %s", args.intent_name)
@@ -658,7 +657,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         args = QueryInvestigationContextArgs.model_validate(tool_args)
         logger.info("[QUERY_INVESTIGATION_CONTEXT] data_type=%s limit=%s", args.data_type, args.limit)
@@ -734,7 +733,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None,
+        execution_id: str,
     ) -> ToolResult:
         logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
 
@@ -805,7 +804,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None = None,
+        execution_id: str,
     ) -> ToolResult:
         """Validate, dispatch, and execute a single AI tool call by name.
 
@@ -897,20 +896,17 @@ class AIToolService:
         args: FileEditPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        execution_id: str | None,
+        execution_id: str,
     ) -> FileEditResult:
         """Delegate file edit operation to the OperatorCommandService.
 
-        ``execution_id`` is the caller-authoritative per-tool id. If the caller
-        did not supply one (legacy internal paths), fall back to a freshly
-        generated command id so each invocation still gets a unique entry in
-        the execution registry.
+        ``execution_id`` is the caller-authoritative per-tool id.
         """
         return await self.operator_command_service.execute_file_edit(
             args=args,
             g8e_context=g8e_context,
             investigation=investigation,
-            execution_id=execution_id or generate_command_execution_id(),
+            execution_id=execution_id,
         )
 
     async def _execute_port_check(
@@ -918,14 +914,14 @@ class AIToolService:
         args: CheckPortArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        execution_id: str | None,
+        execution_id: str,
     ) -> PortCheckToolResult:
         """Delegate port check operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_port_check(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,
-            execution_id=execution_id or generate_command_execution_id(),
+            execution_id=execution_id,
         )
 
     async def _execute_fs_list(
@@ -933,14 +929,14 @@ class AIToolService:
         args: FsListArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        execution_id: str | None,
+        execution_id: str,
     ) -> FsListToolResult:
         """Delegate file system list operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_list(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,
-            execution_id=execution_id or generate_command_execution_id(),
+            execution_id=execution_id,
         )
 
     async def _execute_fs_read(
@@ -948,14 +944,14 @@ class AIToolService:
         args: FsReadArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
-        execution_id: str | None,
+        execution_id: str,
     ) -> FsReadToolResult:
         """Delegate file system read operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fs_read(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,
-            execution_id=execution_id or generate_command_execution_id(),
+            execution_id=execution_id,
         )
 
     async def _execute_intent_permission_request(
@@ -991,12 +987,14 @@ class AIToolService:
         args: FetchFileHistoryArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
+        execution_id: str,
     ) -> FetchFileHistoryToolResult:
         """Delegate file history fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_history(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,
+            execution_id=execution_id,
         )
 
     async def _execute_fetch_file_diff(
@@ -1004,10 +1002,12 @@ class AIToolService:
         args: FetchFileDiffArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
+        execution_id: str,
     ) -> FetchFileDiffToolResult:
         """Delegate file diff fetch operation to the G8eoOperatorService."""
         return await self.operator_command_service.execute_fetch_file_diff(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,
+            execution_id=execution_id,
         )

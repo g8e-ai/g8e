@@ -201,7 +201,7 @@ class TestExecutionIdGeneration:
 
         assert len(set(ids)) == len(ids), "execution_ids must be unique across calls"
 
-    async def test_non_operator_tool_has_no_execution_id(self):
+    async def test_non_operator_tool_has_execution_id(self):
         executor = _make_tool_executor()
         result = CommandExecutionResult(success=True, output="results")
         executor.execute_tool_call = AsyncMock(return_value=result)
@@ -215,7 +215,12 @@ class TestExecutionIdGeneration:
             request_settings=REQUEST_SETTINGS,
         )
 
-        assert result.call_info.execution_id is None
+        assert result.call_info.execution_id is not None
+        import re
+        pattern = r"^cmd_[0-9a-f]{12}_\d+$"
+        assert re.match(pattern, result.call_info.execution_id), (
+            f"execution_id '{result.call_info.execution_id}' does not match expected format"
+        )
 
     async def test_execution_id_format_matches_expected_pattern(self):
         """execution_id must be 'cmd_<12hex>_<timestamp_int>'."""

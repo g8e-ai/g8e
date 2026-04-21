@@ -329,9 +329,7 @@ async def orchestrate_tool_execution(
 
             raw_args = executor_args.model_dump(by_alias=True)
 
-    execution_id: str | None = (
-        generate_command_execution_id() if is_operator_tool else None
-    )
+    execution_id = generate_command_execution_id()
 
     result = await tool_executor.execute_tool_call(
         tool_name,

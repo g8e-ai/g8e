@@ -51,6 +51,7 @@ from app.models.operators import (
     ApprovalResult,
     CommandApprovalRequest,
     CommandResultRecord,
+    DirectCommandResult,
     FileEditApprovalRequest,
     IntentApprovalRequest,
     OperatorDocument,
@@ -58,6 +59,7 @@ from app.models.operators import (
     PendingApproval,
     TargetSystem,
 )
+from app.models.internal_api import DirectCommandRequest
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.models.tool_results import (
     CommandInternalResult,
@@ -606,8 +608,8 @@ class LFAAServiceProtocol(Protocol):
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult: ...
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult: ...
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult: ...
+    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileHistoryToolResult: ...
+    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileDiffToolResult: ...
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
@@ -651,7 +653,7 @@ class ToolExecutorProtocol(Protocol):
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str | None = None,
+        execution_id: str,
     ) -> ToolResult: ...
     @property
     def web_search_provider(self) -> Any: ...
