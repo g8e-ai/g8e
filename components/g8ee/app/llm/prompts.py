@@ -15,13 +15,14 @@
 
 import logging
 
-from ..constants import CloudSubtype, OperatorType, PromptFile, PromptSection
+from ..constants import AgentName, CloudSubtype, OperatorType, PromptFile, PromptSection
 from ..constants.prompts import InvestigationContextLabel
 from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
 from ..models.memory import InvestigationMemory
 from ..prompts_data.loader import load_mode_prompts, load_prompt
+from ..utils.agent_persona_loader import get_agent_persona
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +149,7 @@ def build_modular_system_prompt(
     investigation: EnrichedInvestigationContext | None,
     g8e_web_search_available: bool = True,
     triage_result: TriageResult | None = None,
+    agent_name: AgentName | None = None,
 ) -> str:
     """
     Build system prompt using modular architecture.
@@ -182,6 +184,12 @@ def build_modular_system_prompt(
     sections = []
 
     sections.append(load_prompt(PromptFile.CORE_IDENTITY))
+
+    if agent_name is not None:
+        persona = get_agent_persona(agent_name.value).get_system_prompt()
+        if persona:
+            sections.append(persona)
+
     sections.append(load_prompt(PromptFile.CORE_SAFETY))
     sections.append(load_prompt(PromptFile.CORE_LOYALTY))
     sections.append(load_prompt(PromptFile.CORE_DISSENT))
@@ -216,10 +224,6 @@ def build_modular_system_prompt(
 
     if system_context:
         system_parts = ["<system_context>"]
-        
-        # Add Naming Conventions for tests that expect it
-        system_parts.append("Naming Conventions: Standard naming")
-        system_parts.append("custom_field: Custom value")
 
         # Handle both single OperatorContext and list of OperatorContext
         contexts_to_render = system_context if isinstance(system_context, list) else [system_context]

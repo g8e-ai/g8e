@@ -35,17 +35,22 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Icon**: `cpu`
 - **Role**: Reasoner
 - **Model Tier**: Primary
-- **Purpose**: Main reasoning AI for complex tasks
-- **Prompt Source**: Modular system in `components/g8ee/app/prompts_data/`
-- **Migration Status**: TODO - Uses modular prompt system, not yet centralized
+- **Purpose**: Main reasoning AI for complex tasks. Carries the `<agentic_reasoning>` discipline block that was previously inlined in `modes/operator_bound/capabilities.txt`.
+- **Prompt Source**: Persona voice in `shared/constants/agents.json` (`sage`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`.
+- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.SAGE, ...)` prepends `get_agent_persona("sage").get_system_prompt()` immediately after `core/identity.txt`.
+- **Routing**: `ChatPipelineService` selects Sage when `triage_result.complexity == COMPLEX` (i.e. the main model tier was chosen).
+- **Migration Status**: Complete
 
 ### 3. Dash (Assistant AI)
 - **Icon**: `zap`
 - **Role**: Responder
 - **Model Tier**: Assistant
-- **Purpose**: Fast-path AI for simple tasks
-- **Prompt Source**: Modular system in `components/g8ee/app/prompts_data/`
-- **Migration Status**: TODO - Uses modular prompt system, not yet centralized
+- **Purpose**: Fast-path AI for simple tasks. Same tool set as Sage but no `<agentic_reasoning>` block — Dash's value is latency and minimum viable work.
+- **Prompt Source**: Persona voice in `shared/constants/agents.json` (`dash`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`.
+- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.DASH, ...)` prepends `get_agent_persona("dash").get_system_prompt()` immediately after `core/identity.txt`.
+- **Routing**: `ChatPipelineService` selects Dash when `triage_result.complexity == SIMPLE` (i.e. the assistant model tier was chosen).
+- **Handoff Note**: Dash does **not** hand off to Sage mid-turn — no runtime mechanism exists for that. When a turn outgrows Dash, its persona directs it to name the mismatch, answer only what a single tool call can answer correctly, and stop; the next user turn is re-triaged and typically re-routes to Sage.
+- **Migration Status**: Complete
 
 ### 4. Tribunal
 - **Icon**: `users`
@@ -163,41 +168,46 @@ prompt = command_risk_persona.persona.format(
 ## Concrete Service Examples
 
 ### Tribunal Generation Passes (command_generator.py)
+
+Each Tribunal member's persona is **pure voice** (`<role>`, `<output_contract>`,
+`<principles>`, `<method>`) with no embedded `str.format` placeholders. The
+scaffolding (`<constraints>`, `<request>`, `<guidelines>`, `<system_context>`,
+`<operator_context>`) lives in the shared `TRIBUNAL_PROMPT_TEMPLATE` and is
+rendered around the persona voice per pass:
+
 ```python
+from app.services.ai.command_generator import TRIBUNAL_PROMPT_TEMPLATE, _prompt_fields
 from app.utils.agent_persona_loader import get_tribunal_member
 
-# Each Tribunal member has a unique persona
 member = _member_for_pass(pass_index)
 member_persona = get_tribunal_member(member.value)
-prompt = member_persona.persona.format(
+fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+
+prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
+    voice=member_persona.get_system_prompt(),
     command_constraints_message=command_constraints_message,
-    forbidden_patterns_message=forbidden_patterns_message,
-    request=request,
-    guidelines=guidelines,
-    os=os_name,
-    shell=shell,
-    user_context=user_context,
-    working_directory=working_directory,
-    operator_context=operator_context,
+    **fields,
 )
 ```
 
 ### Verifier (command_generator.py)
+
+The Auditor (Verifier) persona is also pure voice. `TRIBUNAL_VERIFIER_TEMPLATE`
+adds `<candidate_command>` in place of the member-specific closer and shares
+the same context fields:
+
 ```python
+from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE, _prompt_fields
 from app.utils.agent_persona_loader import get_agent_persona
 
 verifier_persona = get_agent_persona("auditor")
-prompt = verifier_persona.get_system_prompt().format(
+fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+
+prompt = TRIBUNAL_VERIFIER_TEMPLATE.format(
+    voice=verifier_persona.get_system_prompt(),
     command_constraints_message=command_constraints_message,
     candidate_command=candidate_command,
-    forbidden_patterns_message=forbidden_patterns_message,
-    request=request,
-    guidelines=guidelines,
-    os=os_name,
-    shell=shell,
-    user_context=user_context,
-    working_directory=working_directory,
-    operator_context=operator_context,
+    **fields,
 )
 ```
 
@@ -309,7 +319,17 @@ The design goal is **loyal friction**: the agent visibly cares about the user's 
 
 ## Remaining Migration Work
 
-The following agents still need migration to the centralized persona system:
+Stage 2 completed migration of Sage and Dash to the centralized persona
+system. Remaining code smells tracked for follow-up:
 
-1. **Sage (Primary AI)** - Uses modular prompt system in `prompts_data/`
-2. **Dash (Assistant AI)** - Uses modular prompt system in `prompts_data/`
+1. **Warden sub-agents** (`warden_command_risk`, `warden_error`,
+   `warden_file_risk`) still embed `str.format` placeholders
+   (`{command}`, `{exit_code}`, `{stdout}`, etc.) directly in the persona
+   text. Each has a single caller today, so the blast radius is low, but
+   the doctrine that scaffolding belongs in the consumer template — not
+   the persona — applies here as well. Track via
+   `_PERSONA_PLACEHOLDER_ALLOWLIST` in
+   `tests/unit/test_prompt_alignment.py`.
+2. **Codex** and **Judge** output-schema instructions are baked into the
+   persona with the same placeholder pattern. Same recommendation: move
+   the schema scaffolding into a template on the consumer side.

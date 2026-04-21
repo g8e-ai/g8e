@@ -103,6 +103,7 @@ from app.models.agents.tribunal import (
     TribunalSessionCompletedPayload,
 )
 from app.models.events import SessionEvent
+from app.models.model_configs import get_model_config
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
 
@@ -237,6 +238,73 @@ def _prompt_fields(
 
 _MAX_TOKENS_GENERATION = 256
 _MAX_TOKENS_VERIFIER = 256
+
+
+TRIBUNAL_PROMPT_TEMPLATE = """\
+{voice}
+
+<constraints>
+{forbidden_patterns_message}
+
+{command_constraints_message}
+</constraints>
+
+<request>
+{request}
+</request>
+
+<guidelines>
+{guidelines}
+</guidelines>
+
+<system_context>
+OS: {os}
+Shell: {shell}
+User: {user_context}
+Working directory: {working_directory}
+</system_context>
+
+<operator_context>
+{operator_context}
+</operator_context>
+
+Respond now with the exact command string and nothing else."""
+
+
+TRIBUNAL_VERIFIER_TEMPLATE = """\
+{voice}
+
+<constraints>
+{forbidden_patterns_message}
+
+{command_constraints_message}
+</constraints>
+
+<request>
+{request}
+</request>
+
+<guidelines>
+{guidelines}
+</guidelines>
+
+<os>
+{os}
+</os>
+
+<user>
+{user_context}
+</user>
+
+<operator_context>
+{operator_context}
+</operator_context>
+
+<candidate_command>
+{candidate_command}
+</candidate_command>
+
+Respond now with exactly `ok` or the single corrected command, and nothing else."""
 
 
 _SYSTEM_ERROR_PATTERNS: tuple[str, ...] = (
@@ -420,7 +488,8 @@ async def _run_generation_pass(
     member_persona = get_tribunal_member(member.value)
 
     fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
-    prompt = member_persona.persona.format(
+    prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
+        voice=member_persona.get_system_prompt(),
         command_constraints_message=command_constraints_message,
         **fields,
     )
@@ -430,7 +499,6 @@ async def _run_generation_pass(
         fields["user_context"], fields["os"], fields["shell"], fields["working_directory"],
     )
     logger.debug("[TRIBUNAL-PASS-%d] Full prompt: %s", pass_index, prompt[:5000])
-    from app.models.model_configs import get_model_config
     model_config = get_model_config(model)
     settings = LiteLLMSettings(
         max_output_tokens=_MAX_TOKENS_GENERATION,
@@ -557,12 +625,11 @@ async def _run_verifier(
         TribunalVerifierStartedPayload(candidate_command=candidate_command),
     )
 
-    from app.models.model_configs import get_model_config
-
     verifier_persona = get_agent_persona("auditor")
 
     fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
-    prompt = verifier_persona.get_system_prompt().format(
+    prompt = TRIBUNAL_VERIFIER_TEMPLATE.format(
+        voice=verifier_persona.get_system_prompt(),
         command_constraints_message=command_constraints_message,
         candidate_command=candidate_command,
         **fields,
@@ -814,10 +881,10 @@ async def generate_command(
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to generate a command from Sage's request.
 
-    Sage never proposes a command directly. `request` is Sage's natural-language
-    articulation of what the Operator must accomplish; `guidelines` is optional
-    creative guidance. The Tribunal is the sole authority on the resulting
-    command string.
+    The caller never proposes a command directly. `request` is the caller's
+    natural-language articulation of what the Operator must accomplish;
+    `guidelines` is optional constraints on the shape of the command (not its
+    output). The Tribunal is the sole authority on the resulting command string.
 
     Raises on any failure mode. There is no fallback — Sage did not propose a
     command, so there is nothing to fall back to.

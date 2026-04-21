@@ -19,7 +19,12 @@ from unittest.mock import AsyncMock, MagicMock
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.constants import AgentMode
 from app.llm.llm_types import ThoughtSignature
-from app.models.agent import AgentStreamContext, StreamChunkFromModel, TurnResult
+from app.models.agent import (
+    AgentInputs,
+    AgentStreamState,
+    StreamChunkFromModel,
+    TurnResult,
+)
 from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
@@ -46,33 +51,7 @@ def make_gen_config(
     )
 
 
-def make_agent_stream_context(
-    case_id: str = "case-test-001",
-    investigation_id: str = "inv-test-001",
-    web_session_id: str = "web-test-001",
-    user_id: str = "user-test-001",
-    agent_mode: AgentMode = AgentMode.OPERATOR_BOUND,
-    investigation=None,
-    g8e_context=None,
-    **kwargs,
-) -> AgentStreamContext:
-    """Build an AgentStreamContext with sensible test defaults."""
-    return AgentStreamContext(
-        case_id=case_id,
-        investigation_id=investigation_id,
-        web_session_id=web_session_id,
-        user_id=user_id,
-        agent_mode=agent_mode,
-        investigation=investigation,
-        g8e_context=g8e_context or build_g8e_http_context(
-            web_session_id=web_session_id,
-            user_id=user_id,
-        ),
-        **kwargs,
-    )
-
-
-def make_agent_streaming_context(
+def make_agent_inputs(
     case_id: str = "case-test-001",
     investigation_id: str = "inv-test-001",
     web_session_id: str = "web-test-001",
@@ -80,13 +59,13 @@ def make_agent_streaming_context(
     agent_mode: AgentMode = AgentMode.OPERATOR_BOUND,
     sentinel_mode: bool = True,
     investigation=None,
+    g8e_context=None,
     request_settings=None,
     **kwargs,
-) -> AgentStreamContext:
-    """Build a AgentStreamContext (SSE state tracker) with sensible test defaults."""
-    from app.models.settings import G8eeUserSettings
+) -> AgentInputs:
+    """Build an AgentInputs (immutable request-scoped inputs) with sensible test defaults."""
     from tests.fakes.factories import build_enriched_context
-    
+
     if investigation is None:
         investigation = build_enriched_context(
             investigation_id=investigation_id,
@@ -94,17 +73,17 @@ def make_agent_streaming_context(
             user_id=user_id,
             sentinel_mode=sentinel_mode,
         )
-    
-    g8e_context = build_g8e_http_context(
-        web_session_id=web_session_id,
-        user_id=user_id,
-    )
-    
+
+    if g8e_context is None:
+        g8e_context = build_g8e_http_context(
+            web_session_id=web_session_id,
+            user_id=user_id,
+        )
+
     if request_settings is None:
-        from app.models.settings import LLMSettings
         request_settings = G8eeUserSettings(llm=LLMSettings())
-    
-    return AgentStreamContext(
+
+    return AgentInputs(
         case_id=case_id,
         investigation_id=investigation_id,
         web_session_id=web_session_id,
@@ -118,8 +97,9 @@ def make_agent_streaming_context(
     )
 
 
-# Alias for backward compatibility
-make_streaming_context = make_agent_streaming_context
+def make_agent_stream_state() -> AgentStreamState:
+    """Build a fresh, empty AgentStreamState."""
+    return AgentStreamState()
 
 
 def make_g8e_agent(
@@ -200,7 +180,7 @@ def patch_stream_response(agent: g8eEngine, chunks: list[StreamChunkFromModel]) 
 
 async def collect_stream_from_model_chunks(
     agent: g8eEngine,
-    context: AgentStreamContext,
+    inputs: AgentInputs,
     gen_config=None,
     model_name: str = "test-model",
     g8ed_event_service: Any = None,
@@ -208,13 +188,13 @@ async def collect_stream_from_model_chunks(
 ) -> list[StreamChunkFromModel]:
     """Consume agent._stream_with_tool_loop and return all yielded chunks."""
     if gen_config is None:
-        gen_config = make_gen_config(agent_mode=context.agent_mode or AgentMode.OPERATOR_NOT_BOUND)
+        gen_config = make_gen_config(agent_mode=inputs.agent_mode or AgentMode.OPERATOR_NOT_BOUND)
     chunks: list[StreamChunkFromModel] = []
     async for chunk in agent._stream_with_tool_loop(
         contents=[],
         generation_config=gen_config,
         model_name=model_name,
-        context=context,
+        inputs=inputs,
         g8ed_event_service=g8ed_event_service or make_g8ed_event_service(),
         llm_provider=llm_provider,
     ):

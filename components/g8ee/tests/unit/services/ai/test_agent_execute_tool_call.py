@@ -316,14 +316,22 @@ class TestOperatorToolDetection:
 
 class TestToolArgsInjection:
 
-    async def testexecution_id_injected_for_operator_tool(self):
+    async def test_execution_id_passed_as_kwarg_for_operator_tool(self):
+        """The canonical per-tool execution_id is threaded to the executor via the
+        ``execution_id`` keyword — not stuffed into the LLM-facing tool_args dict.
+        This keeps the args validated by the typed Pydantic model clean while still
+        giving the executor (and every downstream operator service) an authoritative
+        id to use for the execution registry and UI lifecycle events.
+        """
         executor = _make_tool_executor()
         _mock_executor_success(executor)
+        captured_kwargs = {}
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
+            nonlocal captured_args, captured_kwargs
+            captured_args = tool_args
+            captured_kwargs = kwargs
             return CommandExecutionResult(success=True, output="ok")
 
         executor.execute_tool_call = AsyncMock(side_effect=capture_call)
@@ -338,39 +346,22 @@ class TestToolArgsInjection:
                 request_settings=REQUEST_SETTINGS,
             )
 
-        assert "execution_id" in captured_args
-        assert captured_args["execution_id"].startswith("exec_")
+        # execution_id is delivered as a typed kwarg, not silently stuffed into args.
+        assert captured_kwargs.get("execution_id") is not None
+        assert captured_kwargs["execution_id"].startswith("cmd_")
+        # LLM-facing args dict never carries internal routing fields.
+        assert "execution_id" not in captured_args
+        assert "_web_session_id" not in captured_args
 
-    async def test_web_session_id_injected_for_operator_tool(self):
+    async def test_execution_id_kwarg_none_for_non_operator_tool(self):
         executor = _make_tool_executor()
+        captured_kwargs = {}
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
-            return CommandExecutionResult(success=True, output="ok")
-
-        executor.execute_tool_call = AsyncMock(side_effect=capture_call)
-
-        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
-            await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show uptime"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
-            )
-
-        assert captured_args["_web_session_id"] == "web-001"
-
-    async def test_internal_fields_not_injected_for_non_operator_tool(self):
-        executor = _make_tool_executor()
-        captured_args = {}
-
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
+            nonlocal captured_args, captured_kwargs
+            captured_args = tool_args
+            captured_kwargs = kwargs
             return CommandExecutionResult(success=True, output="ok")
 
         executor.execute_tool_call = AsyncMock(side_effect=capture_call)
@@ -384,15 +375,21 @@ class TestToolArgsInjection:
             request_settings=REQUEST_SETTINGS,
         )
 
+        # Non-operator tools never get an execution_id.
+        assert captured_kwargs.get("execution_id") is None
         assert "execution_id" not in captured_args
 
-    async def test_original_args_preserved_alongside_injected_fields(self):
+    async def test_original_args_preserved_without_hidden_injection(self):
+        """The Tribunal adds ``command`` to the executor args; the caller's original
+        ``request``/``guidelines`` are preserved. Internal routing fields
+        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected —
+        they are passed as typed parameters instead."""
         executor = _make_tool_executor()
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
             nonlocal captured_args
-            captured_args = tool_args_with_id
+            captured_args = tool_args
             return CommandExecutionResult(success=True, output="ok")
 
         executor.execute_tool_call = AsyncMock(side_effect=capture_call)
@@ -410,12 +407,11 @@ class TestToolArgsInjection:
                 request_settings=REQUEST_SETTINGS,
             )
 
-        # Tribunal injects `command` from its final_command; `request`/`guidelines` pass through.
         assert captured_args["request"] == "echo hello"
         assert captured_args["guidelines"] == "prefer minimal output"
         assert "command" in captured_args
-        assert "execution_id" in captured_args
-        assert "_web_session_id" in captured_args
+        assert "execution_id" not in captured_args
+        assert "_web_session_id" not in captured_args
 
 
 # =============================================================================

@@ -1295,10 +1295,10 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
         expect(chat._portCheckIndicators.has('exec-p2')).toBe(true);
     });
 
-    it('PORT_CHECK event bus wiring: REQUESTED → COMPLETED completes the indicator', () => {
+    it('PORT_CHECK event bus wiring: STARTED → COMPLETED completes the indicator', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED, {
+        eventBus.emit(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
@@ -1315,13 +1315,27 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
         expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`port-check-${EXECUTION_ID}`);
     });
 
-    it('PORT_CHECK event bus wiring: REQUESTED → FAILED completes the indicator', () => {
+    it('PORT_CHECK event bus wiring: REQUESTED must NOT create an indicator (STARTED owns indicator lifecycle; REQUESTED is an MCP/operator dispatch event)', () => {
         chat.setupSSEListeners();
 
         eventBus.emit(EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
+            port: '22',
+        });
+
+        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
+    });
+
+    it('PORT_CHECK event bus wiring: STARTED → FAILED completes the indicator', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+            port: '22',
         });
 
         eventBus.emit(EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED, {
@@ -1331,6 +1345,32 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
         });
 
         expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`port-check-${EXECUTION_ID}`);
+    });
+
+    it('Generic tool-call indicator is suppressed for check_port_status (uses dedicated port-check sidecar)', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+            tool_name: 'check_port_status',
+        });
+
+        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
+    });
+
+    it('Generic tool-call indicator is suppressed for g8e_web_search (uses dedicated search-web sidecar)', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+            tool_name: 'g8e_web_search',
+        });
+
+        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
     });
 });
 

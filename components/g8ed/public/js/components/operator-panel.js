@@ -148,7 +148,9 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        const heartbeat = data.data || {};
+        const heartbeat = data || {};
+        // heartbeat.metrics is the canonical OperatorHeartbeat
+        // (shared/models/wire/heartbeat_sse.json -> heartbeat.json#operator_heartbeat).
         const heartbeatTimestamp = heartbeat.metrics?.timestamp ?? null;
         this._lastHeartbeat = heartbeatTimestamp ? new Date(heartbeatTimestamp).getTime() : Date.now();
         this._isConnected = true;
@@ -161,10 +163,7 @@ export class OperatorPanel {
             this._operators[operatorIndex] = {
                 ...existingOperator,
                 status: heartbeat.status ?? existingOperator.status,
-                latest_heartbeat_snapshot: HeartbeatSnapshot.parse({
-                    timestamp: heartbeatTimestamp ? new Date(heartbeatTimestamp) : new Date(),
-                    ...(heartbeat.metrics || {})
-                }),
+                latest_heartbeat_snapshot: HeartbeatSnapshot.parse(heartbeat.metrics || {}),
                 last_heartbeat: heartbeatTimestamp,
             };
         }

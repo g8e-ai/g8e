@@ -18,6 +18,16 @@ import { logger } from '../../utils/logger.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
 import { OperatorStatus } from '../../constants/operator.js';
 
+// NOTE: Frontend operator selection mechanism is currently disabled
+// The frontend no longer allows users to select a single bound operator for metrics display
+// This was disabled because the UX for selecting one operator out of a list of bound operators needs improvement
+// To re-enable when UX is better established:
+// 1. Uncomment the click handler in operator-list-mixin.js that calls _selectMetricsOperator
+// 2. Uncomment the _applyDefaultMetricsSelection call in operator-list-mixin.js
+// 3. Uncomment the automatic selection on bind in operator-bind-mixin.js
+// The backend here supports operator selection via the selectedMetricsOperatorId pattern
+// See: operator-panel.js (heartbeat and status_updated handlers) and operator-list-mixin.js (_selectMetricsOperator)
+
 /**
  * @param {Object} options
  * @param {Object} options.services - Services object containing all platform services

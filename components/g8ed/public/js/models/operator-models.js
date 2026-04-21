@@ -25,19 +25,96 @@ import { FrontendBaseModel, F } from './base.js';
 // HeartbeatSnapshot
 // ---------------------------------------------------------------------------
 
-export class HeartbeatSnapshot extends FrontendBaseModel {
+// Canonical shape: shared/models/wire/heartbeat.json#operator_heartbeat.
+// This is the same instance the backend persists as latest_heartbeat_snapshot
+// AND the envelope payload in shared/models/wire/heartbeat_sse.json#envelope.metrics.
+// Frontend parses, persists, and consumes exactly one shape — no flat projection.
+
+export class HeartbeatSystemIdentity extends FrontendBaseModel {
     static fields = {
-        timestamp:       { type: F.date,   default: null },
+        hostname:     { type: F.string, default: null },
+        os:           { type: F.string, default: null },
+        architecture: { type: F.string, default: null },
+        pwd:          { type: F.string, default: null },
+        current_user: { type: F.string, default: null },
+        cpu_count:    { type: F.number, default: null },
+        memory_mb:    { type: F.number, default: null },
+    };
+}
+
+export class HeartbeatPerformanceMetrics extends FrontendBaseModel {
+    static fields = {
         cpu_percent:     { type: F.number, default: null },
         memory_percent:  { type: F.number, default: null },
         disk_percent:    { type: F.number, default: null },
-        network_latency: { type: F.any,    default: null },
-        uptime:          { type: F.any,    default: null },
-        uptime_seconds:  { type: F.any,    default: null },
+        network_latency: { type: F.number, default: null },
+        memory_used_mb:  { type: F.number, default: null },
+        memory_total_mb: { type: F.number, default: null },
+        disk_used_gb:    { type: F.number, default: null },
+        disk_total_gb:   { type: F.number, default: null },
+    };
+}
+
+export class HeartbeatNetworkInterface extends FrontendBaseModel {
+    static fields = {
+        name: { type: F.string, default: null },
+        ip:   { type: F.string, default: null },
+        mtu:  { type: F.number, default: null },
+    };
+}
+
+export class HeartbeatNetworkInfo extends FrontendBaseModel {
+    static fields = {
+        public_ip:           { type: F.string, default: null },
+        internal_ip:         { type: F.string, default: null },
+        interfaces:          { type: F.any,    default: null },
+        connectivity_status: { type: F.any,    default: null },
+    };
+}
+
+export class HeartbeatUptimeInfo extends FrontendBaseModel {
+    static fields = {
+        uptime_display: { type: F.string, default: null },
+        uptime_seconds: { type: F.number, default: null },
+    };
+}
+
+export class HeartbeatVersionInfo extends FrontendBaseModel {
+    static fields = {
+        operator_version: { type: F.string, default: null },
+        status:           { type: F.string, default: null },
+    };
+}
+
+export class HeartbeatSnapshot extends FrontendBaseModel {
+    static fields = {
+        timestamp:             { type: F.date,   default: null },
+        heartbeat_type:        { type: F.string, default: null },
+
+        system_identity:       { type: F.object, model: HeartbeatSystemIdentity,     default: () => new HeartbeatSystemIdentity({}) },
+        performance:           { type: F.object, model: HeartbeatPerformanceMetrics, default: () => new HeartbeatPerformanceMetrics({}) },
+        network:               { type: F.object, model: HeartbeatNetworkInfo,        default: () => new HeartbeatNetworkInfo({}) },
+        uptime:                { type: F.object, model: HeartbeatUptimeInfo,         default: () => new HeartbeatUptimeInfo({}) },
+        version_info:          { type: F.object, model: HeartbeatVersionInfo,        default: () => new HeartbeatVersionInfo({}) },
+
+        os_details:            { type: F.any, default: null },
+        user_details:          { type: F.any, default: null },
+        disk_details:          { type: F.any, default: null },
+        memory_details:        { type: F.any, default: null },
+        environment:           { type: F.any, default: null },
+
+        system_fingerprint:    { type: F.string, default: null },
+        fingerprint_details:   { type: F.any,    default: null },
+
+        is_cloud_operator:     { type: F.boolean, default: false },
+        cloud_provider:        { type: F.string,  default: null },
+
+        local_storage_enabled: { type: F.boolean, default: false },
+        git_available:         { type: F.boolean, default: false },
+        ledger_enabled:        { type: F.boolean, default: false },
     };
 
     static empty() {
         return HeartbeatSnapshot.parse({});
     }
-
 }

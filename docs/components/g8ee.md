@@ -186,24 +186,42 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 
 `deliver_via_sse` chunk dispatch:
 
-| `StreamChunkFromModelType` | SSE event published | Side effect |
+| `StreamChunkFromModelType` | SSE event(s) published | Side effect |
 |-------------------|--------------------|--------------|
-| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `LLMStreamingContext.response_text` |
-| `THINKING` | none | `AgentStreamContext.set_thinking_started()` |
-| `THINKING_UPDATE` | none | — |
-| `THINKING_END` | none | `AgentStreamContext.set_thinking_ended()` |
-| `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
-| `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
+| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `AgentStreamContext.response_text` |
+| `THINKING` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=START` on the first chunk of a thinking burst, `UPDATE` thereafter) | `AgentStreamContext.set_thinking_started()` |
+| `THINKING_END` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=END`) | `AgentStreamContext.set_thinking_ended()` |
+| `RETRY` | `LLM_CHAT_ITERATION_RETRY` (carries `attempt`, `max_attempts`) | — |
+| `TOOL_CALL` | `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always, for every tool); plus `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` (search_web only) or `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only) | — |
+| `TOOL_RESULT` | `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always, for every tool); `LLM_TOOL_G8E_WEB_SEARCH_COMPLETED` / `_FAILED` (search_web only); `LLM_CHAT_ITERATION_COMPLETED` (turn tick, increments `_turn`) | Awaits `on_iteration_text(response_text)` if provided and the buffer is non-whitespace, then clears `AgentStreamContext.response_text` so the next iteration's text starts fresh |
 | `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamContext` |
-| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
-| `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
-| `RETRY` | none | — |
+| `COMPLETE` | none in-loop; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the loop exits with the post-loop `response_text`, finish reason, citation metadata, and aggregate token usage | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
+| `ERROR` | `LLM_CHAT_ITERATION_FAILED` (carries provider error message) | Sets internal `error_occurred=True` and breaks the loop; the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED` is suppressed |
 
-`deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
+`deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive. Wrapping `try/except` translates `asyncio.CancelledError` and any uncaught `Exception` raised by the generator into `LLM_CHAT_ITERATION_FAILED` events; `CancelledError` is re-raised after the event is published, all other exceptions are swallowed so the SSE channel remains usable.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamContext` state.
+#### Per-Iteration AI Text Persistence
 
-`AgentStreamContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
+`response_text` is **not** a single buffer for the whole stream — it is a per-iteration accumulator. `deliver_via_sse` accepts an optional `on_iteration_text: Callable[[str], Awaitable[None]] | None` parameter. On every `TOOL_RESULT` chunk (i.e., at the end of each ReAct iteration), if the callback was supplied and `response_text.strip()` is non-empty, it is awaited with the accumulated pre-tool text **before** the buffer is cleared. Persistence failures inside the callback are caught and logged so they cannot break the live SSE stream.
+
+`ChatPipelineService._run_chat_impl` wires this callback into a closure that writes each iteration's commentary as a `MessageSender.AI_PRIMARY` row via `InvestigationService.add_chat_message`. The post-stream `_persist_ai_response` writes the final segment (still in `response_text`) as another `AI_PRIMARY` row, attaching the aggregate `grounding_metadata` and `token_usage` collected over the whole stream; it skips the write when `response_text` is whitespace-only (e.g., when the agent ends on a tool result with no closing narration).
+
+The resulting chronological shape of `conversation_history` for a multi-turn tool loop is:
+
+```
+user_chat
+  -> ai_primary (iteration 1 commentary)         <- via on_iteration_text
+  -> system     (operator.command.approval.*)    <- via approval_service._audit
+  -> user_terminal (operator command result)
+  -> ai_primary (iteration 2 commentary)         <- via on_iteration_text
+  -> system     (operator.command.approval.*)
+  -> user_terminal (operator command result)
+  -> ...
+  -> ai_primary (final answer, with token_usage + grounding_metadata)
+                                                  <- via _persist_ai_response
+```
+
+Intermediate rows carry `AIResponseMetadata(source=EVENT_SOURCE_AI_PRIMARY)` with no grounding or token-usage fields; only the final row carries the aggregate totals for the entire stream. Frontend restore (`chat-history.js`) renders each `AI_PRIMARY` row through the same `appendDirectHtmlResponse` path used for live chunks, so a restored conversation looks identical to the live stream.
 
 ### Error Handling
 
@@ -298,7 +316,7 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records
 - `memory` — the attached `InvestigationMemory` (or `None`)
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn)
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. See [SSE Delivery Pipeline → Per-Iteration AI Text Persistence](#per-iteration-ai-text-persistence).
 
 For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
 
@@ -671,15 +689,15 @@ For complete schema DDL, exact table/column definitions, vault encryption detail
 
 ---
 
-## Sentinel: Data Protection & Threat Detection
+## Sentinel: Platform-Wide Protection
 
-Sentinel is a dual-purpose security system that performs data scrubbing and pre-execution threat detection in a single scan pass.
+Sentinel is the platform-wide protector that runs on both the AI Engine (`g8ee`) and the Operator (`g8eo`), providing multiple layers of security for the user's remote systems and data.
 
-- **g8ee Python scrubber** — scrubs sensitive data from user messages before they reach the AI (27 patterns: service tokens, cloud credentials, PII, connection strings, private keys).
-- **g8eo Go sentinel** — scrubs command output before it leaves the Operator, and performs pre-execution threat detection mapped to MITRE ATT&CK categories. Threat detection is Go-only.
-- **`sentinel_mode`** on an investigation controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary — never pass the raw bool to g8eo payloads. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for the conversion mapping.
+- **AI Engine Side (`g8ee`)** — Performs **ingress scrubbing** as a redundant layer of protection for all Operator data (command results, file contents) before it is transmitted to any model provider. It also scrubs sensitive data from user messages (27 patterns).
+- **Operator Side (`g8eo`)** — Performs **pre-execution threat detection** (46 MITRE ATT&CK-mapped categories) to block dangerous commands on the host, and **egress scrubbing** to ensure raw sensitive data never leaves the system of record.
+- **`sentinel_mode`** — Controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for details.
 
-For the full pattern list, threat categories, and scrubbed-vs-preserved data breakdown, see [architecture/security.md — Sentinel Output Scrubbing](../architecture/security.md#sentinel-output-scrubbing) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo).
+Sentinel ensures that sensitive information is replaced with safe placeholders (e.g., `[AWS_KEY]`, `[EMAIL]`) across the entire pipeline, standing guard on both the operator and the application side.
 
 ---
 

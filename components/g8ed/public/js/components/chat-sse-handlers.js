@@ -78,10 +78,21 @@ export const ChatSSEHandlersMixin = {
             this.handleSearchWebFailed(data);
         });
 
-        this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED, (data) => {
-            this.handleNetworkPortCheckIndicator(data);
-        });
-
+        // IMPORTANT: Do NOT subscribe to OPERATOR_NETWORK_PORT_CHECK_REQUESTED for UI
+        // indicator creation. STARTED owns the indicator lifecycle.
+        //
+        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves two distinct roles in the platform:
+        //   1. MCP tool-call event dispatched to the operator (g8eo) to execute the port
+        //      check on the bound host.
+        //   2. A frontend notification emitted by agent_sse when the LLM issues the
+        //      check_port tool call, carrying the LLM tool-call execution_id
+        //      (generated per-tool in agent_tool_loop.orchestrate_tool_execution).
+        //
+        // port_service emits STARTED / COMPLETED / FAILED keyed by g8e_context.execution_id
+        // (the HTTP context's execution_id, not the per-tool LLM id). These two ids do not
+        // coincide, so an indicator created on REQUESTED would be orphaned forever.
+        // Only STARTED/COMPLETED/FAILED (all using g8e_context.execution_id) drive the
+        // UI indicator lifecycle.
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, (data) => {
             this.handleNetworkPortCheckIndicator(data);
         });
@@ -691,6 +702,11 @@ export const ChatSSEHandlersMixin = {
 
         const executionId = data.execution_id;
         if (!executionId) return;
+
+        const toolName = data.tool_name;
+        if (toolName === 'check_port_status' || toolName === 'g8e_web_search') {
+            return;
+        }
 
         const indicatorId = `tool-${executionId}`;
         if (!this._toolCallIndicators) this._toolCallIndicators = new Map();

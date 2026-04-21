@@ -811,7 +811,7 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (g8ed). Collections a
 5. g8ee → g8es Doc: Read/create `cases` and `investigations` documents
 6. g8ee → LLM Provider: Stream request with assembled context
 7. g8ee → g8ed SSE: Push each `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event per text chunk
-8. g8ee → g8es Doc: Persist final AI response to `investigations`
+8. g8ee → g8es Doc: At each ReAct tool boundary (`TOOL_RESULT` chunk), append the iteration's accumulated AI text as an `AI_PRIMARY` row in `investigations.conversation_history` via `_run_chat_impl`'s `on_iteration_text` callback. After the stream closes, append the final segment as another `AI_PRIMARY` row via `_persist_ai_response` (carrying aggregate `token_usage` and `grounding_metadata`).
 9. g8ee → g8es Doc: Dispatch LFAA events via pub/sub to the bound g8eo
 
 ### Command Execution Flow

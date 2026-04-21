@@ -75,7 +75,7 @@ flowchart TD
 3. **Tool execution** — Tool calls are dispatched sequentially through `execute_turn_tool_calls` in `agent_tool_loop.py`. 
 4. **Tribunal Refinement** — `run_commands_with_operator` tool calls pass through the Tribunal (Voting Swarm + Verifier) in `agent_tool_loop.py` before execution. Parallel generation (up to 5 passes) surfaces ideologically distinct candidates; weighted majority voting converges them; the Verifier (The Auditor) confirms or minimally corrects the winner.
 5. **SSE delivery** — Chunks are translated via `deliver_via_sse` and forwarded to the browser via g8ed in real time.
-6. **Persistence** — Results are saved to g8es via `_persist_ai_response` in `chat_pipeline.py`; background memory update tasks are fired.
+6. **Persistence** — Conversation history is written incrementally: each ReAct iteration's pre-tool commentary is persisted as a `MessageSender.AI_PRIMARY` row through an `on_iteration_text` callback wired by `_run_chat_impl`, and the final segment (with aggregate `token_usage` and `grounding_metadata`) is written by `_persist_ai_response` in `chat_pipeline.py` after the stream closes. Background memory update tasks are then fired.
 
 All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in g8es (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with g8es are strictly authenticated via the `X-Internal-Auth` shared secret.
 
@@ -102,7 +102,7 @@ The resulting `EnrichedInvestigationContext` carries:
 - `memory` — the attached `InvestigationMemory` (or `None`).
 - `bound_operators` — `BoundOperator` instances from `G8eHttpContext`.
 - `operator_session_token` — transient operator session token for authorization validation.
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn).
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. The chronological shape is `user_chat → ai_primary (iter 1) → system (approval.*) → user_terminal (result) → ai_primary (iter 2) → … → ai_primary (final)`. Aggregate `token_usage` and `grounding_metadata` for the whole stream are attached only to the final row.
 
 ### Security
 
@@ -191,6 +191,8 @@ Each mode provides sections: `capabilities`, `execution`, and `tools`. The `tool
 3. `_ai_update_memory` takes the conversation history, sends it with the memory analysis persona from `agents.json`. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
 4. Non-null fields from the AI response overwrite the existing memory fields; existing values are preserved when the AI returns null.
 5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to g8es KV).
+
+> **Known limitation.** `_persist_ai_response` passes `ctx.conversation_history`, which is the snapshot taken in `_prepare_chat_context` *before* the LLM stream began. It includes the user message and prior turns but does **not** include the per-iteration `AI_PRIMARY` rows written by `on_iteration_text` during the stream, nor the final segment written moments earlier by `_persist_ai_response` itself. Memory analysis therefore does not see the agent's running commentary or final answer from the current turn. If memory quality matters for tool-heavy sessions, the snapshot must be re-fetched (or appended to in-memory) before the memory call.
 
 ### Injection on the Next Turn
 
@@ -313,13 +315,17 @@ flowchart LR
 
 g8ee publishes events using `EventType` constants defined in `components/g8ee/app/constants/events.py`. Events are published via:
 
-**`deliver_via_sse`** (`components/g8ee/app/services/ai/AI_sse.py`)
-- Translates `StreamChunkFromModel` objects into g8ed EventService pub/sub calls
-- Maps stream chunk types to EventType constants:
-  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`
-  - `THINKING` → `LLM_CHAT_ITERATION_THINKING_STARTED`
-  - `TOOL_CALL` → Tool-specific events (e.g., `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
-  - `COMPLETE` → `LLM_CHAT_ITERATION_TEXT_COMPLETED` or `LLM_CHAT_ITERATION_FAILED`
+**`deliver_via_sse`** (`components/g8ee/app/services/ai/agent_sse.py`)
+- Translates `StreamChunkFromModel` objects into g8ed `EventService` pub/sub calls
+- Maps stream chunk types to EventType constants (full table in [components/g8ee.md → SSE Delivery Pipeline](../components/g8ee.md#sse-delivery-pipeline)):
+  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` (per chunk) and accumulates into `AgentStreamContext.response_text`
+  - `THINKING` / `THINKING_END` → `LLM_CHAT_ITERATION_THINKING_STARTED` (with `action_type` of `START`/`UPDATE`/`END`)
+  - `RETRY` → `LLM_CHAT_ITERATION_RETRY`
+  - `TOOL_CALL` → `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always) plus tool-specific events (e.g. `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
+  - `TOOL_RESULT` → `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always) and `LLM_CHAT_ITERATION_COMPLETED` (turn tick); also flushes the iteration's accumulated text via the optional `on_iteration_text` persistence callback before clearing the buffer
+  - `CITATIONS` → `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`)
+  - `COMPLETE` → stores `token_usage` and `finish_reason` on the context; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the stream closes (suppressed if an `ERROR` chunk was seen)
+  - `ERROR` → `LLM_CHAT_ITERATION_FAILED` (suppresses the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED`)
 
 **`EventService.publish_investigation_event`** (`components/g8ee/app/services/infra/g8ed_event_service.py`)
 - HTTP POST to g8ed internal endpoint `/internal/sse/push`
@@ -398,10 +404,10 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 **g8ee side**:
 - `deliver_via_sse` catches exceptions during streaming:
-  - `CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with fixed error message, re-raises
-  - `G8eError` subclasses (OperationError, NetworkError, RateLimitError): Populates `payload.error` with `str(e)`
-  - Generic `Exception`: Logs error, publishes `LLM_CHAT_ITERATION_FAILED`, does not re-raise
-- Retry loop for transient errors (429, 503) with exponential backoff
+  - `asyncio.CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with `"AI processing stopped"`, then re-raises so the cancellation propagates
+  - In-stream `ERROR` chunk (provider returned an error): Publishes `LLM_CHAT_ITERATION_FAILED` with the provider error message, sets `error_occurred=True`, breaks the loop, and suppresses the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED`
+  - Any other uncaught `Exception`: Logs the error, publishes `LLM_CHAT_ITERATION_FAILED` with `str(e)`, and does not re-raise so the SSE channel remains usable
+- `g8eEngine.stream_response` retries transient provider errors (e.g. 429, 503) with exponential backoff, but only while `streaming_started=False` — once any `TEXT` chunk has been yielded the error is surfaced immediately as an `ERROR` chunk
 
 **g8ed side**:
 - `internal_sse_routes.js`: Returns 500 on publish failures, logs error details

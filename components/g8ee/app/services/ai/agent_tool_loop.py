@@ -19,7 +19,6 @@ tool call dispatch, and sequential turn-level execution loop.
 """
 
 import logging
-import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
@@ -32,7 +31,6 @@ from app.constants.settings import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EXECUTION_ID_PREFIX,
     ToolDisplayCategory,
     StreamChunkFromModelType,
 )
@@ -59,7 +57,7 @@ from app.models.agents.tribunal import (
 from app.services.investigation.investigation_service import extract_operator_context_by_target
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
-from app.utils.timestamp import now, to_timestamp
+from app.utils.ids import generate_command_execution_id
 
 
 class TribunalInvoker:
@@ -331,22 +329,17 @@ async def orchestrate_tool_execution(
 
             raw_args = executor_args.model_dump(by_alias=True)
 
-    execution_id: str | None = None
-
-    if is_operator_tool:
-        execution_id = f"{EXECUTION_ID_PREFIX}_{uuid.uuid4().hex[:12]}_{int(to_timestamp(now()))}"
-
-    tool_args_with_id = {**raw_args}
-    if is_operator_tool and execution_id:
-        tool_args_with_id["execution_id"] = execution_id
-        tool_args_with_id["_web_session_id"] = g8e_context.web_session_id
+    execution_id: str | None = (
+        generate_command_execution_id() if is_operator_tool else None
+    )
 
     result = await tool_executor.execute_tool_call(
         tool_name,
-        tool_args_with_id,
+        raw_args,
         investigation,
         g8e_context,
         request_settings=request_settings,
+        execution_id=execution_id,
     )
 
     logger.info(

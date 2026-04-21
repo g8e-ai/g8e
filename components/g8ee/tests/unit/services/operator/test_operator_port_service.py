@@ -111,6 +111,11 @@ def _make_context():
     return build_g8e_http_context()
 
 
+def _exec_id(tag: str = "") -> str:
+    from uuid import uuid4
+    return f"test-exec-{tag or uuid4().hex[:8]}"
+
+
 def _make_success_envelope(
     execution_id: str = "test",
     host: str = "google.com",
@@ -166,7 +171,7 @@ class TestPortCheckSuccess:
                 registry.complete(eid, _make_success_envelope(is_open=True))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(args, investigation, _make_context())
+        result = await service.execute_port_check(args, investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is True
@@ -188,7 +193,7 @@ class TestPortCheckSuccess:
                 registry.complete(eid, _make_success_envelope(is_open=False, latency_ms=None))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(args, investigation, _make_context())
+        result = await service.execute_port_check(args, investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is True
@@ -207,7 +212,7 @@ class TestPortCheckSuccess:
                 registry.complete(eid, _make_success_envelope(host="redis-server", port=8080))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        await service.execute_port_check(args, investigation, _make_context())
+        await service.execute_port_check(args, investigation, _make_context(), _exec_id())
         await task
 
         assert len(pubsub.published_commands) == 1
@@ -228,7 +233,7 @@ class TestPortCheckSuccess:
                 registry.complete(eid, _make_success_envelope())
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        await service.execute_port_check(args, investigation, _make_context())
+        await service.execute_port_check(args, investigation, _make_context(), _exec_id())
         await task
 
         assert ("op-1", "session-1") in pubsub.registered_sessions
@@ -245,7 +250,7 @@ class TestPortCheckSuccess:
                 registry.complete(eid, _make_success_envelope())
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        await service.execute_port_check(args, investigation, _make_context())
+        await service.execute_port_check(args, investigation, _make_context(), _exec_id())
         await task
 
         assert len(registry.allocate_calls) == 1
@@ -263,7 +268,7 @@ class TestPortValidation:
     async def test_port_zero_rejected(self):
         service, *_ = _make_service()
         result = await service.execute_port_check(
-            _make_args(port=0), _make_investigation(), _make_context(),
+            _make_args(port=0), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
@@ -273,7 +278,7 @@ class TestPortValidation:
     async def test_port_negative_rejected(self):
         service, *_ = _make_service()
         result = await service.execute_port_check(
-            _make_args(port=-1), _make_investigation(), _make_context(),
+            _make_args(port=-1), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
@@ -282,7 +287,7 @@ class TestPortValidation:
     async def test_port_above_65535_rejected(self):
         service, *_ = _make_service()
         result = await service.execute_port_check(
-            _make_args(port=65536), _make_investigation(), _make_context(),
+            _make_args(port=65536), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
@@ -298,7 +303,7 @@ class TestPortValidation:
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         result = await service.execute_port_check(
-            _make_args(port=1), _make_investigation(), _make_context(),
+            _make_args(port=1), _make_investigation(), _make_context(), _exec_id(),
         )
         await task
         assert result.success is True
@@ -314,7 +319,7 @@ class TestPortValidation:
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         result = await service.execute_port_check(
-            _make_args(port=65535), _make_investigation(), _make_context(),
+            _make_args(port=65535), _make_investigation(), _make_context(), _exec_id(),
         )
         await task
         assert result.success is True
@@ -333,7 +338,7 @@ class TestOperatorResolution:
         )
         investigation = build_enriched_context(operator_documents=[])
         result = await service.execute_port_check(
-            _make_args(), investigation, _make_context(),
+            _make_args(), investigation, _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
@@ -346,7 +351,7 @@ class TestOperatorResolution:
         )
         investigation = _make_investigation()
         result = await service.execute_port_check(
-            _make_args(target_operator="bad"), investigation, _make_context(),
+            _make_args(target_operator="bad"), investigation, _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
@@ -357,7 +362,7 @@ class TestOperatorResolution:
         service, *_ = _make_service(resolved_operator=op_no_session)
         investigation = _make_investigation(operators=[op_no_session])
         result = await service.execute_port_check(
-            _make_args(), investigation, _make_context(),
+            _make_args(), investigation, _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.NO_OPERATORS_AVAILABLE
@@ -376,7 +381,7 @@ class TestOperatorResolution:
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         await service.execute_port_check(
-            _make_args(target_operator="op-1"), investigation, _make_context(),
+            _make_args(target_operator="op-1"), investigation, _make_context(), _exec_id(),
         )
         await task
 
@@ -398,7 +403,7 @@ class TestOperatorResolution:
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         await service.execute_port_check(
-            _make_args(target_operator=None), investigation, _make_context(),
+            _make_args(target_operator=None), investigation, _make_context(), _exec_id(),
         )
         await task
 
@@ -415,7 +420,7 @@ class TestPubsubNotReady:
     async def test_returns_error_when_pubsub_not_ready(self):
         service, *_ = _make_service(pubsub_ready=False)
         result = await service.execute_port_check(
-            _make_args(), _make_investigation(), _make_context(),
+            _make_args(), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY
@@ -436,7 +441,7 @@ class TestTimeout:
 
         from unittest.mock import patch
         with patch("app.services.operator.port_service.OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS", 0.01):
-            result = await service.execute_port_check(args, investigation, _make_context())
+            result = await service.execute_port_check(args, investigation, _make_context(), _exec_id())
 
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATION_TIMEOUT
@@ -461,7 +466,7 @@ class TestG8eoResultHandling:
                 registry.complete(eid, _make_failed_envelope("Connection refused"))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(_make_args(), investigation, _make_context())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is False
@@ -486,7 +491,7 @@ class TestG8eoResultHandling:
                 registry.complete(eid, envelope)
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(_make_args(), investigation, _make_context())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is False
@@ -503,7 +508,7 @@ class TestG8eoResultHandling:
                 registry.complete(eid, "not_an_envelope")
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(_make_args(), investigation, _make_context())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is False
@@ -528,7 +533,7 @@ class TestG8eoResultHandling:
                 registry.complete(eid, envelope)
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(_make_args(), investigation, _make_context())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
         await task
 
         assert result.success is False
@@ -552,7 +557,7 @@ class TestExceptionHandling:
             raise RuntimeError("boom")
 
         registry.allocate = _explode
-        result = await service.execute_port_check(_make_args(), investigation, _make_context())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
 
         assert result.success is False
         assert result.error_type == CommandErrorType.EXECUTION_ERROR
@@ -564,7 +569,7 @@ class TestExceptionHandling:
             resolve_error=ValidationError("bad target", component="g8ee"),
         )
         result = await service.execute_port_check(
-            _make_args(), _make_investigation(), _make_context(),
+            _make_args(), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
@@ -576,7 +581,7 @@ class TestExceptionHandling:
             resolve_error=BusinessLogicError("no operators", component="g8ee"),
         )
         result = await service.execute_port_check(
-            _make_args(), _make_investigation(), _make_context(),
+            _make_args(), _make_investigation(), _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
@@ -587,7 +592,7 @@ class TestExceptionHandling:
         result = await service.execute_port_check(
             _make_args(protocol="invalid_proto"),
             _make_investigation(),
-            _make_context(),
+            _make_context(), _exec_id(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.EXECUTION_ERROR
@@ -613,7 +618,7 @@ class TestProtocol:
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         result = await service.execute_port_check(
-            _make_args(protocol="udp"), investigation, _make_context(),
+            _make_args(protocol="udp"), investigation, _make_context(), _exec_id(),
         )
         await task
 

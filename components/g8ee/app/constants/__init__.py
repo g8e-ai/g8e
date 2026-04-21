@@ -29,6 +29,7 @@ from app.constants.shared import (
 )
 from app.constants.api_paths import API_PATHS, InternalApiPaths
 from app.constants.agents import (
+    AgentName,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
@@ -339,6 +340,7 @@ __all__ = [
     "_AGENTS",
     "API_PATHS",
     "InternalApiPaths",
+    "AgentName",
     "TriageComplexityClassification",
     "TriageConfidence",
     "TriageIntentClassification",

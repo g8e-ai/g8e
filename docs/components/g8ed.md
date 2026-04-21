@@ -594,7 +594,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 **Key rules:**
 - `available` is the default state — operator has been provisioned but never authenticated
-- `stale` is set by g8ee when a heartbeat has not been received within the stale threshold (60s)
+- `stale` is set by g8ed's `HeartbeatMonitorService` when a heartbeat has not been received within the stale threshold (`OperatorStaleThreshold.SECONDS`, default 60s). g8ed owns operator bind/auth state and is therefore authoritative for the staleness of that binding.
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -656,7 +656,14 @@ Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handl
 
 ### Heartbeat Architecture
 
-g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, persists to g8es document store, detects staleness, and manages all operator status transitions. g8ee then notifies g8ed via HTTP POST. g8ed's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to g8es and does **not** run its own stale detection.
+g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `last_heartbeat` / `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
+
+Staleness reconciliation is owned by g8ed, not g8ee: `HeartbeatMonitorService` (`services/operator/heartbeat_monitor_service.js`) runs on a timer inside g8ed and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
+
+- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > OperatorStaleThreshold.SECONDS`
+- `STALE → BOUND` and `OFFLINE → ACTIVE` when a fresh heartbeat resumes
+
+On each transition the updated status is persisted via `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is fanned out to the owning user's active sessions.
 
 ```
 g8eo (every 30s)
@@ -664,11 +671,13 @@ g8eo (every 30s)
     ▼
 g8es pub/sub  →  g8ee (OperatorHeartbeatService)
                       │ write last_heartbeat, latest_heartbeat_snapshot to g8es
-                      │ detect staleness, set offline status (g8ee is source of truth)
                       │ HTTP POST /api/internal/sse/push
                       ▼
                     g8ed
                       │ broadcast SSE operator.heartbeat
+                      │ HeartbeatMonitorService (timer) reconciles status:
+                      │   BOUND↔STALE, ACTIVE↔OFFLINE based on last_heartbeat age
+                      │ broadcast SSE operator.status.updated.{stale|bound|offline|active}
                       ▼
                     Browser (operator-panel.js)
                       └── uses data.status + data.status_class directly

@@ -404,7 +404,6 @@ async def test_shared_fixture_event_types_match_constants():
         "g8e_web_search_requested": EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
         "g8e_web_search_completed": EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
         "g8e_web_search_failed": EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED,
-        "port_check_requested": EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
         "port_check_completed": EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         "port_check_failed": EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         "citations_received": EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,

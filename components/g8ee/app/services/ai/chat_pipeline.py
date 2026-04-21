@@ -32,6 +32,7 @@ import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
+    AgentName,
     AITaskId,
     NEW_CASE_ID,
     EventType,
@@ -43,7 +44,7 @@ from app.constants import (
 )
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
@@ -105,8 +106,8 @@ class ChatPipelineService:
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
         model_overrides: ModelOverrideResolver,
-    ) -> AgentStreamContext:
-        """Assemble all inputs required for a chat turn.
+    ) -> AgentInputs:
+        """Assemble all immutable, request-scoped inputs for a chat turn.
 
         Sequence:
         1. Fetch and enrich investigation context (operators, memory)
@@ -123,7 +124,13 @@ class ChatPipelineService:
         12. Build generation config
         13. Format attachment parts
         14. Build contents from history
-        15. Assemble AgentStreamContext
+        15. Assemble AgentInputs
+
+        Returns an ``AgentInputs`` instance. The caller is responsible for
+        pairing it with a fresh ``AgentStreamState`` when running the agent;
+        the stream sinks (response_text, token_usage, finish_reason,
+        grounding_metadata) are intentionally absent from the inputs to
+        keep request inputs immutable.
         """
         case_id = g8e_context.case_id
         investigation_id = g8e_context.investigation_id
@@ -235,6 +242,7 @@ class ChatPipelineService:
             logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
 
         all_operator_contexts = extract_all_operators_context(investigation)
+        active_agent = AgentName.SAGE if needs_main_model else AgentName.DASH
         system_instructions = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
@@ -243,6 +251,7 @@ class ChatPipelineService:
             investigation=investigation,
             g8e_web_search_available=self.g8e_agent.g8e_web_search_available,
             triage_result=triage_result,
+            agent_name=active_agent,
         )
 
         generation_config = self.request_builder.get_generation_config(
@@ -271,7 +280,7 @@ class ChatPipelineService:
             sentinel_mode=investigation_sentinel_mode
         )
 
-        return AgentStreamContext(
+        return AgentInputs(
             case_id=g8e_context.case_id,
             investigation_id=g8e_context.investigation_id,
             investigation=investigation,
@@ -296,33 +305,37 @@ class ChatPipelineService:
     async def _persist_ai_response(
         self,
         g8e_context: G8eHttpContext,
-        ctx: AgentStreamContext,
+        inputs: AgentInputs,
+        state: AgentStreamState,
         user_settings: G8eeUserSettings,
     ) -> None:
         """Persist AI response to database and trigger memory updates."""
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, 'investigation_id', 'unknown') if g8e_context else 'None',
-            len(ctx.response_text) if ctx else 0
+            len(state.response_text),
         )
-        
-        response_text = ctx.response_text
 
-        await self.investigation_service.add_chat_message(
-            investigation_id=g8e_context.investigation_id or "",
-            content=response_text,
-            sender=MessageSender.AI_PRIMARY,
-            metadata=AIResponseMetadata(
-                source=EventType.EVENT_SOURCE_AI_PRIMARY,
-                grounding_metadata=ctx.grounding_metadata,
-                token_usage=ctx.token_usage,
-            ),
-        )
-        logger.info("[SSE-CHAT] AI response persisted to database")
+        response_text = state.response_text
 
-        if ctx.investigation and g8e_context.investigation_id:
-            investigation = ctx.investigation
-            conversation_history = ctx.conversation_history
+        if response_text.strip():
+            await self.investigation_service.add_chat_message(
+                investigation_id=g8e_context.investigation_id or "",
+                content=response_text,
+                sender=MessageSender.AI_PRIMARY,
+                metadata=AIResponseMetadata(
+                    source=EventType.EVENT_SOURCE_AI_PRIMARY,
+                    grounding_metadata=state.grounding_metadata,
+                    token_usage=state.token_usage,
+                ),
+            )
+            logger.info("[SSE-CHAT] Final AI response persisted to database")
+        else:
+            logger.info("[SSE-CHAT] Skipping final AI response persistence (empty response_text)")
+
+        if inputs.investigation and g8e_context.investigation_id:
+            investigation = inputs.investigation
+            conversation_history = inputs.conversation_history
             try:
                 await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
@@ -451,15 +464,12 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
 
-        llm_provider = get_llm_provider(resolved_settings.llm)
-        logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
-
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
             primary_model=llm_primary_model,
             assistant_model=llm_assistant_model,
         )
-        ctx = await self._prepare_chat_context(
+        inputs = await self._prepare_chat_context(
             message=message,
             g8e_context=g8e_context,
             request_settings=resolved_settings,
@@ -469,22 +479,28 @@ class ChatPipelineService:
         )
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
+        state = AgentStreamState()
+
+        is_assistant_provider = inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+        llm_provider = get_llm_provider(resolved_settings.llm, is_assistant=is_assistant_provider)
+        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_assistant=%s)", type(llm_provider).__name__, is_assistant_provider)
+
         logger.info(
             "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
-            ctx.model_to_use, ctx.agent_mode, len(ctx.contents), ctx.max_tokens
+            inputs.model_to_use, inputs.agent_mode, len(inputs.contents), inputs.max_tokens
         )
 
-        if ctx.triage_result and ctx.triage_result.follow_up_question and (
-            ctx.triage_result.complexity_confidence == TriageConfidence.LOW or
-            ctx.triage_result.intent_confidence == TriageConfidence.LOW
+        if inputs.triage_result and inputs.triage_result.follow_up_question and (
+            inputs.triage_result.complexity_confidence == TriageConfidence.LOW or
+            inputs.triage_result.intent_confidence == TriageConfidence.LOW
         ):
-            follow_up = ctx.triage_result.follow_up_question
+            follow_up = inputs.triage_result.follow_up_question
             logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
 
             await self.g8ed_event_service.publish_investigation_event(
                 investigation_id=g8e_context.investigation_id,
                 event_type=EventType.LLM_CHAT_ITERATION_STARTED,
-                payload=ChatProcessingStartedPayload(agent_mode=ctx.agent_mode),
+                payload=ChatProcessingStartedPayload(agent_mode=inputs.agent_mode),
                 web_session_id=g8e_context.web_session_id,
                 case_id=g8e_context.case_id,
                 user_id=g8e_context.user_id,
@@ -510,32 +526,47 @@ class ChatPipelineService:
                 case_id=g8e_context.case_id,
                 user_id=g8e_context.user_id,
             )
-            ctx.response_text = follow_up
-        elif ctx.model_to_use and ctx.generation_config:
+            state.response_text = follow_up
+        elif inputs.model_to_use and inputs.generation_config:
             logger.info("[SSE-CHAT] Running full agent execution")
+
+            async def _persist_iteration_text(text: str) -> None:
+                if not g8e_context.investigation_id or not text.strip():
+                    return
+                await self.investigation_service.add_chat_message(
+                    investigation_id=g8e_context.investigation_id,
+                    content=text,
+                    sender=MessageSender.AI_PRIMARY,
+                    metadata=AIResponseMetadata(
+                        source=EventType.EVENT_SOURCE_AI_PRIMARY,
+                    ),
+                )
+
             await self.g8e_agent.run_with_sse(
-                contents=ctx.contents,
-                generation_config=ctx.generation_config,
-                model_name=ctx.model_to_use,
-                agent_streaming_context=ctx,
-                context=ctx,
+                contents=inputs.contents,
+                generation_config=inputs.generation_config,
+                model_name=inputs.model_to_use,
+                inputs=inputs,
+                state=state,
                 g8ed_event_service=self.g8ed_event_service,
                 llm_provider=llm_provider,
+                on_iteration_text=_persist_iteration_text,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 
-        if ctx.token_usage:
+        if state.token_usage:
             logger.info(
-                "[TOKEN_USAGE] SSE-CHAT final: %s", ctx.token_usage
+                "[TOKEN_USAGE] SSE-CHAT final: %s", state.token_usage
             )
 
         await self._persist_ai_response(
             g8e_context=g8e_context,
-            ctx=ctx,
+            inputs=inputs,
+            state=state,
             user_settings=user_settings,
         )
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(ctx.response_text)
+            len(state.response_text)
         )

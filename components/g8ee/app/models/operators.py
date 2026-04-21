@@ -764,110 +764,22 @@ class TruncatedOutput(G8eBaseModel):
         return result
 
 
-class HeartbeatMetrics(G8eBaseModel):
-    """g8eo-authored telemetry projected from OperatorHeartbeat for the SSE wire.
-
-    Canonical shape: shared/models/wire/heartbeat_sse.json#metrics. Contains no
-    g8ee-owned state (status, routing, correlation) — those live on the envelope.
-    Nested Pydantic fields stay as typed instances inside the application
-    boundary and are serialized only by the envelope's flatten_for_wire().
-    """
-
-    timestamp: UTCDatetime = Field(description="When heartbeat was received")
-    heartbeat_type: HeartbeatType = Field(description="Heartbeat type")
-
-    hostname: str | None = Field(default=None, description="System hostname")
-    os: str | None = Field(default=None, description="Operating system name")
-    architecture: str | None = Field(default=None, description="CPU architecture")
-    cpu_count: int | None = Field(default=None, description="Number of CPU cores")
-    memory_mb: int | None = Field(default=None, description="Total memory in MB from system_identity")
-    current_user: str | None = Field(default=None, description="Current user from system_identity")
-
-    cpu_percent: float | None = Field(default=None, description="CPU usage percentage")
-    memory_percent: float | None = Field(default=None, description="Memory usage percentage")
-    disk_percent: float | None = Field(default=None, description="Disk usage percentage")
-    network_latency: float | None = Field(default=None, description="Network latency in ms")
-    memory_used_mb: float | None = Field(default=None, description="Memory used in MB")
-    memory_total_mb: float | None = Field(default=None, description="Total memory in MB")
-    disk_used_gb: float | None = Field(default=None, description="Disk used in GB")
-    disk_total_gb: float | None = Field(default=None, description="Total disk in GB")
-
-    public_ip: str | None = Field(default=None, description="Public IP address")
-    internal_ip: str | None = Field(default=None, description="Internal/private IP address")
-    interfaces: list[str] | None = Field(default=None, description="Network interface names")
-
-    uptime: str | None = Field(default=None, description="Human-readable uptime string")
-    uptime_seconds: int | None = Field(default=None, description="Uptime in seconds")
-
-    operator_version: str | None = Field(default=None, description="Operator binary version")
-    version_status: VersionStability | None = Field(default=None, description="Version stability")
-
-    local_storage_enabled: bool = Field(default=False, description="Local storage active")
-    git_available: bool = Field(default=False, description="Git available on operator host")
-    ledger_enabled: bool = Field(default=False, description="LFAA ledger mirroring active")
-
-    os_details: HeartbeatOSDetails | None = Field(default=None, description="OS details")
-    user_details: HeartbeatUserDetails | None = Field(default=None, description="User details")
-    disk_details: HeartbeatDiskDetails | None = Field(default=None, description="Disk details")
-    memory_details: HeartbeatMemoryDetails | None = Field(default=None, description="Memory details")
-    environment: HeartbeatEnvironment | None = Field(default=None, description="Environment context")
-
-    @classmethod
-    def from_heartbeat(cls, heartbeat: "OperatorHeartbeat") -> "HeartbeatMetrics":
-        """Project an OperatorHeartbeat into the wire-facing metrics shape.
-
-        Pure projection: no status, no routing, no correlation. Nested model
-        fields are passed through as typed instances — serialization happens
-        once at the wire boundary via the envelope's flatten_for_wire().
-        """
-        return cls(
-            timestamp=heartbeat.timestamp,
-            heartbeat_type=heartbeat.heartbeat_type,
-            hostname=heartbeat.system_identity.hostname,
-            os=heartbeat.system_identity.os,
-            architecture=heartbeat.system_identity.architecture,
-            cpu_count=heartbeat.system_identity.cpu_count,
-            memory_mb=heartbeat.system_identity.memory_mb,
-            current_user=heartbeat.system_identity.current_user,
-            cpu_percent=heartbeat.performance.cpu_percent,
-            memory_percent=heartbeat.performance.memory_percent,
-            disk_percent=heartbeat.performance.disk_percent,
-            network_latency=heartbeat.performance.network_latency,
-            memory_used_mb=heartbeat.performance.memory_used_mb,
-            memory_total_mb=heartbeat.performance.memory_total_mb,
-            disk_used_gb=heartbeat.performance.disk_used_gb,
-            disk_total_gb=heartbeat.performance.disk_total_gb,
-            public_ip=heartbeat.network.public_ip,
-            internal_ip=heartbeat.network.internal_ip,
-            interfaces=heartbeat.network.interfaces,
-            uptime=heartbeat.uptime.uptime_display,
-            uptime_seconds=heartbeat.uptime.uptime_seconds,
-            operator_version=heartbeat.version_info.operator_version,
-            version_status=heartbeat.version_info.status,
-            local_storage_enabled=heartbeat.local_storage_enabled,
-            git_available=heartbeat.git_available,
-            ledger_enabled=heartbeat.ledger_enabled,
-            os_details=heartbeat.os_details,
-            user_details=heartbeat.user_details,
-            disk_details=heartbeat.disk_details,
-            memory_details=heartbeat.memory_details,
-            environment=heartbeat.environment,
-        )
-
-
 class HeartbeatSSEEnvelope(G8eBaseModel):
     """Wire envelope for OPERATOR_HEARTBEAT_RECEIVED SSE events.
 
     Canonical shape: shared/models/wire/heartbeat_sse.json#envelope. Authorship
     boundary: g8ee owns `operator_id` and `status` (the authoritative value from
-    OperatorDocument), while `metrics` carries g8eo-authored telemetry. Callers
-    must never mutate fields after construction — the envelope is validated
-    once at the boundary and passed straight to EventService.
+    OperatorDocument); `metrics` carries the g8eo-authored OperatorHeartbeat
+    snapshot verbatim (shared/models/wire/heartbeat.json#operator_heartbeat) —
+    the same instance persisted as `latest_heartbeat_snapshot` on the operator
+    document. There is no flat projection: wire, persistence, and browser
+    all see the identical nested shape. Callers must never mutate fields
+    after construction.
     """
 
     operator_id: str = Field(description="Operator ID")
     status: OperatorStatus = Field(description="Authoritative operator status from OperatorDocument")
-    metrics: HeartbeatMetrics = Field(description="g8eo-authored telemetry snapshot")
+    metrics: "OperatorHeartbeat" = Field(description="Full OperatorHeartbeat snapshot (nested)")
 
     @classmethod
     def from_heartbeat(
@@ -876,11 +788,12 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
         status: OperatorStatus,
         heartbeat: "OperatorHeartbeat",
     ) -> "HeartbeatSSEEnvelope":
-        """Build the envelope from an authoritative operator_id+status plus telemetry."""
+        """Build the envelope from an authoritative operator_id+status plus the
+        full OperatorHeartbeat. `metrics` holds the heartbeat instance as-is."""
         return cls(
             operator_id=operator_id,
             status=status,
-            metrics=HeartbeatMetrics.from_heartbeat(heartbeat),
+            metrics=heartbeat,
         )
 
 
@@ -980,6 +893,7 @@ class BatchCommandBroadcastEvent(G8eBaseModel):
 
 class FileEditBroadcastEvent(G8eBaseModel):
     """Broadcast payload for OPERATOR_FILE_EDIT_COMPLETED / OPERATOR_FILE_EDIT_FAILED."""
+    command: str | None = None
     file_path: str
     operation: str | None = None
     execution_id: str | None = None

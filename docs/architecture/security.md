@@ -29,7 +29,7 @@ Human control is a first-class architectural property. Every enforcement mechani
 2. **Human-in-the-Loop** — The AI proposes; the human approves. No state-changing operation executes without explicit, informed user consent — enforced at the platform level, not bypassable by the AI or any API call.
 3. **Least Privilege** — Every actor has the minimum access required to perform its function. Cloud Operators for AWS start with zero AWS access. Permissions are granted Just-in-Time and revoked immediately after use.
 4. **Data Sovereignty** — Sensitive operational data stays on the Operator host by default. The platform is a stateless relay; it never stores raw command output. Only Sentinel-scrubbed metadata crosses component boundaries toward the AI.
-5. **Defense in Depth** — No single control is relied upon. Authentication is layered (passkeys + sessions + context binding). Data protection is layered (TLS in transit + AES-256-GCM at rest + Sentinel scrubbing before AI). If one control fails, others hold.
+5. **Defense in Depth** — No single control is relied upon. Authentication is layered (passkeys + sessions + context binding). Data protection is layered through Sentinel's platform-wide coverage — egress scrubbing on the Operator ensures raw data never leaves the host, while redundant ingress scrubbing on the Engine adds a final protector for all Operator data before it crosses any network boundary toward a model provider.
 
 ---
 
@@ -73,9 +73,9 @@ Host Filesystem / AWS / Target System
 | **g8ed → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
 | **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
-| **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
+| **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all Operator data before it is transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
-| **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
+| **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
 | **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
 

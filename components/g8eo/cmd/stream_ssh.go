@@ -381,11 +381,44 @@ func streamToHost(
 	session.Stderr = stderrBuf
 	session.Stdout = stdoutBuf
 
-	// Build the remote ephemeral script inline (same trap pattern as bash impl)
+	// Build the remote ephemeral script inline.
+	//
+	// Critical: when the local stream is cancelled (Ctrl-C, ctx cancel) we
+	// must guarantee the remote operator dies with the session. Without a
+	// PTY, sshd does not automatically HUP the remote process group, and a
+	// plain `& wait $!` pattern leaves the backgrounded operator orphaned to
+	// init. We therefore:
+	//   1. Install a trap on HUP/INT/TERM that forwards the signal to the
+	//      operator's PID and the whole process group, then waits briefly
+	//      for graceful exit before SIGKILL.
+	//   2. Run the operator in its own process group (setsid) so we can
+	//      signal the group, covering any children it spawned.
+	//   3. `wait "$PID"` is interruptible by trapped signals, so the trap
+	//      fires promptly rather than after the operator exits on its own.
 	var remoteCmd string
 	if operatorArgs != "" {
 		remoteCmd = fmt.Sprintf(
-			`set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; "$B" %s < /dev/null & wait $!`,
+			`set -e
+B=$(mktemp)
+cat > "$B"
+chmod +x "$B"
+cleanup() {
+  sig=${1:-TERM}
+  if [ -n "${PID:-}" ] && kill -0 "$PID" 2>/dev/null; then
+    kill -"$sig" "-$PID" 2>/dev/null || kill -"$sig" "$PID" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "$PID" 2>/dev/null || break
+      sleep 0.2
+    done
+    kill -0 "$PID" 2>/dev/null && { kill -KILL "-$PID" 2>/dev/null || kill -KILL "$PID" 2>/dev/null || true; }
+  fi
+  rm -f "$B"
+}
+trap 'cleanup TERM; exit 143' HUP INT TERM
+trap 'rm -f "$B"' EXIT
+setsid "$B" %s < /dev/null &
+PID=$!
+wait "$PID"`,
 			operatorArgs,
 		)
 	} else {
@@ -400,7 +433,22 @@ func streamToHost(
 	default:
 	}
 
-	if err := session.Run(remoteCmd); err != nil {
+	// Watcher: on ctx cancellation, send SIGHUP to the remote shell and
+	// close the session so sshd tears down the channel. Our remote trap
+	// will fire and kill the operator process group.
+	runDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = session.Signal(ssh.SIGHUP)
+			_ = session.Close()
+		case <-runDone:
+		}
+	}()
+
+	err = session.Run(remoteCmd)
+	close(runDone)
+	if err != nil {
 		// SSH exit status non-zero is surfaced as *ssh.ExitError — treat operator
 		// exit as a normal end of session, not a hard failure, but attach the
 		// captured remote stderr (and last-resort stdout) so the caller can

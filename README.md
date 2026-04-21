@@ -39,11 +39,11 @@ No long-lived credentials. No implicit trust from network position. Trust is mat
 
 **III. Safety is Structural, Not Verbal**
 
-System prompts are suggestions. g8e enforces safety at the binary and network layers, where prompt injection cannot reach. Sentinel's 46 MITRE ATT&CK-mapped threat detectors block dangerous commands before any process is spawned. Privilege escalation is unconditionally forbidden. The AI cannot opt out of governance.
+System prompts are suggestions. g8e enforces safety at the binary and network layers, where prompt injection cannot reach. Sentinel is the platform-wide protector running on both the Operator and the AI Engine — its 46 MITRE ATT&CK-mapped threat detectors block dangerous commands on the host before any process is spawned, while its multi-layer data scrubbing protects sensitive information at every stage. Privilege escalation is unconditionally forbidden. The AI cannot opt out of governance.
 
 **IV. Data Stays Where It Belongs**
 
-The remote host is the system of record. Raw command output never leaves the machine. The AI receives only what passes through Sentinel's 28 scrubbing patterns — credentials, PII, and secrets are replaced with safe placeholders before any data crosses a network boundary toward any model provider.
+The remote host is the system of record. Raw command output never leaves the machine. The AI receives only what passes through Sentinel's 28 scrubbing patterns — credentials, PII, and secrets are replaced with safe placeholders. Sentinel provides multiple layers of protection: egress scrubbing on the Operator side ensures raw data never leaves the host, while ingress scrubbing on the Engine side adds a redundant layer of protection for all Operator data before it crosses any network boundary toward a model provider.
 
 **V. Presence is Ephemeral**
 
@@ -78,27 +78,46 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that refines ever
 5. **Execution** — The Operator executes locally, records the full output to an encrypted local vault, scrubs the output through Sentinel, and returns only the sanitized result to the AI for its next reasoning step.
 
 ```
-  You ──── "Fix the disk pressure on the prod nodes"
+  You ────── "Fix the disk pressure on the prod nodes"
    │
    ▼
-  g8ee (AI Engine) ── investigates ── reasons ── proposes command
+  Triage ─── classifies complexity · intent · posture · confidence
    │
-   ├── Tribunal Pass 0 · Axiom     ──┐
-   ├── Tribunal Pass 1 · Concord   ──┤
-   ├── Tribunal Pass 2 · Variance  ──┼── Weighted Vote ── Verifier
-   ├── Tribunal Pass 3 · Pragma    ──┤         │
-   └── Tribunal Pass 4 · Nemesis   ──┘         ▼
-                                    ┌─── Your Approval ───┐
-                                    │  "df -h /var/log"   │
-                                    │  on: prod-node-3    │
-                                    │  [Approve] [Deny]   │
-                                    └─────────────────────┘
-                                               │
-                                               ▼
-                                    Operator executes locally
-                                    Output → Encrypted Vault (raw, local-only)
-                                    Output → Sentinel scrub → AI (sanitized)
-                                    AI reasons about result → next step
+   ├── complex turn ──►  Sage    (deep reasoning, full tool loop)
+   └── simple turn  ──►  Dash    (fast path, narrow tool loop)
+                          │
+                          ▼
+                 investigates · reasons · proposes a command
+                          │
+                          ▼
+  The Tribunal ── heterogeneous personas, parallel generation
+   │
+   ├── Pass 0 · Axiom     (Minimalist)     ──┐
+   ├── Pass 1 · Concord   (Guardian)       ──┤
+   ├── Pass 2 · Variance  (Exhaustive)     ──┼──► Weighted Vote
+   ├── Pass 3 · Pragma    (Conventional)   ──┤          │
+   └── Pass 4 · Nemesis   (Adversary)      ──┘          ▼
+                                                     Auditor ── `ok` or minimal revision
+                                                        │
+                                                        ▼
+                                           ┌──── Your Approval ────┐
+                                           │   "df -h /var/log"    │
+                                           │   on: prod-node-3     │
+                                           │   [Approve]  [Deny]   │
+                                           └───────────┬───────────┘
+                                                       │
+                                                       ▼
+                                              Operator executes locally
+                                                       │
+                                 ┌─────────────────────┴─────────────────────┐
+                                 ▼                                           ▼
+                         Encrypted Vault                              Sentinel scrub
+                         raw · local-only                             28 patterns, MITRE-mapped
+                                                                             │
+                                                                             ▼
+                                                                Sage / Dash reasons about
+                                                                the sanitized result
+                                                                ──► next step
 ```
 
 ---
@@ -145,7 +164,7 @@ The platform is four containers and a binary. The binary is the most interesting
 
 - **Authentication**: FIDO2/WebAuthn passkeys only. Passwords are not supported and never will be.
 - **Transport**: TLS 1.3 everywhere. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certificates issued at claim time.
-- **Sentinel**: 46 pre-execution threat detectors (MITRE ATT&CK-mapped). 28 post-execution scrubbing patterns. Indirect prompt injection defense.
+- **Sentinel**: Platform-wide protector running on both g8eo and g8ee. 46 pre-execution threat detectors (MITRE ATT&CK-mapped) on the Operator. 28 post-execution scrubbing patterns across both components. Indirect prompt injection defense.
 - **Sessions**: Encrypted cookies, idle timeout, absolute timeout, IP tracking, replay protection with timestamp + nonce validation.
 - **Operator Binding**: System fingerprint permanently bound on first auth. Stolen API keys cannot be used from a different machine.
 - **Compliance Alignment**: NSA Zero Trust Implementation Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.

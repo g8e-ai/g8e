@@ -141,5 +141,37 @@
     }
   },
 
-  "_comment.field_mapping": "g8ee validates payload as G8eoHeartbeatPayload (pubsub_messages.py) then calls OperatorHeartbeat.from_wire: performance_metrics -> performance, uptime_info.uptime -> uptime.uptime_display, network_info -> network, capability_flags -> local_storage_enabled/git_available/ledger_enabled. g8ed's HeartbeatSnapshot.fromHeartbeat reads performance_metrics and uptime_info directly."
+  "_comment.field_mapping": "g8ee validates payload as G8eoHeartbeatPayload (pubsub_messages.py) then calls OperatorHeartbeat.from_wire to produce the persisted/SSE shape defined in #operator_heartbeat below.",
+
+  "operator_heartbeat": {
+    "_description": "Canonical normalized heartbeat shape. Produced by OperatorHeartbeat.from_wire(G8eoHeartbeatPayload) in g8ee, persisted on the Operator document (latest_heartbeat_snapshot + heartbeat_history), and serialized verbatim as `metrics` inside HeartbeatSSEEnvelope (see heartbeat_sse.json). Consumers: g8ee (Python OperatorHeartbeat), g8ed frontend HeartbeatSnapshot. No flat projection exists — the frontend model mirrors this shape 1:1.",
+
+    "timestamp": { "type": "string", "format": "iso8601", "required": true, "description": "UTC timestamp when g8ee received the source heartbeat." },
+    "heartbeat_type": { "type": "string", "required": true, "values": ["automatic", "bootstrap", "requested"], "description": "See status.json heartbeat.type." },
+
+    "system_identity": { "$ref": "#heartbeat/system_identity" },
+    "performance":     { "$ref": "#heartbeat/performance_metrics", "_renamed_from": "performance_metrics" },
+    "network":         { "$ref": "#heartbeat/network_info",        "_renamed_from": "network_info" },
+    "uptime": {
+      "_description": "Uptime (renamed from wire `uptime_info`, with `uptime` -> `uptime_display`).",
+      "uptime_display": { "type": "string", "description": "Human-readable uptime string." },
+      "uptime_seconds": { "type": "integer" }
+    },
+    "version_info":   { "$ref": "#heartbeat/version_info" },
+    "os_details":     { "$ref": "system_info.json#system_info/fields/os_details" },
+    "user_details":   { "$ref": "system_info.json#system_info/fields/user_details" },
+    "disk_details":   { "$ref": "system_info.json#system_info/fields/disk_details" },
+    "memory_details": { "$ref": "system_info.json#system_info/fields/memory_details" },
+    "environment":    { "$ref": "system_info.json#system_info/fields/environment" },
+
+    "system_fingerprint":    { "type": "string", "description": "SHA256 fingerprint of stable host attributes." },
+    "fingerprint_details":   { "$ref": "system_info.json#system_info/fields/fingerprint_details" },
+
+    "is_cloud_operator": { "type": "boolean", "default": false, "description": "True when the operator is cloud-hosted." },
+    "cloud_provider":    { "type": "string", "description": "Cloud provider identifier (null when not cloud-hosted)." },
+
+    "local_storage_enabled": { "type": "boolean", "default": false, "description": "From capability_flags.local_storage_enabled." },
+    "git_available":         { "type": "boolean", "default": false, "description": "From capability_flags.git_available." },
+    "ledger_enabled":        { "type": "boolean", "default": false, "description": "From capability_flags.ledger_enabled." }
+  }
 }

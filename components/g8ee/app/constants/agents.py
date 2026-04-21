@@ -15,6 +15,21 @@ from enum import Enum
 from app.constants.shared import _AGENTS
 
 
+class AgentName(str, Enum):
+    """Canonical agent identity used to route system-prompt assembly.
+
+    Each value matches the top-level id under `agent.metadata` in
+    `shared/constants/agents.json`. `SAGE` is the deep-reasoning primary
+    agent; `DASH` is the fast-path assistant agent. The chat pipeline
+    resolves an AgentName from the tier it selected (primary -> SAGE,
+    assistant -> DASH) and threads it into `build_modular_system_prompt`
+    so the assembled prompt prepends the agent's persona.
+    """
+    __str__ = lambda self: self.value
+    SAGE = _AGENTS["agent.names"]["sage"]
+    DASH = _AGENTS["agent.names"]["dash"]
+
+
 class TriageComplexityClassification(str, Enum):
     __str__ = lambda self: self.value
     SIMPLE  = _AGENTS["triage.complexity"]["simple"]

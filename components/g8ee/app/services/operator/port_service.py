@@ -18,7 +18,6 @@ Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
 import logging
-import uuid
 from typing import cast
 
 from app.services.protocols import (
@@ -47,7 +46,7 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, G8eMessage
 from app.models.tool_results import PortCheckToolResult
-from app.utils.timestamp import now, to_timestamp
+from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +69,17 @@ class OperatorPortService:
         args: CheckPortArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
+        execution_id: str,
     ) -> PortCheckToolResult:
-        logger.info("[PORT_CHECK] Starting port check operation")
+        """Execute a single port check.
+
+        ``execution_id`` is the caller-authoritative id for this invocation; it
+        is used as the registry key and appears in the STARTED / COMPLETED /
+        FAILED UI lifecycle events. Using a per-call id (rather than
+        ``g8e_context.execution_id``) ensures that concurrent port checks in a
+        single chat turn do not collide in ``execution_registry``.
+        """
+        logger.info("[PORT_CHECK] Starting port check operation (execution_id=%s)", execution_id)
 
         case_id = g8e_context.case_id
         user_id = g8e_context.user_id
@@ -120,8 +128,6 @@ class OperatorPortService:
             resolved_operator.system_info.hostname if resolved_operator.system_info else None
         ) or "unknown"
         logger.info("[PORT_CHECK] Resolved operator: %s (hostname: %s)", operator_id, _hn)
-
-        execution_id = f"portcheck_{uuid.uuid4().hex[:12]}_{int(to_timestamp(now()))}"
 
         if not self.pubsub_service.is_ready:
             error_msg = "Pub/sub pattern subscription not ready"

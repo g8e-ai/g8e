@@ -174,8 +174,8 @@ class CandidateCommand(G8eBaseModel):
 
 class CommandGenerationResult(G8eBaseModel):
     """Result of the Tribunal command generation pipeline for a single tool call."""
-    request: str = Field(description="Sage's natural-language request that seeded the Tribunal")
-    guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal")
+    request: str = Field(description="Caller's natural-language request that seeded the Tribunal")
+    guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal")
     final_command: str = Field(description="Command string produced by the Tribunal pipeline")
     outcome: CommandGenerationOutcome
     candidates: list[CandidateCommand] = Field(

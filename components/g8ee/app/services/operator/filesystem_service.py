@@ -40,7 +40,6 @@ from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBr
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
 from app.models.pubsub_messages import G8eMessage
-from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +64,19 @@ class OperatorFilesystemService:
         args: FsListArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
+        execution_id: str,
     ) -> FsListToolResult:
+        """List files on an operator.
 
+        ``execution_id`` is the caller-authoritative id for this invocation and
+        is used as the registry key and in UI lifecycle events.
+        """
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
         )
-        
-        execution_id = generate_command_execution_id()
+
         self.execution_registry.allocate(execution_id)
 
         try:
@@ -169,15 +172,19 @@ class OperatorFilesystemService:
         args: FsReadArgs,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
+        execution_id: str,
     ) -> FsReadToolResult:
+        """Read a file from an operator.
 
+        ``execution_id`` is the caller-authoritative id for this invocation and
+        is used as the registry key and in UI lifecycle events.
+        """
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
         )
-        
-        execution_id = generate_command_execution_id()
+
         self.execution_registry.allocate(execution_id)
 
         try:

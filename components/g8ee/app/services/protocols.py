@@ -593,8 +593,8 @@ class FileServiceProtocol(Protocol):
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult: ...
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult: ...
+    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsListToolResult: ...
+    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsReadToolResult: ...
 
 @runtime_checkable
 class IntentServiceProtocol(Protocol):
@@ -616,7 +616,7 @@ class IntentServiceProtocol(Protocol):
 
 @runtime_checkable
 class PortServiceProtocol(Protocol):
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult: ...
+    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> PortCheckToolResult: ...
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):
@@ -633,6 +633,7 @@ class ToolExecutorProtocol(Protocol):
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
+        execution_id: str | None = None,
     ) -> ToolResult: ...
     @property
     def web_search_provider(self) -> Any: ...

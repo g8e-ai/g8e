@@ -21,7 +21,6 @@ from app.constants import EventType, HeartbeatType, OperatorStatus, PubSubChanne
 from app.errors import ConfigurationError
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
-    HeartbeatMetrics,
     HeartbeatSSEEnvelope,
     OperatorDocument,
     OperatorHeartbeat,
@@ -466,7 +465,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         payload = _make_payload()
 
@@ -491,7 +490,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(envelope, _make_payload(), operator)
@@ -514,7 +513,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(
@@ -534,7 +533,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
@@ -555,7 +554,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-333",
             status=OperatorStatus.ACTIVE,
-            metrics=HeartbeatMetrics(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = AttributeError(
             "'InternalHttpClient' object has no attribute '_context'"

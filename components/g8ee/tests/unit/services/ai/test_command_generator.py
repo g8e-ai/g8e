@@ -1803,14 +1803,17 @@ class TestPromptFields:
         assert fields["user_context"] == "root (uid=0)"
 
     def test_all_tribunal_personas_accept_prompt_fields(self):
-        """Every Tribunal persona template (+ auditor) must render with _prompt_fields.
+        """Every Tribunal template (+ auditor) must render cleanly with _prompt_fields.
 
-        Regression: previously 4 of 6 personas lacked the {operator_context} placeholder
-        and/or the _prompt_fields keys. str.format silently ignores unused kwargs but
-        raises KeyError on missing placeholders — this test catches the latter and
-        also verifies all six personas now receive {operator_context}.
+        After the scaffolding refactor, placeholders live in TRIBUNAL_PROMPT_TEMPLATE
+        and TRIBUNAL_VERIFIER_TEMPLATE — not in the persona text itself. This test
+        guards against drift in either the templates or _prompt_fields.
         """
         from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+        from app.services.ai.command_generator import (
+            TRIBUNAL_PROMPT_TEMPLATE,
+            TRIBUNAL_VERIFIER_TEMPLATE,
+        )
 
         fields = _prompt_fields(
             OperatorContext(
@@ -1832,18 +1835,20 @@ class TestPromptFields:
 
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             persona = get_tribunal_member(member_id)
-            rendered = persona.persona.format(
+            rendered = TRIBUNAL_PROMPT_TEMPLATE.format(
+                voice=persona.get_system_prompt(),
                 **common,
                 **fields,
             )
-            assert "{operator_context}" in persona.persona, (
-                f"{member_id}: persona template is missing the {{operator_context}} placeholder"
+            assert "{operator_context}" in TRIBUNAL_PROMPT_TEMPLATE, (
+                "TRIBUNAL_PROMPT_TEMPLATE missing {operator_context} placeholder"
             )
             assert "host1" in rendered, f"{member_id}: operator_context did not render"
             assert "CRITICAL" in rendered, f"{member_id}: forbidden_patterns missing"
 
         auditor = get_agent_persona("auditor")
-        rendered = auditor.get_system_prompt().format(
+        rendered = TRIBUNAL_VERIFIER_TEMPLATE.format(
+            voice=auditor.get_system_prompt(),
             candidate_command="ls -la",
             **common,
             **fields,

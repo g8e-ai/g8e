@@ -48,7 +48,8 @@ from app.constants import (
 from app.models.version import VersionInfo
 
 from .agent import (
-    AgentStreamContext,
+    AgentInputs,
+    AgentStreamState,
     ExecutorCommandArgs,
     OperatorContext,
     SageOperatorRequest,
@@ -268,7 +269,8 @@ __all__ = [
     "VersionStability",
     "AgentMode",
     "VersionInfo",
-    "AgentStreamContext",
+    "AgentInputs",
+    "AgentStreamState",
     "ExecutorCommandArgs",
     "OperatorContext",
     "SageOperatorRequest",

@@ -134,7 +134,7 @@ class OperatorFileService:
             if not operator_session_id:
                 return FileEditResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = execution_id or generate_command_execution_id()
+            exec_id = execution_id
 
             # 3. Risk analysis (only for write/update)
             risk_analysis: FileOperationRiskAnalysis | None = None
@@ -249,6 +249,7 @@ class OperatorFileService:
             await self.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 FileEditBroadcastEvent(
+                    command=f"file_edit {op_name} {file_path}",
                     file_path=file_path,
                     operation=op_name,
                     execution_id=exec_id,

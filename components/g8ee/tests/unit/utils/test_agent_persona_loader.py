@@ -74,14 +74,41 @@ class TestGetAgentPersona:
         assert persona.persona in system_prompt
 
     def test_get_system_prompt_with_todo_persona(self):
-        """Test get_system_prompt falls back to identity/purpose for TODO personas."""
-        persona = get_agent_persona("sage")
-        system_prompt = persona.get_system_prompt()
-        # sage has TODO persona, so should fall back to identity/purpose
+        """Test get_system_prompt falls back to identity/purpose when persona is TODO-stubbed."""
+        stub = AgentPersona.model_validate({
+            "id": "stub",
+            "display_name": "Stub",
+            "icon": "x",
+            "description": "stub",
+            "role": "stub",
+            "model_tier": "primary",
+            "tools": [],
+            "identity": "I am a stub.",
+            "purpose": "To be replaced.",
+            "autonomy": "none",
+            "persona": "TODO: fill this in",
+        })
+        system_prompt = stub.get_system_prompt()
         assert "<identity>" in system_prompt
         assert "<purpose>" in system_prompt
-        assert persona.identity in system_prompt
-        assert persona.purpose in system_prompt
+        assert stub.identity in system_prompt
+        assert stub.purpose in system_prompt
+
+    def test_sage_persona_carries_reasoning_discipline(self):
+        """Sage's persona is the home of agentic_reasoning (moved out of the mode file)."""
+        sage = get_agent_persona("sage")
+        prompt = sage.get_system_prompt()
+        assert "Sage" in prompt
+        assert "<agentic_reasoning>" in prompt
+
+    def test_dash_persona_is_fast_path_and_shares_sage_toolset(self):
+        """Dash is the fast-path voice but keeps Sage's full tool set."""
+        dash = get_agent_persona("dash")
+        sage = get_agent_persona("sage")
+        prompt = dash.get_system_prompt()
+        assert "Dash" in prompt
+        assert "<agentic_reasoning>" not in prompt
+        assert set(dash.tools) == set(sage.tools)
 
     def test_tools_is_list(self):
         """Test that tools field is always a list."""
@@ -101,9 +128,31 @@ class TestPipelineTemplateContract:
     regression. These tests pin the contract explicitly.
     """
 
-    def test_tribunal_member_personas_accept_generation_kwargs(self):
-        """All five Tribunal members must format cleanly with the exact kwargs
-        command_generator._run_generation_pass supplies."""
+    def test_tribunal_member_personas_are_pure_voice(self):
+        """Tribunal member personas must not carry scaffolding placeholders —
+        scaffolding lives in TRIBUNAL_PROMPT_TEMPLATE in command_generator."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            persona_text = get_tribunal_member(member_id).persona
+            for placeholder in (
+                "{forbidden_patterns_message}",
+                "{command_constraints_message}",
+                "{request}",
+                "{guidelines}",
+                "{operator_context}",
+                "{os}",
+                "{shell}",
+                "{user_context}",
+                "{working_directory}",
+            ):
+                assert placeholder not in persona_text, (
+                    f"{member_id} persona still carries scaffolding placeholder {placeholder}"
+                )
+
+    def test_tribunal_prompt_template_renders_with_member_voice(self):
+        """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using each
+        member's voice plus the kwargs command_generator._run_generation_pass supplies."""
+        from app.services.ai.command_generator import TRIBUNAL_PROMPT_TEMPLATE
+
         kwargs = dict(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
@@ -117,17 +166,23 @@ class TestPipelineTemplateContract:
         )
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             persona = get_tribunal_member(member_id)
-            formatted = persona.persona.format(**kwargs)
-            # Every substituted value must appear in the formatted prompt —
-            # this catches silent placeholder drift.
+            formatted = TRIBUNAL_PROMPT_TEMPLATE.format(
+                voice=persona.get_system_prompt(),
+                **kwargs,
+            )
             for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
-                assert needle in formatted, f"{member_id} persona dropped '{needle}'"
+                assert needle in formatted, f"{member_id}: template dropped '{needle}'"
+            # The member's own voice must survive into the assembled prompt.
+            assert persona.display_name in formatted or persona.display_name.lower() in formatted.lower()
 
-    def test_verifier_persona_accepts_verifier_kwargs_and_enforces_ok_contract(self):
-        """Verifier persona must format with the caller's kwargs AND carry the
-        terse 'ok / corrected-command' output contract that the pipeline parses."""
+    def test_verifier_template_renders_and_enforces_ok_contract(self):
+        """TRIBUNAL_VERIFIER_TEMPLATE + auditor voice must carry the terse
+        'ok / corrected-command' output contract that the pipeline parses."""
+        from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE
+
         persona = get_agent_persona("auditor")
-        formatted = persona.get_system_prompt().format(
+        formatted = TRIBUNAL_VERIFIER_TEMPLATE.format(
+            voice=persona.get_system_prompt(),
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
             request="list files",
@@ -142,8 +197,7 @@ class TestPipelineTemplateContract:
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
             assert needle in formatted
         # The pipeline parses `response.text.strip().lower() == "ok"` — the
-        # persona must tell the model that contract, or revisions will read as
-        # verdict labels that the parser can't match.
+        # persona voice must tell the model that contract.
         assert "`ok`" in formatted
         assert "corrected command" in formatted
 
