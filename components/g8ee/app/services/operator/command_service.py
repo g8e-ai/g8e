@@ -241,9 +241,6 @@ class OperatorCommandService:
     async def stop_pubsub_listeners(self) -> None:
         await self._pubsub_service.stop()
 
-    def operator_service_available(self) -> bool:
-        return self.operator_data_service is not None
-
     async def execute_command(
         self,
         args: ExecutorCommandArgs,

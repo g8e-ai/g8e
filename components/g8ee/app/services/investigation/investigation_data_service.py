@@ -12,7 +12,8 @@
 # limitations under the License.
 
 import logging
-from typing import Any
+
+from pydantic import TypeAdapter
 
 from app.constants import (
     DB_COLLECTION_INVESTIGATIONS,
@@ -44,6 +45,8 @@ from app.utils.timestamp import now
 
 
 logger = logging.getLogger(__name__)
+
+_CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
 
 
 class InvestigationDataService(InvestigationDataServiceProtocol):
@@ -363,8 +366,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         raw_history = data.get("conversation_history", [])
         if not isinstance(raw_history, list):
             return []
-        raw_history_typed: list[dict[str, Any]] = raw_history
-        messages = [ConversationHistoryMessage.model_validate(m) for m in raw_history_typed]
+        messages = _CONVERSATION_HISTORY_ADAPTER.validate_python(raw_history)
         messages.sort(key=lambda m: m.timestamp)
 
         return messages
