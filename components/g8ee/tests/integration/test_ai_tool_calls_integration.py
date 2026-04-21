@@ -205,6 +205,7 @@ class TestCommandExecutionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload was processed correctly
@@ -248,6 +249,7 @@ class TestCommandExecutionTools:
                     investigation=sample_investigation,
                     g8e_context=sample_g8e_context,
                     request_settings=request_settings,
+                    execution_id="test-execution-id",
                 )
 
             # Verify the mock was called
@@ -275,6 +277,7 @@ class TestCommandExecutionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify security violation was handled
@@ -327,6 +330,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -376,6 +380,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -425,6 +430,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -475,6 +481,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -541,6 +548,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -590,6 +598,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -642,6 +651,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -692,6 +702,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -754,6 +765,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -815,6 +827,7 @@ class TestNetworkSearchTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -870,6 +883,7 @@ class TestNetworkSearchTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -959,6 +973,7 @@ class TestPermissionSessionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -1005,6 +1020,7 @@ class TestPermissionSessionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -1113,6 +1129,7 @@ class TestToolIntegration:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload was handled correctly

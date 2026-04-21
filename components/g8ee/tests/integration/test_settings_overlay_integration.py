@@ -198,8 +198,8 @@ class TestG8eeSettingsOverlayIntegration:
             "user_id": user_id,
             "settings": {
                 "llm": {
-                    "provider": "openai",
-                    "primary_model": "gpt-4o",
+                    "llm_primary_provider": "openai",
+                    "llm_model": "gpt-4o",
                     "openai_api_key": "user-key"
                 },
                 "search": {

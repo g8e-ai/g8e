@@ -193,9 +193,9 @@ class SettingsService:
             
             return G8eeUserSettings(
                 llm=LLMSettings(
-                    llm_model="",
-                    llm_assistant_model="",
-                    llm_lite_model="",
+                    llm_model=None,
+                    llm_assistant_model=None,
+                    llm_lite_model=None,
                     openai_endpoint=OPENAI_DEFAULT_ENDPOINT,
                     openai_api_key=None,
                     ollama_endpoint=OLLAMA_DEFAULT_ENDPOINT,

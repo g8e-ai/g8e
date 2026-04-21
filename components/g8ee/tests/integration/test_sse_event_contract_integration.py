@@ -305,17 +305,15 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        search_requested_events = [e for e in published if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+        tool_call_started_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
         
-        assert len(search_requested_events) >= 1
-        actual_event = search_requested_events[0]
+        assert len(tool_call_started_events) >= 1
+        actual_event = tool_call_started_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["g8e_web_search_requested"]
-        
-        assert actual_event.event_type == expected_fixture["type"]
-        assert actual_event.payload.query == "contract test query"
+        # Verify the generic tool call started event carries the search web tool metadata
+        assert actual_event.payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
         assert actual_event.payload.execution_id == "contract-search-001"
+        assert actual_event.payload.display_detail == "contract test query"
         assert actual_event.investigation_id == inputs.investigation_id
         assert actual_event.case_id == inputs.case_id
         assert actual_event.web_session_id == inputs.web_session_id

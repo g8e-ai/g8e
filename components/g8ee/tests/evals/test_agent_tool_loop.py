@@ -83,6 +83,7 @@ async def test_orchestrate_tool_execution_no_bound_operator(
         investigation=investigation,
         g8e_context=g8e_context,
         request_settings=user_settings,
+        execution_id=tool_call.id,
     )
 
     # Approve any pending approvals from fake operators
@@ -162,6 +163,7 @@ async def test_orchestrate_tool_execution_security_violation(
         investigation=investigation,
         g8e_context=g8e_context,
         request_settings=user_settings,
+        execution_id=tool_call.id,
     )
 
     # Approve any pending approvals from fake operators
