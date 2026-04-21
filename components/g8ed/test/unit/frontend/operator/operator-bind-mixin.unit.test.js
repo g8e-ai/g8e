@@ -58,7 +58,7 @@ function createMixinContext(overrides = {}) {
 
 function createMockOperator(overrides = {}) {
     return {
-        id: TEST_OPERATOR_ID,
+        operator_id: TEST_OPERATOR_ID,
         status: OperatorStatus.ACTIVE,
         system_info: {
             hostname: 'test-host',
@@ -499,8 +499,8 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('calls showConfirmationModal with active operators', async () => {
             const ctx = createMixinContext();
             ctx.operators = [
-                createMockOperator({ id: TEST_OPERATOR_ID, status: OperatorStatus.ACTIVE }),
-                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
+                createMockOperator({ operator_id: TEST_OPERATOR_ID, status: OperatorStatus.ACTIVE }),
+                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID_2];
             showConfirmationModal.mockResolvedValue(true);
@@ -556,7 +556,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
-            const activeOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
+            const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
                 ok: true,
@@ -636,7 +636,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.bind-all-confirmation-overlay');
-            const activeOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
+            const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
             checkboxes[1].checked = false;
@@ -702,7 +702,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ status: OperatorStatus.ACTIVE }),
-                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.ACTIVE }),
+                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.ACTIVE }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID];
 
@@ -762,7 +762,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID }),
-                createMockOperator({ id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: 'other_session' }),
+                createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: 'other_session' }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             global.window = { authState: { getWebSessionId: () => TEST_WEB_SESSION_ID } };
@@ -796,7 +796,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
             const overlay = document.querySelector('.unbind-all-confirmation-overlay');
-            const boundOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
+            const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ unbound_operator_ids: [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2] }),
@@ -815,7 +815,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const overlay = document.querySelector('.unbind-all-confirmation-overlay');
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
-            const boundOperators = [createMockOperator(), createMockOperator({ id: TEST_OPERATOR_ID_2 })];
+            const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: true,
                 json: async () => ({ unbound_operator_ids: [TEST_OPERATOR_ID] }),
@@ -919,7 +919,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             const result = ctx._createBindAllOperatorItem(operator);
 
-            expect(result).toContain(operator.id);
+            expect(result).toContain(operator.operator_id);
             expect(result).toContain(operator.system_info.hostname);
             expect(result).toContain(operator.system_info.os);
             expect(result).toContain(operator.system_info.internal_ip);
@@ -927,7 +927,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
         it('uses defaults for missing system_info', () => {
             const ctx = createMixinContext();
-            const operator = { id: TEST_OPERATOR_ID, system_info: null };
+            const operator = { operator_id: TEST_OPERATOR_ID, system_info: null };
 
             const result = ctx._createBindAllOperatorItem(operator);
 
@@ -942,7 +942,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
 
             const result = ctx._createUnbindAllOperatorItem(operator);
 
-            expect(result).toContain(operator.id);
+            expect(result).toContain(operator.operator_id);
             expect(result).toContain(operator.system_info.hostname);
             expect(result).toContain(operator.system_info.os);
             expect(result).toContain(operator.system_info.public_ip);

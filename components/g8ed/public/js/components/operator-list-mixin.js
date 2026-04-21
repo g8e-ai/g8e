@@ -97,7 +97,7 @@ export const OperatorListMixin = {
         paginatedOperators.forEach(operator => {
             const item = document.createElement('div');
             item.className = 'operator-list-item';
-            item.setAttribute('data-operator-id', operator.id);
+            item.setAttribute('data-operator-id', operator.operator_id);
 
             const latestSnapshot = operator.latest_heartbeat_snapshot || {};
             const identity = latestSnapshot.system_identity || {};
@@ -110,8 +110,8 @@ export const OperatorListMixin = {
 
             if (isBoundToMe) {
                 item.classList.add('bound');
-                if (!this.boundOperatorIds.includes(operator.id)) {
-                    this.boundOperatorIds.push(operator.id);
+                if (!this.boundOperatorIds.includes(operator.operator_id)) {
+                    this.boundOperatorIds.push(operator.operator_id);
                 }
             } else if (isBoundElsewhere) {
                 item.classList.add('bound-elsewhere');
@@ -207,23 +207,23 @@ export const OperatorListMixin = {
             const actionsHtml = `
                 <div class="operator-actions-inline">
                     ${operator.is_g8ep ? `
-                    <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.id}">
+                    <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">restart_alt</span>
                     </button>
                     ` : ''}
-                    <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.id}">
+                    <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
-                    <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.id}">
+                    <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">vpn_key</span>
                     </button>
-                    <button class="operator-action-btn refresh-key-btn" title="Refresh API Key" data-operator-id="${operator.id}">
+                    <button class="operator-action-btn refresh-key-btn" title="Refresh API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">key_off</span>
                     </button>
-                    <button class="operator-action-btn bind-operator-btn" title="${bindBtnTitle}" data-operator-id="${operator.id}" data-is-bound="${isBoundToMe}" data-is-stale="${isStale}"${bindBtnDisabled ? ' disabled' : ''}>
+                    <button class="operator-action-btn bind-operator-btn" title="${bindBtnTitle}" data-operator-id="${operator.operator_id}" data-is-bound="${isBoundToMe}" data-is-stale="${isStale}"${bindBtnDisabled ? ' disabled' : ''}>
                         <span class="material-symbols-outlined">${bindBtnIcon}</span>
                     </button>
-                    <button class="operator-action-btn stop-btn" title="${isStoppable ? 'Stop Operator' : 'Stop Operator (not running)'}" data-operator-id="${operator.id}"${!isStoppable ? ' disabled' : ''}>
+                    <button class="operator-action-btn stop-btn" title="${isStoppable ? 'Stop Operator' : 'Stop Operator (not running)'}" data-operator-id="${operator.operator_id}"${!isStoppable ? ' disabled' : ''}>
                         <span class="material-symbols-outlined">stop_circle</span>
                     </button>
                 </div>
@@ -360,7 +360,7 @@ export const OperatorListMixin = {
 
             // Operator selection disabled - UX needs improvement for explicit selection
             // item.addEventListener('click', () => {
-            //     this._selectMetricsOperator(operator.id);
+            //     this._selectMetricsOperator(operator.operator_id);
             // });
 
             fragment.appendChild(item);

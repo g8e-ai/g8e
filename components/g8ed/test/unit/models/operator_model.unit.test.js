@@ -601,7 +601,7 @@ describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const operators = [new OperatorSlot({ id: 'op-1', status: 'ACTIVE' })];
+        const operators = [new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' })];
         const event = OperatorListUpdatedEvent.parse({
             type: 'operator.list.updated',
             operators: operators,
@@ -610,7 +610,7 @@ describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
             used_slots: 3,
             max_slots: 10,
         });
-        expect(event.operators[0].id).toBe('op-1');
+        expect(event.operators[0].operator_id).toBe('op-1');
         expect(event.operators[0].status).toBe('ACTIVE');
         expect(event.total_count).toBe(10);
         expect(event.active_count).toBe(5);

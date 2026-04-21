@@ -18,7 +18,7 @@ import { templateLoader } from '../utils/template-loader.js';
 import { notificationService } from '../utils/notification-service.js';
 import { operatorSessionService } from '../utils/operator-session-service.js';
 import { escapeHtml } from '../utils/html.js';
-import { HeartbeatSnapshot } from '../models/operator-models.js';
+import { HeartbeatSnapshot, OperatorListUpdatedEvent, OperatorStatusUpdatedEvent, HeartbeatSSEEvent } from '../models/operator-models.js';
 import { OperatorDownloadMixin } from './operator-download-mixin.js';
 import { OperatorDeviceLinkMixin } from './operator-device-link-mixin.js';
 import { BindOperatorsMixin } from './operator-bind-mixin.js';
@@ -123,24 +123,43 @@ export class OperatorPanel {
     }
 
     _onListUpdated(data) {
-        this._operators = data.operators;
-        this._totalOperatorCount = data.total_count || 0;
-        this._activeOperatorCount = data.active_count || 0;
-        this._usedSlots = data.used_slots || 0;
-        this._maxSlots = data.max_slots ?? 1;
+        const parsed = OperatorListUpdatedEvent.parse({
+            type: EventType.OPERATOR_PANEL_LIST_UPDATED,
+            ...data
+        });
+        this._operators = parsed.operators;
+        this._totalOperatorCount = parsed.total_count;
+        this._activeOperatorCount = parsed.active_count;
+        this._usedSlots = parsed.used_slots;
+        this._maxSlots = parsed.max_slots;
         operatorSessionService.setBoundOperators(this._operators);
         devLogger.log('[OPERATOR-PANEL] List updated:', this._totalOperatorCount, 'total,', this._activeOperatorCount, 'active');
         this._applyOperatorState({ cause: 'list_updated' });
     }
 
     _onStatusUpdated(data) {
-        if (data.total_count !== undefined) {
-            this._totalOperatorCount = data.total_count;
-            this._activeOperatorCount = data.active_count || 0;
+        const parsed = OperatorStatusUpdatedEvent.parse(data);
+        const statusData = parsed.data;
+
+        if (statusData.total_count !== undefined) {
+            this._totalOperatorCount = statusData.total_count;
+            this._activeOperatorCount = statusData.active_count || 0;
+        }
+
+        const operatorIndex = this._operators.findIndex(op => op.operator_id === statusData.operator_id);
+        if (operatorIndex !== -1 && statusData.status) {
+            const existing = this._operators[operatorIndex];
+            this._operators[operatorIndex] = {
+                ...existing,
+                status: statusData.status,
+                status_display: String(statusData.status).toUpperCase(),
+                status_class: String(statusData.status).toLowerCase(),
+                bound_web_session_id: statusData.web_session_id ?? existing.bound_web_session_id ?? null,
+            };
         }
 
         operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] Status updated:', data.operator_id, data.status);
+        devLogger.log('[OPERATOR-PANEL] Status updated:', statusData.operator_id, statusData.status);
         this._applyOperatorState({ cause: 'status_updated' });
     }
 
@@ -148,15 +167,16 @@ export class OperatorPanel {
         const authState = window.authState?.getState();
         if (!authState?.isAuthenticated) return;
 
-        const heartbeat = data || {};
+        const parsed = HeartbeatSSEEvent.parse(data);
+        const heartbeat = parsed.data || {};
         // heartbeat.metrics is the canonical OperatorHeartbeat
         // (shared/models/wire/heartbeat_sse.json -> heartbeat.json#operator_heartbeat).
         const heartbeatTimestamp = heartbeat.metrics?.timestamp ?? null;
         this._lastHeartbeat = heartbeatTimestamp ? new Date(heartbeatTimestamp).getTime() : Date.now();
         this._isConnected = true;
-        devLogger.log('[OPERATOR-PANEL] Heartbeat:', heartbeat.operator_id);
+        devLogger.log('[OPERATOR-PANEL] Heartbeat:', parsed.operator_id);
 
-        const operatorIndex = this._operators.findIndex(op => op.operator_id === heartbeat.operator_id);
+        const operatorIndex = this._operators.findIndex(op => op.operator_id === parsed.operator_id);
         if (operatorIndex !== -1) {
             const existingOperator = this._operators[operatorIndex];
 
@@ -197,9 +217,8 @@ export class OperatorPanel {
         }
 
         if (cause === 'status_updated') {
-            const offlineStatuses = [OperatorStatus.OFFLINE, OperatorStatus.STOPPED, OperatorStatus.STALE, OperatorStatus.AVAILABLE];
             const selectedOp = this.operators.find(op => op.operator_id === this.selectedMetricsOperatorId);
-            if (selectedOp && offlineStatuses.includes(selectedOp.status)) {
+            if (selectedOp && !_ACTIVE_STATUSES.has(selectedOp.status)) {
                 this.clearPanelMetrics();
             }
         }

@@ -149,7 +149,7 @@ describe('OperatorService', () => {
 
             const slot = result.operators[0];
             expect(slot).toBeInstanceOf(OperatorSlot);
-            expect(slot.id).toBe('op-1');
+            expect(slot.operator_id).toBe('op-1');
             expect(slot.name).toBe('node-01');
             expect(slot.status).toBe(OperatorStatus.ACTIVE);
             expect(slot.status_display).toBe('ACTIVE');

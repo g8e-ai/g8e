@@ -520,7 +520,7 @@ export class OperatorSlotSystemInfo extends G8eBaseModel {
 
 export class OperatorSlot extends G8eBaseModel {
     static fields = {
-        id:            { type: F.string,  required: true },
+        operator_id:    { type: F.string,  required: true },
         name:           { type: F.string,  default: null },
         status:         { type: F.string,  default: null },
         status_display: { type: F.string,  default: null },
@@ -536,7 +536,7 @@ export class OperatorSlot extends G8eBaseModel {
     static fromOperator(operator) {
         const s = operator.status ?? OperatorStatus.OFFLINE;
         return new OperatorSlot({
-            id:            operator.id,
+            operator_id:    operator.id,
             name:           operator.name ?? null,
             status:         s,
             status_display: String(s).toUpperCase(),

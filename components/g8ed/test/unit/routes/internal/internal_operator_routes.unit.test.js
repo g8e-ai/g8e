@@ -186,7 +186,7 @@ describe('Internal Operator Routes [UNIT]', () => {
             mockOperatorService.getUserOperators.mockResolvedValue(
                 new OperatorListUpdatedEvent({
                     type: 'operator.list.updated',
-                    operators: [new OperatorSlot({ id: 'op_1', status: OperatorStatus.AVAILABLE })],
+                    operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.AVAILABLE })],
                     total_count: 1,
                     active_count: 1
                 })
