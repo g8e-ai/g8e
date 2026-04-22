@@ -31,7 +31,7 @@ AI backend. Python/FastAPI.
 - **Config/shared mounts:** `./shared:/app/shared:ro`, `g8es-ssl:/g8es:ro`
 - **Internal Auth:** Receives `G8E_INTERNAL_AUTH_TOKEN` via environment during bootstrap; discovers authoritative token from g8es/SSL volume at runtime.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`)
-- **Healthcheck:** `curl -f -k https://localhost/health` (internal port 443)
+- **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost/health` (internal port 443)
 
 ### g8ed (`g8ed`)
 
@@ -44,7 +44,7 @@ Web frontend and single external entry point. Node.js.
 - **Config/shared mounts:** `./shared:/shared:ro`, `g8es-ssl:/g8es:ro`, `./docs:/docs:ro`, `./README.md:/readme/README.md:ro`, and specific file mounts from `./components/g8ed/` to `/app/` for hot-reload support.
 - **Internal Auth:** Discovers authoritative token from g8es/SSL volume (`g8es-ssl:/g8es:ro`) at runtime.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`), read-only root filesystem
-- **Healthcheck:** `curl -f -k https://localhost/health` (internal port 443)
+- **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost/health` (internal port 443)
 
 ### g8es (`g8es`)
 
@@ -57,7 +57,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
 - **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
-- **Healthcheck:** `curl -f -k https://localhost:9000/health`
+- **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost:9000/health`
 
 ### g8e node (`g8ep`)
 

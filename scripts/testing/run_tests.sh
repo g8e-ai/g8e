@@ -150,13 +150,11 @@ _load_platform_secrets() {
 _verify_g8es() {
     local ca_cert="/g8es/ca.crt"
     [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
-    local curl_args=()
-    if [[ -f "$ca_cert" ]]; then
-        curl_args=("--cacert" "$ca_cert")
-    else
-        curl_args=("-k")
-        log_warn "CA cert not found, using insecure connection"
+    if [[ ! -f "$ca_cert" ]]; then
+        log_err "Platform CA cert not found at /g8es/ca.crt or /g8es/ca/ca.crt"
+        exit 1
     fi
+    local curl_args=("--cacert" "$ca_cert")
     if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
         log_err "g8es not accessible at https://g8es:9000/health"
         exit 1
@@ -212,7 +210,6 @@ run_g8ee() {
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && [[ "$QUIET" == "false" ]] && cov_args+=("--log-cli-level=INFO")
     if [[ -n "$PARALLEL" ]]; then
         # -s (capture=no) is incompatible with xdist; drop it when parallelising.
         local filtered=()

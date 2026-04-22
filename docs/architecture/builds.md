@@ -117,7 +117,7 @@ All component images have no build-time dependencies on each other and build in 
 
 Port 9000 (HTTPS) is used by g8ee and g8ed for all internal API traffic. Port 9001 (WSS/TLS) is used by remote Operators for the pub/sub connection. The container is internal-only and exposes no host ports. It runs as non-root user `g8e` (UID 1001).
 
-**Health check:** `curl -f -k https://localhost:9000/health` — passes when the HTTP server is ready and the SQLite store is open. Operator binary uploads to the blob store run in the background after health is reached.
+**Health check:** `curl -f --cacert /g8es/ca.crt https://localhost:9000/health` — passes when the HTTP server is ready and the SQLite store is open. Operator binary uploads to the blob store run in the background after health is reached.
 
 ---
 
@@ -143,7 +143,7 @@ exec uvicorn app.main:app --host 0.0.0.0 --port 443 \
 
 g8ee is an internal-only service. g8ed proxies all traffic to it; g8ee is never exposed on a public port. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`.
 
-**Health check:** `curl -f -k https://localhost/health`.
+**Health check:** `curl -f --cacert /g8es/ca.crt https://localhost/health`.
 
 ---
 
@@ -162,7 +162,7 @@ CMD ["node", "server.js"]
 
 g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser dashboard. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`. g8ed's `G8ENodeOperatorService` manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via `docker exec`.
 
-**Health check:** `curl -f -k https://localhost/health`.
+**Health check:** `curl -f --cacert /g8es/ca.crt https://localhost/health`.
 
 ---
 

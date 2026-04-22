@@ -80,7 +80,7 @@ services:
         aliases:
           - g8ee
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
+      test: ["CMD", "curl", "-f", "--cacert", "/g8es/ca.crt", "https://localhost/health"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -154,7 +154,7 @@ services:
           - g8e.local
           - g8ed
     healthcheck:
-      test: ["CMD", "curl", "-f", "-k", "https://localhost/health"]
+      test: ["CMD", "curl", "-f", "--cacert", "/g8es/ca.crt", "https://localhost/health"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -211,7 +211,7 @@ services:
           - g8es
   # Internal services only - uses ports 9000 (HTTPS) and 9001 (WSS)
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -k https://localhost:9000/health"]
+      test: ["CMD-SHELL", "curl -f --cacert /g8es/ca.crt https://localhost:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
