@@ -117,7 +117,7 @@ All component images have no build-time dependencies on each other and build in 
 
 Port 9000 (HTTPS) is used by g8ee and g8ed for all internal API traffic. Port 9001 (WSS/TLS) is used by remote Operators for the pub/sub connection. The container is internal-only and exposes no host ports. It runs as non-root user `g8e` (UID 1001).
 
-**Health check:** `curl -f --cacert /g8es/ca.crt https://localhost:9000/health` — passes when the HTTP server is ready and the SQLite store is open. Operator binary uploads to the blob store run in the background after health is reached.
+**Health check:** `curl -f --cacert /ssl/ca.crt https://localhost:9000/health` — passes when the HTTP server is ready and the SQLite store is open. Operator binary uploads to the blob store run in the background after health is reached.
 
 ---
 

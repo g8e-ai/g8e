@@ -176,7 +176,7 @@ deploy:
 				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e g8es --http-port 9000 --wss-port 9001 > g8e.operator.log 2>&1 & \
+			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e g8e.local > g8e.operator.log 2>&1 & \
 			echo "    operator started (pid: $$!)"' || true; \
 	done; \
 	echo "Done."

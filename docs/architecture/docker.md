@@ -57,7 +57,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
 - **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
-- **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost:9000/health`
+- **Healthcheck:** `curl -f --cacert /ssl/ca.crt https://localhost:9000/health`
 
 ### g8e node (`g8ep`)
 

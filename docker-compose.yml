@@ -211,7 +211,7 @@ services:
           - g8es
   # Internal services only - uses ports 9000 (HTTPS) and 9001 (WSS)
     healthcheck:
-      test: ["CMD-SHELL", "curl -f --cacert /g8es/ca.crt https://localhost:9000/health"]
+      test: ["CMD-SHELL", "curl -f --cacert /ssl/ca.crt https://localhost:9000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
