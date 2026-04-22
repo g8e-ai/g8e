@@ -81,6 +81,13 @@ from app.constants import (
     EventType,
     VerifierReason,
 )
+from app.llm.prompts import (
+    build_command_constraints_message,
+    build_tribunal_generator_prompt,
+    build_tribunal_verifier_prompt,
+    build_tribunal_verifier_context,
+    build_tribunal_prompt_fields,
+)
 from app.llm.factory import get_llm_provider
 from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
 from app.llm.provider import LLMProvider
@@ -121,6 +128,8 @@ from app.utils.blacklist_validator import validate_command_against_blacklist
 
 logger = logging.getLogger(__name__)
 
+_MAX_TOKENS_GENERATION = 4096
+_MAX_TOKENS_VERIFIER = 1024
 
 _TERMINAL_TRIBUNAL_EVENTS = {
     EventType.TRIBUNAL_SESSION_STARTED,
@@ -173,136 +182,6 @@ class TribunalEmitter:
 TRIBUNAL_MIN_CONSENSUS = 2
 
 
-def _format_command_constraints_message(
-    whitelisting_enabled: bool,
-    blacklisting_enabled: bool,
-    whitelisted_commands: List[str] | None,
-    blacklisted_commands: List[dict[str, str]] | None,
-) -> str:
-    """Generate a message describing command constraints for Tribunal prompts."""
-    parts: list[str] = []
-    
-    if whitelisting_enabled and whitelisted_commands:
-        parts.append(
-            f"COMMAND WHITELIST ACTIVE: Only these {len(whitelisted_commands)} commands are permitted. "
-            f"Your proposed command MUST exactly match one of these whitelisted patterns. "
-            f"Whitelisted commands: {', '.join(repr(c) for c in whitelisted_commands[:10])}"
-            f"{'...' if len(whitelisted_commands) > 10 else ''}."
-        )
-    
-    if blacklisting_enabled and blacklisted_commands:
-        parts.append(
-            f"COMMAND BLACKLIST ACTIVE: Commands matching these patterns are forbidden. "
-            f"Your proposed command MUST NOT match any blacklisted pattern. "
-            f"Blacklisted patterns: {', '.join(b.get('pattern', '') for b in blacklisted_commands[:10])}"
-            f"{'...' if len(blacklisted_commands) > 10 else ''}."
-        )
-    
-    if not whitelisting_enabled and not blacklisting_enabled:
-        parts.append("No whitelist or blacklist constraints are active.")
-    
-    return " ".join(parts)
-
-
-def _build_operator_context_string(operator_context: OperatorContext | None) -> str:
-    """Build a formatted string of operator context for Tribunal prompts."""
-    if not operator_context:
-        return "No operator context available"
-
-    parts: list[str] = []
-    if operator_context.hostname:
-        parts.append(f"Hostname: {operator_context.hostname}")
-    if operator_context.os:
-        parts.append(f"OS: {operator_context.os}")
-    if operator_context.architecture:
-        parts.append(f"Architecture: {operator_context.architecture}")
-    if operator_context.username:
-        uid_suffix = f" (uid={operator_context.uid})" if operator_context.uid is not None else ""
-        parts.append(f"User: {operator_context.username}{uid_suffix}")
-    if operator_context.shell:
-        parts.append(f"Shell: {operator_context.shell}")
-    if operator_context.working_directory:
-        parts.append(f"Working Directory: {operator_context.working_directory}")
-    if operator_context.operator_type:
-        parts.append(f"Operator Type: {operator_context.operator_type}")
-    if operator_context.is_cloud_operator:
-        parts.append("Cloud Operator: Yes")
-        if operator_context.cloud_subtype:
-            parts.append(f"Cloud Subtype: {operator_context.cloud_subtype}")
-        if operator_context.granted_intents:
-            parts.append(f"Granted Intents: {operator_context.granted_intents}")
-    if operator_context.is_container:
-        parts.append("Container Environment: Yes")
-        if operator_context.container_runtime:
-            parts.append(f"Container Runtime: {operator_context.container_runtime}")
-        if operator_context.init_system:
-            parts.append(f"Init System: {operator_context.init_system}")
-    elif operator_context.init_system:
-        parts.append(f"Init System: {operator_context.init_system}")
-
-    return "\n".join(parts) if parts else "No operator details available"
-
-
-def _format_forbidden_patterns_message() -> str:
-    """Generate a message listing all forbidden command patterns.
-
-    Privilege escalation wrappers (sudo, su, pkexec, doas, etc.) are rejected
-    unconditionally by `tool_service.execute_tool_call` regardless of uid. The
-    platform's contract is that the Operator is launched with whatever privilege
-    level it needs; in-command escalation is never permitted. The Tribunal
-    must therefore never emit these patterns.
-    """
-    # Extract unique base patterns (e.g., "sudo" from "sudo", "su " from "su ")
-    base_patterns = sorted(set(p.strip() for p in FORBIDDEN_COMMAND_PATTERNS))
-    pattern_list = ", ".join(f'"{p}"' for p in base_patterns)
-    return (
-        f"CRITICAL: NEVER add {pattern_list}, or any privilege escalation wrapper. "
-        f"The platform rejects any command containing these tokens regardless of the user's uid. "
-        f"If a command requires root, the Operator itself must be launched with sufficient "
-        f"privileges — in-command escalation is never accepted."
-    )
-
-
-def _prompt_fields(
-    operator_context: OperatorContext | None,
-    request: str,
-    guidelines: str,
-) -> dict[str, str]:
-    """Build the common template kwargs used by every Tribunal persona prompt.
-
-    Returns a dict with keys: os, shell, working_directory, user_context,
-    operator_context, forbidden_patterns_message, request, guidelines.
-
-    Centralising this avoids each stage re-deriving the same fields and
-    guarantees that every persona sees consistent context.
-    """
-    os_name = (operator_context.os if operator_context else None) or DEFAULT_OS_NAME
-    shell = (operator_context.shell if operator_context else None) or DEFAULT_SHELL
-    working_directory = (
-        operator_context.working_directory if operator_context else None
-    ) or DEFAULT_WORKING_DIRECTORY
-    username = operator_context.username if operator_context else None
-    uid = operator_context.uid if operator_context else None
-    if username and uid is not None:
-        user_context = f"{username} (uid={uid})"
-    else:
-        user_context = username or "unknown"
-    return {
-        "os": os_name,
-        "shell": shell,
-        "working_directory": working_directory,
-        "user_context": user_context,
-        "operator_context": _build_operator_context_string(operator_context),
-        "forbidden_patterns_message": _format_forbidden_patterns_message(),
-        "request": request.strip() if request else "",
-        "guidelines": guidelines.strip() if guidelines else "(none)",
-    }
-
-
-_MAX_TOKENS_GENERATION = 256
-_MAX_TOKENS_VERIFIER = 256
-
-
 def _is_system_error(error_message: str) -> bool:
     """Classify an error message as a system error vs. a model error.
 
@@ -325,7 +204,16 @@ def _is_system_error(error_message: str) -> bool:
 
 
 def _normalise_command(raw: str) -> str:
-    """Normalise a command string by stripping markdown fences and common prefixes.
+    """Normalise a command string by stripping cosmetic differences.
+
+    Normalization steps (applied in order):
+    1. Strip markdown code fences
+    2. Strip common prefixes
+    3. Strip comment lines (# prefix)
+    4. Strip shebang lines (#!/bin/bash, etc.)
+    5. Strip trailing semicolons
+    6. Collapse multiple spaces to single spaces (outside quoted strings)
+    7. Strip trailing newlines
 
     Returns the first line if multi-line with unbalanced quotes, or empty string
     if the command is invalid.
@@ -346,6 +234,30 @@ def _normalise_command(raw: str) -> str:
     for prefix in prefixes:
         if raw.startswith(prefix):
             raw = raw[len(prefix):].strip()
+
+    # Strip comment lines (lines starting with #)
+    lines = raw.split("\n")
+    lines = [line for line in lines if not line.strip().startswith("#")]
+    raw = "\n".join(lines).strip()
+
+    # Strip shebang lines
+    if raw.startswith("#!"):
+        lines = raw.split("\n")
+        if len(lines) > 1:
+            raw = "\n".join(lines[1:]).strip()
+        else:
+            raw = ""
+
+    # Strip trailing semicolons
+    raw = raw.rstrip(";").strip()
+
+    # Collapse multiple spaces to single spaces (simple version - outside quoted strings)
+    # This is a conservative approach; full quoted-string-aware parsing would be more complex
+    parts = raw.split()
+    raw = " ".join(parts)
+
+    # Strip trailing newlines
+    raw = raw.rstrip("\n")
 
     # Handle multi-line commands (heredocs, etc.)
     lines = raw.split("\n")
@@ -592,7 +504,7 @@ def _weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tu
         dissenters_by_command=dissenters,
         consensus_strength=max_votes / total_members,
         tie_broken=True,
-        tie_break_reason=None,
+        tie_break_reason=TieBreakReason.ALPHABETICAL,
     ), tied_candidates
 
 
@@ -620,105 +532,6 @@ class VerifierInput(G8eBaseModel):
     winner: str | None
     mode: str  # "unanimous", "majority", "tied"
     clusters: list[VerifierClusterInfo]
-
-TRIBUNAL_PROMPT_TEMPLATE = """\
-<constraints>
-{forbidden_patterns_message}
-
-{command_constraints_message}
-</constraints>
-
-<request>
-{request}
-</request>
-
-<guidelines>
-{guidelines}
-</guidelines>
-
-<system_context>
-OS: {os}
-Shell: {shell}
-User: {user_context}
-Working directory: {working_directory}
-</system_context>
-
-<operator_context>
-{operator_context}
-</operator_context>
-
-Respond now with the exact command string and nothing else."""
-
-
-TRIBUNAL_VERIFIER_TEMPLATE = """\
-<constraints>
-{forbidden_patterns_message}
-
-{command_constraints_message}
-</constraints>
-
-<request>
-{request}
-</request>
-
-<guidelines>
-{guidelines}
-</guidelines>
-
-<os>
-{os}
-</os>
-
-<user>
-{user_context}
-</user>
-
-<operator_context>
-{operator_context}
-</operator_context>
-
-{verifier_context}
-
-Respond now with the JSON object and nothing else."""
-
-
-def _build_verifier_prompt_content(verifier_input: VerifierInput) -> str:
-    """Build the mode-specific context for the verifier prompt."""
-    parts = []
-    
-    if verifier_input.mode == "unanimous":
-        parts.append(f"<candidate_command>\n{verifier_input.winner}\n</candidate_command>")
-        parts.append("\nUNANIMOUS CONSENSUS: All Tribunal members produced the command above.")
-        parts.append("Validate it for syntactic correctness, safety, and alignment with the request.")
-        parts.append("\nResponse format:")
-        parts.append("- status: \"ok\" (if correct) or \"revised\" (if needs fix)")
-        parts.append("- revised_command: the corrected command string (only if status is \"revised\")")
-        
-    elif verifier_input.mode == "majority":
-        parts.append("<candidates_by_cluster>")
-        for c in verifier_input.clusters:
-            parts.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
-        parts.append("</candidates_by_cluster>")
-        parts.append(f"\nMAJORITY WINNER: [{verifier_input.clusters[0].cluster_id}]")
-        parts.append("\nObserve the winner and the dissenting clusters above. You may approve the winner, swap to a dissenter, or issue a revision.")
-        parts.append("\nResponse format:")
-        parts.append("- status: \"ok\" (approve winner), \"swap\" (pick another cluster), or \"revised\"")
-        parts.append("- swap_to_cluster: e.g. \"cluster_b\" (only if status is \"swap\")")
-        parts.append("- revised_command: corrected string (only if status is \"revised\")")
-        
-    elif verifier_input.mode == "tied":
-        parts.append("<tied_candidates>")
-        for c in verifier_input.clusters:
-            parts.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
-        parts.append("</tied_candidates>")
-        parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
-        parts.append("YOU MUST DISAMBIGUATE. Pick the best cluster from the tied set or provide a revision.")
-        parts.append("\nResponse format:")
-        parts.append("- status: \"swap\" (pick one) or \"revised\"")
-        parts.append("- swap_to_cluster: e.g. \"cluster_a\" (required for status \"swap\")")
-        parts.append("- revised_command: corrected string (only if status is \"revised\")")
-        
-    return "\n".join(parts)
 
 
 def _parse_verifier_response(
@@ -820,13 +633,31 @@ async def _run_verifier(
         TribunalVerifierStartedPayload(candidate_command=target_cmd),
     )
 
-    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
     
-    verifier_context = _build_verifier_prompt_content(verifier_input)
-    prompt = TRIBUNAL_VERIFIER_TEMPLATE.format(
+    # Prepare clusters for the prompt context function
+    clusters_data = [
+        {"cluster_id": c.cluster_id, "command": c.command, "support_count": c.support_count}
+        for c in clusters
+    ]
+    
+    verifier_context = build_tribunal_verifier_context(mode, target_cmd, clusters_data)
+    prompt = build_tribunal_verifier_prompt(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=fields["forbidden_patterns_message"],
         command_constraints_message=command_constraints_message,
+        os=fields["os"],
+        user_context=fields["user_context"],
+        operator_context_str=fields["operator_context"],
         verifier_context=verifier_context,
-        **fields,
     )
 
     logger.info("[TRIBUNAL-VERIFIER] mode=%s winner=%r clusters=%d", mode, target_cmd, len(clusters))
@@ -970,11 +801,25 @@ async def _run_generation_pass(
     """
     member = _member_for_pass(pass_index)
     member_persona = get_tribunal_member(member)
-    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
 
-    prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
+    prompt = build_tribunal_generator_prompt(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=fields["forbidden_patterns_message"],
         command_constraints_message=command_constraints_message,
-        **fields,
+        os=fields["os"],
+        shell=fields["shell"],
+        user_context=fields["user_context"],
+        working_directory=fields["working_directory"],
+        operator_context_str=fields["operator_context"],
     )
 
     logger.info(
@@ -1047,7 +892,8 @@ async def _run_generation_pass(
             TribunalPassCompletedPayload(
                 pass_index=pass_index,
                 member=member,
-                command=normalised,
+                candidate=normalised,
+                success=True,
             ),
         )
 
@@ -1144,10 +990,18 @@ async def _run_voting_stage(
         if vote_breakdown.consensus_strength > 0:
             # consensus_failed due to low strength
             logger.warning("[TRIBUNAL] Consensus strength too low: %.2f < %d members", vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
+            # Log side-by-side candidate comparison for telemetry
+            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
+            for member, cmd in vote_breakdown.candidates_by_member.items():
+                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
         elif vote_breakdown.tie_break_reason == TieBreakReason.VERIFIER_DISAMBIGUATION:
             logger.info("[TRIBUNAL] Voting tied; verifier disambiguation required")
         else:
             logger.warning("[TRIBUNAL] Consensus failed: no agreement among members")
+            # Log side-by-side candidate comparison for telemetry
+            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
+            for member, cmd in vote_breakdown.candidates_by_member.items():
+                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
             
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
@@ -1329,7 +1183,14 @@ async def generate_command(
     """
     request = (request or "").strip()
     guidelines = (guidelines or "").strip()
-    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
 
     logger.info(
         "[TRIBUNAL-ENTRY] generate_command called: request_len=%d guidelines_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
@@ -1338,7 +1199,7 @@ async def generate_command(
         operator_context.architecture if operator_context else None,
     )
 
-    command_constraints_message = _format_command_constraints_message(
+    command_constraints_message = build_command_constraints_message(
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
         whitelisted_commands=whitelisted_commands,

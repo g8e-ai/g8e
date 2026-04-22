@@ -1,0 +1,26 @@
+<constraints>
+{forbidden_patterns_message}
+
+{command_constraints_message}
+</constraints>
+
+<request>
+{request}
+</request>
+
+<guidelines>
+{guidelines}
+</guidelines>
+
+<system_context>
+OS: {os}
+Shell: {shell}
+User: {user_context}
+Working directory: {working_directory}
+</system_context>
+
+<operator_context>
+{operator_context}
+</operator_context>
+
+Respond now with the exact command string and nothing else.

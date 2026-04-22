@@ -233,7 +233,7 @@ _authenticate_user() {
 
     local auth_url="https://localhost/api/auth/operator"
     local response=""
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
 
     if [[ -n "$device_token" ]]; then
         # Authenticate via device link token

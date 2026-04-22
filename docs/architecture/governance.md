@@ -11,7 +11,7 @@ The Tribunal Governance Model (TGM) replaces trust with **Heterogeneous Consensu
 
 Trust is minimized through:
 *   **Diverse Personas**: Different ideological lenses (minimalism, safety, edge-cases, convention, adversarial) surface distinct candidate commands.
-*   **Weighted Voting**: Consensus is reached through a position-decay voting mechanism that favors early, high-confidence candidates while still considering the full panel.
+*   **Uniform Voting**: Consensus is reached through uniform per-member voting (each member contributes exactly 1 vote per candidate) with deterministic tie-breaking.
 *   **Independent Verification**: A separate, fast validator (The Verifier) performs the final check against the user's intent and safety constraints.
 *   **Human-in-the-Loop**: No state-changing command is executed without explicit user approval.
 
@@ -51,7 +51,7 @@ When a `run_commands_with_operator` tool is invoked, the following pipeline fire
 
 1.  **Parallel Generation**: All 5 Tribunal members receive the request + operator context (OS, Shell, User, PWD) and generate independent candidates.
 2.  **Normalization**: Commands are stripped of markdown fences and surrounding whitespace.
-3.  **Weighted Voting**: Unique commands are grouped. Each occurrence receives a weight based on its pass index: `weight = 1 / (index + 1)`. The command with the highest aggregate weight wins.
+3.  **Uniform Voting**: Unique commands are grouped. Each member contributes exactly 1 vote per candidate. The command with the highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
 4.  **Verification**: The winner is sent to the Verifier. If the Verifier rejects it, the revision is used (if provided).
 5.  **Guardrails**: The result is checked against deterministic `FORBIDDEN_COMMAND_PATTERNS` (e.g., `rm -rf /`).
 6.  **Approval**: The final command is presented to the user for explicit approval.

@@ -338,3 +338,402 @@
     background: rgba(var(--accent-blue-rgb), 0.04);
     border-color: rgba(var(--accent-blue-rgb), 0.12);
 }
+
+/* Inline Bind All Operators Overlay */
+.operator-bind-all-overlay {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.operator-bind-all-overlay.active {
+    display: flex;
+}
+
+.operator-bind-all-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.operator-bind-all-header-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.operator-bind-all-icon {
+    font-size: 22px;
+    color: var(--accent-green);
+}
+
+.operator-bind-all-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.operator-bind-all-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.operator-bind-all-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.operator-bind-all-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-bind-all-close-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.operator-bind-all-close-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.operator-bind-all-description {
+    padding: 10px 12px;
+    background: rgba(74, 158, 255, 0.08);
+    border: 1px solid rgba(74, 158, 255, 0.15);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.operator-bind-all-operators-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.operator-bind-all-operators-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.operator-select-all-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #10b981;
+}
+
+.operator-bind-all-operators-header label {
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.operator-bind-all-operators-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.operator-bind-all-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.operator-bind-all-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-bind-all-action-btn .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.operator-bind-all-action-btn.cancel-btn {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+.operator-bind-all-action-btn.cancel-btn:hover:not(:disabled) {
+    background: rgba(107, 114, 128, 0.2);
+    border-color: rgba(107, 114, 128, 0.4);
+}
+
+.operator-bind-all-action-btn.confirm-btn {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.operator-bind-all-action-btn.confirm-btn:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+.operator-bind-all-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.operator-bind-all-processing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    background: var(--surface-secondary);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.operator-bind-all-processing .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    border-top-color: #10b981;
+    border-radius: 4px;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.operator-bind-all-actions-feedback {
+    min-height: 20px;
+}
+
+[data-theme="light"] .operator-bind-all-overlay {
+    background: var(--bg-primary);
+}
+
+[data-theme="light"] .operator-bind-all-description {
+    background: rgba(74, 158, 255, 0.1);
+    border-color: rgba(74, 158, 255, 0.2);
+}
+
+/* Inline Unbind All Operators Overlay */
+.operator-unbind-all-overlay {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.operator-unbind-all-overlay.active {
+    display: flex;
+}
+
+.operator-unbind-all-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.operator-unbind-all-header-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.operator-unbind-all-icon {
+    font-size: 22px;
+    color: var(--accent-red);
+}
+
+.operator-unbind-all-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.operator-unbind-all-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.operator-unbind-all-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.operator-unbind-all-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-unbind-all-close-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.operator-unbind-all-close-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.operator-unbind-all-description {
+    padding: 10px 12px;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-primary);
+}
+
+.operator-unbind-all-operators-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.operator-unbind-all-operators-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.operator-unbind-all-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.operator-unbind-all-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-unbind-all-action-btn .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.operator-unbind-all-action-btn.cancel-btn {
+    background: rgba(107, 114, 128, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+.operator-unbind-all-action-btn.cancel-btn:hover:not(:disabled) {
+    background: rgba(107, 114, 128, 0.2);
+    border-color: rgba(107, 114, 128, 0.4);
+}
+
+.operator-unbind-all-action-btn.confirm-btn {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.operator-unbind-all-action-btn.confirm-btn:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.operator-unbind-all-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.operator-unbind-all-processing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px;
+    background: var(--surface-secondary);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.operator-unbind-all-processing .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(239, 68, 68, 0.3);
+    border-top-color: #ef4444;
+    border-radius: 4px;
+    animation: spin 0.8s linear infinite;
+}
+
+.operator-unbind-all-actions-feedback {
+    min-height: 20px;
+}
+
+[data-theme="light"] .operator-unbind-all-overlay {
+    background: var(--bg-primary);
+}
+
+[data-theme="light"] .operator-unbind-all-description {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+}

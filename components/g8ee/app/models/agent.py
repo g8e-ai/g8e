@@ -192,6 +192,8 @@ class AgentStreamState(G8eBaseModel):
     token_usage: TokenUsage | None = None
     finish_reason: str | None = None
     grounding_metadata: GroundingMetadata | None = None
+    tool_call_count: int = 0
+    tool_types_used: list[str] = Field(default_factory=list)
 
 
 class StreamChunkData(G8eBaseModel):

@@ -337,7 +337,7 @@
     gap: 6px;
     padding: 8px 12px;
     margin: 4px 0;
-    width: 200px;
+    min-width: 300px;
     background: var(--surface-secondary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -1546,6 +1546,8 @@
     background: var(--accent-green);
     animation: waitingCursorBlink 0.8s step-end infinite;
     vertical-align: middle;
+    flex-shrink: 0;
+    align-self: flex-start;
 }
 
 @keyframes waitingCursorBlink {

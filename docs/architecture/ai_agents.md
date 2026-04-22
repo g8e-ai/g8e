@@ -463,7 +463,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (original_command, final_command, outcome, vote_score, verifier_passed, verifier_revision, candidates). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when command arg is missing. |
 | `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
-| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier. Persona templates in `agents.json`. |
+| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + uniform per-member voting + verifier. Persona templates in `agents.json`. |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push. |
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts. |
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction. |
@@ -720,7 +720,7 @@ flowchart TD
     Gen --> Candidates{Any candidates?}
     Candidates -- No, all system errors --> SysErr[TRIBUNAL_SESSION_SYSTEM_ERROR<br/>tool call fails]
     Candidates -- No, non-system errors --> GenFail[TRIBUNAL_SESSION_GENERATION_FAILED<br/>tool call fails]
-    Candidates -- Yes --> Vote[Weighted Majority Vote]
+    Candidates -- Yes --> Vote[Uniform Per-Member Voting]
 
     Vote --> VerifierEnabled{Verifier enabled?}
     VerifierEnabled -- No --> OutVote[CONSENSUS: vote winner]
@@ -773,20 +773,16 @@ Raw output is normalised by `_normalise_command`: strips surrounding whitespace,
 
 Thinking is enabled for models that support it but forced to the lowest available level (`get_lowest_thinking_level`) with `include_thoughts=False` — minimises latency on this fast-path.
 
-**Stage 2 — Weighted Majority Vote (`_run_voting_stage` / `_weighted_vote`)**
+**Stage 2 — Uniform Per-Member Voting (`_run_voting_stage`)**
 
-```
-weight[candidate] += 1 / (pass_index + 1)
-```
+Each member contributes exactly 1 vote per candidate. Candidates that are identical (after normalisation) accumulate votes. The string with the highest vote count is the vote winner. The normalised score is `winner_votes / total_members` — a value between 0 and 1 representing consensus strength.
 
-Each pass `i` (0-indexed) contributes `1/(i+1)` to its candidate's aggregate weight. This means:
-- Pass 0 contributes `1.0`
-- Pass 1 contributes `0.5`
-- Pass 2 contributes `0.333`
+Tie-breaking ladder (when multiple candidates have the same highest vote count):
+1. Shortest command wins (maximizes signal density for approval fatigue reduction)
+2. Non-Nemesis cluster wins over Nemesis-including cluster
+3. Alphabetical fallback (deterministic)
 
-Candidates that are identical (after normalisation) accumulate weight. The string with the highest aggregate weight is the vote winner. The normalised score is `winner_weight / total_weight` — a value between 0 and 1 representing how dominant the winner was.
-
-If all passes produce unique strings, every candidate has equal weight and the earliest pass (pass 0) wins by tiebreak (Python `max` with stable ordering). If no candidates were produced (all passes failed), `_weighted_vote` returns `(None, 0.0)` and the pipeline falls back.
+If no candidates were produced (all passes failed), the voting stage returns `(None, 0.0)` and the pipeline falls back.
 
 A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying `vote_winner`, `vote_score`, `num_candidates`, and `original_command`.
 

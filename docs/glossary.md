@@ -437,7 +437,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 1. **Generation** — Up to five independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Diversity is driven by distinct member personas: Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), and Nemesis (The Adversary).
 
-2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each unique string receives a weight based on position-decay weighting (earlier passes carry more weight). The highest aggregate weight wins.
+2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each member contributes exactly 1 vote per candidate. The highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
 
 3. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent and reports either "ok" or a short revised command.
 

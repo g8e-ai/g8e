@@ -161,10 +161,7 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
         }
 
-        const allOperators = await this._cache_aside.queryDocuments(
-            this._operatorService.collectionName,
-            [{ field: 'user_id', operator: '==', value: user_id }]
-        );
+        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: user_id }]);
         const currentSlotCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
 
         if (max_uses > currentSlotCount) {
@@ -173,7 +170,7 @@ class DeviceLinkService {
 
             for (let i = 0; i < slotsToCreate; i++) {
                 const slotNumber = currentSlotCount + i + 1;
-                const operatorId = await this._operatorService.createOperatorSlot({
+                const creationResponse = await this._operatorService.createOperatorSlot({
                     userId: user_id,
                     organizationId: organization_id,
                     slotNumber: slotNumber,
@@ -183,13 +180,13 @@ class DeviceLinkService {
                     isG8eNode: false,
                 });
 
-                if (!operatorId) {
+                if (!creationResponse.success || !creationResponse.operator_id) {
                     for (const id of createdSlotIds) {
                         await this._operatorService.terminateOperator(id).catch(() => {});
                     }
                     return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
                 }
-                createdSlotIds.push(operatorId);
+                createdSlotIds.push(creationResponse.operator_id);
             }
 
             logger.info('[DEVICE-LINK] Generated operator slots for device link', {
@@ -340,26 +337,33 @@ class DeviceLinkService {
             return { success: false, error: `Device link is ${linkData.status}` };
         }
 
-        // Dedup check (fingerprint only — same physical device must not register twice).
-        const fingerprintKey = KVKey.deviceLinkFingerprints(token);
-        const fingerprintAdded = await this._cache_aside.kvSadd(fingerprintKey, sanitizedFingerprint);
-        if (fingerprintAdded === 0) {
-            return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
+        // 1. Check if this device has already claimed a slot VIA THIS LINK
+        // If it has, we bypass usage checks and reuse the same slot.
+        const existingClaim = linkData.claims.find(c => c.system_fingerprint === sanitizedFingerprint);
+        
+        if (existingClaim) {
+            const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
+            const result = await this._deviceRegistration.registerDevice({
+                operator_id: existingClaim.operator_id,
+                deviceInfo,
+                g8eContext: {
+                    web_session_id: webSessionId,
+                    user_id: linkData.user_id,
+                    organization_id: linkData.organization_id,
+                },
+            });
+            return result;
         }
 
-        // Uses check — incr/decr are read-modify-write over HTTP and not atomic.
-        // SECURITY: We use kvIncr but then check against max_uses. 
-        // If max_uses is exceeded, we decrement and fail.
-        const usesKey = KVKey.deviceLinkUses(token);
-        const newUsesCount = await this._cache_aside.kvIncr(usesKey);
+        // 2. New registration for THIS LINK.
+        // Check if device already has a slot from a previous link or manual registration.
+        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+        const existingOp = allOperators.find(op => 
+            op.system_fingerprint === sanitizedFingerprint && 
+            op.status !== OperatorStatus.TERMINATED
+        );
 
-        if (newUsesCount > linkData.max_uses) {
-            await this._cache_aside.kvDecr(usesKey);
-            await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
-            return { success: false, error: DeviceLinkError.LINK_EXHAUSTED };
-        }
-
-        // Acquire distributed lock to prevent race condition where multiple
+        // 3. Acquire distributed lock to prevent race condition where multiple
         // concurrent claims select the same available operator slot
         const lockKey = KVKey.deviceLinkRegistrationLock(token);
         const lockValue = `${token}:${sanitizedFingerprint}:${Date.now()}`;
@@ -375,8 +379,6 @@ class DeviceLinkService {
         }
 
         if (!lockAcquired) {
-            await this._cache_aside.kvDecr(usesKey);
-            await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
             logger.error('[DEVICE-LINK] Failed to acquire registration lock', {
                 token_prefix: token.substring(0, 20) + '...',
                 user_id: linkData.user_id
@@ -386,39 +388,104 @@ class DeviceLinkService {
 
         // Fetch TTL after lock is acquired so it reflects the current remaining time.
         const linkTtl = await this._cache_aside.kvTtl(KVKey.deviceLink(token));
-        if (linkTtl > 0) {
-            await this._cache_aside.kvExpire(fingerprintKey, linkTtl);
-            await this._cache_aside.kvExpire(usesKey, linkTtl);
-        }
 
         try {
-            const allOperators = await this._cache_aside.queryDocuments(
-                this._operatorService.collectionName,
-                [{ field: 'user_id', operator: '==', value: linkData.user_id }]
-            );
-            const availableOperator = allOperators.find(op =>
-                op.status === OperatorStatus.AVAILABLE
-            );
+            let targetOperatorId = existingOp?.id;
 
-            let targetOperatorId;
-            if (availableOperator) {
-                targetOperatorId = availableOperator.id;
-            } else {
-                const existingCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
-                targetOperatorId = await this._operatorService.createOperatorSlot({
-                    userId: linkData.user_id,
-                    organizationId: linkData.organization_id,
-                    slotNumber: existingCount + 1,
-                    operatorType: OperatorType.SYSTEM,
-                    cloudSubtype: null,
-                    namePrefix: 'operator',
-                    isG8eNode: false,
-                });
-                if (!targetOperatorId) {
-                    await this._cache_aside.kvDecr(usesKey);
-                    await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
-                    return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
+            if (!targetOperatorId) {
+                // Re-query operators to ensure we have latest state after lock
+                const freshOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+
+                // Double check fingerprint match after lock
+                const opAfterLock = freshOperators.find(op => 
+                    op.system_fingerprint === sanitizedFingerprint && 
+                    op.status !== OperatorStatus.TERMINATED
+                );
+
+                if (opAfterLock) {
+                    targetOperatorId = opAfterLock.id;
+                } else {
+                    // Re-use an available operator if one exists
+                    const availableOperator = freshOperators.find(op => op.status === OperatorStatus.AVAILABLE);
+                    
+                    if (availableOperator) {
+                        targetOperatorId = availableOperator.id;
+                    } else {
+                        const creationResponse = await this._operatorService.createOperatorSlot({
+                            userId: linkData.user_id,
+                            organizationId: linkData.organization_id,
+                            slotNumber: freshOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length + 1,
+                            operatorType: OperatorType.SYSTEM,
+                            cloudSubtype: null,
+                            namePrefix: 'operator',
+                            isG8eNode: false,
+                        });
+
+                        if (!creationResponse.success || !creationResponse.operator_id) {
+                            return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
+                        }
+                        targetOperatorId = creationResponse.operator_id;
+                    }
                 }
+            }
+
+            // Dedup check (fingerprint only — same physical device must not register twice on this link).
+            // This MUST happen after lock acquisition and before use counter increment to prevent
+            // race conditions where concurrent requests from the same device consume the quota.
+            const fingerprintKey = KVKey.deviceLinkFingerprints(token);
+            const fingerprintAdded = await this._cache_aside.kvSadd(fingerprintKey, sanitizedFingerprint);
+            if (fingerprintAdded === 0) {
+                return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
+            }
+
+            if (linkTtl > 0) {
+                await this._cache_aside.kvExpire(fingerprintKey, linkTtl);
+            }
+
+            // Persist claim BEFORE incrementing use counter so concurrent requests
+            // will see the existing claim and reuse the slot
+            const freshLinkResult = await this.getLink(token);
+            const freshLinkData = freshLinkResult.success ? freshLinkResult.data : linkData;
+
+            // Check if claim was already added by a concurrent request
+            const existingClaim = freshLinkData.claims.find(c => c.system_fingerprint === sanitizedFingerprint);
+            if (existingClaim) {
+                await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+                const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
+                const result = await this._deviceRegistration.registerDevice({
+                    operator_id: existingClaim.operator_id,
+                    deviceInfo,
+                    g8eContext: {
+                        web_session_id: webSessionId,
+                        user_id: linkData.user_id,
+                        organization_id: linkData.organization_id,
+                    },
+                });
+                return result;
+            }
+
+            freshLinkData.claims.push(DeviceLinkClaim.parse({
+                system_fingerprint: sanitizedFingerprint,
+                hostname: sanitizeString(deviceInfo.hostname, 255),
+                operator_id: targetOperatorId,
+                claimed_at: now()
+            }));
+
+            freshLinkData.uses = freshLinkData.claims.length;
+
+            if (freshLinkData.claims.length >= freshLinkData.max_uses) {
+                freshLinkData.status = DeviceLinkStatus.EXHAUSTED;
+            }
+
+            const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
+            await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
+
+            // Now increment use counter AFTER claim is persisted
+            const usesKey = KVKey.deviceLinkUses(token);
+            const newUsesCount = await this._cache_aside.kvIncr(usesKey);
+
+            if (linkTtl > 0) {
+                await this._cache_aside.kvExpire(usesKey, linkTtl);
             }
 
             const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
@@ -438,27 +505,15 @@ class DeviceLinkService {
             if (!result.success) {
                 await this._cache_aside.kvDecr(usesKey);
                 await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+                // Remove the claim we added
+                freshLinkData.claims = freshLinkData.claims.filter(c => c.system_fingerprint !== sanitizedFingerprint);
+                freshLinkData.uses = freshLinkData.claims.length;
+                if (freshLinkData.claims.length < freshLinkData.max_uses) {
+                    freshLinkData.status = DeviceLinkStatus.ACTIVE;
+                }
+                await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
                 return result;
             }
-
-            const freshLinkResult = await this.getLink(token);
-            const freshLinkData = freshLinkResult.success ? freshLinkResult.data : linkData;
-
-            freshLinkData.claims.push(DeviceLinkClaim.parse({
-                system_fingerprint: sanitizedFingerprint,
-                hostname: sanitizeString(deviceInfo.hostname, 255),
-                operator_id: targetOperatorId,
-                claimed_at: now()
-            }));
-
-            freshLinkData.uses = freshLinkData.claims.length;
-
-            if (freshLinkData.claims.length >= freshLinkData.max_uses) {
-                freshLinkData.status = DeviceLinkStatus.EXHAUSTED;
-            }
-
-            const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
-            await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
 
             logger.info('[DEVICE-LINK] Device registered', {
                 token_prefix: token.substring(0, 20) + '...',

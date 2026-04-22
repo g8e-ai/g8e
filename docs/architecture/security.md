@@ -664,7 +664,7 @@ Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes
   Members cycle through Axiom / Concord / Variance
   │
   ▼
-Weighted majority vote — earlier passes weighted higher (weight 1/(i+1))
+Uniform per-member voting — each member contributes exactly 1 vote per candidate
   │
   ▼
 SLM Verifier (same model, temperature: model default; disabled via `llm_command_gen_verifier=false`)

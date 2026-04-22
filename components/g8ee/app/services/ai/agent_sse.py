@@ -185,6 +185,11 @@ async def deliver_via_sse(
                 fn = chunk.data.tool_name or ""
                 exec_id = chunk.data.execution_id or ""
 
+                # Track tool call in state for metadata recording
+                state.tool_call_count += 1
+                if fn and fn not in state.tool_types_used:
+                    state.tool_types_used.append(fn)
+
                 # Emit generic tool call started event for all tools
                 await _publish(
                     EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED,

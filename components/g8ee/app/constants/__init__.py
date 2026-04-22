@@ -36,6 +36,7 @@ from app.constants.agents import (
     TriageRequestPosture,
     TribunalMember,
     VerifierReason,
+    TieBreakReason
 )
 from app.constants.channels import (
     PubSubAction,
@@ -46,6 +47,7 @@ from app.constants.channels import (
 )
 from app.constants.collections import (
     DB_COLLECTION_API_KEYS,
+    DB_COLLECTION_AGENT_ACTIVITY_METADATA,
     DB_COLLECTION_CASES,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
@@ -168,7 +170,6 @@ from app.constants.settings import (
     ChatSessionStatus,
     CircuitBreakerState,
     CommandGenerationOutcome,
-    TieBreakReason,
     DB_TIMESTAMP,
     DEFAULT_FINISH_REASON,
     DEFAULT_HTTP_CLIENT_TIMEOUT,
@@ -348,12 +349,14 @@ __all__ = [
     "TriageRequestPosture",
     "TribunalMember",
     "VerifierReason",
+    "TieBreakReason",
     "PubSubAction",
     "PubSubChannel",
     "PubSubField",
     "PubSubMessageType",
     "PubSubWireEventType",
     "DB_COLLECTION_API_KEYS",
+    "DB_COLLECTION_AGENT_ACTIVITY_METADATA",
     "DB_COLLECTION_CASES",
     "DB_COLLECTION_INVESTIGATIONS",
     "DB_COLLECTION_MEMORIES",

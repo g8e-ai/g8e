@@ -381,7 +381,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 8px;
+    padding: 4px 8px;
     background: rgba(var(--accent-green-rgb), 0.1);
     border: 1px solid rgba(var(--accent-green-rgb), 0.3);
     border-radius: 0.25rem;
@@ -407,7 +407,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 8px;
+    padding: 4px 8px;
     background: rgba(var(--accent-blue-rgb), 0.1);
     border: 1px solid rgba(var(--accent-blue-rgb), 0.3);
     border-radius: 0.25rem;
@@ -460,6 +460,181 @@
     background: rgba(245, 158, 11, 0.15);
     color: #f59e0b;
     border-color: rgba(245, 158, 11, 0.3);
+}
+
+/* Operator Bind Single Overlay - Inline in Operator Deployment */
+.operator-bind-single-overlay {
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+.operator-bind-single-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.operator-bind-single-header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.operator-bind-single-icon {
+    font-size: 28px;
+    color: var(--primary-color);
+}
+
+.operator-bind-single-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.operator-bind-single-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.operator-bind-single-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-bind-single-close-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
+.operator-bind-single-close-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.operator-bind-single-description {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(74, 158, 255, 0.1);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    border-radius: 0.25rem;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.operator-bind-single-operators-container {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.operator-bind-single-operators-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    padding-right: 4px;
+}
+
+.operator-bind-single-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.operator-bind-single-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 0.25rem;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.operator-bind-single-action-btn .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.operator-bind-single-action-btn.cancel-btn {
+    background: rgba(107, 114, 128, 0.15);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.operator-bind-single-action-btn.cancel-btn:hover:not(:disabled) {
+    background: rgba(107, 114, 128, 0.25);
+    border-color: rgba(107, 114, 128, 0.5);
+}
+
+.operator-bind-single-action-btn.confirm-btn {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.operator-bind-single-action-btn.confirm-btn:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+.operator-bind-single-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.operator-bind-single-processing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--surface-secondary);
+    border-radius: 0.25rem;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.operator-bind-single-processing .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    border-top-color: #10b981;
+    border-radius: 0.25rem;
+    animation: spin 0.8s linear infinite;
+}
+
+.operator-bind-single-actions-feedback {
+    margin-top: 12px;
 }
 
 /* Light theme adjustments */

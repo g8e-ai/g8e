@@ -91,6 +91,10 @@ class PromptFile(str, Enum):
     ANALYSIS_ERROR_SUGGESTION = "analysis/error_analysis.txt"
     ANALYSIS_FILE_RISK = "analysis/file_risk.txt"
 
+    # Tribunal
+    TRIBUNAL_GENERATOR = "tribunal/generator.txt"
+    TRIBUNAL_VERIFIER = "tribunal/verifier.txt"
+
     @property
     def path(self) -> str:
         """Get the relative path for the prompt file."""

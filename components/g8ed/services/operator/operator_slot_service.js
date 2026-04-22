@@ -208,6 +208,7 @@ export class OperatorSlotService {
             operator_session_id,
             bound_web_session_id,
             system_info: info,
+            system_fingerprint: info.system_fingerprint,
             claimed: true,
             updated_at: ts,
             last_heartbeat: ts,

@@ -121,7 +121,7 @@ class OperatorService {
     }
 
     async getOperatorByUserId(userId) {
-        const data = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
+        const data = await this.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         if (!data || data.length === 0) return null;
         const deployed = data.find(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND);
         if (deployed) return deployed;
@@ -254,7 +254,8 @@ class OperatorService {
     }
 
     async queryOperators(filters) {
-        return this.operatorDataService.queryOperators(filters);
+        const data = await this.operatorDataService.queryOperators(filters);
+        return (data || []).map(op => OperatorDocument.fromDB(op));
     }
     
     async resetOperator(operatorId) {

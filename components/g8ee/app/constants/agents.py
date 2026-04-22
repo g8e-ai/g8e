@@ -100,3 +100,19 @@ class VerifierReason(str, Enum):
     VERIFIER_ERROR       = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
     SWAPPED_TO_DISSENTER = _AGENTS["tribunal.verifier_reason"]["swapped_to_dissenter"]
     REVISED_FROM_DISSENT = _AGENTS["tribunal.verifier_reason"]["revised_from_dissent"]
+
+
+class TieBreakReason(str, Enum):
+    """How a tie at the top of the uniform vote was resolved.
+
+    Populated on VoteBreakdown only when more than one command cluster
+    held the highest vote count and one of the deterministic tie-break
+    rules resolved it.
+    """
+    __str__ = lambda self: self.value
+    SHORTEST                = _AGENTS["tribunal.tie_break_reason"]["shortest"]
+    LONGEST                 = _AGENTS["tribunal.tie_break_reason"]["longest"]
+    FEWEST_OPERATIONS       = _AGENTS["tribunal.tie_break_reason"]["fewest_operations"]
+    EXCLUDED_NEMESIS        = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
+    ALPHABETICAL            = _AGENTS["tribunal.tie_break_reason"]["alphabetical"]
+    VERIFIER_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["verifier_disambiguation"]

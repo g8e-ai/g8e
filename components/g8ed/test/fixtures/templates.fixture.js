@@ -169,6 +169,92 @@ export const TEMPLATE_FIXTURES = {
     <span class="feedback-message">{{message}}</span>
 </div>`,
 
+    'operator-bind-all-overlay': `<div class="operator-bind-all-overlay" id="operator-bind-all-overlay">
+    <div class="operator-bind-all-header">
+        <div class="operator-bind-all-header-content">
+            <span class="material-symbols-outlined operator-bind-all-icon">link</span>
+            <div class="operator-bind-all-title-section">
+                <h3 class="operator-bind-all-title">Bind All Active Operators</h3>
+                <span class="operator-bind-all-count" id="operator-bind-all-count"></span>
+            </div>
+        </div>
+        <button class="operator-bind-all-close-btn" id="operator-bind-all-close-btn">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <div class="operator-bind-all-description">
+        The following operators will be bound to your current web session. You will be able to interact with all of them through the chat interface.
+    </div>
+
+    <div class="operator-bind-all-operators-container">
+        <div class="operator-bind-all-operators-header">
+            <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
+            <label for="operator-select-all-operators">Select All</label>
+        </div>
+        <div class="operator-bind-all-operators-list" id="operator-bind-all-operators-list">
+        </div>
+    </div>
+
+    <div class="operator-bind-all-actions">
+        <button class="operator-bind-all-action-btn cancel-btn" id="operator-bind-all-cancel-btn">
+            <span class="material-symbols-outlined">cancel</span>
+            <span>Cancel</span>
+        </button>
+        <button class="operator-bind-all-action-btn confirm-btn" id="operator-bind-all-confirm-btn">
+            <span class="material-symbols-outlined">link</span>
+            <span>Bind All</span>
+        </button>
+    </div>
+
+    <div class="operator-bind-all-processing initially-hidden" id="operator-bind-all-processing">
+        <div class="spinner"></div>
+        <span id="operator-bind-all-processing-label">Binding operators...</span>
+    </div>
+    <div class="operator-bind-all-actions-feedback" id="operator-bind-all-feedback"></div>
+</div>`,
+
+    'operator-unbind-all-overlay': `<div class="operator-unbind-all-overlay" id="operator-unbind-all-overlay">
+    <div class="operator-unbind-all-header">
+        <div class="operator-unbind-all-header-content">
+            <span class="material-symbols-outlined operator-unbind-all-icon">link_off</span>
+            <div class="operator-unbind-all-title-section">
+                <h3 class="operator-unbind-all-title">Unbind All Operators</h3>
+                <span class="operator-unbind-all-count" id="operator-unbind-all-count"></span>
+            </div>
+        </div>
+        <button class="operator-unbind-all-close-btn" id="operator-unbind-all-close-btn">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <div class="operator-unbind-all-description">
+        The following operators will be unbound from your current web session. You will no longer be able to interact with them until they are rebound.
+    </div>
+
+    <div class="operator-unbind-all-operators-container">
+        <div class="operator-unbind-all-operators-list" id="operator-unbind-all-operators-list">
+        </div>
+    </div>
+
+    <div class="operator-unbind-all-actions">
+        <button class="operator-unbind-all-action-btn cancel-btn" id="operator-unbind-all-cancel-btn">
+            <span class="material-symbols-outlined">cancel</span>
+            <span>Cancel</span>
+        </button>
+        <button class="operator-unbind-all-action-btn confirm-btn" id="operator-unbind-all-confirm-btn">
+            <span class="material-symbols-outlined">link_off</span>
+            <span>Unbind All</span>
+        </button>
+    </div>
+
+    <div class="operator-unbind-all-processing initially-hidden" id="operator-unbind-all-processing">
+        <div class="spinner"></div>
+        <span id="operator-unbind-all-processing-label">Unbinding operators...</span>
+    </div>
+    <div class="operator-unbind-all-actions-feedback" id="operator-unbind-all-feedback"></div>
+</div>`,
+
     'confirmation-modal-base': `<div class="download-menu-overlay confirmation-modal-overlay">
     <div class="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="confirmation-modal-header">

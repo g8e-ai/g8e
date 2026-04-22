@@ -27,6 +27,7 @@ Does NOT own:
 
 import asyncio
 import logging
+import time
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
@@ -52,6 +53,7 @@ from app.models.investigations import (
     ConversationHistoryMessage,
     EnrichedInvestigationContext,
 )
+from app.models.agent_activity import AgentActivityMetadata
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
 
@@ -63,6 +65,7 @@ from .memory_generation_service import MemoryGenerationService
 from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
+from ..data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
 from app.models.g8ed_client import (
     ChatErrorPayload,
@@ -88,6 +91,7 @@ class ChatPipelineService:
         g8e_agent: g8eEngine,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
+        agent_activity_data_service: AgentActivityDataService | None = None,
     ) -> None:
         self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
@@ -95,6 +99,7 @@ class ChatPipelineService:
         self.g8e_agent = g8e_agent
         self.memory_service = memory_service
         self.memory_generation_service = memory_generation_service
+        self.agent_activity_data_service = agent_activity_data_service
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")
@@ -344,6 +349,69 @@ class ChatPipelineService:
                 task_manager=task_manager,
             )
 
+    async def _record_agent_activity_metadata(
+        self,
+        inputs: AgentInputs,
+        state: AgentStreamState,
+        start_time: float,
+        attachments: list[AttachmentMetadata],
+        error: str | None = None,
+    ) -> None:
+        """Record agent activity metadata for data science analysis.
+        
+        This is called after each chat turn completes to capture comprehensive
+        telemetry including model usage, token consumption, tool execution,
+        triage classification, and performance metrics.
+        """
+        if not self.agent_activity_data_service:
+            return
+
+        try:
+            duration_seconds = time.time() - start_time
+            
+            metadata = AgentActivityMetadata(
+                user_id=inputs.user_id,
+                user_email=inputs.investigation.user_email if inputs.investigation else None,
+                investigation_id=inputs.investigation_id,
+                case_id=inputs.case_id,
+                web_session_id=inputs.web_session_id,
+                agent_mode=inputs.agent_mode,
+                model_name=inputs.model_to_use,
+                provider=inputs.request_settings.llm.primary_provider.value if inputs.request_settings.llm.primary_provider else None,
+                token_usage=state.token_usage,
+                finish_reason=state.finish_reason,
+                triage_complexity=inputs.triage_result.complexity if inputs.triage_result else None,
+                triage_complexity_confidence=inputs.triage_result.complexity_confidence if inputs.triage_result else None,
+                triage_intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else None,
+                triage_intent_confidence=inputs.triage_result.intent_confidence if inputs.triage_result else None,
+                triage_request_posture=inputs.triage_result.request_posture if inputs.triage_result else None,
+                triage_posture_confidence=inputs.triage_result.posture_confidence if inputs.triage_result else None,
+                tool_call_count=state.tool_call_count,
+                tool_types_used=state.tool_types_used,
+                duration_seconds=duration_seconds,
+                has_attachments=len(attachments) > 0,
+                attachment_count=len(attachments),
+                grounding_used=state.grounding_metadata is not None,
+                citation_count=len(state.grounding_metadata.citations) if state.grounding_metadata and state.grounding_metadata.citations else 0,
+                operator_bound=inputs.operator_bound,
+                bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
+                response_length=len(state.response_text),
+                error=error,
+            )
+
+            await self.agent_activity_data_service.record_activity(metadata)
+            logger.info(
+                "Agent activity metadata recorded",
+                extra={
+                    "activity_id": metadata.id,
+                    "investigation_id": metadata.investigation_id,
+                    "model": metadata.model_name,
+                    "duration_seconds": metadata.duration_seconds,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record agent activity metadata: {e}", exc_info=True)
+
     def _dispatch_memory_update(
         self,
         investigation: EnrichedInvestigationContext,
@@ -500,6 +568,7 @@ class ChatPipelineService:
         task_manager: BackgroundTaskManager | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
+        start_time = time.time()
         logger.info(
             "[SSE-CHAT] _run_chat_impl started: g8e_context=%s attachments_count=%d",
             f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
@@ -613,6 +682,13 @@ class ChatPipelineService:
             state=state,
             user_settings=user_settings,
             task_manager=task_manager,
+        )
+
+        await self._record_agent_activity_metadata(
+            inputs=inputs,
+            state=state,
+            start_time=start_time,
+            attachments=attachments,
         )
 
         logger.info(

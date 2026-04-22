@@ -312,7 +312,7 @@ Incentivize pipeline-dense commands to reduce approval fatigue while preserving 
 - [ ] **5.1** Confirm Sage persona includes intent-density guidance (from Phase 1). Verify in practice: Sage is articulating broad investigative intents, not atomic ones.
 - [ ] **5.2** Confirm Tribunal member personas include compositional pressure language (from Phase 1). Each member's role in composition is explicit.
 - [ ] **5.3** Implement `_logical_operation_count` helper in `command_generator.py`. Tokenize respecting quotes and escapes. Count `|`, `&&`, `||`, `;` as separators. Return 1 for simple commands.
-- [ ] **5.4** Update tie-breaker ladder: insert "fewest logical operations" between "longest command" and "non-Nemesis cluster" rules. Update `VoteBreakdown.tie_break_reason` to include `fewest_operations`.
+- [ ] **5.4** Update tie-breaker ladder: insert "fewest logical operations" between "shortest command" and "non-Nemesis cluster" rules. Update `VoteBreakdown.tie_break_reason` to include `fewest_operations`.
 - [ ] **5.5** Define shell operator policy constant: `SEQUENCE_OPERATORS_ALLOWED = {"&&", "||"}`, `SEQUENCE_OPERATORS_RESTRICTED = {";"}`.
 - [ ] **5.6** Add Sentinel detector for bare `;` outside strings/heredocs/comments. Signal (not block) for Auditor attention.
 - [ ] **5.7** Update Auditor's persona: explicit requirement to justify any bare `;` in approved candidates.

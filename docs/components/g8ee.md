@@ -33,6 +33,7 @@ ChatPipelineService
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
   ├── BackgroundTaskManager     — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates
+  ├── AgentActivityDataService — AI agent activity metadata recording for data science
   ├── MemoryGenerationService — Background memory updates from conversation
   ├── AttachmentService       — Attachment storage and retrieval
   └── EventService           — Internal SSE event delivery to g8ed
@@ -66,7 +67,7 @@ flowchart LR
 
 - **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
 - **g8es** -- Multi-purpose persistence layer:
-    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings.
+    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings, agent activity metadata.
     - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
     - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
     - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
@@ -1004,7 +1005,7 @@ The following sections are read from the `settings` map inside the settings docu
 The Tribunal implements a four-stage pipeline for producing safe, valid shell commands:
 
 1.  **Generation**: N independent parallel passes using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
-2.  **Voting**: Weighted majority vote over normalised candidates to reach consensus.
+2.  **Voting**: Uniform per-member voting over normalised candidates to reach consensus, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
 3.  **Verification**: Optional verifier pass that evaluates the winner and can suggest a safer revision.
 4.  **Safety Enforcement**: Final structural and security validation before returning the command.
 

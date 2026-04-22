@@ -14,8 +14,16 @@
 """g8ee AI Agent Prompts Module"""
 
 import logging
+from typing import Any, List, Optional
 
-from ..constants import AgentName, CloudSubtype, OperatorType, PromptFile, PromptSection
+from ..constants import (
+    AgentName,
+    CloudSubtype,
+    FORBIDDEN_COMMAND_PATTERNS,
+    OperatorType,
+    PromptFile,
+    PromptSection,
+)
 from ..constants.prompts import InvestigationContextLabel
 from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
@@ -139,6 +147,214 @@ def build_learned_context_section(
         return ""
 
     return "<learned_context>\n" + "\n".join(f"- {part}" for part in context_parts) + "\n</learned_context>\n"
+
+
+def build_command_constraints_message(
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    whitelisted_commands: List[str] | None,
+    blacklisted_commands: List[dict[str, str]] | None,
+) -> str:
+    """Generate a human-readable message describing active command constraints."""
+    parts = []
+    if whitelisting_enabled:
+        if whitelisted_commands:
+            parts.append(f"Whitelisting is ENABLED. Only these commands (and their subcommands) are allowed: {', '.join(whitelisted_commands)}")
+        else:
+            parts.append("Whitelisting is ENABLED, but no commands are whitelisted. ALL commands will be rejected.")
+    
+    if blacklisting_enabled:
+        if blacklisted_commands:
+            blacklisted_names = [c.get("command", "unknown") for c in blacklisted_commands]
+            parts.append(f"Blacklisting is ENABLED. These commands are FORBIDDEN: {', '.join(blacklisted_names)}")
+        else:
+            parts.append("Blacklisting is ENABLED, but no commands are blacklisted.")
+
+    if not parts:
+        return "No whitelist or blacklist constraints are active."
+
+    return " ".join(parts)
+
+
+def build_forbidden_patterns_message() -> str:
+    """Generate a message listing all forbidden command patterns."""
+    patterns = sorted(list(FORBIDDEN_COMMAND_PATTERNS))
+    return f"The following patterns are FORBIDDEN and will be rejected: {', '.join(patterns)}"
+
+
+def build_tribunal_operator_context_string(operator_context: OperatorContext | None) -> str:
+    """Build a formatted string of operator context for Tribunal prompts."""
+    if not operator_context:
+        return "No operator context available"
+
+    parts: list[str] = []
+    if operator_context.hostname:
+        parts.append(f"Hostname: {operator_context.hostname}")
+    if operator_context.os:
+        parts.append(f"OS: {operator_context.os}")
+    if operator_context.architecture:
+        parts.append(f"Architecture: {operator_context.architecture}")
+    if operator_context.username:
+        uid_suffix = f" (uid={operator_context.uid})" if operator_context.uid is not None else ""
+        parts.append(f"User: {operator_context.username}{uid_suffix}")
+    if operator_context.shell:
+        parts.append(f"Shell: {operator_context.shell}")
+    if operator_context.working_directory:
+        parts.append(f"Working Directory: {operator_context.working_directory}")
+    if operator_context.operator_type:
+        parts.append(f"Operator Type: {operator_context.operator_type}")
+    if operator_context.is_cloud_operator:
+        parts.append("Cloud Operator: Yes")
+        if operator_context.cloud_subtype:
+            parts.append(f"Cloud Subtype: {operator_context.cloud_subtype}")
+        if operator_context.granted_intents:
+            parts.append(f"Granted Intents: {operator_context.granted_intents}")
+    if operator_context.is_container:
+        parts.append("Container Environment: Yes")
+        if operator_context.container_runtime:
+            parts.append(f"Container Runtime: {operator_context.container_runtime}")
+        if operator_context.init_system:
+            parts.append(f"Init System: {operator_context.init_system}")
+    elif operator_context.init_system:
+        parts.append(f"Init System: {operator_context.init_system}")
+
+    return "\n".join(parts) if parts else "No operator details available"
+
+
+def build_tribunal_prompt_fields(
+    operator_context: OperatorContext | None,
+    request: str,
+    guidelines: str,
+    default_os: str,
+    default_shell: str,
+    default_working_directory: str,
+) -> dict[str, str]:
+    """Build the common template kwargs used by every Tribunal persona prompt.
+    
+    Returns a dict with keys: os, shell, working_directory, user_context,
+    operator_context, forbidden_patterns_message, request, guidelines.
+    """
+    os_name = (operator_context.os if operator_context else None) or default_os
+    shell = (operator_context.shell if operator_context else None) or default_shell
+    working_directory = (
+        operator_context.working_directory if operator_context else None
+    ) or default_working_directory
+    username = operator_context.username if operator_context else None
+    uid = operator_context.uid if operator_context else None
+    if username and uid is not None:
+        user_context = f"{username} (uid={uid})"
+    else:
+        user_context = username or "unknown"
+        
+    return {
+        "os": os_name,
+        "shell": shell,
+        "working_directory": working_directory,
+        "user_context": user_context,
+        "operator_context": build_tribunal_operator_context_string(operator_context),
+        "forbidden_patterns_message": build_forbidden_patterns_message(),
+        "request": request.strip() if request else "",
+        "guidelines": guidelines.strip() if guidelines else "(none)",
+    }
+
+
+def build_tribunal_verifier_context(
+    mode: str,
+    winner: str | None,
+    clusters: List[dict[str, Any]],
+) -> str:
+    """Build the mode-specific context for the verifier prompt.
+    
+    Args:
+        mode: "unanimous", "majority", or "tied"
+        winner: The winning command string
+        clusters: List of dicts with keys: cluster_id, command, support_count
+    """
+    parts = []
+    
+    if mode == "unanimous":
+        parts.append(f"<candidate_command>\n{winner}\n</candidate_command>")
+        parts.append("\nUNANIMOUS CONSENSUS: All Tribunal members produced the command above.")
+        parts.append("Validate it for syntactic correctness, safety, and alignment with the request.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"ok\" (if correct) or \"revised\" (if needs fix)")
+        parts.append("- revised_command: the corrected command string (only if status is \"revised\")")
+        
+    elif mode == "majority":
+        parts.append("<candidates_by_cluster>")
+        for c in clusters:
+            parts.append(f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}")
+        parts.append("</candidates_by_cluster>")
+        parts.append(f"\nMAJORITY WINNER: [{clusters[0]['cluster_id']}]")
+        parts.append("\nObserve the winner and the dissenting clusters above. You may approve the winner, swap to a dissenter, or issue a revision.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"ok\" (approve winner), \"swap\" (pick another cluster), or \"revised\"")
+        parts.append("- swap_to_cluster: e.g. \"cluster_b\" (only if status is \"swap\")")
+        parts.append("- revised_command: corrected string (only if status is \"revised\")")
+        
+    elif mode == "tied":
+        parts.append("<tied_candidates>")
+        for c in clusters:
+            parts.append(f"[{c['cluster_id']}] (support: {c['support_count']})\n{c['command']}")
+        parts.append("</tied_candidates>")
+        parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
+        parts.append("YOU MUST DISAMBIGUATE. Pick the best cluster from the tied set or provide a revision.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"swap\" (pick one) or \"revised\"")
+        parts.append("- swap_to_cluster: e.g. \"cluster_a\" (required for status \"swap\")")
+        parts.append("- revised_command: corrected string (only if status is \"revised\")")
+        
+    return "\n".join(parts)
+
+
+def build_tribunal_generator_prompt(
+    request: str,
+    guidelines: str,
+    forbidden_patterns_message: str,
+    command_constraints_message: str,
+    os: str,
+    shell: str,
+    user_context: str,
+    working_directory: str,
+    operator_context_str: str,
+) -> str:
+    """Build the prompt for a Tribunal generation pass."""
+    template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+    return template.format(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=forbidden_patterns_message,
+        command_constraints_message=command_constraints_message,
+        os=os,
+        shell=shell,
+        user_context=user_context,
+        working_directory=working_directory,
+        operator_context=operator_context_str,
+    )
+
+
+def build_tribunal_verifier_prompt(
+    request: str,
+    guidelines: str,
+    forbidden_patterns_message: str,
+    command_constraints_message: str,
+    os: str,
+    user_context: str,
+    operator_context_str: str,
+    verifier_context: str,
+) -> str:
+    """Build the prompt for the Tribunal verifier."""
+    template = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
+    return template.format(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=forbidden_patterns_message,
+        command_constraints_message=command_constraints_message,
+        os=os,
+        user_context=user_context,
+        operator_context=operator_context_str,
+        verifier_context=verifier_context,
+    )
 
 
 def build_modular_system_prompt(

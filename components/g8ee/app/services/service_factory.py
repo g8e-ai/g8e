@@ -29,6 +29,7 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
+from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
@@ -76,6 +77,7 @@ class DataServices(TypedDict):
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
+    agent_activity_data_service: AgentActivityDataService
 
 
 class DomainServices(TypedDict):
@@ -166,11 +168,16 @@ class ServiceFactory:
             event_service=cast(EventService, core_services['g8ed_event_service']),
         )
 
+        agent_activity_data_service = AgentActivityDataService(
+            cache=cache_aside_service
+        )
+
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
+            agent_activity_data_service=agent_activity_data_service,
         )
     
     @staticmethod
@@ -301,6 +308,7 @@ class ServiceFactory:
             g8e_agent=g8e_agent,
             memory_service=data_services['memory_data_service'],  # type: ignore[arg-type]
             memory_generation_service=domain_services['memory_generation_service'],
+            agent_activity_data_service=data_services['agent_activity_data_service'],
         )
 
         all_services = AllServices(
