@@ -851,10 +851,31 @@ case "$TOP" in
     # ------------------------------------------------------------------
     demo)
         DEMO_DIR="$SCRIPT_DIR/demo"
-        DEMO_TOKEN_FILE="$DEMO_DIR/.demo-token"
         if [[ ! -d "$DEMO_DIR" ]]; then
             echo "[g8e] demo directory not found: $DEMO_DIR" >&2
             exit 1
+        fi
+        # Parse -d flag for device token shorthand
+        demo_args=("${@:3}")
+        device_token=""
+        i=0
+        while [[ $i -lt ${#demo_args[@]} ]]; do
+            arg="${demo_args[$i]}"
+            if [[ "$arg" == "-d" ]]; then
+                if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
+                    device_token="${demo_args[$((i + 1))]}"
+                    unset demo_args[$i] demo_args[$((i + 1))]
+                    break
+                else
+                    echo "[g8e] -d flag requires a token value" >&2
+                    exit 1
+                fi
+            fi
+            ((i++))
+        done
+        # Convert -d to DEVICE_TOKEN for make
+        if [[ -n "$device_token" ]]; then
+            demo_args=("DEVICE_TOKEN=$device_token" "${demo_args[@]}")
         fi
         case "$SUB" in
             -h|--help|"")
@@ -867,66 +888,15 @@ case "$TOP" in
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
-            init)
-                _banner "demo init"
-                echo "Setting up demo environment with pre-authenticated operator..."
-                echo ""
-                _ensure_g8ep "demo init"
-                DEMO_EMAIL="demo@g8e.local"
-                DEMO_NAME="Demo User"
-                echo "Checking for demo user: $DEMO_EMAIL"
-                USER_ID=$(docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py users get --email "$DEMO_EMAIL" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)
-                if [[ -z "$USER_ID" ]]; then
-                    echo "Creating demo user..."
-                    docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py users create --email "$DEMO_EMAIL" --name "$DEMO_NAME" > /dev/null
-                    USER_ID=$(docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py users get --email "$DEMO_EMAIL" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}')
-                    echo "  Created user: $USER_ID"
-                else
-                    echo "  Demo user exists: $USER_ID"
-                fi
-                echo ""
-                echo "Creating device link token for demo user..."
-                TOKEN_OUTPUT=$(docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py device-links create --user-id "$USER_ID" --name "demo-fleet" --max-uses 100 --expires-in-hours 168 2>&1)
-                DEVICE_TOKEN=$(echo "$TOKEN_OUTPUT" | grep 'Token:' | awk '{print $2}')
-                if [[ -z "$DEVICE_TOKEN" ]]; then
-                    echo "[g8e] Failed to create device link token" >&2
-                    exit 1
-                fi
-                echo "  Token: $DEVICE_TOKEN"
-                echo ""
-                echo "Storing token in $DEMO_TOKEN_FILE"
-                echo "$DEVICE_TOKEN" > "$DEMO_TOKEN_FILE"
-                chmod 600 "$DEMO_TOKEN_FILE"
-                echo ""
-                echo "Demo mode initialized. Use './g8e demo stream' to deploy operators with this token."
-                exit 0 ;;
-            start)
-                _banner "demo start"
-                echo "Building and starting platform..."
-                bash "$SCRIPT_DIR/scripts/core/build.sh" setup
-                echo ""
-                echo "Initializing demo mode..."
-                "$SCRIPT_DIR/g8e" demo init
-                echo ""
-                echo "Starting demo fleet (operators auto-attach in-container)..."
-                # `demo up` reads .demo-token and passes DEVICE_TOKEN to compose;
-                # each node then downloads and supervises its own operator with
-                # logs visible via `docker logs web-node-<NN>`. No separate
-                # stream step needed.
-                make -C "$DEMO_DIR" up
-                echo ""
-                echo "Demo ready. Tail operator logs with:"
-                echo "  docker logs -f web-node-01    (or any node 01-10)"
-                exit 0 ;;
             up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
-                exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
+                exec make -C "$DEMO_DIR" "$SUB" "${demo_args[@]}" ;;
             shell)
                 _banner "demo shell"
-                exec make -C "$DEMO_DIR" shell "${@:3}" ;;
+                exec make -C "$DEMO_DIR" shell "${demo_args[@]}" ;;
             *)
                 echo "[g8e] unknown demo subcommand: '$SUB'" >&2
-                echo "  Valid: init, start, up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
+                echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
                 exit 1 ;;
         esac ;;
 

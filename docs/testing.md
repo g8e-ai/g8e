@@ -72,6 +72,15 @@ All tests are orchestrated via the `./g8e` CLI, which routes each component to i
 
 # Run g8ee with strict pyright type checking
 ./g8e test g8ee --pyright
+
+# Run g8ee with ruff lint check
+./g8e test g8ee --ruff
+
+# Run g8ee with E2E operator lifecycle tests
+./g8e test g8ee --e2e
+
+# Run g8ee tests in parallel
+./g8e test g8ee -j auto
 ```
 
 ---

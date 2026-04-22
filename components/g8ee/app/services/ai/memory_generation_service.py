@@ -28,6 +28,25 @@ from app.services.protocols import MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
 
+# Codex template scaffolding - holds the response format structure
+# separate from the persona voice in agents.json
+
+CODEX_ANALYSIS_TEMPLATE = """\
+Analyze the conversation above and populate the memory fields.
+
+<output_format>
+Return a JSON object with these fields:
+- "investigation_summary": high-level summary (no hostnames/IPs)
+- "communication_preferences": how the user prefers to communicate
+- "technical_background": user's technical experience and skills
+- "response_style": how they want information presented
+- "problem_solving_approach": how they debug and investigate
+- "interaction_style": meta-preferences about questions and context
+
+All fields are optional but try to populate each one.
+</output_format>
+"""
+
 CONVERSATION_HISTORY_LIMIT = 20
 FALLBACK_TEXT_LIMIT = 2000
 
@@ -235,7 +254,7 @@ class MemoryGenerationService:
         # Add the analysis request
         contents.append(types.Content(
             role=Role.USER,
-            parts=[types.Part.from_text(text="Analyze the conversation above and populate the memory fields. Return a JSON object with these fields:\n- \"investigation_summary\": high-level summary (no hostnames/IPs)\n- \"communication_preferences\": how the user prefers to communicate\n- \"technical_background\": user's technical experience and skills\n- \"response_style\": how they want information presented\n- \"problem_solving_approach\": how they debug and investigate\n- \"interaction_style\": meta-preferences about questions and context\nAll fields are optional but try to populate each one.")],
+            parts=[types.Part.from_text(text=CODEX_ANALYSIS_TEMPLATE)],
         ))
         return contents
 

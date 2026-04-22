@@ -7,19 +7,11 @@
 COMPOSE := docker compose
 CONTAINER_PREFIX := web-node
 SSH_USER := appuser
-DEMO_TOKEN_FILE := .demo-token
 
 help:
 	@echo "Broken Web App Fleet Demo"
 	@echo ""
 	@echo "Usage: make [target]"
-	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  DEMO MODE (Pre-authenticated)"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  Use './g8e demo init' to set up demo mode with auto-generated token"
-	@echo "  Use './g8e demo start' for one-command full setup"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "  FLEET LIFECYCLE"
@@ -34,9 +26,9 @@ help:
 	@echo "  OPERATOR DEPLOYMENT"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  deploy [DEVICE_TOKEN=...]  - Deploy operators via API download (device link)"
-	@echo "  stream [DEVICE_TOKEN=...]  - Deploy operators via SSH streaming (auto-configures SSH)"
-	@echo "                            - If demo mode is initialized, token is auto-loaded"
+	@echo "  deploy [-d dlk_xxx]         - Deploy operators via API download (device link)"
+	@echo "  stream [-d dlk_xxx]         - Deploy operators via SSH streaming (auto-configures SSH)"
+	@echo "                            - Also supports: DEVICE_TOKEN=dlk_xxx"
 	@echo "  discover-hosts            - List discovered demo fleet hosts"
 	@echo "  vanish                    - Remove all operators (zero trace)"
 	@echo "  operators                 - Show operator status on all nodes"
@@ -74,17 +66,17 @@ build:
 up: build
 	@set -e; \
 	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && [ -f "$(DEMO_TOKEN_FILE)" ]; then \
-		TOKEN=$$(cat "$(DEMO_TOKEN_FILE)"); \
-		echo "Loaded demo token from $(DEMO_TOKEN_FILE)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
 	if [ -n "$$TOKEN" ]; then \
 		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
+		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
 	else \
 		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
-		echo "  Run './g8e demo init' to provision a token, then './g8e demo up'."; \
-	fi; \
-	DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d
+		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
+		$(COMPOSE) up -d; \
+	fi
 	@echo ""
 	@echo "========================================"
 	@echo "  Broken Web App Fleet - 10 Nodes"
@@ -100,6 +92,10 @@ up: build
 	@echo ""
 	@echo "Operator logs stream to: docker logs -f web-node-<NN>"
 	@echo "Dashboard:               http://localhost:3000"
+	@echo ""
+	@echo "Deploy operators:"
+	@echo "  ./g8e demo deploy -d dlk_xxx"
+	@echo "  ./g8e demo stream -d dlk_xxx"
 	@echo ""
 	@echo "========================================"
 
@@ -162,18 +158,13 @@ nginx-check:
 deploy:
 	@set -e; \
 	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ]; then \
-		if [ -f "$(DEMO_TOKEN_FILE)" ]; then \
-			TOKEN=$$(cat "$(DEMO_TOKEN_FILE)"); \
-			echo "Using stored demo token from $(DEMO_TOKEN_FILE)"; \
-		else \
-			echo "Usage: make deploy DEVICE_TOKEN=dlk_xxx"; \
-			echo "   or: ./g8e demo init  (to set up demo mode with auto token)"; \
-			exit 1; \
-		fi; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
 	if [ -z "$$TOKEN" ]; then \
-		echo "[deploy] device token is empty; aborting"; exit 1; \
+		echo "Usage: make deploy -d dlk_xxx"; \
+		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
+		exit 1; \
 	fi; \
 	echo "Deploying operators to all 10 nodes..."; \
 	for i in $$(seq -f "%02g" 1 10); do \
@@ -196,18 +187,13 @@ discover-hosts:
 stream:
 	@set -e; \
 	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ]; then \
-		if [ -f "$(DEMO_TOKEN_FILE)" ]; then \
-			TOKEN=$$(cat "$(DEMO_TOKEN_FILE)"); \
-			echo "Using stored demo token from $(DEMO_TOKEN_FILE)"; \
-		else \
-			echo "Usage: make stream DEVICE_TOKEN=dlk_xxx"; \
-			echo "   or: ./g8e demo init  (to set up demo mode with auto token)"; \
-			exit 1; \
-		fi; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
 	if [ -z "$$TOKEN" ]; then \
-		echo "[stream] device token is empty; aborting"; exit 1; \
+		echo "Usage: make stream -d dlk_xxx"; \
+		echo "       make stream DEVICE_TOKEN=dlk_xxx"; \
+		exit 1; \
 	fi; \
 	echo "Configuring SSH in g8ep..."; \
 	$(MAKE) -s setup-ssh; \

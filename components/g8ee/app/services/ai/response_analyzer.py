@@ -217,7 +217,7 @@ class AIResponseAnalyzer:
             justification=justification,
             working_dir=working_dir
         )
-        prompt = f"{command_risk_persona.persona}{template}"
+        prompt = f"{command_risk_persona.get_system_prompt()}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -273,7 +273,7 @@ class AIResponseAnalyzer:
             retry_count=retry_count,
             working_dir=working_dir
         )
-        prompt = f"{error_persona.persona}{template}"
+        prompt = f"{error_persona.get_system_prompt()}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -343,7 +343,7 @@ class AIResponseAnalyzer:
             git_status=git_status,
             backup_available=backup_available
         )
-        prompt = f"{file_risk_persona.persona}{template}"
+        prompt = f"{file_risk_persona.get_system_prompt()}{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 

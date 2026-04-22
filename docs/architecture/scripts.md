@@ -99,6 +99,10 @@ Runs tests for platform components in dedicated test-runner containers.
 ./g8e test g8ed                     # Dashboard (Node/Vitest)
 ./g8e test g8eo                     # Operator (Go)
 ./g8e test g8ee --coverage          # Generate coverage report
+./g8e test g8ee --pyright           # Run pyright strict gate (g8ee only)
+./g8e test g8ee --ruff              # Run ruff lint check (g8ee only)
+./g8e test g8ee --e2e               # Run E2E operator lifecycle tests (g8ee only)
+./g8e test g8ee -j auto             # Run pytest in parallel via pytest-xdist (g8ee only)
 ./g8e test g8ee --llm-provider gemini # Run with a specific LLM provider
 ./g8e test g8ee --primary-model <m> # Override the LLM model for the run
 ./g8e test g8eo -- TestFoo          # Pass extra args to the underlying test runner
@@ -329,7 +333,9 @@ Runs tests for g8e components in dedicated test-runner containers. Infrastructur
 |--------|-------------|
 | `--coverage` | Generate coverage reports |
 | `--pyright` | Run pyright strict gate (g8ee only) |
+| `--ruff` | Run ruff lint check (g8ee only) |
 | `--e2e` | Run E2E operator lifecycle tests (g8ee only) |
+| `-j, --parallel <N|auto>` | Run pytest in parallel via pytest-xdist (g8ee only) |
 
 ---
 

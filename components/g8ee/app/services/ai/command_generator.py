@@ -308,7 +308,11 @@ TRIBUNAL_VERIFIER_TEMPLATE = """\
 {candidate_command}
 </candidate_command>
 
-Respond now with exactly `ok` or the single corrected command, and nothing else."""
+You must respond with a JSON object with exactly these fields:
+- status: either "ok" (if the candidate command is safe and correct) or "revised" (if you need to fix it)
+- revised_command: the corrected command string (only if status is "revised")
+
+Respond now with the JSON object and nothing else."""
 
 
 _SYSTEM_ERROR_PATTERNS: tuple[str, ...] = (
@@ -823,29 +827,30 @@ async def _run_verifier(
         status = ""
         revised_raw = ""
 
-        if response_format:
-            try:
-                import json
-                data = json.loads(raw_text)
-                status = data.get("status", "").lower()
-                revised_raw = data.get("revised_command", "")
-            except (json.JSONDecodeError, AttributeError):
-                # Fallback to text parsing
-                status = raw_text.lower()
-        else:
-            status = raw_text.lower()
+        try:
+            import json
+            data = json.loads(raw_text)
+            status = data.get("status", "").lower()
+            revised_raw = data.get("revised_command", "")
+        except (json.JSONDecodeError, AttributeError) as exc:
+            logger.error("[TRIBUNAL] Verifier returned invalid JSON: %s", exc)
+            error_msg = f"Verifier returned invalid JSON: {raw_text[:100]}"
+            await _fail_verifier(
+                emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
+            )
+            raise TribunalVerifierFailedError(
+                reason=VerifierReason.NO_VALID_REVISION,
+                error=error_msg,
+                candidate_command=candidate_command,
+                request=request,
+            )
 
-        if status == "ok" or "ok" in status.split():
+        if status == "ok":
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
                 TribunalVerifierCompletedPayload(passed=True, reason=VerifierReason.OK),
             )
             return True, None
-
-        # Handle revised command
-        if not revised_raw and not response_format:
-            # If not using structured output, the whole response might be the revised command
-            revised_raw = raw_text
 
         revised = _normalise_command(revised_raw)
         if revised and revised != candidate_command:

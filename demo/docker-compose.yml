@@ -20,9 +20,9 @@ networks:
     external: true
 
 # Shared operator env — merged into each node's environment map below.
-# When DEVICE_TOKEN is set (via `./g8e demo start` / `demo up` reading
-# .demo-token), each node auto-downloads the operator and runs it supervised
-# in-container. When empty, the node boots healthy with no operator attached.
+# When DEVICE_TOKEN is set (via `make up DEVICE_TOKEN=dlk_xxx`), each node
+# auto-downloads the operator and runs it supervised in-container.
+# When empty, the node boots healthy with no operator attached.
 x-operator-env: &operator-env
   DEVICE_TOKEN: ${DEVICE_TOKEN:-}
   G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}

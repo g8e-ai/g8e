@@ -380,22 +380,9 @@ async def operator_sandbox(
         sandbox_dir=sandbox_dir,
     )
 
-    # 5. Subscribe to the heartbeat channel BEFORE launching the binary
-    #    so we catch the first heartbeat event-driven.
-    heartbeat_pattern = f"heartbeat:{operator_id}:*"
-
-    async def _on_heartbeat(pattern: str, channel: str, data: str | dict) -> None:
-        raw = data if isinstance(data, dict) else json.loads(data)
-        if not sandbox.heartbeat_received.is_set():
-            sandbox.first_heartbeat_data = raw
-            sandbox.heartbeat_received.set()
-            logger.info(
-                "[E2E] First heartbeat received for operator %s",
-                operator_id,
-            )
-
-    e2e_pubsub_client.on_pmessage(heartbeat_pattern, _on_heartbeat)
-    await e2e_pubsub_client.psubscribe(heartbeat_pattern)
+    # 5. Subscribe to the heartbeat channel AFTER launching the binary
+    #    We'll query g8ed for the session_id after the operator starts,
+    #    then subscribe to the exact heartbeat channel.
 
     # 6. Launch the operator binary
     endpoint = e2e_settings.component_urls.g8ed_url.replace("https://", "").split(":")[0]
@@ -430,6 +417,55 @@ async def operator_sandbox(
     stdout_task = asyncio.create_task(_capture_stream(process.stdout, sandbox.stdout_lines))
     stderr_task = asyncio.create_task(_capture_stream(process.stderr, sandbox.stderr_lines))
 
+    # 8. Wait for operator to start and query g8ed for session_id
+    #    Give the operator a few seconds to start and register with g8ed
+    await asyncio.sleep(3.0)
+    
+    try:
+        operator_status = await e2e_http.get_operator_status(operator_id)
+        operator_session_id = operator_status.get("operator_session_id")
+        if not operator_session_id:
+            raise RuntimeError(f"Operator {operator_id} status missing operator_session_id: {operator_status}")
+        
+        sandbox.operator_session_id = operator_session_id
+        logger.info(
+            "[E2E] Operator %s registered with session_id %s",
+            operator_id,
+            operator_session_id[:12] + "...",
+        )
+        
+        # Subscribe to the exact heartbeat channel for this session
+        heartbeat_channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
+        
+        async def _on_heartbeat(channel: str, data: str | dict) -> None:
+            raw = data if isinstance(data, dict) else json.loads(data)
+            if not sandbox.heartbeat_received.is_set():
+                sandbox.first_heartbeat_data = raw
+                sandbox.heartbeat_received.set()
+                logger.info(
+                    "[E2E] First heartbeat received for operator %s session %s",
+                    operator_id,
+                    operator_session_id[:12] + "...",
+                )
+        
+        e2e_pubsub_client.on_channel_message(heartbeat_channel, _on_heartbeat)
+        await e2e_pubsub_client.subscribe(heartbeat_channel)
+        
+        # Store the channel for cleanup
+        sandbox._heartbeat_channel = heartbeat_channel
+        sandbox._heartbeat_handler = _on_heartbeat
+        
+    except Exception as exc:
+        logger.error("[E2E] Failed to get operator session_id from g8ed: %s", exc)
+        # Clean up the process if we failed
+        if sandbox.is_running:
+            try:
+                sandbox.process.kill()
+                await sandbox.process.wait()
+            except Exception:
+                pass
+        raise RuntimeError(f"Failed to discover operator session_id: {exc}") from exc
+
     yield sandbox
 
     # --- Teardown ---
@@ -459,8 +495,13 @@ async def operator_sandbox(
     if hasattr(request.node, "rep_call") and request.node.rep_call.failed:
         logger.error(sandbox.dump_logs())
 
-    # 9. Unsubscribe heartbeat pattern
-    await e2e_pubsub_client.punsubscribe(heartbeat_pattern)
+    # 9. Unsubscribe from heartbeat channel
+    if hasattr(sandbox, "_heartbeat_channel") and sandbox._heartbeat_channel:
+        try:
+            e2e_pubsub_client.off_channel_message(sandbox._heartbeat_channel, sandbox._heartbeat_handler)
+            await e2e_pubsub_client.unsubscribe(sandbox._heartbeat_channel)
+        except Exception:
+            pass
 
     # 10. Clean up operator slots and user in g8es via internal API
     #    Uses CacheAside to maintain cache consistency

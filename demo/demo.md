@@ -8,33 +8,19 @@ The g8e platform must be running (`./g8e platform start` from the project root).
 
 ## Quick Start
 
-### Option 1: Demo Mode (Recommended - Pre-authenticated)
-
 ```bash
-# One-command setup: builds platform, initializes demo mode, starts fleet, and deploys operators
-./g8e demo start
+# Start the platform
+./g8e platform setup
 
-# Open http://localhost:3000 for the fleet status dashboard
-# Use g8e to find and fix broken nodes
-
-./g8e demo vanish                                  # Remove all operators (zero trace)
-```
-
-The `demo start` command chains:
-1. `./g8e platform setup` - builds and starts the platform
-2. `./g8e demo init` - creates a demo user and device link token
-3. `./g8e demo up` - starts the fleet
-4. `./g8e demo stream` - deploys operators to all nodes
-
-### Option 2: Manual Setup with Custom Token
-
-```bash
 # Start the fleet
 ./g8e demo up
 
 # Deploy operators (pick one method)
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token      # Method 1: API download (device link)
-./g8e demo stream DEVICE_TOKEN=dlk_your_token      # Method 2: SSH streaming (recommended)
+./g8e demo deploy -d dlk_your_token               # Method 1: API download (device link)
+./g8e demo stream -d dlk_your_token               # Method 2: SSH streaming (recommended)
+# Or use full syntax:
+./g8e demo deploy DEVICE_TOKEN=dlk_your_token
+./g8e demo stream DEVICE_TOKEN=dlk_your_token
 
 # Open http://localhost:3000 for the fleet status dashboard
 # Use g8e to find and fix broken nodes
@@ -42,14 +28,7 @@ The `demo start` command chains:
 ./g8e demo vanish                                  # Remove all operators (zero trace)
 ```
 
-### Demo Mode Details
-
-The demo mode (`./g8e demo init`) creates:
-- A demo user: `demo@g8e.local`
-- A device link token with 100 max uses and 168 hour (7 day) expiration (platform max)
-- Stores the token in `demo/.demo-token` for automatic use
-
-Once initialized, `./g8e demo stream` and `./g8e demo deploy` will automatically use the stored token without needing to pass `DEVICE_TOKEN`.
+**Note:** You must authenticate with the platform and provide a device link token (`-d dlk_...` or `DEVICE_TOKEN=dlk_...`) to deploy operators. Log in via `./g8e login --api-key <key>` or `./g8e login --device-token <token>`, then generate a device link token from the dashboard.
 
 ## The Fleet
 
@@ -126,11 +105,15 @@ Things to ask g8e once operators are deployed:
 ### Operator Deployment
 | Command | Description |
 |---------|-------------|
-| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download |
-| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
+| `./g8e demo deploy -d dlk_xxx` | Deploy operators via API download |
+| `./g8e demo stream -d dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
+| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download (full syntax) |
+| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (full syntax) |
 | `./g8e demo discover-hosts` | List discovered demo fleet hosts |
 | `./g8e demo operators` | Show operator status |
 | `./g8e demo vanish` | Remove all operators (zero trace) |
+
+**Note:** Device token is required for deploy/stream commands. Use `-d dlk_xxx` shorthand or `DEVICE_TOKEN=dlk_xxx`. Generate a device link token from the g8e dashboard after logging in.
 
 ### Inspection
 | Command | Description |

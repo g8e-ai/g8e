@@ -49,6 +49,7 @@ PYRIGHT=false
 RUFF=false
 E2E=false
 PARALLEL=""
+QUIET=false
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -65,6 +66,19 @@ while [[ $# -gt 0 ]]; do
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
+            echo "Examples (via ./g8e CLI):"
+            echo "  ./g8e test g8ee tests/unit"
+            echo "  ./g8e test g8ee --coverage"
+            echo "  ./g8e test g8ee --pyright --ruff"
+            echo "  ./g8e test g8ee --e2e"
+            echo "  ./g8e test g8ee -j auto"
+            echo "  ./g8e test g8ed test/services"
+            echo "  ./g8e test g8eo ./cmd/server"
+            echo ""
+            echo "LLM/Web Search configuration (g8ee only):"
+            echo "  ./g8e test g8ee -p anthropic -m claude-3-5-sonnet -k <api-key> tests/unit"
+            echo "  ./g8e test g8ee -p openai -m gpt-4 -a gpt-3.5-turbo -k <api-key> --coverage"
+            echo ""
             echo "LLM/Web Search options are passed as environment variables by the ./g8e CLI."
             exit 0
             ;;
@@ -72,6 +86,9 @@ while [[ $# -gt 0 ]]; do
         --pyright)  PYRIGHT=true;  shift ;;
         --ruff)     RUFF=true;     shift ;;
         --e2e)      E2E=true;      shift ;;
+        -q|--quiet)
+            QUIET=true
+            shift ;;
         -j|--parallel)
             if [[ $# -lt 2 || "$2" == -* || "$2" == "--" ]]; then
                 PARALLEL="auto"
@@ -195,7 +212,7 @@ run_g8ee() {
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("--log-cli-level=INFO")
+    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && [[ "$QUIET" == "false" ]] && cov_args+=("--log-cli-level=INFO")
     if [[ -n "$PARALLEL" ]]; then
         # -s (capture=no) is incompatible with xdist; drop it when parallelising.
         local filtered=()

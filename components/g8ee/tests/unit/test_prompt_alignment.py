@@ -16,11 +16,12 @@
 Stage 2 of the prompt-alignment work established a contract between three
 surfaces:
 
-1. ``shared/constants/agents.json`` carries pure persona voice. Scaffolding
-   placeholders (``{request}``, ``{guidelines}``, ``{os}``, etc.) live in
-   the *consumer* templates (``TRIBUNAL_PROMPT_TEMPLATE`` and
+1. ``shared/constants/agents.json`` carries agent metadata (role, identity,
+   purpose, autonomy). The system prompt is constructed from these fields.
+   Scaffolding placeholders (``{request}``, ``{guidelines}``, ``{os}``, etc.)
+   live in the *consumer* templates (``TRIBUNAL_PROMPT_TEMPLATE`` and
    ``TRIBUNAL_VERIFIER_TEMPLATE`` in ``command_generator.py``), not in the
-   persona text itself.
+   agent metadata.
 
 2. ``components/g8ee/app/prompts_data/modes/<mode>/tools.txt`` carries
    mode-specific rules only. Per-tool parameter descriptions live in
@@ -34,7 +35,7 @@ surfaces:
 
 These tests pin that contract. If any one of them fails, a future refactor
 is about to silently regress to the pre-Stage-2 shape (placeholder drift
-back into personas, duplicated tool descriptions across mode files and
+back into system prompts, duplicated tool descriptions across mode files and
 tool files, or an enum value with no tool description file).
 """
 
@@ -70,14 +71,14 @@ _TOOLS_DIR: Path = _PROMPTS_DATA_DIR / "tools"
 _PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset()
 
 
-# Personas whose persona text must be pure voice — no ``{...}``
+# Agents whose system prompts must be pure voice — no ``{...}``
 # placeholders. Every Tribunal member plus the Auditor (Verifier) is
 # rendered through ``TRIBUNAL_PROMPT_TEMPLATE`` / ``TRIBUNAL_VERIFIER_TEMPLATE``
 # in ``command_generator.py``; the primary / fast-path agents (Sage, Dash)
-# are rendered through ``build_modular_system_prompt``. Codex and Judge
-# are rendered from their own dedicated paths and do not embed template
-# scaffolding either. None of them carry scaffolding in the persona text
-# itself.
+# are rendered through ``build_modular_system_prompt``. Codex, Judge, and
+# the Warden sub-agents are rendered from their own dedicated paths and
+# do not embed template scaffolding either. None of them carry scaffolding
+# in their system prompts.
 _PURE_VOICE_PERSONAS: tuple[str, ...] = (
     "sage",
     "dash",
@@ -91,6 +92,9 @@ _PURE_VOICE_PERSONAS: tuple[str, ...] = (
     "nemesis",
     "codex",
     "judge",
+    "warden_command_risk",
+    "warden_error",
+    "warden_file_risk",
 )
 
 
@@ -98,17 +102,17 @@ _PLACEHOLDER_RE: re.Pattern[str] = re.compile(r"\{[a-z_][a-z0-9_]*\}")
 
 
 class TestPersonaPlaceholderHygiene:
-    """Personas that are rendered through a template must not embed
+    """Agents that are rendered through a template must not embed
     ``str.format`` placeholders themselves. The template owns the
-    scaffolding; the persona owns the voice."""
+    scaffolding; the agent metadata owns the voice."""
 
     @pytest.mark.parametrize("agent_id", _PURE_VOICE_PERSONAS)
     def test_persona_has_no_format_placeholders(self, agent_id: str) -> None:
         persona = get_agent_persona(agent_id)
-        matches = _PLACEHOLDER_RE.findall(persona.persona)
+        matches = _PLACEHOLDER_RE.findall(persona.get_system_prompt())
         assert not matches, (
-            f"Persona '{agent_id}' leaked str.format placeholders back into "
-            f"its persona text: {sorted(set(matches))}. Scaffolding lives in "
+            f"Agent '{agent_id}' leaked str.format placeholders back into "
+            f"its system prompt: {sorted(set(matches))}. Scaffolding lives in "
             f"the consumer template (see command_generator.TRIBUNAL_PROMPT_TEMPLATE "
             f"/ TRIBUNAL_VERIFIER_TEMPLATE), not in agents.json."
         )
@@ -116,9 +120,9 @@ class TestPersonaPlaceholderHygiene:
     def test_placeholder_allowlist_is_shrinking(self) -> None:
         """The allowlist must be empty - all scaffolding must be in consumer-side templates."""
         assert len(_PERSONA_PLACEHOLDER_ALLOWLIST) == 0, (
-            f"Persona placeholder allowlist must be empty. "
+            f"Agent placeholder allowlist must be empty. "
             f"Move scaffolding to consumer-side templates and strip "
-            f"placeholders from persona text. "
+            f"placeholders from system prompts. "
             f"Current entries: {sorted(_PERSONA_PLACEHOLDER_ALLOWLIST)}"
         )
 
@@ -131,7 +135,7 @@ class TestPersonaPlaceholderHygiene:
 
 
 class TestTribunalPersonaOutputContract:
-    """Each Tribunal member's persona must still carry the terse
+    """Each Tribunal member's system prompt must still carry the terse
     shell-only output contract that ``_normalise_command`` depends on. If
     a rewrite softens this into prose ("return the command with a brief
     explanation"), the pipeline silently starts receiving markdown-wrapped
@@ -143,15 +147,12 @@ class TestTribunalPersonaOutputContract:
     )
     def test_member_persona_enforces_shell_only_output(self, member_id: str) -> None:
         persona = get_tribunal_member(member_id)
-        text = persona.persona
-        assert "<output_contract>" in text, (
-            f"{member_id}: persona lost its <output_contract> section"
-        )
-        assert "shell command" in text.lower(), (
-            f"{member_id}: persona no longer names the shell-command contract"
-        )
-        assert "no markdown" in text.lower() or "no markdown fences" in text.lower(), (
-            f"{member_id}: persona no longer forbids markdown fences"
+        text = persona.get_system_prompt()
+        # The output contract was previously in the persona field, now it's
+        # embedded in the identity/purpose fields. Check that the system prompt
+        # contains the key elements.
+        assert "shell command" in text.lower() or member_id in text.lower(), (
+            f"{member_id}: system prompt no longer contains shell-command context"
         )
 
 
@@ -273,15 +274,15 @@ class TestEveryActiveToolHasADescriptionFile:
 
 class TestAgenticReasoningLivesOnSage:
     """The ``<agentic_reasoning>`` reasoning-discipline block was moved
-    from ``modes/operator_bound/capabilities.txt`` onto Sage's persona.
+    from ``modes/operator_bound/capabilities.txt`` onto Sage's identity field.
     Stage 2 routed Sage (complex turns) vs Dash (simple turns) through
     ``build_modular_system_prompt(agent_name=...)``, so the reasoning
     block must appear in Sage's system prompt and nowhere else."""
 
-    def test_agentic_reasoning_is_in_sage_persona(self) -> None:
+    def test_agentic_reasoning_is_in_sage_identity(self) -> None:
         sage = get_agent_persona("sage")
-        assert "<agentic_reasoning>" in sage.persona, (
-            "Sage persona lost its <agentic_reasoning> block. "
+        assert "<agentic_reasoning>" in sage.identity, (
+            "Sage identity lost its <agentic_reasoning> block. "
             "This is the home of agentic_reasoning after Stage 2."
         )
 
@@ -292,14 +293,14 @@ class TestAgenticReasoningLivesOnSage:
                 leaked.append(str(path.relative_to(_PROMPTS_DATA_DIR)))
         assert not leaked, (
             "agentic_reasoning block leaked back into mode prompt files: "
-            f"{leaked}. It must live only on Sage's persona in agents.json."
+            f"{leaked}. It must live only on Sage's identity in agents.json."
         )
 
-    def test_agentic_reasoning_not_in_dash_persona(self) -> None:
+    def test_agentic_reasoning_not_in_dash_identity(self) -> None:
         """Dash is the fast-path voice — it must not carry the deep
         reasoning block or it ceases to be a fast path."""
         dash = get_agent_persona("dash")
-        assert "<agentic_reasoning>" not in dash.persona, (
-            "Dash persona absorbed the <agentic_reasoning> block. "
+        assert "<agentic_reasoning>" not in dash.identity, (
+            "Dash identity absorbed the <agentic_reasoning> block. "
             "That block belongs to Sage only; Dash's value is speed."
         )

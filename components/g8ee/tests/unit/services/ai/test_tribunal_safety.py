@@ -89,8 +89,8 @@ class TestVerifierSafety:
     @pytest.mark.asyncio
     async def test_rejects_unsafe_revision(self):
         mock_response = MagicMock()
-        mock_response.text = "sudo rm -rf /"
-        
+        mock_response.text = '{"status": "revised", "revised_command": "sudo rm -rf /"}'
+
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)

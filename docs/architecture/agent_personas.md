@@ -316,20 +316,3 @@ The platform's stance against RLHF-induced sycophancy lives in four pieces that 
 The design goal is **loyal friction**: the agent visibly cares about the user's outcome and, because it cares, refuses to let the user hurt themselves — while still executing what the user commands within their authority, with the warning logged alongside the execution.
 
 **Note**: The `analysis/` directory (command_risk.txt, error_analysis.txt, file_risk.txt) was previously used by Response Analyzer but has been migrated to the persona system as sub-agents. These files can be removed once migration is confirmed stable.
-
-## Remaining Migration Work
-
-Stage 2 completed migration of Sage and Dash to the centralized persona
-system. Remaining code smells tracked for follow-up:
-
-1. **Warden sub-agents** (`warden_command_risk`, `warden_error`,
-   `warden_file_risk`) still embed `str.format` placeholders
-   (`{command}`, `{exit_code}`, `{stdout}`, etc.) directly in the persona
-   text. Each has a single caller today, so the blast radius is low, but
-   the doctrine that scaffolding belongs in the consumer template — not
-   the persona — applies here as well. Track via
-   `_PERSONA_PLACEHOLDER_ALLOWLIST` in
-   `tests/unit/test_prompt_alignment.py`.
-2. **Codex** and **Judge** output-schema instructions are baked into the
-   persona with the same placeholder pattern. Same recommendation: move
-   the schema scaffolding into a template on the consumer side.

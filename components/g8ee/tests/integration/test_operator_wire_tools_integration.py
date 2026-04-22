@@ -36,6 +36,7 @@ import asyncio
 import json
 import logging
 import os
+import ssl
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
@@ -123,59 +124,84 @@ async def wire_pubsub_client(test_settings) -> AsyncIterator[PubSubClient]:
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def g8ep_operator(wire_pubsub_client: PubSubClient) -> AsyncIterator[DiscoveredOperator]:
-    """Discover the running g8ep operator via a single heartbeat.
+    """Discover the running g8ep operator via g8ed internal API.
 
-    Subscribes to ``heartbeat:*:*``, waits for the first heartbeat, parses
-    ``operator_id`` and ``operator_session_id`` out of the channel name, and
-    yields the tuple. Skips the module if no heartbeat arrives within
-    ``HEARTBEAT_DISCOVERY_TIMEOUT``.
+    Queries g8ed for the g8ep operator status to get operator_id and session_id.
+    Skips the module if no g8ep operator is found.
     """
-    got = asyncio.Event()
-    holder: dict[str, str] = {}
+    import aiohttp
 
-    async def _on_hb(pattern: str, channel: str, _data: str | dict[str, object]) -> None:
-        # channel format: heartbeat:{operator_id}:{session_id}
-        if got.is_set():
-            return
-        parts = channel.split(":")
-        if len(parts) != 3:
-            return
-        _, op_id, sess_id = parts
-        if not op_id or not sess_id:
-            return
-        holder["operator_id"] = op_id
-        holder["operator_session_id"] = sess_id
-        got.set()
+    # Get g8ed base URL from settings or use default
+    g8ed_base_url = os.environ.get("G8E_G8ED_URL", "https://g8ed:443")
+    internal_auth_token = os.environ.get("G8E_INTERNAL_AUTH_TOKEN", "")
 
-    pattern = "heartbeat:*:*"
-    wire_pubsub_client.on_pmessage(pattern, _on_hb)
-    await wire_pubsub_client.psubscribe(pattern)
+    if not internal_auth_token:
+        # Try to read from token file
+        token_path = os.environ.get("G8E_INTERNAL_AUTH_TOKEN_FILE", "/g8es/internal_auth_token")
+        try:
+            with open(token_path) as f:
+                internal_auth_token = f.read().strip()
+        except Exception:
+            pass
+
+    if not internal_auth_token:
+        os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+        pytest.skip("G8E_INTERNAL_AUTH_TOKEN not set - cannot query g8ed for operator status")
+
+    headers = {
+        "X-Internal-Auth": internal_auth_token,
+        "Content-Type": "application/json",
+    }
+
+    ssl_context = wire_pubsub_client._ca_cert_path
+    ssl_ctx = ssl.create_default_context(cafile=ssl_context) if ssl_context else None
 
     try:
-        try:
-            await asyncio.wait_for(got.wait(), timeout=HEARTBEAT_DISCOVERY_TIMEOUT)
-        except asyncio.TimeoutError:
-            os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
-            pytest.skip(
-                f"No g8ep operator heartbeat within {HEARTBEAT_DISCOVERY_TIMEOUT}s — "
-                f"start the platform (./g8e platform start) and ensure the g8ep container is running."
-            )
+        async with aiohttp.ClientSession(headers=headers, connector=aiohttp.TCPConnector(ssl=ssl_ctx)) as session:
+            # List all operators to find g8ep
+            async with session.get(f"{g8ed_base_url}/api/internal/operators") as resp:
+                if resp.status != 200:
+                    os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+                    pytest.skip(f"Failed to query g8ed operators: {resp.status}")
+                data = await resp.json()
+                operators = data.get("data", [])
 
-        os.environ["G8EP_OPERATOR_AVAILABLE"] = "true"
-        discovered = DiscoveredOperator(
-            operator_id=holder["operator_id"],
-            operator_session_id=holder["operator_session_id"],
-        )
-        logger.info(
-            "[WIRE] Discovered g8ep operator: operator_id=%s session_id=%s",
-            discovered.operator_id, discovered.operator_session_id,
-        )
-        yield discovered
-    finally:
-        try:
-            await wire_pubsub_client.punsubscribe(pattern)
-        except Exception:  # noqa: BLE001 - best-effort cleanup
-            pass
+            # Find the g8ep operator (look for operator with hostname containing 'g8ep')
+            g8ep_op = None
+            for op in operators:
+                hostname = op.get("hostname", "")
+                if "g8ep" in hostname.lower():
+                    g8ep_op = op
+                    break
+
+            if not g8ep_op:
+                os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+                pytest.skip("No g8ep operator found in g8ed operator list")
+
+            operator_id = g8ep_op.get("id")
+            operator_session_id = g8ep_op.get("operator_session_id")
+
+            if not operator_id or not operator_session_id:
+                os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+                pytest.skip(f"g8ep operator missing id or session_id: {g8ep_op}")
+
+            os.environ["G8EP_OPERATOR_AVAILABLE"] = "true"
+            discovered = DiscoveredOperator(
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+            )
+            logger.info(
+                "[WIRE] Discovered g8ep operator via g8ed API: operator_id=%s session_id=%s",
+                discovered.operator_id, discovered.operator_session_id,
+            )
+            yield discovered
+
+    except asyncio.TimeoutError:
+        os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+        pytest.skip(f"Timeout querying g8ed for operator status")
+    except Exception as e:
+        os.environ["G8EP_OPERATOR_AVAILABLE"] = "false"
+        pytest.skip(f"Failed to discover g8ep operator: {e}")
 
 
 # ---------------------------------------------------------------------------

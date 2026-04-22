@@ -204,7 +204,7 @@ class TestRoleImportRegression:
     @pytest.mark.asyncio
     async def test_verifier_uses_role_user_in_content(self):
         mock_response = MagicMock()
-        mock_response.text = "ok"
+        mock_response.text = '{"status": "ok"}'
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
@@ -499,10 +499,10 @@ class TestGenerateCommandSystemError:
             nonlocal call_count
             call_count += 1
             mock_response = MagicMock()
-            if call_count == 1:
+            if call_count <= 3:  # 3 generation passes
                 mock_response.text = "ls -la"
-            else:
-                mock_response.text = "ok"
+            else:  # verifier call
+                mock_response.text = '{"status": "ok"}'
             return mock_response
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=mock_generate_content_lite)
@@ -526,7 +526,7 @@ class TestGenerateCommandSystemError:
             )
 
             mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
-            assert result.final_command == "ok"
+            assert result.final_command == "ls -la"
 
 
 class TestMixedErrorFallback:
@@ -889,7 +889,7 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_verifier_approves_returns_verified(self):
         mock_response = MagicMock()
-        mock_response.text = "ok"
+        mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
@@ -907,7 +907,7 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_verifier_revision_returns_verification_failed(self):
         mock_response = MagicMock()
-        mock_response.text = "ls -la --color=auto"
+        mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
         final_cmd, outcome, passed, revision = await _run_verification_stage(
@@ -995,6 +995,8 @@ class TestGenerateCommandHappyPath:
         The first ``passes`` calls return ``generation_text`` (concurrent
         generation stage). Subsequent calls return ``verifier_text`` (or
         repeat ``generation_text`` when ``verifier_text`` is ``None``).
+        
+        Verifier responses are automatically converted to JSON format.
         """
         call_count = 0
 
@@ -1005,7 +1007,16 @@ class TestGenerateCommandHappyPath:
             if call_count <= passes:
                 resp.text = generation_text
             else:
-                resp.text = verifier_text if verifier_text is not None else generation_text
+                if verifier_text is not None:
+                    # Convert verifier text to JSON format
+                    if verifier_text == "ok":
+                        resp.text = '{"status": "ok"}'
+                    else:
+                        # Assume it's a revised command
+                        import json
+                        resp.text = json.dumps({"status": "revised", "revised_command": verifier_text})
+                else:
+                    resp.text = generation_text
             return resp
 
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
@@ -1155,7 +1166,7 @@ class TestGenerateCommandHappyPath:
             if call_count <= 3:
                 resp.text = "df -h"
             else:
-                resp.text = "ok"
+                resp.text = '{"status": "ok"}'
             return resp
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
@@ -1408,6 +1419,8 @@ class TestGenerateCommandVerifierFailure:
 
         The first ``passes`` calls return ``generation_text`` (generation stage).
         Subsequent calls use ``verifier_side_effect`` or ``verifier_return``.
+        
+        Verifier responses are automatically converted to JSON format if they are plain text.
         """
         call_count = 0
 
@@ -1420,6 +1433,16 @@ class TestGenerateCommandVerifierFailure:
                 return resp
             if verifier_side_effect is not None:
                 raise verifier_side_effect
+            if verifier_return is not None:
+                # Convert verifier response to JSON format if it's plain text
+                if hasattr(verifier_return, 'text'):
+                    text = verifier_return.text
+                    if text == "ok":
+                        verifier_return.text = '{"status": "ok"}'
+                    elif text and text != generation_text:
+                        # Assume it's a revised command
+                        import json
+                        verifier_return.text = json.dumps({"status": "revised", "revised_command": text})
             return verifier_return
 
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
@@ -1505,7 +1528,7 @@ class TestGenerateCommandVerifierFailure:
 
             assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
             assert exc_info.value.request == "list files with details"
-            assert "non-ok answer without valid revision" in exc_info.value.error
+            assert "invalid JSON" in exc_info.value.error
 
         from app.constants import EventType
         emitted_types = [
@@ -1670,7 +1693,7 @@ class TestMaxTokensConstants:
     async def test_verifier_uses_max_tokens(self):
         from unittest.mock import patch
         mock_response = MagicMock()
-        mock_response.text = "ok"
+        mock_response.text = '{"status": "ok"}'
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)

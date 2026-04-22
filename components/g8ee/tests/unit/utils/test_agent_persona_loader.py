@@ -63,18 +63,21 @@ class TestGetAgentPersona:
         assert "nonexistent_agent" in str(exc_info.value)
         assert "not found in agents.json" in str(exc_info.value)
 
-    def test_get_system_prompt_with_full_persona(self):
-        """Test get_system_prompt returns persona when defined."""
+    def test_get_system_prompt_constructs_from_fields(self):
+        """Test get_system_prompt constructs prompt from individual fields."""
         persona = get_agent_persona("triage")
         system_prompt = persona.get_system_prompt()
-        # The new Triage persona positions itself as the gatekeeper and must
-        # emit the request_posture field for downstream dissent calibration.
-        assert "You are Triage, the gatekeeper of g8e" in system_prompt
-        assert "request_posture" in system_prompt
-        assert persona.persona in system_prompt
+        assert "<role>" in system_prompt
+        assert "<identity>" in system_prompt
+        assert "<purpose>" in system_prompt
+        assert "<autonomy>" in system_prompt
+        assert persona.role in system_prompt
+        assert persona.identity in system_prompt
+        assert persona.purpose in system_prompt
+        assert persona.autonomy in system_prompt
 
-    def test_get_system_prompt_with_todo_persona(self):
-        """Test get_system_prompt falls back to identity/purpose when persona is TODO-stubbed."""
+    def test_get_system_prompt_constructs_from_fields_stub(self):
+        """Test get_system_prompt constructs prompt from individual fields for stub."""
         stub = AgentPersona.model_validate({
             "id": "stub",
             "display_name": "Stub",
@@ -86,28 +89,33 @@ class TestGetAgentPersona:
             "identity": "I am a stub.",
             "purpose": "To be replaced.",
             "autonomy": "none",
-            "persona": "TODO: fill this in",
         })
         system_prompt = stub.get_system_prompt()
+        assert "<role>" in system_prompt
         assert "<identity>" in system_prompt
         assert "<purpose>" in system_prompt
+        assert "<autonomy>" in system_prompt
         assert stub.identity in system_prompt
         assert stub.purpose in system_prompt
 
-    def test_sage_persona_carries_reasoning_discipline(self):
-        """Sage's persona is the home of agentic_reasoning (moved out of the mode file)."""
+    def test_sage_system_prompt_constructs_from_fields(self):
+        """Sage's system prompt is constructed from individual fields."""
         sage = get_agent_persona("sage")
         prompt = sage.get_system_prompt()
-        assert "Sage" in prompt
-        assert "<agentic_reasoning>" in prompt
+        assert "<role>" in prompt
+        assert "<identity>" in prompt
+        assert "<purpose>" in prompt
+        assert "<autonomy>" in prompt
+        assert sage.identity in prompt
 
-    def test_dash_persona_is_fast_path_and_shares_sage_toolset(self):
+    def test_dash_system_prompt_is_fast_path_and_shares_sage_toolset(self):
         """Dash is the fast-path voice but keeps Sage's full tool set."""
         dash = get_agent_persona("dash")
         sage = get_agent_persona("sage")
         prompt = dash.get_system_prompt()
-        assert "Dash" in prompt
-        assert "<agentic_reasoning>" not in prompt
+        assert "<role>" in prompt
+        assert "<identity>" in prompt
+        assert dash.identity in prompt
         assert set(dash.tools) == set(sage.tools)
 
     def test_tools_is_list(self):
@@ -128,11 +136,11 @@ class TestPipelineTemplateContract:
     regression. These tests pin the contract explicitly.
     """
 
-    def test_tribunal_member_personas_are_pure_voice(self):
-        """Tribunal member personas must not carry scaffolding placeholders —
+    def test_tribunal_member_system_prompts_are_pure_voice(self):
+        """Tribunal member system prompts must not carry scaffolding placeholders —
         scaffolding lives in TRIBUNAL_PROMPT_TEMPLATE in command_generator."""
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
-            persona_text = get_tribunal_member(member_id).persona
+            prompt_text = get_tribunal_member(member_id).get_system_prompt()
             for placeholder in (
                 "{forbidden_patterns_message}",
                 "{command_constraints_message}",
@@ -144,8 +152,8 @@ class TestPipelineTemplateContract:
                 "{user_context}",
                 "{working_directory}",
             ):
-                assert placeholder not in persona_text, (
-                    f"{member_id} persona still carries scaffolding placeholder {placeholder}"
+                assert placeholder not in prompt_text, (
+                    f"{member_id} system prompt still carries scaffolding placeholder {placeholder}"
                 )
 
     def test_tribunal_prompt_template_renders_with_member_voice(self):
@@ -209,26 +217,26 @@ class TestSharpenedTribunalPersonas:
 
     def test_axiom_is_the_minimalist(self):
         axiom = get_tribunal_member("axiom")
-        assert "Minimalist" in axiom.persona
+        assert "Minimalist" in axiom.description
 
     def test_concord_is_the_guardian(self):
         concord = get_tribunal_member("concord")
-        assert "Guardian" in concord.persona
+        assert "Guardian" in concord.description
 
     def test_variance_is_the_exhaustive(self):
         variance = get_tribunal_member("variance")
-        assert "Exhaustive" in variance.persona
+        assert "Exhaustive" in variance.description
 
     def test_pragma_is_the_conventional(self):
         pragma = get_tribunal_member("pragma")
-        assert "Conventional" in pragma.persona
+        assert "Conventional" in pragma.description
 
     def test_nemesis_is_the_adversary(self):
         nemesis = get_tribunal_member("nemesis")
-        assert "Adversary" in nemesis.persona
+        assert "Adversary" in nemesis.description
         # Nemesis is the only member that should reference the adversarial
         # request_posture signal — that coupling is part of the design.
-        assert "adversarial" in nemesis.persona.lower()
+        assert "adversarial" in nemesis.identity.lower()
 
 
 class TestListAllAgents:
@@ -277,8 +285,7 @@ class TestAgentPersonaValidation:
             "tools": ["test_tool"],
             "identity": "Test identity",
             "purpose": "Test purpose",
-            "autonomy": "fully_autonomous",
-            "persona": "Test persona"
+            "autonomy": "fully_autonomous"
         }
         persona = AgentPersona.model_validate(valid_data)
         assert persona.agent_id == "test_agent"
@@ -306,8 +313,7 @@ class TestAgentPersonaValidation:
             "tools": [],
             "identity": "Test identity",
             "purpose": "Test purpose",
-            "autonomy": "You operate at the maximum level of agency this seat permits.",
-            "persona": ""
+            "autonomy": "You operate at the maximum level of agency this seat permits."
         }
         persona = AgentPersona.model_validate(data)
         assert isinstance(persona.autonomy, str) and persona.autonomy
