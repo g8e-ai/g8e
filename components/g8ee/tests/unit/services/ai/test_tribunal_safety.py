@@ -98,13 +98,26 @@ class TestVerifierSafety:
         with patch("app.services.ai.command_generator.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
             
+            from app.models.agents.tribunal import VoteBreakdown
+            vote_breakdown = VoteBreakdown(
+                candidates_by_member={},
+                candidates_by_command={"ls": ["axiom"]},
+                winner="ls",
+                winner_supporters=["axiom"],
+                dissenters_by_command={},
+                consensus_strength=1.0,
+            )
+
             with pytest.raises(TribunalVerifierFailedError) as exc_info:
                 await _run_verifier(
                     provider=mock_provider,
                     model="test-model",
                     request="delete everything",
                     guidelines="",
-                    candidate_command="ls",
+                    mode="unanimous",
+                    vote_winner="ls",
+                    vote_breakdown=vote_breakdown,
+                    tied_candidates=None,
                     operator_context=_make_mock_operator_context(),
                     emitter=emitter,
                     command_constraints_message="",

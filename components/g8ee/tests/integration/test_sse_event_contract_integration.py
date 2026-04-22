@@ -359,12 +359,74 @@ class TestSSEEventContract:
             assert event.case_id == inputs.case_id
             assert event.web_session_id == inputs.web_session_id
 
+    async def test_tribunal_consensus_failed_matches_shared_fixture(self):
+        """TRIBUNAL_CONSENSUS_FAILED event matches shared structure."""
+        from app.models.agents.tribunal import TribunalConsensusFailedPayload, VoteBreakdown
+
+        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_consensus_failed"]
+
+        # Create payload matching fixture
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
+            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            winner=expected_fixture["data"]["vote_breakdown"]["winner"],
+            winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
+            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
+            tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
+            tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
+        )
+
+        payload = TribunalConsensusFailedPayload(
+            request=expected_fixture["data"]["request"],
+            vote_breakdown=vote_breakdown,
+            reason=expected_fixture["data"]["reason"],
+        )
+
+        # Verify payload structure
+        assert payload.request == expected_fixture["data"]["request"]
+        assert payload.reason == expected_fixture["data"]["reason"]
+        assert payload.vote_breakdown.winner is None
+        assert payload.vote_breakdown.consensus_strength == 0.0
+
+    async def test_tribunal_dissent_recorded_matches_shared_fixture(self):
+        """TRIBUNAL_DISSENT_RECORDED event matches shared structure."""
+        from app.models.agents.tribunal import TribunalDissentRecordedPayload, VoteBreakdown
+
+        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_dissent_recorded"]
+
+        # Create payload matching fixture
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
+            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            winner=expected_fixture["data"]["vote_breakdown"]["winner"],
+            winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
+            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
+            tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
+            tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
+        )
+
+        payload = TribunalDissentRecordedPayload(
+            request=expected_fixture["data"]["request"],
+            losing_command=expected_fixture["data"]["losing_command"],
+            dissenting_member_ids=expected_fixture["data"]["dissenting_member_ids"],
+            winner=expected_fixture["data"]["winner"],
+            vote_breakdown=vote_breakdown,
+        )
+
+        # Verify payload structure
+        assert payload.request == expected_fixture["data"]["request"]
+        assert payload.losing_command == expected_fixture["data"]["losing_command"]
+        assert payload.dissenting_member_ids == expected_fixture["data"]["dissenting_member_ids"]
+        assert payload.winner == expected_fixture["data"]["winner"]
+
 
 async def test_shared_fixtures_contain_all_required_event_types():
     """Shared fixtures file contains all required event types."""
     required_event_types = [
         "text_chunk_received",
-        "text_completed", 
+        "text_completed",
         "chat_iteration_failed",
         "g8e_web_search_requested",
         "g8e_web_search_completed",
@@ -380,17 +442,19 @@ async def test_shared_fixtures_contain_all_required_event_types():
         "llm_lifecycle_started",
         "llm_lifecycle_completed",
         "platform_sse_connection_established",
-        "platform_sse_keepalive_sent"
+        "platform_sse_keepalive_sent",
+        "tribunal_voting_consensus_failed",
+        "tribunal_voting_dissent_recorded",
     ]
 
     for event_type in required_event_types:
         assert event_type in SHARED_SSE_EVENTS, f"Missing required event type: {event_type}"
-        
+
         # Each fixture should have the required structure
         fixture = SHARED_SSE_EVENTS[event_type]
         assert "type" in fixture, f"Event {event_type} missing 'type' field"
         assert "data" in fixture, f"Event {event_type} missing 'data' field"
-        
+
         # Data should have routing fields (except for platform events which only have web_session_id)
         data = fixture["data"]
         assert "web_session_id" in data, f"Event {event_type} missing 'web_session_id' in data"
@@ -420,6 +484,8 @@ async def test_shared_fixture_event_types_match_constants():
         "llm_lifecycle_completed": EventType.LLM_LIFECYCLE_COMPLETED,
         "platform_sse_connection_established": EventType.PLATFORM_SSE_CONNECTION_ESTABLISHED,
         "platform_sse_keepalive_sent": EventType.PLATFORM_SSE_KEEPALIVE_SENT,
+        "tribunal_voting_consensus_failed": EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+        "tribunal_voting_dissent_recorded": EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
     }
 
     for fixture_key, expected_constant in fixture_to_constant_mapping.items():

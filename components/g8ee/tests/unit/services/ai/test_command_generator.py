@@ -210,16 +210,28 @@ class TestRoleImportRegression:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
 
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+
         passed, revision = await _run_verifier(
             provider=mock_provider,
             model="test-model",
             request="list files",
             guidelines="",
-            candidate_command="ls -la",
+            mode="unanimous",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-        
         )
 
         assert passed is True
@@ -935,6 +947,130 @@ class TestRunVotingStage:
         assert vote_breakdown.winner is None
         assert tied_candidates is None
 
+    @pytest.mark.asyncio
+    async def test_five_five_unanimous_consensus(self):
+        """All five members produce the same command."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -la", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score == 5.0
+        assert vote_breakdown.consensus_strength == 1.0
+        assert len(vote_breakdown.winner_supporters) == 5
+        assert tied_candidates is None
+
+    @pytest.mark.asyncio
+    async def test_four_one_majority(self):
+        """Four members agree, one dissents."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score == 4.0
+        assert vote_breakdown.consensus_strength == 0.8
+        assert len(vote_breakdown.winner_supporters) == 4
+        assert tied_candidates is None
+
+    @pytest.mark.asyncio
+    async def test_three_two_majority(self):
+        """Three members agree, two disagree with a different command."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -l", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score == 3.0
+        assert vote_breakdown.consensus_strength == 0.6
+        assert len(vote_breakdown.winner_supporters) == 3
+        assert tied_candidates is None
+
+    @pytest.mark.asyncio
+    async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
+        """2/2/1 tie broken by shortest command rule."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner == "ls"
+        assert score == 2.0
+        assert vote_breakdown.consensus_strength == 0.4
+        assert vote_breakdown.tie_broken is True
+        assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
+        assert len(vote_breakdown.winner_supporters) == 2
+        assert tied_candidates is not None
+        assert len(tied_candidates) == 2
+
+    @pytest.mark.asyncio
+    async def test_tie_break_non_nemesis_cluster_wins(self):
+        """Tie broken by non-Nemesis cluster preference."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -l", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner == "ls -la"
+        assert score == 2.0
+        assert vote_breakdown.consensus_strength == 0.4
+        assert vote_breakdown.tie_broken is True
+        assert vote_breakdown.tie_break_reason == TieBreakReason.EXCLUDED_NEMESIS
+        assert len(vote_breakdown.winner_supporters) == 2
+
 
 class TestRunVerificationStage:
     """_run_verification_stage determines final command and outcome."""
@@ -1021,6 +1157,151 @@ class TestRunVerificationStage:
         assert passed is False
         assert revision == "ls -la --color=auto"
         assert verifier_reason == VerifierReason.REVISED
+
+    @pytest.mark.asyncio
+    async def test_verifier_swap_to_dissenter_returns_verified(self):
+        """Verifier swaps to a dissenting cluster."""
+        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={"ls -l": ["concord"]},
+            consensus_strength=0.5,
+        )
+        tied_candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
+        ]
+        mock_response = MagicMock()
+        mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        assert final_cmd == "ls -l"
+        assert outcome == CommandGenerationOutcome.VERIFIED
+        assert passed is True
+        assert revision is None
+        assert verifier_reason == VerifierReason.SWAPPED_TO_DISSENTER
+
+    @pytest.mark.asyncio
+    async def test_verifier_revise_from_dissent(self):
+        """Verifier revises from a dissenting cluster."""
+        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={"ls -l": ["concord"]},
+            consensus_strength=0.5,
+        )
+        tied_candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
+        ]
+        mock_response = MagicMock()
+        mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        assert final_cmd == "ls -la --color=auto"
+        assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
+        assert passed is False
+        assert revision == "ls -la --color=auto"
+        assert verifier_reason == VerifierReason.REVISED_FROM_DISSENT
+
+    @pytest.mark.asyncio
+    async def test_tied_mode_verifier_disambiguation(self):
+        """Verifier must disambiguate in tied mode (cannot return ok)."""
+        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={"ls -l": ["concord"]},
+            consensus_strength=0.5,
+            tie_broken=True,
+            tie_break_reason=None,
+        )
+        tied_candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
+        ]
+        mock_response = MagicMock()
+        mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
+        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        assert final_cmd == "ls -la"
+        assert outcome == CommandGenerationOutcome.VERIFIED
+        assert passed is True
+        assert revision is None
+        assert verifier_reason == VerifierReason.SWAPPED_TO_DISSENTER
+
+    @pytest.mark.asyncio
+    async def test_malformed_verifier_response_retries_once(self):
+        """Verifier returns malformed JSON, retries once, then succeeds."""
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+        call_count = 0
+
+        def _side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_response = MagicMock()
+            if call_count == 1:
+                mock_response.text = "invalid json"
+            else:
+                mock_response.text = '{"status": "ok"}'
+            return mock_response
+
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+            provider=mock_provider, model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+        )
+
+        assert call_count == 2  # Initial call + one retry
+        assert final_cmd == "ls -la"
+        assert outcome == CommandGenerationOutcome.VERIFIED
+        assert passed is True
+        assert revision is None
+        assert verifier_reason == VerifierReason.OK
 
     @pytest.mark.asyncio
     async def test_verifier_exception_raises_verifier_failed_error(self):
@@ -1830,17 +2111,29 @@ class TestMaxTokensConstants:
             )
             mock_get_config.return_value = mock_config
 
-            await _run_verifier(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            candidate_command="ls -la",
-            operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
+            from app.models.agents.tribunal import VoteBreakdown
+            vote_breakdown = VoteBreakdown(
+                candidates_by_member={},
+                candidates_by_command={"ls -la": ["axiom"]},
+                winner="ls -la",
+                winner_supporters=["axiom"],
+                dissenters_by_command={},
+                consensus_strength=1.0,
+            )
 
-        )
+            await _run_verifier(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                mode="unanimous",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                tied_candidates=None,
+                operator_context=_make_mock_operator_context(os="linux"),
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
+            )
 
             call_kwargs = mock_provider.generate_content_lite.call_args
             settings = call_kwargs.kwargs.get("lite_llm_settings")

@@ -299,6 +299,289 @@ _MAX_TOKENS_GENERATION = 256
 _MAX_TOKENS_VERIFIER = 256
 
 
+def _is_system_error(error_message: str) -> bool:
+    """Classify an error message as a system error vs. a model error.
+
+    System errors are infrastructure failures (auth, network, config) that
+    should trigger TribunalSystemError. Model errors are LLM output problems
+    that should trigger TribunalGenerationFailedError.
+    """
+    error_lower = error_message.lower()
+    system_indicators = [
+        "401", "403", "unauthorized", "forbidden",
+        "authentication", "api key",
+        "connection refused", "connectionerror", "timeout",
+        "dns", "ssl", "econnrefused",
+        "unsupported llm provider",
+    ]
+    return any(indicator in error_lower for indicator in system_indicators)
+
+
+def _normalise_command(raw: str) -> str:
+    """Normalise a command string by stripping markdown fences and common prefixes.
+
+    Returns the first line if multi-line with unbalanced quotes, or empty string
+    if the command is invalid.
+    """
+    if not raw:
+        return ""
+
+    # Strip markdown code fences
+    for fence in ["```bash", "```sh", "```"]:
+        if raw.startswith(fence):
+            raw = raw[len(fence):].strip()
+            if raw.endswith("```"):
+                raw = raw[:-3].strip()
+            break
+
+    # Strip common prefixes
+    prefixes = ["Command:", "The command is:", "Final command:"]
+    for prefix in prefixes:
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):].strip()
+
+    # Handle multi-line commands (heredocs, etc.)
+    lines = raw.split("\n")
+    if len(lines) > 1:
+        # Check if the first line has valid shell syntax
+        first_line = lines[0].strip()
+        try:
+            shlex.split(first_line)
+            return first_line
+        except ValueError:
+            # First line invalid, check if it's a valid multi-line command
+            # For heredocs, we need to preserve the full command
+            if "<<" in raw:
+                return raw.strip()
+            return ""
+
+    # Validate shell syntax
+    try:
+        shlex.split(raw)
+        return raw.strip()
+    except ValueError:
+        return ""
+
+
+def _validate_command_safety(
+    command: str,
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    operator_context: OperatorContext | None,
+) -> tuple[bool, str | None]:
+    """Validate a command against forbidden patterns, whitelist, and blacklist.
+
+    Returns (is_safe, error_message).
+    """
+    if not command:
+        return False, "Empty command"
+
+    # Check forbidden patterns (sudo, etc.)
+    for pattern in FORBIDDEN_COMMAND_PATTERNS:
+        if pattern in command:
+            return False, f"Command contains forbidden pattern: {pattern}"
+
+    # Check blacklist
+    if blacklisting_enabled:
+        is_allowed, blacklist_result = validate_command_against_blacklist(command)
+        if not is_allowed:
+            return False, f"Command blocked by blacklist: {blacklist_result.reason if blacklist_result else 'Unknown reason'}"
+
+    # Check whitelist
+    if whitelisting_enabled:
+        is_valid, whitelist_result = validate_command_against_whitelist(
+            command, operator_context
+        )
+        if not is_valid:
+            return False, f"Command not whitelisted: {whitelist_result.reason if whitelist_result else 'Unknown reason'}"
+
+    return True, None
+
+
+async def _fail_verifier(
+    emitter: TribunalEmitter,
+    request: str,
+    reason: VerifierReason,
+    error_msg: str,
+    candidate_command: str,
+) -> NoReturn:
+    """Emit a verifier failure event and raise TribunalVerifierFailedError."""
+    await emitter.emit(
+        EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
+        TribunalVerifierCompletedPayload(passed=False, reason=reason),
+    )
+    raise TribunalVerifierFailedError(
+        reason=reason,
+        request=request,
+        error=error_msg,
+        candidate_command=candidate_command,
+    )
+
+
+def _member_for_pass(pass_index: int) -> TribunalMember:
+    """Map a pass index to a Tribunal member.
+
+    Uses round-robin through the five members: axiom, concord, variance,
+    pragma, nemesis. Nemesis is always included (pass 4 or mod 5).
+    """
+    members = [
+        TribunalMember.AXIOM,
+        TribunalMember.CONCORD,
+        TribunalMember.VARIANCE,
+        TribunalMember.PRAGMA,
+        TribunalMember.NEMESIS,
+    ]
+    return members[pass_index % len(members)]
+
+
+def _resolve_model(llm_settings: LLMSettings, request: str = "") -> str:
+    """Resolve the concrete model string from settings with proper fallback.
+
+    Priority: assistant_model > primary_model. Raises TribunalModelNotConfiguredError
+    if neither is set and the provider requires one.
+    """
+    if llm_settings.assistant_model:
+        return llm_settings.assistant_model
+
+    if llm_settings.primary_model:
+        return llm_settings.primary_model
+
+    # No model configured - check provider
+    provider = llm_settings.primary_provider or llm_settings.assistant_provider
+    if provider in (LLMProvider.OPENAI, LLMProvider.ANTHROPIC, LLMProvider.GEMINI):
+        raise TribunalModelNotConfiguredError(
+            provider=provider.value if provider else "unknown",
+            error="No model configured",
+        )
+
+    raise TribunalModelNotConfiguredError(
+        provider="ollama",
+        error="No model configured",
+    )
+
+
+def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
+    """Compute uniform-weighted majority vote with deterministic tie-breaking.
+
+    Each member contributes exactly 1 vote per candidate (no position decay).
+    Tie-breaker ladder:
+      1. Longest command wins (compositional pressure)
+      2. Non-Nemesis cluster wins over Nemesis-including cluster
+      3. Alphabetical (deterministic fallback)
+
+    Returns (vote_winner, vote_score, vote_breakdown, tied_candidates).
+    """
+    if not candidates:
+        return None, 0.0, VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={},
+            winner=None,
+            winner_supporters=[],
+            dissenters_by_command={},
+            consensus_strength=0.0,
+            tie_broken=False,
+            tie_break_reason=None,
+        ), None
+
+    # Group candidates by command (uniform voting - each member = 1 vote)
+    candidates_by_command: dict[str, list[str]] = {}
+    candidates_by_member: dict[str, str] = {}
+    for c in candidates:
+        candidates_by_member[c.member.value] = c.command
+        if c.command not in candidates_by_command:
+            candidates_by_command[c.command] = []
+        candidates_by_command[c.command].append(c.member.value)
+
+    # Calculate vote counts (uniform - each member = 1 vote)
+    vote_counts = {cmd: len(members) for cmd, members in candidates_by_command.items()}
+    max_votes = max(vote_counts.values()) if vote_counts else 0
+
+    # Check consensus threshold
+    if max_votes < TRIBUNAL_MIN_CONSENSUS:
+        return None, 0.0, VoteBreakdown(
+            candidates_by_member=candidates_by_member,
+            candidates_by_command=candidates_by_command,
+            winner=None,
+            winner_supporters=[],
+            dissenters_by_command=candidates_by_command,
+            consensus_strength=max_votes / len(candidates) if candidates else 0.0,
+            tie_broken=False,
+            tie_break_reason=None,
+        ), None
+
+    # Find candidates with max votes (potential tie)
+    top_candidates = [cmd for cmd, count in vote_counts.items() if count == max_votes]
+
+    if len(top_candidates) == 1:
+        winner = top_candidates[0]
+        dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
+        return winner, float(max_votes), VoteBreakdown(
+            candidates_by_member=candidates_by_member,
+            candidates_by_command=candidates_by_command,
+            winner=winner,
+            winner_supporters=candidates_by_command[winner],
+            dissenters_by_command=dissenters,
+            consensus_strength=max_votes / len(candidates),
+            tie_broken=False,
+            tie_break_reason=None,
+        ), None
+
+    # Tie detected - apply tie-breaker ladder
+    # 1. Longest command wins
+    longest_cmd = max(top_candidates, key=len)
+    if len(set(len(c) for c in top_candidates)) > 1:
+        # Multiple lengths, pick longest
+        winner = longest_cmd
+        dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
+        tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
+        return winner, float(max_votes), VoteBreakdown(
+            candidates_by_member=candidates_by_member,
+            candidates_by_command=candidates_by_command,
+            winner=winner,
+            winner_supporters=candidates_by_command[winner],
+            dissenters_by_command=dissenters,
+            consensus_strength=max_votes / len(candidates),
+            tie_broken=True,
+            tie_break_reason=TieBreakReason.LONGEST_COMMAND,
+        ), tied_candidates
+
+    # 2. Non-Nemesis cluster wins over Nemesis-including cluster
+    nemesis_members = [TribunalMember.NEMESIS.value]
+    non_nemesis_candidates = [
+        cmd for cmd in top_candidates
+        if not any(m in nemesis_members for m in candidates_by_command[cmd])
+    ]
+    if non_nemesis_candidates and len(non_nemesis_candidates) < len(top_candidates):
+        winner = non_nemesis_candidates[0]
+        dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
+        tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
+        return winner, float(max_votes), VoteBreakdown(
+            candidates_by_member=candidates_by_member,
+            candidates_by_command=candidates_by_command,
+            winner=winner,
+            winner_supporters=candidates_by_command[winner],
+            dissenters_by_command=dissenters,
+            consensus_strength=max_votes / len(candidates),
+            tie_broken=True,
+            tie_break_reason=TieBreakReason.NON_NEMESIS_CLUSTER,
+        ), tied_candidates
+
+    # 3. Alphabetical fallback
+    winner = sorted(top_candidates)[0]
+    dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
+    tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
+    return winner, float(max_votes), VoteBreakdown(
+        candidates_by_member=candidates_by_member,
+        candidates_by_command=candidates_by_command,
+        winner=winner,
+        winner_supporters=candidates_by_command[winner],
+        dissenters_by_command=dissenters,
+        consensus_strength=max_votes / len(candidates),
+        tie_broken=True,
+        tie_break_reason=TieBreakReason.ALPHABETICAL,
+    ), tied_candidates
+
+
 class TribunalResponse(G8eBaseModel):
     """Structured response for Tribunal command generation."""
     command: str
@@ -616,6 +899,116 @@ async def _run_verifier(
         if isinstance(exc, ValueError):
             await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, str(exc), target_cmd)
         await _fail_verifier(emitter, request, VerifierReason.VERIFIER_ERROR, str(exc), target_cmd)
+
+
+async def _run_generation_pass(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    pass_index: int,
+    emitter: TribunalEmitter,
+    pass_errors: List[str],
+    command_constraints_message: str,
+) -> str | None:
+    """Run a single Tribunal generation pass.
+
+    Returns the normalised command string or None if the pass fails.
+    Appends error messages to pass_errors list on failure.
+    """
+    member = _member_for_pass(pass_index)
+    member_persona = get_tribunal_member(member)
+    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+
+    prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
+        voice=member_persona.get_system_prompt(),
+        command_constraints_message=command_constraints_message,
+        **fields,
+    )
+
+    logger.info(
+        "[TRIBUNAL-PASS] pass=%d member=%s model=%s request_len=%d",
+        pass_index, member.value, model, len(request),
+    )
+
+    model_config = get_model_config(model)
+    
+    response_format = None
+    if model_config.supports_structured_output:
+        response_format = ResponseFormat.from_pydantic_schema(
+            TribunalResponse.model_json_schema(),
+            name="TribunalResponse"
+        )
+
+    settings = LiteLLMSettings(
+        max_output_tokens=_MAX_TOKENS_GENERATION,
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
+        system_instructions="",
+        response_format=response_format,
+    )
+
+    try:
+        response = await provider.generate_content_lite(
+            model=model,
+            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
+            lite_llm_settings=settings,
+        )
+        
+        if not response.text or not response.text.strip():
+            error_msg = f"Pass {pass_index} ({member.value}): empty response"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s", error_msg)
+            return None
+
+        raw_command = response.text.strip()
+        
+        # If structured output, extract command from JSON
+        if model_config.supports_structured_output:
+            try:
+                import json
+                parsed = json.loads(raw_command)
+                if isinstance(parsed, dict) and "command" in parsed:
+                    raw_command = parsed["command"]
+            except (json.JSONDecodeError, KeyError):
+                pass  # Use raw text if JSON parsing fails
+
+        normalised = _normalise_command(raw_command)
+        
+        if not normalised:
+            error_msg = f"Pass {pass_index} ({member.value}): normalisation failed"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
+            return None
+
+        logger.info(
+            "[TRIBUNAL-PASS] pass=%d member=%s success: cmd=%r",
+            pass_index, member.value, normalised[:80],
+        )
+
+        await emitter.emit(
+            EventType.TRIBUNAL_PASS_COMPLETED,
+            TribunalPassCompletedPayload(
+                pass_index=pass_index,
+                member=member,
+                command=normalised,
+            ),
+        )
+
+        return normalised
+
+    except OllamaEmptyResponseError as exc:
+        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        pass_errors.append(error_msg)
+        logger.error("[TRIBUNAL-PASS] %s", error_msg)
+        return None
+    except Exception as exc:
+        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        pass_errors.append(error_msg)
+        logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
+        return None
 
 
 async def _run_generation_stage(

@@ -245,6 +245,59 @@ class VoteBreakdown(G8eBaseModel):
     )
 
 
+class ConsensusConfidence:
+    """Descriptor for qualitative consensus confidence levels.
+
+    Qualitative levels derived from quantitative metrics:
+    - unanimous_verified: 5/5 agreement, verifier passed
+    - unanimous_unverified: 5/5 agreement, verifier disabled
+    - strong_verified: 4/5 agreement, verifier passed
+    - strong_with_intervention: 4/5 agreement, verifier revised/swapped
+    - majority_verified: 3/5 agreement, verifier passed
+    - majority_with_intervention: 3/5 agreement, verifier revised/swapped
+    - tied_resolved: tie broken by ladder, verifier passed
+    - tied_verifier_resolved: tie broken by ladder, verifier disambiguated
+    - consensus_failed: no two members agreed
+    """
+
+    @staticmethod
+    def from_breakdown_and_result(
+        vote_breakdown: VoteBreakdown,
+        verifier_passed: bool | None,
+        verifier_reason: VerifierReason | None,
+    ) -> str:
+        """Compute qualitative confidence level from quantitative metrics."""
+        if vote_breakdown.winner is None:
+            return "consensus_failed"
+
+        strength = vote_breakdown.consensus_strength
+        total_members = len(vote_breakdown.candidates_by_member)
+
+        if strength == 1.0:
+            if verifier_passed is True:
+                return "unanimous_verified"
+            return "unanimous_unverified"
+
+        if strength >= 0.8:  # 4/5
+            if verifier_passed is True:
+                return "strong_verified"
+            if verifier_reason in (VerifierReason.REVISED, VerifierReason.REVISED_FROM_DISSENT, VerifierReason.SWAPPED_TO_DISSENTER):
+                return "strong_with_intervention"
+
+        if strength >= 0.6:  # 3/5
+            if verifier_passed is True:
+                return "majority_verified"
+            if verifier_reason in (VerifierReason.REVISED, VerifierReason.REVISED_FROM_DISSENT, VerifierReason.SWAPPED_TO_DISSENTER):
+                return "majority_with_intervention"
+
+        if vote_breakdown.tie_broken:
+            if vote_breakdown.tie_break_reason == TieBreakReason.VERIFIER_DISAMBIGUATION:
+                return "tied_verifier_resolved"
+            return "tied_resolved"
+
+        return "consensus_failed"
+
+
 class CommandGenerationResult(G8eBaseModel):
     """Result of the Tribunal command generation pipeline for a single tool call.
 
