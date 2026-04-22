@@ -23,6 +23,7 @@ from app.constants import (
     ComponentName,
     EventType,
     VerifierReason,
+    TieBreakReason,
 )
 from app.llm.llm_types import Role
 from app.models.model_configs import LLMModelConfig
@@ -949,96 +950,96 @@ class TestRunVotingStage:
 
     @pytest.mark.asyncio
     async def test_five_five_unanimous_consensus(self):
-        """All five members produce the same command."""
+        """All five members produce the same chained command."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="ls -la", pass_index=4, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="check nginx logs for errors and warnings", emitter=emitter,
         )
 
-        assert winner == "ls -la"
-        assert score == 5.0
+        assert winner == "cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log"
+        assert score == 1.0
         assert vote_breakdown.consensus_strength == 1.0
         assert len(vote_breakdown.winner_supporters) == 5
         assert tied_candidates is None
 
     @pytest.mark.asyncio
     async def test_four_one_majority(self):
-        """Four members agree, one dissents."""
+        """Four members agree on chained command, one dissents with single command."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="ls", pass_index=4, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="docker ps", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="check full docker state", emitter=emitter,
         )
 
-        assert winner == "ls -la"
-        assert score == 4.0
+        assert winner == "docker ps -a && docker images && docker volume ls && docker network ls && docker system df"
+        assert score == 0.8
         assert vote_breakdown.consensus_strength == 0.8
         assert len(vote_breakdown.winner_supporters) == 4
         assert tied_candidates is None
 
     @pytest.mark.asyncio
     async def test_three_two_majority(self):
-        """Three members agree, two disagree with a different command."""
+        """Three members agree on chained command, two disagree with different command."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -l", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="git status", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="git diff", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="check full git state", emitter=emitter,
         )
 
-        assert winner == "ls -la"
-        assert score == 3.0
+        assert winner == "git status && git diff && git log -5 && git branch -a && git remote -v"
+        assert score == 0.6
         assert vote_breakdown.consensus_strength == 0.6
         assert len(vote_breakdown.winner_supporters) == 3
         assert tied_candidates is None
 
     @pytest.mark.asyncio
     async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
-        """2/2/1 tie broken by shortest command rule."""
+        """2/2/1 tie broken by shortest command rule (maximizes signal density for approval fatigue reduction)."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="docker ps", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="docker ps", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="docker images", pass_index=4, member=TribunalMember.NEMESIS),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="check docker state", emitter=emitter,
         )
 
-        assert winner == "ls"
-        assert score == 2.0
+        assert winner == "docker ps"
+        assert score == 0.4
         assert vote_breakdown.consensus_strength == 0.4
         assert vote_breakdown.tie_broken is True
         assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
@@ -1048,24 +1049,26 @@ class TestRunVotingStage:
 
     @pytest.mark.asyncio
     async def test_tie_break_non_nemesis_cluster_wins(self):
-        """Tie broken by non-Nemesis cluster preference."""
+        """Tie broken by non-Nemesis cluster preference (equal length commands, one cluster has Nemesis)."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -l", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/error.log && grep ERROR nginx/error.log && grep WARN nginx/error.log && wc -l nginx/error.log", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cd /var/log && tail -100 nginx/error.log && grep ERROR nginx/error.log && grep WARN nginx/error.log && wc -l nginx/error.log", pass_index=3, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="ls", pass_index=4, member=TribunalMember.PRAGMA),
         ]
         emitter = TribunalEmitter(None, None)
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="check nginx logs", emitter=emitter,
         )
 
-        assert winner == "ls -la"
-        assert score == 2.0
+        # Both top commands are equal length (same pattern), Nemesis is in the second cluster
+        # Non-nemesis cluster should win
+        assert winner == "cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log"
+        assert score == 0.4
         assert vote_breakdown.consensus_strength == 0.4
         assert vote_breakdown.tie_broken is True
         assert vote_breakdown.tie_break_reason == TieBreakReason.EXCLUDED_NEMESIS
@@ -2286,6 +2289,8 @@ class TestPromptFields:
         auditor = get_agent_persona("auditor")
         rendered = TRIBUNAL_VERIFIER_TEMPLATE.format(
             voice=auditor.get_system_prompt(),
+            command_constraints_message=command_constraints_message,
+            verifier_context="Verifier context placeholder",
             candidate_command="ls -la",
             **common,
             **fields,

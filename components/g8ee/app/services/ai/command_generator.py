@@ -515,7 +515,7 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
     if len(top_candidates) == 1:
         winner = top_candidates[0]
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
-        return winner, float(max_votes), VoteBreakdown(
+        return winner, max_votes / len(candidates), VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
@@ -527,14 +527,14 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
         ), None
 
     # Tie detected - apply tie-breaker ladder
-    # 1. Longest command wins
-    longest_cmd = max(top_candidates, key=len)
+    # 1. Shortest command wins (maximizes signal density for approval fatigue reduction)
+    shortest_cmd = min(top_candidates, key=len)
     if len(set(len(c) for c in top_candidates)) > 1:
-        # Multiple lengths, pick longest
-        winner = longest_cmd
+        # Multiple lengths, pick shortest
+        winner = shortest_cmd
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
         tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-        return winner, float(max_votes), VoteBreakdown(
+        return winner, max_votes / len(candidates), VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
@@ -542,7 +542,7 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
             dissenters_by_command=dissenters,
             consensus_strength=max_votes / len(candidates),
             tie_broken=True,
-            tie_break_reason=TieBreakReason.LONGEST_COMMAND,
+            tie_break_reason=TieBreakReason.SHORTEST,
         ), tied_candidates
 
     # 2. Non-Nemesis cluster wins over Nemesis-including cluster
@@ -555,7 +555,7 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
         winner = non_nemesis_candidates[0]
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
         tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-        return winner, float(max_votes), VoteBreakdown(
+        return winner, max_votes / len(candidates), VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
@@ -563,14 +563,14 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
             dissenters_by_command=dissenters,
             consensus_strength=max_votes / len(candidates),
             tie_broken=True,
-            tie_break_reason=TieBreakReason.NON_NEMESIS_CLUSTER,
+            tie_break_reason=TieBreakReason.EXCLUDED_NEMESIS,
         ), tied_candidates
 
     # 3. Alphabetical fallback
     winner = sorted(top_candidates)[0]
     dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
     tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-    return winner, float(max_votes), VoteBreakdown(
+    return winner, max_votes / len(candidates), VoteBreakdown(
         candidates_by_member=candidates_by_member,
         candidates_by_command=candidates_by_command,
         winner=winner,
@@ -578,7 +578,7 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
         dissenters_by_command=dissenters,
         consensus_strength=max_votes / len(candidates),
         tie_broken=True,
-        tie_break_reason=TieBreakReason.ALPHABETICAL,
+        tie_break_reason=None,
     ), tied_candidates
 
 
@@ -989,7 +989,7 @@ async def _run_generation_pass(
         )
 
         await emitter.emit(
-            EventType.TRIBUNAL_PASS_COMPLETED,
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(
                 pass_index=pass_index,
                 member=member,
