@@ -396,21 +396,23 @@ class GeminiProvider(LLMProvider):
                 thinking_translation.thinking_level if thinking_translation and thinking_translation.enabled else None
             )
             logged_include_thoughts = bool(thinking_translation and thinking_translation.include_thoughts)
-            logger.debug(
-                "[GEMINI] Building config: model=%s max_output_tokens=%d "
-                "top_p=%s top_k=%s system_instructions_len=%d tools_count=%d "
-                "thinking_level=%s include_thoughts=%s tool_calling_mode=%s allowed_tools=%d",
-                model,
-                settings.max_output_tokens,
-                settings.top_p_nucleus_sampling if settings.top_p_nucleus_sampling is not None else "None",
-                settings.top_k_filtering if settings.top_k_filtering is not None else "None",
-                len(settings.system_instructions),
-                len(genai_tools) if genai_tools else 0,
-                logged_thinking_level,
-                logged_include_thoughts,
-                fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None,
-                len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0,
-            )
+            log_parts = [
+                f"[GEMINI] Building config: model={model}",
+                f"max_output_tokens={settings.max_output_tokens}",
+            ]
+            if settings.top_p_nucleus_sampling is not None:
+                log_parts.append(f"top_p={settings.top_p_nucleus_sampling}")
+            if settings.top_k_filtering is not None:
+                log_parts.append(f"top_k={settings.top_k_filtering}")
+            log_parts.extend([
+                f"system_instructions_len={len(settings.system_instructions)}",
+                f"tools_count={len(genai_tools) if genai_tools else 0}",
+                f"thinking_level={logged_thinking_level}",
+                f"include_thoughts={logged_include_thoughts}",
+                f"tool_calling_mode={fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None}",
+                f"allowed_tools={len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0}",
+            ])
+            logger.debug(" ".join(log_parts))
             
             config_kwargs = {
                 "max_output_tokens": settings.max_output_tokens,
@@ -426,15 +428,16 @@ class GeminiProvider(LLMProvider):
             
             return genai_types.GenerateContentConfig(**config_kwargs)
         else:
-            logger.info(
-                "[GEMINI] Building config: model=%s max_output_tokens=%d "
-                "top_p=%s top_k=%s response_format=%s",
-                model,
-                settings.max_output_tokens,
-                settings.top_p_nucleus_sampling if settings.top_p_nucleus_sampling is not None else "None",
-                settings.top_k_filtering if settings.top_k_filtering is not None else "None",
-                settings.response_format is not None,
-            )
+            log_parts = [
+                f"[GEMINI] Building config: model={model}",
+                f"max_output_tokens={settings.max_output_tokens}",
+            ]
+            if settings.top_p_nucleus_sampling is not None:
+                log_parts.append(f"top_p={settings.top_p_nucleus_sampling}")
+            if settings.top_k_filtering is not None:
+                log_parts.append(f"top_k={settings.top_k_filtering}")
+            log_parts.append(f"response_format={settings.response_format is not None}")
+            logger.info(" ".join(log_parts))
             
             config_kwargs = {
                 "max_output_tokens": settings.max_output_tokens,
