@@ -46,7 +46,7 @@ The `demo start` command chains:
 
 The demo mode (`./g8e demo init`) creates:
 - A demo user: `demo@g8e.local`
-- A device link token with 100 max uses and 720 hour (30 day) expiration
+- A device link token with 100 max uses and 168 hour (7 day) expiration (platform max)
 - Stores the token in `demo/.demo-token` for automatic use
 
 Once initialized, `./g8e demo stream` and `./g8e demo deploy` will automatically use the stored token without needing to pass `DEVICE_TOKEN`.

@@ -152,7 +152,7 @@
     "axiom": {
       "id": "axiom",
       "display_name": "Axiom",
-      "icon": "minimize-2",
+      "icon": "minimize",
       "description": "The Minimalist. Pass 0 of the Tribunal. Produces the smallest command that satisfies intent. Rejects unnecessary flags, extra pipes, defensive wrappers. Do less.",
       "role": "tribunal_member",
       "model_tier": "assistant",
@@ -204,7 +204,7 @@
     "nemesis": {
       "id": "nemesis",
       "display_name": "Nemesis",
-      "icon": "alert-triangle",
+      "icon": "warning",
       "description": "The Adversary. Pass 4 of the Tribunal. Produces the command as if an attacker had written it and the user had not noticed. Do it wrong, carefully.",
       "role": "tribunal_member",
       "model_tier": "assistant",

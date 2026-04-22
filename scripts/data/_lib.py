@@ -177,6 +177,13 @@ def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     }
+    # g8ed internal endpoints accept either an operator session OR the
+    # platform internal auth token. Running inside g8ep (trusted container)
+    # we forward the mounted internal token so bootstrap flows like
+    # `g8e demo init` work before any user is authenticated.
+    internal_token = get_internal_auth_token()
+    if internal_token:
+        headers['X-Internal-Auth'] = internal_token
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
     try:
@@ -203,13 +210,15 @@ def resolve_user_id(user_id: Optional[str], email: Optional[str]) -> Optional[st
     if not email:
         return None
     result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
-    if not result.get('success'):
+    # g8ed returns {user: {...}} on success and {error/...} on failure.
+    user = result.get('user') if isinstance(result, dict) else None
+    if not user:
         if result.get('_status_code') == 404:
             print(f"\nUser not found with email: {email}")
         else:
             raise RuntimeError(result.get('error', 'Failed to resolve user by email'))
         return None
-    return result['data']['id']
+    return user['id']
 
 
 # =============================================================================

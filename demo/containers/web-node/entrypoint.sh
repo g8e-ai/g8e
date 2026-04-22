@@ -119,6 +119,57 @@ EOF
 (while true; do sleep 30; echo "[$NODE_ID] watchdog: all services healthy" >> /var/log/app/watchdog.log; done) &
 (while true; do sleep 45; echo "[$NODE_ID] data-sync: $(date -u +%Y-%m-%dT%H:%M:%SZ) synced 0 records" >> /var/log/app/data-sync.log; done) &
 
+# Supervise the g8e operator in-container (mirrors g8ep):
+# - downloads the operator binary from the platform using DEVICE_TOKEN
+# - execs it with stdout/stderr prefixed to container stdout so it shows in `docker logs`
+# - auto-restarts on exit so crashes don't leave the node unmanaged
+#
+# This replaces the legacy SSH-stream deployment model for the demo. If
+# DEVICE_TOKEN is unset the operator is simply not started — the fleet
+# still boots healthy, the operator can be added later via `g8e demo stream`.
+_operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
+_operator_binary="/opt/g8e.operator"
+_operator_log_prefix="[$NODE_ID operator]"
+
+_run_operator() {
+    if [ -z "${DEVICE_TOKEN:-}" ]; then
+        echo "$_operator_log_prefix DEVICE_TOKEN not set; skipping in-container operator"
+        return 0
+    fi
+
+    # Download binary (retry on transient platform readiness failures).
+    local attempt=0
+    while [ ! -x "$_operator_binary" ]; do
+        attempt=$((attempt + 1))
+        echo "$_operator_log_prefix downloading binary from $_operator_endpoint (attempt $attempt)..."
+        if curl -fsSLk -H "Authorization: Bearer $DEVICE_TOKEN" \
+                -o "$_operator_binary" \
+                "https://$_operator_endpoint/operator/download/linux/amd64" 2>/dev/null; then
+            chmod +x "$_operator_binary"
+            echo "$_operator_log_prefix binary ready ($(stat -c%s "$_operator_binary" 2>/dev/null || wc -c < "$_operator_binary") bytes)"
+        else
+            echo "$_operator_log_prefix download failed; retrying in 5s"
+            rm -f "$_operator_binary"
+            sleep 5
+        fi
+    done
+
+    # Supervised restart loop.
+    while true; do
+        echo "$_operator_log_prefix starting: $_operator_binary -e $_operator_endpoint -D *** --no-git"
+        "$_operator_binary" \
+            -e "$_operator_endpoint" \
+            -D "$DEVICE_TOKEN" \
+            --no-git 2>&1 \
+            | sed -u "s/^/$_operator_log_prefix /"
+        rc=${PIPESTATUS[0]}
+        echo "$_operator_log_prefix exited rc=$rc; restarting in 5s"
+        sleep 5
+    done
+}
+
+_run_operator &
+
 # Start Flask app backend
 cd /opt/app
 gunicorn --bind 0.0.0.0:5000 --workers 2 --access-logfile /var/log/app/gunicorn-access.log --error-logfile /var/log/app/gunicorn-error.log app:app &

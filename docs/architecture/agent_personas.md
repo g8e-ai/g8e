@@ -62,11 +62,11 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
 **Tribunal Members**:
-- **Axiom** (icon: `minimize-2`) — The Minimalist. Pass 0. Proposes the smallest command that satisfies intent.
+- **Axiom** (icon: `minimize`) — The Minimalist. Pass 0. Proposes the smallest command that satisfies intent.
 - **Concord** (icon: `shield`) — The Guardian. Pass 1. Proposes the safest command that satisfies intent.
 - **Variance** (icon: `layers`) — The Exhaustive. Pass 2. Proposes a command that handles edge cases.
 - **Pragma** (icon: `code`) — The Conventional. Pass 3. Proposes the command the target system's community would produce.
-- **Nemesis** (icon: `alert-triangle`) — The Adversary. Pass 4. Proposes a plausible-but-subtly-wrong command to test for attack surfaces.
+- **Nemesis** (icon: `warning`) — The Adversary. Pass 4. Proposes a plausible-but-subtly-wrong command to test for attack surfaces.
 
 ### 5. Auditor (Verifier)
 - **Icon**: `gavel`

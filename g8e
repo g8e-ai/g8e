@@ -877,7 +877,7 @@ case "$TOP" in
                 fi
                 echo ""
                 echo "Creating device link token for demo user..."
-                TOKEN_OUTPUT=$(docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py device-links create --user-id "$USER_ID" --name "demo-fleet" --max-uses 100 --expires-in-hours 720 2>&1)
+                TOKEN_OUTPUT=$(docker exec -i g8ep python3 /app/scripts/data/manage-g8es.py device-links create --user-id "$USER_ID" --name "demo-fleet" --max-uses 100 --expires-in-hours 168 2>&1)
                 DEVICE_TOKEN=$(echo "$TOKEN_OUTPUT" | grep 'Token:' | awk '{print $2}')
                 if [[ -z "$DEVICE_TOKEN" ]]; then
                     echo "[g8e] Failed to create device link token" >&2
@@ -899,11 +899,15 @@ case "$TOP" in
                 echo "Initializing demo mode..."
                 "$SCRIPT_DIR/g8e" demo init
                 echo ""
-                echo "Starting demo fleet..."
+                echo "Starting demo fleet (operators auto-attach in-container)..."
+                # `demo up` reads .demo-token and passes DEVICE_TOKEN to compose;
+                # each node then downloads and supervises its own operator with
+                # logs visible via `docker logs web-node-<NN>`. No separate
+                # stream step needed.
                 make -C "$DEMO_DIR" up
                 echo ""
-                echo "Streaming operators to fleet..."
-                make -C "$DEMO_DIR" stream
+                echo "Demo ready. Tail operator logs with:"
+                echo "  docker logs -f web-node-01    (or any node 01-10)"
                 exit 0 ;;
             up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
