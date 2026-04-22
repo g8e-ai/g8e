@@ -12,11 +12,10 @@
 # limitations under the License.
 
 """
-Reliable AI Agent Tool Loop Evaluation Test Suite.
+Integration test for tool execution security validation.
 
-Tests the actual agent_tool_loop.py code with REAL services from ServiceFactory.
-These tests exercise real AIToolService validation logic with real services,
-but do not call any LLM (deterministic validation paths only).
+Tests the real security validation in AIToolService.execute_tool_call.
+This is a deterministic integration test with no LLM calls.
 """
 
 import pytest
@@ -38,86 +37,6 @@ from tests.integration.conftest import auto_approve_pending
 logger = logging.getLogger(__name__)
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
-
-
-@pytest.mark.asyncio
-async def test_orchestrate_tool_execution_with_real_operator(
-    cache_aside_service,
-    unique_investigation_id,
-    unique_case_id,
-    unique_web_session_id,
-    all_services,
-    tool_service,
-    unified_metrics_collector,
-    real_operator,
-):
-    """
-    Test operator tool execution with a REAL operator process.
-
-    This tests the actual operator execution path with a real g8e operator
-    running in g8ep, following the demo pattern (device link token auth).
-    """
-    start_time = datetime.now(timezone.utc)
-
-    # Use the real operator from the fixture
-    from tests.fakes.factories import build_bound_operator
-
-    bound_op = build_bound_operator(
-        operator_id=real_operator.operator_id,
-        operator_session_id=real_operator.operator_session_id,
-        status=OperatorStatus.BOUND,
-    )
-
-    investigation = build_enriched_investigation(
-        investigation_id=unique_investigation_id,
-        case_id=unique_case_id,
-        operator_documents=[],  # Real operator will register itself
-    )
-
-    g8e_context = build_g8e_http_context(
-        web_session_id=unique_web_session_id,
-        user_id="user-test-001",
-        bound_operators=[bound_op],
-    )
-
-    user_settings = G8eeUserSettings(llm=LLMSettings())
-
-    tool_call = ToolCall(
-        name="run_commands_with_operator",
-        args={"command": "echo 'Hello from real operator'", "justification": "Test command"},
-        id="tool-call-001",
-    )
-
-    # Call tool_service.execute_tool_call with real operator
-    result = await tool_service.execute_tool_call(
-        tool_name=tool_call.name,
-        tool_args=tool_call.args,
-        investigation=investigation,
-        g8e_context=g8e_context,
-        request_settings=user_settings,
-        execution_id=tool_call.id,
-    )
-
-    # Approve any pending approvals from the real operator
-    approval_service = all_services['approval_service']
-    await auto_approve_pending(approval_service)
-
-    passed = result.success is True
-    execution_time_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-
-    unified_metrics_collector.add_row(EvalRow(
-        dimension="accuracy",
-        suite="agent_tool_loop",
-        scenario_id="real_operator_execution",
-        category="operator_execution",
-        passed=passed,
-        score=None,
-        latency_ms=execution_time_ms,
-        error=result.error if not passed else None,
-        details={"error_type": result.error_type if not passed else None},
-    ))
-
-    assert result.success is True, f"Real operator execution failed: {result.error}"
 
 
 @pytest.mark.asyncio

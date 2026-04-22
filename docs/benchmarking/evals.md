@@ -1,6 +1,6 @@
 # g8e Evals — Real-Operator Evaluation Framework
 
-> **Status:** design. This document supersedes the current `components/g8ee/tests/evals/real_operator_fixture.py` and related pytest plumbing for real-operator evals.
+> **Status:** implemented (2026-04-22). All 7 steps of the implementation plan are complete. The new evals framework at `components/g8ee/evals/` is ready for use with `./g8e evals run --device-token <token> --gold-set gold_sets/benchmark.json`. The old `components/g8ee/tests/evals/real_operator_fixture.py` has been removed.
 
 ## 1. Why we are rewriting this
 

@@ -797,7 +797,7 @@ class AIToolService:
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
-        execution_id: str,
+        execution_id: str | None = None,
     ) -> ToolResult:
         """Validate, dispatch, and execute a single AI tool call by name.
 
@@ -838,6 +838,9 @@ class AIToolService:
                     error=error_msg,
                     error_type=CommandErrorType.NO_OPERATORS_AVAILABLE
                 )
+
+        if tool_name == OperatorToolName.G8E_SEARCH_WEB and self.web_search_provider is None:
+            raise ExternalServiceError("g8e_web_search called but WebSearchProvider is not configured")
 
         logger.info("[TOOL_CALL] Starting execution: %s", tool_name)
         logger.info("[TOOL_CALL] Args: %s", tool_args)

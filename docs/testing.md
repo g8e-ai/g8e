@@ -192,3 +192,58 @@ Our GitHub workflows enforce these constraints on every commit to `main`:
 - Matrix execution of `g8ee`, `g8ed`, and `g8eo` tests against running infrastructure.
 - Real AI integration tests using live API keys.
 - Contract enforcement and pyright strict type checking.
+
+---
+
+## Test Harness Architecture: E2E vs Evals
+
+The platform maintains two distinct "real operator" test harnesses with **strictly separated authentication and lifecycle patterns**. This separation is architectural and must be enforced in code review.
+
+### E2E Tests — Internal Lifecycle Path
+
+**Location:** `components/g8ee/tests/e2e/conftest.py`
+
+**Purpose:** Validate the internal operator lifecycle and platform infrastructure.
+
+**Pattern:**
+- Provisions operator slots via g8ed internal API (`/api/internal/operators/...`)
+- Reads API keys directly from g8es document store
+- Uses `X-Internal-Auth` header for all internal API calls
+- Subscribes to real PubSub heartbeat channels
+- Launches real operator binary in isolated sandbox
+
+**Correct because:** E2E tests validate the internal platform infrastructure. They are allowed to use internal auth tokens and direct g8es document access because they are testing the platform's own internal mechanisms.
+
+### Evals — Public Device-Token Path
+
+**Location:** `components/g8ee/evals/` (host-driven runner, see `docs/benchmarking/evals.md`)
+
+**Purpose:** Evaluate AI agent behavior against the product surface that real users experience.
+
+**Pattern:**
+- Uses device-link tokens generated from the dashboard (same as end users)
+- Hits public g8ed HTTPS API endpoints (chat, approvals, SSE)
+- No `X-Internal-Auth` header usage
+- No direct g8es document writes
+- Operator containers authenticate via device token, not internal slot provisioning
+
+**Correct because:** Evals exercise the product as users experience it. They must not bypass the public authentication surface or use internal shortcuts, as that would invalidate the evaluation of real-world behavior.
+
+### Code Review Guidelines
+
+**For E2E test PRs:**
+- Internal auth and direct g8es access are expected and correct
+- Review focus: infrastructure validation, lifecycle correctness, PubSub event handling
+
+**For evals PRs:**
+- **REJECT** any changes that introduce `X-Internal-Auth` usage
+- **REJECT** any changes that perform direct g8es document writes
+- **REJECT** any changes that use internal API endpoints (`/api/internal/...`)
+- **REJECT** any changes that bypass device-token authentication
+- Review focus: public API correctness, device-token flow, realistic user scenarios
+
+**Rationale:** The separation ensures that:
+1. E2E tests validate internal infrastructure without constraints
+2. Evals validate the product surface exactly as users experience it
+3. Performance or security regressions in the public path are caught by evals
+4. Internal implementation changes don't accidentally invalidate eval results

@@ -1044,6 +1044,85 @@ case "$TOP" in
                 exit 1 ;;
         esac ;;
 
+    # ------------------------------------------------------------------
+    # evals — manages eval fleet for real-operator evaluation scenarios
+    # ------------------------------------------------------------------
+    evals)
+        EVALS_DIR="$SCRIPT_DIR/components/g8ee/evals"
+        EVALS_COMPOSE="$EVALS_DIR/docker-compose.evals.yml"
+        if [[ ! -f "$EVALS_COMPOSE" ]]; then
+            echo "[g8e] evals compose file not found: $EVALS_COMPOSE" >&2
+            exit 1
+        fi
+        case "$SUB" in
+            -h|--help|"")
+                echo "g8e evals - Real-operator evaluation fleet"
+                echo ""
+                echo "Usage:"
+                echo "  ./g8e evals up --device-token <token> [--nodes N]"
+                echo "  ./g8e evals down"
+                echo "  ./g8e evals status"
+                echo "  ./g8e evals logs <node-name>"
+                echo ""
+                echo "Commands:"
+                echo "  up     - Bring up the eval fleet with N nodes (default: 3)"
+                echo "  down   - Tear down the eval fleet"
+                echo "  status - Show status of eval nodes"
+                echo "  logs   - Show logs for a specific node"
+                echo ""
+                echo "Prerequisites:"
+                echo "  - Platform must be running: ./g8e platform start"
+                echo "  - Device link token from dashboard: ./g8e login --device-token <token>"
+                echo ""
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
+            up)
+                _banner "evals up"
+                _nodes=3
+                _device_token=""
+                _args=("${@:3}")
+                while [[ $# -gt 2 ]]; do
+                    case "${3:-}" in
+                        --nodes) _nodes="${4:-3}"; shift 2 ;;
+                        --device-token) _device_token="${4:-}"; shift 2 ;;
+                        *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
+                    esac
+                done
+                if [[ -z "$_device_token" ]]; then
+                    echo "[g8e] evals up requires --device-token" >&2
+                    echo "  Generate a device link token from the dashboard" >&2
+                    exit 1
+                fi
+                echo "  Bringing up $_nodes eval nodes..."
+                DEVICE_TOKEN="$_device_token" docker compose -f "$EVALS_COMPOSE" up -d --scale eval-node-01=1 --scale eval-node-02=1 --scale eval-node-03=1
+                echo ""
+                echo "  Eval fleet is up. Check status with: ./g8e evals status"
+                exit 0 ;;
+            down)
+                _banner "evals down"
+                docker compose -f "$EVALS_COMPOSE" down
+                echo ""
+                echo "  Eval fleet is down."
+                exit 0 ;;
+            status)
+                _banner "evals status"
+                docker compose -f "$EVALS_COMPOSE" ps
+                exit 0 ;;
+            logs)
+                _banner "evals logs ${3:-}"
+                if [[ -z "${3:-}" ]]; then
+                    echo "[g8e] evals logs requires a node name" >&2
+                    echo "  Usage: ./g8e evals logs <node-name>" >&2
+                    exit 1
+                fi
+                docker logs -f "${3}"
+                exit 0 ;;
+            *)
+                echo "[g8e] unknown evals subcommand: '$SUB'" >&2
+                echo "  Valid: up, down, status, logs" >&2
+                exit 1 ;;
+        esac ;;
+
     *)
         echo "[g8e] unknown command: '$TOP'" >&2
         echo "  Run: ./g8e --help" >&2

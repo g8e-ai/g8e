@@ -182,6 +182,7 @@ class TestSearchWebRouting:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert len(provider._search_calls) == 1
@@ -196,6 +197,7 @@ class TestSearchWebRouting:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert isinstance(result, SearchWebResult)
@@ -211,6 +213,7 @@ class TestSearchWebRouting:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert result.query == "docker container logs"
@@ -224,6 +227,7 @@ class TestSearchWebRouting:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert result.success is True
@@ -255,6 +259,7 @@ class TestSearchWebResponseShape:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert len(result.results) == 2
@@ -271,6 +276,7 @@ class TestSearchWebResponseShape:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert isinstance(result.results[0], WebSearchResultItem)
@@ -293,6 +299,7 @@ class TestSearchWebResponseShape:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         item = result.results[0]
@@ -324,6 +331,7 @@ class TestSearchWebFailureHandling:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert isinstance(result, SearchWebResult)
@@ -342,6 +350,7 @@ class TestSearchWebFailureHandling:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert isinstance(result, SearchWebResult)
@@ -431,7 +440,7 @@ class TestSearchWebGrounding:
 class TestSearchWebSSEEvents:
     """TOOL_CALL and TOOL_RESULT for G8E_SEARCH_WEB produce correct SSE events."""
 
-    async def test_search_web_tool_call_fires_search_requested(self):
+    async def test_search_web_tool_call_fires_tool_call_started(self):
         chunks = [
             StreamChunkFromModel(
                 type=StreamChunkFromModelType.TOOL_CALL,
@@ -448,10 +457,11 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        search_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
-        assert len(search_events) == 1
+        tool_call_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
+        assert len(tool_call_events) == 1
+        assert tool_call_events[0].payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
 
-    async def test_search_web_requested_event_carriesexecution_id(self):
+    async def test_search_web_tool_call_started_carries_execution_id(self):
         chunks = [
             StreamChunkFromModel(
                 type=StreamChunkFromModelType.TOOL_CALL,
@@ -468,10 +478,10 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        search_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
-        assert search_event.payload.execution_id == "exe_sw_002"
+        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED)
+        assert tool_call_event.payload.execution_id == "exe_sw_002"
 
-    async def test_search_web_requested_event_carries_query(self):
+    async def test_search_web_tool_call_started_carries_display_detail(self):
         chunks = [
             StreamChunkFromModel(
                 type=StreamChunkFromModelType.TOOL_CALL,
@@ -488,8 +498,8 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        search_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
-        assert search_event.payload.query == "nginx upstream timeout"
+        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED)
+        assert tool_call_event.payload.display_detail == "nginx upstream timeout"
 
     async def test_citations_chunk_fires_citations_ready_event(self):
         from app.constants.settings import GroundingSource
@@ -543,8 +553,8 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        search_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
-        assert len(search_events) == 2
+        tool_call_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
+        assert len(tool_call_events) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -568,6 +578,7 @@ class TestSearchWebObservability:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert len(provider._search_calls) == 1
@@ -584,6 +595,7 @@ class TestSearchWebObservability:
                 _investigation(),
                 _g8e_context(),
                 G8eeUserSettings(llm=LLMSettings()),
+                execution_id="test-execution-id",
             )
 
         assert len(provider._search_calls) == 3
@@ -599,6 +611,7 @@ class TestSearchWebObservability:
             _investigation(),
             _g8e_context(),
             G8eeUserSettings(llm=LLMSettings()),
+            execution_id="test-execution-id",
         )
 
         assert provider._search_calls[0]["num"] == 10
