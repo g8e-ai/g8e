@@ -175,6 +175,20 @@ class CommandGenerationOutcome(str, Enum):
     CONSENSUS           = _AGENTS["tribunal.outcome"]["consensus"]
     VERIFIED            = _AGENTS["tribunal.outcome"]["verified"]
     VERIFICATION_FAILED = _AGENTS["tribunal.outcome"]["verification_failed"]
+    CONSENSUS_FAILED    = _AGENTS["tribunal.outcome"]["consensus_failed"]
+
+
+class TieBreakReason(str, Enum):
+    """How a tie at the top of the uniform vote was resolved.
+
+    Populated on VoteBreakdown only when more than one command cluster
+    held the highest vote count and one of the deterministic tie-break
+    rules resolved it.
+    """
+    __str__ = lambda self: self.value
+    SHORTEST                = _AGENTS["tribunal.tie_break_reason"]["shortest"]
+    EXCLUDED_NEMESIS        = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
+    VERIFIER_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["verifier_disambiguation"]
 
 
 class ToolDisplayCategory(str, Enum):

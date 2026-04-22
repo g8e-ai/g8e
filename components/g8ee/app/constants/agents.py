@@ -93,8 +93,10 @@ class VerifierReason(str, Enum):
     the shared constants in shared/constants/agents.json.
     """
     __str__ = lambda self: self.value
-    OK                = _AGENTS["tribunal.verifier_reason"]["ok"]
-    REVISED           = _AGENTS["tribunal.verifier_reason"]["revised"]
-    EMPTY_RESPONSE    = _AGENTS["tribunal.verifier_reason"]["empty_response"]
-    NO_VALID_REVISION = _AGENTS["tribunal.verifier_reason"]["no_valid_revision"]
-    VERIFIER_ERROR    = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
+    OK                   = _AGENTS["tribunal.verifier_reason"]["ok"]
+    REVISED              = _AGENTS["tribunal.verifier_reason"]["revised"]
+    EMPTY_RESPONSE       = _AGENTS["tribunal.verifier_reason"]["empty_response"]
+    NO_VALID_REVISION    = _AGENTS["tribunal.verifier_reason"]["no_valid_revision"]
+    VERIFIER_ERROR       = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
+    SWAPPED_TO_DISSENTER = _AGENTS["tribunal.verifier_reason"]["swapped_to_dissenter"]
+    REVISED_FROM_DISSENT = _AGENTS["tribunal.verifier_reason"]["revised_from_dissent"]

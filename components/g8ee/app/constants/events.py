@@ -281,6 +281,8 @@ class EventType(str, Enum):
     TRIBUNAL_VOTING_PASS_FAILED = "g8e.v1.ai.tribunal.voting.pass.failed"
     TRIBUNAL_VOTING_CONSENSUS_REACHED = "g8e.v1.ai.tribunal.voting.consensus.reached"
     TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED = "g8e.v1.ai.tribunal.voting.consensus.not_reached"
+    TRIBUNAL_VOTING_CONSENSUS_FAILED = "g8e.v1.ai.tribunal.voting.consensus.failed"
+    TRIBUNAL_VOTING_DISSENT_RECORDED = "g8e.v1.ai.tribunal.voting.dissent.recorded"
     TRIBUNAL_VOTING_REVIEW_STARTED = "g8e.v1.ai.tribunal.voting.review.started"
     TRIBUNAL_VOTING_REVIEW_COMPLETED = "g8e.v1.ai.tribunal.voting.review.completed"
     TRIBUNAL_VOTING_REVIEW_FAILED = "g8e.v1.ai.tribunal.voting.review.failed"

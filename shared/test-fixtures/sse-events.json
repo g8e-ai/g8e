@@ -319,5 +319,113 @@
       "case_id": "test-case-id",
       "web_session_id": "test-web-session-id"
     }
+  },
+  "tribunal_voting_consensus_reached_with_breakdown": {
+    "type": "g8e.v1.ai.tribunal.voting.consensus.reached",
+    "data": {
+      "vote_winner": "ls -la",
+      "vote_score": 0.8,
+      "num_candidates": 5,
+      "request": "test request",
+      "vote_breakdown": {
+        "candidates_by_member": {
+          "axiom": "ls -la",
+          "concord": "ls -la",
+          "variance": "ls -la",
+          "pragma": "ls -l",
+          "nemesis": "rm -rf"
+        },
+        "candidates_by_command": {
+          "ls -la": ["axiom", "concord", "variance"],
+          "ls -l": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "winner": "ls -la",
+        "winner_supporters": ["axiom", "concord", "variance"],
+        "dissenters_by_command": {
+          "ls -l": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "consensus_strength": 0.6,
+        "tie_broken": false,
+        "tie_break_reason": null
+      },
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_voting_consensus_failed": {
+    "type": "g8e.v1.ai.tribunal.voting.consensus.failed",
+    "data": {
+      "request": "test request",
+      "vote_breakdown": {
+        "candidates_by_member": {
+          "axiom": "ls -la",
+          "concord": "ls -l",
+          "variance": "ls",
+          "pragma": "ll",
+          "nemesis": "rm -rf"
+        },
+        "candidates_by_command": {
+          "ls -la": ["axiom"],
+          "ls -l": ["concord"],
+          "ls": ["variance"],
+          "ll": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "winner": null,
+        "winner_supporters": [],
+        "dissenters_by_command": {
+          "ls -la": ["axiom"],
+          "ls -l": ["concord"],
+          "ls": ["variance"],
+          "ll": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "consensus_strength": 0.0,
+        "tie_broken": false,
+        "tie_break_reason": null
+      },
+      "reason": "no_agreement",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "tribunal_voting_dissent_recorded": {
+    "type": "g8e.v1.ai.tribunal.voting.dissent.recorded",
+    "data": {
+      "request": "test request",
+      "losing_command": "rm -rf",
+      "dissenting_member_ids": ["nemesis"],
+      "winner": "ls -la",
+      "vote_breakdown": {
+        "candidates_by_member": {
+          "axiom": "ls -la",
+          "concord": "ls -la",
+          "variance": "ls -la",
+          "pragma": "ls -l",
+          "nemesis": "rm -rf"
+        },
+        "candidates_by_command": {
+          "ls -la": ["axiom", "concord", "variance"],
+          "ls -l": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "winner": "ls -la",
+        "winner_supporters": ["axiom", "concord", "variance"],
+        "dissenters_by_command": {
+          "ls -l": ["pragma"],
+          "rm -rf": ["nemesis"]
+        },
+        "consensus_strength": 0.6,
+        "tie_broken": false,
+        "tie_break_reason": null
+      },
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
   }
 }

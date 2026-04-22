@@ -18,6 +18,7 @@ from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
     TribunalError,
+    TribunalConsensusFailedError,
     TribunalDisabledError,
     TribunalModelNotConfiguredError,
     TribunalSystemError,
@@ -35,7 +36,10 @@ from app.models.agents.tribunal import (
     TribunalSessionGenerationFailedPayload,
     TribunalSessionVerifierFailedPayload,
     TribunalVotingCompletedPayload,
+    TribunalConsensusFailedPayload,
+    TribunalDissentRecordedPayload,
     TribunalSessionCompletedPayload,
+    VoteBreakdown,
 )
 from app.models.agents.title_generator import CaseTitleRequest, CaseTitleResult
 from app.models.agents.verifier import VerifierRequest, VerifierResult
@@ -48,7 +52,9 @@ __all__ = [
     "TribunalMemberResult",
     "CandidateCommand",
     "CommandGenerationResult",
+    "VoteBreakdown",
     "TribunalError",
+    "TribunalConsensusFailedError",
     "TribunalDisabledError",
     "TribunalModelNotConfiguredError",
     "TribunalSystemError",
@@ -66,6 +72,8 @@ __all__ = [
     "TribunalSessionGenerationFailedPayload",
     "TribunalSessionVerifierFailedPayload",
     "TribunalVotingCompletedPayload",
+    "TribunalConsensusFailedPayload",
+    "TribunalDissentRecordedPayload",
     "TribunalSessionCompletedPayload",
     "CaseTitleRequest",
     "CaseTitleResult",

@@ -61,7 +61,7 @@ import asyncio
 import logging
 import shlex
 from collections import defaultdict
-from typing import List, NoReturn, Optional
+from typing import Any, List, NoReturn, Optional
 
 from app.errors import OllamaEmptyResponseError
 from app.models.settings import LLMSettings, G8eeUserSettings
@@ -76,6 +76,7 @@ from app.constants import (
     DEFAULT_WORKING_DIRECTORY,
     FORBIDDEN_COMMAND_PATTERNS,
     TribunalMember,
+    TieBreakReason,
     EventType,
     VerifierReason,
 )
@@ -91,6 +92,7 @@ from app.models.agents.tribunal import (
     TribunalGenerationFailedError,
     TribunalModelNotConfiguredError,
     TribunalVerifierFailedError,
+    TribunalConsensusFailedError,
     TribunalPassCompletedPayload,
     TribunalVerifierStartedPayload,
     TribunalVerifierCompletedPayload,
@@ -102,7 +104,10 @@ from app.models.agents.tribunal import (
     TribunalSessionGenerationFailedPayload,
     TribunalSessionVerifierFailedPayload,
     TribunalVotingCompletedPayload,
+    TribunalConsensusFailedPayload,
+    TribunalDissentRecordedPayload,
     TribunalSessionCompletedPayload,
+    VoteBreakdown,
 )
 from app.models.events import SessionEvent
 from app.models.model_configs import get_model_config
@@ -111,7 +116,57 @@ from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_membe
 from app.utils.whitelist_validator import validate_command_against_whitelist
 from app.utils.blacklist_validator import validate_command_against_blacklist
 
+
 logger = logging.getLogger(__name__)
+
+
+_TERMINAL_TRIBUNAL_EVENTS = {
+    EventType.TRIBUNAL_SESSION_STARTED,
+    EventType.TRIBUNAL_SESSION_COMPLETED,
+    EventType.TRIBUNAL_SESSION_DISABLED,
+    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+    EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+}
+
+
+class TribunalEmitter:
+    """Handles emission of Tribunal SSE events via EventService.
+
+    Distinguishes between terminal events (which raise on publish failure)
+    and progress events (which swallow failures to avoid blocking the pipeline).
+    """
+
+    def __init__(
+        self,
+        event_service: EventService,
+        g8e_context: G8eHttpContext,
+    ):
+        self.event_service = event_service
+        self.g8e_context = g8e_context
+
+    async def emit(self, event_type: EventType, payload: Any) -> None:
+        """Emit an SSE event. Re-raises if event_type is terminal."""
+        try:
+            event = SessionEvent(
+                event_type=event_type,
+                payload=payload.model_dump() if hasattr(payload, "model_dump") else payload,
+                web_session_id=self.g8e_context.web_session_id,
+                user_id=self.g8e_context.user_id,
+                case_id=self.g8e_context.case_id,
+                investigation_id=self.g8e_context.investigation_id,
+                source_component=ComponentName.G8EE,
+            )
+            await self.event_service.publish(event)
+        except Exception as exc:
+            if event_type in _TERMINAL_TRIBUNAL_EVENTS:
+                logger.error("[TRIBUNAL-EMIT] Terminal event %s failed: %s", event_type, exc)
+                raise
+            logger.warning("[TRIBUNAL-EMIT] Progress event %s failed (swallowed): %s", event_type, exc)
+
+TRIBUNAL_MIN_CONSENSUS = 2
 
 
 def _format_command_constraints_message(
@@ -244,6 +299,31 @@ _MAX_TOKENS_GENERATION = 256
 _MAX_TOKENS_VERIFIER = 256
 
 
+class TribunalResponse(G8eBaseModel):
+    """Structured response for Tribunal command generation."""
+    command: str
+
+
+class TribunalVerifierResponse(G8eBaseModel):
+    """Structured response for Tribunal verification."""
+    status: str  # "ok", "revised", or "swap"
+    revised_command: Optional[str] = None
+    swap_to_cluster: Optional[str] = None
+
+
+class VerifierClusterInfo(G8eBaseModel):
+    """Internal model for passing cluster info to the verifier prompt."""
+    cluster_id: str
+    command: str
+    support_count: int
+
+
+class VerifierInput(G8eBaseModel):
+    """Internal model for the verifier prompt context."""
+    winner: str | None
+    mode: str  # "unanimous", "majority", "tied"
+    clusters: list[VerifierClusterInfo]
+
 TRIBUNAL_PROMPT_TEMPLATE = """\
 {voice}
 
@@ -304,454 +384,90 @@ TRIBUNAL_VERIFIER_TEMPLATE = """\
 {operator_context}
 </operator_context>
 
-<candidate_command>
-{candidate_command}
-</candidate_command>
-
-You must respond with a JSON object with exactly these fields:
-- status: either "ok" (if the candidate command is safe and correct) or "revised" (if you need to fix it)
-- revised_command: the corrected command string (only if status is "revised")
+{verifier_context}
 
 Respond now with the JSON object and nothing else."""
 
 
-_SYSTEM_ERROR_PATTERNS: tuple[str, ...] = (
-    "401",
-    "403",
-    "authentication",
-    "unauthorized",
-    "forbidden",
-    "api key",
-    "api_key",
-    "invalid key",
-    "connection refused",
-    "connection error",
-    "connectionerror",
-    "timeout",
-    "timed out",
-    "name resolution",
-    "dns",
-    "ssl",
-    "certificate",
-    "unsupported llm provider",
-    "no such host",
-    "network",
-    "econnrefused",
-    "enotfound",
-)
-
-
-def _is_system_error(error_message: str) -> bool:
-    """Return True if the error message indicates a system-level failure.
-
-    System errors are infrastructure problems (auth, network, config) that
-    affect all passes equally. Distinguishing these from legitimate model
-    disagreement prevents the Tribunal from silently falling back to the
-    original command when the LLM is misconfigured.
-    """
-    lower = error_message.lower()
-    return any(pattern in lower for pattern in _SYSTEM_ERROR_PATTERNS)
-
-
-def _resolve_model(llm: LLMSettings, request: str = "") -> str:
-    """Resolve a concrete model string for the Tribunal pipeline.
-
-    Fallback chain: assistant_model -> primary_model.
-
-    Raises TribunalModelNotConfiguredError if neither is set. ``request``
-    is threaded through so the exception carries Sage's original ask at
-    the raise site (no post-construction mutation by callers).
-    """
-    if llm.resolved_assistant_model:
-        return llm.resolved_assistant_model
-    if llm.primary_model:
-        return llm.primary_model
-    raise TribunalModelNotConfiguredError(
-        provider=llm.primary_provider,
-        request=request,
-    )
-
-
-_TRIBUNAL_MEMBERS: tuple[TribunalMember, ...] = (
-    TribunalMember.AXIOM,
-    TribunalMember.CONCORD,
-    TribunalMember.VARIANCE,
-    TribunalMember.PRAGMA,
-    TribunalMember.NEMESIS,
-)
-
-
-def _member_for_pass(pass_index: int) -> TribunalMember:
-    """Return the Tribunal member assigned to a given pass index (cycles every 5)."""
-    return _TRIBUNAL_MEMBERS[pass_index % len(_TRIBUNAL_MEMBERS)]
-
-
-def _normalise_command(raw: str) -> str:
-    """Extract and normalise command from LLM response with robust parsing.
-
-    Handles:
-    1. Markdown code fences (```bash, ```shell, ```sh, ```).
-    2. Common prefixes (e.g., "Command:", "The command is:").
-    3. Explanatory text after the command.
-    4. Preserves intentional multi-line structure (heredocs, pipelines).
-    5. Validates shell syntax using shlex.
-
-    Returns the extracted command string or an empty string if invalid.
-    """
-    if not raw:
-        return ""
-
-    cmd = raw.strip()
-
-    # 1. Handle markdown fences
-    for fence in ("```bash", "```shell", "```sh", "```"):
-        if cmd.startswith(fence):
-            cmd = cmd[len(fence):]
-            # Strip trailing fence if it exists
-            if cmd.endswith("```"):
-                cmd = cmd[:-3]
-            break
+def _build_verifier_prompt_content(verifier_input: VerifierInput) -> str:
+    """Build the mode-specific context for the verifier prompt."""
+    parts = []
     
-    # If no fence was matched but it ends with ```, still strip it
-    if cmd.endswith("```"):
-        cmd = cmd[:-3]
-
-    cmd = cmd.strip()
-
-    # 2. Handle common prefixes
-    prefixes = (
-        "command:",
-        "the command is:",
-        "proposed command:",
-        "final command:",
-        "revised command:",
-        "exact command:",
-    )
-    lower_cmd = cmd.lower()
-    for prefix in prefixes:
-        if lower_cmd.startswith(prefix):
-            cmd = cmd[len(prefix):].strip()
-            break
-
-    # 3. Handle trailing explanatory text
-    # If there are multiple lines, and the first line looks like a command
-    # but subsequent lines look like explanations, we might need to be careful.
-    # However, for Tribunal, we usually expect a single logical command (which could be multi-line).
-    
-    # 4. Validate shell syntax
-    try:
-        # shlex.split handles quotes and escapes correctly.
-        # It will raise ValueError for unbalanced quotes/escapes.
-        shlex.split(cmd)
-    except ValueError as exc:
-        logger.warning("[TRIBUNAL-NORM] Shell syntax validation failed: %s", exc)
-        # If it failed, it might be because of explanatory text after the command.
-        # Let's try to take just the first line if it's a simple command.
-        lines = cmd.splitlines()
-        if len(lines) > 1:
-            try:
-                shlex.split(lines[0])
-                logger.info("[TRIBUNAL-NORM] Falling back to first line for valid shell syntax")
-                return lines[0].strip()
-            except ValueError:
-                pass
-        return ""
-
-    return cmd
-
-
-class TribunalResponse(G8eBaseModel):
-    """Structured response for Tribunal command generation."""
-    command: str
-
-class TribunalVerifierResponse(G8eBaseModel):
-    """Structured response for Tribunal verification."""
-    status: str  # "ok" or "revised"
-    revised_command: Optional[str] = None
-
-def _validate_command_safety(
-    command: str,
-    whitelisting_enabled: bool,
-    blacklisting_enabled: bool,
-    operator_context: OperatorContext | None,
-) -> tuple[bool, str | None]:
-    """Validate a command against all security constraints.
-    
-    Checks:
-    1. FORBIDDEN_COMMAND_PATTERNS (sudo, su, etc.)
-    2. Blacklist (if enabled)
-    3. Whitelist (if enabled)
-    
-    Returns (is_safe, error_message).
-    """
-    if not command:
-        return False, "Empty command"
-
-    # 1. FORBIDDEN_COMMAND_PATTERNS
-    for pattern in FORBIDDEN_COMMAND_PATTERNS:
-        if pattern in command:
-            return False, f"Command contains forbidden pattern: {pattern}"
-
-    # 2. Blacklist
-    if blacklisting_enabled:
-        blacklist_result = validate_command_against_blacklist(command)
-        if not blacklist_result.is_allowed:
-            return False, f"Command blocked by blacklist: {blacklist_result.reason}"
-
-    # 3. Whitelist
-    if whitelisting_enabled:
-        # We need the platform from operator_context
-        from app.constants import Platform
-        platform = Platform.LINUX
-        if operator_context and operator_context.os:
-            os_lower = operator_context.os.lower()
-            if "windows" in os_lower:
-                platform = Platform.WINDOWS
-            elif "darwin" in os_lower or "macos" in os_lower:
-                platform = Platform.MACOS
-
-        whitelist_result = validate_command_against_whitelist(command, platform=platform)
-        if not whitelist_result.is_valid:
-            return False, f"Command not whitelisted: {whitelist_result.reason}"
-
-    return True, None
-
-def _weighted_vote(candidates: List[CandidateCommand]) -> tuple[str | None, float]:
-    """
-    Compute weighted majority vote over candidate commands.
-
-    Each pass i (0-indexed) contributes weight 1/(i+1) to its candidate.
-    Returns (winner_command, normalised_score) or (None, 0.0) if no candidates.
-    """
-    if not candidates:
-        return None, 0.0
-
-    weights: dict[str, float] = defaultdict(float)
-    for c in candidates:
-        weights[c.command] += 1.0 / (c.pass_index + 1)
-
-    if not weights:
-        return None, 0.0
-
-    total_weight = sum(weights.values())
-    winner = max(weights, key=lambda k: weights[k])
-    normalised = weights[winner] / total_weight if total_weight > 0 else 0.0
-    return winner, normalised
-
-
-_TERMINAL_TRIBUNAL_EVENTS: frozenset[EventType] = frozenset({
-    EventType.TRIBUNAL_SESSION_STARTED,
-    EventType.TRIBUNAL_SESSION_COMPLETED,
-    EventType.TRIBUNAL_SESSION_DISABLED,
-    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
-    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
-    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
-    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-    EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
-})
-
-
-class TribunalEmitter:
-    """Helper for emitting Tribunal SSE events with consistent context."""
-
-    def __init__(
-        self,
-        event_service: EventService | None,
-        g8e_context: G8eHttpContext | None,
-    ):
-        self.svc = event_service
-        self.ctx = g8e_context
-
-    async def emit(self, event_type: EventType, payload: G8eBaseModel) -> None:
-        """Fire-and-forget SSE event. Swallows errors to prevent pipeline stalls.
-
-        Terminal events (TRIBUNAL_SESSION_*) are critical: they are the only signal
-        the frontend receives that the Tribunal has ended. If publish() fails for
-        a terminal event, log at CRITICAL and re-raise to ensure the caller is
-        aware of the failure. For progress events, log at ERROR and swallow.
-        """
-        if not self.svc or not self.ctx or not self.ctx.web_session_id or not self.ctx.user_id:
-            return
-        try:
-            await self.svc.publish(
-                SessionEvent(
-                    event_type=event_type,
-                    payload=payload,
-                    web_session_id=self.ctx.web_session_id,
-                    user_id=self.ctx.user_id,
-                    case_id=self.ctx.case_id,
-                    investigation_id=self.ctx.investigation_id,
-                )
-            )
-        except Exception as exc:
-            if event_type in _TERMINAL_TRIBUNAL_EVENTS:
-                logger.critical(
-                    "[TRIBUNAL_EMIT] CRITICAL: Failed to emit terminal event %s: %s. "
-                    "Frontend will not receive Tribunal completion signal.",
-                    event_type, exc
-                )
-                raise
-            logger.error("[TRIBUNAL_EMIT] Failed to emit %s: %s", event_type, exc)
-
-
-async def _run_generation_pass(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    operator_context: OperatorContext | None,
-    pass_index: int,
-    emitter: TribunalEmitter,
-    pass_errors: List[str],
-    command_constraints_message: str,
-) -> str | None:
-    """Run one Tribunal generation pass and return the normalised candidate command.
-
-    Failed passes append their error string to pass_errors so the caller can
-    classify the failure mode (system vs. legitimate).
-    """
-    member = _member_for_pass(pass_index)
-    member_persona = get_tribunal_member(member.value)
-
-    fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
-    prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
-        voice=member_persona.get_system_prompt(),
-        command_constraints_message=command_constraints_message,
-        **fields,
-    )
-    logger.info(
-        "[TRIBUNAL-PASS-%d] Member=%s prompt_len=%d user_context=%s os=%s shell=%s working_dir=%s",
-        pass_index, member.value, len(prompt),
-        fields["user_context"], fields["os"], fields["shell"], fields["working_directory"],
-    )
-    logger.debug("[TRIBUNAL-PASS-%d] Full prompt: %s", pass_index, prompt[:5000])
-    model_config = get_model_config(model)
-    
-    # Use structured output if the model supports it
-    response_format = None
-    if model_config.supports_structured_output:
-        response_format = ResponseFormat.from_pydantic_schema(
-            TribunalResponse.model_json_schema(),
-            name="TribunalResponse"
-        )
-
-    settings = LiteLLMSettings(
-        max_output_tokens=_MAX_TOKENS_GENERATION,
-        top_p_nucleus_sampling=model_config.top_p,
-        top_k_filtering=model_config.top_k,
-        stop_sequences=model_config.stop_sequences,
-        system_instructions="",
-        response_format=response_format,
-    )
-    try:
-        response = await provider.generate_content_lite(
-            model=model,
-            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-            lite_llm_settings=settings,
-        )
-        if not response.text or not response.text.strip():
-            raise OllamaEmptyResponseError(
-                f"Provider returned empty response text",
-                model=model,
-                channel="lite",
-                done_reason="stop",
-                prompt_eval_count=None,
-                eval_count=None,
-                num_ctx=0,
-                num_predict=0,
-                thinking_len=0,
-                tool_calls_count=0,
-                ctx_overflow_suspected=False,
-            )
+    if verifier_input.mode == "unanimous":
+        parts.append(f"<candidate_command>\n{verifier_input.winner}\n</candidate_command>")
+        parts.append("\nUNANIMOUS CONSENSUS: All Tribunal members produced the command above.")
+        parts.append("Validate it for syntactic correctness, safety, and alignment with the request.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"ok\" (if correct) or \"revised\" (if needs fix)")
+        parts.append("- revised_command: the corrected command string (only if status is \"revised\")")
         
-        raw_text = response.text
-        if response_format:
-            try:
-                import json
-                data = json.loads(raw_text)
-                candidate_raw = data.get("command", "")
-            except (json.JSONDecodeError, AttributeError):
-                candidate_raw = raw_text
-        else:
-            candidate_raw = raw_text
-
-        candidate = _normalise_command(candidate_raw)
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-            TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=candidate, success=True),
-        )
-        return candidate
-    except OllamaEmptyResponseError as exc:
-        error_msg = f"Pass {pass_index} ({member.value}) returned empty response: {exc}"
-        pass_errors.append(error_msg)
-        logger.warning("[TRIBUNAL] %s", error_msg)
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-            TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False),
-        )
-        return None
-    except Exception as exc:
-        error_msg = str(exc)
-        pass_errors.append(error_msg)
-        if _is_system_error(error_msg):
-            logger.error("[TRIBUNAL] Pass %d (%s) system error: %s", pass_index, member, exc)
-        else:
-            logger.warning("[TRIBUNAL] Pass %d (%s) failed: %s", pass_index, member, exc)
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-            TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=None, success=False, error=error_msg),
-        )
-        return None
+    elif verifier_input.mode == "majority":
+        parts.append("<candidates_by_cluster>")
+        for c in verifier_input.clusters:
+            parts.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
+        parts.append("</candidates_by_cluster>")
+        parts.append(f"\nMAJORITY WINNER: [{verifier_input.clusters[0].cluster_id}]")
+        parts.append("\nObserve the winner and the dissenting clusters above. You may approve the winner, swap to a dissenter, or issue a revision.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"ok\" (approve winner), \"swap\" (pick another cluster), or \"revised\"")
+        parts.append("- swap_to_cluster: e.g. \"cluster_b\" (only if status is \"swap\")")
+        parts.append("- revised_command: corrected string (only if status is \"revised\")")
+        
+    elif verifier_input.mode == "tied":
+        parts.append("<tied_candidates>")
+        for c in verifier_input.clusters:
+            parts.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
+        parts.append("</tied_candidates>")
+        parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
+        parts.append("YOU MUST DISAMBIGUATE. Pick the best cluster from the tied set or provide a revision.")
+        parts.append("\nResponse format:")
+        parts.append("- status: \"swap\" (pick one) or \"revised\"")
+        parts.append("- swap_to_cluster: e.g. \"cluster_a\" (required for status \"swap\")")
+        parts.append("- revised_command: corrected string (only if status is \"revised\")")
+        
+    return "\n".join(parts)
 
 
-async def _emit_verifier_failed_session(
-    emitter: TribunalEmitter,
-    request: str,
-    reason: VerifierReason,
-    error: str | None,
-    candidate_command: str,
-) -> None:
-    """Emit TRIBUNAL_SESSION_VERIFIER_FAILED co-located with the raise site.
+def _parse_verifier_response(
+    raw_text: str, 
+    mode: str, 
+    cluster_ids: list[str]
+) -> tuple[str, str | None, str | None]:
+    """Parse and validate verifier JSON response with mode-specific rules."""
+    try:
+        import json
+        data = json.loads(raw_text)
+        status = data.get("status", "").lower()
+        revised_raw = data.get("revised_command")
+        swap_to_cluster = data.get("swap_to_cluster")
+        
+        # Mode-specific validation
+        if mode == "unanimous":
+            if status not in ("ok", "revised"):
+                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
+            if swap_to_cluster:
+                raise ValueError(f"Verifier returned swap_to_cluster in {mode!r} mode")
+        elif mode == "tied":
+            if status == "ok":
+                raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
+            if status not in ("swap", "revised"):
+                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
+        elif mode == "majority":
+            if status not in ("ok", "swap", "revised"):
+                raise ValueError(f"invalid status {status!r} for mode {mode!r}")
 
-    Centralising emission next to the raise keeps all terminal-state events
-    symmetric with the other session-failure events (disabled, model-not-
-    configured, provider-unavailable, system-error, generation-failed) which
-    all fire inside this module rather than in the orchestration caller.
-    """
-    await emitter.emit(
-        EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
-        TribunalSessionVerifierFailedPayload(
-            request=request,
-            reason=reason,
-            error=error,
-            candidate_command=candidate_command,
-        ),
-    )
-
-
-async def _fail_verifier(
-    emitter: TribunalEmitter,
-    request: str,
-    reason: VerifierReason,
-    error_msg: str,
-    candidate_command: str,
-    error_detail: str | None = None,
-) -> NoReturn:
-    """Emit verifier failure event and raise TribunalVerifierFailedError.
-
-    Emits TRIBUNAL_SESSION_VERIFIER_FAILED as the sole terminal signal for
-    all verifier failure paths. TRIBUNAL_VOTING_REVIEW_COMPLETED is reserved
-    for non-terminal outcomes (OK, REVISED) only.
-    """
-    await _emit_verifier_failed_session(
-        emitter, request, reason, error_msg, candidate_command,
-    )
-    raise TribunalVerifierFailedError(
-        reason=reason,
-        error=error_msg,
-        candidate_command=candidate_command,
-        request=request,
-    )
+        if status == "swap":
+            if not swap_to_cluster:
+                raise ValueError("Verifier returned status='swap' but no swap_to_cluster")
+            if swap_to_cluster not in cluster_ids:
+                raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
+        
+        if status == "revised" and not revised_raw:
+            raise ValueError("Verifier returned status='revised' but no revised_command")
+            
+        return status, revised_raw, swap_to_cluster
+    except (json.JSONDecodeError, AttributeError) as exc:
+        raise ValueError(f"Verifier returned invalid JSON: {str(exc)}") from exc
 
 
 async def _run_verifier(
@@ -759,34 +475,69 @@ async def _run_verifier(
     model: str,
     request: str,
     guidelines: str,
-    candidate_command: str,
+    mode: str,
+    vote_winner: str | None,
+    vote_breakdown: VoteBreakdown,
+    tied_candidates: list[CandidateCommand] | None,
     operator_context: OperatorContext | None,
     emitter: TribunalEmitter,
     command_constraints_message: str,
-) -> tuple[bool, str | None]:
-    """Run the Tribunal verifier against the vote winner."""
+) -> tuple[bool, str | None, str | None, VerifierReason, str | None, str | None]:
+    """Run the dissent-aware Verifier."""
+    # Prepare cluster info and mapping
+    clusters: list[VerifierClusterInfo] = []
+    cluster_to_cmd: dict[str, str] = {}
+    cluster_to_members: dict[str, list[str]] = {}
+    
+    # 1. Add winner (or first tied) as cluster_a
+    target_cmd = vote_winner or (tied_candidates[0].command if tied_candidates else None)
+    if not target_cmd:
+        raise ValueError("No candidate command to verify")
+
+    cluster_to_cmd["cluster_a"] = target_cmd
+    cluster_to_members["cluster_a"] = vote_breakdown.candidates_by_command[target_cmd]
+    clusters.append(VerifierClusterInfo(
+        cluster_id="cluster_a",
+        command=target_cmd,
+        support_count=len(cluster_to_members["cluster_a"])
+    ))
+
+    # 2. Add other clusters
+    idx = 1
+    for cmd, members in vote_breakdown.candidates_by_command.items():
+        if cmd == target_cmd:
+            continue
+        c_id = f"cluster_{chr(ord('a') + idx)}"
+        cluster_to_cmd[c_id] = cmd
+        cluster_to_members[c_id] = members
+        clusters.append(VerifierClusterInfo(
+            cluster_id=c_id,
+            command=cmd,
+            support_count=len(members)
+        ))
+        idx += 1
+
+    verifier_input = VerifierInput(winner=target_cmd, mode=mode, clusters=clusters)
+    
     await emitter.emit(
         EventType.TRIBUNAL_VOTING_REVIEW_STARTED,
-        TribunalVerifierStartedPayload(candidate_command=candidate_command),
+        TribunalVerifierStartedPayload(candidate_command=target_cmd),
     )
 
     verifier_persona = get_agent_persona("auditor")
-
     fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
+    
+    verifier_context = _build_verifier_prompt_content(verifier_input)
     prompt = TRIBUNAL_VERIFIER_TEMPLATE.format(
         voice=verifier_persona.get_system_prompt(),
         command_constraints_message=command_constraints_message,
-        candidate_command=candidate_command,
+        verifier_context=verifier_context,
         **fields,
     )
-    logger.info(
-        "[TRIBUNAL-VERIFIER] prompt_len=%d user_context=%s os=%s candidate_command=%s",
-        len(prompt), fields["user_context"], fields["os"], candidate_command,
-    )
-    logger.debug("[TRIBUNAL-VERIFIER] Full prompt: %s", prompt[:5000])
+
+    logger.info("[TRIBUNAL-VERIFIER] mode=%s winner=%r clusters=%d", mode, target_cmd, len(clusters))
     model_config = get_model_config(model)
     
-    # Use structured output if the model supports it
     response_format = None
     if model_config.supports_structured_output:
         response_format = ResponseFormat.from_pydantic_schema(
@@ -802,6 +553,7 @@ async def _run_verifier(
         system_instructions="",
         response_format=response_format,
     )
+
     try:
         response = await provider.generate_content_lite(
             model=model,
@@ -809,91 +561,61 @@ async def _run_verifier(
             lite_llm_settings=settings,
         )
         if not response.text or not response.text.strip():
-            raise OllamaEmptyResponseError(
-                f"Verifier returned empty response text",
-                model=model,
-                channel="lite",
-                done_reason="stop",
-                prompt_eval_count=None,
-                eval_count=None,
-                num_ctx=0,
-                num_predict=0,
-                thinking_len=0,
-                tool_calls_count=0,
-                ctx_overflow_suspected=False,
-            )
+            raise OllamaEmptyResponseError("Provider returned empty response", model=model, channel="lite")
         
-        raw_text = response.text.strip()
-        status = ""
-        revised_raw = ""
-
-        try:
-            import json
-            data = json.loads(raw_text)
-            status = data.get("status", "").lower()
-            revised_raw = data.get("revised_command", "")
-        except (json.JSONDecodeError, AttributeError) as exc:
-            logger.error("[TRIBUNAL] Verifier returned invalid JSON: %s", exc)
-            error_msg = f"Verifier returned invalid JSON: {raw_text[:100]}"
-            await _fail_verifier(
-                emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
-            )
-            raise TribunalVerifierFailedError(
-                reason=VerifierReason.NO_VALID_REVISION,
-                error=error_msg,
-                candidate_command=candidate_command,
-                request=request,
-            )
+        status, revised_raw, swap_to_cluster = _parse_verifier_response(
+            response.text.strip(), mode, list(cluster_to_cmd.keys())
+        )
 
         if status == "ok":
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
                 TribunalVerifierCompletedPayload(passed=True, reason=VerifierReason.OK),
             )
-            return True, None
+            return True, target_cmd, None, VerifierReason.OK, None, None
 
-        revised = _normalise_command(revised_raw)
-        if revised and revised != candidate_command:
-            # VALIDATE REVISION SAFETY
-            is_safe, safety_error = _validate_command_safety(
-                revised,
-                whitelisting_enabled=True, # Always validate safety for revisions
-                blacklisting_enabled=True,
-                operator_context=operator_context,
-            )
+        if status == "swap":
+            final_cmd = cluster_to_cmd[swap_to_cluster]
+            swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
+            
+            # RE-VALIDATE SWAP TARGET SAFETY
+            is_safe, safety_err = _validate_command_safety(final_cmd, True, True, operator_context)
             if not is_safe:
-                logger.error("[TRIBUNAL] Verifier suggested unsafe revision: %s", safety_error)
-                error_msg = f"Verifier suggested unsafe revision: {safety_error}"
-                await _fail_verifier(
-                    emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
-                )
+                await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, f"Swap target unsafe: {safety_err}", target_cmd)
 
-            logger.info("[TRIBUNAL] Verifier revised command: original=%r revised=%r", candidate_command, revised)
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-                TribunalVerifierCompletedPayload(passed=False, revision=revised, reason=VerifierReason.REVISED),
+                TribunalVerifierCompletedPayload(
+                    passed=True, 
+                    reason=VerifierReason.SWAPPED_TO_DISSENTER,
+                    swap_to_cluster=swap_to_cluster,
+                    swap_to_member=swap_to_member
+                ),
             )
-            return False, revised
+            return True, final_cmd, None, VerifierReason.SWAPPED_TO_DISSENTER, swap_to_cluster, swap_to_member
 
-        logger.error("[TRIBUNAL] Verifier returned non-ok but no valid revision; cannot verify candidate")
-        error_msg = f"Verifier returned non-ok answer without valid revision: {raw_text[:100]}"
-        await _fail_verifier(
-            emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
+        # Handle revised
+        revised = _normalise_command(revised_raw)
+        if not revised:
+            await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, "Empty revision", target_cmd)
+
+        is_safe, safety_err = _validate_command_safety(revised, True, True, operator_context)
+        if not is_safe:
+            await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, f"Revision unsafe: {safety_err}", target_cmd)
+
+        reason = VerifierReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else VerifierReason.REVISED
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
+            TribunalVerifierCompletedPayload(passed=False, revision=revised, reason=reason),
         )
+        return False, revised, revised, reason, None, None
 
-    except TribunalVerifierFailedError:
-        raise
     except Exception as exc:
         if isinstance(exc, OllamaEmptyResponseError):
-            logger.error("[TRIBUNAL] Verifier returned empty response; cannot verify candidate: %s", exc)
-            error_msg = f"Verifier returned empty response: {exc}"
-            await _fail_verifier(
-                emitter, request, VerifierReason.EMPTY_RESPONSE, error_msg, candidate_command,
-            )
-        logger.error("[TRIBUNAL] Verifier failed with exception; cannot verify candidate: %s", exc)
-        await _fail_verifier(
-            emitter, request, VerifierReason.VERIFIER_ERROR, str(exc), candidate_command, error_detail=str(exc),
-        )
+            await _fail_verifier(emitter, request, VerifierReason.EMPTY_RESPONSE, str(exc), target_cmd)
+        if isinstance(exc, ValueError):
+            await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, str(exc), target_cmd)
+        await _fail_verifier(emitter, request, VerifierReason.VERIFIER_ERROR, str(exc), target_cmd)
 
 
 async def _run_generation_stage(
@@ -962,25 +684,58 @@ async def _run_voting_stage(
     candidates: list[CandidateCommand],
     request: str,
     emitter: TribunalEmitter,
-) -> tuple[str, float]:
+) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Stage 2: compute weighted majority vote and emit consensus event.
 
-    Returns (vote_winner, vote_score). The caller must guarantee candidates is
-    non-empty; an assertion guards against programming errors.
+    Returns (vote_winner, vote_score, vote_breakdown, tied_candidates).
     """
-    vote_winner, vote_score = _weighted_vote(candidates)
-    assert vote_winner is not None, "vote_winner should not be None after empty candidates check"
+    vote_winner, vote_score, vote_breakdown, tied_candidates = _weighted_vote(candidates)
 
-    await emitter.emit(
-        EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
-        TribunalVotingCompletedPayload(
-            vote_winner=vote_winner,
-            vote_score=vote_score,
-            num_candidates=len(candidates),
-            request=request,
-        ),
-    )
-    return vote_winner, vote_score
+    if vote_winner is None:
+        # Check if we have a winner but consensus strength is too low
+        if vote_breakdown.consensus_strength > 0:
+            # consensus_failed due to low strength
+            logger.warning("[TRIBUNAL] Consensus strength too low: %.2f < %d members", vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
+        elif vote_breakdown.tie_break_reason == TieBreakReason.VERIFIER_DISAMBIGUATION:
+            logger.info("[TRIBUNAL] Voting tied; verifier disambiguation required")
+        else:
+            logger.warning("[TRIBUNAL] Consensus failed: no agreement among members")
+            
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            TribunalConsensusFailedPayload(
+                request=request,
+                vote_breakdown=vote_breakdown,
+            ),
+        )
+    else:
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
+            TribunalVotingCompletedPayload(
+                vote_winner=vote_winner,
+                vote_score=vote_score,
+                num_candidates=len(candidates),
+                request=request,
+                vote_breakdown=vote_breakdown,
+            ),
+        )
+        
+        # Emit dissent events for audit
+        for cmd, members in vote_breakdown.dissenters_by_command.items():
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
+                TribunalDissentRecordedPayload(
+                    request=request,
+                    losing_command=cmd,
+                    dissenting_member_ids=members,
+                    winner=vote_winner,
+                    vote_breakdown=vote_breakdown,
+                )
+            )
+
+    return vote_winner, vote_score, vote_breakdown, tied_candidates
+
+
 
 
 async def _run_verification_stage(
@@ -988,45 +743,90 @@ async def _run_verification_stage(
     model: str,
     request: str,
     guidelines: str,
-    vote_winner: str,
+    vote_winner: str | None,
+    vote_breakdown: VoteBreakdown,
     operator_context: OperatorContext | None,
     verifier_enabled: bool,
     emitter: TribunalEmitter,
     command_constraints_message: str,
-) -> tuple[str | None, CommandGenerationOutcome, bool, str | None]:
+    tied_candidates: list[CandidateCommand] | None = None,
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, VerifierReason]:
     """Stage 3: optionally verify the vote winner and determine outcome.
 
-    Returns (final_command, outcome, verifier_passed, verifier_revision).
+    Returns (final_command, outcome, verifier_passed, verifier_revision, verifier_reason).
     """
     if not verifier_enabled:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, VerifierReason.OK
 
-    verifier_passed, verifier_revision = await _run_verifier(
-        provider=provider, model=model, request=request, guidelines=guidelines,
-        candidate_command=vote_winner, operator_context=operator_context,
-        emitter=emitter, command_constraints_message=command_constraints_message,
+    # Determine mode based on consensus strength and tie-break reason
+    if vote_breakdown.consensus_strength == 1.0:
+        mode = "unanimous"
+    elif vote_breakdown.tie_break_reason == TieBreakReason.VERIFIER_DISAMBIGUATION:
+        mode = "tied"
+    else:
+        mode = "majority"
+
+    verifier_passed, final_command, verifier_revision, verifier_reason, swap_to_cluster, swap_to_member = await _run_verifier(
+        provider=provider,
+        model=model,
+        request=request,
+        guidelines=guidelines,
+        mode=mode,
+        vote_winner=vote_winner,
+        vote_breakdown=vote_breakdown,
+        tied_candidates=tied_candidates,
+        operator_context=operator_context,
+        emitter=emitter,
+        command_constraints_message=command_constraints_message,
     )
-    if verifier_passed:
-        logger.info("[TRIBUNAL] Verifier approved: %r", vote_winner)
-        return vote_winner, CommandGenerationOutcome.VERIFIED, True, None
 
-    logger.info("[TRIBUNAL] Verifier revised: %r -> %r", vote_winner, verifier_revision)
-    return verifier_revision or vote_winner, CommandGenerationOutcome.VERIFICATION_FAILED, False, verifier_revision
+    outcome = CommandGenerationOutcome.VERIFIED if verifier_passed else CommandGenerationOutcome.VERIFICATION_FAILED
+    
+    # If it was a revision (not a swap or OK), use the legacy REVISED outcome if appropriate
+    if not verifier_passed and verifier_reason == VerifierReason.REVISED:
+        outcome = CommandGenerationOutcome.VERIFICATION_FAILED
+
+    return final_command, outcome, verifier_passed, verifier_revision, verifier_reason
 
 
 async def _build_and_emit_result(
     request: str,
     guidelines: str,
-    final_command: str,
+    final_command: str | None,
     outcome: CommandGenerationOutcome,
     candidates: list[CandidateCommand],
-    vote_winner: str,
-    vote_score: float,
-    verifier_passed: bool,
+    vote_winner: str | None,
+    vote_score: float | None,
+    vote_breakdown: VoteBreakdown | None,
+    verifier_passed: bool | None,
     verifier_revision: str | None,
+    verifier_reason: VerifierReason | None,
     emitter: TribunalEmitter,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+    whitelisted_commands: list[str] | None = None,
+    blacklisted_commands: list[dict[str, str]] | None = None,
+    operator_context: OperatorContext | None = None,
 ) -> CommandGenerationResult:
     """Stage 4: assemble the result model and emit the session-completed event."""
+    # Final safety validation check
+    is_safe = True
+    safety_error = None
+    if final_command:
+        is_safe, safety_error = _validate_command_safety(
+            final_command,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            operator_context=operator_context,
+        )
+
+    if not is_safe:
+        logger.error("[TRIBUNAL] Final command safety validation failed: %s", safety_error)
+        outcome = CommandGenerationOutcome.CONSENSUS_FAILED
+        final_command = None
+        # We don't raise here, we return a CONSENSUS_FAILED result so the UI can show the breakdown
+        # and the AI knows the command was rejected for safety.
+
     result = CommandGenerationResult(
         request=request,
         guidelines=guidelines,
@@ -1035,17 +835,19 @@ async def _build_and_emit_result(
         candidates=candidates,
         vote_winner=vote_winner,
         vote_score=vote_score,
+        vote_breakdown=vote_breakdown,
         verifier_passed=verifier_passed,
         verifier_revision=verifier_revision,
+        verifier_reason=verifier_reason,
     )
 
     await emitter.emit(
         EventType.TRIBUNAL_SESSION_COMPLETED,
         TribunalSessionCompletedPayload(
             request=request,
-            final_command=final_command,
+            final_command=final_command or "",
             outcome=outcome,
-            vote_score=vote_score,
+            vote_score=vote_score or 0.0,
         ),
     )
     return result
@@ -1193,47 +995,62 @@ async def generate_command(
         command_constraints_message=command_constraints_message,
     )
 
-    vote_winner, vote_score = await _run_voting_stage(
+    vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
         candidates=candidates, request=request, emitter=emitter,
     )
 
-    final_command, outcome, verifier_passed, verifier_revision = await _run_verification_stage(
-        provider=provider, model=model, request=request, guidelines=guidelines,
-        vote_winner=vote_winner, operator_context=operator_context,
+    if vote_winner is None and vote_breakdown.tie_break_reason != TieBreakReason.VERIFIER_DISAMBIGUATION:
+        # Consensus failed completely
+        return await _build_and_emit_result(
+            request=request,
+            guidelines=guidelines,
+            final_command=None,
+            outcome=CommandGenerationOutcome.CONSENSUS_FAILED,
+            candidates=candidates,
+            vote_winner=None,
+            vote_score=0.0,
+            vote_breakdown=vote_breakdown,
+            verifier_passed=None,
+            verifier_revision=None,
+            verifier_reason=None,
+            emitter=emitter,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            whitelisted_commands=whitelisted_commands,
+            blacklisted_commands=blacklisted_commands,
+            operator_context=operator_context,
+        )
+
+    final_command, outcome, verifier_passed, verifier_revision, verifier_reason = await _run_verification_stage(
+        provider=provider,
+        model=model,
+        request=request,
+        guidelines=guidelines,
+        vote_winner=vote_winner,
+        vote_breakdown=vote_breakdown,
+        operator_context=operator_context,
         verifier_enabled=settings.llm.llm_command_gen_verifier,
         emitter=emitter,
         command_constraints_message=command_constraints_message,
+        tied_candidates=tied_candidates,
     )
-
-    # Ensure final_command is never None — verifier contract guarantees a string,
-    # but belt-and-braces against a future refactor leaving verifier_revision empty.
-    final_command_str = final_command if final_command is not None else vote_winner
-
-    # FINAL SAFETY VALIDATION
-    is_safe, safety_error = _validate_command_safety(
-        final_command_str,
-        whitelisting_enabled=whitelisting_enabled,
-        blacklisting_enabled=blacklisting_enabled,
-        operator_context=operator_context,
-    )
-    if not is_safe:
-        logger.error("[TRIBUNAL] Final command safety validation failed: %s", safety_error)
-        error_msg = f"Final command safety validation failed: {safety_error}"
-        await emitter.emit(
-            EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
-            TribunalSessionSystemErrorPayload(
-                request=request,
-                pass_errors=[error_msg],
-            ),
-        )
-        raise TribunalGenerationFailedError(
-            pass_errors=[error_msg],
-            request=request,
-        )
 
     return await _build_and_emit_result(
-        request=request, guidelines=guidelines, final_command=final_command_str,
-        outcome=outcome, candidates=candidates, vote_winner=vote_winner,
-        vote_score=vote_score, verifier_passed=verifier_passed,
-        verifier_revision=verifier_revision, emitter=emitter,
+        request=request,
+        guidelines=guidelines,
+        final_command=final_command,
+        outcome=outcome,
+        candidates=candidates,
+        vote_winner=vote_winner,
+        vote_score=vote_score,
+        vote_breakdown=vote_breakdown,
+        verifier_passed=verifier_passed,
+        verifier_revision=verifier_revision,
+        verifier_reason=verifier_reason,
+        emitter=emitter,
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        whitelisted_commands=whitelisted_commands,
+        blacklisted_commands=blacklisted_commands,
+        operator_context=operator_context,
     )

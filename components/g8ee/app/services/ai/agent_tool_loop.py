@@ -53,6 +53,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
+    TribunalConsensusFailedError,
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target
 from app.services.ai.tool_service import AIToolService
@@ -316,6 +317,13 @@ async def orchestrate_tool_execution(
                     request_settings=request_settings,
                     tool_executor=tool_executor,
                 )
+                
+                # Check for consensus failure
+                from app.constants import CommandGenerationOutcome
+                if gen_result.outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
+                    logger.warning("[TRIBUNAL-INVOKE] Consensus failed for request: %r", request[:80])
+                    raise TribunalConsensusFailedError(request=request, vote_breakdown=gen_result.vote_breakdown)
+                    
             except TribunalError as exc:
                 logger.error(
                     "[TRIBUNAL-ERROR] %s (%s): %s",

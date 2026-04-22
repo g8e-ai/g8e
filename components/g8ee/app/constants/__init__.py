@@ -168,6 +168,7 @@ from app.constants.settings import (
     ChatSessionStatus,
     CircuitBreakerState,
     CommandGenerationOutcome,
+    TieBreakReason,
     DB_TIMESTAMP,
     DEFAULT_FINISH_REASON,
     DEFAULT_HTTP_CLIENT_TIMEOUT,

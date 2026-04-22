@@ -672,12 +672,22 @@ class TestTribunalVerifierFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_empty_verifier_response(self):
         """Empty verifier response raises TribunalVerifierFailedError instead of treating as passed."""
+        from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         mock_response.text = None
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
+        
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
@@ -685,11 +695,13 @@ class TestTribunalVerifierFailedError:
             model="test-model",
             request="list files",
             guidelines="",
-            candidate_command="ls -la",
+            mode="unanimous",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            
+            command_constraints_message="No whitelist or blacklist constraints are active",
         )
 
         assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
@@ -698,6 +710,7 @@ class TestTribunalVerifierFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_no_valid_revision(self):
         """Non-ok answer without valid revision raises TribunalVerifierFailedError instead of treating as passed."""
+        from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         # Response that's not "ok" and normalizes to the same command (not a valid revision)
         mock_response.text = "ls -la"
@@ -705,6 +718,15 @@ class TestTribunalVerifierFailedError:
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, None)
+        
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
@@ -712,11 +734,13 @@ class TestTribunalVerifierFailedError:
             model="test-model",
             request="list files",
             guidelines="",
-            candidate_command="ls -la",
+            mode="unanimous",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            
+            command_constraints_message="No whitelist or blacklist constraints are active",
         )
 
         assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
@@ -725,11 +749,21 @@ class TestTribunalVerifierFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_verifier_exception(self):
         """Verifier exception raises TribunalVerifierFailedError instead of treating as passed."""
+        from app.models.agents.tribunal import VoteBreakdown
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Verifier API timeout")
         )
         emitter = TribunalEmitter(None, None)
+        
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
 
         with pytest.raises(TribunalVerifierFailedError) as exc_info:
             await _run_verifier(
@@ -737,11 +771,13 @@ class TestTribunalVerifierFailedError:
             model="test-model",
             request="list files",
             guidelines="",
-            candidate_command="ls -la",
+            mode="unanimous",
+            vote_winner="ls -la",
+            vote_breakdown=vote_breakdown,
+            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            
+            command_constraints_message="No whitelist or blacklist constraints are active",
         )
 
         assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
@@ -830,10 +866,10 @@ class TestRunGenerationStage:
 
 
 class TestRunVotingStage:
-    """_run_voting_stage computes weighted vote and emits consensus event."""
+    """_run_voting_stage computes uniform vote and emits consensus event."""
 
     @pytest.mark.asyncio
-    async def test_returns_winner_and_score(self):
+    async def test_returns_winner_and_score_with_breakdown(self):
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
@@ -845,12 +881,17 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, None)
 
-        winner, score = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
             candidates=candidates, request="list files", emitter=emitter,
         )
 
         assert winner == "ls -la"
-        assert score > 0.5
+        assert score == 0.6
+        assert vote_breakdown is not None
+        assert vote_breakdown.winner == "ls -la"
+        assert vote_breakdown.consensus_strength == 0.6
+        assert len(vote_breakdown.winner_supporters) == 3
+        assert tied_candidates is None
 
     @pytest.mark.asyncio
     async def test_single_candidate_wins(self):
@@ -861,12 +902,38 @@ class TestRunVotingStage:
         ]
         emitter = TribunalEmitter(None, None)
 
-        winner, score = await _run_voting_stage(
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
             candidates=candidates, request="list files", emitter=emitter,
         )
 
         assert winner == "ls -la"
         assert score == 1.0
+        assert vote_breakdown.consensus_strength == 1.0
+        assert tied_candidates is None
+
+    @pytest.mark.asyncio
+    async def test_consensus_failed_returns_none_winner(self):
+        """When no two members agree, consensus fails and winner is None."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ll", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, None)
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter,
+        )
+
+        assert winner is None
+        assert score == 0.0
+        assert vote_breakdown.consensus_strength == 0.0
+        assert vote_breakdown.winner is None
+        assert tied_candidates is None
 
 
 class TestRunVerificationStage:
@@ -874,9 +941,19 @@ class TestRunVerificationStage:
 
     @pytest.mark.asyncio
     async def test_verifier_disabled_returns_consensus(self):
-        final_cmd, outcome, passed, revision = await _run_verification_stage(
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
             provider=MagicMock(), model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=False, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -885,16 +962,27 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.CONSENSUS
         assert passed is True
         assert revision is None
+        assert verifier_reason == VerifierReason.OK
 
     @pytest.mark.asyncio
     async def test_verifier_approves_returns_verified(self):
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
         mock_response = MagicMock()
         mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -903,16 +991,27 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFIED
         assert passed is True
         assert revision is None
+        assert verifier_reason == VerifierReason.OK
 
     @pytest.mark.asyncio
     async def test_verifier_revision_returns_verification_failed(self):
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
         mock_response = MagicMock()
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             verifier_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
@@ -921,9 +1020,19 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
         assert passed is False
         assert revision == "ls -la --color=auto"
+        assert verifier_reason == VerifierReason.REVISED
 
     @pytest.mark.asyncio
     async def test_verifier_exception_raises_verifier_failed_error(self):
+        from app.models.agents.tribunal import VoteBreakdown
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
         mock_provider = _make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("timeout")
         )
@@ -931,7 +1040,8 @@ class TestRunVerificationStage:
         with pytest.raises(TribunalVerifierFailedError):
             await _run_verification_stage(
                 provider=mock_provider, model="test-model", request="list files", guidelines="",
-                vote_winner="ls -la", operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+                vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
+                operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
                 verifier_enabled=True, emitter=TribunalEmitter(None, None),
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
@@ -942,18 +1052,27 @@ class TestBuildAndEmitResult:
 
     @pytest.mark.asyncio
     async def test_builds_complete_result(self):
-        from app.models.agents.tribunal import CandidateCommand
+        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
 
         candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
         ]
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member={"axiom": "ls -la"},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
         emitter = TribunalEmitter(None, None)
 
         result = await _build_and_emit_result(
             request="list files", guidelines="", final_command="ls -la",
             outcome=CommandGenerationOutcome.VERIFIED, candidates=candidates,
-            vote_winner="ls -la", vote_score=1.0, verifier_passed=True,
-            verifier_revision=None, emitter=emitter,
+            vote_winner="ls -la", vote_score=1.0, vote_breakdown=vote_breakdown,
+            verifier_passed=True, verifier_revision=None, verifier_reason=VerifierReason.OK,
+            emitter=emitter,
         )
 
         assert result.request == "list files"
@@ -961,8 +1080,10 @@ class TestBuildAndEmitResult:
         assert result.outcome == CommandGenerationOutcome.VERIFIED
         assert result.vote_winner == "ls -la"
         assert result.vote_score == 1.0
+        assert result.vote_breakdown is not None
         assert result.verifier_passed is True
         assert result.verifier_revision is None
+        assert result.verifier_reason == VerifierReason.OK
 
 
 class TestGenerateCommandHappyPath:

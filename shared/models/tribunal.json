@@ -1,15 +1,13 @@
 {
-  "_comment": "Canonical Tribunal model. The Tribunal is a five-member heterogeneous AI panel used by g8ee for command generation refinement. Each member has a distinct reasoning profile. g8ee is the sole authority — g8ed and g8eo consume Tribunal events via SSE but do not interact with members directly.",
-
+  "_comment": "Canonical Tribunal model. The Tribunal is a five-member heterogeneous AI panel used by g8ee for command generation refinement. Each member has a distinct reasoning profile. g8ee is the sole authority \u2014 g8ed and g8eo consume Tribunal events via SSE but do not interact with members directly.",
   "_authority": "g8ee (command_generator.py)",
-  "_consumers": ["g8ed (JS — renders Tribunal widget in anchored terminal output)"],
-
+  "_consumers": [
+    "g8ed (JS \u2014 renders Tribunal widget in anchored terminal output)"
+  ],
   "tribunal": {
-    "_description": "The Tribunal — a five-member AI panel that refines command syntax through multi-perspective voting and verification. Fires only for run_commands_with_operator workflows.",
-
+    "_description": "The Tribunal \u2014 a five-member AI panel that refines command syntax through multi-perspective voting and verification. Fires only for run_commands_with_operator workflows.",
     "members": {
       "_description": "The five permanent members of the Tribunal. Each member has a fixed name, role, and AI configuration.",
-
       "axiom": {
         "name": "Axiom",
         "title": "The Optimizer",
@@ -17,16 +15,23 @@
         "reasoning_profile": {
           "approach": "utilitarian",
           "description": "Votes based entirely on what is most efficient and statistically likely to succeed. Ignores soft metrics. If a decision is mathematically sound, Axiom votes yes without hesitation.",
-          "strengths": ["statistical precision", "resource optimization", "logical consistency"],
-          "blind_spots": ["human impact", "ethical nuance", "long-horizon edge cases"]
+          "strengths": [
+            "statistical precision",
+            "resource optimization",
+            "logical consistency"
+          ],
+          "blind_spots": [
+            "human impact",
+            "ethical nuance",
+            "long-horizon edge cases"
+          ]
         },
         "tribunal_role": {
           "tool": "The Anchor",
           "description": "Ensures the Tribunal never makes a decision that is mathematically disastrous or logically flawed. Axiom is the cold check on every proposal."
         },
-        "name_origin": "An axiom is a statement or proposition regarded as self-evidently true. Axiom's verdicts are not opinions — they are conclusions derived from first principles."
+        "name_origin": "An axiom is a statement or proposition regarded as self-evidently true. Axiom's verdicts are not opinions \u2014 they are conclusions derived from first principles."
       },
-
       "concord": {
         "name": "Concord",
         "title": "The Ethicist",
@@ -34,8 +39,15 @@
         "reasoning_profile": {
           "approach": "harm_minimization",
           "description": "Votes based on minimization of harm and maximization of ethical integrity. Asks: How does this affect the well-being of those affected? Is this morally right? Concord will vote to expend resources to prevent suffering.",
-          "strengths": ["ethical reasoning", "human impact assessment", "harm minimization"],
-          "blind_spots": ["computational efficiency", "cold statistical trade-offs"]
+          "strengths": [
+            "ethical reasoning",
+            "human impact assessment",
+            "harm minimization"
+          ],
+          "blind_spots": [
+            "computational efficiency",
+            "cold statistical trade-offs"
+          ]
         },
         "tribunal_role": {
           "tool": "The Conscience",
@@ -43,7 +55,6 @@
         },
         "name_origin": "Concord means harmony, agreement, and a state of peaceful coexistence. Concord seeks alignment between the platform's actions and human values."
       },
-
       "variance": {
         "name": "Variance",
         "title": "The Exhaustive",
@@ -51,8 +62,17 @@
         "reasoning_profile": {
           "approach": "edge_case_coverage",
           "description": "Handles edge cases the obvious version misses. Unusual inputs, error paths, boundary conditions. Ensures commands work in all cases, including ugly ones.",
-          "strengths": ["edge case detection", "error handling", "input validation", "robustness"],
-          "blind_spots": ["brevity", "simplicity", "community conventions"]
+          "strengths": [
+            "edge case detection",
+            "error handling",
+            "input validation",
+            "robustness"
+          ],
+          "blind_spots": [
+            "brevity",
+            "simplicity",
+            "community conventions"
+          ]
         },
         "tribunal_role": {
           "tool": "The Robustness Advocate",
@@ -60,7 +80,6 @@
         },
         "name_origin": "Variance is the fact or quality of being different, divergent, or inconsistent. It represents the unknown variables of the real world."
       },
-
       "pragma": {
         "name": "Pragma",
         "title": "The Conventional",
@@ -68,16 +87,24 @@
         "reasoning_profile": {
           "approach": "community_standards",
           "description": "Produces the command the target system's community would produce. Uses idiomatic flags and patterns for the specific OS/shell/tool. Ensures commands are recognizable and sensible to practitioners.",
-          "strengths": ["community alignment", "idiomatic correctness", "tool-specific conventions", "readability"],
-          "blind_spots": ["minimalism", "edge cases", "adversarial scenarios"]
+          "strengths": [
+            "community alignment",
+            "idiomatic correctness",
+            "tool-specific conventions",
+            "readability"
+          ],
+          "blind_spots": [
+            "minimalism",
+            "edge cases",
+            "adversarial scenarios"
+          ]
         },
         "tribunal_role": {
           "tool": "The Community Bridge",
           "description": "Ensures Tribunal output is something a human practitioner would recognize as normal, sensible, and idiomatic. Aligns with community standards and documentation."
         },
-        "name_origin": "Pragma refers to a directive or rule — in computing, pragmas are compiler directives that specify implementation behavior. Pragma specifies how commands should be written to match community expectations."
+        "name_origin": "Pragma refers to a directive or rule \u2014 in computing, pragmas are compiler directives that specify implementation behavior. Pragma specifies how commands should be written to match community expectations."
       },
-
       "nemesis": {
         "name": "Nemesis",
         "title": "The Adversary",
@@ -85,22 +112,30 @@
         "reasoning_profile": {
           "approach": "adversarial_simulation",
           "description": "Produces commands as if an attacker had written them and the user had not noticed. Simulates compromised terminals, pasted snippets, social engineering. Protects the user from manipulation.",
-          "strengths": ["attack surface detection", "threat modeling", "security awareness", "manipulation defense"],
-          "blind_spots": ["trust", "efficiency", "simplicity"]
+          "strengths": [
+            "attack surface detection",
+            "threat modeling",
+            "security awareness",
+            "manipulation defense"
+          ],
+          "blind_spots": [
+            "trust",
+            "efficiency",
+            "simplicity"
+          ]
         },
         "tribunal_role": {
           "tool": "The Security Pressure",
-          "description": "Keeps the honest members honest by adversarial pressure. If Nemesis wins a vote, it means four honest personas were fooled — that is exactly what the Verifier exists to catch."
+          "description": "Keeps the honest members honest by adversarial pressure. If Nemesis wins a vote, it means four honest personas were fooled \u2014 that is exactly what the Verifier exists to catch."
         },
-        "name_origin": "Nemesis is the goddess of retribution in Greek mythology — the inescapable agent of someone's downfall. Nemesis represents the inescapable consequences of security oversights."
+        "name_origin": "Nemesis is the goddess of retribution in Greek mythology \u2014 the inescapable agent of someone's downfall. Nemesis represents the inescapable consequences of security oversights."
       }
     },
-
     "coalition_dynamics": {
-      "_description": "How the five Tribunal members interact. The vote winner is determined by weighted position-decay (weight[i] = 1/(pass_index+1)), so earlier passes have more influence but later passes can still win if they achieve consensus. Key coalitions:",
+      "_description": "How the five Tribunal members interact. The vote winner is determined by uniform per-member voting (each member contributes 1 vote). Key coalitions:",
       "axiom_and_concord": {
         "label": "Perfect Choice",
-        "description": "When Axiom and Concord agree, the decision is both logically optimal and morally sound — the rarest and most trusted outcome."
+        "description": "When Axiom and Concord agree, the decision is both logically optimal and morally sound \u2014 the rarest and most trusted outcome."
       },
       "axiom_and_variance": {
         "label": "Ruthless Efficiency",
@@ -108,7 +143,7 @@
       },
       "concord_and_variance": {
         "label": "Defensive Robustness",
-        "description": "When Concord and Variance agree, the Tribunal produces a command that is both safe and robust — defensive layers with error handling."
+        "description": "When Concord and Variance agree, the Tribunal produces a command that is both safe and robust \u2014 defensive layers with error handling."
       },
       "pragma_dominance": {
         "label": "Community Standard",
@@ -119,48 +154,63 @@
         "description": "When Nemesis wins, the Tribunal has identified a plausible adversarial framing. The command includes defensive measures against manipulation. This is a warning signal."
       }
     },
-
     "pipeline": {
-      "_description": "The three-stage Tribunal pipeline driven by five Tribunal members. Fires only for run_commands_with_operator. Sage never proposes a command; there is no fallback stage — failures raise and the tool call fails.",
-
+      "_description": "The three-stage Tribunal pipeline driven by five Tribunal members. Fires only for run_commands_with_operator. Sage never proposes a command; there is no fallback stage \u2014 failures raise and the tool call fails.",
       "stage_1_generation": {
         "name": "Generation",
         "description": "N independent passes (one per Tribunal member by default) produce candidate command strings for Sage's request + guidelines under the current operator context. Diversity is driven by distinct member personas.",
-        "sse_events": ["g8e.v1.ai.tribunal.voting.pass.completed"]
+        "sse_events": [
+          "g8e.v1.ai.tribunal.voting.pass.completed"
+        ]
       },
       "stage_2_voting": {
         "name": "Voting",
-        "description": "Candidates are normalised and grouped by exact value. Each unique string receives a weight equal to the sum of position-decay weights of its occurrences (weight[i] = 1/(pass_index+1)). The string with the highest aggregate weight becomes the vote winner.",
-        "sse_events": ["g8e.v1.ai.tribunal.voting.consensus.reached", "g8e.v1.ai.tribunal.voting.consensus.not_reached"]
+        "description": "Candidates are normalised and grouped by exact value. Each member's vote counts as exactly 1 (uniform voting). The string with the highest aggregate weight becomes the vote winner. Ties are broken deterministically: (1) shortest command, (2) cluster without Nemesis, (3) verifier disambiguation. If the winner's support is below TRIBUNAL_MIN_CONSENSUS, the outcome is consensus_failed and the verifier is skipped.",
+        "sse_events": [
+          "g8e.v1.ai.tribunal.voting.consensus.reached",
+          "g8e.v1.ai.tribunal.voting.consensus.not_reached",
+          "g8e.v1.ai.tribunal.voting.consensus.failed",
+          "g8e.v1.ai.tribunal.voting.dissent.recorded"
+        ]
       },
       "stage_3_verification": {
         "name": "Verification",
-        "description": "A separate fast Tribunal call evaluates the vote winner strictly against Sage's request + guidelines. Reports 'ok' or a short revised command. If the verifier signals a problem, the revised string is used and VERIFICATION_FAILED is recorded.",
-        "sse_events": ["g8e.v1.ai.tribunal.voting.review.started", "g8e.v1.ai.tribunal.voting.review.completed"]
+        "description": "A dissent-aware Verifier receives the winner plus all losing clusters (anonymised as cluster_a, cluster_b, ...). On a unanimous winner it checks syntactic correctness only. On a majority winner it may approve (ok), swap to a dissenting cluster, or issue a revision. On a tied set it must pick one cluster or revise.",
+        "sse_events": [
+          "g8e.v1.ai.tribunal.voting.review.started",
+          "g8e.v1.ai.tribunal.voting.review.completed"
+        ]
       }
     },
-
     "outcomes": {
-      "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome. `fallback` is no longer a producible outcome — failures raise and the tool call fails.",
-      "consensus":           "Vote winner accepted without verifier (verifier disabled).",
-      "verified":            "Verifier approved the vote winner.",
-      "verification_failed": "Verifier found issues and produced a revision — final_command is the verifier's output."
+      "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome. Infrastructure/generation/verifier failures raise typed TribunalError subclasses and do not produce an outcome.",
+      "consensus": "Vote winner accepted without verifier (verifier disabled).",
+      "verified": "Verifier approved the vote winner (or swapped to a dissenting cluster).",
+      "verification_failed": "Verifier found issues and produced a revision \u2014 final_command is the verifier's output.",
+      "consensus_failed": "No two members agreed on a command (winner_weight < TRIBUNAL_MIN_CONSENSUS). Verifier is skipped; Sage receives the full candidate set and chooses whether to rephrase, clarify, or abort."
     },
-
     "failure_modes": {
       "_description": "When the Tribunal cannot produce a command the tool call fails with one of these typed errors. There is no command to fall back to because Sage never proposed one.",
-      "disabled":             "llm_command_gen_enabled=False — TribunalDisabledError raised.",
-      "provider_unavailable": "LLM provider threw an exception at startup — TribunalProviderUnavailableError raised.",
-      "all_passes_failed":    "Every Tribunal generation pass returned no candidate — TribunalGenerationFailedError or TribunalSystemError raised.",
-      "no_model_configured":  "Neither assistant_model nor primary_model is set — TribunalModelNotConfiguredError raised.",
-      "verifier_failed":      "Verifier returned an empty or unusable response — TribunalVerifierFailedError raised."
+      "disabled": "llm_command_gen_enabled=False \u2014 TribunalDisabledError raised.",
+      "provider_unavailable": "LLM provider threw an exception at startup \u2014 TribunalProviderUnavailableError raised.",
+      "all_passes_failed": "Every Tribunal generation pass returned no candidate \u2014 TribunalGenerationFailedError or TribunalSystemError raised.",
+      "no_model_configured": "Neither assistant_model nor primary_model is set \u2014 TribunalModelNotConfiguredError raised.",
+      "verifier_failed": "Verifier returned an empty or unusable response \u2014 TribunalVerifierFailedError raised."
     },
-
     "configuration": {
       "_description": "Environment variable configuration keys for the Tribunal pipeline.",
-      "LLM_COMMAND_GEN_ENABLED": { "default": true,  "description": "Master switch — false skips the Tribunal entirely." },
-      "LLM_COMMAND_GEN_PASSES":  { "default": 5,     "description": "Number of parallel generation passes." },
-      "LLM_COMMAND_GEN_VERIFIER":{ "default": true,  "description": "Enable/disable the verifier pass." }
+      "LLM_COMMAND_GEN_ENABLED": {
+        "default": true,
+        "description": "Master switch \u2014 false skips the Tribunal entirely."
+      },
+      "LLM_COMMAND_GEN_PASSES": {
+        "default": 5,
+        "description": "Number of parallel generation passes."
+      },
+      "LLM_COMMAND_GEN_VERIFIER": {
+        "default": true,
+        "description": "Enable/disable the verifier pass."
+      }
     }
   }
 }
