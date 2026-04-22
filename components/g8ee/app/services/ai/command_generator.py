@@ -152,9 +152,11 @@ class TribunalEmitter:
     async def emit(self, event_type: EventType, payload: Any) -> None:
         """Emit an SSE event. Re-raises if event_type is terminal."""
         try:
+            if self.event_service is None or self.g8e_context is None:
+                return
             event = SessionEvent(
                 event_type=event_type,
-                payload=payload.model_dump() if hasattr(payload, "model_dump") else payload,
+                payload=payload,
                 web_session_id=self.g8e_context.web_session_id,
                 user_id=self.g8e_context.user_id,
                 case_id=self.g8e_context.case_id,
@@ -385,15 +387,17 @@ def _validate_command_safety(
 
     # Check blacklist
     if blacklisting_enabled:
-        is_allowed, blacklist_result = validate_command_against_blacklist(command)
+        blacklist_result = validate_command_against_blacklist(command)
+        is_allowed = blacklist_result.is_allowed
         if not is_allowed:
             return False, f"Command blocked by blacklist: {blacklist_result.reason if blacklist_result else 'Unknown reason'}"
 
     # Check whitelist
     if whitelisting_enabled:
-        is_valid, whitelist_result = validate_command_against_whitelist(
-            command, operator_context
+        whitelist_result = validate_command_against_whitelist(
+            command, operator_context.os
         )
+        is_valid = whitelist_result.is_valid
         if not is_valid:
             return False, f"Command not whitelisted: {whitelist_result.reason if whitelist_result else 'Unknown reason'}"
 
@@ -409,8 +413,13 @@ async def _fail_verifier(
 ) -> NoReturn:
     """Emit a verifier failure event and raise TribunalVerifierFailedError."""
     await emitter.emit(
-        EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
-        TribunalVerifierCompletedPayload(passed=False, reason=reason),
+        EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+        TribunalSessionVerifierFailedPayload(
+            request=request,
+            reason=reason,
+            error=error_msg,
+            candidate_command=candidate_command,
+        ),
     )
     raise TribunalVerifierFailedError(
         reason=reason,
@@ -455,7 +464,7 @@ def _resolve_model(llm_settings: LLMSettings, request: str = "") -> str:
     )
 
 
-def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
+def _weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Compute uniform-weighted majority vote with deterministic tie-breaking.
 
     Each member contributes exactly 1 vote per candidate (no position decay).
@@ -463,6 +472,9 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
       1. Longest command wins (compositional pressure)
       2. Non-Nemesis cluster wins over Nemesis-including cluster
       3. Alphabetical (deterministic fallback)
+
+    consensus_strength is calculated as max_votes / total_members, where total_members
+    is the count of members who were asked to produce (not the count of unique candidates).
 
     Returns (vote_winner, vote_score, vote_breakdown, tied_candidates).
     """
@@ -499,7 +511,7 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
             winner=None,
             winner_supporters=[],
             dissenters_by_command=candidates_by_command,
-            consensus_strength=max_votes / len(candidates) if candidates else 0.0,
+            consensus_strength=max_votes / total_members if total_members > 0 else 0.0,
             tie_broken=False,
             tie_break_reason=None,
         ), None
@@ -510,13 +522,13 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
     if len(top_candidates) == 1:
         winner = top_candidates[0]
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
-        return winner, max_votes / len(candidates), VoteBreakdown(
+        return winner, max_votes / total_members, VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
             winner_supporters=candidates_by_command[winner],
             dissenters_by_command=dissenters,
-            consensus_strength=max_votes / len(candidates),
+            consensus_strength=max_votes / total_members,
             tie_broken=False,
             tie_break_reason=None,
         ), None
@@ -529,13 +541,13 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
         winner = shortest_cmd
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
         tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-        return winner, max_votes / len(candidates), VoteBreakdown(
+        return winner, max_votes / total_members, VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
             winner_supporters=candidates_by_command[winner],
             dissenters_by_command=dissenters,
-            consensus_strength=max_votes / len(candidates),
+            consensus_strength=max_votes / total_members,
             tie_broken=True,
             tie_break_reason=TieBreakReason.SHORTEST,
         ), tied_candidates
@@ -546,17 +558,21 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
         cmd for cmd in top_candidates
         if not any(m in nemesis_members for m in candidates_by_command[cmd])
     ]
-    if non_nemesis_candidates and len(non_nemesis_candidates) < len(top_candidates):
+    nemesis_including_candidates = [
+        cmd for cmd in top_candidates
+        if any(m in nemesis_members for m in candidates_by_command[cmd])
+    ]
+    if non_nemesis_candidates and nemesis_including_candidates:
         winner = non_nemesis_candidates[0]
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
         tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-        return winner, max_votes / len(candidates), VoteBreakdown(
+        return winner, max_votes / total_members, VoteBreakdown(
             candidates_by_member=candidates_by_member,
             candidates_by_command=candidates_by_command,
             winner=winner,
             winner_supporters=candidates_by_command[winner],
             dissenters_by_command=dissenters,
-            consensus_strength=max_votes / len(candidates),
+            consensus_strength=max_votes / total_members,
             tie_broken=True,
             tie_break_reason=TieBreakReason.EXCLUDED_NEMESIS,
         ), tied_candidates
@@ -565,13 +581,13 @@ def _weighted_vote(candidates: list[CandidateCommand]) -> tuple[str | None, floa
     winner = sorted(top_candidates)[0]
     dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
     tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
-    return winner, max_votes / len(candidates), VoteBreakdown(
+    return winner, max_votes / total_members, VoteBreakdown(
         candidates_by_member=candidates_by_member,
         candidates_by_command=candidates_by_command,
         winner=winner,
         winner_supporters=candidates_by_command[winner],
         dissenters_by_command=dissenters,
-        consensus_strength=max_votes / len(candidates),
+        consensus_strength=max_votes / total_members,
         tie_broken=True,
         tie_break_reason=None,
     ), tied_candidates
@@ -1102,12 +1118,13 @@ async def _run_voting_stage(
     candidates: list[CandidateCommand],
     request: str,
     emitter: TribunalEmitter,
+    total_members: int,
 ) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Stage 2: compute weighted majority vote and emit consensus event.
 
     Returns (vote_winner, vote_score, vote_breakdown, tied_candidates).
     """
-    vote_winner, vote_score, vote_breakdown, tied_candidates = _weighted_vote(candidates)
+    vote_winner, vote_score, vote_breakdown, tied_candidates = _weighted_vote(candidates, total_members)
 
     if vote_winner is None:
         # Check if we have a winner but consensus strength is too low
@@ -1394,11 +1411,12 @@ async def generate_command(
         provider = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
         logger.error("[TRIBUNAL] Provider initialization failed: %s", exc)
+        provider_str = str(settings.llm.assistant_provider) if settings.llm.assistant_provider else "None"
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             TribunalSessionProviderUnavailablePayload(
                 request=request,
-                provider=settings.llm.assistant_provider,
+                provider=provider_str,
                 error=str(exc),
             ),
         )
@@ -1415,7 +1433,7 @@ async def generate_command(
     )
 
     vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
-        candidates=candidates, request=request, emitter=emitter,
+        candidates=candidates, request=request, emitter=emitter, total_members=num_passes,
     )
 
     if vote_winner is None and vote_breakdown.tie_break_reason != TieBreakReason.VERIFIER_DISAMBIGUATION:

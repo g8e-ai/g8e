@@ -11,6 +11,6 @@
     "passed": { "type": "boolean", "description": "True if the verifier approves the candidate." },
     "revision": { "type": "string", "nullable": true, "description": "The revised command string if the verifier rejects the candidate." },
     "reason": { "type": "string", "description": "Reasoning for the approval or rejection." },
-    "reason_enum": { "type": "string", "enum": ["ok", "revised", "empty_response", "no_valid_revision", "verifier_error"] }
+    "reason_enum": { "type": "string", "enum": ["ok", "revised", "empty_response", "no_valid_revision", "verifier_error", "swapped_to_dissenter", "revised_from_dissent"] }
   }
 }

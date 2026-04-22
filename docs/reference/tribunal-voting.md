@@ -140,6 +140,37 @@ Replace position-decay weighting with uniform per-member voting, deterministic t
 - [x] **2.17** Write tests covering all voting scenarios. Added tests for 5/5 unanimous, 4/1 majority, 3/2 majority, 2/2/1 tied-top (shortest command), non-Nemesis cluster tie-breaker. Added verifier path tests: swap-to-dissenter, revise-from-dissent, tied-mode disambiguation, malformed-response retry. Implementation aligned with SHORTEST tie-breaker and fractional scores. Some test failures remain due to payload structure changes and missing event types that require further investigation.
 - [ ] **2.18** Run full benchmark suite. Compare to Phase 1 baseline.
 
+### Ollama Fallback Removal (Post-Phase 2 Work)
+
+**Status**: In Progress - Test fixes partially complete
+
+**Changes Made:**
+- Removed ollama defaults from LLMSettings (primary_provider, assistant_provider, lite_provider, ollama_endpoint all default to None)
+- Removed ollama fallback in settings_service.py
+- Updated gateway_service.py comment to reflect explicit provider configuration requirement
+- Removed fallbacks in _run_verifier (vote_winner fallback, hardcoded verifier_persona)
+- Fixed tests to expect None instead of OLLAMA provider
+- Fixed tests to pass verifier_persona parameter explicitly
+
+**Test Fixes Completed:**
+- Fixed missing `get_agent_persona` import in test_command_generator.py and test_tribunal_safety.py
+- Fixed TribunalSessionProviderUnavailablePayload validation error (provider=None → "None" string)
+- Fixed CommandBlacklistResult unpacking error (function returns object, not tuple)
+- Fixed validate_command_against_whitelist unpacking error (function returns object, not tuple)
+- Fixed g8e_context.web_session_id AttributeError by adding mock G8eHttpContext helper
+- Fixed enum mismatches:
+  - Updated verifier.json to include swapped_to_dissenter and revised_from_dissent in reason_enum
+  - Updated status.json to include consensus_failed in tribunal.outcome
+
+**Remaining Test Failures:**
+- G8eHttpContext requires source_component field in mock helper
+- Test assertions expecting outdated behavior (payload structure changes, missing event types)
+- TestNormaliseCommand.test_multi_line assertion failure
+- TestPipelineTemplateContract failures (template rendering, verifier_context KeyError)
+- TestSharpenedTribunalPersonas.test_axiom_is_the_minimalist assertion failure
+- TestCommandGenerationOutcomeMatchesSharedJSON.test_all_members_covered assertion failure
+- TestSharedModelJSONEnumsMatchG8ee.test_verifier_reason_enum_matches assertion failure
+
 ### Deliverables
 
 - Rewritten `_weighted_vote` with uniform voting and explicit tie-breaking

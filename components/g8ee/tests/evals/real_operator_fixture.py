@@ -25,6 +25,7 @@ g8e-network where it can reach g8e.local.
 import asyncio
 import logging
 import os
+import ssl
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -85,8 +86,9 @@ class RealOperatorFixture:
 
         logger.info("[REAL-OP-FIXTURE] Downloading operator binary from g8e.local")
 
+        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
         async with httpx.AsyncClient(
-            verify="/g8es/ca.crt" if os.path.exists("/g8es/ca.crt") else False,
+            verify=verify_context,
             timeout=30.0,
         ) as client:
             # Download binary
@@ -170,8 +172,9 @@ class RealOperatorFixture:
         if self.internal_auth_token:
             headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
 
+        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
         async with httpx.AsyncClient(
-            verify="/g8es/ca.crt" if os.path.exists("/g8es/ca.crt") else False,
+            verify=verify_context,
             timeout=10.0,
         ) as client:
             start_time = asyncio.get_event_loop().time()
@@ -249,8 +252,9 @@ class RealOperatorFixture:
         if self.internal_auth_token:
             headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
 
+        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
         async with httpx.AsyncClient(
-            verify="/g8es/ca.crt" if os.path.exists("/g8es/ca.crt") else False,
+            verify=verify_context,
             timeout=10.0,
         ) as client:
             try:
@@ -282,8 +286,9 @@ class RealOperatorFixture:
         if self.internal_auth_token:
             headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
 
+        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
         async with httpx.AsyncClient(
-            verify="/g8es/ca.crt" if os.path.exists("/g8es/ca.crt") else False,
+            verify=verify_context,
             timeout=10.0,
         ) as client:
             try:

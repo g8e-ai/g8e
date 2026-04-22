@@ -23,7 +23,9 @@ from app.services.ai.command_generator import (
 )
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalGenerationFailedError, TribunalVerifierFailedError
-from app.constants import VerifierReason
+from app.constants import VerifierReason, ComponentName
+from app.utils.agent_persona_loader import get_agent_persona
+from app.models.http_context import G8eHttpContext
 
 def _make_mock_operator_context(os="linux"):
     return OperatorContext(
@@ -35,6 +37,17 @@ def _make_mock_operator_context(os="linux"):
         working_directory="/home/testuser",
         hostname="testhost",
         architecture="x86_64",
+    )
+
+
+def _make_mock_g8e_context() -> G8eHttpContext:
+    """Create a mock G8eHttpContext for tests."""
+    return G8eHttpContext(
+        web_session_id="test-session-id",
+        user_id="test-user-id",
+        case_id="test-case-id",
+        investigation_id="test-investigation-id",
+        source_component=ComponentName.G8EE,
     )
 
 class TestNormaliseCommand:
@@ -93,7 +106,7 @@ class TestVerifierSafety:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
         with patch("app.services.ai.command_generator.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
@@ -172,7 +185,7 @@ class TestStructuredOutputSupport:
         
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
         from app.services.ai.command_generator import _run_generation_pass
         

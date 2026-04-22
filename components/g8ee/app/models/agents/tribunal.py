@@ -233,7 +233,7 @@ class VoteBreakdown(G8eBaseModel):
         default=0.0,
         ge=0.0,
         le=1.0,
-        description="winner_supporters / total_members; 0.0 on consensus_failed",
+        description="Ratio of winning-cluster member count to total Tribunal members, regardless of whether consensus was reached. A winner of None indicates consensus failure irrespective of strength value.",
     )
     tie_broken: bool = Field(
         default=False,

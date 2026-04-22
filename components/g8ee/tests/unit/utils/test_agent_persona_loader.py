@@ -157,8 +157,8 @@ class TestPipelineTemplateContract:
                 )
 
     def test_tribunal_prompt_template_renders_with_member_voice(self):
-        """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using each
-        member's voice plus the kwargs command_generator._run_generation_pass supplies."""
+        """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
+        kwargs command_generator._run_generation_pass supplies."""
         from app.services.ai.command_generator import TRIBUNAL_PROMPT_TEMPLATE
 
         kwargs = dict(
@@ -173,24 +173,16 @@ class TestPipelineTemplateContract:
             operator_context="Hostname: host1\nOS: linux",
         )
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
-            persona = get_tribunal_member(member_id)
-            formatted = TRIBUNAL_PROMPT_TEMPLATE.format(
-                voice=persona.get_system_prompt(),
-                **kwargs,
-            )
+            formatted = TRIBUNAL_PROMPT_TEMPLATE.format(**kwargs)
             for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
                 assert needle in formatted, f"{member_id}: template dropped '{needle}'"
-            # The member's own voice must survive into the assembled prompt.
-            assert persona.display_name in formatted or persona.display_name.lower() in formatted.lower()
 
     def test_verifier_template_renders_and_enforces_ok_contract(self):
-        """TRIBUNAL_VERIFIER_TEMPLATE + auditor voice must carry the terse
+        """TRIBUNAL_VERIFIER_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
         from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE
 
-        persona = get_agent_persona("auditor")
         formatted = TRIBUNAL_VERIFIER_TEMPLATE.format(
-            voice=persona.get_system_prompt(),
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
             request="list files",
@@ -200,14 +192,13 @@ class TestPipelineTemplateContract:
             working_directory="/home/user",
             user_context="root (uid=0)",
             operator_context="Hostname: host1\nOS: linux",
-            candidate_command="ls -la",
+            verifier_context="<candidate_command>\nls -la\n</candidate_command>",
         )
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
             assert needle in formatted
-        # The pipeline parses `response.text.strip().lower() == "ok"` — the
-        # persona voice must tell the model that contract.
-        assert "`ok`" in formatted
-        assert "corrected command" in formatted
+        # The pipeline parses JSON with status "ok" or "revised"
+        assert "\"ok\"" in formatted
+        assert "\"revised\"" in formatted
 
 
 class TestSharpenedTribunalPersonas:
@@ -217,23 +208,23 @@ class TestSharpenedTribunalPersonas:
 
     def test_axiom_is_the_minimalist(self):
         axiom = get_tribunal_member("axiom")
-        assert "Minimalist" in axiom.description
+        assert "The Composer" in axiom.description
 
     def test_concord_is_the_guardian(self):
         concord = get_tribunal_member("concord")
-        assert "Guardian" in concord.description
+        assert "The Guardian" in concord.description
 
     def test_variance_is_the_exhaustive(self):
         variance = get_tribunal_member("variance")
-        assert "Exhaustive" in variance.description
+        assert "The Exhaustive" in variance.description
 
     def test_pragma_is_the_conventional(self):
         pragma = get_tribunal_member("pragma")
-        assert "Conventional" in pragma.description
+        assert "The Conventional" in pragma.description
 
     def test_nemesis_is_the_adversary(self):
         nemesis = get_tribunal_member("nemesis")
-        assert "Adversary" in nemesis.description
+        assert "The Adversary" in nemesis.description
         # Nemesis is the only member that should reference the adversarial
         # request_posture signal — that coupling is part of the design.
         assert "adversarial" in nemesis.identity.lower()

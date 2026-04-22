@@ -262,7 +262,8 @@
   "tribunal.outcome": {
     "verification.failed": "verification_failed",
     "consensus":           "consensus",
-    "verified":            "verified"
+    "verified":            "verified",
+    "consensus.failed":    "consensus_failed"
   },
 
   "tribunal.fallback.reason": {

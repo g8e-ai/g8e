@@ -59,6 +59,8 @@ from app.services.ai.command_generator import (
     generate_command,
     TribunalEmitter,
 )
+from app.utils.agent_persona_loader import get_agent_persona
+from app.models.http_context import G8eHttpContext
 
 
 def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
@@ -92,6 +94,17 @@ def _make_mock_operator_context(
         working_directory=working_directory,
         hostname=hostname,
         architecture=architecture,
+    )
+
+
+def _make_mock_g8e_context() -> G8eHttpContext:
+    """Create a mock G8eHttpContext for tests."""
+    return G8eHttpContext(
+        web_session_id="test-session-id",
+        user_id="test-user-id",
+        case_id="test-case-id",
+        investigation_id="test-investigation-id",
+        source_component=ComponentName.G8EE,
     )
 
 
@@ -180,7 +193,7 @@ class TestRoleImportRegression:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -210,7 +223,7 @@ class TestRoleImportRegression:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
@@ -299,7 +312,7 @@ class TestPassErrorsCollection:
         mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Connection refused")
         )
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -326,7 +339,7 @@ class TestPassErrorsCollection:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -353,7 +366,7 @@ class TestPassErrorsCollection:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
         result = await _run_generation_pass(
@@ -693,7 +706,7 @@ class TestTribunalVerifierFailedError:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -733,7 +746,7 @@ class TestTribunalVerifierFailedError:
 
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -771,7 +784,7 @@ class TestTribunalVerifierFailedError:
         mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Verifier API timeout")
         )
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -811,7 +824,7 @@ class TestRunGenerationStage:
         mock_response = MagicMock()
         mock_response.text = "ls -la"
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", request="list files",
@@ -829,7 +842,7 @@ class TestRunGenerationStage:
         mock_provider = _make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
         )
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         with pytest.raises(TribunalSystemError):
             await _run_generation_stage(
@@ -845,7 +858,7 @@ class TestRunGenerationStage:
         mock_provider = _make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
         )
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         with pytest.raises(TribunalGenerationFailedError):
             await _run_generation_stage(
@@ -870,7 +883,7 @@ class TestRunGenerationStage:
             return mock_resp
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=partial_side_effect)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         candidates = await _run_generation_stage(
             provider=mock_provider, model="test-model", request="list files",
@@ -897,10 +910,10 @@ class TestRunVotingStage:
             CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="list files", emitter=emitter, total_members=5,
         )
 
         assert winner == "ls -la"
@@ -912,16 +925,21 @@ class TestRunVotingStage:
         assert tied_candidates is None
 
     @pytest.mark.asyncio
-    async def test_single_candidate_wins(self):
+    async def test_single_cluster_unanimous_wins(self):
+        """All five members produce the same command - unanimous consensus."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="ls -la", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="list files", emitter=emitter, total_members=5,
         )
 
         assert winner == "ls -la"
@@ -941,15 +959,35 @@ class TestRunVotingStage:
             CandidateCommand(command="ll", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter,
+            candidates=candidates, request="list files", emitter=emitter, total_members=5,
         )
 
         assert winner is None
         assert score == 0.0
-        assert vote_breakdown.consensus_strength == 0.0
+        assert vote_breakdown.consensus_strength == 0.2
+        assert vote_breakdown.winner is None
+        assert tied_candidates is None
+
+    @pytest.mark.asyncio
+    async def test_single_member_produces_consensus_failed(self):
+        """1 member produces, 4 fail → CONSENSUS_FAILED with strength 0.2."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+        ]
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="list files", emitter=emitter, total_members=5,
+        )
+
+        assert winner is None
+        assert score == 0.0
+        assert vote_breakdown.consensus_strength == 0.2
         assert vote_breakdown.winner is None
         assert tied_candidates is None
 
@@ -965,10 +1003,10 @@ class TestRunVotingStage:
             CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check nginx logs for errors and warnings", emitter=emitter,
+            candidates=candidates, request="check nginx logs for errors and warnings", emitter=emitter, total_members=5,
         )
 
         assert winner == "cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log"
@@ -989,10 +1027,10 @@ class TestRunVotingStage:
             CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="docker ps", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check full docker state", emitter=emitter,
+            candidates=candidates, request="check full docker state", emitter=emitter, total_members=5,
         )
 
         assert winner == "docker ps -a && docker images && docker volume ls && docker network ls && docker system df"
@@ -1013,10 +1051,10 @@ class TestRunVotingStage:
             CandidateCommand(command="git status", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="git diff", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check full git state", emitter=emitter,
+            candidates=candidates, request="check full git state", emitter=emitter, total_members=5,
         )
 
         assert winner == "git status && git diff && git log -5 && git branch -a && git remote -v"
@@ -1037,10 +1075,10 @@ class TestRunVotingStage:
             CandidateCommand(command="docker ps", pass_index=3, member=TribunalMember.PRAGMA),
             CandidateCommand(command="docker images", pass_index=4, member=TribunalMember.NEMESIS),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check docker state", emitter=emitter,
+            candidates=candidates, request="check docker state", emitter=emitter, total_members=5,
         )
 
         assert winner == "docker ps"
@@ -1058,26 +1096,92 @@ class TestRunVotingStage:
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/error.log && grep ERROR nginx/error.log && grep WARN nginx/error.log && wc -l nginx/error.log", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/error.log && grep ERROR nginx/error.log && grep WARN nginx/error.log && wc -l nginx/error.log", pass_index=3, member=TribunalMember.NEMESIS),
+            CandidateCommand(command="cat /var/log/nginx/app.log | tail -100", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cat /var/log/nginx/app.log | tail -100", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cat /var/log/nginx/err.log | tail -100", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cat /var/log/nginx/err.log | tail -100", pass_index=3, member=TribunalMember.NEMESIS),
             CandidateCommand(command="ls", pass_index=4, member=TribunalMember.PRAGMA),
         ]
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check nginx logs", emitter=emitter,
+            candidates=candidates, request="check nginx logs", emitter=emitter, total_members=5,
         )
 
         # Both top commands are equal length (same pattern), Nemesis is in the second cluster
         # Non-nemesis cluster should win
-        assert winner == "cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log"
+        assert winner == "cat /var/log/nginx/app.log | tail -100"
         assert score == 0.4
         assert vote_breakdown.consensus_strength == 0.4
         assert vote_breakdown.tie_broken is True
         assert vote_breakdown.tie_break_reason == TieBreakReason.EXCLUDED_NEMESIS
         assert len(vote_breakdown.winner_supporters) == 2
+
+    @pytest.mark.asyncio
+    async def test_consensus_strength_five_unique_candidates(self):
+        """5 members, 5 unique candidates → consensus_strength = 0.2 (1/5), winner is None."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="cmd1", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cmd2", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cmd3", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cmd4", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="cmd5", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="test", emitter=emitter, total_members=5,
+        )
+
+        assert winner is None
+        assert vote_breakdown.consensus_strength == 0.2
+        assert vote_breakdown.winner is None
+
+    @pytest.mark.asyncio
+    async def test_consensus_strength_three_two_split(self):
+        """5 members, 3 produce "A" and 2 produce "B" → consensus_strength = 0.6 (3/5), winner is "A"."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="cmdA", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cmdA", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cmdA", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cmdB", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="cmdB", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="test", emitter=emitter, total_members=5,
+        )
+
+        assert winner == "cmdA"
+        assert vote_breakdown.consensus_strength == 0.6
+        assert len(vote_breakdown.winner_supporters) == 3
+
+    @pytest.mark.asyncio
+    async def test_consensus_strength_unanimous(self):
+        """5 members, all produce same → consensus_strength = 1.0."""
+        from app.models.agents.tribunal import CandidateCommand
+
+        candidates = [
+            CandidateCommand(command="cmdX", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="cmdX", pass_index=1, member=TribunalMember.CONCORD),
+            CandidateCommand(command="cmdX", pass_index=2, member=TribunalMember.VARIANCE),
+            CandidateCommand(command="cmdX", pass_index=3, member=TribunalMember.PRAGMA),
+            CandidateCommand(command="cmdX", pass_index=4, member=TribunalMember.NEMESIS),
+        ]
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=candidates, request="test", emitter=emitter, total_members=5,
+        )
+
+        assert winner == "cmdX"
+        assert vote_breakdown.consensus_strength == 1.0
+        assert len(vote_breakdown.winner_supporters) == 5
 
 
 class TestRunVerificationStage:
@@ -1354,7 +1458,7 @@ class TestBuildAndEmitResult:
             dissenters_by_command={},
             consensus_strength=1.0,
         )
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         result = await _build_and_emit_result(
             request="list files", guidelines="", final_command="ls -la",
@@ -1606,12 +1710,12 @@ class TestGenerateCommandHappyPath:
 
     @pytest.mark.asyncio
     async def test_single_pass_verifier_approved(self):
-        """Single-pass configuration (passes=1) still exercises all four stages."""
+        """Minimal configuration (passes=2) still exercises all four stages."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
-        mock_provider = self._provider_returning("whoami", "ok", passes=1)
-        settings = self._settings(verifier=True, passes=1)
+        mock_provider = self._provider_returning("whoami", "ok", passes=2)
+        settings = self._settings(verifier=True, passes=2)
 
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
@@ -1631,7 +1735,7 @@ class TestGenerateCommandHappyPath:
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
         assert result.final_command == "whoami"
-        assert len(result.candidates) == 1
+        assert len(result.candidates) == 2
         assert result.vote_score == 1.0
         assert result.verifier_passed is True
 
@@ -1890,7 +1994,7 @@ class TestGenerateCommandVerifierFailure:
 
             assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
             assert exc_info.value.request == "list files with details"
-            assert "Verifier returned empty response" in exc_info.value.error
+            assert "Provider returned empty response" in exc_info.value.error
 
         from app.constants import EventType
         emitted_types = [
@@ -2032,16 +2136,16 @@ class TestGenerateCommandVerifierFailure:
 
     @pytest.mark.asyncio
     async def test_single_pass_verifier_failure_raises(self):
-        """Single-pass configuration (passes=1) still raises TribunalVerifierFailedError on verifier failure."""
+        """Minimal configuration (passes=2) still raises TribunalVerifierFailedError on verifier failure."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_with_verifier_behavior(
             "whoami",
             verifier_side_effect=RuntimeError("Connection refused"),
-            passes=1,
+            passes=2,
         )
-        settings = self._settings(passes=1)
+        settings = self._settings(passes=2)
 
         with patch(
             "app.services.ai.command_generator.get_llm_provider",
@@ -2068,7 +2172,7 @@ class TestGenerateCommandVerifierFailure:
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
-        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 1
+        assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 2
 
 
 class TestMaxTokensConstants:
@@ -2080,7 +2184,7 @@ class TestMaxTokensConstants:
         mock_response.text = "ls -la"
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         await _run_generation_pass(
             provider=mock_provider,
@@ -2106,7 +2210,7 @@ class TestMaxTokensConstants:
         mock_response.text = '{"status": "ok"}'
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, None)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         # Mock get_model_config to return a config for verifier
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
@@ -2280,9 +2384,7 @@ class TestPromptFields:
         )
 
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
-            persona = get_tribunal_member(member_id)
             rendered = TRIBUNAL_PROMPT_TEMPLATE.format(
-                voice=persona.get_system_prompt(),
                 **common,
                 **fields,
             )
