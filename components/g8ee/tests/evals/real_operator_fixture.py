@@ -84,16 +84,19 @@ class RealOperatorFixture:
         operator_path = os.path.join(tempfile.gettempdir(), "g8e.operator")
         operator_sha_path = f"{operator_path}.sha256"
 
-        logger.info("[REAL-OP-FIXTURE] Downloading operator binary from g8e.local")
+        logger.info("[REAL-OP-FIXTURE] Downloading operator binary from %s", self.g8ed_url)
 
-        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
+        if os.path.exists("/g8es/ca.crt"):
+            verify = ssl.create_default_context(cafile="/g8es/ca.crt")
+        else:
+            verify = False
         async with httpx.AsyncClient(
-            verify=verify_context,
+            verify=verify,
             timeout=30.0,
         ) as client:
             # Download binary
             response = await client.get(
-                "https://g8e.local/operator/download/linux/amd64",
+                f"{self.g8ed_url}/operator/download/linux/amd64",
                 headers={"Authorization": f"Bearer {self.device_token}"},
             )
             response.raise_for_status()
@@ -103,7 +106,7 @@ class RealOperatorFixture:
 
             # Download and verify checksum
             response = await client.get(
-                "https://g8e.local/operator/download/linux/amd64/sha256",
+                f"{self.g8ed_url}/operator/download/linux/amd64/sha256",
                 headers={"Authorization": f"Bearer {self.device_token}"},
             )
             response.raise_for_status()
@@ -131,8 +134,8 @@ class RealOperatorFixture:
         cmd = [
             operator_path,
             "-D", self.device_token,
-            "-e", "g8e.local",
-            "--http-port", "9000",
+            "-e", "g8ed",
+            "--http-port", "443",
             "--wss-port", "9001",
             "--no-git",
             "--log", "info",
@@ -145,13 +148,14 @@ class RealOperatorFixture:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            cwd="/tmp"
         )
 
-        # Wait for operator to register and become ACTIVE
-        operator_info = await self._wait_for_operator_active(timeout=30)
+        # Wait for operator to start and parse operator_id from stdout
+        operator_info = await self._wait_for_operator_output(timeout=30)
 
         self.running_operator = RunningOperator(
-            operator_id=operator_info["id"],
+            operator_id=operator_info["operator_id"],
             operator_session_id=operator_info["operator_session_id"],
             device_token=self.device_token,
         )
@@ -164,58 +168,62 @@ class RealOperatorFixture:
 
         return self.running_operator
 
-    async def _wait_for_operator_active(
+    async def _wait_for_operator_output(
         self, timeout: int = 30
     ) -> dict:
-        """Poll g8ed API until operator becomes ACTIVE."""
-        headers = {}
-        if self.internal_auth_token:
-            headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
-
-        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
-        async with httpx.AsyncClient(
-            verify=verify_context,
-            timeout=10.0,
-        ) as client:
-            start_time = asyncio.get_event_loop().time()
-            while asyncio.get_event_loop().time() - start_time < timeout:
-                try:
-                    response = await client.get(
-                        f"{self.g8ed_url}/api/operators",
-                        headers=headers,
-                    )
-                    response.raise_for_status()
-                    operators = response.json()
-
-                    # Find the operator that just started (most recent)
-                    # Filter for ACTIVE status
-                    active_operators = [
-                        op for op in operators
-                        if op.get("status") == "ACTIVE"
-                    ]
-
-                    if active_operators:
-                        # Return the most recent ACTIVE operator
-                        latest = max(
-                            active_operators,
-                            key=lambda op: op.get("created_at", ""),
-                        )
-                        logger.info(
-                            "[REAL-OP-FIXTURE] Operator ACTIVE: %s",
-                            latest["id"],
-                        )
-                        return latest
-
-                    await asyncio.sleep(1)
-
-                except Exception as e:
-                    logger.debug(
-                        "[REAL-OP-FIXTURE] Poll error (will retry): %s", e
-                    )
-                    await asyncio.sleep(1)
-
+        """Read operator stdout to extract operator_id and operator_session_id."""
+        start_time = asyncio.get_event_loop().time()
+        
+        while asyncio.get_event_loop().time() - start_time < timeout:
+            if self.operator_process.poll() is not None:
+                # Process has exited
+                stdout, stderr = self.operator_process.communicate()
+                logger.error(
+                    "[REAL-OP-FIXTURE] Operator process exited early - stdout: %s, stderr: %s",
+                    stdout,
+                    stderr,
+                )
+                raise RuntimeError(
+                    f"Operator process exited with code {self.operator_process.returncode}"
+                )
+            
+            # Try to read from stdout without blocking
+            try:
+                # Use select to check if there's data available
+                import select
+                if select.select([self.operator_process.stdout], [], [], 0.1)[0]:
+                    line = self.operator_process.stdout.readline()
+                    if line:
+                        logger.info("[REAL-OP-FIXTURE] Operator output: %s", line.strip())
+                        
+                        # Parse operator_id and operator_session_id from output
+                        # Expected format: "operator_id=op_xxx operator_session_id=sess_xxx"
+                        import re
+                        operator_id_match = re.search(r'operator_id=([a-zA-Z0-9_-]+)', line)
+                        session_id_match = re.search(r'operator_session_id=([a-zA-Z0-9_-]+)', line)
+                        
+                        if operator_id_match and session_id_match:
+                            return {
+                                "operator_id": operator_id_match.group(1),
+                                "operator_session_id": session_id_match.group(1),
+                            }
+            except Exception as e:
+                logger.debug("[REAL-OP-FIXTURE] Read error (will retry): %s", e)
+            
+            await asyncio.sleep(0.5)
+        
+        # Timeout - try to get what we can from current output
+        try:
+            import select
+            while select.select([self.operator_process.stdout], [], [], 0)[0]:
+                line = self.operator_process.stdout.readline()
+                if line:
+                    logger.info("[REAL-OP-FIXTURE] Operator output (timeout): %s", line.strip())
+        except:
+            pass
+        
         raise TimeoutError(
-            f"Operator did not become ACTIVE within {timeout} seconds"
+            f"Operator did not output operator_id within {timeout} seconds"
         )
 
     async def stop_operator(self):
@@ -230,13 +238,7 @@ class RealOperatorFixture:
                 self.operator_process.wait()
             self.operator_process = None
 
-        if self.running_operator:
-            logger.info(
-                "[REAL-OP-FIXTURE] Stopping operator via API: %s",
-                self.running_operator.operator_id,
-            )
-            await self._stop_operator_via_api(self.running_operator.operator_id)
-            self.running_operator = None
+        self.running_operator = None
 
         # Clean up downloaded binary
         operator_path = os.path.join(tempfile.gettempdir(), "g8e.operator")
@@ -245,70 +247,6 @@ class RealOperatorFixture:
             if os.path.exists(path):
                 os.remove(path)
                 logger.info("[REAL-OP-FIXTURE] Removed %s", path)
-
-    async def _stop_operator_via_api(self, operator_id: str):
-        """Stop operator via g8ed API."""
-        headers = {}
-        if self.internal_auth_token:
-            headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
-
-        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
-        async with httpx.AsyncClient(
-            verify=verify_context,
-            timeout=10.0,
-        ) as client:
-            try:
-                response = await client.post(
-                    f"{self.g8ed_url}/api/operators/{operator_id}/stop",
-                    headers=headers,
-                )
-                response.raise_for_status()
-                logger.info("[REAL-OP-FIXTURE] Operator stopped via API")
-            except Exception as e:
-                logger.warning(
-                    "[REAL-OP-FIXTURE] Failed to stop operator via API: %s", e
-                )
-
-    async def bind_to_session(
-        self, web_session_id: str, user_id: str
-    ) -> bool:
-        """Bind the operator to a web session."""
-        if not self.running_operator:
-            raise RuntimeError("No operator running")
-
-        logger.info(
-            "[REAL-OP-FIXTURE] Binding operator %s to session %s",
-            self.running_operator.operator_id,
-            web_session_id,
-        )
-
-        headers = {}
-        if self.internal_auth_token:
-            headers["X-G8E-Internal-Auth-Token"] = self.internal_auth_token
-
-        verify_context = ssl.create_default_context(cafile="/g8es/ca.crt") if os.path.exists("/g8es/ca.crt") else False
-        async with httpx.AsyncClient(
-            verify=verify_context,
-            timeout=10.0,
-        ) as client:
-            try:
-                response = await client.post(
-                    f"{self.g8ed_url}/api/operators/bind",
-                    headers=headers,
-                    json={
-                        "operator_id": self.running_operator.operator_id,
-                        "web_session_id": web_session_id,
-                        "user_id": user_id,
-                    },
-                )
-                response.raise_for_status()
-                logger.info("[REAL-OP-FIXTURE] Operator bound successfully")
-                return True
-            except Exception as e:
-                logger.error(
-                    "[REAL-OP-FIXTURE] Failed to bind operator: %s", e
-                )
-                return False
 
     async def __aenter__(self):
         return await self.start_operator()

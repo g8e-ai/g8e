@@ -56,31 +56,31 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Icon**: `users`
 - **Role**: Arbitrator
 - **Model Tier**: Assistant
-- **Purpose**: Syntactic refinement and validation for shell commands through a five-member panel
+- **Purpose**: Syntactic refinement and validation for shell commands through a five-member panel.
 - **Migration Status**: Complete
-- **Usage**: Documentation record only. Runtime loads `axiom`, `concord`, `variance`, `pragma`, and `nemesis` directly via `get_tribunal_member(...)` and `verifier` via `get_agent_persona("auditor")`. The base `tribunal` entry describes the shared output contract and is not injected into any prompt.
+- **Usage**: Documentation record only. Runtime loads `axiom`, `concord`, `variance`, `pragma`, and `nemesis` directly via `get_tribunal_member(...)` and `verifier` via `get_agent_persona("auditor")`.
 - **Prompt Source**: `shared/constants/agents.json` (`tribunal`)
 
 **Tribunal Members**:
-- **Axiom** (icon: `minimize`) — The Minimalist. Pass 0. Proposes the smallest command that satisfies intent.
-- **Concord** (icon: `shield`) — The Guardian. Pass 1. Proposes the safest command that satisfies intent.
-- **Variance** (icon: `layers`) — The Exhaustive. Pass 2. Proposes a command that handles edge cases.
-- **Pragma** (icon: `code`) — The Conventional. Pass 3. Proposes the command the target system's community would produce.
-- **Nemesis** (icon: `warning`) — The Adversary. Pass 4. Proposes a plausible-but-subtly-wrong command to test for attack surfaces.
+- **Axiom** (icon: `git-merge`) — The Composer. Translates intent into the most coherent composed command that fulfills the full intent in one invocation. Pressure against fragmentation.
+- **Concord** (icon: `shield-check`) — The Guardian. Translates intent into the safest command that does the job. Pressure against regret; defensive discipline.
+- **Variance** (icon: `git-branch`) — The Exhaustive. Handles edge cases the obvious version misses (filenames with spaces, symlinks, etc.). Pressure against fragility.
+- **Pragma** (icon: `book-open`) — The Conventional. Uses idiomatic tools, flags, and patterns for the target system's community. Pressure against novelty.
+- **Nemesis** (icon: `shield-alert`) — The Adversary. Always present; produces a plausible-but-flawed command, or honestly abstains when no attack surface exists. immune system of the platform.
 
 ### 5. Auditor (Verifier)
-- **Icon**: `gavel`
+- **Icon**: `search-check`
 - **Role**: Validator / Final Judgment
 - **Model Tier**: Assistant
-- **Purpose**: The last voice before the command reaches user approval. Produces one of two verdicts in a strict wire contract: the literal string `ok` when the Tribunal winner is correct as-is, or a single corrected command string when a specific nameable flaw requires revision. Defaults to confirming; revises only on concrete errors, never on general unease.
-- **Migration Status**: Complete (voice sharpened; `ok`/corrected-command wire contract preserved for `_run_verifier` in `command_generator.py`)
+- **Purpose**: The final checkpoint before the command reaches the human. Operates in three modes (Unanimous, Majority, Tied) with anonymized cluster IDs. Produces `ok`, `revised:<command>`, or `swap:<cluster_id>`. Scrutinizes compositions stage-by-stage.
+- **Migration Status**: Complete
 - **Usage**: `get_agent_persona("auditor")` in `command_generator.py`
 
 ### 6. Scribe (Title Generator)
 - **Icon**: `type`
 - **Role**: Summarizer
 - **Model Tier**: Assistant
-- **Purpose**: Generates concise case titles
+- **Purpose**: Generates concise (3-7 words) specific case titles from the opening turn. Ruthlessly compressive.
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("scribe")` in `title_generator.py`
 
@@ -88,28 +88,30 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Icon**: `brain`
 - **Role**: Analyzer
 - **Model Tier**: Assistant
-- **Purpose**: Analyzes conversation history to extract user preferences and investigation summaries
+- **Purpose**: Extracts durable user preferences and scrubbed investigation summaries. Redacts identifiers and guards against overfitting to single turns.
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("codex")` in `memory_generation_service.py`
-- **Prompt Source**: `shared/constants/agents.json` (`codex`)
 
 ### 8. Judge (Eval Judge)
 - **Icon**: `gavel`
 - **Role**: Evaluator
 - **Model Tier**: Primary
-- **Purpose**: Evaluates AI agent performance against gold standard criteria
+- **Purpose**: Grades agent performance against gold-standard rubrics. Distinguishes between system failures and low scores.
 - **Migration Status**: Complete
 - **Usage**: `get_agent_persona("judge")` in `eval_judge.py`
-- **Prompt Source**: `shared/constants/agents.json` (`judge`)
 
-### 9. Warden (Response Analyzer)
+### 9. Warden (Defensive Coordinator)
 - **Icon**: `shield`
 - **Role**: Defender
 - **Model Tier**: Assistant
-- **Purpose**: Defensive analysis of AI responses (command risk, error analysis, file operation risk)
-- **Migration Status**: Complete - Uses sub-agent pattern
-- **Usage**: `get_agent_persona("warden_command_risk")`, etc. in `response_analyzer.py`
-- **Prompt Source**: `shared/constants/agents.json` (`warden`, `warden_command_risk`, `warden_error`, `warden_file_risk`)
+- **Purpose**: Coordinates defensive analysis across three specialist sub-agents. Fails closed (HIGH risk) on inconclusive analysis.
+- **Migration Status**: Complete - Uses specialist sub-agent pattern
+- **Usage**: `get_agent_persona("warden")` in `response_analyzer.py`
+
+**Warden Specialists**:
+- `warden_command_risk` (icon: `shield-alert`) - Classifies shell command risk (LOW/MEDIUM/HIGH) based on blast radius and reversibility.
+- `warden_error` (icon: `alert-triangle`) - Analyzes failures to determine if they are `AUTO_FIXABLE`, `ESCALATE`, or `RETRY_LIMIT`.
+- `warden_file_risk` (icon: `file-shield`) - Classifies file operation risk, factoring in git working-tree state and backup status.
 
 ## Persona Loader Utility
 
