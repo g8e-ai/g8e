@@ -45,7 +45,7 @@ _run_operator() {
         attempt=$((attempt + 1))
         echo "$OPERATOR_LOG_PREFIX downloading binary from $OPERATOR_ENDPOINT (attempt $attempt)..."
 
-        if curl -fsSLk \
+        if curl -fsSL --cacert /g8es/ca.crt \
                 -H "Authorization: Bearer $DEVICE_TOKEN" \
                 -o "$OPERATOR_BINARY" \
                 "https://$OPERATOR_ENDPOINT/operator/download/linux/amd64" 2>/dev/null; then

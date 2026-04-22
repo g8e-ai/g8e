@@ -14,10 +14,10 @@
 """Fixtures for AI accuracy evaluation tests.
 
 Provides unified_metrics_collector fixture that collects all evaluation results
-across accuracy, safety, and privacy dimensions, and displays them in a summary
-at the end of the test run with persisted artifacts.
+across accuracy, safety, and privacy dimensions using fake operators (documents only,
+no real process), and displays them in a summary at the end of the test run with
+persisted artifacts.
 
-Note: These tests use fake operators (documents only, no real process).
 Real-operator evals are being migrated to a new host-driven framework.
 See docs/benchmarking/evals.md for the new design.
 """

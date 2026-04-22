@@ -170,9 +170,9 @@ deploy:
 	for i in $$(seq -f "%02g" 1 10); do \
 		echo "  Deploying to node-$$i..."; \
 		docker exec -e DEVICE_TOKEN="$$TOKEN" $(CONTAINER_PREFIX)-$$i sh -c '\
-			curl -fsSLk -H "Authorization: Bearer $$DEVICE_TOKEN" \
+			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
-			curl -fsSLk -H "Authorization: Bearer $$DEVICE_TOKEN" \
+			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \

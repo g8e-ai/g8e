@@ -740,7 +740,7 @@ case "$TOP" in
                     _args=("${_args[@]:2}") ;;
                 -d|--device-token)
                     _require_value "-d/--device-token"
-                    export TEST_DEVICE_TOKEN="${_args[1]}"
+                    export DEVICE_TOKEN="${_args[1]}"
                     _args=("${_args[@]:2}") ;;
                 -j|--parallel)
                     # Optional value: accept "auto" or a positive integer; otherwise default to "auto".
@@ -773,7 +773,7 @@ case "$TOP" in
         [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]]       && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
         [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]         && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
         [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
-        [[ -n "${TEST_DEVICE_TOKEN:-}" ]]               && _TEST_ENV_ARGS+=(-e "TEST_DEVICE_TOKEN=$TEST_DEVICE_TOKEN")
+        [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
 
         _ensure_container "$_TEST_RUNNER" "test $_TEST_COMPONENT"
         if [ -t 0 ] && [ -t 1 ]; then

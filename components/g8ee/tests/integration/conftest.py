@@ -249,3 +249,61 @@ async def user_settings(cache_aside_service, test_settings):
     # Otherwise load from g8es
     settings_service = SettingsService(cache_aside_service=cache_aside_service)
     return await settings_service.get_user_settings("test-user-id")
+
+
+@pytest.fixture(scope="session")
+def unified_metrics_collector(request):
+    """Unified collector for all eval results across accuracy, safety, and privacy dimensions.
+
+    Tests should call add_row(EvalRow) to record results. The fixture automatically
+    prints a text summary to stdout and persists artifacts (report.txt, results.csv,
+    summary.json) to components/g8ee/reports/evals/<timestamp>/ at session end.
+    """
+    from tests.evals.metrics import EvalRow, FullReport
+    from tests.evals.reporter import compute_summaries, persist_report, render_text_table
+    from app.constants.paths import PATHS
+    from app.llm.factory import get_llm_settings
+    from datetime import datetime, UTC
+
+    class UnifiedMetricsCollector:
+        def __init__(self):
+            self.rows: list[EvalRow] = []
+
+        def add_row(self, row: EvalRow):
+            self.rows.append(row)
+
+    collector = UnifiedMetricsCollector()
+
+    def finalize_session():
+        if not collector.rows:
+            return
+
+        llm_settings = get_llm_settings()
+        llm_config = {}
+        if llm_settings:
+            llm_config = {
+                "primary_provider": llm_settings.primary_provider.value if llm_settings.primary_provider else "unknown",
+                "primary_model": llm_settings.primary_model or "unknown",
+                "assistant_provider": llm_settings.assistant_provider.value if llm_settings.assistant_provider else "none",
+                "assistant_model": llm_settings.assistant_model or "none",
+            }
+
+        report = FullReport(
+            rows=collector.rows,
+            summaries=compute_summaries(collector.rows),
+            finished_at=datetime.now(UTC),
+            llm_config=llm_config,
+        )
+
+        print("\n")
+        print(render_text_table(report))
+
+        reports_dir = PATHS["g8ee"]["evals"]["reports_dir"]
+        try:
+            artifacts = persist_report(report, reports_dir)
+            print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
+        except Exception as e:
+            logger.error("Failed to persist eval artifacts: %s", e)
+
+    request.addfinalizer(finalize_session)
+    return collector

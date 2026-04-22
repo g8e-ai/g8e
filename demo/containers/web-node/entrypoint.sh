@@ -142,7 +142,8 @@ _run_operator() {
     while [ ! -x "$_operator_binary" ]; do
         attempt=$((attempt + 1))
         echo "$_operator_log_prefix downloading binary from $_operator_endpoint (attempt $attempt)..."
-        if curl -fsSLk -H "Authorization: Bearer $DEVICE_TOKEN" \
+        if curl -fsSL --cacert /g8es/ca.crt \
+                -H "Authorization: Bearer $DEVICE_TOKEN" \
                 -o "$_operator_binary" \
                 "https://$_operator_endpoint/operator/download/linux/amd64" 2>/dev/null; then
             chmod +x "$_operator_binary"
