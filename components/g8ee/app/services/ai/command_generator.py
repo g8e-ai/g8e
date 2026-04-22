@@ -59,8 +59,9 @@ Nemesis adversary), not from numerical parameters.
 
 import asyncio
 import logging
+import shlex
 from collections import defaultdict
-from typing import List, NoReturn
+from typing import List, NoReturn, Optional
 
 from app.errors import OllamaEmptyResponseError
 from app.models.settings import LLMSettings, G8eeUserSettings
@@ -79,7 +80,7 @@ from app.constants import (
     VerifierReason,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings
+from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
@@ -107,6 +108,8 @@ from app.models.events import SessionEvent
 from app.models.model_configs import get_model_config
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+from app.utils.whitelist_validator import validate_command_against_whitelist
+from app.utils.blacklist_validator import validate_command_against_blacklist
 
 logger = logging.getLogger(__name__)
 
@@ -380,16 +383,134 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
 
 
 def _normalise_command(raw: str) -> str:
-    """Strip surrounding whitespace, trailing newlines, and markdown fences."""
+    """Extract and normalise command from LLM response with robust parsing.
+
+    Handles:
+    1. Markdown code fences (```bash, ```shell, ```sh, ```).
+    2. Common prefixes (e.g., "Command:", "The command is:").
+    3. Explanatory text after the command.
+    4. Preserves intentional multi-line structure (heredocs, pipelines).
+    5. Validates shell syntax using shlex.
+
+    Returns the extracted command string or an empty string if invalid.
+    """
+    if not raw:
+        return ""
+
     cmd = raw.strip()
+
+    # 1. Handle markdown fences
     for fence in ("```bash", "```shell", "```sh", "```"):
         if cmd.startswith(fence):
             cmd = cmd[len(fence):]
+            # Strip trailing fence if it exists
+            if cmd.endswith("```"):
+                cmd = cmd[:-3]
             break
+    
+    # If no fence was matched but it ends with ```, still strip it
     if cmd.endswith("```"):
         cmd = cmd[:-3]
-    return cmd.strip()
 
+    cmd = cmd.strip()
+
+    # 2. Handle common prefixes
+    prefixes = (
+        "command:",
+        "the command is:",
+        "proposed command:",
+        "final command:",
+        "revised command:",
+        "exact command:",
+    )
+    lower_cmd = cmd.lower()
+    for prefix in prefixes:
+        if lower_cmd.startswith(prefix):
+            cmd = cmd[len(prefix):].strip()
+            break
+
+    # 3. Handle trailing explanatory text
+    # If there are multiple lines, and the first line looks like a command
+    # but subsequent lines look like explanations, we might need to be careful.
+    # However, for Tribunal, we usually expect a single logical command (which could be multi-line).
+    
+    # 4. Validate shell syntax
+    try:
+        # shlex.split handles quotes and escapes correctly.
+        # It will raise ValueError for unbalanced quotes/escapes.
+        shlex.split(cmd)
+    except ValueError as exc:
+        logger.warning("[TRIBUNAL-NORM] Shell syntax validation failed: %s", exc)
+        # If it failed, it might be because of explanatory text after the command.
+        # Let's try to take just the first line if it's a simple command.
+        lines = cmd.splitlines()
+        if len(lines) > 1:
+            try:
+                shlex.split(lines[0])
+                logger.info("[TRIBUNAL-NORM] Falling back to first line for valid shell syntax")
+                return lines[0].strip()
+            except ValueError:
+                pass
+        return ""
+
+    return cmd
+
+
+class TribunalResponse(G8eBaseModel):
+    """Structured response for Tribunal command generation."""
+    command: str
+
+class TribunalVerifierResponse(G8eBaseModel):
+    """Structured response for Tribunal verification."""
+    status: str  # "ok" or "revised"
+    revised_command: Optional[str] = None
+
+def _validate_command_safety(
+    command: str,
+    whitelisting_enabled: bool,
+    blacklisting_enabled: bool,
+    operator_context: OperatorContext | None,
+) -> tuple[bool, str | None]:
+    """Validate a command against all security constraints.
+    
+    Checks:
+    1. FORBIDDEN_COMMAND_PATTERNS (sudo, su, etc.)
+    2. Blacklist (if enabled)
+    3. Whitelist (if enabled)
+    
+    Returns (is_safe, error_message).
+    """
+    if not command:
+        return False, "Empty command"
+
+    # 1. FORBIDDEN_COMMAND_PATTERNS
+    for pattern in FORBIDDEN_COMMAND_PATTERNS:
+        if pattern in command:
+            return False, f"Command contains forbidden pattern: {pattern}"
+
+    # 2. Blacklist
+    if blacklisting_enabled:
+        blacklist_result = validate_command_against_blacklist(command)
+        if not blacklist_result.is_allowed:
+            return False, f"Command blocked by blacklist: {blacklist_result.reason}"
+
+    # 3. Whitelist
+    if whitelisting_enabled:
+        # We need the platform from operator_context
+        from app.constants import Platform
+        platform = Platform.LINUX
+        if operator_context and operator_context.os:
+            os_lower = operator_context.os.lower()
+            if "windows" in os_lower:
+                platform = Platform.WINDOWS
+            elif "darwin" in os_lower or "macos" in os_lower:
+                platform = Platform.MACOS
+
+        whitelist_result = validate_command_against_whitelist(command, platform=platform)
+        if not whitelist_result.is_valid:
+            return False, f"Command not whitelisted: {whitelist_result.reason}"
+
+    return True, None
 
 def _weighted_vote(candidates: List[CandidateCommand]) -> tuple[str | None, float]:
     """
@@ -501,13 +622,22 @@ async def _run_generation_pass(
     )
     logger.debug("[TRIBUNAL-PASS-%d] Full prompt: %s", pass_index, prompt[:5000])
     model_config = get_model_config(model)
+    
+    # Use structured output if the model supports it
+    response_format = None
+    if model_config.supports_structured_output:
+        response_format = ResponseFormat.from_pydantic_schema(
+            TribunalResponse.model_json_schema(),
+            name="TribunalResponse"
+        )
+
     settings = LiteLLMSettings(
         max_output_tokens=_MAX_TOKENS_GENERATION,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
         system_instructions="",
-        response_format=None,
+        response_format=response_format,
     )
     try:
         response = await provider.generate_content_lite(
@@ -529,7 +659,19 @@ async def _run_generation_pass(
                 tool_calls_count=0,
                 ctx_overflow_suspected=False,
             )
-        candidate = _normalise_command(response.text)
+        
+        raw_text = response.text
+        if response_format:
+            try:
+                import json
+                data = json.loads(raw_text)
+                candidate_raw = data.get("command", "")
+            except (json.JSONDecodeError, AttributeError):
+                candidate_raw = raw_text
+        else:
+            candidate_raw = raw_text
+
+        candidate = _normalise_command(candidate_raw)
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
             TribunalPassCompletedPayload(pass_index=pass_index, member=member, candidate=candidate, success=True),
@@ -639,13 +781,22 @@ async def _run_verifier(
     )
     logger.debug("[TRIBUNAL-VERIFIER] Full prompt: %s", prompt[:5000])
     model_config = get_model_config(model)
+    
+    # Use structured output if the model supports it
+    response_format = None
+    if model_config.supports_structured_output:
+        response_format = ResponseFormat.from_pydantic_schema(
+            TribunalVerifierResponse.model_json_schema(),
+            name="TribunalVerifierResponse"
+        )
+
     settings = LiteLLMSettings(
         max_output_tokens=_MAX_TOKENS_VERIFIER,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
         system_instructions="",
-        response_format=None,
+        response_format=response_format,
     )
     try:
         response = await provider.generate_content_lite(
@@ -667,16 +818,51 @@ async def _run_verifier(
                 tool_calls_count=0,
                 ctx_overflow_suspected=False,
             )
-        answer = response.text.strip()
-        if answer.lower() == "ok":
+        
+        raw_text = response.text.strip()
+        status = ""
+        revised_raw = ""
+
+        if response_format:
+            try:
+                import json
+                data = json.loads(raw_text)
+                status = data.get("status", "").lower()
+                revised_raw = data.get("revised_command", "")
+            except (json.JSONDecodeError, AttributeError):
+                # Fallback to text parsing
+                status = raw_text.lower()
+        else:
+            status = raw_text.lower()
+
+        if status == "ok" or "ok" in status.split():
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
                 TribunalVerifierCompletedPayload(passed=True, reason=VerifierReason.OK),
             )
             return True, None
 
-        revised = _normalise_command(answer)
+        # Handle revised command
+        if not revised_raw and not response_format:
+            # If not using structured output, the whole response might be the revised command
+            revised_raw = raw_text
+
+        revised = _normalise_command(revised_raw)
         if revised and revised != candidate_command:
+            # VALIDATE REVISION SAFETY
+            is_safe, safety_error = _validate_command_safety(
+                revised,
+                whitelisting_enabled=True, # Always validate safety for revisions
+                blacklisting_enabled=True,
+                operator_context=operator_context,
+            )
+            if not is_safe:
+                logger.error("[TRIBUNAL] Verifier suggested unsafe revision: %s", safety_error)
+                error_msg = f"Verifier suggested unsafe revision: {safety_error}"
+                await _fail_verifier(
+                    emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
+                )
+
             logger.info("[TRIBUNAL] Verifier revised command: original=%r revised=%r", candidate_command, revised)
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED,
@@ -685,7 +871,7 @@ async def _run_verifier(
             return False, revised
 
         logger.error("[TRIBUNAL] Verifier returned non-ok but no valid revision; cannot verify candidate")
-        error_msg = f"Verifier returned non-ok answer without valid revision: {answer[:100]}"
+        error_msg = f"Verifier returned non-ok answer without valid revision: {raw_text[:100]}"
         await _fail_verifier(
             emitter, request, VerifierReason.NO_VALID_REVISION, error_msg, candidate_command,
         )
@@ -1017,6 +1203,28 @@ async def generate_command(
     # Ensure final_command is never None — verifier contract guarantees a string,
     # but belt-and-braces against a future refactor leaving verifier_revision empty.
     final_command_str = final_command if final_command is not None else vote_winner
+
+    # FINAL SAFETY VALIDATION
+    is_safe, safety_error = _validate_command_safety(
+        final_command_str,
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        operator_context=operator_context,
+    )
+    if not is_safe:
+        logger.error("[TRIBUNAL] Final command safety validation failed: %s", safety_error)
+        error_msg = f"Final command safety validation failed: {safety_error}"
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+            TribunalSessionSystemErrorPayload(
+                request=request,
+                pass_errors=[error_msg],
+            ),
+        )
+        raise TribunalGenerationFailedError(
+            pass_errors=[error_msg],
+            request=request,
+        )
 
     return await _build_and_emit_result(
         request=request, guidelines=guidelines, final_command=final_command_str,

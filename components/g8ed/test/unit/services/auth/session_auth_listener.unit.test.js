@@ -21,9 +21,9 @@ import { DEFAULT_OPERATOR_CONFIG } from '@g8ed/constants/operator_defaults.js';
 describe('SessionAuthListener', () => {
     let listener;
     let mockPubSubClient;
-    let mockSubscriber;
     let mockOperatorSessionService;
     let mockOperatorService;
+    let messageHandlers = [];
 
     const mockG8eContext = {
         operator_session_id: 'sess-123',
@@ -38,23 +38,31 @@ describe('SessionAuthListener', () => {
 
     beforeEach(() => {
         vi.useFakeTimers();
-
-        mockSubscriber = {
-            on: vi.fn(),
-            subscribe: vi.fn().mockResolvedValue(true),
-            publish: vi.fn().mockResolvedValue(true),
-            terminate: vi.fn(),
-            // Mock EventEmitter behavior for 'message'
-            emitMessage: function(channel, data) {
-                const callback = this.on.mock.calls.find(call => call[0] === 'message')?.[1];
-                if (callback) return callback(channel, data);
-            }
-        };
+        messageHandlers = [];
 
         mockPubSubClient = {
-            // duplicate() is synchronous on G8esPubSubClient — it returns a fresh
-            // client instance, NOT a Promise. The listener relies on that contract.
-            duplicate: vi.fn().mockReturnValue(mockSubscriber)
+            on: vi.fn().mockImplementation((event, handler) => {
+                if (event === 'message') {
+                    messageHandlers.push(handler);
+                }
+            }),
+            removeListener: vi.fn().mockImplementation((event, handler) => {
+                if (event === 'message') {
+                    const index = messageHandlers.indexOf(handler);
+                    if (index !== -1) {
+                        messageHandlers.splice(index, 1);
+                    }
+                }
+            }),
+            subscribe: vi.fn(),
+            unsubscribe: vi.fn(),
+            publish: vi.fn().mockResolvedValue(true),
+            // Helper to emit messages to registered handlers
+            emitMessage: async function(channel, data) {
+                for (const handler of messageHandlers) {
+                    await handler(channel, data);
+                }
+            }
         };
 
         mockOperatorSessionService = {
@@ -101,47 +109,48 @@ describe('SessionAuthListener', () => {
             // Wait for promise chain
             await vi.runAllTimersAsync();
 
-            expect(mockPubSubClient.duplicate).toHaveBeenCalled();
-            expect(mockSubscriber.subscribe).toHaveBeenCalledWith(authChannel);
-            expect(mockSubscriber.on).toHaveBeenCalledWith('message', expect.any(Function));
+            expect(mockPubSubClient.on).toHaveBeenCalledWith('message', expect.any(Function));
+            expect(mockPubSubClient.subscribe).toHaveBeenCalledWith(authChannel);
         });
 
-        it('should terminate subscriber after timeout if no message received', async () => {
+        it('should unsubscribe and remove listener after timeout if no message received', async () => {
             listener.listen(mockG8eContext);
             await vi.runAllTimersAsync();
 
             vi.advanceTimersByTime(SESSION_AUTH_LISTEN_TTL_MS + 100);
             
-            expect(mockSubscriber.terminate).toHaveBeenCalled();
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
 
         it('should ignore messages on other channels', async () => {
             listener.listen(mockG8eContext);
             await vi.runAllTimersAsync();
 
-            await mockSubscriber.emitMessage('wrong-channel', {});
+            await mockPubSubClient.emitMessage('wrong-channel', {});
             
             expect(mockOperatorSessionService.validateSession).not.toHaveBeenCalled();
         });
 
         it('should publish failure if session is invalid', async () => {
             listener.listen(mockG8eContext);
-            await vi.runAllTimersAsync();
 
+            expect(messageHandlers.length).toBeGreaterThan(0);
             mockOperatorSessionService.validateSession.mockResolvedValue(null);
 
-            await mockSubscriber.emitMessage(authChannel, {});
+            await mockPubSubClient.emitMessage(authChannel, {});
+            await vi.runAllTimersAsync();
 
-            expect(mockSubscriber.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
+            expect(mockPubSubClient.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
                 success: false,
                 error: 'Session not found or expired'
             }));
-            expect(mockSubscriber.terminate).toHaveBeenCalled();
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
 
         it('should publish success response with bootstrap config for valid session', async () => {
             listener.listen(mockG8eContext);
-            await vi.runAllTimersAsync();
 
             const mockSession = { is_active: true };
             const mockOperator = { api_key: 'op-api-key-123' };
@@ -149,34 +158,37 @@ describe('SessionAuthListener', () => {
             mockOperatorSessionService.validateSession.mockResolvedValue(mockSession);
             mockOperatorService.getOperator.mockResolvedValue(mockOperator);
 
-            await mockSubscriber.emitMessage(authChannel, {});
+            await mockPubSubClient.emitMessage(authChannel, {});
+            await vi.runAllTimersAsync();
 
-            expect(mockSubscriber.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
+            expect(mockPubSubClient.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
                 success: true,
                 operator_id: mockG8eContext.operator_id,
                 api_key: mockOperator.api_key,
                 config: expect.objectContaining(DEFAULT_OPERATOR_CONFIG)
             }));
-            expect(mockSubscriber.terminate).toHaveBeenCalled();
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
 
         it('should handle errors gracefully and publish failure', async () => {
             listener.listen(mockG8eContext);
-            await vi.runAllTimersAsync();
 
             mockOperatorSessionService.validateSession.mockRejectedValue(new Error('DB Error'));
 
-            await mockSubscriber.emitMessage(authChannel, {});
+            await mockPubSubClient.emitMessage(authChannel, {});
+            await vi.runAllTimersAsync();
 
-            expect(mockSubscriber.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
+            expect(mockPubSubClient.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
                 success: false,
                 error: ApiKeyError.AUTH_FAILED
             }));
-            expect(mockSubscriber.terminate).toHaveBeenCalled();
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
 
         it('should handle setup errors gracefully when subscribe throws', async () => {
-            mockSubscriber.subscribe.mockImplementation(() => {
+            mockPubSubClient.subscribe.mockImplementation(() => {
                 throw new Error('Connection failed');
             });
 
@@ -184,12 +196,13 @@ describe('SessionAuthListener', () => {
             expect(() => listener.listen(mockG8eContext)).not.toThrow();
             await vi.runAllTimersAsync();
 
-            expect(mockSubscriber.terminate).toHaveBeenCalled();
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
 
-        it('should tolerate duplicate() throwing synchronously', async () => {
-            mockPubSubClient.duplicate.mockImplementation(() => {
-                throw new Error('duplicate failed');
+        it('should tolerate on() throwing synchronously', async () => {
+            mockPubSubClient.on.mockImplementation(() => {
+                throw new Error('on failed');
             });
 
             // The listener is called fire-and-forget from the HTTP handler — it

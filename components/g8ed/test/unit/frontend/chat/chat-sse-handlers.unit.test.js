@@ -844,6 +844,41 @@ describe('ChatComponent — handleTribunalStarted [FRONTEND - jsdom]', () => {
         expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledOnce();
         expect(terminalSpy.sealStreamingResponse).toHaveBeenCalledWith(WEB_SESSION_ID);
     });
+
+    it('handleTribunalPassCompleted: routes to terminalSpy.updateTribunalPass with candidate', () => {
+        chat._tribunalWidgetIds = new Map([[WEB_SESSION_ID, 'widget-123']]);
+        
+        chat.handleTribunalPassCompleted({
+            web_session_id: WEB_SESSION_ID,
+            pass_index: 2,
+            success: true,
+            candidate: 'ls -la',
+        });
+
+        expect(terminalSpy.updateTribunalPass).toHaveBeenCalledOnce();
+        expect(terminalSpy.updateTribunalPass).toHaveBeenCalledWith('widget-123', {
+            passIndex: 2,
+            success: true,
+            candidate: 'ls -la',
+        });
+    });
+
+    it('handleTribunalPassCompleted: handles missing candidate', () => {
+        chat._tribunalWidgetIds = new Map([[WEB_SESSION_ID, 'widget-123']]);
+        
+        chat.handleTribunalPassCompleted({
+            web_session_id: WEB_SESSION_ID,
+            pass_index: 0,
+            success: false,
+        });
+
+        expect(terminalSpy.updateTribunalPass).toHaveBeenCalledOnce();
+        expect(terminalSpy.updateTribunalPass).toHaveBeenCalledWith('widget-123', {
+            passIndex: 0,
+            success: false,
+            candidate: undefined,
+        });
+    });
 });
 
 describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortCheckCompleted / handleNetworkPortCheckFailed [FRONTEND - jsdom]', () => {

@@ -473,6 +473,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalPass(widgetId, {
             passIndex: data.pass_index,
             success: data.success,
+            candidate: data.candidate,
         });
     },
 

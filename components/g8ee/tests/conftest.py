@@ -261,7 +261,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
-    kwargs: dict = {"provider": provider, "assistant_provider": assistant_provider}
+    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider}
     if primary:
         kwargs["primary_model"] = primary
     if assistant:
@@ -413,7 +413,15 @@ def pytest_collection_modifyitems(config, items):
     # will now fail later during execution rather than being skipped here,
     # unless they are explicitly marked with capabilities.
 
-    has_llm_credentials = _has_llm_credentials(llm)
+    # Check for LLM credentials from TEST_LLM_* env vars
+    has_test_llm_creds = _has_llm_credentials(llm)
+    
+    # Don't skip ai_integration tests if TEST_LLM_* env vars are not set,
+    # because tests now load user settings from g8es which may have API keys configured
+    # Only skip if TEST_LLM_* env vars are explicitly set but invalid
+    env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
+    has_llm_credentials = has_test_llm_creds if env_llm_provider else True  # Allow tests to run if no TEST_LLM_PROVIDER set
+    
     has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (
         search_settings.enabled
@@ -422,7 +430,7 @@ def pytest_collection_modifyitems(config, items):
         and bool(search_settings.api_key)
     ) if search_settings else False
 
-    logger.info(f"Collection: settings={settings is not None}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
+    logger.info(f"Collection: settings={settings is not None}, has_test_creds={has_test_llm_creds}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
     if llm:
         logger.info(f"LLM Config: provider={llm.primary_provider}, key_set={bool(llm.gemini_api_key)}")
 

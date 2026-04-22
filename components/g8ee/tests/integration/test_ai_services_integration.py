@@ -56,7 +56,6 @@ from app.constants import (
 
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
-from app.models.settings import G8eeUserSettings
 from app.models.tool_results import CommandRiskContext
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.services.ai.command_generator import generate_command
@@ -82,9 +81,12 @@ class TestMemoryGenerationServiceIntegration:
     """Test AI-powered memory generation with real LLM calls."""
 
     async def test_memory_generation_from_conversation(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService analyzes conversation and updates memory."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -125,9 +127,6 @@ class TestMemoryGenerationServiceIntegration:
         ]
 
         # Test memory generation
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
@@ -166,9 +165,12 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(result_memory.investigation_id)
 
     async def test_memory_generation_with_existing_memory(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService updates existing memory with new conversation data."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -226,9 +228,6 @@ class TestMemoryGenerationServiceIntegration:
         assert "RPM" in all_text, "Conversation content missing from LLM payload"
 
         # Test memory update
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         updated_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
@@ -305,9 +304,12 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(updated_memory.investigation_id)
 
     async def test_memory_generation_empty_conversation(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService handles empty conversation gracefully."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -320,9 +322,6 @@ class TestMemoryGenerationServiceIntegration:
         )
 
         # Test with empty conversation
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=[],
             investigation=created_investigation,
@@ -349,17 +348,13 @@ class TestMemoryGenerationServiceIntegration:
 class TestTitleGenerationIntegration:
     """Test AI-powered title generation with real LLM calls."""
 
-    async def test_generate_case_title_from_description(self, test_settings):
+    async def test_generate_case_title_from_description(self, user_settings):
         """generate_case_title creates meaningful titles from descriptions."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with unique technical description
         description = "Our 'Crimson-Edge' router in Singapore is experiencing a 'Purple-Pulse' synchronization error. This usually happens during the monsoon season when humidity is over 85%. We need to verify the fiber optic signal strength on Port 7."
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
@@ -377,17 +372,13 @@ class TestTitleGenerationIntegration:
         # Look for router, network, or connectivity concepts
         assert any(keyword in title_lower for keyword in ["router", "crimson", "edge", "purple", "pulse", "sync", "singapore", "fiber", "optic", "signal", "port", "network", "connection"])
 
-    async def test_generate_case_title_from_short_description(self, test_settings):
+    async def test_generate_case_title_from_short_description(self, user_settings):
         """generate_case_title handles short descriptions well."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with very short description
         description = "Help with Kubernetes"
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
@@ -418,14 +409,10 @@ class TestTitleGenerationIntegration:
         # Should be truncated version of description
         assert title.generated_title.lower().startswith("complex technical")
 
-    async def test_generate_case_title_empty_description(self, test_settings):
+    async def test_generate_case_title_empty_description(self, user_settings):
         """generate_case_title handles empty/None descriptions."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
 
         # Test with None description
         title = await generate_case_title(
@@ -470,11 +457,9 @@ class TestTitleGenerationIntegration:
 class TestTriageServiceIntegration:
     """Test AI-powered triage with real LLM calls."""
 
-    async def test_triage_complexity_classification(self, test_settings):
+    async def test_triage_complexity_classification(self, user_settings):
         """TriageService correctly classifies case complexity."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test complex technical issue with specific entities
@@ -486,7 +471,6 @@ class TestTriageServiceIntegration:
         """
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=complex_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -503,18 +487,15 @@ class TestTriageServiceIntegration:
         # Helsinki bunker with Borealis-7 chipset and Silver-Scream panic is definitely not simple.
         assert result.complexity == TriageComplexityClassification.COMPLEX
 
-    async def test_triage_simple_issue(self, test_settings):
+    async def test_triage_simple_issue(self, user_settings):
         """TriageService correctly classifies simple issues."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test simple issue
         simple_message = "What time is it?"
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=simple_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -535,18 +516,15 @@ class TestTriageServiceIntegration:
             TriageComplexityClassification.COMPLEX,  # Current fallback due to JSON parsing failure
         ]
 
-    async def test_triage_password_reset_complexity(self, test_settings):
+    async def test_triage_password_reset_complexity(self, user_settings):
         """TriageService correctly classifies password reset as complex due to security implications."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test password reset (security-sensitive)
         security_message = "I need help resetting my password. I forgot it and can't log in."
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=security_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -562,18 +540,15 @@ class TestTriageServiceIntegration:
         # Password reset involves account access and security, so should be classified as COMPLEX
         assert result.complexity == TriageComplexityClassification.COMPLEX
 
-    async def test_triage_ambiguous_request(self, test_settings):
+    async def test_triage_ambiguous_request(self, user_settings):
         """TriageService handles ambiguous requests appropriately."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test ambiguous request
         ambiguous_message = "help"
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=ambiguous_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -607,11 +582,9 @@ class TestTriageServiceIntegration:
 class TestCommandGenerationIntegration:
     """Test AI-powered command generation with real LLM calls."""
 
-    async def test_command_generation_interface(self, test_settings):
+    async def test_command_generation_interface(self, user_settings, all_services):
         """Test that command generation interface exists and can be called."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
         assert callable(generate_command)
 
@@ -622,14 +595,12 @@ class TestCommandGenerationIntegration:
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
 
-    async def test_forbidden_patterns_dynamic_integration(self, test_settings):
+    async def test_forbidden_patterns_dynamic_integration(self, user_settings):
         """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""
-        from app.llm.factory import get_llm_settings
         from app.constants import FORBIDDEN_COMMAND_PATTERNS
         from app.services.ai.command_generator import _format_forbidden_patterns_message
         
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
         
         # The platform forbids privilege-escalation tokens unconditionally (see
@@ -707,11 +678,9 @@ class TestCommandGenerationIntegration:
 class TestResponseAnalysisIntegration:
     """Test AI-powered response analysis with real LLM calls."""
 
-    async def test_analyze_command_risk(self, test_settings):
+    async def test_analyze_command_risk(self, user_settings):
         """AIResponseAnalyzer correctly analyzes command risk."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
@@ -726,7 +695,6 @@ class TestResponseAnalysisIntegration:
             username="dc-tech",
         )
 
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=low_risk_command,
             justification=justification,
@@ -742,11 +710,9 @@ class TestResponseAnalysisIntegration:
         # but HIGH is a failure of the risk model for an 'ls' command.
         assert result.risk_level in ['LOW', 'MEDIUM']
 
-    async def test_analyze_high_risk_command(self, test_settings):
+    async def test_analyze_high_risk_command(self, user_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
@@ -761,7 +727,6 @@ class TestResponseAnalysisIntegration:
             username="root",
         )
 
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=high_risk_command,
             justification=justification,
@@ -776,11 +741,9 @@ class TestResponseAnalysisIntegration:
         # rm -rf /data/... as root is HIGH risk.
         assert result.risk_level == 'HIGH'
 
-    async def test_analyzer_interface_exists(self, test_settings):
+    async def test_analyzer_interface_exists(self, user_settings):
         """Test that AIResponseAnalyzer interface exists and can be instantiated."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test that the class can be instantiated

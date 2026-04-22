@@ -1001,17 +1001,26 @@ The following sections are read from the `settings` map inside the settings docu
 | `command_gen_passes` | `5` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
-Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature` (resolved via `_temperature_for_pass` → `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Hardcoding per-member temperatures is incompatible with providers that require fixed temperatures (e.g. Gemini 3+ requires 1.0). Per-member diversity comes from the distinct Axiom/Concord/Variance personas in `shared/constants/agents.json`, not from sampling temperature.
+The Tribunal implements a four-stage pipeline for producing safe, valid shell commands:
 
-**Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
+1.  **Generation**: N independent parallel passes using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
+2.  **Voting**: Weighted majority vote over normalised candidates to reach consensus.
+3.  **Verification**: Optional verifier pass that evaluates the winner and can suggest a safer revision.
+4.  **Safety Enforcement**: Final structural and security validation before returning the command.
 
-**Forbidden patterns:** Tribunal prompts dynamically include the canonical `FORBIDDEN_COMMAND_PATTERNS` constant from `app.constants.settings.py`. This ensures that forbidden command patterns (e.g., `sudo`, `su `, `pkexec`, `doas`, etc.) are always reflected in Tribunal prompts without hardcoding. The `_format_forbidden_patterns_message()` helper generates this message dynamically.
+**Enhanced Normalization & Syntax Validation:**
+Tribunal uses robust normalization to extract commands from LLM responses, handling markdown fences, common conversational prefixes (e.g., "Command:"), and trailing explanatory text. It validates shell syntax using `shlex` to ensure balanced quotes and escapes, preventing malformed commands from reaching execution.
 
-**Command constraints:** Tribunal prompts can include command whitelist/blacklist constraints when passed to `generate_command()`. These constraints are formatted by `_format_command_constraints_message()` and injected into prompts via the `{command_constraints_message}` placeholder. The `generate_command()` function accepts these optional parameters:
-- `whitelisting_enabled` (bool): Whether command whitelisting is active
-- `blacklisting_enabled` (bool): Whether command blacklisting is active
-- `whitelisted_commands` (list[str] | None): List of whitelisted command patterns
-- `blacklisted_commands` (list[dict[str, str]] | None): List of blacklisted command patterns with metadata
+**Structured Output:**
+When supported by the underlying model, Tribunal uses JSON schema structured output to enforce the response format at the API level, minimizing reliance on prompt instructions and reducing parsing errors.
+
+**Security Constraints:**
+- **Forbidden Patterns**: Always blocks privilege escalation wrappers (`sudo`, `su`, etc.).
+- **Blacklist/Whitelist**: Dynamically enforces environment-specific command constraints.
+- **Revision Safety**: The verifier's suggested revisions are strictly validated against all safety constraints before acceptance.
+- **Final Guard**: A final safety check is performed on the resulting command before completion, ensuring no unsafe command ever leaves the Tribunal.
+
+Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature`. Diversity comes from the distinct personas in `shared/constants/agents.json`.
 
 The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_settings.command_validation` and passes them to `generate_command()`, ensuring Tribunal is aware of downstream command validation rules configured per-user.
 

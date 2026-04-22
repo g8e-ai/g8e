@@ -578,12 +578,15 @@ export class TerminalOutputMixin {
         return id;
     }
 
-    updateTribunalPass(id, { passIndex, success }) {
+    updateTribunalPass(id, { passIndex, success, candidate }) {
         const widget = document.getElementById(id);
         if (!widget) return;
         const dot = widget.querySelector(`.tribunal__dot[data-pass="${passIndex}"]`);
         if (dot) {
             dot.classList.add(success ? 'tribunal__dot--ok' : 'tribunal__dot--fail');
+            if (candidate) {
+                dot.setAttribute('title', `Pass ${passIndex + 1}: ${candidate}`);
+            }
         }
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {

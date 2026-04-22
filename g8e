@@ -191,9 +191,18 @@ while [[ $i -le $# ]]; do
             fi
             ((i++))
             ;;
-        *)
+        -*)
+            # Preserve other flags that might appear before subcommand
             filtered_args+=("$arg")
             ((i++))
+            ;;
+        *)
+            # First non-flag argument is the subcommand. Stop parsing global flags.
+            while [[ $i -le $# ]]; do
+                filtered_args+=("${!i}")
+                ((i++))
+            done
+            break
             ;;
     esac
 done
