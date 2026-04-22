@@ -26,8 +26,9 @@ jobs:
           ./g8e test g8ee
           -p gemini
           -k "$GEMINI_API_KEY"
-          -m gemini-3.1-pro-preview-customtools
+          -m gemini-3.1-pro-preview
           -a gemini-3-flash-preview
+          -l gemini-3.1-flash-lite-preview
           -- tests --ignore=tests/evals
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

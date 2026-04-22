@@ -544,6 +544,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal?.hideWaitingIndicator();
         this.anchoredTerminal?.clearActivityIndicators();
         this._portCheckIndicators?.clear();
+        this._searchWebIndicators?.clear();
         this._hasResetAutoScrollForSession?.delete(webSessionId);
 
         if (this.anchoredTerminal && data.content) {

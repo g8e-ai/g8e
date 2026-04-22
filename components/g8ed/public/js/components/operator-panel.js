@@ -144,6 +144,7 @@ export class OperatorPanel {
                 status: parsed.status,
                 status_display: String(parsed.status).toUpperCase(),
                 status_class: String(parsed.status).toLowerCase(),
+                bound_web_session_id: parsed.web_session_id ?? existing.bound_web_session_id,
             };
         }
 

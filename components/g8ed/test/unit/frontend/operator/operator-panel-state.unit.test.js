@@ -97,9 +97,9 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onHeartbeat({
-            type: 'g8e.v1.operator.heartbeat.received',
             operator_id: 'other',
-            data: { metrics: {} },
+            status: OperatorStatus.ACTIVE,
+            metrics: {},
         });
 
         expect(panel._operators[0].latest_heartbeat_snapshot).toBeNull();
@@ -113,9 +113,9 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onHeartbeat({
-            type: 'g8e.v1.operator.heartbeat.received',
             operator_id: 'op-1',
-            data: { metrics: { performance: { cpu_percent: 99 } } },
+            status: OperatorStatus.ACTIVE,
+            metrics: { performance: { cpu_percent: 99 } },
         });
 
         expect(panel._operators[0].latest_heartbeat_snapshot).toBeNull();
@@ -129,12 +129,9 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onStatusUpdated({
-            type: 'g8e.v1.operator.status.updated.bound',
-            data: {
-                operator_id: 'op-1',
-                status: OperatorStatus.BOUND,
-                web_session_id: 'ws-42',
-            },
+            operator_id: 'op-1',
+            status: OperatorStatus.BOUND,
+            web_session_id: 'ws-42',
         });
 
         const updated = panel._operators[0];
@@ -150,11 +147,8 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onStatusUpdated({
-            type: 'g8e.v1.operator.status.updated.active',
-            data: {
-                operator_id: 'op-1',
-                status: OperatorStatus.ACTIVE,
-            },
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
         });
 
         expect(panel._operators[0].status).toBe(OperatorStatus.ACTIVE);
@@ -167,11 +161,8 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onStatusUpdated({
-            type: 'g8e.v1.operator.status.updated.active',
-            data: {
-                operator_id: 'missing',
-                status: OperatorStatus.ACTIVE,
-            },
+            operator_id: 'missing',
+            status: OperatorStatus.ACTIVE,
         });
 
         expect(panel._operators[0].status).toBe(OperatorStatus.AVAILABLE);
@@ -183,13 +174,10 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
         ]);
 
         panel._onStatusUpdated({
-            type: 'g8e.v1.operator.status.updated.active',
-            data: {
-                operator_id: 'op-1',
-                status: OperatorStatus.ACTIVE,
-                total_count: 7,
-                active_count: 3,
-            },
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            total_count: 7,
+            active_count: 3,
         });
 
         expect(panel._totalOperatorCount).toBe(7);

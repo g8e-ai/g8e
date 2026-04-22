@@ -101,7 +101,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
             const res = await request(app).get('/api/operator/test-op-id/details');
 
             expect(res.status).toBe(200);
-            expect(res.body.id).toBe('test-op-id');
+            expect(res.body.operator_id).toBe('test-op-id');
             expect(res.body.status_display).toBe('ACTIVE');
         });
     });
