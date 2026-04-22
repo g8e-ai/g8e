@@ -1,41 +1,23 @@
 # g8e Evals — Real-Operator Evaluation Framework
 
-> **Status:** implemented (2026-04-22). All 7 steps of the implementation plan are complete. The new evals framework at `components/g8ee/evals/` is ready for use with `./g8e evals run --device-token <token> --gold-set gold_sets/benchmark.json`. The old `components/g8ee/tests/evals/real_operator_fixture.py` has been removed.
+The g8e evals framework provides end-to-end testing of the g8e platform against real operator containers, using the same public API surface and authentication flow that end users experience. This framework exercises the complete product stack — from device link token generation through chat interactions, tool execution, and approval workflows.
 
-## 1. Why we are rewriting this
+## Overview
 
-The existing `components/g8ee/tests/evals/real_operator_fixture.py` and its `real_operator` conftest fixture are structurally broken and must be removed, not patched.
+The evals framework is designed to:
 
-Concrete findings:
+- **Exercise the real product surface** — Evals hit the same `g8ed` HTTPS API that browsers use, with device link tokens generated from the dashboard. No internal auth tokens, slot-provisioning shortcuts, or fake operator documents.
+- **Use real operator containers** — Each scenario runs against dedicated operator containers on the `g8e-network`, mirroring the `demo/web-node` pattern. Containers are disposable and isolated from the test runner.
+- **Run from the Docker host** — Evals launch via `./g8e evals run` on the host, not inside `g8ee-test-runner`. The framework does not use pytest, which remains dedicated to unit/integration/e2e tests.
+- **Support deterministic and generative testing** — Gold-set JSON files define scenario inputs. The framework uses deterministic matchers for tool calls and LLM judges for behavior validation.
+- **Enable rapid iteration** — The fleet stands up in seconds, scenarios run in parallel, and failures produce container logs and reproduction commands.
 
-- `conftest.py` calls `fixture.bind_to_session(...)` which is **not defined** on `RealOperatorFixture`. Any test using the fixture fails on import-free runtime. That alone proves nobody is running this code.
-- The operator is launched **inside `g8ee-test-runner`** via `subprocess.Popen`. That container:
-  - has no operator binary baked in (the fixture downloads it fresh over HTTPS every run),
-  - runs as uid 1001 with `cap_drop: ALL` and no privileged shell,
-  - is not the container the platform expects to see as a managed node,
-  - shares its network namespace with pytest, so the operator's `--http-port 443`/`--wss-port 9001` flags collide with or falsely imply things about the test runner's own interface.
-- Operator identity is scraped with a regex from stdout (`operator_id=... operator_session_id=...`). The operator does not emit that line format. The fixture times out 100% of the time.
-- Readiness = "two regexes matched". There is no confirmation that the operator reached `ACTIVE`, is receiving heartbeats, or is reachable via pubsub.
-- Binary verification downloads happen through `verify=False` fallback even though the same binary already lives at `/home/g8e/g8e.operator` inside `g8ep`.
-- Meanwhile a **correct** real-operator pattern already exists at `components/g8ee/tests/e2e/conftest.py` (provisions slots via the g8ed internal API, reads api_key from the g8es document store, subscribes to the real PubSub heartbeat channel). The evals suite duplicated and downgraded that pattern instead of reusing it — and even that pattern is not the right shape for evals, because evals are supposed to exercise **the product**, not the internal fixture plumbing.
-
-The demo (`demo/Makefile`, `demo/docker-compose.yml`, `demo/containers/web-node/entrypoint.sh`) gives us the pattern we actually want: a fleet of real Linux containers, each running a real operator that auth'd against the platform with a **user-generated device link token** — the exact end-user workflow.
-
-## 2. Design goals
-
-1. **No bandaids.** Delete `real_operator_fixture.py` and the `real_operator` fixture from the evals conftest.
-2. **Real product surface.** Evals hit the same `g8ed` HTTPS API a browser hits, using a device link token the user generates from the dashboard — no internal auth tokens, no slot-provisioning short-circuits, no fake operator documents.
-3. **Real operator containers.** Each scenario runs against one (or more) dedicated operator containers on the `g8e-network`, exactly like `demo/web-node`. They are disposable and isolated from pytest's test runner.
-4. **Host-driven harness.** Evals are launched as `./g8e evals run`. They run on the Docker host, not inside `g8ee-test-runner`. They do not use pytest. Pytest stays dedicated to unit/integration/e2e.
-5. **Deterministic baseline, generative flexibility.** Keep the existing gold-set JSON shape (`gold_set.json`, `benchmark_gold_set.json`, `privacy_gold_set.json`) as scenario inputs. Reuse the existing `reporter.py` + `metrics.py` artifact format.
-6. **Cheap to iterate.** Fleet stands up in seconds; scenarios run in parallel; failures produce the exact container logs and a reproduction command.
-
-## 3. Target architecture
+## Architecture
 
 ```
 Host
  ├── ./g8e evals run
- │     └── scripts/evals/runner.py         (Python, runs on host, orchestrator)
+ │     └── components/g8ee/evals/runner/  (Python, runs on host, orchestrator)
  │           ├── docker compose -f components/g8ee/evals/docker-compose.evals.yml up
  │           │     ├── eval-node-01..NN    (real operator containers, device-token auth)
  │           │     └── (joins g8e-network, reaches g8e.local == g8ed)
@@ -48,10 +30,10 @@ Host
 Key properties:
 
 - The runner uses **only** public surfaces: device-link auth → POST chat → stream SSE → optionally POST approval. No `X-Internal-Auth`, no direct g8es document writes.
-- Each eval node is a real Linux container with a real filesystem; scenarios like "tail /var/log/auth.log" actually tail a log file. Broken/healthy profiles (reused from demo if relevant) seed the environment.
-- The runner owns the device token lifetime; it never mints one itself. The user pastes a token the same way they do in the dashboard.
+- Each eval node is a real Linux container with a real filesystem; scenarios like "tail /var/log/auth.log" actually tail a log file. Broken/healthy profiles seed the environment.
+- The runner does not mint device tokens; the user provides a token generated from the dashboard, matching the end-user workflow.
 
-## 4. File layout (target state)
+## File Layout
 
 ```
 components/g8ee/evals/
@@ -60,58 +42,60 @@ components/g8ee/evals/
 ├── containers/
 │   └── eval-node/
 │       ├── Dockerfile
-│       └── entrypoint.sh                 # Downloads + supervises operator (demo pattern)
+│       └── entrypoint.sh                 # Downloads + supervises operator
 ├── runner/
 │   ├── __init__.py
 │   ├── cli.py                            # ./g8e evals run entrypoint
 │   ├── fleet.py                          # compose up/down, health, discover
 │   ├── client.py                         # g8ed chat/approval/SSE client
 │   ├── scorer.py                         # judge + deterministic matchers
-│   ├── reporter.py                       # (move from tests/evals/reporter.py)
-│   └── metrics.py                        # (move from tests/evals/metrics.py)
+│   ├── reporter.py                       # report generation
+│   └── metrics.py                        # metrics collection
 └── gold_sets/
-    ├── accuracy.json                     # (was gold_set.json)
-    ├── benchmark.json                    # (was benchmark_gold_set.json)
-    └── privacy.json                      # (was privacy_gold_set.json)
+    ├── accuracy.json                     # accuracy scenarios
+    ├── benchmark.json                    # benchmark scenarios
+    └── privacy.json                      # privacy scenarios
 
-docs/benchmarking/evals.md                # (this file)
-components/g8ee/reports/evals/            # existing artifact dir — keep
+docs/benchmarking/evals.md                # this file
+components/g8ee/reports/evals/            # artifact output directory
 ```
 
-Deleted:
-- `components/g8ee/tests/evals/real_operator_fixture.py`
-- The `real_operator` fixture in `components/g8ee/tests/evals/conftest.py`
-- `components/g8ee/tests/evals/test_agent_tool_loop.py::test_orchestrate_tool_execution_with_real_operator`
-  (the security-violation test in the same file stays — it's a pure integration test and has no business being in evals).
+Note: Non-operator gold-set tests (accuracy/benchmark/privacy that drive LLM+validation paths without a real operator) remain under `tests/evals/` and continue using pytest. The evals framework specifically targets the **real-operator** dimension.
 
-Non-operator gold-set tests (accuracy/benchmark/privacy that drive LLM+validation paths without a real operator) stay under `tests/evals/` and keep using pytest. Only the **real-operator** dimension moves out.
+## Container Design — `eval-node`
 
-## 5. Container design — `eval-node`
+The eval-node container mirrors the `demo/containers/web-node` pattern, stripped to the minimum needed for operator coverage.
 
-Mirrors `demo/containers/web-node/entrypoint.sh` but stripped to the minimum needed for operator coverage.
+### Dockerfile
 
-Dockerfile:
-- base: `debian:stable-slim` (closer to a real target than alpine)
-- installs: `bash curl coreutils iproute2 procps file openssh-client grep sed awk findutils less` plus anything the gold-set scenarios require (logs, nginx, etc — profile-driven)
-- non-root `appuser` for the operator, optional `root`-profile container for root-level scenarios
-- writes a realistic filesystem fixture (`/var/log/auth.log`, `/etc/app/config.json`, etc) at entrypoint so scenarios have something real to find
+- Base: `debian:stable-slim` (closer to a real target than alpine)
+- Installs: `bash curl coreutils iproute2 procps file openssh-client grep sed awk findutils less` plus any tools required by gold-set scenarios (logs, nginx, etc — profile-driven)
+- Non-root `appuser` for the operator, with optional root-profile container for root-level scenarios
+- Writes realistic filesystem fixtures (`/var/log/auth.log`, `/etc/app/config.json`, etc) at entrypoint so scenarios have real data to interact with
 
-Entrypoint responsibilities (copy from `demo/containers/web-node/entrypoint.sh:122-169`):
+### Entrypoint Responsibilities
 
-1. If `DEVICE_TOKEN` is unset, exit non-zero — evals must always have a token.
-2. Download `g8e.operator` from `https://${G8E_ENDPOINT:-g8e.local}/operator/download/linux/amd64` with `Authorization: Bearer $DEVICE_TOKEN` (verify checksum; retry on failure).
-3. `exec` the operator with `-e g8e.local -D $DEVICE_TOKEN --no-git`. Do **not** override `--http-port`/`--wss-port` — let the defaults match the platform.
-4. Supervised restart loop, stdout prefixed with `[eval-node-NN operator]` so `docker logs` is readable.
+The entrypoint script handles:
 
-Compose (`docker-compose.evals.yml`):
-- external network `g8e-network`, external volume `g8es-ssl` (same as demo)
-- N services `eval-node-01..NN` using an anchor block, each with env `DEVICE_TOKEN`, `EVAL_NODE_ID`, and optional `EVAL_PROFILE`
-- `labels: io.g8e.evals=true` for discovery
-- no exposed host ports; everything stays on `g8e-network`
+1. **Token validation** — If `DEVICE_TOKEN` is unset, exit non-zero. Evals must always have a token.
+2. **Operator download** — Download `g8e.operator` from `https://${G8E_ENDPOINT:-g8e.local}/operator/download/linux/amd64` with `Authorization: Bearer $DEVICE_TOKEN`, verifying the checksum and retrying on failure.
+3. **Operator execution** — Execute the operator with `-e g8e.local -D $DEVICE_TOKEN --no-git`. The default `--http-port` and `--wss-port` settings are used to match platform expectations.
+4. **Supervision** — Run a supervised restart loop with stdout prefixed with `[eval-node-NN operator]` for readable `docker logs`.
 
-## 6. Orchestrator — `./g8e evals run`
+### Docker Compose Configuration
 
-CLI surface (host-side):
+The `docker-compose.evals.yml` file defines:
+
+- External network `g8e-network` and external volume `g8es-ssl` (same as demo)
+- N services `eval-node-01..NN` using an anchor block, each with environment variables `DEVICE_TOKEN`, `EVAL_NODE_ID`, and optional `EVAL_PROFILE`
+- Labels `io.g8e.evals=true` for discovery
+- No exposed host ports; everything stays on `g8e-network`
+
+## Orchestrator — `./g8e evals run`
+
+### CLI Interface
+
+The evals CLI runs on the Docker host:
 
 ```
 ./g8e evals run --device-token dlk_xxx [--suite accuracy|benchmark|privacy|all] \
@@ -123,100 +107,130 @@ CLI surface (host-side):
 ./g8e evals logs eval-node-03
 ```
 
-Orchestrator flow per scenario:
+### Scenario Execution Flow
 
-1. **Pick a node.** Round-robin or pin by `scenario.required_profile`. Wait until g8ed's `GET /api/internal/operators/user/{user}/status`-equivalent **public** path reports BOUND — we'll expose the minimum public status needed, or we reuse the dashboard's existing polling endpoint.
-2. **Create an investigation** via the same POST the dashboard uses.
-3. **Send the chat message.** Stream SSE back; capture all tool calls, approvals required, final message text, and timing. No mocking — the g8ee agent is the real agent.
-4. **Auto-approve** any `approval_required` events using the same public approval endpoint the dashboard uses. (Privacy/safety scenarios should assert that certain tool calls never reach approval, or that Sentinel blocked them.)
-5. **Score** using `scorer.py`:
-   - deterministic matchers for `expected_tool`/`expected_payload` (reuse benchmark gold-set shape)
-   - LLM judge for `expected_behavior`/`required_concepts` (reuse accuracy gold-set shape)
-   - Sentinel assertions for privacy (secret must not appear in final response)
-6. **Record** an `EvalRow` (same dataclass used today in `tests/evals/metrics.py`).
-7. **Reset node state** between scenarios (either `docker restart eval-node-NN` or a scripted fs reset — start with docker restart; it's <2s).
-8. After the last scenario, `reporter.persist_report(...)` writes `report.txt`, `results.csv`, `summary.json` to `components/g8ee/reports/evals/<ts>/`.
+For each scenario, the orchestrator:
 
-On failure the runner prints:
-- the scenario id
-- the final SSE timeline
+1. **Selects a node** — Uses round-robin or pins by `scenario.required_profile`. Waits until the operator reports BOUND status via the public API.
+2. **Creates an investigation** — Uses the same POST endpoint the dashboard uses.
+3. **Sends the chat message** — Streams SSE back, capturing all tool calls, approvals required, final message text, and timing. The g8ee agent is the real agent with no mocking.
+4. **Auto-approves requests** — Approves any `approval_required` events using the same public approval endpoint the dashboard uses. Privacy/safety scenarios assert that certain tool calls never reach approval or that Sentinel blocked them.
+5. **Scores the result** — Uses `scorer.py` with:
+   - Deterministic matchers for `expected_tool`/`expected_payload` (benchmark gold-set)
+   - LLM judge for `expected_behavior`/`required_concepts` (accuracy gold-set)
+   - Sentinel assertions for privacy (secrets must not appear in final response)
+6. **Records metrics** — Creates an `EvalRow` (same dataclass used in `tests/evals/metrics.py`).
+7. **Resets node state** — Between scenarios, resets the node state (currently via `docker restart eval-node-NN`, which takes <2s).
+8. **Generates reports** — After all scenarios complete, `reporter.persist_report(...)` writes `report.txt`, `results.csv`, and `summary.json` to `components/g8ee/reports/evals/<ts>/`.
+
+### Failure Handling
+
+On failure, the runner prints:
+- The scenario ID
+- The final SSE timeline
 - `docker logs eval-node-NN --tail=200`
-- the exact command to re-run just that scenario
+- The exact command to re-run just that scenario
 
-Parallelism: scenarios are independent if each owns its own node. Cap `--parallel` at `--nodes`.
+### Parallelism
 
-## 7. Gold set consolidation
+Scenarios are independent when each owns its own node. The `--parallel` flag is capped at `--nodes` to ensure adequate resources.
 
-- Move `tests/evals/{gold_set,benchmark_gold_set,privacy_gold_set}.json` → `components/g8ee/evals/gold_sets/{accuracy,benchmark,privacy}.json`.
-- Validate on load with the existing schema checks from `tests/evals/shared.py` (`REQUIRED_SCENARIO_FIELDS`, `REQUIRED_BENCHMARK_FIELDS`). Move those helpers to `runner/`.
-- Scenarios marked `agent_mode: "OPERATOR_BOUND"` previously **skipped** in raw-model tests (`tests/evals/shared.py:load_and_validate_gold_set` with `filter_operator_bound=True`) are now first-class inputs for `./g8e evals run`. No more silent skips.
+## Gold Sets
 
-## 8. Step-by-step implementation plan
+Gold sets define the test scenarios for evals. They are located in `components/g8ee/evals/gold_sets/`:
 
-One PR per step so each is bisectable.
+- `accuracy.json` — Accuracy scenarios with LLM judge validation
+- `benchmark.json` — Benchmark scenarios with deterministic tool matching
+- `privacy.json` — Privacy scenarios with Sentinel assertions
 
-**Step 0 — Delete the bandaid (prereq, standalone PR)**
+Each gold set is validated on load using schema checks from the runner module. Scenarios marked with `agent_mode: "OPERATOR_BOUND"` are first-class inputs for `./g8e evals run` and execute against real operators.
 
-- Remove `components/g8ee/tests/evals/real_operator_fixture.py`.
-- Remove the `real_operator` fixture from `components/g8ee/tests/evals/conftest.py`.
-- Remove `test_orchestrate_tool_execution_with_real_operator` from `components/g8ee/tests/evals/test_agent_tool_loop.py` (keep the security-violation test; it's unrelated).
-- Run `./g8e test g8ee -- tests/evals` to prove nothing else depended on them.
-- Update `tests/evals/conftest.py` docstring to stop claiming "real operators" — fake-operator gold-set evals continue to live there.
+## Usage
 
-**Step 1 — eval-node container**
+### Prerequisites
 
-- Create `components/g8ee/evals/containers/eval-node/{Dockerfile,entrypoint.sh}`.
-- Entrypoint is a cleaned-up port of `demo/containers/web-node/entrypoint.sh:122-169`. No nginx, no flask, no SSH, no fake secrets — just the operator supervisor loop and any fixture files individual scenarios need.
-- Validate manually: `docker build`, `docker run -e DEVICE_TOKEN=dlk_xxx --network g8e-network ...`, confirm operator appears in the g8ed dashboard.
+1. **Platform running** — Ensure the g8e platform is running via `./g8e platform up`
+2. **Device link token** — Generate a device link token from the dashboard. The runner does not mint tokens; this is a user action by design.
+3. **Network access** — The Docker host must have access to the `g8e-network` and `g8es-ssl` volume
 
-**Step 2 — compose profile**
+### Quick Start
 
-- Create `components/g8ee/evals/docker-compose.evals.yml` with one anchor + N services (start with N=3).
-- Add `./g8e evals up|down|status|logs` to the top-level `g8e` CLI — thin wrappers around `docker compose` with the evals compose file.
-- Document in `components/g8ee/evals/README.md`: prereqs (`./g8e platform setup`, login, dashboard device-token generation), quickstart.
+```bash
+# Bring up the eval fleet
+./g8e evals up --device-token dlk_xxx --nodes 5
 
-**Step 3 — runner skeleton + g8ed client**
+# Run all benchmark scenarios
+./g8e evals run --device-token dlk_xxx --suite benchmark
 
-- Add `components/g8ee/evals/runner/` with `cli.py`, `client.py`, `fleet.py`.
-- `client.py`: async `aiohttp` client for `POST /api/chat`, SSE stream consumer, `POST /api/approvals/{id}`. TLS via `g8es-ssl` CA (mounted into `g8ep` or read from the volume on the host).
-- `fleet.py`: `up(n, device_token)`, `down()`, `wait_bound(timeout)`, `restart(node_id)`, `logs(node_id, tail)`.
-- `cli.py`: wire `./g8e evals run --device-token … --dry-run` that just brings up fleet, runs one canned chat ("run `uname -a`"), prints the response, tears down.
+# Run specific scenarios
+./g8e evals run --device-token dlk_xxx --scenarios scenario_id_1,scenario_id_2
 
-**Step 4 — scorer + reporter port**
+# Tear down the fleet
+./g8e evals down
+```
 
-- Move `components/g8ee/tests/evals/{metrics,reporter}.py` → `components/g8ee/evals/runner/`. Adjust imports.
-- `scorer.py` consolidates three scoring paths:
-  - deterministic tool matcher (benchmark) — port logic from `test_agent_benchmark.py`
-  - LLM judge for expected_behavior — port from `test_agent_accuracy.py`
-  - privacy redaction checks — port from `test_agent_privacy.py`
-- Unit test the scorers in `components/g8ee/tests/unit/` against recorded SSE fixtures (no operator needed for scorer unit tests).
+### Running Specific Suites
 
-**Step 5 — full runner loop**
+- **Accuracy suite**: `./g8e evals run --device-token dlk_xxx --suite accuracy`
+- **Benchmark suite**: `./g8e evals run --device-token dlk_xxx --suite benchmark`
+- **Privacy suite**: `./g8e evals run --device-token dlk_xxx --suite privacy`
+- **All suites**: `./g8e evals run --device-token dlk_xxx --suite all`
 
-- Implement scenario selection, round-robin node assignment, per-scenario `reset` between runs, parallelism, artifact writing.
-- Run against a single gold-set file end-to-end. Prove: all OPERATOR_BOUND scenarios that used to be skipped now execute against a real operator.
+### Fleet Management
 
-**Step 6 — regression coverage**
+```bash
+# Check fleet status
+./g8e evals status
 
-- Add a golden "smoke" scenario that must always pass (`echo hello` style). `./g8e evals run --suite smoke` is safe to run in CI.
-- Add one failure-injection test: stop `eval-node-01` mid-scenario, confirm runner reports the failure cleanly rather than hanging.
-- Document expected run times and resource footprint in `components/g8ee/evals/README.md`.
+# View logs for a specific node
+./g8e evals logs eval-node-03
 
-**Step 7 — docs + deprecation notes**
+# Bring up fleet without running scenarios
+./g8e evals up --device-token dlk_xxx --nodes 3
+```
 
-- Point `docs/benchmarking/` and `docs/developer.md` at this file.
-- Remove any stale references to `real_operator` / `TEST_DEVICE_TOKEN` in component docs.
-- Update `.github/workflows/build-and-test.yml` to exclude real-operator evals from PR runs (device token required) but allow an opt-in nightly job.
+### Reports
 
-## 9. What explicitly stays out of scope
+After a run completes, reports are generated in `components/g8ee/reports/evals/<timestamp>/`:
 
-- No changes to the operator binary, g8ed, g8ee, or g8es. If we hit a real bug in those during step 5, it's a separate PR with its own regression test.
-- No auto-minting of device tokens inside the runner. That's a user action by design.
-- No new internal auth surface. If a scoring need can't be met through public APIs, that's a product gap to fix in the product, not a shortcut in evals.
-- Keep pytest-based accuracy evals (non-operator) intact during the migration. Delete them only after the new runner has at least one green run of the equivalent suite.
+- `report.txt` — Human-readable summary
+- `results.csv` — Machine-readable results per scenario
+- `summary.json` — Aggregated metrics and statistics
 
-## 10. Open questions
+### CI Integration
 
-- **Profiles per node.** Do accuracy/benchmark gold-set scenarios need environment-specific profiles (nginx broken, logs seeded, etc.) the way demo nodes do? If yes, we add a small `profiles/` dir under `eval-node` and map `scenario.required_profile → container`. Defer until step 5 surfaces a real need.
-- **Token reuse across runs.** A dashboard-generated device token is long-lived; we should document rotation expectations and whether `./g8e evals run` should validate the token before fleet-up to fail fast.
-- **Approval policy.** Auto-approve everything vs. simulate a user approving only "safe" actions. The privacy/safety suite needs the nuanced version; start with auto-approve-all and add policy hooks in step 5.
+Real-operator evals require a device token and are excluded from PR CI runs. They can be run as an opt-in nightly job or manually for validation.
+
+## Design Decisions
+
+### No Internal Auth Surface
+
+The runner uses only public APIs — device-link auth, POST chat, SSE streaming, and approval endpoints. No `X-Internal-Auth` headers or direct g8es document writes. If a scoring need cannot be met through public APIs, that represents a product gap to be fixed in the product itself, not a shortcut in evals.
+
+### Device Token Management
+
+The runner does not auto-mint device tokens. Users generate tokens from the dashboard, matching the end-user workflow exactly. This ensures evals exercise the complete authentication flow.
+
+### Node Profiles
+
+Scenarios can specify `required_profile` to match with appropriate container configurations. Currently, a basic profile is provided. Additional profiles (e.g., nginx-broken, logs-seeded) can be added as needed.
+
+### Approval Policy
+
+The current implementation auto-approves all requests. Future enhancements may add policy hooks to simulate user approval behavior for privacy/safety scenarios.
+
+## Scope
+
+### In Scope
+
+- End-to-end testing of the g8e platform against real operator containers
+- Validation via deterministic matchers, LLM judges, and Sentinel assertions
+- Fleet management and orchestration on the Docker host
+- Report generation and metrics collection
+
+### Out of Scope
+
+- Changes to the operator binary, g8ed, g8ee, or g8es (bugs found during evals are addressed in separate PRs)
+- Auto-minting of device tokens (user action by design)
+- New internal auth surfaces (must use public APIs)
+- Pytest-based accuracy evals (non-operator) remain under `tests/evals/`
