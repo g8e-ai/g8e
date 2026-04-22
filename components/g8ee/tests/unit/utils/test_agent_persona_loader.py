@@ -180,7 +180,16 @@ class TestPipelineTemplateContract:
     def test_verifier_template_renders_and_enforces_ok_contract(self):
         """TRIBUNAL_VERIFIER_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
-        from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE
+        from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE, _build_verifier_prompt_content, VerifierInput
+
+        verifier_input = VerifierInput(
+            mode="unanimous",
+            winner="ls -la",
+            clusters=[],
+            request="list files",
+            guidelines="",
+        )
+        verifier_context = _build_verifier_prompt_content(verifier_input)
 
         formatted = TRIBUNAL_VERIFIER_TEMPLATE.format(
             forbidden_patterns_message="FORBIDDEN",
@@ -192,7 +201,7 @@ class TestPipelineTemplateContract:
             working_directory="/home/user",
             user_context="root (uid=0)",
             operator_context="Hostname: host1\nOS: linux",
-            verifier_context="<candidate_command>\nls -la\n</candidate_command>",
+            verifier_context=verifier_context,
         )
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
             assert needle in formatted

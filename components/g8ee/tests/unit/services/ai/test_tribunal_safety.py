@@ -138,7 +138,7 @@ class TestVerifierSafety:
                 )
             
             assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
-            assert "unsafe revision" in exc_info.value.error.lower()
+            assert "revision unsafe" in exc_info.value.error.lower()
 
 class TestGenerateCommandSafety:
     @pytest.mark.asyncio

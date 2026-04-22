@@ -622,7 +622,7 @@ class TestTribunalProviderUnavailableError:
     async def test_raises_on_provider_init_failure(self):
         """Provider init failure raises TribunalProviderUnavailableError instead of silent fallback."""
         llm = LLMSettings(
-            primary_provider=LLMProvider.OLLAMA,
+            assistant_provider=LLMProvider.OLLAMA,
             assistant_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)

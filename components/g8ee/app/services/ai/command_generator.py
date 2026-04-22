@@ -311,6 +311,9 @@ def _is_system_error(error_message: str) -> bool:
     that should trigger TribunalGenerationFailedError.
     """
     error_lower = error_message.lower()
+    # Safety validation failures are model errors, not system errors
+    if "safety validation failed" in error_lower:
+        return False
     system_indicators = [
         "401", "403", "unauthorized", "forbidden",
         "authentication", "api key",
@@ -347,16 +350,16 @@ def _normalise_command(raw: str) -> str:
     # Handle multi-line commands (heredocs, etc.)
     lines = raw.split("\n")
     if len(lines) > 1:
+        # Check for heredocs first - they must be preserved as multi-line
+        if "<<" in raw:
+            return raw.strip()
         # Check if the first line has valid shell syntax
         first_line = lines[0].strip()
         try:
             shlex.split(first_line)
             return first_line
         except ValueError:
-            # First line invalid, check if it's a valid multi-line command
-            # For heredocs, we need to preserve the full command
-            if "<<" in raw:
-                return raw.strip()
+            # First line invalid, return empty
             return ""
 
     # Validate shell syntax
@@ -934,6 +937,8 @@ async def _run_verifier(
                 else:
                     await _fail_verifier(emitter, request, VerifierReason.NO_VALID_REVISION, f"Failed to parse verifier response after {max_attempts} attempts: {str(exc)}", target_cmd)
             continue
+        except TribunalVerifierFailedError:
+            raise
         except Exception as exc:
             logger.error("[TRIBUNAL-VERIFIER] Unexpected error: %s (raw_text=%r)", exc, raw_text[:200] if raw_text else "None", exc_info=True)
             await _fail_verifier(emitter, request, VerifierReason.VERIFIER_ERROR, str(exc), target_cmd)
@@ -1022,6 +1027,14 @@ async def _run_generation_pass(
             error_msg = f"Pass {pass_index} ({member.value}): normalisation failed"
             pass_errors.append(error_msg)
             logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
+            return None
+
+        # Validate command safety (forbidden patterns like sudo)
+        is_safe, safety_err = _validate_command_safety(normalised, False, False, operator_context)
+        if not is_safe:
+            error_msg = f"Pass {pass_index} ({member.value}): safety validation failed: {safety_err}"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s", error_msg)
             return None
 
         logger.info(
