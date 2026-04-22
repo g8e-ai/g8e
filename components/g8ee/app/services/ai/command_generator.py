@@ -608,8 +608,6 @@ class VerifierInput(G8eBaseModel):
     clusters: list[VerifierClusterInfo]
 
 TRIBUNAL_PROMPT_TEMPLATE = """\
-{voice}
-
 <constraints>
 {forbidden_patterns_message}
 
@@ -639,8 +637,6 @@ Respond now with the exact command string and nothing else."""
 
 
 TRIBUNAL_VERIFIER_TEMPLATE = """\
-{voice}
-
 <constraints>
 {forbidden_patterns_message}
 
@@ -812,7 +808,6 @@ async def _run_verifier(
     
     verifier_context = _build_verifier_prompt_content(verifier_input)
     prompt = TRIBUNAL_VERIFIER_TEMPLATE.format(
-        voice=verifier_persona.get_system_prompt(),
         command_constraints_message=command_constraints_message,
         verifier_context=verifier_context,
         **fields,
@@ -833,7 +828,7 @@ async def _run_verifier(
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
-        system_instructions="",
+        system_instructions=verifier_persona.get_system_prompt(),
         response_format=response_format,
     )
 
@@ -922,7 +917,6 @@ async def _run_generation_pass(
     fields = _prompt_fields(operator_context, request=request, guidelines=guidelines)
 
     prompt = TRIBUNAL_PROMPT_TEMPLATE.format(
-        voice=member_persona.get_system_prompt(),
         command_constraints_message=command_constraints_message,
         **fields,
     )
@@ -946,7 +940,7 @@ async def _run_generation_pass(
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
-        system_instructions="",
+        system_instructions=member_persona.get_system_prompt(),
         response_format=response_format,
     )
 

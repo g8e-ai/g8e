@@ -47,8 +47,37 @@ async def all_services(cache_aside_service, test_settings):
 
     Benchmark and eval tests use fake operators (documents only, no real process).
     Use auto_approve_pending helper to approve pending approvals during tests.
+
+    Injects a real WebSearchProvider if TEST_WEB_SEARCH_* env vars are set,
+    ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+    import os
+    from app.services.ai.grounding.web_search_provider import WebSearchProvider
+
+    # Check if web search credentials are available via env vars
+    web_search_provider = None
+    project_id = os.environ.get("TEST_WEB_SEARCH_PROJECT_ID", "").strip()
+    engine_id = os.environ.get("TEST_WEB_SEARCH_ENGINE_ID", "").strip()
+    api_key = os.environ.get("TEST_WEB_SEARCH_API_KEY", "").strip()
+    location = os.environ.get("TEST_WEB_SEARCH_LOCATION", "").strip() or "global"
+
+    if project_id and engine_id and api_key:
+        web_search_provider = WebSearchProvider(
+            project_id=project_id,
+            engine_id=engine_id,
+            api_key=api_key,
+            location=location,
+        )
+        logger.info(
+            "[EVAL-FIXTURE] Injecting real WebSearchProvider from env vars: project_id=%s engine_id=%s",
+            project_id, engine_id
+        )
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        web_search_provider=web_search_provider,
+    )
 
     yield services
 

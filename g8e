@@ -722,6 +722,22 @@ case "$TOP" in
                     _require_value "-k/--llm-api-key"
                     export TEST_LLM_API_KEY="${_args[1]}"
                     _args=("${_args[@]:2}") ;;
+                -P|--web-search-project)
+                    _require_value "-P/--web-search-project"
+                    export TEST_WEB_SEARCH_PROJECT_ID="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -E|--web-search-engine)
+                    _require_value "-E/--web-search-engine"
+                    export TEST_WEB_SEARCH_ENGINE_ID="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -K|--web-search-api-key)
+                    _require_value "-K/--web-search-api-key"
+                    export TEST_WEB_SEARCH_API_KEY="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -L|--web-search-location)
+                    _require_value "-L/--web-search-location"
+                    export TEST_WEB_SEARCH_LOCATION="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
                 -j|--parallel)
                     # Optional value: accept "auto" or a positive integer; otherwise default to "auto".
                     if [[ ${#_args[@]} -ge 2 && ( "${_args[1]}" == "auto" || "${_args[1]}" =~ ^[0-9]+$ ) ]]; then

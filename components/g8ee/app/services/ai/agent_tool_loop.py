@@ -147,7 +147,7 @@ class TribunalInvoker:
         )
         logger.info(
             "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
-            gen_result.outcome, request[:80], gen_result.final_command[:80],
+            gen_result.outcome, request[:80], gen_result.final_command[:80] if gen_result.final_command else None,
         )
 
         executor_args = ExecutorCommandArgs(
