@@ -95,9 +95,9 @@ class TestSettingsService:
         
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
-        
+
         # LLM settings should be empty (no platform fallback)
-        assert settings.llm.primary_provider == LLMProvider.OLLAMA
+        assert settings.llm.primary_provider is None
         assert settings.llm.openai_api_key is None
         assert settings.llm.anthropic_api_key is None
         assert settings.llm.gemini_api_key is None
@@ -267,7 +267,7 @@ class TestSettingsService:
         assert settings.llm.llm_command_gen_verifier is True
 
     async def test_llm_settings_provider_preserved(self):
-        """Test that valid provider is preserved in user settings."""
+        """Test that valid provider is preserved in user settings (explicitly set, not a default)."""
         cache_mock = MagicMock()
         cache_mock.get_document = AsyncMock()
 

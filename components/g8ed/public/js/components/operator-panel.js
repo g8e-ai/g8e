@@ -169,6 +169,8 @@ export class OperatorPanel {
             this._operators[operatorIndex] = {
                 ...existing,
                 status: parsed.status,
+                status_display: String(parsed.status).toUpperCase(),
+                status_class: String(parsed.status).toLowerCase(),
                 latest_heartbeat_snapshot: parsed.metrics,
                 last_heartbeat: heartbeatTimestamp,
             };

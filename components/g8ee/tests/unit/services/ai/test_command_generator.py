@@ -111,8 +111,9 @@ class TestResolveModel:
         llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
         assert llm.assistant_model is None
         assert llm.primary_model is None
-        with pytest.raises(TribunalModelNotConfiguredError):
+        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
             _resolve_model(llm)
+        assert exc_info.value.provider == "ollama"
 
     def test_raises_for_openai_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
@@ -221,7 +222,7 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        passed, revision = await _run_verifier(
+        verifier_passed, final_cmd, verifier_revision, verifier_reason, swap_to_cluster, swap_to_member = await _run_verifier(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -233,10 +234,11 @@ class TestRoleImportRegression:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            verifier_persona=get_agent_persona("auditor"),
         )
 
-        assert passed is True
-        assert revision is None
+        assert verifier_passed is True
+        assert verifier_revision is None
         call_kwargs = mock_provider.generate_content_lite.call_args
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
@@ -715,6 +717,7 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
+            verifier_persona=get_agent_persona("auditor"),
         )
 
         assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
@@ -754,6 +757,7 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
+            verifier_persona=get_agent_persona("auditor"),
         )
 
         assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
@@ -791,6 +795,7 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
+            verifier_persona=get_agent_persona("auditor"),
         )
 
         assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
@@ -2136,6 +2141,7 @@ class TestMaxTokensConstants:
                 operator_context=_make_mock_operator_context(os="linux"),
                 emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
+                verifier_persona=get_agent_persona("auditor"),
             )
 
             call_kwargs = mock_provider.generate_content_lite.call_args
@@ -2288,10 +2294,7 @@ class TestPromptFields:
 
         auditor = get_agent_persona("auditor")
         rendered = TRIBUNAL_VERIFIER_TEMPLATE.format(
-            voice=auditor.get_system_prompt(),
-            command_constraints_message=command_constraints_message,
             verifier_context="Verifier context placeholder",
-            candidate_command="ls -la",
             **common,
             **fields,
         )

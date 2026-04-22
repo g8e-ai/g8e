@@ -95,6 +95,40 @@ def tool_service(all_services):
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def real_operator(unique_web_session_id, unique_user_id):
+    """Fixture that starts a real g8e operator for eval tests.
+
+    Requires TEST_DEVICE_TOKEN environment variable to be set.
+    Generate a device link token from the dashboard before running tests.
+
+    Usage:
+        async def test_something(real_operator):
+            operator = await real_operator
+            # operator.operator_id, operator.operator_session_id available
+    """
+    from tests.evals.real_operator_fixture import RealOperatorFixture
+    import os
+
+    device_token = os.environ.get("TEST_DEVICE_TOKEN")
+    if not device_token:
+        pytest.skip(
+            "TEST_DEVICE_TOKEN not set. Generate a device link token from the dashboard "
+            "and set it as TEST_DEVICE_TOKEN to run real operator tests."
+        )
+
+    fixture = RealOperatorFixture(device_token=device_token)
+    operator = await fixture.start_operator()
+
+    # Bind to the test session
+    await fixture.bind_to_session(unique_web_session_id, unique_user_id)
+
+    yield operator
+
+    # Cleanup
+    await fixture.stop_operator()
+
+
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
 async def cleanup(cache_aside_service, all_services):
     """Autouse-friendly cleanup tracker for integration tests.
 

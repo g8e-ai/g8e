@@ -22,6 +22,8 @@ import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
+from pydantic import ValidationError
+
 from app.constants.status import (
     CommandErrorType,
     OperatorToolName,
@@ -317,22 +319,16 @@ async def orchestrate_tool_execution(
                     request_settings=request_settings,
                     tool_executor=tool_executor,
                 )
-                
-                # Check for consensus failure
-                from app.constants import CommandGenerationOutcome
-                if gen_result.outcome == CommandGenerationOutcome.CONSENSUS_FAILED:
-                    logger.warning("[TRIBUNAL-INVOKE] Consensus failed for request: %r", request[:80])
-                    raise TribunalConsensusFailedError(request=request, vote_breakdown=gen_result.vote_breakdown)
-                    
-            except TribunalError as exc:
+            except (TribunalError, ValidationError) as exc:
+                error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
                 logger.error(
                     "[TRIBUNAL-ERROR] %s (%s): %s",
-                    type(exc).__name__, tool_name, exc.user_message,
+                    type(exc).__name__, tool_name, error_msg,
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
                     request=request,
-                    error_msg=exc.user_message,
+                    error_msg=error_msg,
                 )
 
             raw_args = executor_args.model_dump(by_alias=True)

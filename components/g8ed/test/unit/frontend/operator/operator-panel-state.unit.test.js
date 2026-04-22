@@ -85,6 +85,8 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         expect(updated.latest_heartbeat_snapshot.performance.network_latency).toBe(12);
         expect(updated.latest_heartbeat_snapshot.system_identity.hostname).toBe('host-a');
         expect(updated.status).toBe(OperatorStatus.ACTIVE);
+        expect(updated.status_display).toBe(String(OperatorStatus.ACTIVE).toUpperCase());
+        expect(updated.status_class).toBe(String(OperatorStatus.ACTIVE).toLowerCase());
         expect(updated.last_heartbeat).toEqual(new Date('2026-04-21T21:30:10.683Z'));
 
         // Unrelated slot untouched

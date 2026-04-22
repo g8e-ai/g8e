@@ -121,6 +121,7 @@ class TestVerifierSafety:
                     operator_context=_make_mock_operator_context(),
                     emitter=emitter,
                     command_constraints_message="",
+                    verifier_persona=get_agent_persona("auditor"),
                 )
             
             assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION

@@ -102,7 +102,7 @@ class MCPGatewayService:
         )
         try:
             # MCP callers may not provide user settings; use defaults if missing
-            # G8eeUserSettings requires llm field; LLMSettings defaults to OLLAMA provider.
+            # G8eeUserSettings requires llm field; LLMSettings requires explicit provider configuration.
             from app.models.settings import LLMSettings
             from app.utils.ids import generate_command_execution_id
             default_settings = G8eeUserSettings(llm=LLMSettings())

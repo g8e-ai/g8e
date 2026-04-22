@@ -236,7 +236,7 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.openai_api_key == "user-key"
 
     async def test_get_user_settings_falls_back_to_empty_llm_when_missing(self, settings_service, cache_service):
-        """Verify user settings return empty LLMSettings with default OLLAMA provider when UserSettingsDocument is missing."""
+        """Verify user settings return empty LLMSettings with None provider when UserSettingsDocument is missing."""
         user_id = "new-user"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
         
@@ -319,8 +319,8 @@ class TestG8eeSettingsOverlayIntegration:
         cache_service.get_document.side_effect = get_doc_mock
 
         user_settings = await settings_service.get_user_settings(user_id)
-        
-        # LLM settings are user-specific only; missing user doc returns empty LLMSettings with default OLLAMA
-        assert user_settings.llm.primary_provider == LLMProvider.OLLAMA
+
+        # LLM settings are user-specific only; missing user doc returns empty LLMSettings with None provider
+        assert user_settings.llm.primary_provider is None
         assert user_settings.llm.primary_model is None
         assert user_settings.llm.gemini_api_key is None

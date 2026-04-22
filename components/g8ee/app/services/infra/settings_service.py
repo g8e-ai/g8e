@@ -198,7 +198,7 @@ class SettingsService:
                     llm_lite_model=None,
                     openai_endpoint=OPENAI_DEFAULT_ENDPOINT,
                     openai_api_key=None,
-                    ollama_endpoint=OLLAMA_DEFAULT_ENDPOINT,
+                    ollama_endpoint=None,
                     ollama_api_key=None,
                     gemini_api_key=None,
                     anthropic_endpoint=ANTHROPIC_DEFAULT_ENDPOINT,
