@@ -78,11 +78,14 @@ export const TribunalMember = Object.freeze({
  * The Auditor's stated reason for its verdict in Tribunal SSE payloads.
  */
 export const AuditorReason = Object.freeze({
-    OK:                _AGENTS['tribunal.verifier_reason'].ok,
-    REVISED:           _AGENTS['tribunal.verifier_reason'].revised,
-    EMPTY_RESPONSE:    _AGENTS['tribunal.verifier_reason'].empty_response,
-    NO_VALID_REVISION: _AGENTS['tribunal.verifier_reason'].no_valid_revision,
-    VERIFIER_ERROR:    _AGENTS['tribunal.verifier_reason'].verifier_error,
+    OK:                   _AGENTS['tribunal.auditor_reason'].ok,
+    REVISED:              _AGENTS['tribunal.auditor_reason'].revised,
+    EMPTY_RESPONSE:       _AGENTS['tribunal.auditor_reason'].empty_response,
+    NO_VALID_REVISION:    _AGENTS['tribunal.auditor_reason'].no_valid_revision,
+    AUDITOR_ERROR:        _AGENTS['tribunal.auditor_reason'].auditor_error,
+    SWAPPED_TO_DISSENTER: _AGENTS['tribunal.auditor_reason'].swapped_to_dissenter,
+    REVISED_FROM_DISSENT: _AGENTS['tribunal.auditor_reason'].revised_from_dissent,
+    WHITELIST_VIOLATION:  _AGENTS['tribunal.auditor_reason'].whitelist_violation,
 });
 
 /**

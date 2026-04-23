@@ -455,9 +455,15 @@ def test_settings():
     """Returns the globally configured Settings object.
     
     In a real test run, this is loaded from g8es by pytest_sessionstart.
+    If settings are not properly configured, returns a default G8eePlatformSettings.
     """
     from app.llm.factory import get_settings
-    return get_settings()
+    from app.models.settings import AuthSettings, ListenSettings
+    
+    settings = get_settings()
+    if settings is None or not hasattr(settings, 'auth'):
+        return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
+    return settings
 
 
 @pytest.fixture

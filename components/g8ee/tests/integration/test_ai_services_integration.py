@@ -17,29 +17,11 @@ Integration tests: AI Services Real LLM Calls
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
 All tests use real services and infrastructure - no mocks allowed per testing guidelines.
 
-    Segment 1 — Memory Generation Service
-      Test AI-powered memory analysis and updates from conversation history.
-
-    Segment 2 — Title Generation Service  
-      Test AI-powered case title generation from descriptions.
-
-    Segment 3 — Triage Service
-      Test AI-powered case triage and complexity classification.
-
-    Segment 4 — Command Generation Service
-      Test AI-powered command generation from user requests.
-
-    Segment 5 — Response Analysis Service
-      Test AI-powered response analysis and validation.
-
-Real code under test:
-    MemoryGenerationService (app/services/ai/memory_generation_service.py)
-    generate_case_title (app/services/ai/title_generator.py)
-    TriageService (app/services/ai/triage.py)
-    CommandGeneratorService (app/services/ai/command_generator.py)
-    ResponseAnalyzer (app/services/ai/response_analyzer.py)
-
-All tests use real LLM providers and services — no mocks allowed per testing guidelines.
+Segment 1: Memory Generation Service
+Segment 2: Title Generation Service
+Segment 3: Triage Service
+Segment 4: Command Generation Service
+Segment 5: Response Analysis Service
 """
 
 import pytest
@@ -508,13 +490,7 @@ class TestTriageServiceIntegration:
         # Verify triage result
         assert isinstance(result, TriageResult)
         
-        # Simple factual question should be classified as SIMPLE complexity, but JSON parsing is failing
-        # TODO: Fix triage service JSON parsing issue with truncated responses
-        # The model correctly returns "simple" but the JSON is truncated, causing fallback to COMPLEX
-        assert result.complexity in [
-            TriageComplexityClassification.SIMPLE,  # Expected when JSON parsing works
-            TriageComplexityClassification.COMPLEX,  # Current fallback due to JSON parsing failure
-        ]
+        assert result.complexity == TriageComplexityClassification.SIMPLE
 
     async def test_triage_password_reset_complexity(self, user_settings):
         """TriageService correctly classifies password reset as complex due to security implications."""
@@ -663,11 +639,11 @@ class TestCommandGenerationIntegration:
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=False,
-            whitelisted_commands=["ls -la", "pwd", "whoami"],
+            whitelisted_commands=[{"command": "ls -la"}, {"command": "pwd"}, {"command": "whoami"}],
             blacklisted_commands=None,
         )
         assert "Whitelisting is ENABLED" in message
-        assert "Only these commands (and their subcommands) are allowed" in message
+        assert "Only these commands are allowed" in message
         assert "ls -la" in message
         assert "pwd" in message
         assert "whoami" in message
@@ -688,7 +664,7 @@ class TestCommandGenerationIntegration:
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=True,
-            whitelisted_commands=["ls"],
+            whitelisted_commands=[{"command": "ls"}],
             blacklisted_commands=[{"command": "rm -rf"}],
         )
         assert "Whitelisting is ENABLED" in message
@@ -725,8 +701,6 @@ class TestCommandGenerationIntegration:
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
-        # Note: This may fail if ping is not in the whitelist config, but the validation
-        # logic itself is what we're testing
         
         # Test 2: Command with forbidden flag should fail
         is_safe, error = validate_command_safety(
@@ -763,7 +737,7 @@ class TestResponseAnalysisIntegration:
 
         analyzer = AIResponseAnalyzer()
 
-        # Test low-risk command: specifically checking it's NOT high
+        # Test low-risk command
         low_risk_command = "ls -la /home/user/Alpine-Delta/logs"
         justification = "Checking logs for the Alpine-Delta node thermal event"
 
@@ -784,9 +758,7 @@ class TestResponseAnalysisIntegration:
         assert result is not None
         assert hasattr(result, 'risk_level')
         
-        # Reading logs is LOW risk. We'll accept MEDIUM if the LLM is cautious, 
-        # but HIGH is a failure of the risk model for an 'ls' command.
-        assert result.risk_level in ['LOW', 'MEDIUM']
+        assert result.risk_level == 'LOW'
 
     async def test_analyze_high_risk_command(self, user_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
@@ -795,7 +767,7 @@ class TestResponseAnalysisIntegration:
 
         analyzer = AIResponseAnalyzer()
 
-        # Test high-risk command: wiping a specific important directory
+        # Test high-risk command
         high_risk_command = "rm -rf /data/Zurich/Alpine-Alpha/backups"
         justification = "Wiping the Zurich backups for the Alpine-Alpha node because we're decommissioning the rack."
 

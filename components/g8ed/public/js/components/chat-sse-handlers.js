@@ -186,11 +186,11 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalVotingCompleted(data);
         });
 
-        this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_STARTED, (data) => {
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_STARTED, (data) => {
             this.handleTribunalAuditorStarted(data);
         });
 
-        this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED, (data) => {
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED, (data) => {
             this.handleTribunalAuditorCompleted(data);
         });
 
