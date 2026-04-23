@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.clients.http_client import HTTPClient
@@ -69,25 +69,25 @@ class OperatorDataService(OperatorDataServiceProtocol):
         data = await self.cache.get_document(self.collection, operator_id)
         if not data:
             return None
-        
+
         return OperatorDocument.model_validate(data)
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
         """Create a new Operator document in the database."""
-        if not operator.operator_id:
-            raise ValidationError("operator_id is required")
+        if not operator.id:
+            raise ValidationError("id is required")
         
         # Convert to dict for storage
         operator_data = operator.model_dump()
         
         result = await self.cache.create_document(
             collection=self.collection,
-            document_id=operator.operator_id,
+            document_id=operator.id,
             data=operator_data
         )
         
         if not result.success:
-            raise ExternalServiceError(f"Failed to create Operator {operator.operator_id}: {result.error}", service_name="operator_service")
+            raise ExternalServiceError(f"Failed to create Operator {operator.id}: {result.error}", service_name="operator_service")
         
         return True
 
@@ -97,10 +97,10 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ValidationError("operator_id is required")
 
         now_timestamp = now()
-        updates = {
+        updates: dict[str, object] = {
             "status": status,
         }
-        
+
         operator = await self.get_operator(operator_id)
         if operator and status == OperatorStatus.ACTIVE and not operator.last_heartbeat:
             updates["last_heartbeat"] = now_timestamp
@@ -108,7 +108,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         result = await self.cache.update_document(
             collection=self.collection,
             document_id=operator_id,
-            data=cast(dict[str, object], updates),
+            data=updates,
             merge=True
         )
         return result.success
@@ -261,9 +261,9 @@ class OperatorDataService(OperatorDataServiceProtocol):
         try:
             request_payload = BindOperatorsRequest(operator_ids=operator_ids)
 
-            response = await self.internal_http_client.post(  # type: ignore[reportUnknownMemberType]
+            response = await self.internal_http_client.post(
                 "/api/operators/bind-all",
-                json_data=request_payload.model_dump(mode="json"),
+                json_data=request_payload,
                 headers={
                     INTERNAL_AUTH_HEADER: "internal-service",
                     WEB_SESSION_ID_HEADER: web_session_id,

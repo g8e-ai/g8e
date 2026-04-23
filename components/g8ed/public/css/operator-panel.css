@@ -793,15 +793,6 @@
   border-left: 3px solid var(--accent-blue-light);
 }
 
-.operator-list-item.is-g8ep {
-  background: linear-gradient(135deg,
-    rgba(var(--secondary-color-rgb), 0.08) 0%,
-    rgba(var(--secondary-color-rgb), 0.05) 50%,
-    rgba(var(--secondary-color-rgb), 0.03) 100%);
-  border-color: rgba(var(--secondary-color-rgb), 0.5);
-  border-left: 4px solid var(--secondary-color);
-}
-
 /* Light theme adjustments */
 [data-theme="light"] .operator-list-item.active {
   background: linear-gradient(135deg, 
@@ -1220,7 +1211,7 @@
 }
 
 .bind-operator-btn[data-is-bound="true"] .btn-icon {
-  color: var(--accent-green);
+  color: var(--accent-blue);
 }
 
 .bind-operator-btn .btn-icon {
@@ -1835,6 +1826,11 @@
 .operator-download-link:hover {
   color: var(--text-primary);
   text-decoration: underline;
+}
+
+.operator-download-separator {
+  margin: 12px 0;
+  border-top: 1px solid var(--border-color);
 }
 
 .operator-deploy-section {

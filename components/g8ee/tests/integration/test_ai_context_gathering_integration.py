@@ -493,7 +493,7 @@ class TestOperatorEnrichment:
         
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
-            operator_id=operator.operator_id,
+            operator_id=operator.id,
             operator_session_id=operator.operator_session_id,
             status=OperatorStatus.BOUND,
         )
@@ -517,11 +517,11 @@ class TestOperatorEnrichment:
         # Verify
         assert isinstance(enriched_context, EnrichedInvestigationContext)
         assert len(enriched_context.operator_documents) == 1
-        assert enriched_context.operator_documents[0].operator_id == operator.operator_id
+        assert enriched_context.operator_documents[0].id == operator.id
         assert enriched_context.operator_documents[0].current_hostname == operator.current_hostname
 
         # Cleanup
-        cleanup.track_operator(operator.operator_id)
+        cleanup.track_operator(operator.id)
         cleanup.track_investigation(created_investigation.id)
 
     async def test_enrich_multiple_bound_operators(
@@ -556,7 +556,7 @@ class TestOperatorEnrichment:
         # Create g8e context with multiple bound operators
         bound_operators = [
             BoundOperator(
-                operator_id=op.operator_id,
+                operator_id=op.id,
                 operator_session_id=op.operator_session_id,
                 status=OperatorStatus.BOUND,
             )
@@ -579,15 +579,15 @@ class TestOperatorEnrichment:
         
         # Verify
         assert len(enriched_context.operator_documents) == 3
-        operator_ids = [op.operator_id for op in enriched_context.operator_documents]
-        assert operator1.operator_id in operator_ids
-        assert operator2.operator_id in operator_ids
-        assert operator3.operator_id in operator_ids
+        operator_ids = [op.id for op in enriched_context.operator_documents]
+        assert operator1.id in operator_ids
+        assert operator2.id in operator_ids
+        assert operator3.id in operator_ids
 
         # Cleanup
-        cleanup.track_operator(operator1.operator_id)
-        cleanup.track_operator(operator2.operator_id)
-        cleanup.track_operator(operator3.operator_id)
+        cleanup.track_operator(operator1.id)
+        cleanup.track_operator(operator2.id)
+        cleanup.track_operator(operator3.id)
         cleanup.track_investigation(created_investigation.id)
 
     async def test_non_bound_operators_filtered_out(
@@ -626,7 +626,7 @@ class TestOperatorEnrichment:
         # Create g8e context with mixed status operators
         bound_operators = [
             BoundOperator(
-                operator_id=op.operator_id,
+                operator_id=op.id,
                 operator_session_id=op.operator_session_id,
                 status=op.status,
             )
@@ -649,12 +649,12 @@ class TestOperatorEnrichment:
         
         # Verify - only BOUND operator should be enriched
         assert len(enriched_context.operator_documents) == 1
-        assert enriched_context.operator_documents[0].operator_id == bound_operator.operator_id
+        assert enriched_context.operator_documents[0].id == bound_operator.id
 
         # Cleanup
-        cleanup.track_operator(bound_operator.operator_id)
-        cleanup.track_operator(claimed_operator.operator_id)
-        cleanup.track_operator(offline_operator.operator_id)
+        cleanup.track_operator(bound_operator.id)
+        cleanup.track_operator(claimed_operator.id)
+        cleanup.track_operator(offline_operator.id)
         cleanup.track_investigation(created_investigation.id)
 
     async def test_missing_operator_handled_gracefully(
@@ -733,7 +733,7 @@ class TestOperatorEnrichment:
         
         # Create g8e context and enrich
         bound_operator = BoundOperator(
-            operator_id=cloud_operator.operator_id,
+            operator_id=cloud_operator.id,
             operator_session_id=cloud_operator.operator_session_id,
             status=OperatorStatus.BOUND,
         )
@@ -759,7 +759,7 @@ class TestOperatorEnrichment:
         assert op_doc.granted_intents == ["ec2_discovery", "s3_read"]
 
         # Cleanup
-        cleanup.track_operator(cloud_operator.operator_id)
+        cleanup.track_operator(cloud_operator.id)
         cleanup.track_investigation(created_investigation.id)
 
 
@@ -817,7 +817,7 @@ class TestCompleteContextAssembly:
         # Create g8e context with both operators
         bound_operators = [
             BoundOperator(
-                operator_id=op.operator_id,
+                operator_id=op.id,
                 operator_session_id=op.operator_session_id,
                 status=OperatorStatus.BOUND,
             )
@@ -862,8 +862,8 @@ class TestCompleteContextAssembly:
         assert "prod-server-02" in operator_hostnames
 
         # Cleanup
-        cleanup.track_operator(operator1.operator_id)
-        cleanup.track_operator(operator2.operator_id)
+        cleanup.track_operator(operator1.id)
+        cleanup.track_operator(operator2.id)
         cleanup.track_memory(memory.investigation_id)
         cleanup.track_investigation(created_investigation.id)
 

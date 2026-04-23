@@ -34,7 +34,7 @@ from app.constants import (
     CLOUD_INTENT_VERIFICATION_ACTIONS,
     CloudIntent,
 )
-from app.models.command_payloads import GrantIntentArgs
+from app.models.tool_args import GrantIntentArgs
 from app.models.tool_results import IntentPermissionResult
 from app.services.operator.command_service import OperatorCommandService
 from tests.fakes.builder import build_command_service
@@ -314,7 +314,7 @@ class TestExecuteIntentPermissionRequestValidation:
         from app.constants import OperatorType
         op_doc = MagicMock()
         op_doc.operator_type = OperatorType.CLOUD
-        op_doc.operator_id = "op-cloud-1"
+        op_doc.id = "op-cloud-1"
         op_doc.operator_session_id = "sess-cloud-1"
         investigation = MagicMock()
         investigation.id = "inv-001"
@@ -443,7 +443,7 @@ class TestExecuteIntentPermissionRequestValidation:
         from app.constants import OperatorType
         op_doc = MagicMock()
         op_doc.operator_type = OperatorType.SYSTEM
-        op_doc.operator_id = "op-sys-1"
+        op_doc.id = "op-sys-1"
         op_doc.operator_session_id = "sess-sys-1"
         investigation = MagicMock()
         investigation.id = "inv-sys"

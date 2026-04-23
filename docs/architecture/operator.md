@@ -264,7 +264,7 @@ Authentication is always an HTTP exchange with the platform. It happens once at 
 
 **API key** — Pass `--key` / `-k` or set `G8E_OPERATOR_API_KEY`. If neither is set, the binary prompts interactively with echo disabled. Sent as `Authorization: Bearer` on the bootstrap POST.
 
-**Device link token** — Pass `--device-token` / `-D` or set `G8E_DEVICE_TOKEN`. The Operator first registers at `https://{endpoint}/auth/link/{token}/register`, sending its system fingerprint, hostname, OS, arch, and username. On success it receives a pre-authorized `operator_session_id` which is then used for the bootstrap POST. Device tokens support `max_uses` — a single token can authorize an entire fleet. Each registration claims one operator slot atomically.
+**Device link token** — Pass `--device-token` / `-D` or set `G8E_DEVICE_TOKEN`. The Operator first registers at `https://{endpoint}/auth/link/{token}/register`, sending its system fingerprint, hostname, OS, arch, and username. On success it receives a pre-authorized `operator_session_id` which is then used for the bootstrap POST. Device tokens support `max_uses` — a single token can authorize an entire fleet. When a device link is created, g8ed automatically provisions the required operator slots upfront to fulfill the `max_uses` limit. Each registration then claims one of the pre-provisioned slots atomically.
 
 **Pre-authorized session** — Pass `--operator_session` / `-S` or set `G8E_OPERATOR_SESSION_ID`. The session ID is passed directly in the bootstrap POST body with no `Authorization` header. This is the path taken automatically after a successful device link registration.
 

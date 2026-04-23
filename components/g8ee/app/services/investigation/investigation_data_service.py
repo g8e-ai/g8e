@@ -13,6 +13,8 @@
 
 import logging
 
+from pydantic import TypeAdapter
+
 from app.constants import (
     DB_COLLECTION_INVESTIGATIONS,
     ComponentName,
@@ -43,6 +45,8 @@ from app.utils.timestamp import now
 
 
 logger = logging.getLogger(__name__)
+
+_CONVERSATION_HISTORY_ADAPTER = TypeAdapter(list[ConversationHistoryMessage])
 
 
 class InvestigationDataService(InvestigationDataServiceProtocol):
@@ -176,7 +180,6 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Persist a chat message to the investigation's conversation history."""
-        from app.models.investigations import ConversationMessageMetadata
         if not investigation_id:
             return True
 
@@ -236,6 +239,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     ) -> InvestigationModel:
         """Record an approval lifecycle event in both conversation_history and history_trail."""
         summary = f"{event_type.value} ({metadata.approval_id})"
+        metadata.event_type = event_type
 
         await self.add_chat_message(
             investigation_id=investigation_id,
@@ -342,7 +346,10 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             lines.append(f"- [{entry.timestamp}] {entry.summary}")
             if entry.details:
                 if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
-                    status = entry.details.status.value if entry.details.status else "unknown"
+                    status = entry.details.status
+                    if hasattr(status, 'value'):
+                        status = status.value
+                    status = status if status else "unknown"
                 else:
                     status = "success" if entry.details.approved else "failed"
                 lines.append(f"  Result: {status}")
@@ -362,7 +369,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         raw_history = data.get("conversation_history", [])
         if not isinstance(raw_history, list):
             return []
-        messages = [ConversationHistoryMessage.model_validate(m) for m in raw_history]
+        messages = _CONVERSATION_HISTORY_ADAPTER.validate_python(raw_history)
         messages.sort(key=lambda m: m.timestamp)
 
         return messages

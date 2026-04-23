@@ -106,7 +106,7 @@ class CommandInternalResult(G8eBaseModel):
     All fields above this boundary must be typed; this model is the conversion point.
     """
     execution_id: str | None = None
-    status: ExecutionStatus | None = None
+    status: ExecutionStatus
     output: str | None = None
     stderr: str | None = None
     error: str | None = None

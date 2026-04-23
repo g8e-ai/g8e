@@ -128,7 +128,7 @@ A pre-authorized deployment method for installing Operators on one or many syste
 
 ## g8e Sentinel
 
-A bidirectional security system that protects both directions of AI operations. **Pre-execution protection** analyzes commands BEFORE execution to block dangerous operations (threat detectors across MITRE ATT&CK-mapped categories including data destruction, reverse shells, privilege escalation, credential access). Critical threats are automatically blocked; elevated threats are flagged for enhanced scrutiny. **Post-execution protection** scrubs sensitive data from platform transmission AFTER command execution. Includes scrubbing patterns covering credentials (AWS keys, API tokens, JWTs), PII (emails, phone numbers, SSNs), network identifiers, and cloud resources. Sensitive values are replaced with safe placeholders like `[AWS_KEY]`, `[EMAIL]`, `[IP_ADDR]`. Additionally includes indirect prompt injection defense that detects command output attempting to manipulate AI behavior. See [docs/architecture/storage.md](architecture/storage.md) for full pattern and detector details.
+A platform-wide, multi-layer security system that protects the user's remote system and data across both the Operator (`g8eo`) and the AI Engine (`g8ee`). Sentinel stands guard on the Operator side with **pre-execution protection** (46 threat detectors across MITRE ATT&CK-mapped categories) and **egress data scrubbing** to ensure sensitive information never leaves the host. It adds another layer of defense on the AI Engine side with **ingress data scrubbing**, protecting Operator data with redundant patterns before it is transmitted to any model provider. Scrubbing patterns cover credentials (AWS keys, API tokens), PII (emails, phone numbers), network identifiers, and cloud resources, replacing sensitive values with safe placeholders like `[AWS_KEY]` or `[EMAIL]`. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior. See [docs/architecture/storage.md](architecture/storage.md) for full details.
 
 ---
 
@@ -437,7 +437,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 1. **Generation** — Up to five independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Diversity is driven by distinct member personas: Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), and Nemesis (The Adversary).
 
-2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each unique string receives a weight based on position-decay weighting (earlier passes carry more weight). The highest aggregate weight wins.
+2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each member contributes exactly 1 vote per candidate. The highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
 
 3. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent and reports either "ok" or a short revised command.
 
@@ -445,7 +445,7 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 Failure modes (missing model, provider error, no consensus, verifier failure) halt the execution and return an error to the AI — there is no fallback to the original reasoning agent because it never proposes a command directly.
 
-Configuration via platform settings: `llm_command_gen_passes` (default: 3), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
+Configuration via platform settings: `llm_command_gen_passes` (default: 5), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
 
 ---
 

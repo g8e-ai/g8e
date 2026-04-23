@@ -42,13 +42,17 @@ from app.constants.events import (
 from app.constants.settings import (
     ApprovalErrorType,
 )
-from app.models.command_payloads import FileEditPayload, FetchFileHistoryArgs, FetchFileDiffArgs
+from app.models.tool_args import FetchFileHistoryArgs, FetchFileDiffArgs
+from app.models.command_request_payloads import (
+    FileEditRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+)
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
 from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import G8eMessage
-from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -76,16 +80,16 @@ class OperatorFileService:
 
     async def execute_file_edit(
         self,
-        args: FileEditPayload,
+        args: FileEditRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        execution_id: str,
     ) -> FileEditResult:
         """Orchestrate file operation: resolution -> risk -> approval -> execution."""
         try:
             file_path = args.file_path
             operation = args.operation
             justification = args.justification.strip() if args.justification else ""
+            exec_id = args.execution_id
             
             op_name = getattr(operation, "value", operation)
             logger.info("[FILE] Starting %s on %s", op_name, file_path)
@@ -129,21 +133,23 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FileEditResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
-
-            exec_id = execution_id or generate_command_execution_id()
 
             # 3. Risk analysis (only for write/update)
             risk_analysis: FileOperationRiskAnalysis | None = None
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 try:
+                    from app.models.tool_results import FileOperationRiskContext
+                    from app.models.settings import G8eeUserSettings, LLMSettings
                     risk_analysis = await self.ai_response_analyzer.analyze_file_operation_risk(
                         operation=operation,
                         file_path=file_path,
                         content=args.content or args.new_content,
+                        context=FileOperationRiskContext(),
+                        settings=G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
                         return FileEditResult(
@@ -183,9 +189,10 @@ class OperatorFileService:
                             status=ExecutionStatus.DENIED,
                             error=approval_result.reason or "Denied by user",
                             error_type=CommandErrorType.APPROVAL_DENIED,
-                            approval_id=approval_result.approval_id,
+                            approval_id=approval_result.approval_id if approval_result else None,
                         ),
                         g8e_context,
+                        task_id=AITaskId.FILE_EDIT,
                     )
                     return FileEditResult(
                         success=False, 
@@ -249,6 +256,7 @@ class OperatorFileService:
             await self.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 FileEditBroadcastEvent(
+                    command=f"file_edit {op_name} {file_path}",
                     file_path=file_path,
                     operation=op_name,
                     execution_id=exec_id,
@@ -275,13 +283,14 @@ class OperatorFileService:
 
     async def execute_fetch_file_history(
         self,
-        args: FetchFileHistoryArgs,
+        args: FetchFileHistoryRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> FetchFileHistoryToolResult:
         """Fetch file history from operator ledger."""
         try:
             file_path = args.file_path
+            exec_id = args.execution_id
             logger.info("[FILE] Fetching history for %s", file_path)
 
             # 1. Resolve operator
@@ -299,12 +308,11 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FetchFileHistoryToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = generate_command_execution_id()
             self.execution_registry.allocate(exec_id)
 
             try:
@@ -370,15 +378,21 @@ class OperatorFileService:
                     task_id=AITaskId.FETCH_FILE_HISTORY,
                 )
 
-                from app.models.pubsub_messages import FetchFileHistoryResultPayload
+                from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
                 envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileHistoryResultPayload):
-                    history = envelope.payload.history or []
+                if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                     return FetchFileHistoryToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+                        success=True,
+                        file_path=envelope.payload.file_path,
+                        history=envelope.payload.history,
+                        error=None,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+                    return FetchFileHistoryToolResult(
+                        success=False,
                         file_path=file_path,
-                        history=history,
-                        error=internal_result.error if internal_result else "Execution result is None",
+                        history=[],
+                        error=envelope.payload.error,
                     )
 
                 return FetchFileHistoryToolResult(
@@ -394,13 +408,14 @@ class OperatorFileService:
 
     async def execute_fetch_file_diff(
         self,
-        args: FetchFileDiffArgs,
+        args: FetchFileDiffRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> FetchFileDiffToolResult:
         """Fetch file diff from operator ledger."""
         try:
             file_path = args.file_path
+            exec_id = args.execution_id
             logger.info("[FILE] Fetching diff for %s", file_path)
 
             # 1. Resolve operator
@@ -418,12 +433,11 @@ class OperatorFileService:
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
 
-            operator_id = resolved_operator.operator_id
+            operator_id = resolved_operator.id
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FetchFileDiffToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = generate_command_execution_id()
             self.execution_registry.allocate(exec_id)
 
             try:
@@ -489,15 +503,34 @@ class OperatorFileService:
                     task_id=AITaskId.FETCH_FILE_DIFF,
                 )
 
-                from app.models.pubsub_messages import FetchFileDiffResultPayload
+                from app.models.pubsub_messages import (
+                    FetchFileDiffByIdSuccessPayload,
+                    FetchFileDiffBySessionSuccessPayload,
+                    FetchFileDiffErrorPayload,
+                )
                 envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileDiffResultPayload):
-                    diff = envelope.payload.diff
+                if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
                     return FetchFileDiffToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
-                        diff=diff,
-                        total=1 if diff else 0,
-                        error=internal_result.error if internal_result else "Execution result is None",
+                        success=True,
+                        diff=envelope.payload.diff,
+                        total=1,
+                        error=None,
+                        operator_session_id=operator_session_id,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+                    return FetchFileDiffToolResult(
+                        success=True,
+                        diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
+                        total=envelope.payload.total,
+                        error=None,
+                        operator_session_id=operator_session_id,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
+                    return FetchFileDiffToolResult(
+                        success=False,
+                        diff=None,
+                        total=0,
+                        error=envelope.payload.error,
                         operator_session_id=operator_session_id,
                     )
 

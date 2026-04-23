@@ -19,9 +19,11 @@ tool call dispatch, and sequential turn-level execution loop.
 """
 
 import logging
-import uuid
+from typing import Any, List, Dict, Tuple
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
+
+from pydantic import ValidationError
 
 from app.constants.status import (
     CommandErrorType,
@@ -32,7 +34,6 @@ from app.constants.settings import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    EXECUTION_ID_PREFIX,
     ToolDisplayCategory,
     StreamChunkFromModelType,
 )
@@ -45,7 +46,7 @@ from app.models.agent import (
     StreamChunkFromModel,
 )
 
-from app.services.ai.command_generator import generate_command
+from app.services.ai.generator import generate_command
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -55,12 +56,13 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
+    TribunalConsensusFailedError,
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
-from app.utils.timestamp import now, to_timestamp
-
+from app.utils.ids import generate_command_execution_id
+from app.utils.safety import map_os_string_to_platform
 
 class TribunalInvoker:
     """Encapsulates Tribunal invocation logic for run_commands_with_operator.
@@ -72,11 +74,14 @@ class TribunalInvoker:
     @staticmethod
     def _fetch_command_constraints(
         tool_executor: AIToolService,
-    ) -> tuple[bool, bool, list[str], list[dict[str, str]]]:
-        """Fetch command validation constraints from tool executor settings."""
+    ) -> tuple[bool, bool, list[dict[str, Any]], list[dict[str, str]]]:
+        """Fetch command validation constraints from tool executor settings.
+        
+        Returns metadata-rich command list with safe_options and validation patterns.
+        """
         whitelisting_enabled = False
         blacklisting_enabled = False
-        whitelisted_commands: list[str] = []
+        whitelisted_commands: list[dict[str, Any]] = []
         blacklisted_commands: list[dict[str, str]] = []
 
         cv = tool_executor.user_settings
@@ -84,7 +89,11 @@ class TribunalInvoker:
             whitelisting_enabled = cv.command_validation.enable_whitelisting
             blacklisting_enabled = cv.command_validation.enable_blacklisting
             if whitelisting_enabled:
-                whitelisted_commands = sorted(tool_executor.whitelist_validator.all_commands)
+                # Map OS string to Platform enum using centralized function
+                os_name = tool_executor.user_settings.operator_context.os if tool_executor.user_settings and tool_executor.user_settings.operator_context else DEFAULT_OS_NAME
+                platform = map_os_string_to_platform(os_name)
+                
+                whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
             if blacklisting_enabled:
                 blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
 
@@ -148,7 +157,7 @@ class TribunalInvoker:
         )
         logger.info(
             "[CMD_GEN] Tribunal produced command: outcome=%s request=%r final=%r",
-            gen_result.outcome, request[:80], gen_result.final_command[:80],
+            gen_result.outcome, request[:80], gen_result.final_command[:80] if gen_result.final_command else None,
         )
 
         executor_args = ExecutorCommandArgs(
@@ -301,9 +310,9 @@ async def orchestrate_tool_execution(
                 len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
             )
             logger.info(
-                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
                 request_settings.llm.llm_command_gen_enabled,
-                request_settings.llm.llm_command_gen_verifier,
+                request_settings.llm.llm_command_gen_auditor,
                 request_settings.llm.llm_command_gen_passes,
                 request_settings.llm.assistant_model,
                 request_settings.eval_judge.model,
@@ -318,35 +327,29 @@ async def orchestrate_tool_execution(
                     request_settings=request_settings,
                     tool_executor=tool_executor,
                 )
-            except TribunalError as exc:
+            except (TribunalError, ValidationError) as exc:
+                error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
                 logger.error(
                     "[TRIBUNAL-ERROR] %s (%s): %s",
-                    type(exc).__name__, tool_name, exc.user_message,
+                    type(exc).__name__, tool_name, error_msg,
                 )
                 return _tribunal_error_result(
                     tool_name=tool_name,
                     request=request,
-                    error_msg=exc.user_message,
+                    error_msg=error_msg,
                 )
 
             raw_args = executor_args.model_dump(by_alias=True)
 
-    execution_id: str | None = None
-
-    if is_operator_tool:
-        execution_id = f"{EXECUTION_ID_PREFIX}_{uuid.uuid4().hex[:12]}_{int(to_timestamp(now()))}"
-
-    tool_args_with_id = {**raw_args}
-    if is_operator_tool and execution_id:
-        tool_args_with_id["execution_id"] = execution_id
-        tool_args_with_id["_web_session_id"] = g8e_context.web_session_id
+    execution_id = generate_command_execution_id()
 
     result = await tool_executor.execute_tool_call(
         tool_name,
-        tool_args_with_id,
+        raw_args,
         investigation,
         g8e_context,
         request_settings=request_settings,
+        execution_id=execution_id,
     )
 
     logger.info(

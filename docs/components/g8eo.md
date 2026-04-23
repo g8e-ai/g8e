@@ -16,7 +16,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 - **Zero-trust security**: Every operation requires authentication; nothing is implicitly trusted
 - **Human-in-the-loop**: Every command requires explicit user approval before execution
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud
-- **Defense in depth**: Multiple security layers — mTLS, certificate pinning, Sentinel scrubbing
+- **Defense in depth**: Multiple security layers — mTLS, certificate pinning, Sentinel platform-wide protection (threat detection + multi-layer scrubbing)
 - **Outbound-only connectivity**: g8eo initiates all connections; no inbound ports required
 
 ---
@@ -126,7 +126,7 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 5. **Fingerprint Binding** — System fingerprint permanently locked to the Operator slot on first auth; mismatches rejected
 6. **Replay Protection** — `X-Request-Timestamp` (±5 min window) + optional `X-Request-Nonce` validated against nonce cache
 7. **Explicit Session Binding** — Operator cannot receive commands until a user explicitly binds their web session
-8. **Sentinel Pre-Execution** — Dangerous commands blocked before execution (MITRE ATT&CK-mapped patterns)
+8. **Sentinel Pre-Execution** — Dangerous commands blocked on the host before execution (46 MITRE ATT&CK-mapped categories). Part of the platform-wide Sentinel protection that also includes multi-layer data scrubbing on both the Operator and AI Engine.
 9. **Human Approval** — Every state-changing command requires explicit user consent
 10. **LFAA Audit Logging** — All operations logged to the local audit vault
 11. **Process Sovereignty** — The user terminates the process; no platform action can keep a dead Operator alive

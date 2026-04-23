@@ -12,19 +12,14 @@
 // limitations under the License.
 
 /**
- * OperatorMetrics - Extracts and normalizes Operator metrics from raw heartbeat payloads.
+ * OperatorMetrics - Extracts normalized Operator metrics from a raw operator payload.
  *
- * Data sources (in priority order):
- *   system_info                        - single source of truth for static system data
- *   latest_heartbeat_snapshot (nested) - canonical g8ee OperatorHeartbeat shape
- *     .performance.{cpu_percent, memory_percent, disk_percent, network_latency, ...}
- *     .uptime.{uptime_display, uptime_seconds}
- *     .network.{public_ip, internal_ip, interfaces}
- *     .system_identity.{hostname, os, architecture, current_user, cpu_count, memory_mb}
- *     .version_info.{operator_version, status}
- *     .{disk_details, memory_details, os_details, user_details, environment}
- *   Heartbeat payload fields (flat)    - real-time SSE HeartbeatMetrics envelope
- *     (cpu_percent, memory_percent, ... at top level of snapshot/rawData)
+ * Single source of truth: operator.latest_heartbeat_snapshot (OperatorHeartbeat,
+ * shared/models/wire/heartbeat.json#operator_heartbeat). Same shape whether read
+ * from the persisted operator document or the SSE envelope. All identity,
+ * performance, network, and detail fields are read from this one nested object —
+ * never from operator.system_info, which is a stale, redundant projection that
+ * does not update on every heartbeat and causes identity fields to blank out.
  */
 export class OperatorMetrics {
     constructor(rawData) {
@@ -35,92 +30,44 @@ export class OperatorMetrics {
     _extractData() {
         const actualData = this.rawData.data || this.rawData;
 
-        const systemInfo = actualData.system_info || {};
         const snapshot = actualData.latest_heartbeat_snapshot || {};
+        const identity = snapshot.system_identity || {};
+        const network = snapshot.network || {};
+        const perf = snapshot.performance || {};
+        const uptime = snapshot.uptime || {};
+        const version = snapshot.version_info || {};
 
-        // Nested (persisted OperatorHeartbeat) with flat-envelope fallback for
-        // live SSE HeartbeatMetrics payloads.
-        const perf = snapshot.performance || snapshot;
-        const snapshotUptime = snapshot.uptime && typeof snapshot.uptime === 'object'
-            ? snapshot.uptime
-            : null;
-        const snapshotNetwork = snapshot.network && typeof snapshot.network === 'object'
-            ? snapshot.network
-            : null;
-        const snapshotVersion = snapshot.version_info && typeof snapshot.version_info === 'object'
-            ? snapshot.version_info
-            : null;
-        const snapshotIdentity = snapshot.system_identity || {};
+        this.hostname = identity.hostname ?? null;
+        this.os = identity.os ?? null;
+        this.architecture = identity.architecture ?? null;
+        this.currentUser = identity.current_user ?? null;
+        this.cpuCount = identity.cpu_count ?? null;
+        this.memoryMb = identity.memory_mb ?? null;
 
-        const systemIdentity = actualData.system_identity || snapshotIdentity;
-        const uptime = actualData.uptime_info || snapshotUptime || {};
-        const network = actualData.network_info || snapshotNetwork || {};
-        const version = actualData.version_info || snapshotVersion || {};
-
-        this.hostname = systemInfo.hostname || systemIdentity.hostname || null;
-        this.os = systemInfo.os || systemIdentity.os || null;
-        this.architecture = systemInfo.architecture || systemIdentity.architecture || null;
-        this.currentUser = systemInfo.current_user || systemIdentity.current_user || null;
+        this.publicIp = network.public_ip ?? null;
+        this.internalIp = network.internal_ip ?? null;
+        this.interfaces = network.interfaces ?? null;
 
         this.cpu = perf.cpu_percent ?? null;
-        this.memory = perf.memory_percent ?? systemInfo.memory_details?.percent ?? null;
-        this.disk = perf.disk_percent ?? systemInfo.disk_details?.percent ?? null;
+        this.memory = perf.memory_percent ?? null;
+        this.disk = perf.disk_percent ?? null;
         this.networkLatency = perf.network_latency ?? null;
+        this.memoryUsedMb = perf.memory_used_mb ?? null;
+        this.memoryTotalMb = perf.memory_total_mb ?? null;
+        this.diskUsedGb = perf.disk_used_gb ?? null;
+        this.diskTotalGb = perf.disk_total_gb ?? null;
 
-        this.uptime = uptime.uptime_display ?? uptime.uptime ?? snapshot.uptime ?? null;
-        this.uptimeSeconds = uptime.uptime_seconds ?? snapshot.uptime_seconds ?? null;
+        this.uptime = uptime.uptime_display ?? null;
+        this.uptimeSeconds = uptime.uptime_seconds ?? null;
 
-        this.version = version.operator_version || version.g8eo_version || actualData.g8eo_version || null;
-        this.status = version.status || actualData.status || null;
+        this.version = version.operator_version ?? null;
+        this.status = version.status ?? null;
 
-        this.publicIp = systemInfo.public_ip || network.public_ip || null;
-        this.interfaces = systemInfo.interfaces || network.interfaces;
-
-        this.osDetails = systemInfo.os_details || snapshot.os_details || null;
-        this.userDetails = systemInfo.user_details || snapshot.user_details || null;
-        this.diskDetails = systemInfo.disk_details || snapshot.disk_details || null;
-        this.memoryDetails = systemInfo.memory_details || snapshot.memory_details || null;
-        this.environment = systemInfo.environment || snapshot.environment || null;
-
-        this.memoryUsedMb = this.memoryDetails?.used_mb ?? perf.memory_used_mb ?? null;
-        this.memoryTotalMb = systemInfo.memory_mb ?? this.memoryDetails?.total_mb ?? perf.memory_total_mb ?? null;
-        this.diskUsedGb = this.diskDetails?.used_gb ?? perf.disk_used_gb ?? null;
-        this.diskTotalGb = this.diskDetails?.total_gb ?? perf.disk_total_gb ?? null;
-    }
-
-    _findValue(getters) {
-        for (const getter of getters) {
-            try {
-                const value = getter();
-                if (value !== undefined && value !== null) return value;
-            } catch (e) {
-                // continue
-            }
-        }
-        return undefined;
-    }
-
-    _findInObject(obj, paths) {
-        if (!obj || typeof obj !== 'object') return undefined;
-        for (const path of paths) {
-            if (path.includes('.')) {
-                const parts = path.split('.');
-                let current = obj;
-                let found = true;
-                for (const part of parts) {
-                    if (current && typeof current === 'object' && part in current) {
-                        current = current[part];
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                if (found && current !== undefined) return current;
-            } else {
-                if (path in obj && obj[path] !== undefined) return obj[path];
-            }
-        }
-        return undefined;
+        this.osDetails = snapshot.os_details ?? null;
+        this.userDetails = snapshot.user_details ?? null;
+        this.diskDetails = snapshot.disk_details ?? null;
+        this.memoryDetails = snapshot.memory_details ?? null;
+        this.environment = snapshot.environment ?? null;
     }
 
     getCpuDisplay() {

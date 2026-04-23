@@ -55,6 +55,14 @@ import (
 var sharedWireModelsDir string
 
 func init() {
+	if g8eoRoot == "" {
+		var err error
+		g8eoRoot, err = filepath.Abs(filepath.Join(".."))
+		if err != nil {
+			panic(fmt.Sprintf("failed to resolve g8eo root: %v", err))
+		}
+	}
+
 	dir, err := filepath.Abs(filepath.Join(g8eoRoot, "../../shared/models/wire"))
 	if err != nil {
 		panic(fmt.Sprintf("failed to resolve shared wire models dir: %v", err))
@@ -451,7 +459,7 @@ func TestFileDiffEntryMatchesSchema(t *testing.T) {
 func TestFetchFileDiffResultPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.FetchFileDiffResultPayload{})
 
-	fields := []string{"success", "diffs", "diff", "total", "operator_session_id", "error"}
+	fields := []string{"success", "execution_id", "diffs", "diff", "total", "operator_session_id", "error"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "FetchFileDiffResultPayload")
 	}
@@ -488,7 +496,7 @@ func TestPortCheckResultPayloadMatchesSchema(t *testing.T) {
 func TestLFAAErrorPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.LFAAErrorPayload{})
 
-	fields := []string{"success", "error", "operator_id", "operator_session_id"}
+	fields := []string{"success", "error", "execution_id", "operator_id", "operator_session_id"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "LFAAErrorPayload")
 	}
@@ -496,9 +504,25 @@ func TestLFAAErrorPayloadMatchesSchema(t *testing.T) {
 
 func TestRestoreFileResultPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.RestoreFileResultPayload{})
-	fields := []string{"success", "file_path", "commit_hash", "error"}
+	fields := []string{"success", "execution_id", "file_path", "commit_hash", "error"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "RestoreFileResultPayload")
+	}
+}
+
+func TestFetchHistoryResultPayloadMatchesSchema(t *testing.T) {
+	tags := jsonTagsOf(models.FetchHistoryResultPayload{})
+	fields := []string{"success", "execution_id", "operator_session_id", "web_session", "events", "total", "limit", "offset", "error"}
+	for _, f := range fields {
+		assertFieldPresent(t, tags, f, "FetchHistoryResultPayload")
+	}
+}
+
+func TestFetchFileHistoryResultPayloadMatchesSchema(t *testing.T) {
+	tags := jsonTagsOf(models.FetchFileHistoryResultPayload{})
+	fields := []string{"success", "execution_id", "file_path", "history", "error"}
+	for _, f := range fields {
+		assertFieldPresent(t, tags, f, "FetchFileHistoryResultPayload")
 	}
 }
 

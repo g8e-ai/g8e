@@ -3,6 +3,8 @@
 
   "_comment.wire_format": "g8eo wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. g8ee and g8ed read `event_type` from the envelope to select the correct payload deserializer.",
 
+  "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
+
   "execution_result": {
     "_description": "Payload for event_type: g8e.v1.operator.command.completed | g8e.v1.operator.command.failed. Final result of a command execution.",
     "_event_types": ["g8e.v1.operator.command.completed", "g8e.v1.operator.command.failed"],
@@ -420,6 +422,11 @@
     "_event_types": ["g8e.v1.operator.file.diff.fetch.completed", "g8e.v1.operator.file.diff.fetch.failed"],
     "fields": {
       "success": { "type": "boolean", "required": true },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier matching the originating request"
+      },
       "diffs": {
         "type": "array",
         "required": false,
@@ -467,6 +474,11 @@
     "_event_types": ["g8e.v1.operator.history.fetch.completed", "g8e.v1.operator.history.fetch.failed"],
     "fields": {
       "success": { "type": "boolean", "required": true },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier matching the originating request"
+      },
       "operator_session_id": { "type": "string", "required": false, "description": "Operator session ID that was queried" },
       "web_session": {
         "type": "object",
@@ -529,6 +541,11 @@
     "_event_types": ["g8e.v1.operator.file.history.fetch.completed", "g8e.v1.operator.file.history.fetch.failed"],
     "fields": {
       "success": { "type": "boolean", "required": true },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier matching the originating request"
+      },
       "file_path": { "type": "string", "required": false, "description": "Absolute path of the file queried" },
       "history": {
         "type": "array",
@@ -549,6 +566,11 @@
     "_event_types": ["g8e.v1.operator.file.restore.completed", "g8e.v1.operator.file.restore.failed"],
     "fields": {
       "success": { "type": "boolean", "required": true },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique execution identifier matching the originating request"
+      },
       "file_path": { "type": "string", "required": false, "description": "Absolute path of the restored file" },
       "commit_hash": { "type": "string", "required": false, "description": "Git commit hash the file was restored to" },
       "error": { "type": "string", "required": false }
@@ -585,6 +607,11 @@
         "type": "string",
         "required": true,
         "description": "Human-readable error description"
+      },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Execution identifier for correlation with the originating request"
       },
       "operator_id": { "type": "string", "required": true },
       "operator_session_id": { "type": "string", "required": true }

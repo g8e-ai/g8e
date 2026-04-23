@@ -11,6 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import uuid
 
 from app.constants import (
@@ -26,6 +27,22 @@ from app.constants import (
     INTENT_EXECUTION_ID_PREFIX,
 )
 from app.utils.timestamp import now, to_timestamp
+
+
+# Canonical shape of a command execution ID: ``cmd_{hex12}_{unix_timestamp}``.
+# Exposed as a module constant so event consumers (frontend routers, cross-
+# component wire validators) have a single source of truth instead of
+# rebuilding the pattern ad-hoc. ``\d{9,11}`` bounds the timestamp to a
+# plausible Unix epoch window without over-constraining the format across
+# clock-drift scenarios.
+COMMAND_EXECUTION_ID_PATTERN = re.compile(
+    rf"^{re.escape(EXECUTION_ID_PREFIX)}_[0-9a-f]{{12}}_\d{{9,11}}$"
+)
+
+
+def is_valid_command_execution_id(value: str) -> bool:
+    """Return True iff ``value`` matches the canonical command execution ID shape."""
+    return isinstance(value, str) and COMMAND_EXECUTION_ID_PATTERN.match(value) is not None
 
 
 def _ts() -> int:
@@ -52,8 +69,20 @@ def generate_intent_approval_id() -> str:
 
 
 def generate_command_execution_id() -> str:
-    """Generate a unique execution ID for operator command executions."""
-    return f"{EXECUTION_ID_PREFIX}_{_hex()}_{_ts()}"
+    """Generate a unique execution ID for operator command executions.
+
+    The output shape is pinned by ``COMMAND_EXECUTION_ID_PATTERN`` and
+    asserted here so that a future drift in ``_hex`` / ``_ts`` (e.g. a
+    truncated uuid slice, a ms-timestamp migration) fails loudly at the
+    generator instead of leaking malformed IDs into the approval pipeline.
+    """
+    candidate = f"{EXECUTION_ID_PREFIX}_{_hex()}_{_ts()}"
+    if not COMMAND_EXECUTION_ID_PATTERN.match(candidate):
+        raise RuntimeError(
+            f"generate_command_execution_id produced an ID that violates "
+            f"COMMAND_EXECUTION_ID_PATTERN: {candidate!r}"
+        )
+    return candidate
 
 
 def generate_batch_id() -> str:

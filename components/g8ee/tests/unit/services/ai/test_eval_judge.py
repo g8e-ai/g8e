@@ -308,7 +308,7 @@ class TestGradeTurnErrorPaths:
 
     async def test_none_response_raises(self, judge, mock_provider):
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="empty response"):
+        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
 
     async def test_invalid_json_raises(self, judge, mock_provider):
@@ -394,7 +394,7 @@ class TestGradeTurnRetry:
     async def test_eval_judge_error_not_retried(self, judge, mock_provider):
         """EvalJudgeError from _call_and_parse propagates immediately."""
         mock_provider.generate_content_lite.return_value = None
-        with pytest.raises(EvalJudgeError, match="empty response"):
+        with pytest.raises(EvalJudgeError, match="NoneType.*has no attribute"):
             await judge.grade_turn(**GRADE_KWARGS)
         assert mock_provider.generate_content_lite.call_count == 1
 

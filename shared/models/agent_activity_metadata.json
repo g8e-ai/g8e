@@ -1,0 +1,221 @@
+{
+  "_comment": "Canonical AgentActivityMetadata document shape. g8ee is the authority — it creates and owns this document in its SQLite store via g8es. Used for data science analysis and telemetry of AI agent behavior. A field mismatch breaks activity recording and analytics.",
+
+  "_authority": "g8ee (g8es/CacheAside)",
+  "_consumers": ["g8ee (Python — creates and queries activity metadata for analytics)"],
+
+  "agent_activity_metadata": {
+    "_description": "Metadata record for a single AI agent chat turn. Captures comprehensive telemetry for data science analysis including model usage, token consumption, tool execution patterns, triage classification, and performance metrics.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique activity identifier (UUID v4)"
+      }
+    },
+
+    "user_context": {
+      "user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User who initiated the request"
+      },
+      "user_email": {
+        "type": "string",
+        "required": false,
+        "description": "Email of the user"
+      }
+    },
+
+    "session_context": {
+      "investigation_id": {
+        "type": "string",
+        "required": false,
+        "description": "Investigation ID"
+      },
+      "case_id": {
+        "type": "string",
+        "required": false,
+        "description": "Case ID"
+      },
+      "web_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Web session ID"
+      }
+    },
+
+    "agent_configuration": {
+      "agent_mode": {
+        "type": "string",
+        "required": false,
+        "description": "Agent execution mode"
+      },
+      "model_name": {
+        "type": "string",
+        "required": false,
+        "description": "LLM model used"
+      },
+      "provider": {
+        "type": "string",
+        "required": false,
+        "description": "LLM provider (gemini, anthropic, etc.)"
+      }
+    },
+
+    "token_usage": {
+      "token_usage": {
+        "type": "object",
+        "required": false,
+        "description": "Token consumption metrics",
+        "fields": {
+          "input_tokens": { "type": "integer", "required": false },
+          "output_tokens": { "type": "integer", "required": false },
+          "total_tokens": { "type": "integer", "required": false },
+          "thinking_tokens": { "type": "integer", "required": false }
+        }
+      },
+      "finish_reason": {
+        "type": "string",
+        "required": false,
+        "description": "Why the agent stopped (stop, length, error, etc.)"
+      }
+    },
+
+    "triage_classification": {
+      "triage_complexity": {
+        "type": "string",
+        "required": false,
+        "description": "Triage complexity classification"
+      },
+      "triage_complexity_confidence": {
+        "type": "string",
+        "required": false,
+        "description": "Confidence in complexity classification"
+      },
+      "triage_intent_summary": {
+        "type": "string",
+        "required": false,
+        "description": "Triage intent classification"
+      },
+      "triage_intent_confidence": {
+        "type": "string",
+        "required": false,
+        "description": "Confidence in intent classification"
+      },
+      "triage_request_posture": {
+        "type": "string",
+        "required": false,
+        "description": "Triage posture classification"
+      },
+      "triage_posture_confidence": {
+        "type": "string",
+        "required": false,
+        "description": "Confidence in posture classification"
+      }
+    },
+
+    "tool_execution": {
+      "tool_call_count": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Number of tool calls executed"
+      },
+      "tool_types_used": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": [],
+        "description": "Types of tools used"
+      }
+    },
+
+    "performance_metrics": {
+      "duration_seconds": {
+        "type": "number",
+        "required": false,
+        "description": "Total request duration in seconds"
+      },
+      "response_length": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Length of AI response in characters"
+      }
+    },
+
+    "attachments": {
+      "has_attachments": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "Whether attachments were present"
+      },
+      "attachment_count": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Number of attachments"
+      }
+    },
+
+    "grounding": {
+      "grounding_used": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "Whether grounding/citations were used"
+      },
+      "citation_count": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Number of citations returned"
+      }
+    },
+
+    "operator_binding": {
+      "operator_bound": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "Whether operators were bound"
+      },
+      "bound_operator_count": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Number of bound operators"
+      }
+    },
+
+    "error_information": {
+      "error": {
+        "type": "string",
+        "required": false,
+        "description": "Error message if execution failed"
+      },
+      "error_type": {
+        "type": "string",
+        "required": false,
+        "description": "Type of error if execution failed"
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      }
+    }
+  }
+}

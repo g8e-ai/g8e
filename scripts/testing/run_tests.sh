@@ -49,6 +49,7 @@ PYRIGHT=false
 RUFF=false
 E2E=false
 PARALLEL=""
+QUIET=false
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -65,6 +66,19 @@ while [[ $# -gt 0 ]]; do
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
+            echo "Examples (via ./g8e CLI):"
+            echo "  ./g8e test g8ee tests/unit"
+            echo "  ./g8e test g8ee --coverage"
+            echo "  ./g8e test g8ee --pyright --ruff"
+            echo "  ./g8e test g8ee --e2e"
+            echo "  ./g8e test g8ee -j auto"
+            echo "  ./g8e test g8ed test/services"
+            echo "  ./g8e test g8eo ./cmd/server"
+            echo ""
+            echo "LLM/Web Search configuration (g8ee only):"
+            echo "  ./g8e test g8ee -p anthropic -m claude-3-5-sonnet -k <api-key> tests/unit"
+            echo "  ./g8e test g8ee -p openai -m gpt-4 -a gpt-3.5-turbo -k <api-key> --coverage"
+            echo ""
             echo "LLM/Web Search options are passed as environment variables by the ./g8e CLI."
             exit 0
             ;;
@@ -72,6 +86,9 @@ while [[ $# -gt 0 ]]; do
         --pyright)  PYRIGHT=true;  shift ;;
         --ruff)     RUFF=true;     shift ;;
         --e2e)      E2E=true;      shift ;;
+        -q|--quiet)
+            QUIET=true
+            shift ;;
         -j|--parallel)
             if [[ $# -lt 2 || "$2" == -* || "$2" == "--" ]]; then
                 PARALLEL="auto"
@@ -133,13 +150,11 @@ _load_platform_secrets() {
 _verify_g8es() {
     local ca_cert="/g8es/ca.crt"
     [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
-    local curl_args=()
-    if [[ -f "$ca_cert" ]]; then
-        curl_args=("--cacert" "$ca_cert")
-    else
-        curl_args=("-k")
-        log_warn "CA cert not found, using insecure connection"
+    if [[ ! -f "$ca_cert" ]]; then
+        log_err "Platform CA cert not found at /g8es/ca.crt or /g8es/ca/ca.crt"
+        exit 1
     fi
+    local curl_args=("--cacert" "$ca_cert")
     if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
         log_err "g8es not accessible at https://g8es:9000/health"
         exit 1
@@ -195,7 +210,6 @@ run_g8ee() {
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && cov_args+=("--log-cli-level=INFO")
     if [[ -n "$PARALLEL" ]]; then
         # -s (capture=no) is incompatible with xdist; drop it when parallelising.
         local filtered=()
@@ -242,7 +256,7 @@ run_g8eo() {
     done
 
     if [[ "$COVERAGE" == "true" ]]; then
-        gotestsum --format dots-v2 -- -race -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
+        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
         local rc=$?
         if [[ -f coverage.out ]]; then
             echo ""
@@ -251,7 +265,7 @@ run_g8eo() {
         fi
         return $rc
     else
-        gotestsum --format dots-v2 -- -race -timeout 180s "$test_target" "${pass_through_args[@]}"
+        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s "$test_target" "${pass_through_args[@]}"
     fi
 }
 

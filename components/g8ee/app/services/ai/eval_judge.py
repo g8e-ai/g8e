@@ -37,8 +37,37 @@ from app.llm.llm_types import Content, Part, ResponseFormat, Role, LiteLLMSettin
 from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
+from app.errors import OllamaEmptyResponseError
 
 logger = logging.getLogger(__name__)
+
+# Judge template scaffolding - holds the response format structure
+# separate from the persona voice in agents.json
+
+JUDGE_EVALUATION_TEMPLATE = """\
+<user_query>
+{user_query}
+</user_query>
+
+<gold_standard_criteria>
+Expected Behavior: {expected_behavior}
+Required Concepts: {required_concepts}
+Expected Tools: {expected_tools}
+Forbidden Tools: {forbidden_tools}
+</gold_standard_criteria>
+
+<student_interaction>
+{interaction_trace}
+</student_interaction>
+
+<response_format>
+Respond with ONLY a JSON object matching this exact schema, with no prose, no markdown fences, and no additional fields:
+{{
+  "score": integer (1-5),
+  "reasoning": "string explaining why this score was assigned"
+}}
+</response_format>
+"""
 
 PASSING_THRESHOLD = 3
 _MAX_RETRIES = 3
@@ -89,7 +118,7 @@ class EvalGrade(BaseModel):
         return v
 
 
-_JUDGE_RESPONSE_SCHEMA = {
+_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "score": {"type": "integer", "minimum": 1, "maximum": 5},
@@ -156,8 +185,15 @@ class EvalJudge:
                 all retry attempts (infrastructure failure, not a low score).
         """
         persona = get_agent_persona("judge")
-        prompt_template = persona.get_system_prompt()
-        prompt = f"{prompt_template}\n\n<user_query>\n{user_query}\n</user_query>\n\n<gold_standard_criteria>\nExpected Behavior: {expected_behavior}\nRequired Concepts: {', '.join(required_concepts)}\nExpected Tools: {', '.join(expected_tools or [])}\nForbidden Tools: {', '.join(forbidden_tools or [])}\n</gold_standard_criteria>\n\n<student_interaction>\n{interaction_trace}\n</student_interaction>"
+        template = JUDGE_EVALUATION_TEMPLATE.format(
+            user_query=user_query,
+            expected_behavior=expected_behavior,
+            required_concepts=', '.join(required_concepts),
+            expected_tools=', '.join(expected_tools or []),
+            forbidden_tools=', '.join(forbidden_tools or []),
+            interaction_trace=interaction_trace
+        )
+        prompt = f"{persona.get_system_prompt()}{template}"
 
         from app.models.model_configs import get_model_config
 
@@ -168,7 +204,7 @@ class EvalJudge:
             top_k_filtering=model_config.top_k,
             stop_sequences=model_config.stop_sequences,
             system_instructions="",
-            response_format=ResponseFormat.from_pydantic_schema(  # type: ignore[arg-type]
+            response_format=ResponseFormat.from_pydantic_schema(
                 _JUDGE_RESPONSE_SCHEMA,
                 name="EvalGradeResponse",
             ),
@@ -211,8 +247,6 @@ class EvalJudge:
         settings: LiteLLMSettings,
     ) -> EvalGrade:
         """Make the LLM call and parse the response into an EvalGrade."""
-        from app.errors import OllamaEmptyResponseError
-
         if not self._model:
             raise EvalJudgeError("Model is not set")
         try:
@@ -221,7 +255,7 @@ class EvalJudge:
                 contents=contents,
                 lite_llm_settings=settings,
             )
-            if response is None or response.text is None:
+            if response.text is None:
                 raise EvalJudgeError("Judge LLM returned an empty response")
         except OllamaEmptyResponseError as exc:
             raise EvalJudgeError(f"Judge LLM returned an empty response: {exc}") from exc

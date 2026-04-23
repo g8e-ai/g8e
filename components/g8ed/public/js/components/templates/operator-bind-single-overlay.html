@@ -1,0 +1,25 @@
+<!-- Inline Single Operator Bind/Unbind Overlay for Operator Deployment Section -->
+<div class="operator-bind-single-overlay" id="operator-bind-single-overlay">
+    <div class="operator-bind-single-operators-container">
+        <div class="operator-bind-single-operators-list" id="operator-bind-single-operators-list" data-operators-list>
+            <!-- Single operator item inserted here -->
+        </div>
+    </div>
+
+    <div class="operator-bind-single-actions">
+        <button class="operator-bind-single-action-btn cancel-btn" id="operator-bind-single-cancel-btn">
+            <span class="material-symbols-outlined">cancel</span>
+            <span>Cancel</span>
+        </button>
+        <button class="operator-bind-single-action-btn confirm-btn" id="operator-bind-single-confirm-btn">
+            <span class="material-symbols-outlined" data-confirm-icon>link</span>
+            <span data-confirm-label>Bind Operator</span>
+        </button>
+    </div>
+
+    <div class="operator-bind-single-processing initially-hidden" id="operator-bind-single-processing">
+        <div class="spinner"></div>
+        <span id="operator-bind-single-processing-label" data-processing-label>Binding operator...</span>
+    </div>
+    <div class="operator-bind-single-actions-feedback" id="operator-bind-single-feedback"></div>
+</div>

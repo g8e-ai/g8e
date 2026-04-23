@@ -19,12 +19,60 @@ Shared utilities for JSON serialization and deserialization.
 
 import json
 import logging
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def extract_json_from_text(text: str) -> Optional[dict]:
+    """Extract and parse a JSON object from a potentially messy text string.
+    
+    Handles:
+    - Markdown code blocks (```json ... ```)
+    - Leading/trailing whitespace
+    - Empty input
+    """
+    if not text or not text.strip():
+        return None
+
+    cleaned = text.strip()
+
+    # Try simple parse first
+    try:
+        data = json.loads(cleaned)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    # Try stripping Markdown fences
+    # Matches ```json { ... } ``` or ``` { ... } ```
+    pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
+    match = re.search(pattern, cleaned, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(1).strip())
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    # Try finding first '{' and last '}'
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            data = json.loads(cleaned[start : end + 1])
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    return None
 
 
 def _json_serial(obj):

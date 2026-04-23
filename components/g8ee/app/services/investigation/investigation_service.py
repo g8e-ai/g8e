@@ -27,7 +27,10 @@ from app.constants import (
 from app.errors import ExternalServiceError, ResourceNotFoundError
 from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
+from app.constants.message_sender import MessageSender
+from app.models.grounding import GroundingMetadata
 from app.models.investigations import (
+    AIResponseMetadata,
     EnrichedInvestigationContext,
     InvestigationModel,
     InvestigationUpdateRequest,
@@ -38,7 +41,7 @@ from app.models.investigations import (
     InvestigationCreateRequest,
 )
 from app.models.operators import CommandInternalResult, OperatorDocument
-from app.models.tool_results import FileEditResult
+from app.models.tool_results import FileEditResult, TokenUsage
 from app.services.protocols import InvestigationDataServiceProtocol, OperatorDataServiceProtocol, MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -182,7 +185,7 @@ class InvestigationService:
         )
 
         # 1. Populate operator documents from bound operators in context
-        operator_docs = []
+        operator_docs: list[OperatorDocument] = []
         bound_in_context = g8e_context.bound_operators if g8e_context else []
         for bound_op in bound_in_context:
             if bound_op.status != OperatorStatus.BOUND:
@@ -214,7 +217,7 @@ class InvestigationService:
                 "Operators BOUND - context enriched for AI",
                 extra={
                     "operator_count": len(operator_docs),
-                    "operator_ids": [op.operator_id for op in operator_docs],
+                    "operator_ids": [op.id for op in operator_docs],
                 }
             )
         else:
@@ -352,9 +355,7 @@ class InvestigationService:
             event_type=EventType.INVESTIGATION_UPDATED,
             actor=actor,
             summary="Investigation updated",
-            details=ConversationMessageMetadata(
-                changes={k: v for k, v in changes.items() if v is not True}
-            ),
+            details=ConversationMessageMetadata(),
         )
 
         patch: dict[str, object] = {}
@@ -450,6 +451,36 @@ class InvestigationService:
             metadata=metadata,
         )
 
+    async def persist_ai_message(
+        self,
+        investigation_id: str | None,
+        text: str,
+        grounding_metadata: GroundingMetadata | None = None,
+        token_usage: TokenUsage | None = None,
+    ) -> bool:
+        """Persist an AI-generated message as an AI_PRIMARY conversation row.
+
+        Centralizes the strip-guard + AIResponseMetadata construction that was
+        previously duplicated between ChatPipelineService._persist_iteration_text
+        (intermediate per-turn commentary) and _persist_ai_response (final wrap-up).
+
+        Returns False when the text is whitespace-only or the investigation_id is
+        missing; returns True when a row was written.
+        """
+        if not investigation_id or not text.strip():
+            return False
+
+        return await self.investigation_data_service.add_chat_message(
+            investigation_id=investigation_id,
+            sender=MessageSender.AI_PRIMARY,
+            content=text,
+            metadata=AIResponseMetadata(
+                source=EventType.EVENT_SOURCE_AI_PRIMARY,
+                grounding_metadata=grounding_metadata,
+                token_usage=token_usage,
+            ),
+        )
+
     async def add_approval_record(
         self,
         investigation_id: str,
@@ -496,7 +527,7 @@ def _extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
         if hb.environment: environment = hb.environment
 
     return OperatorContext(
-        operator_id=op.operator_id,
+        operator_id=op.id,
         operator_session_id=op.operator_session_id,
         os=sys_info.os if sys_info else None,
         hostname=sys_info.hostname if sys_info else None,
@@ -614,7 +645,7 @@ def extract_operator_context_by_target(
     
     # Try to find operator by operator_id
     for operator_doc in investigation.operator_documents:
-        if operator_doc.operator_id == target_operator:
+        if operator_doc.id == target_operator:
             return _extract_single_operator_context(operator_doc)
     
     # Try to find operator by hostname

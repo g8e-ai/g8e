@@ -1,0 +1,46 @@
+<!-- Inline Bind All Operators Overlay for Operator Deployment Section -->
+<div class="operator-bind-all-overlay" id="operator-bind-all-overlay">
+    <div class="operator-bind-all-header">
+        <div class="operator-bind-all-header-content">
+            <span class="material-symbols-outlined operator-bind-all-icon">link</span>
+            <div class="operator-bind-all-title-section">
+                <h3 class="operator-bind-all-title">Bind All Active Operators</h3>
+                <span class="operator-bind-all-count" id="operator-bind-all-count"></span>
+            </div>
+        </div>
+        <button class="operator-bind-all-close-btn" id="operator-bind-all-close-btn">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <div class="operator-bind-all-description">
+        The following operators will be bound to your current web session. You will be able to interact with all of them through the chat interface.
+    </div>
+
+    <div class="operator-bind-all-operators-container">
+        <div class="operator-bind-all-operators-header">
+            <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
+            <label for="operator-select-all-operators">Select All</label>
+        </div>
+        <div class="operator-bind-all-operators-list" id="operator-bind-all-operators-list">
+            <!-- Operator items inserted here -->
+        </div>
+    </div>
+
+    <div class="operator-bind-all-actions">
+        <button class="operator-bind-all-action-btn cancel-btn" id="operator-bind-all-cancel-btn">
+            <span class="material-symbols-outlined">cancel</span>
+            <span>Cancel</span>
+        </button>
+        <button class="operator-bind-all-action-btn confirm-btn" id="operator-bind-all-confirm-btn">
+            <span class="material-symbols-outlined">link</span>
+            <span>Bind All</span>
+        </button>
+    </div>
+
+    <div class="operator-bind-all-processing initially-hidden" id="operator-bind-all-processing">
+        <div class="spinner"></div>
+        <span id="operator-bind-all-processing-label">Binding operators...</span>
+    </div>
+    <div class="operator-bind-all-actions-feedback" id="operator-bind-all-feedback"></div>
+</div>

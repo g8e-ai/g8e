@@ -28,7 +28,7 @@ from app.models.agent import StreamChunkData, StreamChunkFromModel, StreamChunkF
 from app.models.g8ed_client import ChatProcessingStartedPayload
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import (
-    make_streaming_context,
+    make_agent_run_args,
     make_g8ed_event_service,
 )
 
@@ -53,7 +53,7 @@ class TestSSEEventContract:
 
     async def test_processing_started_matches_shared_fixture(self):
         """LLM_CHAT_ITERATION_STARTED event matches shared structure."""
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-007",
             investigation_id="contract-test-inv-007",
             web_session_id="contract-test-sess-007",
@@ -74,7 +74,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_simple_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -91,9 +92,9 @@ class TestSSEEventContract:
         assert isinstance(actual_event.payload, ChatProcessingStartedPayload)
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.agent_mode == expected_fixture["data"]["agent_mode"]
-        assert actual_event.investigation_id == streaming_ctx.investigation_id
-        assert actual_event.case_id == streaming_ctx.case_id
-        assert actual_event.web_session_id == streaming_ctx.web_session_id
+        assert actual_event.investigation_id == inputs.investigation_id
+        assert actual_event.case_id == inputs.case_id
+        assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_text_chunk_received_matches_shared_fixture(self):
         """LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED event matches shared structure."""
@@ -101,7 +102,7 @@ class TestSSEEventContract:
         expected_fixture = SHARED_SSE_EVENTS["text_chunk_received"]
         fixture_content = expected_fixture["data"]["content"]
 
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-001",
             investigation_id="contract-test-inv-001",
             web_session_id="contract-test-sess-001",
@@ -122,7 +123,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_text_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -139,9 +141,9 @@ class TestSSEEventContract:
         # Verify structure matches (using actual EventType constants)
         assert actual_event.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED
         assert actual_event.payload.content == expected_fixture["data"]["content"]
-        assert actual_event.investigation_id == streaming_ctx.investigation_id
-        assert actual_event.case_id == streaming_ctx.case_id
-        assert actual_event.web_session_id == streaming_ctx.web_session_id
+        assert actual_event.investigation_id == inputs.investigation_id
+        assert actual_event.case_id == inputs.case_id
+        assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_text_completed_matches_shared_fixture(self):
         """LLM_CHAT_ITERATION_TEXT_COMPLETED event matches shared structure."""
@@ -149,7 +151,7 @@ class TestSSEEventContract:
         expected_fixture = SHARED_SSE_EVENTS["text_completed"]
         fixture_content = expected_fixture["data"]["content"]
 
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-002",
             investigation_id="contract-test-inv-002",
             web_session_id="contract-test-sess-002",
@@ -169,7 +171,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_completed_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -184,13 +187,13 @@ class TestSSEEventContract:
         
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.content == expected_fixture["data"]["content"]
-        assert actual_event.investigation_id == streaming_ctx.investigation_id
-        assert actual_event.case_id == streaming_ctx.case_id
-        assert actual_event.web_session_id == streaming_ctx.web_session_id
+        assert actual_event.investigation_id == inputs.investigation_id
+        assert actual_event.case_id == inputs.case_id
+        assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_chat_iteration_failed_matches_shared_fixture(self):
         """LLM_CHAT_ITERATION_FAILED event matches shared structure."""
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-003",
             investigation_id="contract-test-inv-003",
             web_session_id="contract-test-sess-003",
@@ -207,7 +210,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_failing_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -222,13 +226,13 @@ class TestSSEEventContract:
 
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.error == "Contract test failure"
-        assert actual_event.investigation_id == streaming_ctx.investigation_id
-        assert actual_event.case_id == streaming_ctx.case_id
-        assert actual_event.web_session_id == streaming_ctx.web_session_id
+        assert actual_event.investigation_id == inputs.investigation_id
+        assert actual_event.case_id == inputs.case_id
+        assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_error_chunk_skips_completion_event(self):
         """ERROR chunk prevents completion event from being published."""
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-006",
             investigation_id="contract-test-inv-006",
             web_session_id="contract-test-sess-006",
@@ -248,7 +252,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_error_chunk_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -268,7 +273,7 @@ class TestSSEEventContract:
         from app.constants import OperatorToolName
         from app.models.agent import StreamChunkData, StreamChunkFromModel
 
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-004",
             investigation_id="contract-test-inv-004",
             web_session_id="contract-test-sess-004",
@@ -294,29 +299,28 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_search_web_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
         published = event_svc._published_events
-        search_requested_events = [e for e in published if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+        tool_call_started_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
         
-        assert len(search_requested_events) >= 1
-        actual_event = search_requested_events[0]
+        assert len(tool_call_started_events) >= 1
+        actual_event = tool_call_started_events[0]
 
-        # Compare against shared fixture
-        expected_fixture = SHARED_SSE_EVENTS["g8e_web_search_requested"]
-        
-        assert actual_event.event_type == expected_fixture["type"]
-        assert actual_event.payload.query == "contract test query"
+        # Verify the generic tool call started event carries the search web tool metadata
+        assert actual_event.payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
         assert actual_event.payload.execution_id == "contract-search-001"
-        assert actual_event.investigation_id == streaming_ctx.investigation_id
-        assert actual_event.case_id == streaming_ctx.case_id
-        assert actual_event.web_session_id == streaming_ctx.web_session_id
+        assert actual_event.payload.display_detail == "contract test query"
+        assert actual_event.investigation_id == inputs.investigation_id
+        assert actual_event.case_id == inputs.case_id
+        assert actual_event.web_session_id == inputs.web_session_id
 
     async def test_all_required_routing_fields_present(self):
         """All events have required routing fields matching shared fixtures."""
-        streaming_ctx = make_streaming_context(
+        inputs, state = make_agent_run_args(
             case_id="contract-test-case-005",
             investigation_id="contract-test-inv-005",
             web_session_id="contract-test-sess-005",
@@ -336,7 +340,8 @@ class TestSSEEventContract:
 
         await deliver_via_sse(
             stream=_multi_event_stream(),
-            agent_streaming_context=streaming_ctx,
+            inputs=inputs,
+            state=state,
             g8ed_event_service=event_svc,
         )
 
@@ -349,17 +354,79 @@ class TestSSEEventContract:
             assert hasattr(event, 'case_id') 
             assert hasattr(event, 'web_session_id')
             
-            # Check that values match the streaming context
-            assert event.investigation_id == streaming_ctx.investigation_id
-            assert event.case_id == streaming_ctx.case_id
-            assert event.web_session_id == streaming_ctx.web_session_id
+            # Check that values match the inputs
+            assert event.investigation_id == inputs.investigation_id
+            assert event.case_id == inputs.case_id
+            assert event.web_session_id == inputs.web_session_id
+
+    async def test_tribunal_consensus_failed_matches_shared_fixture(self):
+        """TRIBUNAL_CONSENSUS_FAILED event matches shared structure."""
+        from app.models.agents.tribunal import TribunalConsensusFailedPayload, VoteBreakdown
+
+        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_consensus_failed"]
+
+        # Create payload matching fixture
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
+            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            winner=expected_fixture["data"]["vote_breakdown"]["winner"],
+            winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
+            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
+            tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
+            tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
+        )
+
+        payload = TribunalConsensusFailedPayload(
+            request=expected_fixture["data"]["request"],
+            vote_breakdown=vote_breakdown,
+            reason=expected_fixture["data"]["reason"],
+        )
+
+        # Verify payload structure
+        assert payload.request == expected_fixture["data"]["request"]
+        assert payload.reason == expected_fixture["data"]["reason"]
+        assert payload.vote_breakdown.winner is None
+        assert payload.vote_breakdown.consensus_strength == 0.0
+
+    async def test_tribunal_dissent_recorded_matches_shared_fixture(self):
+        """TRIBUNAL_DISSENT_RECORDED event matches shared structure."""
+        from app.models.agents.tribunal import TribunalDissentRecordedPayload, VoteBreakdown
+
+        expected_fixture = SHARED_SSE_EVENTS["tribunal_voting_dissent_recorded"]
+
+        # Create payload matching fixture
+        vote_breakdown = VoteBreakdown(
+            candidates_by_member=expected_fixture["data"]["vote_breakdown"]["candidates_by_member"],
+            candidates_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["candidates_by_command"].items()},
+            winner=expected_fixture["data"]["vote_breakdown"]["winner"],
+            winner_supporters=expected_fixture["data"]["vote_breakdown"]["winner_supporters"],
+            dissenters_by_command={k: v for k, v in expected_fixture["data"]["vote_breakdown"]["dissenters_by_command"].items()},
+            consensus_strength=expected_fixture["data"]["vote_breakdown"]["consensus_strength"],
+            tie_broken=expected_fixture["data"]["vote_breakdown"]["tie_broken"],
+            tie_break_reason=expected_fixture["data"]["vote_breakdown"]["tie_break_reason"],
+        )
+
+        payload = TribunalDissentRecordedPayload(
+            request=expected_fixture["data"]["request"],
+            losing_command=expected_fixture["data"]["losing_command"],
+            dissenting_member_ids=expected_fixture["data"]["dissenting_member_ids"],
+            winner=expected_fixture["data"]["winner"],
+            vote_breakdown=vote_breakdown,
+        )
+
+        # Verify payload structure
+        assert payload.request == expected_fixture["data"]["request"]
+        assert payload.losing_command == expected_fixture["data"]["losing_command"]
+        assert payload.dissenting_member_ids == expected_fixture["data"]["dissenting_member_ids"]
+        assert payload.winner == expected_fixture["data"]["winner"]
 
 
 async def test_shared_fixtures_contain_all_required_event_types():
     """Shared fixtures file contains all required event types."""
     required_event_types = [
         "text_chunk_received",
-        "text_completed", 
+        "text_completed",
         "chat_iteration_failed",
         "g8e_web_search_requested",
         "g8e_web_search_completed",
@@ -375,17 +442,19 @@ async def test_shared_fixtures_contain_all_required_event_types():
         "llm_lifecycle_started",
         "llm_lifecycle_completed",
         "platform_sse_connection_established",
-        "platform_sse_keepalive_sent"
+        "platform_sse_keepalive_sent",
+        "tribunal_voting_consensus_failed",
+        "tribunal_voting_dissent_recorded",
     ]
 
     for event_type in required_event_types:
         assert event_type in SHARED_SSE_EVENTS, f"Missing required event type: {event_type}"
-        
+
         # Each fixture should have the required structure
         fixture = SHARED_SSE_EVENTS[event_type]
         assert "type" in fixture, f"Event {event_type} missing 'type' field"
         assert "data" in fixture, f"Event {event_type} missing 'data' field"
-        
+
         # Data should have routing fields (except for platform events which only have web_session_id)
         data = fixture["data"]
         assert "web_session_id" in data, f"Event {event_type} missing 'web_session_id' in data"
@@ -404,7 +473,6 @@ async def test_shared_fixture_event_types_match_constants():
         "g8e_web_search_requested": EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED,
         "g8e_web_search_completed": EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED,
         "g8e_web_search_failed": EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED,
-        "port_check_requested": EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
         "port_check_completed": EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
         "port_check_failed": EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         "citations_received": EventType.LLM_CHAT_ITERATION_CITATIONS_RECEIVED,
@@ -416,6 +484,8 @@ async def test_shared_fixture_event_types_match_constants():
         "llm_lifecycle_completed": EventType.LLM_LIFECYCLE_COMPLETED,
         "platform_sse_connection_established": EventType.PLATFORM_SSE_CONNECTION_ESTABLISHED,
         "platform_sse_keepalive_sent": EventType.PLATFORM_SSE_KEEPALIVE_SENT,
+        "tribunal_voting_consensus_failed": EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+        "tribunal_voting_dissent_recorded": EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
     }
 
     for fixture_key, expected_constant in fixture_to_constant_mapping.items():

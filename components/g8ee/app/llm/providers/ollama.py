@@ -9,6 +9,7 @@ from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     ThinkingLevel,
 )
+from app.errors import OllamaEmptyResponseError
 from app.llm.thinking import translate_for_ollama
 from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
@@ -104,8 +105,6 @@ def _raise_on_empty_content(
     Raises:
         OllamaEmptyResponseError: If response.message.content is empty or falsy.
     """
-    from app.errors import OllamaEmptyResponseError
-
     message = getattr(response, "message", None)
     content = getattr(message, "content", None) if message else None
     if content:

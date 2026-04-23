@@ -40,7 +40,7 @@ from app.llm.llm_types import (
     ToolCallingConfig,
 )
 from app.llm.utils import ModelOverrideResolver
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.factories import (
@@ -75,28 +75,20 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.add_chat_message = AsyncMock()
+    svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
+    svc.agent_activity_data_service = MagicMock()
+    svc.agent_activity_data_service.record_activity = AsyncMock()
     return svc
 
-def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
+def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentStreamState]:
     inv = build_enriched_context(investigation_id="inv-1")
     g8e_ctx = build_g8e_http_context(user_id="user-1")
     from app.models.settings import G8eeUserSettings, LLMSettings
     request_settings = G8eeUserSettings(llm=LLMSettings())
     
-    streaming = AgentStreamContext(
-        investigation=inv,
-        g8e_context=g8e_ctx,
-        request_settings=request_settings,
-        case_id="case-1",
-        investigation_id="inv-1",
-        web_session_id="web-1",
-        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-        sentinel_mode=True,
-    )
-    
-    agent_ctx = AgentStreamContext(
+    inputs = AgentInputs(
         investigation=inv,
         g8e_context=g8e_ctx,
         request_settings=request_settings,
@@ -105,13 +97,7 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
         user_id="user-1",
         web_session_id="web-1",
         agent_mode=AgentMode.OPERATOR_NOT_BOUND,
-    )
-    
-    return AgentStreamContext(
-        investigation=inv,
-        g8e_context=g8e_ctx,
-        request_settings=request_settings,
-        agent_mode=AgentMode.OPERATOR_NOT_BOUND,
+        sentinel_mode=True,
         operator_bound=False,
         model_to_use="lite-model",
         max_tokens=None,
@@ -129,12 +115,13 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
             thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         ),
-        streaming_context=streaming,
-        agent_context=agent_ctx,
         user_memories=[],
         case_memories=[],
         triage_result=triage_result,
     )
+    
+    state = AgentStreamState()
+    return inputs, state
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -143,10 +130,10 @@ def _make_chat_context(triage_result: TriageResult) -> AgentStreamContext:
 async def test_run_chat_impl_short_circuits_correctly():
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
     
     # Mock _prepare_chat_context to return our prepared context
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
     # Mock get_llm_provider to avoid actual LLM client creation
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
         await svc._run_chat_impl(
@@ -200,10 +187,10 @@ async def test_run_chat_impl_short_circuits_correctly():
     svc.g8e_agent.run_with_sse.assert_not_called()
     
     # 3. Verify persistence
-    # _persist_ai_response should have been called via add_chat_message on investigation_service
-    svc.investigation_service.add_chat_message.assert_called_once()
-    call_args = svc.investigation_service.add_chat_message.call_args
-    assert call_args.kwargs["content"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
+    # _persist_ai_response calls persist_ai_message, which persists the follow-up question
+    svc.investigation_service.persist_ai_message.assert_called_once()
+    call_args = svc.investigation_service.persist_ai_message.call_args
+    assert call_args.kwargs["text"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     assert call_args.kwargs["investigation_id"] == "inv-1"
 
 
@@ -267,13 +254,14 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     captured: dict = {}
 
-    def _capture(llm_settings):
+    def _capture(llm_settings, is_assistant=False):
         captured["llm"] = llm_settings
+        captured["is_assistant"] = is_assistant
         return MagicMock()
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
@@ -374,8 +362,8 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    ctx = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-    svc._prepare_chat_context = AsyncMock(return_value=ctx)
+    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
@@ -391,3 +379,53 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
                 llm_assistant_model="assistant-model",
                 user_settings=user_settings,
             )
+
+
+async def test_run_chat_impl_selects_assistant_provider_for_simple_complexity():
+    """Regression: when triage returns SIMPLE complexity, the assistant provider
+    should be used — not the primary provider.
+
+    Previously, get_llm_provider was called before triage, so is_assistant always
+    defaulted to False, causing cross-provider mismatches (e.g. Gemini model sent
+    to Anthropic endpoint).
+    """
+    from app.constants import LLMProvider
+    from app.models.settings import G8eeUserSettings, LLMSettings
+
+    svc = _make_pipeline()
+    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
+    
+    # Create triage result with SIMPLE complexity (should use assistant provider)
+    simple_triage_result = TriageResult(
+        complexity=TriageComplexityClassification.SIMPLE,
+        complexity_confidence=TriageConfidence.HIGH,
+        intent=TriageIntentClassification.INFORMATION,
+        intent_confidence=TriageConfidence.HIGH,
+        intent_summary="ok",
+    )
+    inputs, state = _make_chat_context(triage_result=simple_triage_result)
+    svc._prepare_chat_context = AsyncMock(return_value=inputs)
+
+    captured: dict = {}
+
+    def _capture(llm_settings, is_assistant=False):
+        captured["llm"] = llm_settings
+        captured["is_assistant"] = is_assistant
+        return MagicMock()
+
+    user_settings = G8eeUserSettings(llm=LLMSettings())
+    with patch("app.services.ai.chat_pipeline.get_llm_provider", side_effect=_capture):
+        await svc._run_chat_impl(
+            message="hello",
+            g8e_context=g8e_ctx,
+            attachments=[],
+            sentinel_mode=True,
+            llm_primary_provider="anthropic",
+            llm_assistant_provider="gemini",
+            llm_primary_model="claude-opus-4-6",
+            llm_assistant_model="gemini-3-flash-preview",
+            user_settings=user_settings,
+        )
+
+    # Verify is_assistant=True was passed (assistant provider should be used)
+    assert captured["is_assistant"] is True

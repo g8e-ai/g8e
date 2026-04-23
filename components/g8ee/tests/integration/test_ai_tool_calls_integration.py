@@ -205,6 +205,7 @@ class TestCommandExecutionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload was processed correctly
@@ -248,6 +249,7 @@ class TestCommandExecutionTools:
                     investigation=sample_investigation,
                     g8e_context=sample_g8e_context,
                     request_settings=request_settings,
+                    execution_id="test-execution-id",
                 )
 
             # Verify the mock was called
@@ -275,6 +277,7 @@ class TestCommandExecutionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify security violation was handled
@@ -327,6 +330,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -376,6 +380,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -425,6 +430,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -475,6 +481,7 @@ class TestFileOperationTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -541,6 +548,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -590,6 +598,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -642,6 +651,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -653,9 +663,11 @@ class TestFileSystemTools:
             call_args = mock_operator_command_service.execute_fetch_file_history.call_args[1]
             
             assert "args" in call_args
+            assert "execution_id" not in call_args
             args = call_args["args"]
             assert args.file_path == "/tmp/test.txt"
             assert args.limit == 10
+            assert args.execution_id == "test-execution-id"
         finally:
             tool_service.reset_invocation_context(context_token)
 
@@ -691,6 +703,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -753,6 +766,7 @@ class TestFileSystemTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -764,9 +778,11 @@ class TestFileSystemTools:
             call_args = mock_operator_command_service.execute_fetch_file_diff.call_args[1]
             
             assert "args" in call_args
+            assert "execution_id" not in call_args
             args = call_args["args"]
             assert args.file_path == "/tmp/test.txt"
             assert args.target_operator == "op-123"
+            assert args.execution_id == "test-execution-id"
         finally:
             tool_service.reset_invocation_context(context_token)
 
@@ -813,6 +829,7 @@ class TestNetworkSearchTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -868,6 +885,7 @@ class TestNetworkSearchTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -912,6 +930,7 @@ class TestNetworkSearchTools:
                     investigation=sample_investigation,
                     g8e_context=sample_g8e_context,
                     request_settings=request_settings,
+                    execution_id="test-execution-id",
                 )
         finally:
             tool_service_no_search.reset_invocation_context(context_token)
@@ -957,6 +976,7 @@ class TestPermissionSessionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -1003,6 +1023,7 @@ class TestPermissionSessionTools:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload processing
@@ -1111,6 +1132,7 @@ class TestToolIntegration:
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
                 request_settings=request_settings,
+                execution_id="test-execution-id",
             )
 
             # Verify payload was handled correctly

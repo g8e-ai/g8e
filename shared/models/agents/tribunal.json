@@ -1,41 +1,153 @@
 {
-  "_comment": "Canonical Tribunal model. Sage (the primary LLM) never proposes shell commands; Sage sends the Tribunal a natural-language `request` plus optional `guidelines`, and the Tribunal is the sole authority for producing the final command string. There is no fallback — when the Tribunal fails, the tool call fails.",
+  "_comment": "Canonical Tribunal model. The caller (Sage or Dash) never proposes shell commands; the caller sends the Tribunal a natural-language `request` plus optional `guidelines`, and the Tribunal is the sole authority for producing the final command string. There is no fallback \u2014 when the Tribunal fails, the tool call fails.",
   "name": "Tribunal",
-  "description": "Command authority. Converts Sage's natural-language request + guidelines into a precise shell command through multi-perspective voting and verification.",
+  "description": "Command authority. Converts the caller's natural-language request + guidelines into a precise shell command through multi-perspective voting and verification.",
   "member_result": {
-    "reasoning": { "type": "string", "description": "The logic behind the member's verdict or revision." },
-    "command": { "type": "string", "description": "The proposed command string for this member." },
-    "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "Confidence in the proposal." }
+    "reasoning": {
+      "type": "string",
+      "description": "The logic behind the member's verdict or revision."
+    },
+    "command": {
+      "type": "string",
+      "description": "The proposed command string for this member."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence in the proposal."
+    }
   },
   "request": {
-    "request": { "type": "string", "description": "Sage's natural-language description of what the Operator must accomplish. No shell syntax." },
-    "guidelines": { "type": "string", "description": "Optional plain-language creative guidance for the Tribunal (flags to favour, behaviours to avoid, preferred output format). No shell syntax." },
+    "request": {
+      "type": "string",
+      "description": "Caller's natural-language description of what the Operator must accomplish. No shell syntax."
+    },
+    "guidelines": {
+      "type": "string",
+      "description": "Optional constraints on the command itself (flags/tools to prefer or avoid, portability, edge cases the command must handle, whitelist/blacklist restrictions). Plain language, never shell syntax. Guidelines describe the command, not its output."
+    },
     "system_context": {
       "type": "object",
       "properties": {
-        "os": { "type": "string" },
-        "shell": { "type": "string" },
-        "working_directory": { "type": "string" }
+        "os": {
+          "type": "string"
+        },
+        "shell": {
+          "type": "string"
+        },
+        "working_directory": {
+          "type": "string"
+        }
       }
     }
   },
   "voting_result": {
-    "vote_winner": { "type": "string", "description": "The command that won the weighted majority vote." },
-    "vote_score": { "type": "number", "description": "Normalised weight of the winner (0.0-1.0)." },
+    "vote_winner": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The command that won the weighted majority vote."
+    },
+    "vote_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Normalised weight of the winner (0.0-1.0)."
+    },
     "outcome": {
       "type": "string",
       "description": "Terminal outcome of the pipeline. Only successful outcomes are enumerated; Tribunal failures raise typed TribunalError subclasses instead of producing a fallback result.",
-      "enum": ["consensus", "verified", "verification_failed"]
+      "enum": [
+        "consensus",
+        "verified",
+        "verification_failed",
+        "consensus_failed"
+      ]
     },
     "candidates": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "command": { "type": "string" },
-          "member": { "type": "string", "enum": ["axiom", "concord", "variance", "pragma", "nemesis"] },
-          "pass_index": { "type": "number" },
-          "reasoning": { "type": "string" }
+          "command": {
+            "type": "string"
+          },
+          "member": {
+            "type": "string",
+            "enum": [
+              "axiom",
+              "concord",
+              "variance",
+              "pragma",
+              "nemesis"
+            ]
+          },
+          "pass_index": {
+            "type": "number"
+          },
+          "reasoning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "vote_breakdown": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Full uniform-vote breakdown with member attribution, dissent clusters, consensus strength, and optional tie-break record. Present on every non-failed Tribunal result.",
+      "properties": {
+        "candidates_by_member": {
+          "type": "object",
+          "description": "member_id -> normalised command string"
+        },
+        "candidates_by_command": {
+          "type": "object",
+          "description": "normalised command -> list of member_ids that produced it"
+        },
+        "winner": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Normalised command that won; null on consensus_failed"
+        },
+        "winner_supporters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "member_ids who produced the winner"
+        },
+        "dissenters_by_command": {
+          "type": "object",
+          "description": "losing command -> list of member_ids that produced it"
+        },
+        "consensus_strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "winner_supporters / total_members"
+        },
+        "tie_broken": {
+          "type": "boolean",
+          "description": "Whether the winner required tie-break resolution"
+        },
+        "tie_break_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "shortest",
+            "excluded_nemesis",
+            "verifier_disambiguation",
+            null
+          ]
         }
       }
     }

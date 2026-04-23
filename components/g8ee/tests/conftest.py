@@ -30,7 +30,7 @@ import pytest_asyncio
 
 from app.clients.kv_cache_client import KVCacheClient
 from app.clients.db_client import DBClient
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eePlatformSettings, ListenSettings
 from app.services.infra.settings_service import SettingsService
 from app.services.cache.cache_aside import CacheAsideService
 from app.db.kv_service import KVService
@@ -48,167 +48,6 @@ from tests.fakes.factories import (
 
 logger = logging.getLogger(__name__)
 
-# Global to store probed capabilities for the session. Consumed by the
-# collection-modify hook for marker-based skips; populated by
-# _probe_llm_capabilities when the session actually reaches the fixture.
-_PROBED_CAPABILITIES: dict = {
-    "supports_thinking": True,
-    "supports_tools": True,
-    "supports_web_search": True,
-    "thinking_error": None,
-    "tools_error": None,
-    "web_search_error": None,
-}
-
-# Conservative default override applied to a model config whose thinking probe
-# succeeds. The probe only confirms that *some* non-OFF level works, so we
-# cover the full intensity range; the provider's translator clamps to what the
-# actual model accepts at request time.
-_PROBED_THINKING_LEVELS: tuple[ThinkingLevel, ...] = (
-    ThinkingLevel.OFF,
-    ThinkingLevel.MINIMAL,
-    ThinkingLevel.LOW,
-    ThinkingLevel.MEDIUM,
-    ThinkingLevel.HIGH,
-)
-
-
-def _build_primary_settings_for_probe(
-    *,
-    thinking_config=None,
-    tools=None,
-):
-    """Build a PrimaryLLMSettings for a probe request.
-
-    The struct now defaults every non-essential field, so the probe only
-    needs to override what it is actually testing (thinking or tools).
-    """
-    from app.llm import llm_types as types
-
-    kwargs: dict = {"max_output_tokens": 1024}
-    if thinking_config is not None:
-        kwargs["thinking_config"] = thinking_config
-    if tools is not None:
-        kwargs["tools"] = list(tools)
-    return types.PrimaryLLMSettings(**kwargs)
-
-
-def _scoped_model_capability_override(
-    model_name: str,
-    *,
-    supported_thinking_levels: list[ThinkingLevel],
-    supports_tools: bool,
-):
-    """Thin wrapper over ``MODEL_REGISTRY.override`` for the capability probe.
-
-    Delegates to the registry's scoped-override API so the probed values are
-    installed as an immutable copy rather than mutated in place. Restoration
-    happens automatically on context exit. Raises ``LookupError`` if the
-    model is not registered — fabricating an ad-hoc config would bypass the
-    registration-time dialect validation in ``_OLLAMA_CONFIGS``.
-    """
-    return MODEL_REGISTRY.override(
-        model_name,
-        supported_thinking_levels=list(supported_thinking_levels),
-        supports_tools=supports_tools,
-    )
-
-
-async def _probe_llm_capabilities(settings) -> None:
-    """Probe the LLM for thinking, tool, and web-search support.
-
-    Populates the module-level _PROBED_CAPABILITIES dict. The caller is
-    responsible for mirroring the results onto the model registry via
-    ``_scoped_model_capability_override``.
-    """
-    from app.llm.factory import get_llm_provider, get_llm_settings
-    from app.llm import llm_types as types
-
-    llm = get_llm_settings()
-    if not _has_llm_credentials(llm):
-        return
-
-    provider = get_llm_provider(llm)
-    primary_model = llm.primary_model
-
-    async with provider:
-        # 1. Probe Thinking
-        try:
-            logger.info(f"[PROBE] Testing thinking support for {primary_model}...")
-            thinking_config = types.ThinkingConfig(
-                thinking_level=ThinkingLevel.MINIMAL,
-                include_thoughts=True,
-            )
-            thinking_llm_settings = _build_primary_settings_for_probe(
-                thinking_config=thinking_config,
-            )
-            await provider.generate_content_primary(
-                model=primary_model,
-                contents=[types.Content(role="user", parts=[types.Part.from_text("Say 'ok'")])],
-                primary_llm_settings=thinking_llm_settings,
-            )
-            logger.info(f"[PROBE] Thinking support confirmed for {primary_model}")
-        except ThinkingNotSupportedError as e:
-            _PROBED_CAPABILITIES["supports_thinking"] = False
-            _PROBED_CAPABILITIES["thinking_error"] = str(e)
-            logger.warning(f"[PROBE] Thinking support failed for {primary_model}: {e}")
-        except Exception as e:
-            logger.info(f"[PROBE] Thinking probe returned non-capability error (ignoring): {e}")
-
-        # 2. Probe Tools
-        try:
-            logger.info(f"[PROBE] Testing tool support for {primary_model}...")
-            dummy_tool = types.ToolDeclaration(
-                name="get_current_weather",
-                description="Get the current weather in a given location",
-                parameters={
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string", "description": "The city and state, e.g. San Francisco, CA"},
-                    },
-                    "required": ["location"],
-                },
-            )
-            tool_group = types.ToolGroup(tools=[dummy_tool])
-            tools_llm_settings = _build_primary_settings_for_probe(
-                tools=[tool_group],
-            )
-            await provider.generate_content_primary(
-                model=primary_model,
-                contents=[types.Content(role="user", parts=[types.Part.from_text("What is the weather in London?")])],
-                primary_llm_settings=tools_llm_settings,
-            )
-            logger.info(f"[PROBE] Tool support confirmed for {primary_model}")
-        except ToolsNotSupportedError as e:
-            _PROBED_CAPABILITIES["supports_tools"] = False
-            _PROBED_CAPABILITIES["tools_error"] = str(e)
-            logger.warning(f"[PROBE] Tool support failed for {primary_model}: {e}")
-        except Exception as e:
-            logger.info(f"[PROBE] Tool probe returned non-capability error (ignoring): {e}")
-
-        # 3. Probe Web Search
-        if settings.search and settings.search.enabled:
-            from app.services.ai.grounding.web_search_provider import WebSearchProvider
-            try:
-                logger.info("[PROBE] Testing web search connectivity...")
-                search_provider = WebSearchProvider(
-                    project_id=settings.search.project_id,
-                    engine_id=settings.search.engine_id,
-                    api_key=settings.search.api_key,
-                    location=settings.search.location or "global"
-                )
-                # Perform a minimal search for connectivity check
-                result = await search_provider.search(query="connectivity-check", num=1)
-                if result.success:
-                    logger.info("[PROBE] Web search connectivity confirmed")
-                else:
-                    _PROBED_CAPABILITIES["supports_web_search"] = False
-                    _PROBED_CAPABILITIES["web_search_error"] = result.error
-                    logger.warning(f"[PROBE] Web search connectivity failed: {result.error}")
-            except Exception as e:
-                _PROBED_CAPABILITIES["supports_web_search"] = False
-                _PROBED_CAPABILITIES["web_search_error"] = str(e)
-                logger.warning(f"[PROBE] Web search probe failed with exception: {e}")
 
 
 def _has_llm_credentials(llm: LLMSettings | None) -> bool:
@@ -261,7 +100,7 @@ def _llm_settings_from_env() -> LLMSettings | None:
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
-    kwargs: dict = {"provider": provider, "assistant_provider": assistant_provider}
+    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider}
     if primary:
         kwargs["primary_model"] = primary
     if assistant:
@@ -396,7 +235,6 @@ def pytest_configure(config):
         logger.info("Overriding web search settings from env")
         set_search_settings(env_search)
 
-    # Probing is now deferred to the 'probed_capabilities' fixture to avoid startup latency.
 
 
 def pytest_collection_modifyitems(config, items):
@@ -405,15 +243,16 @@ def pytest_collection_modifyitems(config, items):
     llm = get_llm_settings()
     search_settings = get_search_settings()
 
-    # NOTE: This hook runs before fixtures like 'probed_capabilities'.
-    # It relies on _PROBED_CAPABILITIES which starts with optimistic defaults.
-    # Capability-based skipping will only be fully accurate if the probe 
-    # was already run in pytest_configure, but we moved it to a fixture 
-    # to avoid latency. Tests requiring capabilities they don't have 
-    # will now fail later during execution rather than being skipped here,
-    # unless they are explicitly marked with capabilities.
 
-    has_llm_credentials = _has_llm_credentials(llm)
+    # Check for LLM credentials from TEST_LLM_* env vars
+    has_test_llm_creds = _has_llm_credentials(llm)
+    
+    # Don't skip ai_integration tests if TEST_LLM_* env vars are not set,
+    # because tests now load user settings from g8es which may have API keys configured
+    # Only skip if TEST_LLM_* env vars are explicitly set but invalid
+    env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
+    has_llm_credentials = has_test_llm_creds if env_llm_provider else True  # Allow tests to run if no TEST_LLM_PROVIDER set
+    
     has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (
         search_settings.enabled
@@ -422,7 +261,7 @@ def pytest_collection_modifyitems(config, items):
         and bool(search_settings.api_key)
     ) if search_settings else False
 
-    logger.info(f"Collection: settings={settings is not None}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
+    logger.info(f"Collection: settings={settings is not None}, has_test_creds={has_test_llm_creds}, has_creds={has_llm_credentials}, has_vertex={has_vertex_search}, has_web_search={has_web_search}")
     if llm:
         logger.info(f"LLM Config: provider={llm.primary_provider}, key_set={bool(llm.gemini_api_key)}")
 
@@ -430,21 +269,14 @@ def pytest_collection_modifyitems(config, items):
     skip_no_vertex = pytest.mark.skip(reason="requires_api tests require Vertex AI Search credentials (VERTEX_SEARCH_ENABLED, VERTEX_SEARCH_PROJECT_ID, VERTEX_SEARCH_ENGINE_ID, VERTEX_SEARCH_API_KEY)")
     skip_no_web_search = pytest.mark.skip(reason=f"requires_web_search tests require web search configuration (search.enabled, project_id, engine_id, api_key). has_web_search={has_web_search}")
     
-    # Capability-based skips
-    skip_no_thinking = pytest.mark.skip(reason=f"Model {llm.primary_model if llm else 'None'} proven not to support thinking: {_PROBED_CAPABILITIES['thinking_error']}")
-    skip_no_tools = pytest.mark.skip(reason=f"Model {llm.primary_model if llm else 'None'} proven not to support tools: {_PROBED_CAPABILITIES['tools_error']}")
-    skip_web_search_unreachable = pytest.mark.skip(reason=f"Web search service unreachable: {_PROBED_CAPABILITIES['web_search_error']}")
 
     for item in items:
         if item.get_closest_marker("ai_integration") and not has_llm_credentials:
             item.add_marker(skip_no_llm)
         if item.get_closest_marker("requires_api") and not has_vertex_search:
             item.add_marker(skip_no_vertex)
-        if item.get_closest_marker("requires_web_search"):
-            if not has_web_search:
-                item.add_marker(skip_no_web_search)
-            elif not _PROBED_CAPABILITIES["supports_web_search"]:
-                item.add_marker(skip_web_search_unreachable)
+        if item.get_closest_marker("requires_web_search") and not has_web_search:
+            item.add_marker(skip_no_web_search)
             
         # Dynamically add markers based on scenario data for accuracy tests
         if "test_agent_accuracy" in item.name or "test_gemini_accuracy" in item.name:
@@ -457,11 +289,6 @@ def pytest_collection_modifyitems(config, items):
                 if scenario.get("agent_mode") == "operator_bound":
                     item.add_marker(pytest.mark.thinking)
 
-        # Dynamically skip based on probed capabilities
-        if item.get_closest_marker("thinking") and not _PROBED_CAPABILITIES["supports_thinking"]:
-            item.add_marker(skip_no_thinking)
-        if item.get_closest_marker("tools") and not _PROBED_CAPABILITIES["supports_tools"]:
-            item.add_marker(skip_no_tools)
 
 
 # ---------------------------------------------------------------------------
@@ -621,47 +448,6 @@ def mock_operator_document():
     return build_production_operator_document()
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def probed_capabilities(test_settings):
-    """Session-scoped fixture to probe LLM capabilities.
-
-    Runs the capability probe once per session (with a 30s timeout), then
-    mirrors the result onto the primary model's config via a scoped override
-    that is automatically reverted on session teardown. This keeps the
-    shared MODEL_REGISTRY free of test-induced mutations if the session
-    aborts partway through.
-    """
-    import asyncio
-    from app.llm.factory import get_llm_settings
-
-    llm_settings = get_llm_settings()
-    if _has_llm_credentials(llm_settings):
-        try:
-            async with asyncio.timeout(30.0):
-                await _probe_llm_capabilities(test_settings)
-        except TimeoutError:
-            logger.warning("LLM capability probing timed out after 30s")
-        except Exception as e:
-            logger.warning(f"LLM capability probing failed: {e}")
-
-        # Mirror the probed capabilities onto the primary model's config for
-        # the rest of the session. Supported levels become the full range
-        # when the probe passed (the translator will clamp at request time)
-        # or empty when the probe clearly failed.
-        thinking_levels: list[ThinkingLevel] = (
-            list(_PROBED_THINKING_LEVELS)
-            if _PROBED_CAPABILITIES["supports_thinking"]
-            else []
-        )
-        with _scoped_model_capability_override(
-            llm_settings.primary_model,
-            supported_thinking_levels=thinking_levels,
-            supports_tools=_PROBED_CAPABILITIES["supports_tools"],
-        ):
-            yield _PROBED_CAPABILITIES
-        return
-
-    yield _PROBED_CAPABILITIES
 
 
 @pytest.fixture(scope="session")
@@ -669,9 +455,15 @@ def test_settings():
     """Returns the globally configured Settings object.
     
     In a real test run, this is loaded from g8es by pytest_sessionstart.
+    If settings are not properly configured, returns a default G8eePlatformSettings.
     """
     from app.llm.factory import get_settings
-    return get_settings()
+    from app.models.settings import AuthSettings, ListenSettings
+    
+    settings = get_settings()
+    if settings is None or not hasattr(settings, 'auth'):
+        return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
+    return settings
 
 
 @pytest.fixture
@@ -704,7 +496,8 @@ def mock_event_service():
 
 @pytest.fixture
 def mock_settings():
-    return G8eePlatformSettings(port=443)
+    from app.models.settings import AuthSettings
+    return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
 
 
 @pytest.fixture
@@ -747,7 +540,7 @@ def cloud_operator_doc():
         HeartbeatEnvironment,
     )
     return OperatorDocument(
-        operator_id="cloud-op-1",
+        id="cloud-op-1",
         user_id="test-user",
         operator_session_id="session-cloud-op-1",
         operator_type=OperatorType.CLOUD,
@@ -784,7 +577,7 @@ def binary_operator_doc():
         HeartbeatEnvironment,
     )
     return OperatorDocument(
-        operator_id="binary-op-1",
+        id="binary-op-1",
         user_id="test-user",
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.SYSTEM,

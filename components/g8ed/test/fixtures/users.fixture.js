@@ -42,31 +42,31 @@ const expiredIds = generateUniqueIds();
 const adminIds = generateUniqueIds();
 
 export const mockUsers = {
-  primary: {
+  primary: UserDocument.parse({
     id: primaryIds.id,
     email: 'primary@example.com',
     name: 'Primary Test User',
     organization_id: primaryIds.organization_id,
     roles: [UserRole.USER],
-    api_key: primaryIds.api_key,
+    g8e_key: primaryIds.api_key,
     operator_id: primaryIds.operator_id,
     created_at: now(),
     updated_at: now()
-  },
+  }),
 
-  secondary: {
+  secondary: UserDocument.parse({
     id: secondaryIds.id,
     email: 'secondary@example.com',
     name: 'Secondary Test User',
     organization_id: secondaryIds.organization_id,
     roles: [UserRole.USER],
-    api_key: secondaryIds.api_key,
+    g8e_key: secondaryIds.api_key,
     operator_id: secondaryIds.operator_id,
     created_at: now(),
     updated_at: now()
-  },
+  }),
 
-  basic: {
+  basic: UserDocument.parse({
     id: basicIds.id,
     email: 'basic@example.com',
     name: 'Basic Test User',
@@ -74,9 +74,9 @@ export const mockUsers = {
     roles: [UserRole.USER],
     created_at: now(),
     updated_at: now()
-  },
+  }),
 
-  expired: {
+  expired: UserDocument.parse({
     id: expiredIds.id,
     email: 'expired@example.com',
     name: 'Expired User',
@@ -84,19 +84,19 @@ export const mockUsers = {
     roles: [UserRole.USER],
     created_at: now(),
     updated_at: now()
-  },
+  }),
 
-  admin: {
+  admin: UserDocument.parse({
     id: adminIds.id,
     email: 'admin@example.com',
     name: 'Admin User',
     organization_id: adminIds.organization_id,
     roles: [UserRole.ADMIN],
-    api_key: adminIds.api_key,
+    g8e_key: adminIds.api_key,
     operator_id: adminIds.operator_id,
     created_at: now(),
     updated_at: now()
-  }
+  })
 };
 
 /**

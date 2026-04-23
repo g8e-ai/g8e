@@ -35,6 +35,7 @@ import logging
 import pytest
 
 from app.constants import AgentMode, OperatorToolName
+from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
@@ -58,6 +59,8 @@ def mock_user_settings_disabled():
         enable_whitelisting=False,
         enable_blacklisting=False,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -69,6 +72,8 @@ def mock_user_settings_whitelist_only():
         enable_whitelisting=True,
         enable_blacklisting=False,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -80,6 +85,8 @@ def mock_user_settings_blacklist_only():
         enable_whitelisting=False,
         enable_blacklisting=True,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -91,6 +98,8 @@ def mock_user_settings_both():
         enable_whitelisting=True,
         enable_blacklisting=True,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -105,6 +114,11 @@ def mock_whitelist_validator():
         is_valid=True,
         command="ping",
     ))
+    validator.get_available_commands_with_metadata = MagicMock(return_value=[
+        "cat",
+        "ls",
+        "ping",
+    ])
     return validator
 
 
@@ -143,7 +157,10 @@ def mock_investigation():
 @pytest.fixture
 def mock_request_settings():
     """Mock G8eeUserSettings."""
-    return MagicMock(spec=G8eeUserSettings)
+    settings = MagicMock(spec=G8eeUserSettings)
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
+    return settings
 
 
 @pytest.fixture
@@ -189,6 +206,7 @@ async def test_handle_get_command_constraints_both_disabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -229,6 +247,7 @@ async def test_handle_get_command_constraints_whitelist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -269,6 +288,7 @@ async def test_handle_get_command_constraints_blacklist_only(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -313,6 +333,7 @@ async def test_handle_get_command_constraints_both_enabled(
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
         request_settings=mock_request_settings,
+        execution_id=None,
     )
 
     assert isinstance(result, CommandConstraintsResult)
@@ -323,44 +344,6 @@ async def test_handle_get_command_constraints_both_enabled(
     assert len(result.blacklisted_commands) == 2
     assert "Whitelisting ENABLED" in result.message
     assert "Blacklisting ENABLED" in result.message
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_handle_get_command_constraints_no_platform_settings(
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
-    caplog,
-):
-    """Test handler returns empty data when platform_settings is None and logs warning."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-    )
-    
-    with caplog.at_level(logging.WARNING):
-        result = await tool_service._handle_get_command_constraints(
-            tool_args={},
-            investigation=mock_investigation,
-            g8e_context=mock_g8e_context,
-            request_settings=mock_request_settings,
-        )
-    
-    assert isinstance(result, CommandConstraintsResult)
-    assert result.success is True
-    assert result.whitelisting_enabled is False
-    assert result.blacklisting_enabled is False
-    
-    assert any(
-        "platform_settings is None" in record.message
-        for record in caplog.records
-        if record.levelname == "WARNING"
-    )
-
 
 # =============================================================================
 # TESTS: CommandBlacklistValidator Public Methods

@@ -26,11 +26,12 @@ help:
 	@echo "  OPERATOR DEPLOYMENT"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  deploy DEVICE_TOKEN=dlk_xxx  - Deploy operators via API download (device link)"
-	@echo "  stream DEVICE_TOKEN=dlk_xxx  - Deploy operators via SSH streaming (auto-configures SSH)"
-	@echo "  discover-hosts              - List discovered demo fleet hosts"
-	@echo "  vanish                      - Remove all operators (zero trace)"
-	@echo "  operators                   - Show operator status on all nodes"
+	@echo "  deploy [-d dlk_xxx]         - Deploy operators via API download (device link)"
+	@echo "  stream [-d dlk_xxx]         - Deploy operators via SSH streaming (auto-configures SSH)"
+	@echo "                            - Also supports: DEVICE_TOKEN=dlk_xxx"
+	@echo "  discover-hosts            - List discovered demo fleet hosts"
+	@echo "  vanish                    - Remove all operators (zero trace)"
+	@echo "  operators                 - Show operator status on all nodes"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "  FLEET INSPECTION"
@@ -63,8 +64,19 @@ build:
 	$(COMPOSE) build
 
 up: build
-	@echo "Starting 10 web nodes..."
-	$(COMPOSE) up -d
+	@set -e; \
+	TOKEN="$(DEVICE_TOKEN)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
+	fi; \
+	if [ -n "$$TOKEN" ]; then \
+		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
+		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
+	else \
+		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
+		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
+		$(COMPOSE) up -d; \
+	fi
 	@echo ""
 	@echo "========================================"
 	@echo "  Broken Web App Fleet - 10 Nodes"
@@ -78,10 +90,12 @@ up: build
 	@echo "  node-09: High Load (504)"
 	@echo "  node-10: Crashed (nginx won't start)"
 	@echo ""
-	@echo "Deploy operators:"
-	@echo "  ./g8e demo stream DEVICE_TOKEN=dlk_your_token"
+	@echo "Operator logs stream to: docker logs -f web-node-<NN>"
+	@echo "Dashboard:               http://localhost:3000"
 	@echo ""
-	@echo "Dashboard: http://localhost:3000"
+	@echo "Deploy operators:"
+	@echo "  ./g8e demo deploy -d dlk_xxx"
+	@echo "  ./g8e demo stream -d dlk_xxx"
 	@echo ""
 	@echo "========================================"
 
@@ -142,36 +156,58 @@ nginx-check:
 	done
 
 deploy:
-	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make deploy DEVICE_TOKEN=dlk_xxx" && exit 1)
-	@echo "Deploying operators to all 10 nodes..."
-	@for i in $$(seq -f "%02g" 1 10); do \
+	@set -e; \
+	TOKEN="$(DEVICE_TOKEN)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
+	fi; \
+	if [ -z "$$TOKEN" ]; then \
+		echo "Usage: make deploy -d dlk_xxx"; \
+		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
+		exit 1; \
+	fi; \
+	echo "Deploying operators to all 10 nodes..."; \
+	for i in $$(seq -f "%02g" 1 10); do \
 		echo "  Deploying to node-$$i..."; \
-		docker exec $(CONTAINER_PREFIX)-$$i sh -c '\
-			curl -fsSLk -H "Authorization: Bearer $(DEVICE_TOKEN)" \
+		docker exec -e DEVICE_TOKEN="$$TOKEN" $(CONTAINER_PREFIX)-$$i sh -c '\
+			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
-			curl -fsSLk -H "Authorization: Bearer $(DEVICE_TOKEN)" \
+			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup ./g8e.operator -D "$(DEVICE_TOKEN)" -e g8es --http-port 9000 --wss-port 9001 > g8e.operator.log 2>&1 & \
+			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e g8e.local > g8e.operator.log 2>&1 & \
 			echo "    operator started (pid: $$!)"' || true; \
-	done
-	@echo "Done."
+	done; \
+	echo "Done."
 
 discover-hosts:
 	@docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort
 
 stream:
-	@test -n "$(DEVICE_TOKEN)" || (echo "Usage: make stream DEVICE_TOKEN=dlk_xxx" && exit 1)
-	@echo "Configuring SSH in g8ep..."
-	@$(MAKE) -s setup-ssh
-	@echo "Discovering demo fleet hosts..."
-	@HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
-	if [ -z "$$HOSTS" ]; then echo "No demo nodes found. Run './g8e demo up' first." && exit 1; fi; \
+	@set -e; \
+	TOKEN="$(DEVICE_TOKEN)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
+	fi; \
+	if [ -z "$$TOKEN" ]; then \
+		echo "Usage: make stream -d dlk_xxx"; \
+		echo "       make stream DEVICE_TOKEN=dlk_xxx"; \
+		exit 1; \
+	fi; \
+	echo "Configuring SSH in g8ep..."; \
+	$(MAKE) -s setup-ssh; \
+	echo "Discovering demo fleet hosts..."; \
+	HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+	if [ -z "$$HOSTS" ]; then \
+		echo "No demo nodes found. Starting fleet..."; \
+		$(MAKE) -s up; \
+		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+	fi; \
 	echo "  Streaming to: $$HOSTS"; \
 	docker exec g8ep /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
-		--device-token "$(DEVICE_TOKEN)" \
+		--device-token "$$TOKEN" \
 		$$HOSTS
 
 operators:

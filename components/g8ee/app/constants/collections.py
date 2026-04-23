@@ -44,6 +44,8 @@ DB_COLLECTION_CASES             = _c["cases"]
 DB_COLLECTION_INVESTIGATIONS    = _c["investigations"]
 DB_COLLECTION_TASKS             = _c["tasks"]
 DB_COLLECTION_MEMORIES          = _c["memories"]
+DB_COLLECTION_TRIBUNAL_COMMANDS = _c["tribunal_commands"]
+DB_COLLECTION_AGENT_ACTIVITY_METADATA = _c["agent_activity_metadata"]
 
 # Document IDs for settings collection
 PLATFORM_SETTINGS_DOC = _d["platform_settings"]

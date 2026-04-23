@@ -132,7 +132,7 @@ g8es:
       aliases:
         - g8es
   healthcheck:
-    test: ["CMD", "curl", "-f", "-k", "https://localhost:443/health"]
+    test: ["CMD", "curl", "-f", "--cacert", "/ssl/ca.crt", "https://localhost:9000/health"]
     interval: 10s
     timeout: 5s
     retries: 5

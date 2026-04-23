@@ -28,6 +28,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import {
     OperatorSessionRegistrationRequest,
     StopOperatorRequest,
@@ -131,7 +132,7 @@ class InternalHttpClient{
         headers[G8eHeaders.SOURCE_COMPONENT] = context.source_component || SourceComponent.G8ED;
 
         logger.info('[HTTP-INTERNAL] G8eContext headers built and validated from model', {
-            web_session_id: context.web_session_id.substring(0, 20) + '...',
+            web_session_id_tag: sessionIdTag(context.web_session_id),
             user_id: context.user_id,
             bound_operators_count: context.bound_operators?.length || 0,
             case_id: context.case_id,

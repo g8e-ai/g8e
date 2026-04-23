@@ -45,14 +45,14 @@ describe('OperatorDataService', () => {
 
     describe('getOperator', () => {
         it('should return OperatorDocument when data exists', async () => {
-            const mockData = { operator_id: 'op-123', user_id: 'user-123', status: 'ACTIVE' };
+            const mockData = { id: 'op-123', user_id: 'user-123', status: 'ACTIVE' };
             mockCacheAside.getDocument.mockResolvedValue(mockData);
 
             const result = await operatorDataService.getOperator('op-123');
 
             expect(mockCacheAside.getDocument).toHaveBeenCalledWith(Collections.OPERATORS, 'op-123');
             expect(result).toBeInstanceOf(OperatorDocument);
-            expect(result.operator_id).toBe('op-123');
+            expect(result.id).toBe('op-123');
         });
 
         it('should return null when data does not exist', async () => {
@@ -66,20 +66,20 @@ describe('OperatorDataService', () => {
 
     describe('getOperatorFresh', () => {
         it('should evict then get operator', async () => {
-            const mockData = { operator_id: 'op-123', user_id: 'user-123' };
+            const mockData = { id: 'op-123', user_id: 'user-123' };
             mockCacheAside.getDocument.mockResolvedValue(mockData);
 
             const result = await operatorDataService.getOperatorFresh('op-123');
 
             expect(mockCacheAside.evictDocument).toHaveBeenCalledWith(Collections.OPERATORS, 'op-123');
             expect(mockCacheAside.getDocument).toHaveBeenCalledWith(Collections.OPERATORS, 'op-123');
-            expect(result.operator_id).toBe('op-123');
+            expect(result.id).toBe('op-123');
         });
     });
 
     describe('queryOperators', () => {
         it('should return array of results', async () => {
-            const mockResults = [{ operator_id: 'op-1' }, { operator_id: 'op-2' }];
+            const mockResults = [{ id: 'op-1' }, { id: 'op-2' }];
             mockCacheAside.queryDocuments.mockResolvedValue(mockResults);
 
             const filters = [{ field: 'user_id', operator: '==', value: 'user-1' }];
@@ -100,7 +100,7 @@ describe('OperatorDataService', () => {
 
     describe('queryOperatorsFresh', () => {
         it('should call queryDocuments with bypassCache=true', async () => {
-            const mockResults = [{ operator_id: 'op-1' }, { operator_id: 'op-2' }];
+            const mockResults = [{ id: 'op-1' }, { id: 'op-2' }];
             mockCacheAside.queryDocuments.mockResolvedValue(mockResults);
 
             const filters = [{ field: 'user_id', operator: '==', value: 'user-1' }];
@@ -121,7 +121,7 @@ describe('OperatorDataService', () => {
 
     describe('createOperator', () => {
         it('should call cacheAside.createDocument', async () => {
-            const mockDoc = { operator_id: 'op-123' };
+            const mockDoc = { id: 'op-123' };
             mockCacheAside.createDocument.mockResolvedValue(true);
 
             const result = await operatorDataService.createOperator('op-123', mockDoc);

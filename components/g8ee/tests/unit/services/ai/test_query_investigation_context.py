@@ -64,7 +64,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "conversation_history"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, inv, g8e_context, user_settings
+            tool_args, inv, g8e_context, user_settings, execution_id=None
         )
         
         assert isinstance(result, InvestigationContextResult)
@@ -75,7 +75,7 @@ class TestHandleQueryInvestigationContext:
     async def test_invalid_data_type(self, tool_service, investigation_context, g8e_context, user_settings):
         tool_args = {"data_type": "invalid_type"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is False
@@ -89,7 +89,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "conversation_history", "limit": 2}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is True
@@ -105,7 +105,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "investigation_status"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is True
@@ -118,7 +118,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "investigation_status"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is False
@@ -130,7 +130,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "operator_actions"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is True
@@ -142,7 +142,7 @@ class TestHandleQueryInvestigationContext:
         
         tool_args = {"data_type": "conversation_history"}
         result = await tool_service._handle_query_investigation_context(
-            tool_args, investigation_context, g8e_context, user_settings
+            tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
         assert result.success is False

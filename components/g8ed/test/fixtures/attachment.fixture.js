@@ -13,9 +13,10 @@
 
 import { vi } from 'vitest';
 import { now } from '@test/fixtures/base.fixture.js';
+import { AttachmentRecord } from '@g8ed/models/attachment_model.js';
 
 export const mockAttachments = {
-    recordWithObjectKey: {
+    recordWithObjectKey: AttachmentRecord.parse({
         attachment_id:     'abc123def456abc123def456abc123de',
         investigation_id:  'inv-test-001',
         user_id:           'user-test-001',
@@ -24,10 +25,10 @@ export const mockAttachments = {
         file_size:         100,
         content_type:      'text/plain',
         object_key:        'attachments/inv-test-001/abc123def456abc123def456abc123de',
-        stored_at:         now().toISOString(),
-    },
+        stored_at:         now(),
+    }),
 
-    record2WithObjectKey: {
+    record2WithObjectKey: AttachmentRecord.parse({
         attachment_id:     'def456abc123def456abc123def456ab',
         investigation_id:  'inv-test-001',
         user_id:           'user-test-001',
@@ -36,8 +37,8 @@ export const mockAttachments = {
         file_size:         2048,
         content_type:      'application/pdf',
         object_key:        'attachments/inv-test-001/def456abc123def456abc123def456ab',
-        stored_at:         now().toISOString(),
-    },
+        stored_at:         now(),
+    }),
 
     validInput: {
         filename:    'test.txt',

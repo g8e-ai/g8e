@@ -20,6 +20,7 @@ the agent, Gemini, and Ollama accuracy tests.
 import json
 import logging
 import os
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -126,21 +127,43 @@ def load_and_validate_gold_set(
         return []
 
     valid: list[dict[str, Any]] = []
+    skipped_operator_bound: list[str] = []
+    skipped_expected_tools: list[str] = []
+
     for scenario in scenarios:
         missing = REQUIRED_SCENARIO_FIELDS - set(scenario.keys())
         if missing:
             logger.warning("Scenario %s missing fields: %s", scenario.get("id", "unknown"), missing)
             continue
 
-        if filter_operator_bound and scenario.get("agent_mode") == "operator_bound":
+        if filter_operator_bound and scenario.get("agent_mode") == "OPERATOR_BOUND":
             logger.info("Skipping %s: requires operator_bound mode", scenario["id"])
+            skipped_operator_bound.append(scenario["id"])
             continue
 
         if filter_expected_tools and scenario.get("expected_tools"):
             logger.info("Skipping %s: depends on expected_tools %s", scenario["id"], scenario["expected_tools"])
+            skipped_expected_tools.append(scenario["id"])
             continue
 
         valid.append(scenario)
+
+    if skipped_operator_bound:
+        warnings.warn(
+            f"SKIPPED {len(skipped_operator_bound)} OPERATOR_BOUND scenarios: {', '.join(skipped_operator_bound)}. "
+            f"These high-value scenarios require a real operator and are not being tested. "
+            f"Set filter_operator_bound=False to include them.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    if skipped_expected_tools:
+        warnings.warn(
+            f"SKIPPED {len(skipped_expected_tools)} scenarios with expected_tools: {', '.join(skipped_expected_tools)}. "
+            f"Set filter_expected_tools=False to include them.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     logger.info("Loaded %d valid scenarios from gold set (%s)", len(valid), gold_set_path)
     return valid
@@ -222,13 +245,13 @@ async def seed_operator_if_bound(
     operator_doc = build_production_operator_document(operator_id=operator_id)
 
     bound_operators = [build_bound_operator(
-        operator_id=operator_doc.operator_id,
+        operator_id=operator_doc.id,
         operator_session_id=operator_doc.operator_session_id,
         status=OperatorStatus.BOUND,
     )]
 
     await operator_data_service.create_operator(operator_doc)
-    logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.operator_id)
-    cleanup.track_operator(operator_doc.operator_id)
+    logger.info("%s Seeded operator document: %s", log_prefix, operator_doc.id)
+    cleanup.track_operator(operator_doc.id)
 
     return bound_operators

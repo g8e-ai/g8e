@@ -139,11 +139,13 @@ beforeEach(async () => {
     showConfirmationModal = uiUtilsMod.showConfirmationModal;
 
     seedTemplates(templateLoader, [
-        'bind-single-confirmation-overlay',
+        'operator-bind-single-overlay',
         'bind-all-confirmation-overlay',
         'unbind-all-confirmation-overlay',
         'bind-all-operator-item',
         'bind-result-feedback',
+        'operator-bind-all-overlay',
+        'operator-unbind-all-overlay',
     ]);
 });
 
@@ -424,9 +426,10 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
     });
 
     describe('_showBindSingleModal', () => {
-        it('calls showConfirmationModal with bind configuration', async () => {
+        it('renders inline overlay with bind configuration', async () => {
             const ctx = createMixinContext();
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx._showBindSingleModal({
                 operatorId: TEST_OPERATOR_ID,
@@ -434,17 +437,19 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 mode: 'bind',
             });
 
-            expect(showConfirmationModal).toHaveBeenCalledTimes(1);
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Bind an Operator to your chat session');
-            expect(callArgs.confirmLabel).toBe('Bind Operator');
-            expect(callArgs.confirmIcon).toBe('link');
-            expect(callArgs.onConfirm).toBeTypeOf('function');
+            expect(ctx.expandDownloadSection).toHaveBeenCalled();
+            expect(ctx.downloadCollapsibleContent.querySelector('.operator-bind-single-overlay')).toBeTruthy();
+            const overlay = ctx.downloadCollapsibleContent.querySelector('.operator-bind-single-overlay');
+            const titleEl = overlay.querySelector('[data-modal-title]');
+            expect(titleEl.textContent).toBe('Bind Selected Operators');
+            const confirmLabelEl = overlay.querySelector('[data-confirm-label]');
+            expect(confirmLabelEl.textContent).toBe('Bind Operator');
         });
 
-        it('calls showConfirmationModal with unbind configuration', async () => {
+        it('renders inline overlay with unbind configuration', async () => {
             const ctx = createMixinContext();
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx._showBindSingleModal({
                 operatorId: TEST_OPERATOR_ID,
@@ -452,15 +457,17 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 mode: 'unbind',
             });
 
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Unbind Operator from WebSession');
-            expect(callArgs.confirmLabel).toBe('Unbind Operator');
-            expect(callArgs.confirmIcon).toBe('link_off');
+            const overlay = ctx.downloadCollapsibleContent.querySelector('.operator-bind-single-overlay');
+            const titleEl = overlay.querySelector('[data-modal-title]');
+            expect(titleEl.textContent).toBe('Unbind Operator from WebSession');
+            const confirmLabelEl = overlay.querySelector('[data-confirm-label]');
+            expect(confirmLabelEl.textContent).toBe('Unbind Operator');
         });
 
-        it('calls showConfirmationModal with unbind-stale configuration', async () => {
+        it('renders inline overlay with unbind-stale configuration', async () => {
             const ctx = createMixinContext();
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx._showBindSingleModal({
                 operatorId: TEST_OPERATOR_ID,
@@ -468,8 +475,22 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 mode: 'unbind-stale',
             });
 
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Unbind Stale Operator');
+            const overlay = ctx.downloadCollapsibleContent.querySelector('.operator-bind-single-overlay');
+            const titleEl = overlay.querySelector('[data-modal-title]');
+            expect(titleEl.textContent).toBe('Unbind Stale Operator');
+        });
+
+        it('shows notificationService error when downloadCollapsibleContent not found', async () => {
+            const ctx = createMixinContext();
+            ctx.downloadCollapsibleContent = null;
+
+            await ctx._showBindSingleModal({
+                operatorId: TEST_OPERATOR_ID,
+                operator: createMockOperator(),
+                mode: 'bind',
+            });
+
+            expect(notificationService.error).toHaveBeenCalledWith('Unable to show bind overlay. Please try again.');
         });
     });
 
@@ -496,47 +517,48 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             expect(showConfirmationModal).not.toHaveBeenCalled();
         });
 
-        it('calls showConfirmationModal with active operators', async () => {
+        it('renders inline overlay with active operators', async () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ operator_id: TEST_OPERATOR_ID, status: OperatorStatus.ACTIVE }),
                 createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID_2];
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx.showBindAllConfirmationOverlay();
 
-            expect(showConfirmationModal).toHaveBeenCalledTimes(1);
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Bind All Active Operators');
-            expect(callArgs.confirmLabel).toBe('Bind All');
-            expect(callArgs.onConfirm).toBeTypeOf('function');
+            expect(ctx.expandDownloadSection).toHaveBeenCalled();
+            expect(ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay')).toBeTruthy();
         });
 
-        it('includes htmlContent with operator list', async () => {
+        it('includes operator list in overlay', async () => {
             const ctx = createMixinContext();
             ctx.operators = [createMockOperator({ status: OperatorStatus.ACTIVE })];
             ctx.boundOperatorIds = [];
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx.showBindAllConfirmationOverlay();
 
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.htmlContent).toContain('bind-all-operators-container');
+            const overlay = ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay');
+            expect(overlay).toBeTruthy();
+            expect(overlay.querySelector('#operator-bind-all-operators-list')).toBeTruthy();
         });
     });
 
     describe('executeBindAll', () => {
         beforeEach(() => {
             const overlay = document.createElement('div');
-            overlay.className = 'bind-all-confirmation-overlay';
+            overlay.className = 'operator-bind-all-overlay';
+            overlay.id = 'operator-bind-all-overlay';
             overlay.innerHTML = `
-                <button data-action="confirm">Confirm</button>
-                <button data-action="cancel">Cancel</button>
-                <div class="bind-all-actions"></div>
-                <div data-processing-indicator class="initially-hidden"></div>
-                <div class="bind-all-actions-feedback"></div>
+                <button id="operator-bind-all-confirm-btn">Confirm</button>
+                <button id="operator-bind-all-cancel-btn">Cancel</button>
+                <div class="operator-bind-all-actions"></div>
+                <div id="operator-bind-all-processing" class="initially-hidden"></div>
+                <div id="operator-bind-all-feedback"></div>
             `;
             document.body.appendChild(overlay);
         });
@@ -555,7 +577,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('calls operatorPanelService.bindAllOperators with operator IDs', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
@@ -574,7 +596,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('adds bound operator IDs to boundOperatorIds', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator()];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
@@ -593,7 +615,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('falls back to input operator IDs if response missing bound_operator_ids', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator()];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
@@ -612,7 +634,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('shows error via templateLoader.renderTo on bind-all failure', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator()];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             operatorPanelService.bindAllOperators.mockResolvedValue({
@@ -635,7 +657,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('binds only selected operators when some checkboxes are unchecked', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2]);
             const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
@@ -656,7 +678,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('shows error when no operators are selected', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.bind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-bind-all-overlay');
             const activeOperators = [createMockOperator()];
             addCheckboxesToOverlay(overlay, [TEST_OPERATOR_ID]);
             const checkboxes = overlay.querySelectorAll('.operator-select-checkbox');
@@ -676,15 +698,16 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
     });
 
     describe('overlay lifecycle', () => {
-        it('overlay management is delegated to showConfirmationModal', async () => {
+        it('renders inline overlay in download section', async () => {
             const ctx = createMixinContext();
             ctx.operators = [createMockOperator({ status: OperatorStatus.ACTIVE })];
             ctx.boundOperatorIds = [];
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx.showBindAllConfirmationOverlay();
 
-            expect(showConfirmationModal).toHaveBeenCalledTimes(1);
+            expect(ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay')).toBeTruthy();
         });
     });
 
@@ -758,7 +781,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             expect(showConfirmationModal).not.toHaveBeenCalled();
         });
 
-        it('calls showConfirmationModal with bound operators', async () => {
+        it('renders inline overlay with bound operators', async () => {
             const ctx = createMixinContext();
             ctx.operators = [
                 createMockOperator({ status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID }),
@@ -766,28 +789,27 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             global.window = { authState: { getWebSessionId: () => TEST_WEB_SESSION_ID } };
-            showConfirmationModal.mockResolvedValue(true);
+            ctx.downloadCollapsibleContent = document.createElement('div');
+            ctx.expandDownloadSection = vi.fn();
 
             await ctx.showUnbindAllConfirmationOverlay();
 
-            expect(showConfirmationModal).toHaveBeenCalledTimes(1);
-            const callArgs = showConfirmationModal.mock.calls[0][0];
-            expect(callArgs.title).toBe('Unbind All Operators');
-            expect(callArgs.confirmLabel).toBe('Unbind All');
-            expect(callArgs.onConfirm).toBeTypeOf('function');
+            expect(ctx.expandDownloadSection).toHaveBeenCalled();
+            expect(ctx.downloadCollapsibleContent.querySelector('.operator-unbind-all-overlay')).toBeTruthy();
         });
     });
 
     describe('executeUnbindAll', () => {
         beforeEach(() => {
             const overlay = document.createElement('div');
-            overlay.className = 'unbind-all-confirmation-overlay';
+            overlay.className = 'operator-unbind-all-overlay';
+            overlay.id = 'operator-unbind-all-overlay';
             overlay.innerHTML = `
-                <button data-action="confirm">Confirm</button>
-                <button data-action="cancel">Cancel</button>
-                <div class="bind-all-actions"></div>
-                <div data-processing-indicator class="initially-hidden"></div>
-                <div class="bind-all-actions-feedback"></div>
+                <button id="operator-unbind-all-confirm-btn">Confirm</button>
+                <button id="operator-unbind-all-cancel-btn">Cancel</button>
+                <div class="operator-unbind-all-actions"></div>
+                <div id="operator-unbind-all-processing" class="initially-hidden"></div>
+                <div id="operator-unbind-all-feedback"></div>
             `;
             document.body.appendChild(overlay);
         });
@@ -795,7 +817,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('calls operatorPanelService.unbindAllOperators with operator IDs', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.unbind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-unbind-all-overlay');
             const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: true,
@@ -813,7 +835,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('removes unbound operator IDs from boundOperatorIds', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.unbind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-unbind-all-overlay');
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             const boundOperators = [createMockOperator(), createMockOperator({ operator_id: TEST_OPERATOR_ID_2 })];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
@@ -832,7 +854,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('sets status to OFFLINE and clears metrics when all operators unbound', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.unbind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-unbind-all-overlay');
             ctx.boundOperatorIds = [TEST_OPERATOR_ID];
             const boundOperators = [createMockOperator()];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
@@ -853,7 +875,7 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('shows error via templateLoader.renderTo on unbind-all failure', async () => {
             vi.useFakeTimers();
             const ctx = createMixinContext();
-            const overlay = document.querySelector('.unbind-all-confirmation-overlay');
+            const overlay = document.querySelector('.operator-unbind-all-overlay');
             const boundOperators = [createMockOperator()];
             operatorPanelService.unbindAllOperators.mockResolvedValue({
                 ok: false,
@@ -886,6 +908,11 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('shows button when bound operators exist', () => {
             const ctx = createMixinContext();
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
+            ctx.operators = [
+                { ...createMockOperator(), operator_id: TEST_OPERATOR_ID, status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID },
+                { ...createMockOperator(), operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID },
+            ];
+            window.authState = { getWebSessionId: () => TEST_WEB_SESSION_ID };
 
             ctx.updateUnbindAllButtonVisibility();
 

@@ -199,6 +199,10 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			"total_elapsed", fmt.Sprintf("%.1fs", time.Since(startTime).Seconds()))
 	}
 
+	cs.logger.Info("About to publish execution result",
+		"execution_id", result.ExecutionID,
+		"results_publisher_nil", cs.results == nil)
+
 	rawStdoutSize := len(result.Stdout)
 	rawStderrSize := len(result.Stderr)
 

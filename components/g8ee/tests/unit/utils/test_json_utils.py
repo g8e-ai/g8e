@@ -24,6 +24,7 @@ from app.utils.json_utils import (
     _json_dumps,
     _json_serial,
     dumps_with_datetime,
+    extract_json_from_text,
     loads_with_datetime,
 )
 
@@ -179,3 +180,45 @@ class TestLoadsWithDatetime:
         raw = json.dumps({"outer": {"ts": "2026-01-01T00:00:00"}})
         result = loads_with_datetime(raw)
         assert isinstance(result["outer"]["ts"], datetime)
+
+
+class TestExtractJsonFromText:
+
+    def test_extract_simple_json(self):
+        text = '{"status": "ok"}'
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_extract_with_whitespace(self):
+        text = '   {"status": "ok"}   '
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_extract_from_markdown_fence(self):
+        text = '```json\n{"status": "ok"}\n```'
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_extract_from_plain_markdown_fence(self):
+        text = '```\n{"status": "ok"}\n```'
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_extract_with_preamble(self):
+        text = 'Here is the response:\n```json\n{"status": "ok"}\n```'
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_extract_partial_json_match(self):
+        text = 'Some text before {"status": "ok"} some text after'
+        result = extract_json_from_text(text)
+        assert result == {"status": "ok"}
+
+    def test_returns_none_for_invalid_json(self):
+        text = 'not json'
+        result = extract_json_from_text(text)
+        assert result is None
+
+    def test_returns_none_for_empty_input(self):
+        assert extract_json_from_text("") is None
+        assert extract_json_from_text(None) is None

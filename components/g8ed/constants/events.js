@@ -252,9 +252,9 @@ export const EventType = Object.freeze({
     TRIBUNAL_VOTING_PASS_FAILED:        _EVENTS['ai']['tribunal']['voting']['pass']['failed'],
     TRIBUNAL_VOTING_CONSENSUS_REACHED:     _EVENTS['ai']['tribunal']['voting']['consensus']['reached'],
     TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED: _EVENTS['ai']['tribunal']['voting']['consensus']['not_reached'],
-    TRIBUNAL_VOTING_REVIEW_STARTED:     _EVENTS['ai']['tribunal']['voting']['review']['started'],
-    TRIBUNAL_VOTING_REVIEW_COMPLETED:   _EVENTS['ai']['tribunal']['voting']['review']['completed'],
-    TRIBUNAL_VOTING_REVIEW_FAILED:      _EVENTS['ai']['tribunal']['voting']['review']['failed'],
+    TRIBUNAL_VOTING_AUDIT_STARTED:     _EVENTS['ai']['tribunal']['voting']['audit']['started'],
+    TRIBUNAL_VOTING_AUDIT_COMPLETED:   _EVENTS['ai']['tribunal']['voting']['audit']['completed'],
+    TRIBUNAL_VOTING_AUDIT_FAILED:      _EVENTS['ai']['tribunal']['voting']['audit']['failed'],
 
     AUTH_LOGIN_REQUESTED:  _EVENTS['platform']['auth']['login']['requested'],
     AUTH_LOGIN_SUCCEEDED:  _EVENTS['platform']['auth']['login']['succeeded'],

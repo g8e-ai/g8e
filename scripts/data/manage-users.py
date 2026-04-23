@@ -140,7 +140,8 @@ class UserManager:
         else:
             result = _api_request('GET', f'/email/{urllib.parse.quote(email, safe="")}')
 
-        if not result.get('success'):
+        user = result.get('user') if isinstance(result, dict) else None
+        if not user:
             identifier = user_id or email
             if result.get('_status_code') == 404:
                 print(f"\nUser not found: {identifier}")
@@ -148,7 +149,6 @@ class UserManager:
                 raise RuntimeError(result.get('error', 'Failed to get user'))
             return None
 
-        user = result['data']
         print(self._format_user_detail(user))
         return user
 
@@ -186,10 +186,10 @@ class UserManager:
             body['roles'] = roles
 
         result = _api_request('POST', '', body)
-        if not result.get('success'):
+        user = result.get('user') if isinstance(result, dict) else None
+        if not user:
             raise RuntimeError(result.get('error', 'Failed to create user'))
 
-        user = result['data']
         print("\nUser created successfully:")
         print(f"  ID:       {user['id']}")
         print(f"  Email:    {user.get('email')}")

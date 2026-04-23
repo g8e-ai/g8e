@@ -191,9 +191,18 @@ while [[ $i -le $# ]]; do
             fi
             ((i++))
             ;;
-        *)
+        -*)
+            # Preserve other flags that might appear before subcommand
             filtered_args+=("$arg")
             ((i++))
+            ;;
+        *)
+            # First non-flag argument is the subcommand. Stop parsing global flags.
+            while [[ $i -le $# ]]; do
+                filtered_args+=("${!i}")
+                ((i++))
+            done
+            break
             ;;
     esac
 done
@@ -224,7 +233,7 @@ _authenticate_user() {
 
     local auth_url="https://localhost/api/auth/operator"
     local response=""
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
 
     if [[ -n "$device_token" ]]; then
         # Authenticate via device link token
@@ -313,8 +322,13 @@ if [[ " ${AUTH_REQUIRED_COMMANDS[@]} " =~ " ${TOP} " ]]; then
     fi
 fi
 
-# Special case: operator deploy and stream need auth
-if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream") ]]; then
+# Special case: operator deploy, stream, and reauth need auth
+# platform settings needs auth for g8ed internal API access
+if [[ "$TOP" == "operator" && ("$SUB" == "deploy" || "$SUB" == "stream" || "$SUB" == "reauth") ]]; then
+    _ensure_authenticated
+fi
+
+if [[ "$TOP" == "platform" && "$SUB" == "settings" ]]; then
     _ensure_authenticated
 fi
 
@@ -494,11 +508,6 @@ case "$TOP" in
                     echo "[g8e] operator reauth requires --user-id <id> or --email <email>" >&2
                     echo "  Usage: ./g8e operator reauth --user-id <id>" >&2
                     echo "         ./g8e operator reauth --email <email>" >&2
-                    exit 1
-                fi
-
-                if [[ -z "$OPERATOR_SESSION_ID" ]]; then
-                    echo "[g8e] Authentication required. Run: ./g8e login --api-key <key>" >&2
                     exit 1
                 fi
 
@@ -713,6 +722,26 @@ case "$TOP" in
                     _require_value "-k/--llm-api-key"
                     export TEST_LLM_API_KEY="${_args[1]}"
                     _args=("${_args[@]:2}") ;;
+                -P|--web-search-project)
+                    _require_value "-P/--web-search-project"
+                    export TEST_WEB_SEARCH_PROJECT_ID="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -E|--web-search-engine)
+                    _require_value "-E/--web-search-engine"
+                    export TEST_WEB_SEARCH_ENGINE_ID="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -K|--web-search-api-key)
+                    _require_value "-K/--web-search-api-key"
+                    export TEST_WEB_SEARCH_API_KEY="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -L|--web-search-location)
+                    _require_value "-L/--web-search-location"
+                    export TEST_WEB_SEARCH_LOCATION="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
+                -d|--device-token)
+                    _require_value "-d/--device-token"
+                    export DEVICE_TOKEN="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
                 -j|--parallel)
                     # Optional value: accept "auto" or a positive integer; otherwise default to "auto".
                     if [[ ${#_args[@]} -ge 2 && ( "${_args[1]}" == "auto" || "${_args[1]}" =~ ^[0-9]+$ ) ]]; then
@@ -744,6 +773,7 @@ case "$TOP" in
         [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]]       && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
         [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]         && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
         [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
+        [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
 
         _ensure_container "$_TEST_RUNNER" "test $_TEST_COMPONENT"
         if [ -t 0 ] && [ -t 1 ]; then
@@ -846,6 +876,28 @@ case "$TOP" in
             echo "[g8e] demo directory not found: $DEMO_DIR" >&2
             exit 1
         fi
+        # Parse -d flag for device token shorthand
+        demo_args=("${@:3}")
+        device_token=""
+        i=0
+        while [[ $i -lt ${#demo_args[@]} ]]; do
+            arg="${demo_args[$i]}"
+            if [[ "$arg" == "-d" ]]; then
+                if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
+                    device_token="${demo_args[$((i + 1))]}"
+                    unset demo_args[$i] demo_args[$((i + 1))]
+                    break
+                else
+                    echo "[g8e] -d flag requires a token value" >&2
+                    exit 1
+                fi
+            fi
+            ((i++))
+        done
+        # Convert -d to DEVICE_TOKEN for make
+        if [[ -n "$device_token" ]]; then
+            demo_args=("DEVICE_TOKEN=$device_token" "${demo_args[@]}")
+        fi
         case "$SUB" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
@@ -859,10 +911,10 @@ case "$TOP" in
                 ;;
             up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard)
                 _banner "demo $SUB"
-                exec make -C "$DEMO_DIR" "$SUB" "${@:3}" ;;
+                exec make -C "$DEMO_DIR" "$SUB" "${demo_args[@]}" ;;
             shell)
                 _banner "demo shell"
-                exec make -C "$DEMO_DIR" shell "${@:3}" ;;
+                exec make -C "$DEMO_DIR" shell "${demo_args[@]}" ;;
             *)
                 echo "[g8e] unknown demo subcommand: '$SUB'" >&2
                 echo "  Valid: up, down, status, clean, health, nginx-check, operators, logs, shell, deploy, discover-hosts, stream, vanish, dashboard" >&2
@@ -989,6 +1041,85 @@ case "$TOP" in
             *)
                 echo "[g8e] unknown llm subcommand: '$SUB'" >&2
                 echo "  Valid: setup, show, get, set, restart" >&2
+                exit 1 ;;
+        esac ;;
+
+    # ------------------------------------------------------------------
+    # evals — manages eval fleet for real-operator evaluation scenarios
+    # ------------------------------------------------------------------
+    evals)
+        EVALS_DIR="$SCRIPT_DIR/components/g8ee/evals"
+        EVALS_COMPOSE="$EVALS_DIR/docker-compose.evals.yml"
+        if [[ ! -f "$EVALS_COMPOSE" ]]; then
+            echo "[g8e] evals compose file not found: $EVALS_COMPOSE" >&2
+            exit 1
+        fi
+        case "$SUB" in
+            -h|--help|"")
+                echo "g8e evals - Real-operator evaluation fleet"
+                echo ""
+                echo "Usage:"
+                echo "  ./g8e evals up --device-token <token> [--nodes N]"
+                echo "  ./g8e evals down"
+                echo "  ./g8e evals status"
+                echo "  ./g8e evals logs <node-name>"
+                echo ""
+                echo "Commands:"
+                echo "  up     - Bring up the eval fleet with N nodes (default: 3)"
+                echo "  down   - Tear down the eval fleet"
+                echo "  status - Show status of eval nodes"
+                echo "  logs   - Show logs for a specific node"
+                echo ""
+                echo "Prerequisites:"
+                echo "  - Platform must be running: ./g8e platform start"
+                echo "  - Device link token from dashboard: ./g8e login --device-token <token>"
+                echo ""
+                [[ -z "$SUB" ]] && exit 1 || exit 0
+                ;;
+            up)
+                _banner "evals up"
+                _nodes=3
+                _device_token=""
+                _args=("${@:3}")
+                while [[ $# -gt 2 ]]; do
+                    case "${3:-}" in
+                        --nodes) _nodes="${4:-3}"; shift 2 ;;
+                        --device-token) _device_token="${4:-}"; shift 2 ;;
+                        *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
+                    esac
+                done
+                if [[ -z "$_device_token" ]]; then
+                    echo "[g8e] evals up requires --device-token" >&2
+                    echo "  Generate a device link token from the dashboard" >&2
+                    exit 1
+                fi
+                echo "  Bringing up $_nodes eval nodes..."
+                DEVICE_TOKEN="$_device_token" docker compose -f "$EVALS_COMPOSE" up -d --scale eval-node-01=1 --scale eval-node-02=1 --scale eval-node-03=1
+                echo ""
+                echo "  Eval fleet is up. Check status with: ./g8e evals status"
+                exit 0 ;;
+            down)
+                _banner "evals down"
+                docker compose -f "$EVALS_COMPOSE" down
+                echo ""
+                echo "  Eval fleet is down."
+                exit 0 ;;
+            status)
+                _banner "evals status"
+                docker compose -f "$EVALS_COMPOSE" ps
+                exit 0 ;;
+            logs)
+                _banner "evals logs ${3:-}"
+                if [[ -z "${3:-}" ]]; then
+                    echo "[g8e] evals logs requires a node name" >&2
+                    echo "  Usage: ./g8e evals logs <node-name>" >&2
+                    exit 1
+                fi
+                docker logs -f "${3}"
+                exit 0 ;;
+            *)
+                echo "[g8e] unknown evals subcommand: '$SUB'" >&2
+                echo "  Valid: up, down, status, logs" >&2
                 exit 1 ;;
         esac ;;
 

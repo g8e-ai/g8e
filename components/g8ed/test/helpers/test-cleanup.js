@@ -21,6 +21,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Collections } from '../../constants/collections.js';
 import { KVKey } from '../../constants/kv_keys.js';
+import { SessionType } from '../../constants/session.js';
+import { generateSessionId } from '../../services/auth/base_session_service.js';
 
 export class TestCleanupHelper {
     constructor(cacheAsideOrKvClient, maybeCacheAside, options = {}) {
@@ -58,9 +60,10 @@ export class TestCleanupHelper {
      */
     generateOperatorId(userId) {
         const opId = uuidv4();
-        // Generate session IDs with proper prefix format matching production
-        const operatorSessionId = `operator_session_${Date.now()}_${uuidv4()}`;
-        const webSessionId = `web_session_${Date.now() + 1}_${uuidv4()}`;
+        // Reuse the production session-id generator so the test fixtures can
+        // never drift from the real wire format.
+        const operatorSessionId = generateSessionId(SessionType.OPERATOR);
+        const webSessionId = generateSessionId(SessionType.WEB);
         
         // Track Operator document and its API key (by operator_id, not doc ID)
         this.trackDBDoc(this.operatorsCollection, opId);

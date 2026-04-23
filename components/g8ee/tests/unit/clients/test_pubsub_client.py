@@ -94,8 +94,9 @@ class TestPubSubClientSubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if channel in connected_client._ack_events:
-                connected_client._ack_events[channel].set()
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.subscribe(channel)
@@ -114,8 +115,9 @@ class TestPubSubClientSubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if channel in connected_client._ack_events:
-                connected_client._ack_events[channel].set()
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.subscribe(channel)
@@ -127,13 +129,14 @@ class TestPubSubClientSubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if channel in connected_client._ack_events:
-                connected_client._ack_events[channel].set()
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.subscribe(channel)
         await task
-        assert channel not in connected_client._ack_events
+        assert channel not in connected_client._pending_acks
 
 
 @pytest.mark.asyncio
@@ -143,8 +146,9 @@ class TestPubSubClientPsubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if pattern in connected_client._ack_events:
-                connected_client._ack_events[pattern].set()
+            if pattern in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[pattern]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.psubscribe(pattern)
@@ -162,8 +166,9 @@ class TestPubSubClientPsubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if pattern in connected_client._ack_events:
-                connected_client._ack_events[pattern].set()
+            if pattern in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[pattern]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.psubscribe(pattern)
@@ -175,13 +180,14 @@ class TestPubSubClientPsubscribe:
 
         async def mock_ack():
             await asyncio.sleep(0.01)
-            if pattern in connected_client._ack_events:
-                connected_client._ack_events[pattern].set()
+            if pattern in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[pattern]:
+                    ack.set()
 
         task = task_tracker.track(asyncio.create_task(mock_ack()))
         await connected_client.psubscribe(pattern)
         await task
-        assert pattern not in connected_client._ack_events
+        assert pattern not in connected_client._pending_acks
 
     async def test_psubscribe_waits_for_ack(self, connected_client):
         """psubscribe should timeout if no ACK arrives within 5 seconds."""
@@ -249,9 +255,10 @@ class TestWsReaderReconnection:
         with patch("app.clients.pubsub_client.logger") as mock_logger:
             connected_client._pubsub_task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
             await connected_client._pubsub_task
-            mock_logger.warning.assert_any_call(
-                "[PUBSUB-CLIENT] Disconnect handler failed: %s",
+            mock_logger.error.assert_any_call(
+                "[PUBSUB-CLIENT] Handler failed: %s",
                 ANY,
+                exc_info=True,
             )
 
 

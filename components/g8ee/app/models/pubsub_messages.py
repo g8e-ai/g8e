@@ -33,18 +33,18 @@ from .mcp import JSONRPCRequest
 from app.utils.timestamp import now, parse_iso
 
 # Import outbound payload types
-from app.models.command_payloads import (
-    CommandPayload,
-    CommandCancelPayload,
-    FileEditPayload,
-    FsListPayload,
-    FsReadPayload,
-    FetchLogsPayload,
-    FetchHistoryPayload,
-    FetchFileHistoryPayload,
-    FetchFileDiffPayload,
-    RestoreFilePayload,
-    DirectCommandAuditPayload,
+from app.models.command_request_payloads import (
+    CommandRequestPayload,
+    CommandCancelRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    FetchLogsRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    RestoreFileRequestPayload,
+    DirectCommandAuditRequestPayload,
 )
 
 
@@ -169,27 +169,18 @@ class FsReadResultPayload(G8eBaseModel):
 
 
 class FetchLogsResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed.
-
-    ``execution_id`` is optional because failed fetches that originate from a
-    malformed request (missing/empty ``execution_id`` in the inbound payload)
-    may surface errors without an execution_id to echo back. Success paths
-    always populate it. This mirrors the other LFAA error payloads
-    (``FetchHistoryResultPayload``, ``RestoreFileResultPayload``,
-    ``FetchFileHistoryResultPayload``) which carry ``success``/``error`` and
-    no required execution_id field.
-    """
-    execution_id: str | None = Field(default=None, description="Execution identifier whose logs were fetched")
-    command: str = Field(default="", description="Original command string")
-    exit_code: int | None = Field(None)
+    """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed."""
+    execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
+    command: str | None = Field(default=None, description="Original command string")
+    exit_code: int | None = Field(default=None)
     duration_ms: int | None = Field(default=None, description="Original execution duration in milliseconds")
-    stdout: str = Field(default="", description="Stored stdout content")
-    stderr: str = Field(default="", description="Stored stderr content")
-    stdout_size: int = Field(0)
-    stderr_size: int = Field(0)
+    stdout: str | None = Field(default=None, description="Stored stdout content")
+    stderr: str | None = Field(default=None, description="Stored stderr content")
+    stdout_size: int = Field(default=0)
+    stderr_size: int = Field(default=0)
     timestamp: UTCDatetime | None = Field(default=None, description="When the original command was executed (UTC)")
-    sentinel_mode: str | None = Field(None)
-    error: str | None = Field(None)
+    sentinel_mode: str | None = Field(default=None)
+    error: str | None = Field(default=None, description="Error description if fetch failed")
 
     @field_validator("timestamp", mode="before")
     @classmethod
@@ -203,52 +194,72 @@ class FetchLogsResultPayload(G8eBaseModel):
         raise ValueError(f"timestamp must be a datetime or ISO string, got {type(v).__name__}")
 
 
-class FetchHistoryResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.history.completed / operator.fetch.history.failed."""
-    success: bool = Field(..., description="Whether the fetch succeeded")
-    operator_session_id: str | None = Field(default=None, description="Operator session ID that was queried")
-    session: AuditSessionMetadata | None = Field(default=None, description="Session metadata")
+class FetchHistorySuccessPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.history.completed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    operator_session_id: str = Field(..., description="Operator session ID that was queried")
+    session: AuditSessionMetadata = Field(..., description="Session metadata")
     events: list[AuditEvent] = Field(default_factory=list, description="Audit events for the session")
     total: int = Field(0)
     limit: int = Field(50)
     offset: int = Field(0)
-    error: str | None = Field(None)
-
-    @field_validator("events", mode="before")
-    @classmethod
-    def _coerce_none_events(cls, v: object) -> list[object]:
-        return v if isinstance(v, list) else []
 
 
-class FetchFileHistoryResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.file.history.completed / operator.fetch.file.history.failed."""
-    success: bool = Field(..., description="Whether the fetch succeeded")
-    file_path: str | None = Field(default=None, description="Absolute path of the file queried")
+class FetchHistoryErrorPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.history.failed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    error: str = Field(..., description="Error description")
+
+
+class FetchFileHistorySuccessPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.file.history.completed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    file_path: str = Field(..., description="Absolute path of the file queried")
     history: list[FileHistoryEntry] = Field(default_factory=list, description="Commit history entries")
-    error: str | None = Field(None)
 
 
-class RestoreFileResultPayload(G8eBaseModel):
-    """Typed payload for operator.restore.file.completed / operator.restore.file.failed."""
-    success: bool = Field(..., description="Whether the restore succeeded")
-    file_path: str | None = Field(default=None, description="Absolute path of the restored file")
-    commit_hash: str | None = Field(default=None, description="Git commit hash the file was restored to")
-    error: str | None = Field(None)
+class FetchFileHistoryErrorPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.file.history.failed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    error: str = Field(..., description="Error description")
 
 
-class FetchFileDiffResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.file.diff.completed / operator.fetch.file.diff.failed."""
-    success: bool = Field(..., description="Whether the fetch succeeded")
-    diff: FileDiffEntry | None = Field(default=None, description="Single file diff entry")
+class RestoreFileSuccessPayload(G8eBaseModel):
+    """Typed payload for operator.restore.file.completed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    file_path: str = Field(..., description="Absolute path of the restored file")
+    commit_hash: str = Field(..., description="Git commit hash the file was restored to")
+
+
+class RestoreFileErrorPayload(G8eBaseModel):
+    """Typed payload for operator.restore.file.failed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    error: str = Field(..., description="Error description")
+
+
+class FetchFileDiffByIdSuccessPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.file.diff.completed when fetching by diff_id."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    diff: FileDiffEntry = Field(..., description="Single file diff entry")
+
+
+class FetchFileDiffBySessionSuccessPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.file.diff.completed when fetching by operator_session_id."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     diffs: list[FileDiffEntry] = Field(default_factory=list, description="Multiple file diff entries")
     total: int = Field(0)
-    operator_session_id: str | None = Field(None)
-    error: str | None = Field(None)
+    operator_session_id: str = Field(..., description="Operator session ID")
+
+
+class FetchFileDiffErrorPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.file.diff.failed."""
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    error: str = Field(..., description="Error description")
 
 
 class PortCheckResultPayload(G8eBaseModel):
     """Typed payload for operator.port.check.completed / operator.port.check.failed."""
-    execution_id: str | None = Field(default=None, description="Unique execution identifier")
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     host: str | None = Field(default=None, description="Target host")
     port: int | None = Field(default=None, description="Target port")
     protocol: str | None = Field(default=None, description="Protocol checked")
@@ -423,10 +434,15 @@ G8eoResultPayload = Union[
     FsListResultPayload,
     FsReadResultPayload,
     FetchLogsResultPayload,
-    FetchHistoryResultPayload,
-    FetchFileHistoryResultPayload,
-    RestoreFileResultPayload,
-    FetchFileDiffResultPayload,
+    FetchHistorySuccessPayload,
+    FetchHistoryErrorPayload,
+    FetchFileHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    RestoreFileSuccessPayload,
+    RestoreFileErrorPayload,
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffBySessionSuccessPayload,
+    FetchFileDiffErrorPayload,
     PortCheckResultPayload,
     ShutdownAckPayload,
 ]
@@ -435,17 +451,17 @@ G8eoResultPayload = Union[
 # Union type for all outbound payloads from g8ee to g8eo
 # Uses discriminator field 'payload_type' for type-safe parsing
 G8eOutboundPayload = Union[
-    CommandPayload,
-    CommandCancelPayload,
-    FileEditPayload,
-    FsListPayload,
-    FsReadPayload,
-    FetchLogsPayload,
-    FetchHistoryPayload,
-    FetchFileHistoryPayload,
-    FetchFileDiffPayload,
-    RestoreFilePayload,
-    DirectCommandAuditPayload,
+    CommandRequestPayload,
+    CommandCancelRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    FetchLogsRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    RestoreFileRequestPayload,
+    DirectCommandAuditRequestPayload,
     JSONRPCRequest,
 ]
 

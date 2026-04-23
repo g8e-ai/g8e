@@ -165,7 +165,7 @@ class CommandGenerationOutcome(str, Enum):
     Only successful outcomes are enumerated. Sage never proposes a command,
     so there is no `fallback` outcome — when the Tribunal cannot produce
     a command it raises a typed TribunalError (disabled / provider_unavailable /
-    generation_failed / system_error / verifier_failed / model_not_configured)
+    generation_failed / system_error / auditor_failed / model_not_configured)
     and the tool call fails.
 
     These values are emitted in Tribunal SSE payloads and must match
@@ -175,6 +175,7 @@ class CommandGenerationOutcome(str, Enum):
     CONSENSUS           = _AGENTS["tribunal.outcome"]["consensus"]
     VERIFIED            = _AGENTS["tribunal.outcome"]["verified"]
     VERIFICATION_FAILED = _AGENTS["tribunal.outcome"]["verification_failed"]
+    CONSENSUS_FAILED    = _AGENTS["tribunal.outcome"]["consensus_failed"]
 
 
 class ToolDisplayCategory(str, Enum):
@@ -321,7 +322,7 @@ OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 
 # Provider default models
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4
-OLLAMA_DEFAULT_MODEL            = OLLAMA_QWEN3_5_122B
+OLLAMA_DEFAULT_MODEL            = OLLAMA_GEMMA4_E4B
 ANTHROPIC_DEFAULT_MODEL        = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL            = GEMINI_3_FLASH
 

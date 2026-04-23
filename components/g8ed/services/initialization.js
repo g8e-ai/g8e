@@ -59,6 +59,7 @@ import { SettingsService } from './platform/settings_service.js';
 import { G8ENodeOperatorService } from './platform/g8ep_operator_service.js';
 import { BindOperatorsService } from './operator/operator_bind_service.js';
 import { OperatorAuthService } from './operator/operator_auth_service.js';
+import { HeartbeatMonitorService } from './operator/heartbeat_monitor_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
 import { PostLoginService } from './auth/post_login_service.js';
 import { SetupService } from './platform/setup_service.js';
@@ -97,6 +98,7 @@ let auditService = null;
 let internalHttpClientInstance = null;
 let bindOperatorsServiceInstance = null;
 let operatorAuthService = null;
+let heartbeatMonitorService = null;
 let apiKeyDataService = null;
 let operatorDataService = null;
 let investigationService = null;
@@ -270,8 +272,14 @@ async function _doInitialize() {
         await sseService.waitForReady();
         if (_sigTermHandler) process.removeListener('SIGTERM', _sigTermHandler);
         if (_sigIntHandler) process.removeListener('SIGINT', _sigIntHandler);
-        _sigTermHandler = async () => { if (sseService) await sseService.close(); };
-        _sigIntHandler  = async () => { if (sseService) await sseService.close(); };
+        _sigTermHandler = async () => {
+            if (heartbeatMonitorService) heartbeatMonitorService.stop();
+            if (sseService) await sseService.close();
+        };
+        _sigIntHandler  = async () => {
+            if (heartbeatMonitorService) heartbeatMonitorService.stop();
+            if (sseService) await sseService.close();
+        };
         process.once('SIGTERM', _sigTermHandler);
         process.once('SIGINT',  _sigIntHandler);
 
@@ -386,6 +394,12 @@ async function _doInitialize() {
             bindingService: getBindingService(),
             webSessionService: getWebSessionService(),
         });
+
+        heartbeatMonitorService = new HeartbeatMonitorService({
+            operatorDataService: getOperatorDataService(),
+            sseService: getSSEService(),
+        });
+        heartbeatMonitorService.start();
         logger.info('[G8ED-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
 
         // --- Phase 6: Configuration ---
@@ -589,6 +603,11 @@ export function getHealthCheckService() {
     return healthCheckService;
 }
 
+export function getHeartbeatMonitorService() {
+    if (!heartbeatMonitorService) throw new Error('HeartbeatMonitorService not initialized. Call initializeServices() first.');
+    return heartbeatMonitorService;
+}
+
 
 // --- Test utilities ---
 // These exports exist solely for test isolation. Do not call in production code.
@@ -626,6 +645,8 @@ export function resetInitialization() {
     internalHttpClientInstance = null;
     bindOperatorsServiceInstance = null;
     operatorAuthService = null;
+    if (heartbeatMonitorService) heartbeatMonitorService.stop();
+    heartbeatMonitorService = null;
     apiKeyDataService = null;
     operatorDataService = null;
     blobStorage = null;

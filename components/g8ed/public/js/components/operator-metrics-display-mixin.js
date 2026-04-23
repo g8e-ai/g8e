@@ -189,16 +189,36 @@ export const OperatorMetricsDisplayMixin = {
 
     updatePanelStatusFromOperatorCounts() {
         const currentWebSessionId = webSessionService.getWebSessionId();
-        const boundOperator = this.operators.find(op => op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId);
-        const hasBoundOperator = !!boundOperator;
-
-        if (hasBoundOperator && this.isConnected) {
-            const status = boundOperator.status || OperatorStatus.BOUND;
-            this.updateStatus(status);
+        const primaryOperatorId = this.webSessionModel?.operator_id;
+        
+        // 1. Try to find an operator bound to this web session
+        const boundOperator = this.operators.find(op => 
+            op.status === OperatorStatus.BOUND && 
+            op.bound_web_session_id === currentWebSessionId
+        );
+        
+        if (boundOperator) {
+            this.updateStatus(boundOperator.status || OperatorStatus.BOUND);
             return;
         }
 
-        if (!hasBoundOperator && this.isConnected) {
+        // 2. Fall back to the user's primary operator status if it's active
+        if (primaryOperatorId) {
+            const primaryOperator = this.operators.find(op => op.operator_id === primaryOperatorId);
+            if (primaryOperator && _ACTIVE_STATUSES.has(primaryOperator.status)) {
+                this.updateStatus(primaryOperator.status);
+                return;
+            }
+        }
+
+        // 3. Fall back to overall active count if any operator is active (for general health)
+        if (this.activeOperatorCount > 0) {
+            this.updateStatus(OperatorStatus.ACTIVE);
+            return;
+        }
+
+        // 4. Default to offline if no active operators and not bound
+        if (this.isConnected) {
             this.clearPanelMetrics();
             this.isConnected = false;
             this.lastHeartbeat = null;

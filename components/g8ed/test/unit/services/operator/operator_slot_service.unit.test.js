@@ -86,7 +86,7 @@ describe('OperatorSlotService', () => {
             const userId = 'u-123';
             const organizationId = 'org-123';
             const existingOp = {
-                operator_id: 'existing-op-1',
+                id: 'existing-op-1',
                 user_id: userId,
                 status: OperatorStatus.AVAILABLE,
                 api_key: 'key-existing'
@@ -107,7 +107,7 @@ describe('OperatorSlotService', () => {
             const userId = 'u-123';
             const organizationId = 'org-123';
             const existingOp = {
-                operator_id: 'existing-op-1',
+                id: 'existing-op-1',
                 user_id: userId,
                 status: OperatorStatus.AVAILABLE,
                 api_key: 'key-existing'
@@ -130,11 +130,11 @@ describe('OperatorSlotService', () => {
             const userId = 'u-123';
             const organizationId = 'org-123';
             const liveOps = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
-                operator_id: `op-${i}`,
+                id: `op-${i}`,
                 status: OperatorStatus.AVAILABLE
             }));
             const terminatedOp = {
-                operator_id: 'op-terminated',
+                id: 'op-terminated',
                 status: OperatorStatus.TERMINATED
             };
 
@@ -148,7 +148,7 @@ describe('OperatorSlotService', () => {
 
         it('should not create slots if already at or above default count', async () => {
             const existing = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
-                operator_id: `op-${i}`,
+                id: `op-${i}`,
                 status: OperatorStatus.AVAILABLE
             }));
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce(existing);
@@ -177,7 +177,7 @@ describe('OperatorSlotService', () => {
 
         it('should not assign G8E_POD if an existing live operator already has is_g8ep', async () => {
             const existingG8eNode = {
-                operator_id: 'op-drop',
+                id: 'op-drop',
                 status: OperatorStatus.AVAILABLE,
                 is_g8ep: true,
             };
@@ -217,7 +217,7 @@ describe('OperatorSlotService', () => {
             const operatorId = 'op-old';
             const userId = 'u-123';
             const oldOperator = new OperatorDocument({
-                operator_id: operatorId,
+                id: operatorId,
                 user_id: userId,
                 organization_id: 'org-123',
                 slot_number: 1,
@@ -257,7 +257,7 @@ describe('OperatorSlotService', () => {
         });
 
         it('should fail if unauthorized', async () => {
-            mocks.operatorDataService.getOperator.mockResolvedValue(new OperatorDocument({ user_id: 'u-other', operator_id: 'op-1' }));
+            mocks.operatorDataService.getOperator.mockResolvedValue(new OperatorDocument({ user_id: 'u-other', id: 'op-1' }));
             const result = await service.refreshOperatorApiKey('op-1', 'u-me', vi.fn());
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(false);
@@ -300,9 +300,9 @@ describe('OperatorSlotService', () => {
 
     describe('generateOperatorApiKey', () => {
         it('should generate key with correct prefix and suffix', () => {
-            const operatorId = 'user_operator_1_12345_abcde';
+            const operatorId = '550e8400-e29b-41d4-a716-446655440000';
             const key = service.generateOperatorApiKey(operatorId);
-            
+
             expect(key).toMatch(/^g8e_[a-z0-9]{5,}_[a-f0-9]{64}$/);
         });
     });

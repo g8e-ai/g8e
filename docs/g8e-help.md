@@ -81,8 +81,26 @@ operator - Build and deploy
 
 test - Run component tests
   g8ee, g8ed, g8eo
-  Options: -j [N|auto]
-  LLM flags: -p, -m, -a, -e, -k
+  Options: --coverage, --pyright, --ruff, --e2e, -j [N|auto]
+
+  LLM configuration (g8ee only):
+    -p, --llm-provider <provider>      LLM provider (anthropic, openai, gemini, etc.)
+    -m, --primary-model <model>        Primary model for grading
+    -a, --assistant-model <model>     Assistant model to evaluate
+    -e, --llm-endpoint-url <url>      Custom LLM endpoint URL
+    -k, --llm-api-key <key>           LLM API key
+
+  Web Search configuration (g8ee only):
+    Set via environment variables: TEST_WEB_SEARCH_PROJECT_ID, TEST_WEB_SEARCH_ENGINE_ID, TEST_WEB_SEARCH_API_KEY
+
+  Examples:
+    ./g8e test g8ee tests/unit
+    ./g8e test g8ee --coverage
+    ./g8e test g8ee --pyright --ruff
+    ./g8e test g8ee --e2e
+    ./g8e test g8ee -j auto
+    ./g8e test g8ee -p anthropic -m claude-3-5-sonnet -k <key> tests/unit
+    ./g8e test g8ee -p openai -m gpt-4 -a gpt-3.5-turbo -k <key> --coverage
 
 security - Security tools (g8ep)
   validate, mtls-test
@@ -116,11 +134,35 @@ aws - AWS credentials (host)
   setup
 
 demo - Fleet demo (host)
-  up, down, status, clean
-  health, nginx-check, operators
-  logs, shell N=<nn>
-  deploy, stream
-  discover-hosts, vanish, dashboard
+  Fleet lifecycle:
+    up              Build and start all 10 demo nodes + dashboard
+    down            Stop all demo nodes
+    status          Show container status for all demo nodes
+    clean           Remove all demo containers and networks
+  Operator deployment:
+    deploy [-d <token>]  Deploy operators via API download (requires device token)
+    stream [-d <token>]  Deploy operators via SSH streaming (requires device token)
+    discover-hosts  List discovered demo fleet hosts
+    operators       Show operator status across the fleet
+    vanish          Remove all operators (zero trace cleanup)
+  Inspection:
+    health          Check Flask backend health on all nodes
+    nginx-check     Check nginx status and HTTP response codes
+    logs            Follow all container logs
+    shell N=<nn>    Shell into a specific node (e.g., shell N=01)
+    dashboard       Print fleet dashboard URL (http://localhost:3000)
+
+  Examples:
+    ./g8e platform setup                              # Start the platform
+    ./g8e demo up                                     # Start the fleet
+    ./g8e demo stream -d dlk_xxx                      # Deploy operators with device token (shorthand)
+    ./g8e demo deploy -d dlk_xxx                      # Deploy operators via API download (shorthand)
+    ./g8e demo stream DEVICE_TOKEN=dlk_xxx            # Deploy operators with device token (full syntax)
+    ./g8e demo deploy DEVICE_TOKEN=dlk_xxx            # Deploy operators via API download (full syntax)
+    ./g8e demo operators                              # Check operator status
+    ./g8e demo shell N=06                             # Debug broken node
+    ./g8e demo vanish                                 # Clean up operators
+    ./g8e demo clean                                  # Remove everything
 
 DETAILED HELP
   ./g8e operator --help

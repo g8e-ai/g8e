@@ -60,7 +60,12 @@ export const OperatorListMixin = {
         });
 
         devLogger.log(`[OPERATOR] Current web session ID: ${currentWebSessionId}`);
-        devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`);
+        const statusCounts = operators.reduce((acc, op) => {
+            const status = op.status || 'unknown';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {});
+        devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`, statusCounts);
 
         const statusPriority = (op) => {
             if (op.is_g8ep) return 0;
@@ -95,9 +100,10 @@ export const OperatorListMixin = {
             item.setAttribute('data-operator-id', operator.operator_id);
 
             const latestSnapshot = operator.latest_heartbeat_snapshot || {};
-            const systemInfo = operator.system_info || {};
+            const identity = latestSnapshot.system_identity || {};
+            const network = latestSnapshot.network || {};
             const operatorName = operator.name || 'Unknown';
-            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (systemInfo.hostname || ' - ');
+            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (identity.hostname || ' - ');
 
             const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
@@ -109,10 +115,6 @@ export const OperatorListMixin = {
                 }
             } else if (isBoundElsewhere) {
                 item.classList.add('bound-elsewhere');
-            }
-
-            if (operator.is_g8ep) {
-                item.classList.add('is-g8ep');
             }
 
             const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
@@ -157,28 +159,25 @@ export const OperatorListMixin = {
                 return ' - ';
             };
 
-            // latest_heartbeat_snapshot is the serialized g8ee OperatorHeartbeat
-            // (nested: performance.*, uptime.uptime_display, etc). The SSE
-            // heartbeat envelope (HeartbeatSnapshot) is flat, so fall back to
-            // flat keys for operators whose snapshot was last updated via SSE.
-            const perf = latestSnapshot.performance || latestSnapshot;
-            const uptimeInfo = latestSnapshot.uptime && typeof latestSnapshot.uptime === 'object'
-                ? latestSnapshot.uptime
-                : latestSnapshot;
+            // latest_heartbeat_snapshot is the canonical OperatorHeartbeat shape
+            // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
+            // whether read from the persisted operator document or the SSE envelope.
+            const perf = latestSnapshot.performance || {};
+            const uptimeInfo = latestSnapshot.uptime || {};
             const cpuPercent = formatPercent(perf.cpu_percent);
             const memoryPercent = formatPercent(perf.memory_percent);
             const diskPercent = formatPercent(perf.disk_percent);
             const networkLatency = formatLatency(perf.network_latency);
-            const uptime = formatUptime(uptimeInfo.uptime_display || uptimeInfo.uptime || uptimeInfo.uptime_seconds);
+            const uptime = formatUptime(uptimeInfo.uptime_display ?? uptimeInfo.uptime_seconds);
 
-            const systemOs = systemInfo.os || ' - ';
-            const architecture = systemInfo.architecture || ' - ';
-            const cpuCount = systemInfo.cpu_count !== null && systemInfo.cpu_count !== undefined ? systemInfo.cpu_count : ' - ';
-            const memoryMb = systemInfo.memory_mb !== null && systemInfo.memory_mb !== undefined ? systemInfo.memory_mb : ' - ';
-            const currentUser = systemInfo.current_user || ' - ';
-            const actualPublicIp = systemInfo.public_ip || ' - ';
+            const systemOs = identity.os || ' - ';
+            const architecture = identity.architecture || ' - ';
+            const cpuCount = identity.cpu_count !== null && identity.cpu_count !== undefined ? identity.cpu_count : ' - ';
+            const memoryMb = identity.memory_mb !== null && identity.memory_mb !== undefined ? identity.memory_mb : ' - ';
+            const currentUser = identity.current_user || ' - ';
+            const actualPublicIp = network.public_ip || ' - ';
             const publicIp = this._obfuscateIp(actualPublicIp);
-            const internalIp = systemInfo.internal_ip || ' - ';
+            const internalIp = network.internal_ip || ' - ';
 
             item.classList.add(statusClass);
 
@@ -207,14 +206,14 @@ export const OperatorListMixin = {
 
             const actionsHtml = `
                 <div class="operator-actions-inline">
-                    <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">dns</span>
-                    </button>
                     ${operator.is_g8ep ? `
                     <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">restart_alt</span>
                     </button>
                     ` : ''}
+                    <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
+                        <span class="material-symbols-outlined">dns</span>
+                    </button>
                     <button class="operator-action-btn api-key-btn" title="Copy API Key" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">vpn_key</span>
                     </button>
@@ -270,6 +269,13 @@ export const OperatorListMixin = {
             if (toggleBtn) {
                 toggleBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    item.classList.toggle('expanded');
+                });
+            }
+
+            const header = item.querySelector('.operator-item-header');
+            if (header) {
+                header.addEventListener('click', (e) => {
                     item.classList.toggle('expanded');
                 });
             }
@@ -352,10 +358,6 @@ export const OperatorListMixin = {
                 });
             }
 
-            item.addEventListener('click', () => {
-                this._selectMetricsOperator(operator.operator_id);
-            });
-
             fragment.appendChild(item);
         });
 
@@ -368,7 +370,8 @@ export const OperatorListMixin = {
             }
         });
 
-        this._applyDefaultMetricsSelection(sortedOperators, previousSelection);
+        // Operator selection disabled - UX needs improvement for explicit selection
+        // this._applyDefaultMetricsSelection(sortedOperators, previousSelection);
 
         const startSlot = paginatedOperators.length > 0 ? startIndex + 1 : 0;
         const endSlot = startIndex + paginatedOperators.length;
@@ -703,7 +706,7 @@ export const OperatorListMixin = {
         try {
             const operator = this.operators.find(op => op.operator_id === operatorId);
             const operatorName = operator?.name || 'Unknown';
-            const hostname = operator?.system_info?.hostname || 'unknown host';
+            const hostname = operator?.latest_heartbeat_snapshot?.system_identity?.hostname || 'unknown host';
 
             const confirmed = await showConfirmationModal({
                 title: 'Stop Operator',

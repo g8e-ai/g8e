@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { randomUUID } from 'crypto';
 import { addSeconds, secondsBetween, now } from '../../models/base.js';
 import { logger } from '../../utils/logger.js';
 import { SessionType, SESSION_TTL_SECONDS, ABSOLUTE_SESSION_TIMEOUT_SECONDS, SessionEndReason, SessionEventType } from '../../constants/session.js';
 import { AuthProvider } from '../../constants/auth.js';
-import { BaseSessionService } from './base_session_service.js';
+import { BaseSessionService, generateSessionId } from './base_session_service.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { CliSessionDocument } from '../../models/auth_models.js';
 import { Collections } from '../../constants/collections.js';
 
@@ -41,7 +41,7 @@ export class CliSessionService extends BaseSessionService {
     }
 
     _generateSessionId() {
-        return `cli_session_${Date.now()}_${randomUUID()}`;
+        return generateSessionId(SessionType.CLI);
     }
 
     _decryptSessionFields(session) {
@@ -123,7 +123,7 @@ export class CliSessionService extends BaseSessionService {
         }
 
         logger.info('[CLI-SESSION-SERVICE] CLI session created', {
-            sessionId: sessionId.substring(0, 12) + '...',
+            sessionId_tag: sessionIdTag(sessionId),
             ttl,
             userId: sessionData.user_id,
         });
@@ -155,7 +155,7 @@ export class CliSessionService extends BaseSessionService {
 
         if (!data || data.session_type !== SessionType.CLI) {
             logger.info('[CLI-SESSION-SERVICE] CLI session not found or wrong type', {
-                cliSessionId: cliSessionId.substring(0, 12) + '...'
+                cliSessionId_tag: sessionIdTag(cliSessionId)
             });
             return null;
         }
@@ -165,7 +165,7 @@ export class CliSessionService extends BaseSessionService {
         const integrityCheck = this._validateSessionIntegrity(session, cliSessionId);
         if (!integrityCheck.valid) {
             logger.error('[CLI-SESSION-SERVICE] CLI session integrity check failed', {
-                cliSessionId: cliSessionId.substring(0, 12) + '...',
+                cliSessionId_tag: sessionIdTag(cliSessionId),
                 reason: integrityCheck.reason
             });
             await this.endSession(cliSessionId, SessionEndReason.INTEGRITY_FAILURE);
@@ -176,7 +176,7 @@ export class CliSessionService extends BaseSessionService {
         const expiryCheck = this._checkSessionExpiry(session, checkTime);
         if (!expiryCheck.valid) {
             logger.info('[CLI-SESSION-SERVICE] CLI session expired', {
-                cliSessionId: cliSessionId.substring(0, 12) + '...',
+                cliSessionId_tag: sessionIdTag(cliSessionId),
                 reason: expiryCheck.reason
             });
             await this.endSession(cliSessionId, SessionEndReason.SESSION_REGENERATION);
@@ -236,7 +236,7 @@ export class CliSessionService extends BaseSessionService {
             );
         } catch (err) {
             logger.warn('[CLI-SESSION-SERVICE] Failed to update last activity', {
-                sessionId: sessionId.substring(0, 12) + '...',
+                sessionId_tag: sessionIdTag(sessionId),
                 error: err.message
             });
         }
@@ -267,7 +267,7 @@ export class CliSessionService extends BaseSessionService {
             );
 
             logger.info('[CLI-SESSION-SERVICE] CLI session ended', {
-                sessionId: sessionId.substring(0, 12) + '...',
+                sessionId_tag: sessionIdTag(sessionId),
                 reason,
                 success: result.success,
             });
@@ -275,7 +275,7 @@ export class CliSessionService extends BaseSessionService {
             return result.success;
         } catch (err) {
             logger.error('[CLI-SESSION-SERVICE] Failed to end session', {
-                sessionId: sessionId.substring(0, 12) + '...',
+                sessionId_tag: sessionIdTag(sessionId),
                 error: err.message
             });
             return false;

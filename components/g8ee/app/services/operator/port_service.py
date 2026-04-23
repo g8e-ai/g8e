@@ -18,7 +18,6 @@ Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
 import logging
-import uuid
 from typing import cast
 
 from app.services.protocols import (
@@ -41,13 +40,14 @@ from app.constants.settings import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
 )
 from app.errors import BusinessLogicError, ValidationError
-from app.models.command_payloads import CheckPortArgs
+from app.models.tool_args import CheckPortArgs
+from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, G8eMessage
 from app.models.tool_results import PortCheckToolResult
-from app.utils.timestamp import now, to_timestamp
+from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +67,20 @@ class OperatorPortService:
 
     async def execute_port_check(
         self,
-        args: CheckPortArgs,
+        args: CheckPortRequestPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> PortCheckToolResult:
-        logger.info("[PORT_CHECK] Starting port check operation")
+        """Execute a single port check.
+
+        ``execution_id`` is extracted from args.execution_id; it
+        is used as the registry key and appears in the STARTED / COMPLETED /
+        FAILED UI lifecycle events. Using a per-call id (rather than
+        ``g8e_context.execution_id``) ensures that concurrent port checks in a
+        single chat turn do not collide in ``execution_registry``.
+        """
+        exec_id = args.execution_id
+        logger.info("[PORT_CHECK] Starting port check operation (execution_id=%s)", exec_id)
 
         case_id = g8e_context.case_id
         user_id = g8e_context.user_id
@@ -107,7 +116,7 @@ class OperatorPortService:
                 error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR,
             )
 
-        operator_id = resolved_operator.operator_id
+        operator_id = resolved_operator.id
         operator_session_id = resolved_operator.operator_session_id
         if not operator_session_id:
             return PortCheckToolResult(
@@ -121,21 +130,19 @@ class OperatorPortService:
         ) or "unknown"
         logger.info("[PORT_CHECK] Resolved operator: %s (hostname: %s)", operator_id, _hn)
 
-        execution_id = f"portcheck_{uuid.uuid4().hex[:12]}_{int(to_timestamp(now()))}"
-
         if not self.pubsub_service.is_ready:
             error_msg = "Pub/sub pattern subscription not ready"
             logger.error("[PUBSUB-PATTERN] %s", error_msg)
             return PortCheckToolResult(success=False, error=error_msg, error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY)
 
         try:
-            self.execution_registry.allocate(execution_id)
+            self.execution_registry.allocate(exec_id)
             max_wait_time = OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.CHECK_PORT,
                 arguments={
-                    "execution_id": execution_id,
+                    "execution_id": exec_id,
                     "host": host,
                     "port": port,
                     "protocol": protocol,
@@ -143,11 +150,11 @@ class OperatorPortService:
                     "source": EventType.EVENT_SOURCE_AI_PRIMARY,
                     "user_id": user_id,
                 },
-                request_id=execution_id,
+                request_id=exec_id,
             )
 
             command_data = G8eMessage(
-                id=execution_id,
+                id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
                 case_id=case_id,
@@ -167,7 +174,7 @@ class OperatorPortService:
                 EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"port_check {host}:{port} ({protocol})",
-                    execution_id=execution_id,
+                    execution_id=exec_id,
                     operator_session_id=operator_session_id,
                 ),
                 g8e_context,
@@ -181,7 +188,7 @@ class OperatorPortService:
             )
             logger.info("[PORT_CHECK] Port check request published successfully (subscribers: %d)", subscribers)
 
-            completed = await self.execution_registry.wait(execution_id, timeout=max_wait_time)
+            completed = await self.execution_registry.wait(exec_id, timeout=max_wait_time)
 
             if not completed:
                 timeout_error = f"Port check timed out after {max_wait_time} seconds"
@@ -191,7 +198,7 @@ class OperatorPortService:
                 await self.execution_service.g8ed_event_service.publish_command_event(
                     EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
                     CommandResultBroadcastEvent(
-                        execution_id=execution_id,
+                        execution_id=exec_id,
                         command=f"port_check {host}:{port} ({protocol})",
                         status=ExecutionStatus.TIMEOUT,
                         error=timeout_error,
@@ -208,7 +215,7 @@ class OperatorPortService:
                     error_type=CommandErrorType.OPERATION_TIMEOUT,
                 )
 
-            envelope = self.execution_registry.get_result(execution_id)
+            envelope = self.execution_registry.get_result(exec_id)
 
             if isinstance(envelope, G8eoResultEnvelope) and isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
@@ -224,7 +231,7 @@ class OperatorPortService:
                 await self.execution_service.g8ed_event_service.publish_command_event(
                     completion_event_type,
                     CommandResultBroadcastEvent(
-                        execution_id=execution_id,
+                        execution_id=exec_id,
                         command=f"port_check {host}:{port} ({protocol})",
                         status=ExecutionStatus.COMPLETED if not failed else ExecutionStatus.FAILED,
                         output=f"Port {port} on {host} is {'OPEN' if payload.is_open else 'CLOSED'}" if not failed else None,
@@ -263,4 +270,4 @@ class OperatorPortService:
             logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
             return PortCheckToolResult(success=False, error=f"Port check execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
         finally:
-            self.execution_registry.release(execution_id)
+            self.execution_registry.release(exec_id)

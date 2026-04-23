@@ -209,7 +209,7 @@ To force a reauth outside of the login flow — for example when the g8ep operat
 
 The operator re-authenticates and goes `ACTIVE` within seconds. The operation is idempotent — safe to call whether or not the operator is currently running.
 
-> The g8ep operator is a **system operator** (`operator_type: system`). It authenticates using its `operator_api_key` from the operator document — no device link, no `--cloud` flag. AWS CLI is **not installed** in the container; however, if it were, the host `~/.aws` directory would typically be mounted for credentials.
+> The g8ep operator is a **cloud operator** (`--cloud --provider g8ep`). It authenticates using its `operator_api_key` from the operator document — no device link. AWS CLI is **not installed** in the container; however, if it were, the host `~/.aws` directory would typically be mounted for credentials.
 
 ---
 

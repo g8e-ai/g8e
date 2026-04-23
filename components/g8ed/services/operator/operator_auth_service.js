@@ -13,6 +13,7 @@
 
 import { OperatorAuthResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { redactWebSessionId } from '../../utils/security.js';
 import {
     ApiKeyError,
@@ -73,7 +74,7 @@ export class OperatorAuthService {
         const session = await this.operatorSessionService.validateSession(deviceLinkSessionId);
         if (!session) {
             logger.warn('[OPERATOR-AUTH] WebSession auth failed - invalid or expired session', {
-                session_id_prefix: deviceLinkSessionId.substring(0, 12) + '...',
+                session_id_tag: sessionIdTag(deviceLinkSessionId),
             });
             return {
                 success: false,
@@ -88,7 +89,7 @@ export class OperatorAuthService {
 
         if (!user_id) {
             logger.error('[OPERATOR-AUTH] WebSession missing user_id', {
-                session_id_prefix: deviceLinkSessionId.substring(0, 12) + '...',
+                session_id_tag: sessionIdTag(deviceLinkSessionId),
             });
             return {
                 success: false,

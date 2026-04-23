@@ -187,7 +187,7 @@ export class CertInfo extends G8eBaseModel {
 
 export class OperatorStatusInfo extends G8eBaseModel {
     static fields = {
-        operator_id:               { type: F.string, required: true },
+        id:                       { type: F.string, required: true },
         user_id:                   { type: F.string, required: true },
         status:                    { type: F.string, required: true },
         bound_web_session_id:      { type: F.string, default: null },
@@ -207,7 +207,7 @@ export class OperatorStatusInfo extends G8eBaseModel {
 
     static fromOperator(operator) {
         return new OperatorStatusInfo({
-            operator_id:               operator.operator_id,
+            id:                       operator.id,
             user_id:                   operator.user_id,
             status:                    operator.status,
             bound_web_session_id:      operator.bound_web_session_id ?? null,
@@ -235,7 +235,6 @@ export class OperatorStatusInfo extends G8eBaseModel {
 
 export class OperatorDocument extends G8eIdentifiableModel {
     static fields = {
-        operator_id:                  { type: F.string,  required: true },
         user_id:                      { type: F.string,  required: true },
         organization_id:              { type: F.string,  default: null },
         component:                    { type: F.string,  default: SourceComponent.G8EO },
@@ -331,7 +330,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
             : new SystemInfo(data.system_info || {});
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
             component:                 SourceComponent.G8EO,
@@ -374,7 +373,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
                 : new SystemInfo({});
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
             component:                 SourceComponent.G8EO,
@@ -409,7 +408,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         const _now = now();
 
         return new OperatorDocument({
-            operator_id:               data.newOperatorId,
+            id:                       data.id,
             user_id:                   data.userId,
             organization_id:           data.organizationId ?? null,
             component:                 SourceComponent.G8EO,
@@ -436,7 +435,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
                 summary:    'New Operator created from API key refresh',
                 actor:      SourceComponent.USER,
                 details:    {
-                    predecessor_operator_id: data.oldOperatorId,
+                    predecessor_operator_id: data.oldId,
                     slot_number:             data.slotNumber,
                     operator_type:           data.operatorType || OperatorType.SYSTEM,
                     slot_cost:               data.slotCost ?? 1,
@@ -451,7 +450,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         const _now = now();
 
         return new OperatorDocument({
-            operator_id:               data.operator_id,
+            id:                       data.id,
             user_id:                   data.user_id,
             organization_id:           data.organization_id ?? null,
             component:                 SourceComponent.G8EO,
@@ -537,7 +536,7 @@ export class OperatorSlot extends G8eBaseModel {
     static fromOperator(operator) {
         const s = operator.status ?? OperatorStatus.OFFLINE;
         return new OperatorSlot({
-            operator_id:    operator.operator_id,
+            operator_id:    operator.id,
             name:           operator.name ?? null,
             status:         s,
             status_display: String(s).toUpperCase(),
@@ -742,7 +741,7 @@ export class UnbindOperatorsResponse extends G8eBaseModel {
 
 export class OperatorWithSessionContext extends G8eBaseModel {
     static fields = {
-        operator_id:         { type: F.string,  required: true },
+        id:                 { type: F.string,  required: true },
         operator_session_id: { type: F.string,  default: null },
         bound_web_session_id: { type: F.string,  default: null },
         status:              { type: F.string,  required: true },
@@ -757,7 +756,7 @@ export class OperatorWithSessionContext extends G8eBaseModel {
 
     static create(operator, operatorSession, webSession) {
         return new OperatorWithSessionContext({
-            operator_id:         operator.operator_id,
+            id:                  operator.id,
             operator_session_id: operatorSession?.id || operator.operator_session_id,
             bound_web_session_id: webSession?.id || operator.bound_web_session_id,
             status:              operator.status,

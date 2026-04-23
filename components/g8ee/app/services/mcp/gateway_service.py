@@ -27,12 +27,13 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
 from app.services.ai.tool_service import AIToolService
 from app.services.investigation.investigation_service import InvestigationService
+from app.models.operators import OperatorDocument
 from app.services.operator.operator_data_service import OperatorDataService
 from app.utils.version import get_version
 
 logger = logging.getLogger(__name__)
 
-MCP_SERVER_INFO = {
+MCP_SERVER_INFO: dict[str, Any] = {
     "protocolVersion": "2025-03-26",
     "serverInfo": {
         "name": "g8e",
@@ -72,10 +73,13 @@ class MCPGatewayService:
         mcp_tools: list[dict[str, Any]] = []
         for group in tool_groups:
             for decl in group.tools:
+                input_schema: dict[str, Any] = (
+                    decl.parameters if isinstance(decl.parameters, dict) else {}
+                )
                 mcp_tools.append({
                     "name": decl.name,
                     "description": decl.description,
-                    "inputSchema": decl.parameters if isinstance(decl.parameters, dict) else {},
+                    "inputSchema": input_schema,
                 })
         return mcp_tools
 
@@ -98,18 +102,20 @@ class MCPGatewayService:
         )
         try:
             # MCP callers may not provide user settings; use defaults if missing
-            # G8eeUserSettings requires llm field
-            from app.constants import LLMProvider
+            # G8eeUserSettings requires llm field; LLMSettings requires explicit provider configuration.
             from app.models.settings import LLMSettings
-            default_settings = G8eeUserSettings(llm=LLMSettings(primary_provider=LLMProvider.OLLAMA))
+            from app.utils.ids import generate_command_execution_id
+            default_settings = G8eeUserSettings(llm=LLMSettings())
             
+            execution_id = generate_command_execution_id()
             result = await asyncio.wait_for(
                 self._tool_service.execute_tool_call(
                     tool_name=tool_name,
-                    args=arguments,
-                    g8e_context=g8e_context,
+                    tool_args=arguments,
                     investigation=investigation,
+                    g8e_context=g8e_context,
                     request_settings=user_settings or default_settings,
+                    execution_id=execution_id,
                 ),
                 timeout=MCP_TOOL_CALL_TIMEOUT_SECONDS,
             )
@@ -145,7 +151,7 @@ class MCPGatewayService:
         minimal context with operator documents resolved from bound_operators,
         reusing the same operator-data lookup path as InvestigationService.
         """
-        operator_docs = []
+        operator_docs: list[OperatorDocument] = []
         for bound_op in (g8e_context.bound_operators or []):
             if bound_op.status != OperatorStatus.BOUND:
                 continue
@@ -160,7 +166,7 @@ class MCPGatewayService:
                 )
 
         return EnrichedInvestigationContext(
-            id=g8e_context.execution_id or "mcp-gateway",
+            id=g8e_context.execution_id,
             case_id=g8e_context.case_id or "mcp-gateway",
             user_id=g8e_context.user_id,
             organization_id=g8e_context.organization_id,

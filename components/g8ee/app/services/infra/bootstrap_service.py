@@ -17,7 +17,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
 # alongside bootstrap secrets on the SSL volume. Must stay in sync with
@@ -187,20 +187,24 @@ class BootstrapService:
             return
 
         try:
-            manifest = json.loads(manifest_path.read_text())
+            raw_manifest: object = json.loads(manifest_path.read_text())
         except (OSError, ValueError) as err:
             raise BootstrapSecretTamperError(
                 f"Bootstrap digest manifest at {manifest_path} is unreadable or malformed: {err}. "
                 f"Refusing to start with an unverified {secret_name}."
             ) from err
 
-        entry = (manifest.get("secrets") or {}).get(secret_name) if isinstance(manifest, dict) else None
-        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        manifest = cast(dict[str, Any], raw_manifest) if isinstance(raw_manifest, dict) else {}
+        secrets_dict_raw = manifest.get("secrets")
+        secrets_dict = cast(dict[str, Any], secrets_dict_raw) if isinstance(secrets_dict_raw, dict) else {}
+        entry_raw = secrets_dict.get(secret_name)
+        entry = cast(dict[str, Any], entry_raw) if isinstance(entry_raw, dict) else {}
+        expected = entry.get("sha256") if isinstance(entry.get("sha256"), str) else None
         if not expected:
             self._logger.warning(
                 "Bootstrap digest manifest has no entry for %s (manifest_version=%s)",
                 secret_name,
-                (manifest.get("version") if isinstance(manifest, dict) else None),
+                manifest.get("version"),
             )
             return
 

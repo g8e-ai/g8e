@@ -4,7 +4,7 @@ title: Developer
 
 # g8e Developer Guide
 
-g8e is an open-source, self-hosted AI governance platform designed for offline operation: with a local LLM provider (Ollama or any OpenAI-compatible endpoint) it runs with zero cloud dependencies at runtime. Building the container images currently still requires outbound access to Docker Hub, PyPI, npmjs, and the Alpine/Debian package mirrors — see [`docs/architecture/air-gap.md`](architecture/air-gap.md) for the deployment path and current vendoring status. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
+g8e is an open-source, self-hosted AI governance platform designed for offline operation: with a local LLM provider (Ollama or any OpenAI-compatible endpoint) it runs with zero cloud dependencies at runtime. Building the container images currently still requires outbound access to Docker Hub, PyPI, npmjs, and the Alpine/Debian package mirrors — see [`docs/architecture/air_gap.md`](architecture/air_gap.md) for the deployment path and current vendoring status. The architecture is built around the Operator with LFAA (Local Function Access & Audit), which serves as the backend for the entire platform.
 
 ---
 
@@ -277,6 +277,30 @@ Inside the application boundary, data lives as typed model instances — never a
 All datetime fields use the `UTCDatetime` type which serializes to ISO 8601 with `Z` suffix (e.g., `2026-01-15T10:30:00.123456Z`).
 
 Passing raw dicts between services, storing unvalidated JSON in the database, or constructing ad-hoc objects at call sites are all prohibited. If a shape crosses a wire boundary, it must have a corresponding entry in `shared/models/` and a typed model class in the consuming component.
+
+### LFAA Result Payload Requirements
+
+All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically injected by the `setExecutionIDOnPayload()` helper in `components/g8eo/services/pubsub/publish_helpers.go` before serialization.
+
+The following result payload types support execution_id injection:
+- CancellationResultPayload
+- FileEditResultPayload
+- FsListResultPayload
+- ExecutionStatusPayload
+- PortCheckResultPayload
+- FetchLogsResultPayload
+- FsReadResultPayload
+- LFAAErrorPayload
+- FetchFileDiffResultPayload
+- FetchHistoryResultPayload
+- FetchFileHistoryResultPayload
+- RestoreFileResultPayload
+- ExecutionResultsPayload
+
+When adding new result payload types, ensure they:
+1. Declare an `ExecutionID string` field with JSON tag `execution_id`
+2. Add a case in `setExecutionIDOnPayload()` to inject the execution_id
+3. Add a unit test in `publish_helpers_test.go` to verify injection works
 
 ---
 

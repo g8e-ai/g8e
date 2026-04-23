@@ -1,0 +1,57 @@
+# g8e Evals Fleet - Real operator containers for evaluation scenarios
+# Each eval-node runs a real g8e operator with device token authentication
+# Containers join the g8e-network to reach the platform at g8e.local
+
+networks:
+  g8e-network:
+    external: true
+
+# Shared operator environment - merged into each node's environment
+x-operator-env: &operator-env
+  DEVICE_TOKEN: ${DEVICE_TOKEN:-}
+  G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+
+# Eval node anchor - defines common configuration
+x-eval-node: &eval-node
+  build:
+    context: ./containers/eval-node
+    dockerfile: Dockerfile
+  networks:
+    - g8e-network
+  labels:
+    - "io.g8e.evals=true"
+  volumes:
+    - g8es-ssl:/g8es:ro
+  restart: unless-stopped
+
+services:
+  eval-node-01:
+    <<: *eval-node
+    container_name: eval-node-01
+    hostname: eval-node-01
+    environment:
+      <<: *operator-env
+      EVAL_NODE_ID: eval-node-01
+      EVAL_PROFILE: healthy
+
+  eval-node-02:
+    <<: *eval-node
+    container_name: eval-node-02
+    hostname: eval-node-02
+    environment:
+      <<: *operator-env
+      EVAL_NODE_ID: eval-node-02
+      EVAL_PROFILE: healthy
+
+  eval-node-03:
+    <<: *eval-node
+    container_name: eval-node-03
+    hostname: eval-node-03
+    environment:
+      <<: *operator-env
+      EVAL_NODE_ID: eval-node-03
+      EVAL_PROFILE: healthy
+
+volumes:
+  g8es-ssl:
+    external: true

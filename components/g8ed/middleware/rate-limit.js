@@ -19,6 +19,7 @@
 import { ErrorResponse } from '../models/response_models.js';
 import rateLimit from 'express-rate-limit';
 import { logger } from '../utils/logger.js';
+import { sessionIdTag } from '../utils/session_log.js';
 import { redactWebSessionId } from '../utils/security.js';
 import { BEARER_PREFIX } from '../constants/auth.js';
 import {
@@ -252,7 +253,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.headers[WEB_SESSION_ID_HEADER] || req.body?.web_session_id;
             logger.warn('[RATE-LIMIT] Chat rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip,
                 path: req.path
             });
@@ -278,7 +279,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.query.webSessionId;
             logger.warn('[RATE-LIMIT] SSE connection rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip
             });
             res.status(429).send(RateLimitError.SSE_ATTEMPTS_WAIT);
@@ -324,7 +325,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.headers[WEB_SESSION_ID_HEADER];
             logger.warn('[RATE-LIMIT] Upload rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip
             });
             res.status(429).json(new ErrorResponse({
@@ -349,7 +350,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             logger.warn('[RATE-LIMIT] Operator refresh rate limit exceeded', {
                 ip: req.ip,
-                operatorSessionId: req.body?.operator_session_id?.substring(0, 12) + '...'
+                operatorSessionId_tag: sessionIdTag(req.body?.operator_session_id)
             });
             res.status(429).json(new ErrorResponse({
                 error: RateLimitError.REFRESH_WAIT

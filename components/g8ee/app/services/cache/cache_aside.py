@@ -158,7 +158,8 @@ class CacheAsideService(CacheAsideProtocol):
         # Invalidate cache instead of populating it
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
-        
+        await self.invalidate_query_cache(collection)
+
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Cache invalidated for new document",
             extra={"collection": collection, "doc_id": document_id}
@@ -199,6 +200,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Cache invalidated",
@@ -235,6 +237,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Document deleted from cache",
@@ -253,8 +256,8 @@ class CacheAsideService(CacheAsideProtocol):
     ) -> dict[str, Any] | None:
         key = self._make_key(collection, document_id)
 
-        cached_data = await self.kv.get_json(key)
-        if cached_data is not None:
+        cached_data: object | None = await self.kv.get_json(key)
+        if isinstance(cached_data, dict):
             logger.info(
                 f"[{self.component_name.upper()}-CACHE] Cache HIT",
                 extra={"collection": collection, "doc_id": document_id}
@@ -324,13 +327,14 @@ class CacheAsideService(CacheAsideProtocol):
         filter_hash = hashlib.md5(query_str.encode()).hexdigest()
         key = KVKey.query(collection, filter_hash)
 
-        cached_data = await self.kv.get_json(key)
-        if cached_data is not None and isinstance(cached_data, list):
+        cached_data: object | None = await self.kv.get_json(key)
+        if isinstance(cached_data, list):
+            result = cast(list[dict[str, Any]], cached_data)
             logger.info(
                 f"[{self.component_name.upper()}-CACHE] Query cache HIT",
-                extra={"collection": collection, "result_count": len(cached_data)}
+                extra={"collection": collection, "result_count": len(result)}
             )
-            return cast(list[dict[str, Any]], cached_data)
+            return result
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Query cache MISS",
@@ -444,6 +448,7 @@ class CacheAsideService(CacheAsideProtocol):
 
         key = self._make_key(collection, document_id)
         await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Array append completed, cache invalidated",
@@ -488,9 +493,14 @@ class CacheAsideService(CacheAsideProtocol):
             extra={"operation_count": len(operations)}
         )
 
+        collections_touched: set[str] = set()
         for op in operations:
             key = self._make_key(op.collection, op.document_id)
             await self.kv.delete(key)
+            collections_touched.add(op.collection)
+
+        for collection in collections_touched:
+            await self.invalidate_query_cache(collection)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] KV batch cache invalidated",

@@ -75,7 +75,7 @@ flowchart TD
 3. **Tool execution** — Tool calls are dispatched sequentially through `execute_turn_tool_calls` in `agent_tool_loop.py`. 
 4. **Tribunal Refinement** — `run_commands_with_operator` tool calls pass through the Tribunal (Voting Swarm + Verifier) in `agent_tool_loop.py` before execution. Parallel generation (up to 5 passes) surfaces ideologically distinct candidates; weighted majority voting converges them; the Verifier (The Auditor) confirms or minimally corrects the winner.
 5. **SSE delivery** — Chunks are translated via `deliver_via_sse` and forwarded to the browser via g8ed in real time.
-6. **Persistence** — Results are saved to g8es via `_persist_ai_response` in `chat_pipeline.py`; background memory update tasks are fired.
+6. **Persistence** — Conversation history is written incrementally: each ReAct iteration's pre-tool commentary is persisted as a `MessageSender.AI_PRIMARY` row through an `on_iteration_text` callback wired by `_run_chat_impl`, and the final segment (with aggregate `token_usage` and `grounding_metadata`) is written by `_persist_ai_response` in `chat_pipeline.py` after the stream closes. Background memory update tasks are then fired.
 
 All state-changing operator actions require explicit user approval. The platform is stateless between turns — all session data lives in g8es (KV) or on the Operator (g8eo via LFAA). All platform-side interactions with g8es are strictly authenticated via the `X-Internal-Auth` shared secret.
 
@@ -102,7 +102,7 @@ The resulting `EnrichedInvestigationContext` carries:
 - `memory` — the attached `InvestigationMemory` (or `None`).
 - `bound_operators` — `BoundOperator` instances from `G8eHttpContext`.
 - `operator_session_token` — transient operator session token for authorization validation.
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn).
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. The chronological shape is `user_chat → ai_primary (iter 1) → system (approval.*) → user_terminal (result) → ai_primary (iter 2) → … → ai_primary (final)`. Aggregate `token_usage` and `grounding_metadata` for the whole stream are attached only to the final row.
 
 ### Security
 
@@ -191,6 +191,8 @@ Each mode provides sections: `capabilities`, `execution`, and `tools`. The `tool
 3. `_ai_update_memory` takes the conversation history, sends it with the memory analysis persona from `agents.json`. The assistant model returns a `MemoryAnalysis` JSON object validated against the Pydantic schema.
 4. Non-null fields from the AI response overwrite the existing memory fields; existing values are preserved when the AI returns null.
 5. The updated `InvestigationMemory` is saved via `MemoryDataService` through `CacheAsideService` (write-through to g8es KV).
+
+> **Known limitation.** `_persist_ai_response` passes `ctx.conversation_history`, which is the snapshot taken in `_prepare_chat_context` *before* the LLM stream began. It includes the user message and prior turns but does **not** include the per-iteration `AI_PRIMARY` rows written by `on_iteration_text` during the stream, nor the final segment written moments earlier by `_persist_ai_response` itself. Memory analysis therefore does not see the agent's running commentary or final answer from the current turn. If memory quality matters for tool-heavy sessions, the snapshot must be re-fetched (or appended to in-memory) before the memory call.
 
 ### Injection on the Next Turn
 
@@ -313,13 +315,17 @@ flowchart LR
 
 g8ee publishes events using `EventType` constants defined in `components/g8ee/app/constants/events.py`. Events are published via:
 
-**`deliver_via_sse`** (`components/g8ee/app/services/ai/AI_sse.py`)
-- Translates `StreamChunkFromModel` objects into g8ed EventService pub/sub calls
-- Maps stream chunk types to EventType constants:
-  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`
-  - `THINKING` → `LLM_CHAT_ITERATION_THINKING_STARTED`
-  - `TOOL_CALL` → Tool-specific events (e.g., `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
-  - `COMPLETE` → `LLM_CHAT_ITERATION_TEXT_COMPLETED` or `LLM_CHAT_ITERATION_FAILED`
+**`deliver_via_sse`** (`components/g8ee/app/services/ai/agent_sse.py`)
+- Translates `StreamChunkFromModel` objects into g8ed `EventService` pub/sub calls
+- Maps stream chunk types to EventType constants (full table in [components/g8ee.md → SSE Delivery Pipeline](../components/g8ee.md#sse-delivery-pipeline)):
+  - `TEXT` → `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` (per chunk) and accumulates into `AgentStreamState.response_text`
+  - `THINKING` / `THINKING_END` → `LLM_CHAT_ITERATION_THINKING_STARTED` (with `action_type` of `START`/`UPDATE`/`END`)
+  - `RETRY` → `LLM_CHAT_ITERATION_RETRY`
+  - `TOOL_CALL` → `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always) plus tool-specific events (e.g. `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED`)
+  - `TOOL_RESULT` → `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always) and `LLM_CHAT_ITERATION_COMPLETED` (turn tick); also flushes the iteration's accumulated text via the optional `on_iteration_text` persistence callback before clearing the buffer
+  - `CITATIONS` → `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`)
+  - `COMPLETE` → stores `token_usage` and `finish_reason` on the context; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the stream closes (suppressed if an `ERROR` chunk was seen)
+  - `ERROR` → `LLM_CHAT_ITERATION_FAILED` (suppresses the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED`)
 
 **`EventService.publish_investigation_event`** (`components/g8ee/app/services/infra/g8ed_event_service.py`)
 - HTTP POST to g8ed internal endpoint `/internal/sse/push`
@@ -388,7 +394,12 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
   - `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` → `handleCitationsReady`
   - `LLM_CHAT_ITERATION_FAILED` → `handleChatError`
   - `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` → `handleSearchWebIndicator`
-  - `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` → `handleNetworkPortCheckIndicator`
+  - `OPERATOR_NETWORK_PORT_CHECK_STARTED` → `handleNetworkPortCheckIndicator`
+    (note: `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` is intentionally NOT
+    subscribed; `STARTED` owns the port-check indicator lifecycle — the
+    REQUESTED event is emitted by agent_sse for backward compatibility and
+    is used elsewhere as the MCP dispatch event to the operator, and would
+    arrive after STARTED/COMPLETED in the stream, orphaning its indicator.)
 
 **`thinking.js`** (`components/g8ed/public/js/components/thinking.js`)
 - Handles `LLM_CHAT_ITERATION_THINKING_STARTED` events
@@ -398,10 +409,10 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 **g8ee side**:
 - `deliver_via_sse` catches exceptions during streaming:
-  - `CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with fixed error message, re-raises
-  - `G8eError` subclasses (OperationError, NetworkError, RateLimitError): Populates `payload.error` with `str(e)`
-  - Generic `Exception`: Logs error, publishes `LLM_CHAT_ITERATION_FAILED`, does not re-raise
-- Retry loop for transient errors (429, 503) with exponential backoff
+  - `asyncio.CancelledError`: Publishes `LLM_CHAT_ITERATION_FAILED` with `"AI processing stopped"`, then re-raises so the cancellation propagates
+  - In-stream `ERROR` chunk (provider returned an error): Publishes `LLM_CHAT_ITERATION_FAILED` with the provider error message, sets `error_occurred=True`, breaks the loop, and suppresses the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED`
+  - Any other uncaught `Exception`: Logs the error, publishes `LLM_CHAT_ITERATION_FAILED` with `str(e)`, and does not re-raise so the SSE channel remains usable
+- `g8eEngine.stream_response` retries transient provider errors (e.g. 429, 503) with exponential backoff, but only while `streaming_started=False` — once any `TEXT` chunk has been yielded the error is surfaced immediately as an `ERROR` chunk
 
 **g8ed side**:
 - `internal_sse_routes.js`: Returns 500 on publish failures, logs error details
@@ -452,7 +463,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (original_command, final_command, outcome, vote_score, verifier_passed, verifier_revision, candidates). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when command arg is missing. |
 | `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
-| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + weighted vote + verifier. Persona templates in `agents.json`. |
+| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + uniform per-member voting + verifier. Persona templates in `agents.json`. |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push. |
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts. |
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction. |
@@ -709,7 +720,7 @@ flowchart TD
     Gen --> Candidates{Any candidates?}
     Candidates -- No, all system errors --> SysErr[TRIBUNAL_SESSION_SYSTEM_ERROR<br/>tool call fails]
     Candidates -- No, non-system errors --> GenFail[TRIBUNAL_SESSION_GENERATION_FAILED<br/>tool call fails]
-    Candidates -- Yes --> Vote[Weighted Majority Vote]
+    Candidates -- Yes --> Vote[Uniform Per-Member Voting]
 
     Vote --> VerifierEnabled{Verifier enabled?}
     VerifierEnabled -- No --> OutVote[CONSENSUS: vote winner]
@@ -747,7 +758,7 @@ flowchart TD
 | Setting | DB Key | Default | Description |
 |---|---|---|---|
 | `LLM_COMMAND_GEN_ENABLED` | `llm_command_gen_enabled` | `true` | Master switch — `false` skips the Tribunal entirely |
-| `LLM_COMMAND_GEN_PASSES` | `llm_command_gen_passes` | `3` | Number of parallel generation passes |
+| `LLM_COMMAND_GEN_PASSES` | `llm_command_gen_passes` | `5` | Number of parallel generation passes |
 | `LLM_COMMAND_GEN_VERIFIER` | `llm_command_gen_verifier` | `true` | Enable/disable the verifier pass |
 
 #### Pipeline Stages
@@ -762,20 +773,16 @@ Raw output is normalised by `_normalise_command`: strips surrounding whitespace,
 
 Thinking is enabled for models that support it but forced to the lowest available level (`get_lowest_thinking_level`) with `include_thoughts=False` — minimises latency on this fast-path.
 
-**Stage 2 — Weighted Majority Vote (`_run_voting_stage` / `_weighted_vote`)**
+**Stage 2 — Uniform Per-Member Voting (`_run_voting_stage`)**
 
-```
-weight[candidate] += 1 / (pass_index + 1)
-```
+Each member contributes exactly 1 vote per candidate. Candidates that are identical (after normalisation) accumulate votes. The string with the highest vote count is the vote winner. The normalised score is `winner_votes / total_members` — a value between 0 and 1 representing consensus strength.
 
-Each pass `i` (0-indexed) contributes `1/(i+1)` to its candidate's aggregate weight. This means:
-- Pass 0 contributes `1.0`
-- Pass 1 contributes `0.5`
-- Pass 2 contributes `0.333`
+Tie-breaking ladder (when multiple candidates have the same highest vote count):
+1. Shortest command wins (maximizes signal density for approval fatigue reduction)
+2. Non-Nemesis cluster wins over Nemesis-including cluster
+3. Alphabetical fallback (deterministic)
 
-Candidates that are identical (after normalisation) accumulate weight. The string with the highest aggregate weight is the vote winner. The normalised score is `winner_weight / total_weight` — a value between 0 and 1 representing how dominant the winner was.
-
-If all passes produce unique strings, every candidate has equal weight and the earliest pass (pass 0) wins by tiebreak (Python `max` with stable ordering). If no candidates were produced (all passes failed), `_weighted_vote` returns `(None, 0.0)` and the pipeline falls back.
+If no candidates were produced (all passes failed), the voting stage returns `(None, 0.0)` and the pipeline falls back.
 
 A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying `vote_winner`, `vote_score`, `num_candidates`, and `original_command`.
 

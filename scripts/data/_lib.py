@@ -34,13 +34,17 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-G8ES_BASE_URL = 'https://g8es'
+G8ES_BASE_URL = 'https://g8es:9000'
 G8ED_BASE_URL = 'https://g8ed'
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
 
 CA_CERT_PATH = Path('/g8es/ca.crt')
+INTERNAL_AUTH_TOKEN_PATHS = (
+    Path('/g8es/internal_auth_token'),
+    Path('/g8es/ssl/internal_auth_token'),
+)
 
 
 def _create_ssl_context() -> Optional[ssl.SSLContext]:
@@ -61,18 +65,32 @@ def _create_ssl_context() -> Optional[ssl.SSLContext]:
 # =============================================================================
 
 def get_auth_token() -> str:
-    """Load operator session token from env (set by g8e login)."""
-    # User session token from g8e login
-    token = os.environ.get('OPERATOR_SESSION_ID')
-    if token:
-        return token
+    """Return the operator session token from env (set by `g8e login`).
 
-    # Fallback to internal auth token for platform-internal use only
-    token = os.environ.get('G8E_INTERNAL_AUTH_TOKEN')
-    if token:
-        return token
+    The wrapper gates `g8e data` on a valid operator session before invoking
+    this script, so OPERATOR_SESSION_ID is expected to be present. It is
+    forwarded to g8ed for operator-scoped API calls; g8es calls use the
+    internal auth token instead (see get_internal_auth_token).
+    """
+    return os.environ.get('OPERATOR_SESSION_ID', '')
 
-    return ''
+
+def get_internal_auth_token() -> str:
+    """Return the platform internal auth token.
+
+    g8es authenticates every request with `X-Internal-Auth`. Inside g8ep the
+    token is mounted at /g8es/internal_auth_token (ro). Falls back to the
+    G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
+    """
+    for p in INTERNAL_AUTH_TOKEN_PATHS:
+        try:
+            if p.exists():
+                token = p.read_text().strip()
+                if token:
+                    return token
+        except OSError:
+            continue
+    return os.environ.get('G8E_INTERNAL_AUTH_TOKEN', '')
 
 
 # =============================================================================
@@ -84,9 +102,17 @@ def g8es_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
-    token = get_auth_token()
-    if token:
-        headers['X-Operator-Session-Id'] = token
+    # g8es requires X-Internal-Auth on all non-health endpoints. The operator
+    # session from `g8e login` gates the wrapper; inside the trusted g8ep
+    # container we use the mounted internal auth token to reach g8es, the
+    # same way g8ed and g8ee do.
+    internal_token = get_internal_auth_token()
+    if internal_token:
+        headers['X-Internal-Auth'] = internal_token
+
+    session_token = get_auth_token()
+    if session_token:
+        headers['X-Operator-Session-Id'] = session_token
 
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
@@ -151,6 +177,13 @@ def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     }
+    # g8ed internal endpoints accept either an operator session OR the
+    # platform internal auth token. Running inside g8ep (trusted container)
+    # we forward the mounted internal token for bootstrap flows before
+    # any user is authenticated.
+    internal_token = get_internal_auth_token()
+    if internal_token:
+        headers['X-Internal-Auth'] = internal_token
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     ctx = _create_ssl_context()
     try:
@@ -177,13 +210,15 @@ def resolve_user_id(user_id: Optional[str], email: Optional[str]) -> Optional[st
     if not email:
         return None
     result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/email/{urllib.parse.quote(email, safe="")}')
-    if not result.get('success'):
+    # g8ed returns {user: {...}} on success and {error/...} on failure.
+    user = result.get('user') if isinstance(result, dict) else None
+    if not user:
         if result.get('_status_code') == 404:
             print(f"\nUser not found with email: {email}")
         else:
             raise RuntimeError(result.get('error', 'Failed to resolve user by email'))
         return None
-    return result['data']['id']
+    return user['id']
 
 
 # =============================================================================

@@ -589,8 +589,16 @@ class G8edServer {
                 proxyHeaders['X-Internal-Auth'] = internalAuthToken;
             }
 
+            // Convert header names to canonical form (Title-Case) for Go http server
+            // Node.js lowercases header names, but Go's http.Header expects canonical form
+            const canonicalizeHeaderName = (name) => {
+                return name.split('-')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                    .join('-');
+            };
+
             const headers = Object.entries(proxyHeaders)
-                .map(([k, v]) => `${k}: ${v}`)
+                .map(([k, v]) => `${canonicalizeHeaderName(k)}: ${v}`)
                 .join('\r\n');
             upstream.write(`${reqLine}${headers}\r\n\r\n`);
             if (head && head.length) upstream.write(head);

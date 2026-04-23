@@ -15,6 +15,21 @@ from enum import Enum
 from app.constants.shared import _AGENTS
 
 
+class AgentName(str, Enum):
+    """Canonical agent identity used to route system-prompt assembly.
+
+    Each value matches the top-level id under `agent.metadata` in
+    `shared/constants/agents.json`. `SAGE` is the deep-reasoning primary
+    agent; `DASH` is the fast-path assistant agent. The chat pipeline
+    resolves an AgentName from the tier it selected (primary -> SAGE,
+    assistant -> DASH) and threads it into `build_modular_system_prompt`
+    so the assembled prompt prepends the agent's persona.
+    """
+    __str__ = lambda self: self.value
+    SAGE = _AGENTS["agent.names"]["sage"]
+    DASH = _AGENTS["agent.names"]["dash"]
+
+
 class TriageComplexityClassification(str, Enum):
     __str__ = lambda self: self.value
     SIMPLE  = _AGENTS["triage.complexity"]["simple"]
@@ -71,15 +86,34 @@ class TribunalMember(str, Enum):
     NEMESIS = _AGENTS["tribunal.members"]["nemesis"]
 
 
-class VerifierReason(str, Enum):
-    """The Verifier's stated reason for its verdict.
+class AuditorReason(str, Enum):
+    """The Auditor's stated reason for its verdict.
 
     These values are emitted in Tribunal SSE payloads and must match
     the shared constants in shared/constants/agents.json.
     """
     __str__ = lambda self: self.value
-    OK                = _AGENTS["tribunal.verifier_reason"]["ok"]
-    REVISED           = _AGENTS["tribunal.verifier_reason"]["revised"]
-    EMPTY_RESPONSE    = _AGENTS["tribunal.verifier_reason"]["empty_response"]
-    NO_VALID_REVISION = _AGENTS["tribunal.verifier_reason"]["no_valid_revision"]
-    VERIFIER_ERROR    = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
+    OK                   = _AGENTS["tribunal.auditor_reason"]["ok"]
+    REVISED              = _AGENTS["tribunal.auditor_reason"]["revised"]
+    EMPTY_RESPONSE       = _AGENTS["tribunal.auditor_reason"]["empty_response"]
+    NO_VALID_REVISION    = _AGENTS["tribunal.auditor_reason"]["no_valid_revision"]
+    AUDITOR_ERROR        = _AGENTS["tribunal.auditor_reason"]["auditor_error"]
+    SWAPPED_TO_DISSENTER = _AGENTS["tribunal.auditor_reason"]["swapped_to_dissenter"]
+    REVISED_FROM_DISSENT = _AGENTS["tribunal.auditor_reason"]["revised_from_dissent"]
+    WHITELIST_VIOLATION  = _AGENTS["tribunal.auditor_reason"]["whitelist_violation"]
+
+
+class TieBreakReason(str, Enum):
+    """How a tie at the top of the uniform vote was resolved.
+
+    Populated on VoteBreakdown only when more than one command cluster
+    held the highest vote count and one of the deterministic tie-break
+    rules resolved it.
+    """
+    __str__ = lambda self: self.value
+    SHORTEST                = _AGENTS["tribunal.tie_break_reason"]["shortest"]
+    LONGEST                 = _AGENTS["tribunal.tie_break_reason"]["longest"]
+    FEWEST_OPERATIONS       = _AGENTS["tribunal.tie_break_reason"]["fewest_operations"]
+    EXCLUDED_NEMESIS        = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
+    ALPHABETICAL            = _AGENTS["tribunal.tie_break_reason"]["alphabetical"]
+    AUDITOR_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["auditor_disambiguation"]

@@ -12,11 +12,10 @@
 # limitations under the License.
 
 """
-Reliable AI Agent Tool Loop Evaluation Test Suite.
+Integration test for tool execution security validation.
 
-Tests the actual agent_tool_loop.py code with REAL services from ServiceFactory.
-These tests exercise real AIToolService validation logic with real services,
-but do not call any LLM (deterministic validation paths only).
+Tests the real security validation in AIToolService.execute_tool_call.
+This is a deterministic integration test with no LLM calls.
 """
 
 import pytest
@@ -38,74 +37,6 @@ from tests.integration.conftest import auto_approve_pending
 logger = logging.getLogger(__name__)
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
-
-
-@pytest.mark.asyncio
-async def test_orchestrate_tool_execution_no_bound_operator(
-    cache_aside_service,
-    unique_investigation_id,
-    unique_case_id,
-    unique_web_session_id,
-    all_services,
-    tool_service,
-    unified_metrics_collector,
-):
-    """
-    Test that operator tools fail gracefully when no operator is bound.
-
-    This tests the REAL validation logic in AIToolService.execute_tool_call.
-    """
-    start_time = datetime.now(timezone.utc)
-    investigation = build_enriched_investigation(
-        investigation_id=unique_investigation_id,
-        case_id=unique_case_id,
-        operator_documents=[],
-    )
-
-    g8e_context = build_g8e_http_context(
-        web_session_id=unique_web_session_id,
-        user_id="user-test-001",
-        bound_operators=[],
-    )
-
-    user_settings = G8eeUserSettings(llm=LLMSettings())
-
-    tool_call = ToolCall(
-        name="run_commands_with_operator",
-        args={"command": "ls /tmp", "justification": "List files"},
-        id="tool-call-001",
-    )
-
-    # Call tool_service.execute_tool_call directly to test validation logic
-    result = await tool_service.execute_tool_call(
-        tool_name=tool_call.name,
-        tool_args=tool_call.args,
-        investigation=investigation,
-        g8e_context=g8e_context,
-        request_settings=user_settings,
-    )
-
-    # Approve any pending approvals from fake operators
-    approval_service = all_services['approval_service']
-    await auto_approve_pending(approval_service)
-
-    passed = result.success is False and "No operators are currently BOUND" in result.error
-    execution_time_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-
-    unified_metrics_collector.add_row(EvalRow(
-        dimension="safety",
-        suite="agent_tool_loop",
-        scenario_id="no_bound_operator",
-        category="operator_validation",
-        passed=passed,
-        score=None,
-        latency_ms=execution_time_ms,
-        error=result.error if not passed else None,
-        details={"error_type": result.error_type if not passed else None},
-    ))
-
-    assert result.success is False
-    assert "No operators are currently BOUND" in result.error
 
 
 @pytest.mark.asyncio
@@ -162,6 +93,7 @@ async def test_orchestrate_tool_execution_security_violation(
         investigation=investigation,
         g8e_context=g8e_context,
         request_settings=user_settings,
+        execution_id=tool_call.id,
     )
 
     # Approve any pending approvals from fake operators

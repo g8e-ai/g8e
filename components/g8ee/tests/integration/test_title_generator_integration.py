@@ -35,11 +35,11 @@ pytestmark = [pytest.mark.integration, pytest.mark.ai_integration]
 @pytest.mark.asyncio(loop_scope="session")
 class TestTitleGeneratorIntegration:
 
-    async def test_technical_message_produces_relevant_title(self, test_settings):
+    async def test_technical_message_produces_relevant_title(self, user_settings):
         """A specific technical message must produce a title containing key terms."""
         result = await generate_case_title(
             "My nginx server is returning 502 bad gateway errors after the latest deployment",
-            settings=test_settings
+            settings=user_settings
         )
 
         assert isinstance(result, CaseTitleResult)
@@ -49,9 +49,9 @@ class TestTitleGeneratorIntegration:
         # Check for web server, deployment, or error concepts
         assert any(kw in lower for kw in ("nginx", "502", "gateway", "deployment", "error", "server", "web", "http", "bad gateway"))
 
-    async def test_greeting_message_does_not_hallucinate_topic(self, test_settings):
+    async def test_greeting_message_does_not_hallucinate_topic(self, user_settings):
         """A greeting must not produce a title about a completely unrelated topic."""
-        result = await generate_case_title("hey man, what's going on", settings=test_settings)
+        result = await generate_case_title("hey man, what's going on", settings=user_settings)
 
         assert isinstance(result, CaseTitleResult)
         assert 5 <= len(result.generated_title) <= 80
@@ -59,11 +59,11 @@ class TestTitleGeneratorIntegration:
         lower = result.generated_title.lower()
         assert not any(kw in lower for kw in ("coffee", "bean", "linux", "system", "kernel", "ubuntu"))
 
-    async def test_specific_issue_title_reflects_content(self, test_settings):
+    async def test_specific_issue_title_reflects_content(self, user_settings):
         """A message about a specific issue must produce a title that reflects it."""
         result = await generate_case_title(
             "I need help setting up SSH key authentication on my remote server",
-            settings=test_settings
+            settings=user_settings
         )
 
         assert isinstance(result, CaseTitleResult)
@@ -72,22 +72,22 @@ class TestTitleGeneratorIntegration:
         lower = result.generated_title.lower()
         assert any(kw in lower for kw in ("ssh", "key", "auth", "server", "remote"))
 
-    async def test_title_fits_within_max_length(self, test_settings):
+    async def test_title_fits_within_max_length(self, user_settings):
         """Generated title must never exceed max_length."""
         result = await generate_case_title(
             "I am having trouble with my Kubernetes cluster and pods are crashing with OOMKilled errors",
             max_length=40,
-            settings=test_settings
+            settings=user_settings
         )
 
         assert isinstance(result, CaseTitleResult)
         assert len(result.generated_title) <= 40
 
-    async def test_title_is_single_line(self, test_settings):
+    async def test_title_is_single_line(self, user_settings):
         """Title must always be a single line — no newlines."""
         result = await generate_case_title(
             "Database connection pool exhausted under high load in production environment",
-            settings=test_settings
+            settings=user_settings
         )
 
         assert "\n" not in result.generated_title

@@ -58,12 +58,7 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
 # an entry requires adding a ``ToolSpec`` in ``tool_registry.TOOL_SPECS``
 # and the corresponding ``_build_*`` / ``_handle_*`` methods on
 # ``AIToolService``. See ``docs/architecture/ai_agents.md``.
-_PENDING_RESTORATION: frozenset[str] = frozenset({
-    OperatorToolName.READ_FILE_CONTENT.value,
-    OperatorToolName.FETCH_EXECUTION_OUTPUT.value,
-    OperatorToolName.FETCH_SESSION_HISTORY.value,
-    OperatorToolName.RESTORE_FILE.value,
-})
+from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 
 
 def test_pending_restoration_tools_are_not_in_operator_tools():

@@ -43,6 +43,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus } from '../../constants/operator.js';
+import { OperatorDocument } from '../../models/operator_model.js';
 import {
     G8E_GATEWAY_CONTAINER_NAME,
     G8E_GATEWAY_OPERATOR_LAUNCH_TIMEOUT_MS,
@@ -94,15 +95,16 @@ class G8ENodeOperatorService {
             return null;
         }
 
-        // We use the raw data if it's not a class instance, or just return as is
-        const operator = operatorData;
+        const operator = operatorData instanceof OperatorDocument
+            ? operatorData
+            : OperatorDocument.fromDB(operatorData);
 
         const alreadyActive = operator.status === OperatorStatus.ACTIVE ||
                               operator.status === OperatorStatus.BOUND;
 
         logger.info('[G8EP-OPERATOR] g8ep operator slot resolved', {
             user_id,
-            operator_id: operator.operator_id,
+            operator_id: operator.id,
             status: operator.status,
             alreadyActive,
         });
@@ -251,7 +253,7 @@ class G8ENodeOperatorService {
         }
 
         const { operator } = slotResult;
-        const operator_id = operator.operator_id;
+        const operator_id = operator.id;
 
         logger.info('[G8EP-OPERATOR] Stopping supervised operator service in g8ep', {
             user_id,
@@ -319,7 +321,7 @@ class G8ENodeOperatorService {
             if (slotResult.alreadyActive) {
                 logger.info('[G8EP-OPERATOR] g8ep operator already active for user — skipping launch', {
                     user_id,
-                    operator_id: slotResult.operator.operator_id
+                    operator_id: slotResult.operator.id
                 });
                 return;
             }
@@ -330,7 +332,7 @@ class G8ENodeOperatorService {
             if (!apiKey) {
                 logger.warn('[G8EP-OPERATOR] Operator slot has no API key — g8ep operator will not be launched', {
                     user_id,
-                    operator_id: operator.operator_id,
+                    operator_id: operator.id,
                 });
                 return;
             }

@@ -66,22 +66,21 @@ export const ChatSSEHandlersMixin = {
             this.handleChatStopped(data);
         });
 
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
-            this.handleSearchWebIndicator(data);
-        });
-
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
-            this.handleSearchWebCompleted(data);
-        });
-
-        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
-            this.handleSearchWebFailed(data);
-        });
-
-        this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED, (data) => {
-            this.handleNetworkPortCheckIndicator(data);
-        });
-
+        // IMPORTANT: Do NOT subscribe to OPERATOR_NETWORK_PORT_CHECK_REQUESTED for UI
+        // indicator creation. STARTED owns the indicator lifecycle.
+        //
+        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves two distinct roles:
+        //   1. MCP tool-call event dispatched to the operator (g8eo).
+        //   2. A frontend notification emitted by agent_sse when the LLM's TOOL_CALL
+        //      stream chunk is processed (see agent_sse.py).
+        //
+        // Although the execution_id on REQUESTED now matches the one used by
+        // port_service for STARTED/COMPLETED/FAILED (both originate from
+        // orchestrate_tool_execution's generate_command_execution_id), the TOOL_CALL
+        // chunk is yielded by execute_turn_tool_calls AFTER it awaits the full
+        // port-check, so REQUESTED arrives AFTER STARTED/COMPLETED. An indicator
+        // created from REQUESTED would therefore never be completed.
+        // Only STARTED/COMPLETED/FAILED drive the UI indicator lifecycle.
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, (data) => {
             this.handleNetworkPortCheckIndicator(data);
         });
@@ -187,12 +186,12 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalVotingCompleted(data);
         });
 
-        this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_STARTED, (data) => {
-            this.handleTribunalVerifierStarted(data);
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_STARTED, (data) => {
+            this.handleTribunalAuditorStarted(data);
         });
 
-        this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED, (data) => {
-            this.handleTribunalVerifierCompleted(data);
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED, (data) => {
+            this.handleTribunalAuditorCompleted(data);
         });
 
         this.eventBus.on(EventType.TRIBUNAL_SESSION_COMPLETED, (data) => {
@@ -377,47 +376,6 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.appendStreamingTextChunk(data.web_session_id, textContent);
     },
 
-    handleSearchWebIndicator(data) {
-        if (!this.shouldProcessEvent(data)) return;
-        const webSessionId = data.web_session_id;
-        if (!webSessionId || !this.anchoredTerminal) return;
-        const executionId = data.execution_id;
-        if (!executionId) return;
-        const indicatorId = `search-web-${executionId}`;
-        if (!this._searchWebIndicators) this._searchWebIndicators = new Map();
-        this._searchWebIndicators.set(executionId, indicatorId);
-        const query = data.query;
-        if (query === undefined || query === null) {
-            console.error('[CHAT] handleSearchWebIndicator: missing query in payload', data);
-            return;
-        }
-        this.anchoredTerminal.appendActivityIndicator({
-            id: indicatorId,
-            icon: 'search',
-            label: 'Searching the web',
-            detail: query,
-            category: ToolDisplayCategory.SEARCH,
-        });
-    },
-
-    handleSearchWebCompleted(data) {
-        if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._searchWebIndicators) return;
-        const indicatorId = this._searchWebIndicators.get(data.execution_id);
-        if (!indicatorId) return;
-        this.anchoredTerminal.completeActivityIndicator(indicatorId);
-        this._searchWebIndicators.delete(data.execution_id);
-    },
-
-    handleSearchWebFailed(data) {
-        if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._searchWebIndicators) return;
-        const indicatorId = this._searchWebIndicators.get(data.execution_id);
-        if (!indicatorId) return;
-        this.anchoredTerminal.completeActivityIndicator(indicatorId);
-        this._searchWebIndicators.delete(data.execution_id);
-    },
-
     handleNetworkPortCheckIndicator(data) {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
@@ -492,7 +450,6 @@ export const ChatSSEHandlersMixin = {
             this.anchoredTerminal?.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
             this.anchoredTerminal?.clearActivityIndicators();
-            this._searchWebIndicators?.clear();
             this._portCheckIndicators?.clear();
             this._hasResetAutoScrollForSession?.delete(webSessionId);
         }
@@ -516,6 +473,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalPass(widgetId, {
             passIndex: data.pass_index,
             success: data.success,
+            candidate: data.candidate,
         });
     },
 
@@ -528,7 +486,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
     },
 
-    handleTribunalVerifierStarted(data) {
+    handleTribunalAuditorStarted(data) {
         if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
@@ -537,7 +495,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying\u2026');
     },
 
-    handleTribunalVerifierCompleted(data) {
+    handleTribunalAuditorCompleted(data) {
         if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
@@ -586,8 +544,8 @@ export const ChatSSEHandlersMixin = {
 
         this.anchoredTerminal?.hideWaitingIndicator();
         this.anchoredTerminal?.clearActivityIndicators();
-        this._searchWebIndicators?.clear();
         this._portCheckIndicators?.clear();
+        this._searchWebIndicators?.clear();
         this._hasResetAutoScrollForSession?.delete(webSessionId);
 
         if (this.anchoredTerminal && data.content) {
@@ -691,6 +649,14 @@ export const ChatSSEHandlersMixin = {
 
         const executionId = data.execution_id;
         if (!executionId) return;
+
+        // check_port_status has a dedicated sidecar indicator driven by
+        // OPERATOR_NETWORK_PORT_CHECK_STARTED/COMPLETED/FAILED from port_service
+        // (which fires in the correct order relative to this generic STARTED event).
+        const toolName = data.tool_name;
+        if (toolName === 'check_port_status') {
+            return;
+        }
 
         const indicatorId = `tool-${executionId}`;
         if (!this._toolCallIndicators) this._toolCallIndicators = new Map();

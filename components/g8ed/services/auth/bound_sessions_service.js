@@ -27,6 +27,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { now } from '../../models/base.js';
 import { BoundSessionsDocument } from '../../models/session_binding_model.js';
 import { BoundOperatorContext } from '../../models/request_models.js';
@@ -78,8 +79,8 @@ export class BoundSessionsService {
         }
 
         logger.info('[BOUND-SESSIONS] Operator bound to web session durability layer', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
+            webSessionId_tag: sessionIdTag(webSessionId),
             operatorId
         });
     }
@@ -117,8 +118,8 @@ export class BoundSessionsService {
         }
 
         logger.info('[BOUND-SESSIONS] Operator unbound from web session durability layer', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
+            webSessionId_tag: sessionIdTag(webSessionId),
             operatorId
         });
     }
@@ -191,7 +192,7 @@ export class BoundSessionsService {
 
         if (boundOperators.length > 0) {
             logger.info('[BOUND-SESSIONS] Resolved bound operators for web session', {
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
                 count: boundOperators.length,
                 operatorIds: boundOperators.map(op => op.operator_id)
             });
@@ -275,7 +276,7 @@ export class BoundSessionsService {
         } catch (err) {
             logger.error('[BOUND-SESSIONS] Failed to create binding document', {
                 error: err.message,
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
             });
         }
     }
@@ -312,7 +313,7 @@ export class BoundSessionsService {
         } catch (err) {
             logger.error('[BOUND-SESSIONS] Failed to update binding document', {
                 error: err.message,
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
                 operation,
             });
         }

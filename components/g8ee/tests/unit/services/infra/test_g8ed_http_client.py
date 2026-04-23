@@ -73,7 +73,11 @@ class MockG8eHTTPClient:
     async def post(self, url: str, json_data: dict, headers: dict, context=None, **kwargs):
         self._captured_method = "POST"
         self._captured_url = url
-        self._captured_json_data = json_data
+        # Handle Pydantic models by converting to dict
+        if hasattr(json_data, 'model_dump'):
+            self._captured_json_data = json_data.model_dump(mode="json")
+        else:
+            self._captured_json_data = json_data
         self._captured_headers = headers or {}
         if self._side_effect:
             raise self._side_effect
@@ -356,7 +360,8 @@ class TestG8edHttpClientGrantIntent:
         await client.grant_intent("op-test-456", "s3_read", context)
 
         assert mock_http._captured_url == "/api/internal/operators/op-test-456/grant-intent"
-        assert mock_http._captured_json_data == {"intent": "s3_read"}
+        expected = IntentRequestPayload(intent="s3_read").model_dump(mode="json")
+        assert mock_http._captured_json_data == expected
 
     async def test_sends_correct_auth_headers(self, mock_settings):
         """grant_intent sends internal auth headers to g8es."""
@@ -506,7 +511,8 @@ class TestG8edHttpClientRevokeIntent:
         await client.revoke_intent("op-test-456", "s3_write", context)
 
         assert mock_http._captured_url == "/api/internal/operators/op-test-456/revoke-intent"
-        assert mock_http._captured_json_data == {"intent": "s3_write"}
+        expected = IntentRequestPayload(intent="s3_write").model_dump(mode="json")
+        assert mock_http._captured_json_data == expected
 
     async def test_sends_correct_auth_headers(self, mock_settings):
         """Sends correct auth headers using G8eHeaders constant."""
