@@ -253,7 +253,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.headers[WEB_SESSION_ID_HEADER] || req.body?.web_session_id;
             logger.warn('[RATE-LIMIT] Chat rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip,
                 path: req.path
             });
@@ -279,7 +279,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.query.webSessionId;
             logger.warn('[RATE-LIMIT] SSE connection rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip
             });
             res.status(429).send(RateLimitError.SSE_ATTEMPTS_WAIT);
@@ -325,7 +325,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             const webSessionId = req.headers[WEB_SESSION_ID_HEADER];
             logger.warn('[RATE-LIMIT] Upload rate limit exceeded', {
-                webSessionId: redactWebSessionId(webSessionId),
+                webSessionId_tag: sessionIdTag(webSessionId),
                 ip: req.ip
             });
             res.status(429).json(new ErrorResponse({

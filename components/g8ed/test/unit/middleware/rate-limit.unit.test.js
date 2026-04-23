@@ -17,6 +17,7 @@ import { RateLimitError } from '@g8ed/constants/rate_limits.js';
 import { WEB_SESSION_ID_HEADER, BEARER_PREFIX } from '@g8ed/constants/auth.js';
 import { logger } from '@g8ed/utils/logger.js';
 import { redactWebSessionId } from '@g8ed/utils/security.js';
+import { sessionIdTag } from '@g8ed/utils/session_log.js';
 
 // Mock express-rate-limit
 vi.mock('express-rate-limit', () => {
@@ -49,6 +50,19 @@ vi.mock('@g8ed/utils/security.js', () => ({
             return id;
         }
         return id.substring(0, 15) + '...';
+    })
+}));
+
+// Mock session_log
+vi.mock('@g8ed/utils/session_log.js', () => ({
+    sessionIdTag: vi.fn((id) => {
+        if (!id || typeof id !== 'string') {
+            return '<none>';
+        }
+        if (id.startsWith('session-')) {
+            return 'abc123def456';
+        }
+        return 'eceb8c5f589b';
     })
 }));
 
@@ -162,7 +176,7 @@ describe('RateLimit Middleware', () => {
             req.headers[WEB_SESSION_ID_HEADER] = 'session-123';
 
             limiter.options.handler(req, res);
-            expect(redactWebSessionId).toHaveBeenCalledWith('session-123');
+            expect(sessionIdTag).toHaveBeenCalledWith('session-123');
         });
 
         it('should extract webSessionId from body when header missing', () => {
@@ -170,10 +184,10 @@ describe('RateLimit Middleware', () => {
             req.body.web_session_id = 'session-456';
 
             limiter.options.handler(req, res);
-            expect(redactWebSessionId).toHaveBeenCalledWith('session-456');
+            expect(sessionIdTag).toHaveBeenCalledWith('session-456');
         });
 
-        it('should log warning with redacted webSessionId, IP, and path', () => {
+        it('should log warning with webSessionId_tag, IP, and path', () => {
             const limiter = limiters.chatRateLimiter;
             req.headers[WEB_SESSION_ID_HEADER] = 'session-123';
 
@@ -181,7 +195,7 @@ describe('RateLimit Middleware', () => {
             expect(logger.warn).toHaveBeenCalledWith(
                 '[RATE-LIMIT] Chat rate limit exceeded',
                 expect.objectContaining({
-                    webSessionId: 'session-123',
+                    webSessionId_tag: 'abc123def456',
                     ip: '127.0.0.1',
                     path: '/api/test'
                 })
@@ -214,10 +228,10 @@ describe('RateLimit Middleware', () => {
             req.query.webSessionId = 'session-123';
 
             limiter.options.handler(req, res);
-            expect(redactWebSessionId).toHaveBeenCalledWith('session-123');
+            expect(sessionIdTag).toHaveBeenCalledWith('session-123');
         });
 
-        it('should log warning with redacted webSessionId and IP', () => {
+        it('should log warning with webSessionId_tag and IP', () => {
             const limiter = limiters.sseRateLimiter;
             req.query.webSessionId = 'session-123';
 
@@ -225,7 +239,7 @@ describe('RateLimit Middleware', () => {
             expect(logger.warn).toHaveBeenCalledWith(
                 '[RATE-LIMIT] SSE connection rate limit exceeded',
                 expect.objectContaining({
-                    webSessionId: 'session-123',
+                    webSessionId_tag: 'abc123def456',
                     ip: '127.0.0.1'
                 })
             );
@@ -278,7 +292,7 @@ describe('RateLimit Middleware', () => {
             expect(limiter.options.standardHeaders).toBe(true);
         });
 
-        it('should log warning with redacted webSessionId and IP', () => {
+        it('should log warning with webSessionId_tag and IP', () => {
             const limiter = limiters.uploadRateLimiter;
             req.headers[WEB_SESSION_ID_HEADER] = 'session-123';
 
@@ -286,7 +300,7 @@ describe('RateLimit Middleware', () => {
             expect(logger.warn).toHaveBeenCalledWith(
                 '[RATE-LIMIT] Upload rate limit exceeded',
                 expect.objectContaining({
-                    webSessionId: 'session-123',
+                    webSessionId_tag: 'abc123def456',
                     ip: '127.0.0.1'
                 })
             );
@@ -310,7 +324,7 @@ describe('RateLimit Middleware', () => {
             expect(limiter.options.standardHeaders).toBe(true);
         });
 
-        it('should log warning with IP and truncated operatorSessionId', () => {
+        it('should log warning with IP and operatorSessionId_tag', () => {
             const limiter = limiters.operatorRefreshRateLimiter;
             req.body.operator_session_id = 'op-session-1234567890';
 
@@ -319,7 +333,7 @@ describe('RateLimit Middleware', () => {
                 '[RATE-LIMIT] Operator refresh rate limit exceeded',
                 expect.objectContaining({
                     ip: '127.0.0.1',
-                    operatorSessionId: 'op-session-1...'
+                    operatorSessionId_tag: 'eceb8c5f589b'
                 })
             );
         });
