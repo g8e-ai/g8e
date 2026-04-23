@@ -22,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
 
@@ -72,42 +71,12 @@ func (rr *PubSubResultsService) publishResultEnvelope(
 		return fmt.Errorf("failed to build %s message: %w", eventType, err)
 	}
 
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, payload); err != nil {
-		return err
-	}
-
 	msg.APIKey = rr.config.APIKey
 	msg.TaskID = taskID
 	msg.InvestigationID = investigationID
 	msg.OperatorSessionID = originalMsg.OperatorSessionID
 
 	return rr.publish(ctx, msg)
-}
-
-func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
-	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
-		return nil
-	}
-
-	executionID := executionIDFromMessage(originalMsg)
-	warnIfMCPExecutionIDMissing(rr.logger, originalMsg, executionID, eventType)
-	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, executionID, eventType, payload)
-	if err != nil {
-		return fmt.Errorf("failed to wrap result for MCP: %w", err)
-	}
-	mcpRaw, err := json.Marshal(mcpResp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP response: %w", err)
-	}
-	msg.EventType = constants.Event.Operator.MCP.ToolsResult
-	msg.Payload = mcpRaw
-
-	rr.logger.Info("Wrapped result as MCP JSON-RPC response",
-		"original_msg_id", originalMsg.ID,
-		"new_event_type", msg.EventType,
-		"payload_size", len(mcpRaw))
-
-	return nil
 }
 
 // PublishExecutionResult publishes command execution result via g8es pub/sub

@@ -151,7 +151,6 @@ type operatorEvents struct {
 	RestoreFile      operatorRestoreFileEvents
 	FetchFileDiff    operatorFetchFileDiffEvents
 	Audit            operatorAuditEvents
-	MCP              operatorMcpEvents
 }
 
 // events is the top-level namespace. Canonical values from shared/constants/events.json.
@@ -248,10 +247,6 @@ var Event = events{
 			AIMsg:           "g8e.v1.operator.audit.ai.recorded",
 			DirectCmd:       "g8e.v1.operator.audit.direct.command.recorded",
 			DirectCmdResult: "g8e.v1.operator.audit.direct.command.result.recorded",
-		},
-		MCP: operatorMcpEvents{
-			ToolsCall:   "g8e.v1.operator.mcp.tools.call",
-			ToolsResult: "g8e.v1.operator.mcp.tools.result",
 		},
 	},
 }

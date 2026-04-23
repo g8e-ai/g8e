@@ -21,21 +21,11 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
 // executionIDFromMessage resolves the execution_id for a command from the
 // inbound payload's execution_id field. If the payload does not carry one it
-// falls back to the envelope id (msg.ID) for native g8e envelopes, where g8ee
-// sets id == execution_id by convention.
-//
-// For MCP-translated envelopes (EventType == operator.mcp.tools.call) the
-// envelope id has been rewritten to the JSON-RPC request id by
-// handleMCPToolsCall and is NOT the execution_id; in that case the fallback
-// is suppressed and "" is returned so callers surface the missing id rather
-// than stamp results with the wrong value. Well-formed MCP tool arguments
-// from g8ee always include execution_id, so an empty return here indicates
-// a protocol violation upstream.
+// falls back to the envelope id (msg.ID).
 func executionIDFromMessage(msg PubSubCommandMessage) string {
 	var probe struct {
 		ExecutionID string `json:"execution_id"`
@@ -43,25 +33,7 @@ func executionIDFromMessage(msg PubSubCommandMessage) string {
 	if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
 		return probe.ExecutionID
 	}
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		return ""
-	}
 	return msg.ID
-}
-
-// warnIfMCPExecutionIDMissing logs a warning when an MCP-translated envelope
-// resolves to an empty execution_id. Well-formed MCP tool arguments from g8ee
-// always include execution_id, so an empty value here indicates an upstream
-// protocol violation. Logged fields are kept to a minimum for signal density.
-func warnIfMCPExecutionIDMissing(logger *slog.Logger, msg PubSubCommandMessage, resolvedID, eventType string) {
-	if msg.EventType != constants.Event.Operator.MCP.ToolsCall || resolvedID != "" {
-		return
-	}
-	logger.Warn("MCP envelope missing execution_id in tool arguments; result metadata will be empty",
-		"envelope_event_type", msg.EventType,
-		"jsonrpc_request_id", msg.ID,
-		"case_id", msg.CaseID,
-		"result_event_type", eventType)
 }
 
 // setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
@@ -97,17 +69,6 @@ func publishLFAATypedResponseTo(
 	if err != nil {
 		logger.Error("Failed to build LFAA typed response", "error", err)
 		return
-	}
-
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
-		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, payload)
-		if err != nil {
-			logger.Error("Failed to wrap result for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
 	}
 
 	resultMsg.APIKey = cfg.APIKey
@@ -158,17 +119,6 @@ func publishLFAAErrorTo(
 		return
 	}
 
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
-		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, &payload)
-		if err != nil {
-			logger.Error("Failed to wrap error for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
-	}
-
 	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
@@ -205,18 +155,6 @@ func publishLFAAResponseTo(
 	if err != nil {
 		logger.Error("Failed to build LFAA response", "error", err)
 		return
-	}
-
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		executionID := executionIDFromMessage(msg)
-		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
-		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, responseJSON)
-		if err != nil {
-			logger.Error("Failed to wrap result for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
 	}
 
 	resultMsg.APIKey = cfg.APIKey

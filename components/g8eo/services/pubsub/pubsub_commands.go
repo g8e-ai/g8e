@@ -25,7 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
-	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
@@ -169,7 +168,6 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.Audit.DirectCmd:            rs.audit.HandleDirectCmdRequest,
 		constants.Event.Operator.Audit.DirectCmdResult:      rs.audit.HandleDirectCmdResultRequest,
 		constants.Event.Operator.FetchFileDiff.Requested:    rs.history.HandleFetchFileDiffRequest,
-		constants.Event.Operator.MCP.ToolsCall:              rs.handleMCPToolsCall,
 	}
 }
 
@@ -362,79 +360,6 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 		return
 	}
 	handler(rs.ctx, cmdMsg)
-}
-
-func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubSubCommandMessage) {
-	rs.logger.Info("Handling MCP tools call", "id", msg.ID)
-
-	var req mcp.JSONRPCRequest
-	if err := json.Unmarshal(msg.Payload, &req); err != nil {
-		rs.logger.Error("Failed to parse MCP JSON-RPC request", "error", err)
-		return
-	}
-
-	g8eMsg, err := mcp.TranslateToolCallToCommand(&req)
-	if err != nil {
-		rs.logger.Error("Failed to translate MCP tool call", "error", err)
-
-		// Send MCP error response back
-		errResp := &mcp.JSONRPCResponse{
-			JSONRPC: "2.0",
-			ID:      req.ID,
-			Error: &mcp.JSONRPCError{
-				Code:    mcp.MethodNotFound,
-				Message: err.Error(),
-			},
-		}
-
-		if msg.OperatorID == nil {
-			rs.logger.Error("Cannot send MCP error response: operator_id is nil (required for routing)")
-			return
-		}
-
-		respMsg, err := models.NewG8eMessage(
-			constants.Event.Operator.MCP.ToolsResult,
-			msg.CaseID,
-			*msg.OperatorID,
-			msg.OperatorSessionID,
-			rs.config.SystemFingerprint,
-			errResp,
-		)
-		if err != nil {
-			rs.logger.Error("Failed to build MCP error response message", "error", err)
-			return
-		}
-		respMsg.InvestigationID = msg.InvestigationID
-		respMsg.TaskID = msg.TaskID
-
-		if rs.results != nil {
-			_ = rs.results.PublishResult(ctx, respMsg)
-		}
-		return
-	}
-
-	rs.logger.Info("MCP tool call translated successfully",
-		"original_event_type", msg.EventType,
-		"translated_event_type", g8eMsg.EventType,
-		"mcp_request_id", req.ID)
-
-	// Update the message with translated data but keep the EventType as MCP.ToolsCall
-	// so the results publisher knows to wrap the result.
-	// We only change the Payload to what the handlers expect.
-	msg.Payload = g8eMsg.Payload
-	msg.ID = g8eMsg.ID // MCP request ID
-
-	rs.logger.Info("Dispatching to handler",
-		"handler_event_type", g8eMsg.EventType,
-		"preserving_original_event_type", msg.EventType)
-
-	// Now dispatch based on the translated EventType using the same dispatch table
-	handler, ok := rs.handlers[g8eMsg.EventType]
-	if !ok {
-		rs.logger.Warn("Unsupported MCP tool event type", "event_type", g8eMsg.EventType)
-		return
-	}
-	handler(ctx, msg)
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {

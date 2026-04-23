@@ -7,6 +7,12 @@
     background: var(--bg-primary);
 }
 
+/* Main container - handles scrolling */
+.console-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
 /* Back link */
 .console-back-link {
     display: inline-flex;

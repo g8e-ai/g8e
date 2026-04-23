@@ -13,7 +13,8 @@
 <body class="console-body" data-theme="<%= theme %>">
     <%- include('partials/nav-public', { currentPage: 'console' }) %>
 
-    <main class="console-page">
+    <div class="console-container">
+        <main class="console-page">
 
         <a href="/chat" class="console-back-link">
             <span class="material-symbols-outlined">arrow_back</span>
@@ -312,6 +313,7 @@
         </div>
 
     </main>
+    </div>
 
     <%- include('partials/footer-public') %>
 

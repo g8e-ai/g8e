@@ -28,6 +28,8 @@ from app.constants import (
     StreamChunkFromModelType,
     ThinkingActionType,
 )
+from app.constants.status import OperatorToolName
+from app.services.ai.tool_registry import AI_UNIVERSAL_TOOLS
 from app.models.agent import (
     AgentInputs,
     AgentStreamState,
@@ -35,6 +37,7 @@ from app.models.agent import (
 )
 from app.models.base import G8eBaseModel
 from app.models.g8ed_client import (
+    AIToolLifecyclePayload,
     ChatCitationsReadyPayload,
     ChatErrorPayload,
     ChatProcessingStartedPayload,
@@ -42,7 +45,6 @@ from app.models.g8ed_client import (
     ChatResponseCompletePayload,
     ChatRetryPayload,
     ChatThinkingPayload,
-    ChatToolCallPayload,
     ChatTurnCompletePayload,
 )
 from app.errors import ValidationError
@@ -190,45 +192,64 @@ async def deliver_via_sse(
                 if fn and fn not in state.tool_types_used:
                     state.tool_types_used.append(fn)
 
-                # Emit generic tool call started event for all tools
-                await _publish(
-                    EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED,
-                    ChatToolCallPayload(
-                        tool_name=fn,
-                        display_label=chunk.data.display_label,
-                        display_icon=chunk.data.display_icon,
-                        display_detail=chunk.data.display_detail,
-                        category=chunk.data.category,
-                        execution_id=exec_id,
-                        status=ToolCallStatus.STARTED,
-                    ),
-                )
+                # For universal tools, emit the new native lifecycle event.
+                # Operator-gated tools are handled by their respective services.
+                if fn in AI_UNIVERSAL_TOOLS:
+                    event_type = None
+                    if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
+                        event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED
+                    elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
+                        event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED
+                    elif fn == OperatorToolName.G8E_SEARCH_WEB:
+                        event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED
 
-                # No per-tool sidecar REQUESTED events are emitted here. The generic
-                # LLM_CHAT_ITERATION_TOOL_CALL_STARTED event (above) carries the
-                # display metadata for every tool and owns the UI indicator
-                # lifecycle. Port check STARTED / COMPLETED / FAILED are emitted
-                # separately by port_service and keep their dedicated sidecar path.
+                    if event_type:
+                        await _publish(
+                            event_type,
+                            AIToolLifecyclePayload(
+                                tool_name=fn,
+                                display_label=chunk.data.display_label,
+                                display_icon=chunk.data.display_icon,
+                                display_detail=chunk.data.display_detail,
+                                category=chunk.data.category,
+                                execution_id=exec_id,
+                                status=ToolCallStatus.STARTED,
+                            ),
+                        )
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
                 exec_id = chunk.data.execution_id
                 fn = chunk.data.tool_name or ""
 
-                # Emit generic tool call completed event for all tools
-                await _publish(
-                    EventType.LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED,
-                    ChatToolCallPayload(
-                        tool_name=fn,
-                        display_label=chunk.data.display_label,
-                        display_icon=chunk.data.display_icon,
-                        display_detail=chunk.data.display_detail,
-                        category=chunk.data.category,
-                        execution_id=exec_id,
-                        status=ToolCallStatus.COMPLETED,
-                    ),
-                )
+                # For universal tools, emit the new native lifecycle event.
+                if fn in AI_UNIVERSAL_TOOLS:
+                    event_type = None
+                    # We use RECEIVED/COMPLETED/FAILED depending on the tool.
+                    # Plan says REQUESTED -> RECEIVED -> COMPLETED -> FAILED.
+                    # agent_sse.py sees TOOL_RESULT which maps to COMPLETED/FAILED.
+                    if fn == OperatorToolName.QUERY_INVESTIGATION_CONTEXT:
+                        event_type = EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED
+                    elif fn == OperatorToolName.GET_COMMAND_CONSTRAINTS:
+                        event_type = EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED
+                    elif fn == OperatorToolName.G8E_SEARCH_WEB:
+                        event_type = EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED
+
+                    if event_type:
+                        await _publish(
+                            event_type,
+                            AIToolLifecyclePayload(
+                                tool_name=fn,
+                                display_label=chunk.data.display_label,
+                                display_icon=chunk.data.display_icon,
+                                display_detail=chunk.data.display_detail,
+                                category=chunk.data.category,
+                                execution_id=exec_id,
+                                status=ToolCallStatus.COMPLETED,
+                            ),
+                        )
 
                 _turn += 1
+
                 await _publish(
                     EventType.LLM_CHAT_ITERATION_COMPLETED,
                     ChatTurnCompletePayload(turn=_turn),

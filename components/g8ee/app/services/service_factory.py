@@ -51,7 +51,6 @@ from app.services.operator.operator_data_service import OperatorDataService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.services.operator.execution_registry import ExecutionRegistryService
-from app.services.mcp.gateway_service import MCPGatewayService
 from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
@@ -101,7 +100,6 @@ class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
     operator_command_service: OperatorCommandService
     tool_service: ToolExecutorProtocol
     tool_executor: ToolExecutorProtocol
-    mcp_gateway_service: MCPGatewayService
     request_builder: AIRequestBuilder
     g8e_agent: g8eEngine
     chat_task_manager: BackgroundTaskManager
@@ -283,12 +281,6 @@ class ServiceFactory:
             platform_settings=settings,
         )
 
-        mcp_gateway_service = MCPGatewayService(
-            tool_service=tool_executor,
-            investigation_service=domain_services['investigation_service'],  # type: ignore[arg-type]
-            operator_data_service=data_services['operator_data_service'],  # type: ignore[arg-type]
-        )
-
         request_builder = AIRequestBuilder(
             tool_executor=tool_executor,
         )
@@ -322,7 +314,6 @@ class ServiceFactory:
             operator_command_service=operator_command_service,
             tool_service=tool_executor,
             tool_executor=tool_executor,
-            mcp_gateway_service=mcp_gateway_service,
             request_builder=request_builder,
             g8e_agent=g8e_agent,
             chat_task_manager=chat_task_manager,

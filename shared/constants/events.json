@@ -271,12 +271,6 @@
           "changed": "g8e.v1.operator.terminal.auth.state.changed"
         }
       }
-    },
-    "mcp": {
-      "tools": {
-        "call": "g8e.v1.operator.mcp.tools.call",
-        "result": "g8e.v1.operator.mcp.tools.result"
-      }
     }
   },
   "ai": {
@@ -347,6 +341,22 @@
               "completed": "g8e.v1.ai.llm.tool.g8e.web.search.completed",
               "failed": "g8e.v1.ai.llm.tool.g8e.web.search.failed"
             }
+          },
+          "investigation": {
+            "query": {
+              "requested": "g8e.v1.ai.llm.tool.g8e.investigation.query.requested",
+              "received": "g8e.v1.ai.llm.tool.g8e.investigation.query.received",
+              "completed": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed",
+              "failed": "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
+            }
+          },
+          "command": {
+            "constraints": {
+              "requested": "g8e.v1.ai.llm.tool.g8e.command.constraints.requested",
+              "received": "g8e.v1.ai.llm.tool.g8e.command.constraints.received",
+              "completed": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed",
+              "failed": "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"
+            }
           }
         }
       },
@@ -380,12 +390,6 @@
           },
           "citations": {
             "received": "g8e.v1.ai.llm.chat.iteration.citations.received"
-          },
-          "tool": {
-            "call": {
-              "started": "g8e.v1.ai.llm.chat.iteration.tool.call.started",
-              "completed": "g8e.v1.ai.llm.chat.iteration.tool.call.completed"
-            }
           },
           "text": {
             "received": "g8e.v1.ai.llm.chat.iteration.text.received",

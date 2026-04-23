@@ -56,8 +56,6 @@ from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
 from .services.operator.heartbeat_service import OperatorHeartbeatService
-from .services.mcp.gateway_service import MCPGatewayService
-
 logger = logging.getLogger(__name__)
 
 
@@ -248,14 +246,6 @@ async def get_g8ee_blob_service(request: Request) -> BlobService:
     return service
 
 
-async def get_g8ee_mcp_gateway_service(request: Request) -> MCPGatewayService:
-    service = getattr(request.app.state, "mcp_gateway_service", None)
-    if not service:
-        logger.error("MCP Gateway Service not found in app state - g8ee initialization may have failed")
-        raise ServiceUnavailableError("MCP Gateway Service not available")
-    return service
-
-
 async def get_g8ee_attachment_service(request: Request) -> AttachmentService:
     service = getattr(request.app.state, "attachment_service", None)
     if not service:
@@ -352,5 +342,4 @@ __all__ = [
     "health_check_dependencies",
     "get_g8ee_grounding_service",
     "get_g8eeweb_search_provider",
-    "get_g8ee_mcp_gateway_service",
 ]

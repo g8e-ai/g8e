@@ -57,12 +57,6 @@ from app.models.pubsub_messages import (
 
 logger = logging.getLogger(__name__)
 
-_FILE_EDIT_EVENTS = frozenset({
-    EventType.OPERATOR_FILE_EDIT_COMPLETED,
-    EventType.OPERATOR_FILE_EDIT_FAILED,
-})
-
-
 # Map event types to payload models for reconstruction
 _PAYLOAD_MODELS = {
     EventType.OPERATOR_FILE_EDIT_COMPLETED: FileEditResultPayload,

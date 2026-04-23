@@ -156,8 +156,13 @@ class ChatRetryPayload(G8eBaseModel):
     max_attempts: int = Field(description="Maximum number of retry attempts")
 
 
-class ChatToolCallPayload(G8eBaseModel):
-    """Payload for EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED/COMPLETED."""
+class AIToolLifecyclePayload(G8eBaseModel):
+    """Payload for per-tool lifecycle events (requested/completed/failed).
+
+    Used by the three universal AI tools (query_investigation_context,
+    get_command_constraints, g8e_search_web) to drive frontend activity
+    indicators via execution_id correlation.
+    """
 
     tool_name: str | None = Field(default=None, description="Name of the tool being called")
     display_label: str | None = Field(default=None, description="Human-readable label for the tool")

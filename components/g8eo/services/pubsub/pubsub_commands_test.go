@@ -1024,62 +1024,6 @@ func TestPubSubCommandService_HandleShutdownRequest(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleMCPToolsCall
-// ---------------------------------------------------------------------------
-
-func TestPubSubCommandService_HandleMCPToolsCall(t *testing.T) {
-	t.Run("handles nil OperatorID gracefully without panic", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		// Create an invalid MCP JSON-RPC request that will fail translation
-		invalidReq := json.RawMessage(`{"jsonrpc":"2.0","id":"req-123","method":"tools/call","params":{"name":"unknown_tool"}}`)
-
-		msg := PubSubCommandMessage{
-			ID:                "req-123",
-			EventType:         constants.Event.Operator.MCP.ToolsCall,
-			CaseID:            "case-456",
-			InvestigationID:   "inv-789",
-			OperatorSessionID: "session-abc",
-			OperatorID:        nil, // This is the key condition being tested
-			Payload:           invalidReq,
-			Timestamp:         time.Now().UTC(),
-		}
-
-		// Call the function - it should log an error and return without panicking
-		// Since OperatorID is nil, it cannot publish a response
-		assert.NotPanics(t, func() {
-			f.Svc.handleMCPToolsCall(context.Background(), msg)
-		})
-
-		// Verify no message was published (since OperatorID is nil)
-		published := f.DB.LastPublished()
-		assert.Nil(t, published, "expected no message to be published when OperatorID is nil")
-	})
-
-	t.Run("handles JSON parsing error gracefully", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		msg := PubSubCommandMessage{
-			ID:                "req-456",
-			EventType:         constants.Event.Operator.MCP.ToolsCall,
-			CaseID:            "case-789",
-			InvestigationID:   "inv-012",
-			OperatorSessionID: "session-def",
-			OperatorID:        nil,
-			Payload:           json.RawMessage(`invalid json`),
-			Timestamp:         time.Now().UTC(),
-		}
-
-		assert.NotPanics(t, func() {
-			f.Svc.handleMCPToolsCall(context.Background(), msg)
-		})
-
-		published := f.DB.LastPublished()
-		assert.Nil(t, published, "expected no message to be published when JSON parsing fails")
-	})
-}
-
-// ---------------------------------------------------------------------------
 // SendAutomaticHeartbeat
 // ---------------------------------------------------------------------------
 

@@ -31,7 +31,6 @@ from app.constants.status import (
     ComponentName,
     ExecutionStatus,
     OperatorType,
-    OperatorToolName,
 )
 from app.constants.events import (
     EventType,

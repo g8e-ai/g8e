@@ -33,7 +33,6 @@ from app.constants.status import (
     ComponentName,
     ExecutionStatus,
     FileOperation,
-    OperatorToolName,
 )
 from app.constants.events import (
     EventType,

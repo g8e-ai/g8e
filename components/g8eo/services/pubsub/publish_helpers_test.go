@@ -56,31 +56,6 @@ func TestExecutionIDFromMessage_EmptyExecutionIDInPayloadFallsBack(t *testing.T)
 	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
 }
 
-// For MCP-translated envelopes, msg.ID has been rewritten to the JSON-RPC
-// request id by handleMCPToolsCall and is NOT the execution_id. The fallback
-// must be suppressed so callers don't stamp results with a wrong id.
-func TestExecutionIDFromMessage_MCPEnvelopeDoesNotFallBack(t *testing.T) {
-	payload, err := json.Marshal(map[string]string{"other": "value"})
-	assert.NoError(t, err)
-	msg := PubSubCommandMessage{
-		ID:        "jsonrpc-req-id",
-		EventType: constants.Event.Operator.MCP.ToolsCall,
-		Payload:   payload,
-	}
-	assert.Equal(t, "", executionIDFromMessage(msg))
-}
-
-func TestExecutionIDFromMessage_MCPEnvelopePrefersPayloadExecutionID(t *testing.T) {
-	payload, err := json.Marshal(map[string]string{"execution_id": "cmd_abc_123"})
-	assert.NoError(t, err)
-	msg := PubSubCommandMessage{
-		ID:        "jsonrpc-req-id",
-		EventType: constants.Event.Operator.MCP.ToolsCall,
-		Payload:   payload,
-	}
-	assert.Equal(t, "cmd_abc_123", executionIDFromMessage(msg))
-}
-
 func TestSetExecutionIDOnPayload_LFAAErrorPayload(t *testing.T) {
 	payload := &models.LFAAErrorPayload{
 		Success: false,

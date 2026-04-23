@@ -33,7 +33,6 @@ from app.constants.status import (
     ComponentName,
     ExecutionStatus,
     NetworkProtocol,
-    OperatorToolName,
 )
 from app.constants.settings import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,

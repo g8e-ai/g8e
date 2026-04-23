@@ -28,7 +28,6 @@ from app.constants.status import (
     ComponentName,
     ExecutionStatus,
     AITaskId,
-    OperatorToolName,
 )
 from app.constants.events import (
     EventType,
