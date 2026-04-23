@@ -25,6 +25,25 @@ from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.models.command_request_payloads import TargetedOperatorBase
 
+__all__ = [
+    "FileCreateArgs",
+    "FileWriteArgs",
+    "FileReadArgs",
+    "FileUpdateArgs",
+    "SearchWebArgs",
+    "CheckPortArgs",
+    "FsReadArgs",
+    "FsListArgs",
+    "FetchExecutionOutputArgs",
+    "FetchSessionHistoryArgs",
+    "FetchFileHistoryArgs",
+    "RestoreFileArgs",
+    "FetchFileDiffArgs",
+    "GrantIntentArgs",
+    "RevokeIntentArgs",
+    "QueryInvestigationContextArgs",
+]
+
 
 class FileCreateArgs(TargetedOperatorBase):
     """LLM tool call args for OperatorToolName.FILE_CREATE."""

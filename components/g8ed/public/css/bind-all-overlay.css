@@ -28,7 +28,8 @@
 /* Modal container */
 .bind-all-modal {
     background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    border: 2px solid rgba(var(--accent-green-rgb), 0.35);
+    border-left-color: rgba(var(--accent-green-rgb), 0.7);
     border-radius: 12px;
     padding: 20px;
     width: 90%;
@@ -39,6 +40,23 @@
     flex-direction: column;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     animation: slideIn 0.3s ease-out;
+    position: relative;
+}
+
+.bind-all-modal::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 12px;
+    padding: 2px;
+    background: linear-gradient(90deg, transparent, rgba(var(--accent-green-rgb), 0.6), transparent);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: swordShine 3s linear infinite;
+    pointer-events: none;
 }
 
 @keyframes slideIn {
@@ -352,6 +370,15 @@
     }
 }
 
+@keyframes swordShine {
+    0% {
+        background-position: -200% center;
+    }
+    100% {
+        background-position: 200% center;
+    }
+}
+
 /* Success/Error states */
 .bind-all-result {
     display: flex;
@@ -465,7 +492,8 @@
 /* Operator Bind Single Overlay - Inline in Operator Deployment */
 .operator-bind-single-overlay {
     background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    border: 2px solid rgba(var(--accent-green-rgb), 0.35);
+    border-left-color: rgba(var(--accent-green-rgb), 0.7);
     border-radius: 8px;
     padding: 8px;
     margin-bottom: 12px;
@@ -473,6 +501,34 @@
     flex-direction: column;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     animation: slideIn 0.3s ease-out;
+    position: relative;
+}
+
+.operator-bind-single-overlay::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 8px;
+    padding: 2px;
+    background: linear-gradient(90deg, transparent, rgba(var(--accent-green-rgb), 0.6), transparent);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: swordShine 3s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes opbind-pulse {
+    0%, 100% {
+        border-color: rgba(var(--accent-green-rgb), 0.35);
+        border-left-color: rgba(var(--accent-green-rgb), 0.7);
+    }
+    50% {
+        border-color: rgba(var(--accent-green-rgb), 0.5);
+        border-left-color: rgba(var(--accent-green-rgb), 0.85);
+    }
 }
 
 .operator-bind-single-header {
@@ -602,6 +658,24 @@
     background: rgba(16, 185, 129, 0.15);
     color: #10b981;
     border: 1px solid rgba(16, 185, 129, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.operator-bind-single-action-btn.confirm-btn::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 0.25rem;
+    padding: 1px;
+    background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.8), transparent);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: swordShine 3s linear infinite;
+    pointer-events: none;
 }
 
 .operator-bind-single-action-btn.confirm-btn:hover:not(:disabled) {

@@ -357,7 +357,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 operator_id=operator_id,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
-                payload=CommandCancelPayload(execution_id=execution_id),
+                payload=CommandCancelRequestPayload(execution_id=execution_id),
             )
 
             await self.pubsub_service.publish_command(

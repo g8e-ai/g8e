@@ -688,7 +688,7 @@ At the Python application layer, `sentinel_mode` is a `bool` on
 `InvestigationModel` and on the chat/MCP request models. At the pub/sub wire
 boundary it is serialized into `CommandPayload.sentinel_mode` as a `str | None`
 holding one of the `VaultMode` values (`"raw"` or `"scrubbed"`) — see
-`components/g8ee/app/models/command_payloads.py`.
+`components/g8ee/app/models/command_request_payloads.py`.
 
 g8eo is the defaulting authority: when `CommandPayload.sentinel_mode` is
 absent or empty on the wire, `CommandService.HandleExecutionRequest`

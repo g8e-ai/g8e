@@ -346,9 +346,37 @@
     gap: 16px;
     padding: 16px;
     background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    border: 2px solid rgba(var(--accent-green-rgb), 0.35);
+    border-left-color: rgba(var(--accent-green-rgb), 0.7);
     border-radius: 8px;
     margin-top: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.operator-bind-all-overlay::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 8px;
+    padding: 2px;
+    background: linear-gradient(90deg, transparent, rgba(var(--accent-green-rgb), 0.6), transparent);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: swordShine 3s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes swordShine {
+    0% {
+        background-position: -200% center;
+    }
+    100% {
+        background-position: 200% center;
+    }
 }
 
 .operator-bind-all-overlay.active {
@@ -559,9 +587,28 @@
     gap: 16px;
     padding: 16px;
     background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    border: 2px solid rgba(var(--accent-green-rgb), 0.35);
+    border-left-color: rgba(var(--accent-green-rgb), 0.7);
     border-radius: 8px;
     margin-top: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.operator-unbind-all-overlay::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 8px;
+    padding: 2px;
+    background: linear-gradient(90deg, transparent, rgba(var(--accent-green-rgb), 0.6), transparent);
+    background-size: 200% 100%;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: swordShine 3s linear infinite;
+    pointer-events: none;
 }
 
 .operator-unbind-all-overlay.active {

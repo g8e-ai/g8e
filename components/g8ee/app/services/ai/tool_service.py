@@ -607,7 +607,7 @@ class AIToolService:
         request_settings: G8eeUserSettings,
         execution_id: str,
     ) -> ToolResult:
-        args = self._convert_args_to_payload(tool_args, CheckPortPayload, execution_id)
+        args = self._convert_args_to_payload(tool_args, CheckPortRequestPayload, execution_id)
         logger.info("[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
             args.host, args.port, args.protocol)
         result = await self._execute_port_check(
@@ -945,7 +945,7 @@ class AIToolService:
 
     async def _execute_port_check(
         self,
-        args: CheckPortPayload,
+        args: CheckPortRequestPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> PortCheckToolResult:

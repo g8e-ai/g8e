@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-Unit tests for command_payloads.py typed wire models.
+Unit tests for command_request_payloads.py typed wire models.
 
 Covers FsListRequestPayload, FsReadRequestPayload, FetchFileHistoryRequestPayload, FetchFileDiffRequestPayload, and CheckPortRequestPayload:
 - Construction with required and optional fields

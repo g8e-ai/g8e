@@ -51,6 +51,7 @@ usage() {
     echo "  --provider           LLM provider (gemini, anthropic, openai, ollama, vllm)"
     echo "  --primary-llm        Primary model name (llm_model)"
     echo "  --assistant-llm      Assistant model name (llm_assistant_model)"
+    echo "  --lite-llm           Lite model name (llm_lite_model)"
     echo "  --endpoint           API base URL (llm_endpoint)"
     echo "  --openai-api-key     OpenAI API key (llm_api_key)"
     echo "  --gemini-api-key     Gemini API key (gemini_api_key)"
@@ -71,6 +72,7 @@ ARG_USER_ID=""
 ARG_PROVIDER=""
 ARG_MODEL=""
 ARG_ASST_MODEL=""
+ARG_LITE_MODEL=""
 ARG_ENDPOINT=""
 ARG_API_KEY=""
 ARG_GEMINI_KEY=""
@@ -97,6 +99,8 @@ case "$COMMAND" in
                 --assistant-llm)       ARG_ASST_MODEL="$2";             shift 2 ;;
                 --asst-model=*)        ARG_ASST_MODEL="${1#*=}";        shift 1 ;;
                 --asst-model)          ARG_ASST_MODEL="$2";             shift 2 ;;
+                --lite-llm=*)          ARG_LITE_MODEL="${1#*=}";        shift 1 ;;
+                --lite-llm)            ARG_LITE_MODEL="$2";             shift 2 ;;
                 --endpoint=*)          ARG_ENDPOINT="${1#*=}";          shift 1 ;;
                 --endpoint)            ARG_ENDPOINT="$2";               shift 2 ;;
                 --openai-api-key=*)    ARG_API_KEY="${1#*=}";           shift 1 ;;
@@ -190,6 +194,7 @@ case "$COMMAND" in
         [[ -n "$ARG_PROVIDER" ]]      && SET_ARGS+=("llm_provider=$ARG_PROVIDER")
         [[ -n "$ARG_MODEL" ]]         && SET_ARGS+=("llm_model=$ARG_MODEL")
         [[ -n "$ARG_ASST_MODEL" ]]    && SET_ARGS+=("llm_assistant_model=$ARG_ASST_MODEL")
+        [[ -n "$ARG_LITE_MODEL" ]]    && SET_ARGS+=("llm_lite_model=$ARG_LITE_MODEL")
         [[ -n "$ARG_ENDPOINT" ]]      && SET_ARGS+=("llm_endpoint=$ARG_ENDPOINT")
         [[ -n "$ARG_API_KEY" ]]       && SET_ARGS+=("llm_api_key=$ARG_API_KEY")
         [[ -n "$ARG_GEMINI_KEY" ]]    && SET_ARGS+=("gemini_api_key=$ARG_GEMINI_KEY")
@@ -238,6 +243,7 @@ _get_setting() {
 _cur_provider="$(_get_setting llm_provider)"
 _cur_model="$(_get_setting llm_model)"
 _cur_asst_model="$(_get_setting llm_assistant_model)"
+_cur_lite_model="$(_get_setting llm_lite_model)"
 _cur_endpoint="$(_get_setting llm_endpoint)"
 _cur_api_key=""
 _cur_gemini_key=""
@@ -311,6 +317,7 @@ LLM_API_KEY=""
 LLM_ENDPOINT=""
 LLM_MODEL=""
 LLM_ASST_MODEL=""
+LLM_LITE_MODEL=""
 GEMINI_KEY=""
 ANTHROPIC_KEY=""
 
@@ -450,7 +457,8 @@ case "$LLM_PROVIDER" in
                 exit 1
             fi
             LLM_MODEL="${ARG_MODEL:-gemma4:e4b}"
-            LLM_ASST_MODEL="${ARG_ASST_MODEL:-gemma4:e4b}"
+            LLM_ASST_MODEL="${ARG_ASST_MODEL:-qwen3.5:2b}"
+            LLM_LITE_MODEL="${ARG_LITE_MODEL:-gemma4:e2b}"
         else
             printf "  Ollama host [%s]: " "${_cur_endpoint:-your-ollama-host:11434}" >&2
             IFS= read -r _input
@@ -464,9 +472,13 @@ case "$LLM_PROVIDER" in
             IFS= read -r _input
             LLM_MODEL="${_input:-${_cur_model:-gemma4:e4b}}"
 
-            printf "  Assistant model [%s]: " "${_cur_asst_model:-gemma4:e4b}" >&2
+            printf "  Assistant model [%s]: " "${_cur_asst_model:-qwen3.5:2b}" >&2
             IFS= read -r _input
-            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-gemma4:e4b}}"
+            LLM_ASST_MODEL="${_input:-${_cur_asst_model:-qwen3.5:2b}}"
+
+            printf "  Lite model [%s]: " "${_cur_lite_model:-gemma4:e2b}" >&2
+            IFS= read -r _input
+            LLM_LITE_MODEL="${_input:-${_cur_lite_model:-gemma4:e2b}}"
         fi
 
         LLM_API_KEY="ollama"
@@ -484,6 +496,7 @@ echo
 _ok "LLM_PROVIDER        = $LLM_PROVIDER_VAL"
 _ok "LLM_MODEL           = $LLM_MODEL"
 _ok "LLM_ASSISTANT_MODEL = $LLM_ASST_MODEL"
+_ok "LLM_LITE_MODEL      = $LLM_LITE_MODEL"
 [[ -n "$LLM_ENDPOINT" ]]   && _ok "LLM_ENDPOINT        = $LLM_ENDPOINT"
 [[ -n "$LLM_API_KEY" ]]    && _ok "LLM_API_KEY         = (set)"
 [[ -n "$GEMINI_KEY" ]]     && _ok "GEMINI_API_KEY      = (set)"
@@ -495,6 +508,7 @@ _build_db_args() {
     DB_ARGS+=("llm_provider=$LLM_PROVIDER_VAL")
     DB_ARGS+=("llm_model=$LLM_MODEL")
     DB_ARGS+=("llm_assistant_model=$LLM_ASST_MODEL")
+    DB_ARGS+=("llm_lite_model=$LLM_LITE_MODEL")
     [[ -n "$LLM_ENDPOINT" ]]   && DB_ARGS+=("llm_endpoint=$LLM_ENDPOINT")
     [[ -n "$LLM_API_KEY" ]]    && DB_ARGS+=("llm_api_key=$LLM_API_KEY")
     [[ -n "$GEMINI_KEY" ]]     && DB_ARGS+=("gemini_api_key=$GEMINI_KEY")

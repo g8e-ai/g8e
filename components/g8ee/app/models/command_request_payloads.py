@@ -28,6 +28,23 @@ from pydantic import Field
 from app.constants import FileOperation
 from app.models.base import G8eBaseModel
 
+__all__ = [
+    "TargetedOperatorBase",
+    "CommandRequestPayload",
+    "CommandCancelRequestPayload",
+    "FileEditRequestPayload",
+    "FsListRequestPayload",
+    "FsReadRequestPayload",
+    "FetchLogsRequestPayload",
+    "FetchHistoryRequestPayload",
+    "FetchFileHistoryRequestPayload",
+    "FetchFileDiffRequestPayload",
+    "CheckPortRequestPayload",
+    "RestoreFileRequestPayload",
+    "DirectCommandAuditRequestPayload",
+    "G8eCommandPayload",
+]
+
 
 class TargetedOperatorBase(G8eBaseModel):
     """Base class for tool args that can be routed to a specific operator."""
