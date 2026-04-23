@@ -18,7 +18,7 @@ from app.models.tool_results import CommandInternalResult
 from app.models.operators import OperatorDocument, TargetSystem, DirectCommandResult
 from app.models.internal_api import DirectCommandRequest
 from app.models.http_context import G8eHttpContext
-from app.models.pubsub_messages import G8eMessage
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
@@ -51,6 +51,8 @@ class FakeExecutionService:
         ai_response_analyzer: Any = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
+        envelope: G8eoResultEnvelope | None = None,
+        pubsub_service: Any = None,
     ) -> None:
         self._exit_code = exit_code
         self._output = output
@@ -60,6 +62,8 @@ class FakeExecutionService:
         self.ai_response_analyzer = ai_response_analyzer
         self.whitelist_validator = whitelist_validator
         self.blacklist_validator = blacklist_validator
+        self.pubsub_service = pubsub_service
+        self._envelope = envelope
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
         self.send_command_calls: list[dict] = []
@@ -69,13 +73,23 @@ class FakeExecutionService:
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> CommandInternalResult:
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
         self.execute_calls.append({
             "g8e_message": g8e_message,
             "g8e_context": g8e_context,
             "timeout_seconds": timeout_seconds,
         })
-        return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
+        if self.pubsub_service:
+            await self.pubsub_service.publish_command(
+                operator_id=g8e_message.operator_id,
+                operator_session_id=g8e_message.operator_session_id,
+                command_data=g8e_message,
+            )
+        return CommandInternalResult(
+            exit_code=self._exit_code, 
+            output=self._output, 
+            status=ExecutionStatus.COMPLETED
+        ), self._envelope
 
     async def execute_command_internal(self, **kwargs) -> CommandInternalResult:
         self.execute_calls.append(kwargs)

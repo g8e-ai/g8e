@@ -16,12 +16,12 @@
 Handles file-related operations (edit, read, write, update) on Operators.
 """
 
+import asyncio
 import logging
 
 from app.services.protocols import (
     ApprovalServiceProtocol,
     EventServiceProtocol,
-    ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
     AIResponseAnalyzerProtocol,
     InvestigationServiceProtocol,
@@ -60,7 +60,6 @@ class OperatorFileService:
     def __init__(
         self,
         pubsub_service: PubSubServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         approval_service: ApprovalServiceProtocol,
         g8ed_event_service: EventServiceProtocol,
         execution_service: ExecutionServiceProtocol,
@@ -68,7 +67,6 @@ class OperatorFileService:
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
         self.pubsub_service = pubsub_service
-        self.execution_registry = execution_registry
         self.approval_service = approval_service
         self.g8ed_event_service = g8ed_event_service
         self.execution_service = execution_service
@@ -225,7 +223,7 @@ class OperatorFileService:
                 task_id=AITaskId.FILE_EDIT,
             )
 
-            internal_result = await self.execution_service.execute(
+            internal_result, _envelope = await self.execution_service.execute(
                 g8e_message=g8e_message,
                 g8e_context=g8e_context,
                 timeout_seconds=60,
@@ -298,86 +296,81 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileHistoryToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            self.execution_registry.allocate(exec_id)
+            g8e_message = G8eMessage(
+                id=exec_id,
+                source_component=ComponentName.G8EE,
+                event_type=EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED,
+                case_id=g8e_context.case_id,
+                task_id=AITaskId.FETCH_FILE_HISTORY,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
+                operator_session_id=operator_session_id,
+                operator_id=operator_id,
+                payload=args,
+            )
 
-            try:
-                g8e_message = G8eMessage(
-                    id=exec_id,
-                    source_component=ComponentName.G8EE,
-                    event_type=EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED,
-                    case_id=g8e_context.case_id,
-                    task_id=AITaskId.FETCH_FILE_HISTORY,
-                    investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
+            # Notify start
+            await self.g8ed_event_service.publish_command_event(
+                EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED,
+                CommandExecutingBroadcastEvent(
+                    command=f"file_history {file_path}",
+                    execution_id=exec_id,
                     operator_session_id=operator_session_id,
-                    operator_id=operator_id,
-                    payload=args,
-                )
+                ),
+                g8e_context,
+                task_id=AITaskId.FETCH_FILE_HISTORY,
+            )
 
-                # Notify start
-                await self.g8ed_event_service.publish_command_event(
-                    EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED,
-                    CommandExecutingBroadcastEvent(
-                        command=f"file_history {file_path}",
-                        execution_id=exec_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.FETCH_FILE_HISTORY,
-                )
+            internal_result, envelope = await self.execution_service.execute(
+                g8e_message=g8e_message,
+                g8e_context=g8e_context,
+                timeout_seconds=60,
+            )
 
-                internal_result = await self.execution_service.execute(
-                    g8e_message=g8e_message,
-                    g8e_context=g8e_context,
-                    timeout_seconds=60,
-                )
+            # Notify completion/failure
+            completion_event_type = (
+                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED 
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
+            )
 
-                # Notify completion/failure
-                completion_event_type = (
-                    EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED 
-                    if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
-                    else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
-                )
-
-                await self.g8ed_event_service.publish_command_event(
-                    completion_event_type,
-                    CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=f"file_history {file_path}",
-                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
-                        output=internal_result.output if internal_result else None,
-                        error=internal_result.error if internal_result else "Execution result is None",
-                        operator_id=operator_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.FETCH_FILE_HISTORY,
-                )
-
-                from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
-                envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
-                    return FetchFileHistoryToolResult(
-                        success=True,
-                        file_path=envelope.payload.file_path,
-                        history=envelope.payload.history,
-                        error=None,
-                    )
-                if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
-                    return FetchFileHistoryToolResult(
-                        success=False,
-                        file_path=file_path,
-                        history=[],
-                        error=envelope.payload.error,
-                    )
-
-                return FetchFileHistoryToolResult(
-                    success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
-                    file_path=file_path,
+            await self.g8ed_event_service.publish_command_event(
+                completion_event_type,
+                CommandResultBroadcastEvent(
+                    execution_id=exec_id,
+                    command=f"file_history {file_path}",
+                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                    output=internal_result.output if internal_result else None,
                     error=internal_result.error if internal_result else "Execution result is None",
+                    operator_id=operator_id,
+                    operator_session_id=operator_session_id,
+                ),
+                g8e_context,
+                task_id=AITaskId.FETCH_FILE_HISTORY,
+            )
+
+            from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
+
+            if isinstance(envelope.payload, FetchFileHistorySuccessPayload):
+                return FetchFileHistoryToolResult(
+                    success=True,
+                    file_path=envelope.payload.file_path,
+                    history=envelope.payload.history,
+                    error=None,
                 )
-            finally:
-                self.execution_registry.release(exec_id)
+            if isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+                return FetchFileHistoryToolResult(
+                    success=False,
+                    file_path=file_path,
+                    history=[],
+                    error=envelope.payload.error,
+                )
+
+            return FetchFileHistoryToolResult(
+                success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+                file_path=file_path,
+                error=internal_result.error if internal_result else "Execution result is None",
+            )
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_history: %s", e, exc_info=True)
             return FetchFileHistoryToolResult(success=False, error=f"File history fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
@@ -414,100 +407,95 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileDiffToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            self.execution_registry.allocate(exec_id)
+            g8e_message = G8eMessage(
+                id=exec_id,
+                source_component=ComponentName.G8EE,
+                event_type=EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED,
+                case_id=g8e_context.case_id,
+                task_id=AITaskId.FETCH_FILE_DIFF,
+                investigation_id=g8e_context.investigation_id,
+                web_session_id=g8e_context.web_session_id,
+                operator_session_id=operator_session_id,
+                operator_id=operator_id,
+                payload=args,
+            )
 
-            try:
-                g8e_message = G8eMessage(
-                    id=exec_id,
-                    source_component=ComponentName.G8EE,
-                    event_type=EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED,
-                    case_id=g8e_context.case_id,
-                    task_id=AITaskId.FETCH_FILE_DIFF,
-                    investigation_id=g8e_context.investigation_id,
-                    web_session_id=g8e_context.web_session_id,
+            # Notify start
+            await self.g8ed_event_service.publish_command_event(
+                EventType.OPERATOR_FILE_DIFF_FETCH_STARTED,
+                CommandExecutingBroadcastEvent(
+                    command=f"file_diff {file_path}",
+                    execution_id=exec_id,
                     operator_session_id=operator_session_id,
-                    operator_id=operator_id,
-                    payload=args,
-                )
+                ),
+                g8e_context,
+                task_id=AITaskId.FETCH_FILE_DIFF,
+            )
 
-                # Notify start
-                await self.g8ed_event_service.publish_command_event(
-                    EventType.OPERATOR_FILE_DIFF_FETCH_STARTED,
-                    CommandExecutingBroadcastEvent(
-                        command=f"file_diff {file_path}",
-                        execution_id=exec_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.FETCH_FILE_DIFF,
-                )
+            internal_result, envelope = await self.execution_service.execute(
+                g8e_message=g8e_message,
+                g8e_context=g8e_context,
+                timeout_seconds=60,
+            )
 
-                internal_result = await self.execution_service.execute(
-                    g8e_message=g8e_message,
-                    g8e_context=g8e_context,
-                    timeout_seconds=60,
-                )
+            # Notify completion/failure
+            completion_event_type = (
+                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED 
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
+            )
 
-                # Notify completion/failure
-                completion_event_type = (
-                    EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED 
-                    if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
-                    else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
-                )
-
-                await self.g8ed_event_service.publish_command_event(
-                    completion_event_type,
-                    CommandResultBroadcastEvent(
-                        execution_id=exec_id,
-                        command=f"file_diff {file_path}",
-                        status=internal_result.status if internal_result else ExecutionStatus.FAILED,
-                        output=internal_result.output if internal_result else None,
-                        error=internal_result.error if internal_result else "Execution result is None",
-                        operator_id=operator_id,
-                        operator_session_id=operator_session_id,
-                    ),
-                    g8e_context,
-                    task_id=AITaskId.FETCH_FILE_DIFF,
-                )
-
-                from app.models.pubsub_messages import (
-                    FetchFileDiffByIdSuccessPayload,
-                    FetchFileDiffBySessionSuccessPayload,
-                    FetchFileDiffErrorPayload,
-                )
-                envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
-                    return FetchFileDiffToolResult(
-                        success=True,
-                        diff=envelope.payload.diff,
-                        total=1,
-                        error=None,
-                        operator_session_id=operator_session_id,
-                    )
-                if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
-                    return FetchFileDiffToolResult(
-                        success=True,
-                        diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
-                        total=envelope.payload.total,
-                        error=None,
-                        operator_session_id=operator_session_id,
-                    )
-                if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
-                    return FetchFileDiffToolResult(
-                        success=False,
-                        diff=None,
-                        total=0,
-                        error=envelope.payload.error,
-                        operator_session_id=operator_session_id,
-                    )
-
-                return FetchFileDiffToolResult(
-                    success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+            await self.g8ed_event_service.publish_command_event(
+                completion_event_type,
+                CommandResultBroadcastEvent(
+                    execution_id=exec_id,
+                    command=f"file_diff {file_path}",
+                    status=internal_result.status if internal_result else ExecutionStatus.FAILED,
+                    output=internal_result.output if internal_result else None,
                     error=internal_result.error if internal_result else "Execution result is None",
+                    operator_id=operator_id,
+                    operator_session_id=operator_session_id,
+                ),
+                g8e_context,
+                task_id=AITaskId.FETCH_FILE_DIFF,
+            )
+
+            from app.models.pubsub_messages import (
+                FetchFileDiffByIdSuccessPayload,
+                FetchFileDiffBySessionSuccessPayload,
+                FetchFileDiffErrorPayload,
+            )
+
+            if isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
+                return FetchFileDiffToolResult(
+                    success=True,
+                    diff=envelope.payload.diff,
+                    total=1,
+                    error=None,
                     operator_session_id=operator_session_id,
                 )
-            finally:
-                self.execution_registry.release(exec_id)
+            if isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+                return FetchFileDiffToolResult(
+                    success=True,
+                    diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
+                    total=envelope.payload.total,
+                    error=None,
+                    operator_session_id=operator_session_id,
+                )
+            if isinstance(envelope.payload, FetchFileDiffErrorPayload):
+                return FetchFileDiffToolResult(
+                    success=False,
+                    diff=None,
+                    total=0,
+                    error=envelope.payload.error,
+                    operator_session_id=operator_session_id,
+                )
+
+            return FetchFileDiffToolResult(
+                success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+                error=internal_result.error if internal_result else "Execution result is None",
+                operator_session_id=operator_session_id,
+            )
         except Exception as e:
             logger.error("[FILE-ERROR] Unexpected error in execute_fetch_file_diff: %s", e, exc_info=True)
             return FetchFileDiffToolResult(success=False, error=f"File diff fetch failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)

@@ -66,10 +66,10 @@ class TestOperatorCommandServiceInit:
                 operator_data_service=None,
                 # investigation_service is missing
                 g8ed_event_service=None,
-                execution_registry=None,
                 settings=None,
                 ai_response_analyzer=None,
                 internal_http_client=None,
+                approval_service=None,
             )
 
     def test_succeeds_with_all_required_args(self):

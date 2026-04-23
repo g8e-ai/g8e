@@ -4,78 +4,27 @@
 
 **governance architecture for trustless environments**
 
-Self-hosted. Air-gap capable. Zero cloud dependencies.<br/>
 The AI reasons. You decide. The architecture enforces it.
 
-[Architecture](docs/architecture/about.md) &#183; [Security](docs/architecture/security.md) &#183; [Quick Start](#quick-start) &#183; [Contributing](#contributing)
+Self-hosted · Air-gap capable · Zero cloud dependencies
+
+[Architecture](docs/architecture/about.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
 
 </div>
 
 ---
 
-## The Problem
+## The Shape of the Problem
 
-Give an AI an API key with write access to your infrastructure and you no longer control your infrastructure — the AI's prompt does. Prompt engineering is not a security boundary. System instructions can be overridden, context windows can be poisoned, and tool-calling agents will confidently execute destructive commands if nothing structurally prevents them.
+Give an AI an API key with write access to your infrastructure and control shifts to the prompt. System instructions get overridden. Context windows get poisoned. A confident model executes a destructive command and the only thing between you and a bad afternoon is hope.
 
-The industry is racing to give AI agents more autonomy. We think the race should be to give them better governance.
+g8e removes hope from the loop.
 
-g8e is an open-source platform that binds AI reasoning to real infrastructure through a zero-trust execution model. The AI investigates your systems, reasons about problems, and proposes actions. It cannot execute anything. Every state-changing operation requires explicit human approval, enforced cryptographically at the binary and network layers — not by a system prompt that hopes the model will comply.
-
----
-
-## The Eight Directives
-
-Every architectural decision in this platform is an expression of these principles. They are not aspirational. They are enforced in code shipping today. They are also designed to remain true when the models are a thousand times more capable than they are now.
+The reasoning agent investigates your systems and proposes a plan. Execution halts at a cryptographic boundary. Every state-changing action requires a FIDO2 approval, enforced at the binary and network layer — where prompt injection cannot reach.
 
 ---
 
-**I. Human Authority is Absolute**
-
-The AI proposes. You decide. This is not a policy — it is a cryptographic invariant. Execution and authorization are strictly separated. Every state-changing action requires explicit approval via FIDO2 WebAuthn. No API call, no prompt injection, no model behavior can bypass it. The human is the final, non-negotiable security layer.
-
-**II. Trust is Earned, Never Inherited**
-
-No long-lived credentials. No implicit trust from network position. Trust is mathematically bound to mTLS sessions, scoped to individual actions, and impossible for an agent to self-escalate. On AWS, the Operator launches with zero permissions and earns them one approved intent at a time, with automatic expiration.
-
-**III. Safety is Structural, Not Verbal**
-
-System prompts are suggestions. g8e enforces safety at the binary and network layers, where prompt injection cannot reach. Sentinel is the platform-wide protector running on both the Operator and the AI Engine — its 46 MITRE ATT&CK-mapped threat detectors block dangerous commands on the host before any process is spawned, while its multi-layer data scrubbing protects sensitive information at every stage. Privilege escalation is unconditionally forbidden. The AI cannot opt out of governance.
-
-**IV. Data Stays Where It Belongs**
-
-The remote host is the system of record. Raw command output never leaves the machine. The AI receives only what passes through Sentinel's 28 scrubbing patterns — credentials, PII, and secrets are replaced with safe placeholders. Sentinel provides multiple layers of protection: egress scrubbing on the Operator side ensures raw data never leaves the host, while ingress scrubbing on the Engine side adds a redundant layer of protection for all Operator data before it crosses any network boundary toward a model provider.
-
-**V. Presence is Ephemeral**
-
-The Operator is a ~4MB static binary. No dependencies. No installation. No root required. Outbound-only mTLS — it opens no inbound ports and works behind any NAT or firewall without configuration. Kill the process and it is gone. The only trace left behind is an encrypted audit ledger that belongs to you.
-
-**VI. Accountability is Local**
-
-Encrypted, append-only audit ledgers live at the site of execution. Every command, every file mutation, every AI interaction is recorded in local SQLite vaults with AES-256-GCM encryption. A git-backed ledger tracks every file change with cryptographic commit hashes. You do not need the platform to know exactly what happened on your machines.
-
-**VII. Infrastructure is Yours**
-
-No SaaS backend. No telemetry. No phone-home. No cloud dependency of any kind. The entire platform runs via `docker compose` on your hardware. The platform generates its own CA, manages its own certificates, and stores everything in local SQLite. It is fully air-gap capable. You hold every key.
-
-**VIII. Intelligence is Replaceable**
-
-Any model. Any provider. Any OS. Anthropic, OpenAI, Google Gemini, or a local Ollama instance running on your own hardware. The governance layer is the constant; the choice of intelligence is yours. When better models arrive — and they will — swap them in. The safety architecture does not change.
-
----
-
-## How It Works
-
-You describe what you want in natural language. The AI fans out across your bound servers, pulls real-time context via heartbeat telemetry, reasons about the problem, and proposes a plan. When it needs to execute a command, the proposal passes through a multi-stage refinement pipeline before it ever reaches you for approval.
-
-### The Tribunal
-
-The Tribunal is a heterogeneous multi-model consensus pipeline that translates the reasoning agent's **intent** into an executable command before human review. The reasoning agent (Sage or Dash) never writes a command directly — it articulates a natural-language request plus optional guidelines, and the Tribunal translates:
-
-1. **Parallel Generation** — Five independent AI passes — Axiom (The Composer), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), Nemesis (The Adversary) — each translate the same intent into a candidate command. All five run every round; Nemesis is always present as the adversarial pressure against the other four. Diversity comes from the distinct personas, not from per-pass temperature overrides.
-2. **Uniform Per-Member Vote** — Each member contributes exactly one vote per candidate. Identical candidates accumulate votes. A minimum consensus threshold (two members) gates the winner; below threshold, the round returns `CONSENSUS_FAILED` and the reasoning agent decides whether to rephrase or abort. Ties resolve deterministically: shortest command wins, then non-Nemesis cluster wins over Nemesis-including cluster, then alphabetical.
-3. **Auditor Verification** — The Auditor evaluates the winner against the articulated intent using **anonymized cluster IDs** (the Auditor cannot see which member produced which candidate). It operates in one of three modes based on consensus strength: *unanimous* (accept or revise), *majority* (accept, revise, or swap to a dissenting cluster), or *tied* (must swap or revise — cannot passively accept). The Auditor knows with certainty that one of the five candidates is Nemesis's adversarial output.
-4. **Human Approval** — The verified command halts. You see exactly what will run, on which system, and why. You approve or deny.
-5. **Execution** — The Operator executes locally, records the full output to an encrypted local vault, scrubs the output through Sentinel, and returns only the sanitized result to the AI for its next reasoning step.
+## The Core Loop
 
 ```
   You ────── "Fix the disk pressure on the prod nodes"
@@ -124,17 +73,69 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that translates t
 
 ---
 
+## The Tribunal
+
+The reasoning agent never writes commands. It articulates intent — natural language, optional guardrails — and the Tribunal translates.
+
+Five personas run in parallel. Each produces one candidate command from the same intent.
+
+| Persona | Archetype |
+|---|---|
+| **Axiom** | The Composer — statistical probability, resource efficiency |
+| **Concord** | The Guardian — harm minimization, ethical integrity |
+| **Variance** | The Exhaustive — edge case hunter, adversarial simulation |
+| **Pragma** | The Conventional — idiomatic, least-surprise correctness |
+| **Nemesis** | The Adversary — always present, always pushing against the other four |
+
+Each member casts one vote. Identical candidates accumulate. A two-vote consensus threshold gates the winner. Ties resolve deterministically: shortest command, then non-Nemesis cluster, then alphabetical.
+
+The Auditor receives anonymized cluster IDs and evaluates the winner against the stated intent. Three modes by consensus strength:
+
+- **Unanimous** — accept or revise
+- **Majority** — accept, revise, or swap to a dissenting cluster
+- **Tied** — must swap or revise; passive accept is forbidden
+
+The Auditor knows one of the five is adversarial. It does not know which.
+
+The verified command reaches you. You see it, in full, with target host and justification. You approve. You deny. That is the only path forward.
+
+---
+
+## Eight Directives
+
+Principles engineered to hold when the models are a thousand times more capable than they are today.
+
+```
+  I.  Human Authority is Absolute       Every write gated by FIDO2. No exceptions.
+ II.  Trust is Earned, Never Inherited  Zero standing credentials. Per-action scope,
+                                        automatic expiration.
+III.  Safety is Structural              Enforced at the binary and network layer.
+                                        Prompt injection cannot reach the boundary.
+ IV.  Data Stays Where It Belongs       28 scrub patterns on egress and ingress.
+                                        Raw output never crosses the host.
+  V.  Presence is Ephemeral             4MB static binary. Outbound-only mTLS.
+                                        Kill the process and it is gone.
+ VI.  Accountability is Local           Encrypted SQLite vaults plus a git-backed
+                                        file ledger. Cryptographic commit chain.
+VII.  Infrastructure is Yours           docker compose on your hardware. No SaaS,
+                                        no telemetry, no phone-home. Air-gap capable.
+VIII. Intelligence is Replaceable       Anthropic, OpenAI, Gemini, Ollama. Swap at
+                                        will. Governance persists.
+```
+
+---
+
 ## Architecture
 
-The platform is four containers and a binary. The binary is the most interesting part — depending on how you invoke it, it becomes the database server, the certificate authority, or the execution agent on your remote hosts.
+Four containers and a binary. The binary wears three hats depending on how you invoke it.
 
-| Component | Language | What It Does |
-|-----------|----------|-------------|
-| **g8es** | Go | The Operator binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, and the platform's own certificate authority. One binary, zero external dependencies. |
-| **g8ee** | Python | AI engine. ReAct reasoning loop, multi-provider LLM abstraction (Gemini, Anthropic, OpenAI, Ollama), Tribunal pipeline, Sentinel integration, and the entire tool-calling control plane. |
-| **g8ed** | Node.js | Web dashboard and the single external entry point. FIDO2 passkey auth, SSE streaming, mTLS gateway for Operators, and the human approval interface. |
-| **g8ep** | Multi | Test runner and build environment. Compiles Operator binaries for all architectures, runs the full test suite, and handles fleet deployment. |
-| **Operator** | Go | The ~4MB static binary deployed to your servers. Executes commands, manages files, maintains encrypted local audit vaults, and communicates over outbound-only mTLS WebSocket. Streams itself to hundreds of hosts in parallel over SSH. |
+| Component | Language | Responsibility |
+|---|---|---|
+| **g8es** | Go | The binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, platform CA. Zero external dependencies. |
+| **g8ee** | Python | AI engine. ReAct loop, multi-provider abstraction (Anthropic, OpenAI, Gemini, Ollama), Tribunal pipeline, Sentinel integration. |
+| **g8ed** | Node.js | Dashboard and single external entry point. FIDO2 auth, SSE streaming, mTLS gateway, human approval UI. |
+| **g8ep** | Multi | Test runner, build environment, cross-arch Operator compiler, fleet deployment. |
+| **Operator** | Go | The ~4MB static binary. Executes locally, maintains the encrypted audit vault, speaks outbound-only mTLS WebSocket. Streams itself over SSH to hundreds of hosts in parallel. |
 
 ```
                           ┌───────────────────────────────────────┐
@@ -162,14 +163,18 @@ The platform is four containers and a binary. The binary is the most interesting
                  Host A      Host B      Host C
 ```
 
-### Security Properties
+---
 
-- **Authentication**: FIDO2/WebAuthn passkeys only. Passwords are not supported and never will be.
-- **Transport**: TLS 1.3 everywhere. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certificates issued at claim time.
-- **Sentinel**: Platform-wide protector running on both g8eo and g8ee. 46 pre-execution threat detectors (MITRE ATT&CK-mapped) on the Operator. 28 post-execution scrubbing patterns across both components. Indirect prompt injection defense.
-- **Sessions**: Encrypted cookies, idle timeout, absolute timeout, IP tracking, replay protection with timestamp + nonce validation.
-- **Operator Binding**: System fingerprint permanently bound on first auth. Stolen API keys cannot be used from a different machine.
-- **Compliance Alignment**: NSA Zero Trust Implementation Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.
+## Security at a Glance
+
+- **Authentication** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
+- **Transport** — TLS 1.3 throughout. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certs issued at claim time.
+- **Sentinel** — 46 MITRE ATT&CK-mapped threat detectors pre-execution on the Operator. 28 scrubbing patterns applied twice (egress on the host, ingress on the engine) before any data reaches a model provider.
+- **Sessions** — Encrypted cookies, idle and absolute timeouts, IP tracking, timestamp + nonce replay protection.
+- **Operator Binding** — System fingerprint locked at first auth. A stolen API key is useless from a different machine.
+- **Compliance Alignment** — NSA Zero Trust Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.
+
+Full threat model and control catalogue: [docs/architecture/security.md](docs/architecture/security.md).
 
 ---
 
@@ -201,11 +206,11 @@ Deploy an Operator to a remote host:
 curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ```
 
-That is a single command. It downloads the CA, fetches the binary over HTTPS, and starts the Operator. No root, no package manager, no dependencies. The binary self-deletes when the session ends.
+One command. It pulls the CA, fetches the binary, starts the Operator. No root, no package manager, no dependencies. The binary self-deletes when the session ends.
 
 ---
 
-## CLI Reference
+## CLI
 
 ```bash
 ./g8e platform build       # First-time build and start
@@ -215,25 +220,23 @@ That is a single command. It downloads the CA, fetches the binary over HTTPS, an
 
 ./g8e operator build       # Compile Operator for all architectures
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
-./g8e test g8ee            # AI engine tests (Python/pytest)
-./g8e test g8ed            # Dashboard tests (Node/Vitest)
-./g8e test g8eo            # Operator tests (Go)
 ```
 
 ---
 
-## Project Status
+## Status
 
-**Alpha.** This is a research project built with a paranoia-first security mindset. It has not undergone external audit. Use in production at your own risk and evaluate the [security architecture](docs/architecture/security.md) for yourself.
+**Alpha.** A research project with a paranoia-first security posture. No external audit yet. Read the [security architecture](docs/architecture/security.md) and judge the threat model for yourself before any production use.
 
-A significant portion of this codebase was written with AI assistance. If you have been around long enough to know what that means in practice, you already know: there are bugs. There is hallucinated logic. There are abstractions that a human would not have chosen. We built a platform to govern AI agents because we experienced firsthand how dangerous unconstrained agents are — while building this very platform with those same agents.
+A significant portion of this codebase was written with AI assistance. If you have been around long enough to know what that means, you already know there are bugs, hallucinated branches, and abstractions a human would have written differently. We built a platform to govern AI agents because we lived the danger of unconstrained ones — while building this platform with those same agents.
+
 ---
 
 ## Contributing
 
-We welcome all contributions. This platform is capable of far more than any single person can build, and the architecture is designed to support capabilities that do not exist yet.
+The architecture is designed to support capabilities that do not exist yet. A good PR that improves any part of the platform gets merged.
 
-**What we value:**
+What we value:
 
 - Bug fixes and real-world edge cases
 - Security hardening and threat model improvements
@@ -242,22 +245,22 @@ We welcome all contributions. This platform is capable of far more than any sing
 - Documentation, testing, and developer experience
 - Novel applications of the governance architecture
 
-If you see something broken, fix it. If you see something missing, build it. If you have an idea for something that does not exist yet, open an issue and let's talk about it.
+If you see something broken, fix it. If you see something missing, build it. If you have an idea nobody has built yet, open an issue.
 
-A good PR that improves any aspect of this platform will be merged. See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup and guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup.
 
 ---
 
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
-| [Architecture Overview](docs/architecture/about.md) | Origins, governance philosophy, and core principles |
-| [Security Architecture](docs/architecture/security.md) | Complete security reference — authentication, Sentinel, LFAA, threat model |
-| [AI Control Plane](docs/architecture/ai_control_plane.md) | AI engine internals — ReAct loop, Tribunal, prompts, tools, providers |
-| [Operator Binary](docs/architecture/operator.md) | Operator lifecycle, modes, deployment, on-host storage |
+|---|---|
+| [Architecture Overview](docs/architecture/about.md) | Origins, governance philosophy, core principles |
+| [Security Architecture](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
+| [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |
+| [Operator Binary](docs/architecture/operator.md) | Lifecycle, modes, deployment, on-host storage |
 | [Developer Guide](docs/developer.md) | Setup, code quality rules, project structure |
-| [Testing Guide](docs/testing.md) | Test infrastructure, component guidelines, CI workflows |
+| [Testing Guide](docs/testing.md) | Test infrastructure, component guidelines, CI |
 | [Glossary](docs/glossary.md) | Platform terminology |
 
 ---

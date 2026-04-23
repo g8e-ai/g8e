@@ -107,6 +107,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal.")
     target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
+    correlation_id: str | None = Field(default=None, description="Tribunal correlation ID linking this command to the originating Tribunal session")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
 
 class OperatorContext(G8eBaseModel):

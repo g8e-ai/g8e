@@ -60,7 +60,6 @@ from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
     EventServiceProtocol,
-    ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
     FileServiceProtocol,
     FilesystemServiceProtocol,
@@ -96,7 +95,6 @@ class OperatorCommandService:
     def __init__(
         self,
         pubsub_service: PubSubServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         approval_service: ApprovalServiceProtocol,
         execution_service: ExecutionServiceProtocol,
         filesystem_service: FilesystemServiceProtocol,
@@ -110,7 +108,6 @@ class OperatorCommandService:
         settings: G8eePlatformSettings,
     ) -> None:
         self._pubsub_service = pubsub_service
-        self._execution_registry = execution_registry
         self._approval_service = approval_service
         self._execution_service = execution_service
         self._filesystem_service = filesystem_service
@@ -142,7 +139,6 @@ class OperatorCommandService:
         operator_data_service: OperatorDataService,
         investigation_service: InvestigationServiceProtocol,
         g8ed_event_service: EventServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         settings: G8eePlatformSettings,
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         internal_http_client: G8edClientProtocol,
@@ -157,7 +153,6 @@ class OperatorCommandService:
 
         execution_service = OperatorExecutionService(
             pubsub_service=pubsub_service,
-            execution_registry=execution_registry,
             approval_service=approval_service,
             g8ed_event_service=g8ed_event_service,
             settings=settings,
@@ -168,20 +163,17 @@ class OperatorCommandService:
 
         filesystem_service = OperatorFilesystemService(
             pubsub_service=pubsub_service,
-            execution_registry=execution_registry,
             execution_service=execution_service,
             investigation_service=investigation_service,
         )
 
         port_service = OperatorPortService(
             pubsub_service=pubsub_service,
-            execution_registry=execution_registry,
             execution_service=execution_service,
         )
 
         file_service = OperatorFileService(
             pubsub_service=pubsub_service,
-            execution_registry=execution_registry,
             approval_service=approval_service,
             g8ed_event_service=g8ed_event_service,
             execution_service=execution_service,
@@ -197,17 +189,8 @@ class OperatorCommandService:
             g8ed_client=internal_http_client,
         )
 
-        async def _on_g8eo_result(envelope: G8eoResultEnvelope) -> None:
-            payload = envelope.payload
-            if payload is None:
-                return
-            execution_registry.complete(payload.execution_id, envelope)
-
-        pubsub_service.subscribe_results(_on_g8eo_result)
-
         return cls(
             pubsub_service=pubsub_service,
-            execution_registry=execution_registry,
             approval_service=approval_service,
             execution_service=execution_service,
             filesystem_service=filesystem_service,
@@ -340,6 +323,7 @@ class OperatorCommandService:
                 task_id=AITaskId.COMMAND,
                 target_systems=target_systems,
                 batch_id=batch_id,
+                correlation_id=args.correlation_id,
             )
         )
 
@@ -437,7 +421,7 @@ class OperatorCommandService:
                 )
 
                 try:
-                    internal_result = await self._execution_service.execute(
+                    internal_result, envelope = await self._execution_service.execute(
                         g8e_message=g8e_message,
                         g8e_context=g8e_context,
                         timeout_seconds=args.timeout_seconds,

@@ -17,11 +17,11 @@ Port check operations via g8eo operators. No approval required.
 Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
+import asyncio
 import logging
 from typing import cast
 
 from app.services.protocols import (
-    ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
     PubSubServiceProtocol,
 )
@@ -55,11 +55,9 @@ class OperatorPortService:
     def __init__(
         self,
         pubsub_service: PubSubServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         execution_service: ExecutionServiceProtocol,
     ) -> None:
         self.pubsub_service = pubsub_service
-        self.execution_registry = execution_registry
         self.execution_service = execution_service
 
     async def execute_port_check(
@@ -71,10 +69,11 @@ class OperatorPortService:
         """Execute a single port check.
 
         ``execution_id`` is extracted from args.execution_id; it
-        is used as the registry key and appears in the STARTED / COMPLETED /
-        FAILED UI lifecycle events. Using a per-call id (rather than
-        ``g8e_context.execution_id``) ensures that concurrent port checks in a
-        single chat turn do not collide in ``execution_registry``.
+        is used as the Future correlation key on ``PubSubService`` and appears
+        in the STARTED / COMPLETED / FAILED UI lifecycle events. Using a
+        per-call id (rather than ``g8e_context.execution_id``) ensures that
+        concurrent port checks in a single chat turn do not collide on the
+        pending-Future registry.
         """
         exec_id = args.execution_id
         logger.info("[PORT_CHECK] Starting port check operation (execution_id=%s)", exec_id)
@@ -133,9 +132,6 @@ class OperatorPortService:
             return PortCheckToolResult(success=False, error=error_msg, error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY)
 
         try:
-            self.execution_registry.allocate(exec_id)
-            max_wait_time = OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
-
             command_data = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
@@ -169,17 +165,14 @@ class OperatorPortService:
                 task_id=AITaskId.PORT_CHECK,
             )
 
-            subscribers = await self.pubsub_service.publish_command(
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                command_data=command_data,
+            internal_result, envelope = await self.execution_service.execute(
+                g8e_message=command_data,
+                g8e_context=g8e_context,
+                timeout_seconds=OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
             )
-            logger.info("[PORT_CHECK] Port check request published successfully (subscribers: %d)", subscribers)
 
-            completed = await self.execution_registry.wait(exec_id, timeout=max_wait_time)
-
-            if not completed:
-                timeout_error = f"Port check timed out after {max_wait_time} seconds"
+            if not envelope:
+                timeout_error = f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"
                 logger.warning("[PORT_CHECK] %s", timeout_error)
 
                 # Notify failure (timeout)
@@ -203,9 +196,7 @@ class OperatorPortService:
                     error_type=CommandErrorType.OPERATION_TIMEOUT,
                 )
 
-            envelope = self.execution_registry.get_result(exec_id)
-
-            if isinstance(envelope, G8eoResultEnvelope) and isinstance(envelope.payload, PortCheckResultPayload):
+            if isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 
@@ -257,5 +248,3 @@ class OperatorPortService:
         except Exception as e:
             logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
             return PortCheckToolResult(success=False, error=f"Port check execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
-        finally:
-            self.execution_registry.release(exec_id)

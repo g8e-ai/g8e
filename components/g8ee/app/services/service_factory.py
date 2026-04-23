@@ -40,7 +40,6 @@ from app.services.protocols import (
     OperatorDataServiceProtocol,
     MemoryDataServiceProtocol,
     OperatorHeartbeatServiceProtocol,
-    ExecutionRegistryProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
@@ -50,7 +49,6 @@ from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
-from app.services.operator.execution_registry import ExecutionRegistryService
 from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
@@ -60,7 +58,6 @@ if TYPE_CHECKING:
     from app.services.operator.operator_data_service import OperatorDataService
     from app.services.investigation.memory_data_service import MemoryDataService
     from app.services.operator.heartbeat_service import OperatorHeartbeatService
-    from app.services.operator.execution_registry import ExecutionRegistryService
     from app.services.ai.response_analyzer import AIResponseAnalyzer
     from app.services.operator.approval_service import OperatorApprovalService
 
@@ -86,7 +83,6 @@ class DomainServices(TypedDict):
 
 class OperatorServices(TypedDict):
     heartbeat_service: OperatorHeartbeatService | OperatorHeartbeatServiceProtocol
-    execution_registry: ExecutionRegistryService | ExecutionRegistryProtocol
 
 
 class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
@@ -207,11 +203,8 @@ class ServiceFactory:
             event_service=core_services['g8ed_event_service'],
         )
 
-        execution_registry = ExecutionRegistryService()
-
         return OperatorServices(
             heartbeat_service=heartbeat_service,
-            execution_registry=execution_registry,
         )
     
     @staticmethod
@@ -263,7 +256,6 @@ class ServiceFactory:
             operator_data_service=data_services['operator_data_service'],  # type: ignore[arg-type]
             investigation_service=domain_services['investigation_service'],  # type: ignore[arg-type]
             g8ed_event_service=core_services['g8ed_event_service'],  # type: ignore[arg-type]
-            execution_registry=operator_services['execution_registry'],  # type: ignore[arg-type]
             settings=settings,
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services['internal_http_client'],

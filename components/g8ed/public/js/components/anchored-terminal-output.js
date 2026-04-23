@@ -532,7 +532,7 @@ export class TerminalOutputMixin {
         this.scrollToBottom();
     }
 
-    async showTribunal({ id, model, numPasses, request, guidelines, webSessionId }) {
+    async showTribunal({ id, model, numPasses, request, guidelines, webSessionId, correlationId }) {
         if (!this.outputContainer) return null;
 
         this._removeWelcome();
@@ -561,7 +561,10 @@ export class TerminalOutputMixin {
 
         const widget = document.createElement('div');
         widget.id = id;
-        widget.className = 'tribunal';
+        widget.className = 'anchored-terminal__approval';
+        widget.setAttribute('data-approval-refining', '1');
+        if (webSessionId) widget.setAttribute('data-web-session-id', webSessionId);
+        if (correlationId) widget.setAttribute('data-correlation-id', correlationId);
 
         const dots = Array.from({ length: numPasses || 3 }, (_, i) => {
             const icon = TribunalMemberIcons[i] || 'circle';
@@ -570,15 +573,30 @@ export class TerminalOutputMixin {
             </span>`;
         }).join('');
 
-        await templateLoader.renderTo(widget, 'tribunal', { dots });
+        const tribunalHtml =
+            `<span class="tribunal__passes">${dots}</span>` +
+            `<span class="tribunal__status">Generating alternatives...</span>` +
+            `<span class="tribunal__spinner"></span>`;
 
-        const commandEl = widget.querySelector('.tribunal__command');
-        if (commandEl) {
-            const parts = [];
-            if (request) parts.push(request);
-            if (guidelines) parts.push(`Guidelines: ${guidelines}`);
-            commandEl.textContent = parts.join(' | ') || '';
-        }
+        const parts = [];
+        if (request) parts.push(request);
+        if (guidelines) parts.push(`Guidelines: ${guidelines}`);
+        const refiningSubject = parts.join(' | ');
+
+        await templateLoader.renderTo(widget, 'approval-card', {
+            cardModifier: 'approval-compact--refining',
+            icon: 'auto_fix_high',
+            iconModifier: 'approval-compact__icon--refining',
+            headerText: 'Refining command',
+            tribunalHtml,
+            riskBadgeHtml: '',
+            promptHtml: '',
+            commandDisplay: refiningSubject,
+            systemsHtml: '',
+            justification: '',
+            approvalId: '',
+            approveButtonText: 'Approve',
+        });
 
         content.appendChild(widget);
         this.scrollToBottom();
@@ -612,13 +630,8 @@ export class TerminalOutputMixin {
         const widget = document.getElementById(id);
         if (!widget) return;
 
-        widget.classList.add('tribunal--done');
-
         const spinner = widget.querySelector('.tribunal__spinner');
         if (spinner) spinner.remove();
-
-        const icon = widget.querySelector('.tribunal__icon');
-        if (icon) icon.textContent = 'check_circle';
 
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
@@ -633,27 +646,28 @@ export class TerminalOutputMixin {
             statusEl.textContent = `${outcomeLabel} · ${finalCommand}`;
             statusEl.classList.add('tribunal__status--done');
         }
-
     }
 
     failTribunal({ id, eventType }) {
         const widget = document.getElementById(id);
         if (!widget) return;
 
-        widget.classList.add('tribunal--failed');
+        const card = widget.querySelector('.approval-compact') || widget;
+        card.classList.add('approval-compact--refining-failed');
 
         const spinner = widget.querySelector('.tribunal__spinner');
         if (spinner) spinner.remove();
 
-        const icon = widget.querySelector('.tribunal__icon');
+        const icon = widget.querySelector('.approval-compact__icon');
         if (icon) {
             icon.textContent = 'warning';
-            icon.classList.add('tribunal__icon--failed');
+            icon.classList.add('approval-compact__icon--failed');
         }
 
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
             statusEl.textContent = this._tribunalFailureLabel(eventType);
+            statusEl.classList.add('tribunal__status--failed');
         }
     }
 

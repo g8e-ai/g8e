@@ -545,7 +545,11 @@
             try {
                 const json = await apiFetch('/api/console/metrics/ai');
                 if (json.success) renderAIStats(json.data);
-            } catch (_) {}
+            } catch (err) {
+                console.error('[CONSOLE] Failed to load AI stats:', err);
+                setEl('stat-investigations-total', 'err');
+                setEl('stat-investigations-active', '—');
+            }
         }
 
         async function loadAll() {
@@ -706,7 +710,10 @@
                     opt.textContent = c;
                     sel.appendChild(opt);
                 });
-            } catch (_) {}
+            } catch (err) {
+                console.error('[CONSOLE] Failed to load collections:', err);
+                sel.innerHTML = '<option value="">Failed to load collections</option>';
+            }
         }
 
         async function dbQuery() {
@@ -843,7 +850,9 @@
                     } else if (data.type === 'g8e.v1.platform.console.log.entry.received') {
                         appendLogEntry(data.entry);
                     }
-                } catch (_) {}
+                } catch (err) {
+                    console.error('[CONSOLE] Failed to parse log stream message:', err, event.data);
+                }
             };
 
             es.onerror = () => {

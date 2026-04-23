@@ -73,6 +73,7 @@ from app.models.model_configs import get_model_config
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
+from app.utils.ids import generate_tribunal_correlation_id
 
 from app.utils.command import normalise_command
 from app.services.ai.voter import (
@@ -477,6 +478,7 @@ async def _build_and_emit_result(
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
     operator_context: OperatorContext | None = None,
+    correlation_id: str | None = None,
 ) -> CommandGenerationResult:
     """Stage 4: assemble the result model and emit the session-completed event."""
     is_safe = True
@@ -506,6 +508,7 @@ async def _build_and_emit_result(
         auditor_passed=auditor_passed,
         auditor_revision=auditor_revision,
         auditor_reason=auditor_reason,
+        correlation_id=correlation_id,
     )
 
     await emitter.emit(
@@ -597,6 +600,7 @@ async def generate_command(
 
     num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
+    correlation_id = generate_tribunal_correlation_id()
 
     await emitter.emit(
         EventType.TRIBUNAL_SESSION_STARTED,
@@ -606,6 +610,7 @@ async def generate_command(
             model=model,
             num_passes=num_passes,
             members=members,
+            correlation_id=correlation_id,
         ),
     )
 
@@ -655,6 +660,7 @@ async def generate_command(
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             operator_context=operator_context,
+            correlation_id=correlation_id,
         )
         raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
 
@@ -688,4 +694,5 @@ async def generate_command(
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
         operator_context=operator_context,
+        correlation_id=correlation_id,
     )

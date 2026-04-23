@@ -340,6 +340,10 @@ class CommandGenerationResult(G8eBaseModel):
         description="Revised command produced by the auditor when auditor_passed=False",
     )
     auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason.")
+    correlation_id: str | None = Field(
+        default=None,
+        description="Correlation ID linking this Tribunal session to subsequent approval requests",
+    )
 
 
 class TribunalPassCompletedPayload(G8eBaseModel):
@@ -379,6 +383,7 @@ class TribunalSessionStartedPayload(G8eBaseModel):
     model: str
     num_passes: int = Field(ge=1)
     members: list[TribunalMember]
+    correlation_id: str = Field(description="Correlation ID to link Tribunal session with subsequent approval requests")
 
 
 class TribunalSessionDisabledPayload(G8eBaseModel):

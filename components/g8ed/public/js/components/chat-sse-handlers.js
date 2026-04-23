@@ -59,17 +59,9 @@ export const ChatSSEHandlersMixin = {
             this.handleChatStopped(data);
         });
 
-        // IMPORTANT: Do NOT subscribe to OPERATOR_NETWORK_PORT_CHECK_REQUESTED for UI
-        // indicator creation. STARTED owns the indicator lifecycle.
-        //
-        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves as a frontend notification
-        // emitted by agent_sse when the LLM's tool call is processed.
-        //
-        // Although the execution_id on REQUESTED now matches the one used by
-        // port_service for STARTED/COMPLETED/FAILED, the tool call chunk is yielded
-        // after the port-check completes, so REQUESTED arrives AFTER STARTED/COMPLETED.
-        // An indicator created from REQUESTED would therefore never be completed.
-        // Only STARTED/COMPLETED/FAILED drive the UI indicator lifecycle.
+        // STARTED/COMPLETED/FAILED emitted by port_service drive the indicator
+        // lifecycle for this tool. agent_sse no longer emits a parallel generic
+        // tool-call event for operator-gated tools.
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, (data) => {
             this.handleNetworkPortCheckIndicator(data);
         });
@@ -469,6 +461,7 @@ export const ChatSSEHandlersMixin = {
             request: data.request,
             guidelines: data.guidelines,
             webSessionId: data.web_session_id,
+            correlationId: data.correlation_id,
         });
 
         const webSessionId = data.web_session_id;

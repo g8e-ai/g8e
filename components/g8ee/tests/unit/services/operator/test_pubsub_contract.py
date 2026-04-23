@@ -11,67 +11,79 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Contract tests for PubSub Service payload mapping."""
+"""Contract tests for PubSub Service payload parsing."""
 
 import pytest
-from app.constants.events import EventType
-from app.services.operator.pubsub_service import _PAYLOAD_MODELS
-from app.models.pubsub_messages import G8eoResultPayload
+from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
+from app.models.pubsub_messages import (
+    G8eoResultPayload,
+    ExecutionResultsPayload,
+    PortCheckResultPayload,
+    FsListResultPayload,
+)
+from typing import get_args
 
 pytestmark = [pytest.mark.unit]
 
-def test_payload_models_exhaustiveness():
-    """Verify that all relevant operator event types are mapped in _PAYLOAD_MODELS.
-    
-    This is a contract test to ensure that when we add new operator events,
-    we also update the pubsub_service mapping to avoid falling back to
-    ExecutionResultsPayload incorrectly.
-    """
-    # These are handled with explicit if/else in _parse_g8eo_payload
-    EXPLICITLY_HANDLED = {
-        EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING,
-        EventType.OPERATOR_COMMAND_CANCELLED,
+def test_discriminator_parsing_execution_result():
+    """Verify that discriminator-based parsing works for execution results."""
+    payload_raw = {
+        "payload_type": "execution_result",
+        "execution_id": "exec-123",
+        "status": "completed",
+        "duration_seconds": 1.5,
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, ExecutionResultsPayload)
+    assert result.execution_id == "exec-123"
+    assert result.payload_type == "execution_result"
+
+def test_discriminator_parsing_port_check():
+    """Verify that discriminator-based parsing works for port check results."""
+    payload_raw = {
+        "payload_type": "port_check_result",
+        "execution_id": "exec-456",
+        "host": "localhost",
+        "port": 8080,
+        "is_open": True,
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, PortCheckResultPayload)
+    assert result.execution_id == "exec-456"
+    assert result.payload_type == "port_check_result"
+
+def test_discriminator_parsing_fs_list():
+    """Verify that discriminator-based parsing works for filesystem list results."""
+    payload_raw = {
+        "payload_type": "fs_list_result",
+        "execution_id": "exec-789",
+        "path": "/tmp",
+        "status": "completed",
+        "entries": [],
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, FsListResultPayload)
+    assert result.execution_id == "exec-789"
+    assert result.payload_type == "fs_list_result"
+
+def test_invalid_payload_type_raises_validation_error():
+    """Verify that invalid payload_type raises ValidationError."""
+    from app.errors import ValidationError
+
+    payload_raw = {
+        "payload_type": "invalid_type",
+        "execution_id": "exec-123",
     }
 
-    # These are inbound events that we expect to have a payload model mapping
-    # We filter EventType to only include OPERATOR_* events that are results
-    EXPECTED_OPERATOR_RESULTS = {
-        EventType.OPERATOR_COMMAND_COMPLETED,
-        EventType.OPERATOR_COMMAND_FAILED,
-        EventType.OPERATOR_FILE_EDIT_COMPLETED,
-        EventType.OPERATOR_FILE_EDIT_FAILED,
-        EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
-        EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
-        EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED,
-        EventType.OPERATOR_FILESYSTEM_LIST_FAILED,
-        EventType.OPERATOR_FILESYSTEM_READ_COMPLETED,
-        EventType.OPERATOR_FILESYSTEM_READ_FAILED,
-        EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED,
-        EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED,
-        EventType.OPERATOR_FILE_RESTORE_COMPLETED,
-        EventType.OPERATOR_FILE_RESTORE_FAILED,
-        EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED,
-        EventType.OPERATOR_FILE_DIFF_FETCH_FAILED,
-        EventType.OPERATOR_LOGS_FETCH_COMPLETED,
-        EventType.OPERATOR_LOGS_FETCH_FAILED,
-        EventType.OPERATOR_HISTORY_FETCH_COMPLETED,
-        EventType.OPERATOR_HISTORY_FETCH_FAILED,
-    }
+    with pytest.raises(ValidationError):
+        parse_inbound_g8eo_payload(payload_raw)
 
-    for event_type in EXPECTED_OPERATOR_RESULTS:
-        if event_type in EXPLICITLY_HANDLED:
-            continue
-        assert event_type in _PAYLOAD_MODELS, f"EventType.{event_type.name} missing from _PAYLOAD_MODELS in pubsub_service.py"
-
-def test_payload_models_registry_alignment():
-    """Verify that all models in _PAYLOAD_MODELS are part of the G8eoResultPayload union."""
-    from typing import get_args
-    
-    # Get all concrete types in the Union
+def test_all_payload_models_have_discriminator():
+    """Verify that all models in G8eoResultPayload union have a payload_type field."""
     union_types = get_args(G8eoResultPayload)
-    
-    for event_type, model_class in _PAYLOAD_MODELS.items():
-        assert model_class in union_types, (
-            f"Model {model_class.__name__} for {event_type} is not in G8eoResultPayload union "
-            "in app/models/pubsub_messages.py"
+
+    for model_class in union_types:
+        # Check if the model has a payload_type field
+        assert "payload_type" in model_class.model_fields, (
+            f"Model {model_class.__name__} is missing payload_type discriminator field"
         )

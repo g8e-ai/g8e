@@ -254,6 +254,24 @@
     border-left-color: rgba(var(--accent-blue-rgb), 0.7);
 }
 
+/* While Tribunal is refining (before approval_requested arrives),
+   hide the approval-specific body sections so only the header shows
+   the title and tribunal vote/status indicators. */
+.approval-compact--refining .approval-compact__command,
+.approval-compact--refining .approval-compact__reason,
+.approval-compact--refining .approval-compact__actions {
+    display: none;
+}
+
+.approval-compact--refining .approval-compact__icon,
+.approval-compact__icon--refining {
+    color: var(--accent-blue);
+}
+
+.approval-compact--refining-failed .approval-compact__icon--failed {
+    color: var(--text-secondary);
+}
+
 .approval-compact__header {
     display: flex;
     align-items: center;

@@ -78,7 +78,7 @@
     "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed",
     "data": {
       "query": "test investigation query",
-      "results": "Search results",
+      "content": "Search results",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
@@ -108,7 +108,7 @@
   "g8e_command_constraints_completed": {
     "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed",
     "data": {
-      "constraints": ["constraint 1"],
+      "content": "constraint 1",
       "execution_id": "test-execution-id",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",

@@ -52,8 +52,10 @@ from app.services.ai.benchmark_judge import (
     ToolCallCapture,
     TribunalCapture,
 )
+from app.constants.status import OperatorToolName
 from app.models.events import SessionEvent
-from app.models.g8ed_client import ChatToolCallPayload
+from app.models.g8ed_client import AIToolLifecyclePayload
+from app.models.operators import CommandExecutingBroadcastEvent
 from app.models.agents.tribunal import TribunalSessionCompletedPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import InvestigationCreateRequest
@@ -133,13 +135,35 @@ def _extract_tribunal_from_events(
     return None
 
 
+# Map native per-tool STARTED events to the canonical OperatorToolName each
+# event family represents. The native event contract dedicates one event family
+# per tool, so the event_type is the source of truth for which tool was called.
+# Multi-tool families (e.g. OPERATOR_FILE_EDIT_STARTED covers create/write/update)
+# are intentionally mapped to their representative AI-facing tool name — the
+# benchmark only asserts tool-family-level expectations, not sub-operation.
+_OPERATOR_STARTED_EVENT_TO_TOOL: dict[EventType, str] = {
+    EventType.OPERATOR_COMMAND_STARTED: OperatorToolName.RUN_COMMANDS,
+    EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED: OperatorToolName.CHECK_PORT,
+    EventType.OPERATOR_FILE_EDIT_STARTED: OperatorToolName.FILE_WRITE,
+    EventType.OPERATOR_FILESYSTEM_LIST_STARTED: OperatorToolName.LIST_FILES,
+    EventType.OPERATOR_FILESYSTEM_READ_STARTED: OperatorToolName.READ_FILE_CONTENT,
+}
+
+_UNIVERSAL_TOOL_REQUESTED_EVENT_TO_TOOL: dict[EventType, str] = {
+    EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED: OperatorToolName.G8E_SEARCH_WEB,
+    EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED: OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
+    EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED: OperatorToolName.GET_COMMAND_CONSTRAINTS,
+}
+
+
 def _extract_tool_calls_from_events(
     published: list[SessionEvent],
 ) -> list[ToolCallCapture]:
-    """Extract tool calls from TOOL_CALL_STARTED events.
+    """Extract tool calls from native per-tool STARTED/REQUESTED events.
 
-    Tool calls are not persisted in conversation history, so we must
-    intercept events to capture them.
+    Tool calls are not persisted in conversation history, so we intercept the
+    per-tool native lifecycle events published by each operator service
+    (OPERATOR_*_STARTED) and each universal AI tool (LLM_TOOL_G8E_*_REQUESTED).
     """
     tool_calls: list[ToolCallCapture] = []
 
@@ -147,14 +171,24 @@ def _extract_tool_calls_from_events(
         if not isinstance(event, SessionEvent):
             continue
 
-        if event.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED:
+        tool_name = _OPERATOR_STARTED_EVENT_TO_TOOL.get(event.event_type)
+        if tool_name is not None:
             payload = event.payload
-            if isinstance(payload, ChatToolCallPayload) and payload.tool_name:
-                command = payload.display_detail or ""
-                tool_calls.append(ToolCallCapture(
-                    tool_name=payload.tool_name,
-                    args={"command": command} if command else {},
-                ))
+            command = payload.command if isinstance(payload, CommandExecutingBroadcastEvent) else ""
+            tool_calls.append(ToolCallCapture(
+                tool_name=tool_name,
+                args={"command": command} if command else {},
+            ))
+            continue
+
+        tool_name = _UNIVERSAL_TOOL_REQUESTED_EVENT_TO_TOOL.get(event.event_type)
+        if tool_name is not None:
+            payload = event.payload
+            detail = payload.display_detail if isinstance(payload, AIToolLifecyclePayload) else None
+            tool_calls.append(ToolCallCapture(
+                tool_name=tool_name,
+                args={"command": detail} if detail else {},
+            ))
 
     return tool_calls
 

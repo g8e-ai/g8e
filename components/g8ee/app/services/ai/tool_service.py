@@ -841,9 +841,10 @@ class AIToolService:
 
         ``execution_id`` is the caller-generated canonical id for this tool invocation.
         It is threaded to per-call operator services (port_check, fs_list, fs_read,
-        file_edit) so that UI lifecycle events (STARTED/COMPLETED/FAILED) and the
-        pub/sub execution registry entry share a single id that also matches the
-        LLM_CHAT_ITERATION_TOOL_CALL_STARTED chunk emitted for this call.
+        file_edit) so that UI lifecycle events (STARTED/COMPLETED/FAILED) published
+        by each service share a single id with the pub/sub execution registry entry
+        and the native per-tool lifecycle event emitted by agent_sse (for universal
+        tools, an ``LLM_TOOL_G8E_<TOOL>_REQUESTED`` chunk carrying the same id).
         """
         if tool_name == OperatorToolName.RUN_COMMANDS:
             raw_command = tool_args.get("command", "")

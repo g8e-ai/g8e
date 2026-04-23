@@ -110,7 +110,9 @@ export class SessionAuthListener {
                             success: false,
                             error:   ApiKeyError.AUTH_FAILED,
                         }).forKV());
-                    } catch (_) {}
+                    } catch (publishErr) {
+                        logger.error('[SESSION-AUTH-LISTENER] Failed to publish auth failure response', { error: publishErr.message });
+                    }
                 } finally {
                     cleanup();
                 }

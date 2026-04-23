@@ -833,24 +833,44 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, request: TEST_REQUEST, webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(WIDGET_ID);
-            const commandEl = widget.querySelector('.tribunal__command');
+            const commandEl = widget.querySelector('.approval-compact__command');
 
             expect(commandEl.textContent).toBe(TEST_REQUEST);
             // Guard against double-escaping of & in the template renderer
             expect(commandEl.innerHTML).not.toContain('&amp;amp;');
         });
 
-        it('renders voting dots as DOM elements inside tribunal__passes', async () => {
+        it('renders as an approval-compact skeleton with refining modifier', async () => {
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, request: TEST_REQUEST, webSessionId: WEB_SESSION_ID });
+
+            const widget = document.getElementById(WIDGET_ID);
+            expect(widget.classList.contains('anchored-terminal__approval')).toBe(true);
+            expect(widget.getAttribute('data-approval-refining')).toBe('1');
+            expect(widget.getAttribute('data-web-session-id')).toBe(WEB_SESSION_ID);
+            expect(widget.querySelector('.approval-compact.approval-compact--refining')).not.toBeNull();
+        });
+
+        it('renders voting dots as DOM elements inside tribunal__passes in the approval-compact header', async () => {
             await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls', webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(WIDGET_ID);
-            const passesEl = widget.querySelector('.tribunal__passes');
+            const header = widget.querySelector('.approval-compact__header');
+            const passesEl = header.querySelector('.tribunal__passes');
             const dots = passesEl.querySelectorAll('.tribunal__dot');
 
             expect(dots.length).toBe(3);
             dots.forEach((dot, i) => {
                 expect(dot.getAttribute('data-pass')).toBe(String(i));
             });
+        });
+
+        it('places tribunal__status inside the approval-compact header', async () => {
+            await terminal.showTribunal({ id: WIDGET_ID, model: 'test-model', numPasses: 3, command: 'ls', webSessionId: WEB_SESSION_ID });
+
+            const widget = document.getElementById(WIDGET_ID);
+            const statusEl = widget.querySelector('.approval-compact__header .tribunal__status');
+            expect(statusEl).not.toBeNull();
+            expect(statusEl.textContent).toContain('Generating alternatives');
         });
 
         it('renders correct number of dots for custom numPasses', async () => {
@@ -889,23 +909,10 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(document.getElementById(WIDGET_ID)).not.toBeNull();
         });
 
-        it('adds tribunal--done class', () => {
-            terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la', outcome: 'consensus' });
-
-            expect(document.getElementById(WIDGET_ID).classList.contains('tribunal--done')).toBe(true);
-        });
-
         it('removes the spinner element', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la', outcome: 'consensus' });
 
             expect(document.getElementById(WIDGET_ID).querySelector('.tribunal__spinner')).toBeNull();
-        });
-
-        it('sets icon to check_circle', () => {
-            terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la', outcome: 'consensus' });
-
-            const icon = document.getElementById(WIDGET_ID).querySelector('.tribunal__icon');
-            expect(icon.textContent).toBe('check_circle');
         });
 
         it('shows "Consensus" label for consensus outcome', () => {
@@ -974,10 +981,11 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(document.getElementById(WIDGET_ID)).not.toBeNull();
         });
 
-        it('adds tribunal--failed class', () => {
+        it('adds approval-compact--refining-failed class to the card', () => {
             terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
-            expect(document.getElementById(WIDGET_ID).classList.contains('tribunal--failed')).toBe(true);
+            const card = document.getElementById(WIDGET_ID).querySelector('.approval-compact');
+            expect(card.classList.contains('approval-compact--refining-failed')).toBe(true);
         });
 
         it('removes the spinner element', () => {
@@ -986,18 +994,18 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(document.getElementById(WIDGET_ID).querySelector('.tribunal__spinner')).toBeNull();
         });
 
-        it('sets icon to warning', () => {
+        it('sets approval-compact icon to warning', () => {
             terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
-            const icon = document.getElementById(WIDGET_ID).querySelector('.tribunal__icon');
+            const icon = document.getElementById(WIDGET_ID).querySelector('.approval-compact__icon');
             expect(icon.textContent).toBe('warning');
         });
 
-        it('adds tribunal__icon--failed class to icon', () => {
+        it('adds approval-compact__icon--failed class to icon', () => {
             terminal.failTribunal({ id: WIDGET_ID, eventType: DISABLED });
 
-            const icon = document.getElementById(WIDGET_ID).querySelector('.tribunal__icon');
-            expect(icon.classList.contains('tribunal__icon--failed')).toBe(true);
+            const icon = document.getElementById(WIDGET_ID).querySelector('.approval-compact__icon');
+            expect(icon.classList.contains('approval-compact__icon--failed')).toBe(true);
         });
 
         it('shows disabled label for TRIBUNAL_SESSION_DISABLED', () => {
@@ -1313,6 +1321,168 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             // Shows "Continuing" status label (not "Approved").
             const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
             expect(approvalCard.textContent).toContain('Continuing');
+        });
+    });
+
+    describe('Tribunal refining widget → approval upgrade', () => {
+        const TRIBUNAL_ID = 'tribunal-upgrade-1';
+
+        it('upgrades the refining widget in place when approval carries matching correlation_id (primary match)', async () => {
+            const CORRELATION_ID = 'tribunal_abc123_1700000000';
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID,
+                model: 'test-model',
+                numPasses: 3,
+                request: 'ls -la',
+                webSessionId: WEB_SESSION_ID,
+                correlationId: CORRELATION_ID,
+            });
+
+            expect(terminal.outputContainer.querySelectorAll('.anchored-terminal__approval').length).toBe(1);
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-upgrade-corr',
+                approval_id: 'approval-upgrade-corr',
+                correlation_id: CORRELATION_ID,
+                // web_session_id intentionally omitted — correlation_id alone must suffice.
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
+                command: 'ls -la',
+                justification: 'List files',
+            });
+
+            const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
+            expect(approvals.length).toBe(1);
+            expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-upgrade-corr');
+            expect(approvals[0].hasAttribute('data-approval-refining')).toBe(false);
+            // Tribunal dots/status are preserved within the upgraded header.
+            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
+        });
+
+        it('upgrades the refining widget in place via web_session_id fallback when correlation_id is absent', async () => {
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID,
+                model: 'test-model',
+                numPasses: 3,
+                request: 'ls -la',
+                webSessionId: WEB_SESSION_ID,
+                // No correlationId (e.g. legacy/non-tribunal flow that still rendered a refining widget).
+            });
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-upgrade-ws',
+                approval_id: 'approval-upgrade-ws',
+                web_session_id: WEB_SESSION_ID,
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
+                command: 'ls -la',
+                justification: 'List files',
+            });
+
+            const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
+            expect(approvals.length).toBe(1);
+            expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-upgrade-ws');
+            expect(approvals[0].hasAttribute('data-approval-refining')).toBe(false);
+            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
+        });
+
+        it('does not cross-claim sibling tribunals: correlation_id match targets only the matching widget', async () => {
+            const CORR_A = 'tribunal_aaa_1';
+            const CORR_B = 'tribunal_bbb_2';
+            await terminal.showTribunal({
+                id: 'tribunal-a', model: 'm', numPasses: 3, request: 'alpha',
+                webSessionId: WEB_SESSION_ID, correlationId: CORR_A,
+            });
+            await terminal.showTribunal({
+                id: 'tribunal-b', model: 'm', numPasses: 3, request: 'bravo',
+                webSessionId: WEB_SESSION_ID, correlationId: CORR_B,
+            });
+            expect(terminal.outputContainer.querySelectorAll('[data-approval-refining="1"]').length).toBe(2);
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-b',
+                approval_id: 'approval-b',
+                correlation_id: CORR_B,
+                case_id: 'case-1', investigation_id: 'inv-1', task_id: 'task-1',
+                command: 'bravo', justification: 'B only',
+            });
+
+            // Only the B widget was claimed; A remains refining.
+            const stillRefining = terminal.outputContainer.querySelectorAll('[data-approval-refining="1"]');
+            expect(stillRefining.length).toBe(1);
+            expect(stillRefining[0].dataset.correlationId).toBe(CORR_A);
+
+            const claimedB = terminal.outputContainer.querySelector('[data-approval-id="approval-b"]');
+            expect(claimedB).not.toBeNull();
+            expect(claimedB.dataset.correlationId).toBe(CORR_B);
+        });
+
+        it('renders a fresh card (no heuristic claim) when approval event carries neither correlation_id nor web_session_id', async () => {
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID, model: 'm', numPasses: 3, request: 'orphan',
+                webSessionId: WEB_SESSION_ID, correlationId: 'tribunal_orphan_1',
+            });
+
+            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-orphan',
+                approval_id: 'approval-orphan',
+                // No correlation_id, no web_session_id — backend contract violation.
+                case_id: 'case-1', investigation_id: 'inv-1', task_id: 'task-1',
+                command: 'orphan', justification: 'No linkage',
+            });
+
+            // Refining widget untouched; a fresh card rendered alongside it.
+            const refining = terminal.outputContainer.querySelectorAll('[data-approval-refining="1"]');
+            expect(refining.length).toBe(1);
+            const allApprovals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
+            expect(allApprovals.length).toBe(2);
+
+            expect(errSpy).toHaveBeenCalledWith(
+                expect.stringContaining('missing both correlation_id and web_session_id'),
+                expect.any(Object),
+            );
+            errSpy.mockRestore();
+        });
+
+        it('does not re-claim a refining widget already upgraded by a prior approval', async () => {
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID,
+                model: 'test-model',
+                numPasses: 3,
+                request: 'whoami',
+                webSessionId: WEB_SESSION_ID,
+            });
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-first',
+                approval_id: 'approval-first',
+                web_session_id: WEB_SESSION_ID,
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
+                command: 'whoami',
+                justification: 'First',
+            });
+
+            // A subsequent approval event (no linkage) must not re-upgrade the already-claimed card.
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-second',
+                approval_id: 'approval-second',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
+                command: 'id',
+                justification: 'Second',
+            });
+
+            const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
+            expect(approvals.length).toBe(2);
+            const ids = Array.from(approvals).map(el => el.getAttribute('data-approval-id')).sort();
+            expect(ids).toEqual(['approval-first', 'approval-second']);
         });
     });
 });

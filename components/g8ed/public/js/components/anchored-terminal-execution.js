@@ -23,6 +23,7 @@ export class TerminalExecutionMixin {
     initExecutionState() {
         this.pendingApprovals = new Map();
         this.activeExecutions = new Map();
+        this.approvalResultsContainers = new Map();
         this.executionResultsContainers = new Map();
     }
 
@@ -63,8 +64,7 @@ export class TerminalExecutionMixin {
     async showExecutingIndicator(command) {
         if (!this.outputContainer) return null;
 
-        if (this._execCounter === undefined) this._execCounter = 0;
-        const id = `exec-${Date.now()}-${++this._execCounter}`;
+        const id = `exec-${crypto.randomUUID()}`;
 
         const group = this._createAIBubbleWrapper(id);
         const content = group.querySelector('.anchored-terminal__agent-message-content');
@@ -84,8 +84,7 @@ export class TerminalExecutionMixin {
     async showPreparingIndicator(command) {
         if (!this.outputContainer) return null;
 
-        if (this._execCounter === undefined) this._execCounter = 0;
-        const id = `exec-${Date.now()}-${++this._execCounter}`;
+        const id = `exec-${crypto.randomUUID()}`;
 
         const group = this._createAIBubbleWrapper(id);
         const content = group.querySelector('.anchored-terminal__agent-message-content');
@@ -105,7 +104,7 @@ export class TerminalExecutionMixin {
     async _showExecutingIndicatorInContainer(container, command) {
         if (!container || typeof container.querySelector !== 'function') return null;
 
-        const id = `exec-${Date.now()}`;
+        const id = `exec-${crypto.randomUUID()}`;
         const body = container.querySelector('.anchored-terminal__results-body');
         if (!body) return await this.showExecutingIndicator(command);
 
@@ -168,10 +167,44 @@ export class TerminalExecutionMixin {
         if (welcome) welcome.remove();
 
         const execId = data.execution_id;
-        const approvalId = data.approval_id || data.execution_id;
+        const approvalId = data.approval_id;
+        if (!approvalId) {
+            console.error('[ANCHORED TERMINAL] Approval event missing approval_id — backend contract violation', data);
+            throw new Error('Approval event must include approval_id');
+        }
+        const webSessionId = data.web_session_id;
+        const correlationId = data.correlation_id;
+
+        // If the Tribunal already rendered a refining approval-compact for this
+        // session, upgrade that existing DOM node in place instead of rendering
+        // a separate card. This preserves the tribunal dots/status inside the
+        // approval-compact header.
+        //
+        // Discovery is done via dataset comparison rather than an attribute
+        // selector with CSS.escape: arbitrary session-id strings may contain
+        // characters that require escaping, and CSS.escape is not available in
+        // every runtime the tests exercise.
+        const unclaimedRefining = Array.from(this.outputContainer.querySelectorAll(
+            '.anchored-terminal__approval[data-approval-refining="1"]:not([data-approval-id])'
+        ));
+
+        let refiningWidget = null;
+        if (correlationId) {
+            // Primary matching: use correlation_id from Tribunal session
+            refiningWidget = unclaimedRefining.find(el => el.dataset.correlationId === correlationId) ?? null;
+        } else if (webSessionId) {
+            // Fallback: use web_session_id for non-Tribunal flows
+            refiningWidget = unclaimedRefining.find(el => el.dataset.webSessionId === webSessionId) ?? null;
+        } else {
+            console.error('[ANCHORED TERMINAL] Approval event missing both correlation_id and web_session_id — cannot safely claim refining widget, rendering separate card', data);
+        }
 
         let group = null;
-        if (execId) {
+        if (refiningWidget) {
+            group = refiningWidget.closest('.anchored-terminal__agent-message-group');
+        }
+
+        if (!group && execId) {
             const preparingExec = this.activeExecutions.get(execId);
             if (preparingExec && preparingExec.indicatorId) {
                 group = this._findBubbleByExecId(preparingExec.indicatorId);
@@ -206,11 +239,29 @@ export class TerminalExecutionMixin {
         const targetSystems = data.target_systems;
         const isBatchExecution = data.is_batch_execution && targetSystems && targetSystems.length > 1;
 
+        if (!data.case_id || !data.investigation_id || !data.task_id) {
+            console.error('[ANCHORED TERMINAL] Approval data missing required fields (case_id, investigation_id, task_id)', data);
+            throw new Error('Approval data must include case_id, investigation_id, and task_id');
+        }
+
         this.pendingApprovals.set(approvalId, data);
 
-        const approval = document.createElement('div');
-        approval.className = 'anchored-terminal__approval';
+        // Reuse the refining widget if present, otherwise create a fresh one.
+        const approval = refiningWidget ?? document.createElement('div');
+        if (!refiningWidget) {
+            approval.className = 'anchored-terminal__approval';
+        }
         approval.setAttribute('data-approval-id', approvalId);
+        approval.removeAttribute('data-approval-refining');
+        approval.id = approvalId;
+
+        // Preserve tribunal dots/status (final state) when upgrading a refining widget.
+        let tribunalHtml = '';
+        if (refiningWidget) {
+            const passesEl = refiningWidget.querySelector('.tribunal__passes');
+            const statusEl = refiningWidget.querySelector('.tribunal__status');
+            tribunalHtml = (passesEl ? passesEl.outerHTML : '') + (statusEl ? statusEl.outerHTML : '');
+        }
 
         let headerText = 'Command';
         let commandDisplay = command;
@@ -263,6 +314,7 @@ export class TerminalExecutionMixin {
             icon,
             iconModifier,
             headerText,
+            tribunalHtml,
             riskBadgeHtml,
             promptHtml: (isFileEdit || isAgentContinue) ? '' : '<span class="approval-compact__prompt">$</span>',
             commandDisplay,
@@ -278,8 +330,10 @@ export class TerminalExecutionMixin {
         approveBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, true));
         denyBtn.addEventListener('click', () => this.handleApprovalResponse(approvalId, false));
 
-        const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
-        contentEl.appendChild(approval);
+        if (!refiningWidget) {
+            const contentEl = group.querySelector('.anchored-terminal__agent-message-content');
+            contentEl.appendChild(approval);
+        }
         this.scrollToBottom();
     }
 
@@ -323,7 +377,7 @@ export class TerminalExecutionMixin {
                 }
 
                 if (approved && !isAgentContinue) {
-                    const resultsContainer = this._createResultsContainer(approvalId, approvalEl);
+                    const resultsContainer = await this._createResultsContainer(approvalId, approvalEl, true);
                     this._pendingExecutingIndicator = await this._showExecutingIndicatorInContainer(
                         resultsContainer,
                         approvalData.command
@@ -410,16 +464,18 @@ export class TerminalExecutionMixin {
         `;
     }
 
-    async _createResultsContainer(executionId, approvalEl) {
+    async _createResultsContainer(containerId, approvalEl, isApproval = false) {
         if (!this.outputContainer) return null;
 
-        if (this.executionResultsContainers.has(executionId)) {
-            return this.executionResultsContainers.get(executionId);
+        const containersMap = isApproval ? this.approvalResultsContainers : this.executionResultsContainers;
+
+        if (containersMap.has(containerId)) {
+            return containersMap.get(containerId);
         }
 
         const container = document.createElement('div');
         container.className = 'anchored-terminal__results-group';
-        container.setAttribute('data-execution-id', executionId);
+        container.setAttribute('data-execution-id', containerId);
 
         const toggle = document.createElement('div');
         toggle.className = 'anchored-terminal__results-toggle';
@@ -448,7 +504,7 @@ export class TerminalExecutionMixin {
             this.outputContainer.appendChild(container);
         }
 
-        this.executionResultsContainers.set(executionId, container);
+        containersMap.set(containerId, container);
         return container;
     }
 
@@ -549,7 +605,7 @@ export class TerminalExecutionMixin {
                 }
 
                 const existingContainer =
-                    (approvalId ? this.executionResultsContainers.get(approvalId) : null) ||
+                    (approvalId ? this.approvalResultsContainers.get(approvalId) : null) ||
                     (execId ? this.executionResultsContainers.get(execId) : null);
 
                 if (existingContainer) {
@@ -572,17 +628,18 @@ export class TerminalExecutionMixin {
             const execInfo = execId ? this.activeExecutions.get(execId) : null;
             this.hideExecutingIndicator(execInfo?.indicatorId);
 
-            let resultsContainer =
-                (approvalId ? this.executionResultsContainers.get(approvalId) : null) ||
-                (execId ? this.executionResultsContainers.get(execId) : null);
+            let resultsContainer = null;
+            if (approvalId) {
+                resultsContainer = this.approvalResultsContainers.get(approvalId);
+            }
 
             if (!resultsContainer) {
-                const containerId = approvalId || execId;
+                const containerId = approvalId;
                 if (!containerId) {
-                    console.error('[TERMINAL] Received final command event with no execution_id or approval_id — cannot render result', data);
+                    console.error('[TERMINAL] Final command event missing approval_id — backend contract violation', data);
                     return;
                 }
-                resultsContainer = await this._createResultsContainer(containerId);
+                resultsContainer = await this._createResultsContainer(containerId, null, true);
             }
 
             if (resultsContainer) {
@@ -613,12 +670,12 @@ export class TerminalExecutionMixin {
         const granted = data.granted || data.eventType === EventType.OPERATOR_INTENT_GRANTED || data.eventType === EventType.OPERATOR_INTENT_APPROVAL_GRANTED;
         const status = granted ? EventType.OPERATOR_COMMAND_COMPLETED : EventType.OPERATOR_COMMAND_FAILED;
 
-        const containerId = data.approval_id || data.execution_id;
+        const containerId = data.approval_id;
         if (!containerId) {
-            console.error('[TERMINAL] Received intent result with no approval_id or execution_id — cannot render result', data);
+            console.error('[TERMINAL] Intent result missing approval_id — backend contract violation', data);
             return;
         }
-        const container = await this._createResultsContainer(containerId);
+        const container = await this._createResultsContainer(containerId, null, true);
         if (container) {
             await this._appendResultToContainer(container, {
                 command: `Permission: ${intentName}`,
@@ -650,7 +707,7 @@ export class TerminalExecutionMixin {
             console.error('[TERMINAL] restoreCommandExecution called with no execution_id — cannot restore result', data);
             return;
         }
-        const container = await this._createResultsContainer(containerId);
+        const container = await this._createResultsContainer(containerId, null, false);
         if (container) {
             await this._appendResultToContainer(container, {
                 command,
@@ -716,8 +773,9 @@ export class TerminalExecutionMixin {
 
         const entry = document.createElement('div');
         entry.className = 'anchored-terminal__approval restored';
-        if (executionId) {
-            entry.setAttribute('data-approval-id', executionId);
+        const approvalId = data.approval_id;
+        if (approvalId) {
+            entry.setAttribute('data-approval-id', approvalId);
         }
 
         await templateLoader.renderTo(entry, 'approval-card-restored', {
@@ -739,7 +797,7 @@ export class TerminalExecutionMixin {
         this.outputContainer.appendChild(group);
 
         if (wasApproved && executionId) {
-            await this._createResultsContainer(executionId, entry);
+            await this._createResultsContainer(executionId, entry, false);
         }
 
         return entry;
@@ -750,19 +808,23 @@ export class TerminalExecutionMixin {
 
         const webSessionId = webSessionService.getWebSessionId();
         let totalDenied = 0;
+        const denyPromises = [];
 
         for (const [approvalId, approvalData] of this.pendingApprovals) {
             if (webSessionId) {
-                window.serviceClient?.post(ComponentName.G8ED, ApiPaths.approval.respond(), {
-                    approval_id: approvalId,
-                    approved: false,
-                    reason: reason,
-                    case_id: approvalData.case_id,
-                    investigation_id: approvalData.investigation_id,
-                    task_id: approvalData.task_id,
-                }).catch(error => {
-                    console.error(`[TERMINAL] Failed to deny approval ${approvalId}:`, error);
-                });
+                denyPromises.push(
+                    window.serviceClient?.post(ComponentName.G8ED, ApiPaths.approval.respond(), {
+                        approval_id: approvalId,
+                        approved: false,
+                        reason: reason,
+                        case_id: approvalData.case_id,
+                        investigation_id: approvalData.investigation_id,
+                        task_id: approvalData.task_id,
+                    }).catch(error => {
+                        console.error(`[TERMINAL] Failed to deny approval ${approvalId}:`, error);
+                        return { approvalId, failed: true };
+                    })
+                );
             }
 
             const approvalEl = this.outputContainer?.querySelector(`[data-approval-id="${approvalId}"]`);
@@ -777,6 +839,12 @@ export class TerminalExecutionMixin {
                 }
             }
             totalDenied++;
+        }
+
+        const results = await Promise.all(denyPromises);
+        const failures = results.filter(r => r?.failed);
+        if (failures.length > 0) {
+            console.error(`[TERMINAL] Failed to deny ${failures.length} approval(s)`);
         }
 
         this.pendingApprovals.clear();

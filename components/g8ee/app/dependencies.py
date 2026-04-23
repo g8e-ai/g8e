@@ -50,7 +50,7 @@ from .services.ai.chat_pipeline import ChatPipelineService
 from .services.ai.chat_task_manager import BackgroundTaskManager
 from .services.data.attachment_store_service import AttachmentService
 from .db.blob_service import BlobService
-from .services.protocols import ExecutionRegistryProtocol, SettingsServiceProtocol
+from .services.protocols import SettingsServiceProtocol
 from .services.infra.g8ed_event_service import EventService
 from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
@@ -142,14 +142,6 @@ async def get_g8ee_investigation_service(request: Request) -> InvestigationServi
     if not service:
         logger.error("Investigation Domain Service not found in app state")
         raise ServiceUnavailableError("Investigation Domain Service not available")
-    return service
-
-
-async def get_g8ee_execution_registry(request: Request) -> ExecutionRegistryProtocol:
-    service = getattr(request.app.state, "execution_registry", None)
-    if not service:
-        logger.error("Execution Registry Service not found in app state")
-        raise ServiceUnavailableError("Execution Registry Service not available")
     return service
 
 

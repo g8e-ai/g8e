@@ -25,6 +25,7 @@ from app.constants import (
     IAM_VERIFY_EXECUTION_ID_PREFIX,
     INTENT_APPROVAL_ID_PREFIX,
     INTENT_EXECUTION_ID_PREFIX,
+    TRIBUNAL_CORRELATION_ID_PREFIX,
 )
 from app.utils.timestamp import now, to_timestamp
 
@@ -123,3 +124,8 @@ def generate_iam_revoke_execution_id() -> str:
 def generate_iam_revoke_intent_execution_id(intent: str) -> str:
     """Generate a unique execution ID for revoking a specific IAM intent policy."""
     return f"{IAM_REVOKE_INTENT_EXECUTION_ID_PREFIX}_{intent}_{_hex()}"
+
+
+def generate_tribunal_correlation_id() -> str:
+    """Generate a unique correlation ID for Tribunal sessions to link with approval requests."""
+    return f"{TRIBUNAL_CORRELATION_ID_PREFIX}_{_hex()}_{_ts()}"

@@ -253,6 +253,7 @@ class OperatorApprovalService:
             target_systems=request.target_systems,
             task_id=request.task_id,
             batch_id=request.batch_id,
+            correlation_id=request.correlation_id,
         )
 
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
@@ -268,6 +269,7 @@ class OperatorApprovalService:
             operator_session_id=request.operator_session_id,
             operator_id=request.operator_id,
             risk_analysis=request.risk_analysis,
+            correlation_id=request.correlation_id,
         )
 
     async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
@@ -283,6 +285,7 @@ class OperatorApprovalService:
             operator_id=request.operator_id,
             all_intents=request.all_intents,
             operation_context=request.operation_context or "",
+            correlation_id=request.correlation_id,
         )
 
     async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult:
@@ -319,6 +322,7 @@ class OperatorApprovalService:
                 task_id=request.task_id,
                 turn_limit=request.turn_limit,
                 turns_completed=request.turns_completed,
+                correlation_id=request.correlation_id,
             )
 
             try:
@@ -447,6 +451,7 @@ class OperatorApprovalService:
         target_systems: list[TargetSystem],
         task_id: str | None,
         batch_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> ApprovalResult:
         approval_id = generate_approval_id()
         try:
@@ -472,6 +477,7 @@ class OperatorApprovalService:
                 risk_analysis=risk_analysis,
                 target_systems=target_systems or [],
                 batch_id=batch_id,
+                correlation_id=correlation_id,
             )
 
             if approval_event.is_batch_execution:
@@ -631,6 +637,7 @@ class OperatorApprovalService:
         operator_session_id: str,
         operator_id: str,
         risk_analysis: FileOperationRiskAnalysis | None,
+        correlation_id: str | None = None,
     ) -> ApprovalResult:
         approval_id = generate_approval_id()
         try:
@@ -649,6 +656,7 @@ class OperatorApprovalService:
                 timeout_seconds=timeout_seconds,
                 user_id=user_id,
                 risk_analysis=risk_analysis,
+                correlation_id=correlation_id,
             )
 
             try:
@@ -783,6 +791,7 @@ class OperatorApprovalService:
         operator_id: str,
         all_intents: list[str | CloudIntent],
         operation_context: str,
+        correlation_id: str | None = None,
     ) -> ApprovalResult:
         normalized_str = intent_name.replace("-", "_").lower()
 
@@ -828,6 +837,7 @@ class OperatorApprovalService:
                 timeout_seconds=timeout_seconds,
                 user_id=user_id,
                 operator_id=operator_id,
+                correlation_id=correlation_id,
             )
 
             try:

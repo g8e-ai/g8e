@@ -134,31 +134,6 @@ class OperatorSessionRegistrationRequest(G8eBaseModel):
     operator_session_id: str = Field(..., description="Operator session ID")
 
 
-class MCPToolCallRequest(G8eBaseModel):
-    """Request model for MCP tool/call via the gateway.
-
-    The external MCP client sends a JSON-RPC tools/call; g8ed unwraps it and
-    forwards tool_name + arguments here. Identity comes from G8eHttpContext headers.
-    """
-    tool_name: str = Field(..., description="MCP tool name (e.g. run_commands_with_operator)")
-    arguments: dict = Field(default_factory=dict, description="Tool arguments")
-    request_id: str = Field(..., description="JSON-RPC request id for correlation")
-    sentinel_mode: bool = Field(default=True, description="Sentinel mode - when True, data is scrubbed before storage and AI sees redacted data")
-
-
-class MCPToolListResponse(G8eBaseModel):
-    """Response for POST /mcp/tools/list."""
-    tools: list = Field(default_factory=list, description="MCP tool definitions")
-
-
-class MCPToolCallResponse(G8eBaseModel):
-    """Response for POST /mcp/tools/call -- wraps the result as MCP JSON-RPC."""
-    jsonrpc: str = Field(default="2.0")
-    id: str = Field(..., description="Correlated JSON-RPC request id")
-    result: dict | None = Field(default=None, description="MCP CallToolResult on success")
-    error: dict | None = Field(default=None, description="JSON-RPC error on failure")
-
-
 class DirectCommandRequest(G8eBaseModel):
     """Request model for direct command execution (bypasses AI).
 

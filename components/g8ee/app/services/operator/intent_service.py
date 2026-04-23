@@ -244,7 +244,7 @@ class OperatorIntentService:
                 ),
             )
             
-            iam_result = await self.execution_service.execute(msg, g8e_context)
+            iam_result, _envelope = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=iam_result))
 
             if iam_result and iam_result.status != ExecutionStatus.COMPLETED:
@@ -344,7 +344,7 @@ class OperatorIntentService:
                     justification="IAM Revoke",
                 ),
             )
-            res = await self.execution_service.execute(msg, g8e_context)
+            res, _envelope = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))
             if res and res.status == ExecutionStatus.COMPLETED and self.g8ed_client:
                 await self.g8ed_client.revoke_intent(op_doc.id, intent, g8e_context)

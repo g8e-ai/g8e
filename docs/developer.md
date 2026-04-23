@@ -145,20 +145,27 @@ Domain Layer (Orchestration)
 
 Operator Services
 ├── HeartbeatService ───────────> OperatorDataService, EventService, PubSubClient
-├── ExecutionRegistryService
-├── ExecutionService ───────────> ExecutionRegistryService, PubSubClient
+├── PubSubService ──────────────> PubSubClient
+│                                 (owns asyncio.Future registry for result correlation;
+│                                  Futures are keyed on payload.execution_id)
+├── ExecutionService ───────────> PubSubService, ApprovalService, EventService,
+│                                 AIResponseAnalyzer, OperatorDataService,
+│                                 InvestigationService
 ├── ApprovalService ────────────> EventService, OperatorDataService,
 │                                 InvestigationDataService
 ├── CommandService ─────────────> CacheAsideService, OperatorDataService,
 │                                 InvestigationService, EventService,
-│                                 ExecutionRegistryService, ApprovalService,
-│                                 InternalHttpClient, PubSubClient
-├── FileService ────────────────> CommandService
-├── FilesystemService ──────────> CommandService
-├── PortService ────────────────> CommandService
-├── LFAAService ────────────────> CommandService
-├── IntentService ──────────────> CommandService
-└── PubSubService ──────────────> PubSubClient
+│                                 ApprovalService, ExecutionService,
+│                                 InternalHttpClient, PubSubService
+├── FileService ────────────────> PubSubService, ApprovalService, EventService,
+│                                 ExecutionService, AIResponseAnalyzer,
+│                                 InvestigationService
+├── FilesystemService ──────────> PubSubService, ExecutionService,
+│                                 InvestigationService
+├── PortService ────────────────> PubSubService, ExecutionService
+├── LFAAService ────────────────> PubSubService
+└── IntentService ──────────────> ApprovalService, ExecutionService, EventService,
+                                  InvestigationService, G8edClient
 
 AI Pipeline
 ├── AIToolService ──────────────> CommandService, InvestigationService,
@@ -180,11 +187,6 @@ AI Pipeline
 ├── GenerationConfigBuilder
 └── EvalJudge
 
-MCP Gateway Services (External Client Integration)
-├── MCPGatewayService ──────────> AIToolService, InvestigationService,
-│                                 OperatorDataService
-│                                 (Translates MCP tool calls to native g8e events)
-└── MCPAdapter
 ```
 
 ---
@@ -243,7 +245,7 @@ The AI pipeline in g8ee consists of several specialized services that orchestrat
   - Uses a dispatch table `_tool_handlers` for efficient tool lookup.
   - Uniform handler signature: `(tool_args, investigation, g8e_context, request_settings)`.
   - Integrated Tribunal oversight via `orchestrate_tool_execution`.
-  - Support for multiple tool types: Operator commands, MCP tools, and internal utility tools.
+  - Support for multiple tool types: Operator commands and internal utility tools.
 
 ---
 

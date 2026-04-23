@@ -276,8 +276,9 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
     message whose id matched -- labelling it a "self-broadcast". g8ee
     publishes only to `cmd:*` and subscribes only to `results:*` / `heartbeat:*`
     (disjoint channels), so there is no real self-broadcast scenario on this
-    wire path. The filter silently ate legitimate results, causing
-    `execution_registry.wait()` to time out and the UI spinner to spin forever.
+    wire path. The filter silently ate legitimate results, causing the
+    awaiting Future on PubSubService to time out and the UI spinner to spin
+    forever.
 
     These tests pin the correct behaviour: a MESSAGE / PMESSAGE event whose
     envelope `id` was just seen on `publish()` MUST still reach the handler.

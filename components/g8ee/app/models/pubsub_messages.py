@@ -19,10 +19,9 @@ communication via g8es pub/sub.
 """
 
 from datetime import datetime
-from typing import Union
+from typing import Literal, Union
+from pydantic import Field, field_validator, TypeAdapter
 from uuid import uuid4
-
-from pydantic import Field, field_validator
 
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
 
@@ -50,6 +49,7 @@ from app.models.command_request_payloads import (
 
 class ExecutionResultsPayload(G8eBaseModel):
     """Typed payload for operator.command.completed / operator.command.failed."""
+    payload_type: Literal["execution_result"] = Field(default="execution_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier")
     status: ExecutionStatus = Field(..., description="Final execution status")
     duration_seconds: float = Field(default=0.0, description="Wall-clock execution duration in seconds")
@@ -79,6 +79,7 @@ class ExecutionResultsPayload(G8eBaseModel):
 
 class ExecutionStatusPayload(G8eBaseModel):
     """Typed payload for operator.command.status."""
+    payload_type: Literal["execution_status"] = Field(default="execution_status", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier")
     status: ExecutionStatus = Field(..., description="Current execution status")
     process_alive: bool = Field(default=True, description="True if the underlying process is still running")
@@ -91,6 +92,7 @@ class ExecutionStatusPayload(G8eBaseModel):
 
 class CancellationResultPayload(G8eBaseModel):
     """Typed payload for operator.command.cancelled."""
+    payload_type: Literal["cancellation_result"] = Field(default="cancellation_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier of the cancelled command")
     status: ExecutionStatus = Field(ExecutionStatus.CANCELLED)
     error_message: str | None = Field(None)
@@ -99,6 +101,7 @@ class CancellationResultPayload(G8eBaseModel):
 
 class FileEditResultPayload(G8eBaseModel):
     """Typed payload for operator.file.edit.completed / operator.file.edit.failed."""
+    payload_type: Literal["file_edit_result"] = Field(default="file_edit_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier")
     operation: str = Field(..., description="File operation performed")
     file_path: str = Field(..., description="Absolute path of the target file")
@@ -134,6 +137,7 @@ class FileEditResultPayload(G8eBaseModel):
 
 class FsListResultPayload(G8eBaseModel):
     """Typed payload for operator.fs.list.completed / operator.fs.list.failed."""
+    payload_type: Literal["fs_list_result"] = Field(default="fs_list_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier")
     path: str | None = Field(default=None, description="Resolved absolute path that was listed")
     status: ExecutionStatus = Field(..., description="Operation status")
@@ -152,6 +156,7 @@ class FsListResultPayload(G8eBaseModel):
 
 class FsReadResultPayload(G8eBaseModel):
     """Typed payload for operator.fs.read.completed / operator.fs.read.failed."""
+    payload_type: Literal["fs_read_result"] = Field(default="fs_read_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Unique execution identifier")
     path: str | None = Field(None)
     status: ExecutionStatus = Field(..., description="Operation status")
@@ -175,6 +180,7 @@ class FetchLogsResultPayload(G8eBaseModel):
     operator.fetch.logs.failed, matching the unified LFAA error envelope
     used by FetchHistory / FetchFileHistory / RestoreFile / FetchFileDiff.
     """
+    payload_type: Literal["fetch_logs_result"] = Field(default="fetch_logs_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
     command: str | None = Field(default=None, description="Original command string")
     exit_code: int | None = Field(default=None)
@@ -204,12 +210,14 @@ class FetchLogsErrorPayload(G8eBaseModel):
 
     Matches the g8eo LFAAErrorPayload wire shape published via publishLFAAErrorTo.
     """
+    payload_type: Literal["fetch_logs_error"] = Field(default="fetch_logs_error", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     error: str = Field(..., description="Error description")
 
 
 class FetchHistorySuccessPayload(G8eBaseModel):
     """Typed payload for operator.fetch.history.completed."""
+    payload_type: Literal["fetch_history_success"] = Field(default="fetch_history_success", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     operator_session_id: str = Field(..., description="Operator session ID that was queried")
     session: AuditSessionMetadata = Field(..., description="Session metadata")
@@ -221,12 +229,14 @@ class FetchHistorySuccessPayload(G8eBaseModel):
 
 class FetchHistoryErrorPayload(G8eBaseModel):
     """Typed payload for operator.fetch.history.failed."""
+    payload_type: Literal["fetch_history_error"] = Field(default="fetch_history_error", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     error: str = Field(..., description="Error description")
 
 
 class FetchFileHistorySuccessPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.history.completed."""
+    payload_type: Literal["fetch_file_history_success"] = Field(default="fetch_file_history_success", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     file_path: str = Field(..., description="Absolute path of the file queried")
     history: list[FileHistoryEntry] = Field(default_factory=list, description="Commit history entries")
@@ -234,12 +244,14 @@ class FetchFileHistorySuccessPayload(G8eBaseModel):
 
 class FetchFileHistoryErrorPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.history.failed."""
+    payload_type: Literal["fetch_file_history_error"] = Field(default="fetch_file_history_error", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     error: str = Field(..., description="Error description")
 
 
 class RestoreFileSuccessPayload(G8eBaseModel):
     """Typed payload for operator.restore.file.completed."""
+    payload_type: Literal["restore_file_success"] = Field(default="restore_file_success", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     file_path: str = Field(..., description="Absolute path of the restored file")
     commit_hash: str = Field(..., description="Git commit hash the file was restored to")
@@ -247,18 +259,21 @@ class RestoreFileSuccessPayload(G8eBaseModel):
 
 class RestoreFileErrorPayload(G8eBaseModel):
     """Typed payload for operator.restore.file.failed."""
+    payload_type: Literal["restore_file_error"] = Field(default="restore_file_error", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     error: str = Field(..., description="Error description")
 
 
 class FetchFileDiffByIdSuccessPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.diff.completed when fetching by diff_id."""
+    payload_type: Literal["fetch_file_diff_by_id_success"] = Field(default="fetch_file_diff_by_id_success", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     diff: FileDiffEntry = Field(..., description="Single file diff entry")
 
 
 class FetchFileDiffBySessionSuccessPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.diff.completed when fetching by operator_session_id."""
+    payload_type: Literal["fetch_file_diff_by_session_success"] = Field(default="fetch_file_diff_by_session_success", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     diffs: list[FileDiffEntry] = Field(default_factory=list, description="Multiple file diff entries")
     total: int = Field(0)
@@ -267,12 +282,14 @@ class FetchFileDiffBySessionSuccessPayload(G8eBaseModel):
 
 class FetchFileDiffErrorPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.diff.failed."""
+    payload_type: Literal["fetch_file_diff_error"] = Field(default="fetch_file_diff_error", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     error: str = Field(..., description="Error description")
 
 
 class PortCheckResultPayload(G8eBaseModel):
     """Typed payload for operator.port.check.completed / operator.port.check.failed."""
+    payload_type: Literal["port_check_result"] = Field(default="port_check_result", description="Payload type discriminator")
     execution_id: str = Field(..., description="Execution identifier for request-response correlation")
     host: str | None = Field(default=None, description="Target host")
     port: int | None = Field(default=None, description="Target port")
@@ -456,6 +473,8 @@ G8eoResultPayload = Union[
     PortCheckResultPayload,
 ]
 
+G8eoResultPayloadAdapter = TypeAdapter(G8eoResultPayload)
+
 
 # Union type for all outbound payloads from g8ee to g8eo
 # Uses discriminator field 'payload_type' for type-safe parsing
@@ -480,6 +499,9 @@ class G8eoResultEnvelope(G8eBaseModel):
 
     Carries routing fields and a typed payload parsed at the wire boundary.
     This is a parse-only boundary object — not a persisted document.
+
+    Payload is always required — errors are represented by specific error payload types
+    in the G8eoResultPayload union (e.g., FetchLogsErrorPayload, FetchHistoryErrorPayload).
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id. See shared/models/wire/envelope.json.")
@@ -489,7 +511,11 @@ class G8eoResultEnvelope(G8eBaseModel):
     case_id: str | None = Field(default=None, description="Case ID propagated from the original command")
     investigation_id: str | None = Field(default=None, description="Investigation ID propagated from the original command")
     task_id: str | None = Field(default=None, description="Task ID propagated from the original command")
-    payload: G8eoResultPayload | None = Field(default=None, description="Typed payload — always a G8eoResultPayload subclass post-parse")
+    payload: G8eoResultPayload = Field(
+        ...,
+        discriminator="payload_type",
+        description="Typed payload — uses discriminator for type-safe parsing. Always required."
+    )
 
 
 class G8eMessage(G8eBaseModel):

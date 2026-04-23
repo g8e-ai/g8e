@@ -46,8 +46,6 @@ class InternalApiPaths:
     G8EE_OPERATOR_APPROVAL_RESPOND: str = PREFIX + API_PATHS["g8ee"]["operator_approval_respond"]
     G8EE_OPERATOR_APPROVAL_PENDING: str = PREFIX + API_PATHS["g8ee"]["operator_approval_pending"]
     G8EE_SETTINGS_USER: str = PREFIX + API_PATHS["g8ee"]["settings_user"]
-    G8EE_MCP_TOOLS_LIST: str = PREFIX + API_PATHS["g8ee"]["mcp_tools_list"]
-    G8EE_MCP_TOOLS_CALL: str = PREFIX + API_PATHS["g8ee"]["mcp_tools_call"]
     
     # g8ed Endpoints (relative to PREFIX)
     G8ED_SSE_PUSH: str = "/sse/push"

@@ -248,7 +248,7 @@ class ToolDeclaration(G8eBaseModel):
     - A ``Schema`` dataclass (canonical in-memory form for tool schemas derived
       from Pydantic models via ``schema_from_model``), or
     - A plain JSON-schema ``dict[str, Any]`` (used when callers pre-build a
-      JSON Schema fragment directly, e.g. MCP adapters and tests).
+      JSON Schema fragment directly, e.g. in tests).
 
     Providers consume the union via ``schema_to_dict`` before making wire calls.
     """
