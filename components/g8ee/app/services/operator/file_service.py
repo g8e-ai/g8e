@@ -42,7 +42,12 @@ from app.constants.events import (
 from app.constants.settings import (
     ApprovalErrorType,
 )
-from app.models.command_payloads import FileEditPayload, FetchFileHistoryArgs, FetchFileDiffArgs
+from app.models.tool_args import FetchFileHistoryArgs, FetchFileDiffArgs
+from app.models.command_request_payloads import (
+    FileEditRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+)
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
@@ -75,16 +80,16 @@ class OperatorFileService:
 
     async def execute_file_edit(
         self,
-        args: FileEditPayload,
+        args: FileEditRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        execution_id: str,
     ) -> FileEditResult:
         """Orchestrate file operation: resolution -> risk -> approval -> execution."""
         try:
             file_path = args.file_path
             operation = args.operation
             justification = args.justification.strip() if args.justification else ""
+            exec_id = args.execution_id
             
             op_name = getattr(operation, "value", operation)
             logger.info("[FILE] Starting %s on %s", op_name, file_path)
@@ -132,8 +137,6 @@ class OperatorFileService:
             operator_session_id = resolved_operator.operator_session_id
             if not operator_session_id:
                 return FileEditResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
-
-            exec_id = execution_id
 
             # 3. Risk analysis (only for write/update)
             risk_analysis: FileOperationRiskAnalysis | None = None
@@ -280,14 +283,14 @@ class OperatorFileService:
 
     async def execute_fetch_file_history(
         self,
-        args: FetchFileHistoryArgs,
+        args: FetchFileHistoryRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        execution_id: str,
     ) -> FetchFileHistoryToolResult:
         """Fetch file history from operator ledger."""
         try:
             file_path = args.file_path
+            exec_id = args.execution_id
             logger.info("[FILE] Fetching history for %s", file_path)
 
             # 1. Resolve operator
@@ -310,7 +313,6 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileHistoryToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = execution_id
             self.execution_registry.allocate(exec_id)
 
             try:
@@ -406,14 +408,14 @@ class OperatorFileService:
 
     async def execute_fetch_file_diff(
         self,
-        args: FetchFileDiffArgs,
+        args: FetchFileDiffRequestPayload,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-        execution_id: str,
     ) -> FetchFileDiffToolResult:
         """Fetch file diff from operator ledger."""
         try:
             file_path = args.file_path
+            exec_id = args.execution_id
             logger.info("[FILE] Fetching diff for %s", file_path)
 
             # 1. Resolve operator
@@ -436,7 +438,6 @@ class OperatorFileService:
             if not operator_session_id:
                 return FetchFileDiffToolResult(success=False, error="Operator offline", error_type=CommandErrorType.NO_OPERATORS_AVAILABLE)
 
-            exec_id = execution_id
             self.execution_registry.allocate(exec_id)
 
             try:

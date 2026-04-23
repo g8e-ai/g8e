@@ -20,13 +20,21 @@ from app.constants.status import ComponentName, CommandErrorType, ExecutionStatu
 from app.constants.events import EventType
 from app.constants.status import AITaskId
 from app.models.agent import ExecutorCommandArgs
-from app.models.command_payloads import (
+from app.models.tool_args import (
     CheckPortArgs,
-    FileEditPayload,
+    FetchFileHistoryArgs,
+    FetchFileDiffArgs,
     FsListArgs,
     FsReadArgs,
     GrantIntentArgs,
     RevokeIntentArgs,
+)
+from app.models.command_request_payloads import (
+    CheckPortRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -50,10 +58,6 @@ from app.models.tool_results import (
     IntentPermissionResult,
     PortCheckToolResult,
     CommandRiskContext,
-)
-from app.models.command_payloads import (
-    FetchFileHistoryArgs,
-    FetchFileDiffArgs,
 )
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
@@ -240,6 +244,7 @@ class OperatorCommandService:
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
+        execution_id: str | None = None,
     ) -> CommandExecutionResult:
         """Orchestrate command execution: resolve -> validate -> approve -> fan-out dispatch.
 
@@ -608,17 +613,17 @@ class OperatorCommandService:
             error=aggregate_error,
         )
 
-    async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult:
-        return await self._file_service.execute_file_edit(args, g8e_context, investigation, execution_id)
+    async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult:
+        return await self._file_service.execute_file_edit(args, g8e_context, investigation)
 
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> PortCheckToolResult:
-        return await self._port_service.execute_port_check(args, investigation, g8e_context=g8e_context, execution_id=execution_id)
+    async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
+        return await self._port_service.execute_port_check(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsListToolResult:
-        return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context, execution_id=execution_id)
+    async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
+        return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsReadToolResult:
-        return await self._filesystem_service.execute_fs_read(args, investigation, g8e_context=g8e_context, execution_id=execution_id)
+    async def execute_fs_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+        return await self._filesystem_service.execute_fs_read(args, investigation, g8e_context=g8e_context)
 
     async def execute_intent_permission_request(self, args: GrantIntentArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
         return await self._intent_service.execute_intent_permission_request(
@@ -630,11 +635,11 @@ class OperatorCommandService:
             args=args, g8e_context=g8e_context, investigation=investigation
         )
 
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileHistoryToolResult:
-        return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation, execution_id)
+    async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
+        return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation)
 
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileDiffToolResult:
-        return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation, execution_id)
+    async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
+        return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation)
 
     async def send_command_to_operator(
         self,

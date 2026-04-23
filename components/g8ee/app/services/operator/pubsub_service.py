@@ -30,7 +30,7 @@ from uuid import uuid4
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants.events import EventType
-from app.constants.channels import PubSubChannel
+from app.constants.channels import OperatorChannel, PubSubChannel
 from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
@@ -216,14 +216,6 @@ class OperatorPubSubService:
         if self.pubsub_client is None:
             raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
         results_ch = PubSubChannel.results(operator_id, operator_session_id)
-        logger.info(
-            "[PUBSUB] Constructing results channel for registration",
-            extra={
-                "operator_id": operator_id,
-                "operator_session_id": operator_session_id,
-                "results_channel": results_ch,
-            },
-        )
         self.pubsub_client.on_channel_message(results_ch, self._dispatch_results_message)
         await self.pubsub_client.subscribe(results_ch)
         self._active_operator_sessions_set.add(key)
@@ -261,22 +253,19 @@ class OperatorPubSubService:
 
     async def _dispatch_results_message(self, channel: str, data: str | dict[str, object]) -> None:
         try:
-            # channel format: results:operator_id:operator_session_id
-            parts = channel.split(":")
-            if len(parts) != 3:
-                logger.warning("[PUBSUB] Failed to parse results channel: %s", channel)
+            _prefix, operator_id, operator_session_id = OperatorChannel.parse(channel)
+        except ValueError:
+            logger.warning("[PUBSUB] Failed to parse results channel: %s", channel)
+            return
+        if isinstance(data, dict):
+            raw = data
+        else:
+            try:
+                raw = json.loads(str(data))
+            except json.JSONDecodeError:
+                logger.warning("[PUBSUB] Non-JSON payload on results channel %s", channel)
                 return
-            
-            operator_id = parts[1]
-            operator_session_id = parts[2]
-            
-            if not operator_id or not operator_session_id:
-                logger.warning("[PUBSUB] Failed to parse results channel: %s", channel)
-                return
-            raw = data if isinstance(data, dict) else json.loads(str(data))
-            await self._handle_pubsub_result_message(operator_id, operator_session_id, raw)
-        except Exception:
-            logger.error("[PUBSUB] _dispatch_results_message error", exc_info=True)
+        await self._handle_pubsub_result_message(operator_id, operator_session_id, raw)
 
     async def _handle_pubsub_result_message(
         self,

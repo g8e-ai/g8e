@@ -28,12 +28,7 @@ import (
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
-	channel := constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
-	rr.logger.Info("[G8EO-PUBSUB] Constructing results channel for publishing",
-		"operator_id", rr.config.OperatorID,
-		"operator_session_id", operatorSessionID,
-		"channel", channel)
-	return channel
+	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
 // PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
@@ -93,14 +88,6 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 // PublishExecutionResult publishes command execution result via g8es pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
-	rr.logger.Info("PublishExecutionResult called",
-		"execution_id", result.ExecutionID,
-		"status", result.Status,
-		"config_operator_id", rr.config.OperatorID,
-		"config_operator_session_id", rr.config.OperatorSessionId,
-		"original_msg_operator_session_id", originalMsg.OperatorSessionID,
-		"original_msg_event_type", originalMsg.EventType)
-
 	eventType := constants.Event.Operator.Command.Completed
 	if result.Status == constants.ExecutionStatusFailed || result.Status == constants.ExecutionStatusTimeout {
 		eventType = constants.Event.Operator.Command.Failed
@@ -149,13 +136,6 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	msg.InvestigationID = result.InvestigationID
 	msg.OperatorSessionID = originalMsg.OperatorSessionID
 
-	rr.logger.Info("About to publish result message",
-		"message_id", msg.ID,
-		"message_event_type", msg.EventType,
-		"message_operator_id", msg.OperatorID,
-		"message_operator_session_id", msg.OperatorSessionID,
-		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
-
 	if err := rr.publish(ctx, msg); err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
 	}
@@ -167,7 +147,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	if result.ReturnCode != nil {
 		logArgs = append(logArgs, "return_code", *result.ReturnCode)
 	}
-	rr.logger.Info("Result transmitted to g8e", logArgs...)
+	rr.logger.Debug("Result transmitted to g8e", logArgs...)
 	return nil
 }
 
@@ -457,12 +437,10 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
 	channel := rr.resultsChannel(msg.OperatorSessionID)
-	rr.logger.Info("Publishing result to channel",
+	rr.logger.Debug("Publishing result",
 		"channel", channel,
 		"event_type", msg.EventType,
-		"message_id", msg.ID,
-		"operator_session_id", msg.OperatorSessionID,
-		"operator_id", msg.OperatorID)
+		"message_id", msg.ID)
 	return rr.client.Publish(ctx, channel, data)
 }
 

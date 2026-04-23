@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { DeviceLinkError } from '../../constants/auth.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
@@ -54,7 +55,7 @@ export class BindOperatorsService {
         logger.info('[OPERATOR-BIND-SERVICE] Starting bind operation', {
             user_id: userId,
             operator_count: operatorIds.length,
-            web_session_id: webSessionId.substring(0, 12) + '...',
+            web_session_id_tag: sessionIdTag(webSessionId),
         });
 
         const bound = [];
@@ -170,7 +171,7 @@ export class BindOperatorsService {
         logger.info('[OPERATOR-BIND-SERVICE] Starting unbind operation', {
             user_id: userId,
             operator_count: operatorIds.length,
-            web_session_id: webSessionId.substring(0, 12) + '...',
+            web_session_id_tag: sessionIdTag(webSessionId),
         });
 
         const unbound = [];

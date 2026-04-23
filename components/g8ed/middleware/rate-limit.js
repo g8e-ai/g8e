@@ -19,6 +19,7 @@
 import { ErrorResponse } from '../models/response_models.js';
 import rateLimit from 'express-rate-limit';
 import { logger } from '../utils/logger.js';
+import { sessionIdTag } from '../utils/session_log.js';
 import { redactWebSessionId } from '../utils/security.js';
 import { BEARER_PREFIX } from '../constants/auth.js';
 import {
@@ -349,7 +350,7 @@ export function createRateLimiters({ config = {} } = {}) {
         handler: (req, res) => {
             logger.warn('[RATE-LIMIT] Operator refresh rate limit exceeded', {
                 ip: req.ip,
-                operatorSessionId: req.body?.operator_session_id?.substring(0, 12) + '...'
+                operatorSessionId_tag: sessionIdTag(req.body?.operator_session_id)
             });
             res.status(429).json(new ErrorResponse({
                 error: RateLimitError.REFRESH_WAIT

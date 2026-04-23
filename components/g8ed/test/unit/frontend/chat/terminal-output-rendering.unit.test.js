@@ -471,6 +471,24 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(terminal.thinkingContentRaw.get(WEB_SESSION_ID)).toBe('line one\nline two');
         });
 
+        it('does not add extra newline when chunk already ends with newline', () => {
+            terminal.markdownRenderer = { parseMarkdown: (text) => `<p>${text}</p>` };
+            terminal.appendThinkingContent(WEB_SESSION_ID, 'word1\n');
+            terminal.appendThinkingContent(WEB_SESSION_ID, 'word2\n');
+            terminal.appendThinkingContent(WEB_SESSION_ID, 'word3');
+
+            expect(terminal.thinkingContentRaw.get(WEB_SESSION_ID)).toBe('word1\nword2\nword3');
+        });
+
+        it('does not add extra newline when chunk starts with newline', () => {
+            terminal.markdownRenderer = { parseMarkdown: (text) => `<p>${text}</p>` };
+            terminal.appendThinkingContent(WEB_SESSION_ID, 'word1');
+            terminal.appendThinkingContent(WEB_SESSION_ID, '\nword2');
+            terminal.appendThinkingContent(WEB_SESSION_ID, '\nword3');
+
+            expect(terminal.thinkingContentRaw.get(WEB_SESSION_ID)).toBe('word1\nword2\nword3');
+        });
+
         it('reuses the same entry element on subsequent calls', () => {
             terminal.appendThinkingContent(WEB_SESSION_ID, 'a');
             terminal.appendThinkingContent(WEB_SESSION_ID, 'b');

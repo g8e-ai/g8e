@@ -15,6 +15,7 @@ import { now } from '../../models/base.js';
 import { SystemInfo } from '../../models/operator_model.js';
 import { OperatorStatusUpdatedEvent, OperatorStatusUpdatedData } from '../../models/sse_models.js';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { OperatorSessionRole, DeviceLinkError } from '../../constants/auth.js';
 import { EventType } from '../../constants/events.js';
@@ -185,7 +186,7 @@ export class DeviceRegistrationService {
         logger.info('[DEVICE-REGISTRATION] Device registered for operator', {
             id,
             hostname:           sanitized.hostname,
-            operator_session_id: operator_session_id.substring(0, 12) + '...',
+            operator_session_id_tag: sessionIdTag(operator_session_id),
         });
 
         this._sessionAuthListener.listen({

@@ -14,25 +14,34 @@
 """
 Unit tests for command_payloads.py typed wire models.
 
-Covers FsListPayload and FsReadPayload:
+Covers FsListRequestPayload, FsReadRequestPayload, FetchFileHistoryRequestPayload, FetchFileDiffRequestPayload, and CheckPortRequestPayload:
 - Construction with required and optional fields
 - flatten_for_wire() produces only canonical wire fields
 - flatten_for_wire() excludes None-valued optional fields
 - Pydantic rejects invalid types
 - Model is a G8eBaseModel subclass
+- TargetedOperatorBase payloads inherit target_operator field
 """
 
 import pytest
 from app.models.base import ValidationError, G8eBaseModel
-from app.models.command_payloads import FetchLogsPayload, FsListPayload, FsReadPayload
+from app.models.command_request_payloads import (
+    FetchLogsRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    CheckPortRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    TargetedOperatorBase,
+)
 
 pytestmark = [pytest.mark.unit]
 
 
-class TestFsListPayload:
+class TestFsListRequestPayload:
 
     def test_all_fields_set(self):
-        p = FsListPayload(
+        p = FsListRequestPayload(
             path="/var/log",
             execution_id="exec-abc",
             max_depth=2,
@@ -44,17 +53,17 @@ class TestFsListPayload:
         assert p.max_entries == 200
 
     def test_all_fields_optional(self):
-        p = FsListPayload(execution_id="exec-test")
+        p = FsListRequestPayload(execution_id="exec-test")
         assert p.path is None
         assert p.execution_id == "exec-test"
         assert p.max_depth is None
         assert p.max_entries is None
 
     def test_is_g8e_base_model(self):
-        assert issubclass(FsListPayload, G8eBaseModel)
+        assert issubclass(FsListRequestPayload, G8eBaseModel)
 
     def test_wire_dump_includes_set_fields(self):
-        p = FsListPayload(path="/app", execution_id="exec-1", max_depth=1, max_entries=50)
+        p = FsListRequestPayload(path="/app", execution_id="exec-1", max_depth=1, max_entries=50)
         wire = p.model_dump(mode="json")
         assert wire["path"] == "/app"
         assert wire["execution_id"] == "exec-1"
@@ -62,26 +71,26 @@ class TestFsListPayload:
         assert wire["max_entries"] == 50
 
     def test_wire_dump_excludes_none_fields(self):
-        p = FsListPayload(path="/app", execution_id="exec-1")
+        p = FsListRequestPayload(path="/app", execution_id="exec-1")
         wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-1"
         assert "max_depth" not in wire
         assert "max_entries" not in wire
 
     def test_wire_dump_only_canonical_fields(self):
-        p = FsListPayload(path=".", execution_id="x", max_depth=0, max_entries=100)
+        p = FsListRequestPayload(path=".", execution_id="x", max_depth=0, max_entries=100)
         wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"path", "execution_id", "max_depth", "max_entries", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
-        p = FsListPayload(path="/tmp", execution_id="exec-test")
+        p = FsListRequestPayload(path="/tmp", execution_id="exec-test")
         wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsListPayload(path="/tmp", execution_id="exec-test", user_id="u-1", source="tool_call", requested_at="2026-01-01T00:00:00Z")
+        p = FsListRequestPayload(path="/tmp", execution_id="exec-test", user_id="u-1", source="tool_call", requested_at="2026-01-01T00:00:00Z")
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire
@@ -89,112 +98,232 @@ class TestFsListPayload:
 
 
 
-class TestFsReadPayload:
+class TestFsReadRequestPayload:
 
     def test_required_path(self):
-        p = FsReadPayload(path="/etc/hosts", execution_id="exec-test")
+        p = FsReadRequestPayload(path="/etc/hosts", execution_id="exec-test")
         assert p.path == "/etc/hosts"
 
     def test_missing_path_raises(self):
         with pytest.raises(ValidationError):
-            FsReadPayload()
+            FsReadRequestPayload()
 
     def test_all_fields_set(self):
-        p = FsReadPayload(path="/app/config.json", execution_id="exec-xyz", max_size=8192)
+        p = FsReadRequestPayload(path="/app/config.json", execution_id="exec-xyz", max_size=8192)
         assert p.path == "/app/config.json"
         assert p.execution_id == "exec-xyz"
         assert p.max_size == 8192
 
     def test_optional_fields_default_to_none(self):
-        p = FsReadPayload(path="/app/config.json", execution_id="exec-test")
+        p = FsReadRequestPayload(path="/app/config.json", execution_id="exec-test")
         assert p.execution_id == "exec-test"
         assert p.max_size is None
 
     def test_is_g8e_base_model(self):
-        assert issubclass(FsReadPayload, G8eBaseModel)
+        assert issubclass(FsReadRequestPayload, G8eBaseModel)
 
     def test_wire_dump_includes_set_fields(self):
-        p = FsReadPayload(path="/etc/passwd", execution_id="exec-2", max_size=4096)
+        p = FsReadRequestPayload(path="/etc/passwd", execution_id="exec-2", max_size=4096)
         wire = p.model_dump(mode="json")
         assert wire["path"] == "/etc/passwd"
         assert wire["execution_id"] == "exec-2"
         assert wire["max_size"] == 4096
 
     def test_wire_dump_excludes_none_optional_fields(self):
-        p = FsReadPayload(path="/app/log.txt", execution_id="exec-test")
+        p = FsReadRequestPayload(path="/app/log.txt", execution_id="exec-test")
         wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-test"
         assert "max_size" not in wire
 
     def test_wire_dump_only_canonical_fields(self):
-        p = FsReadPayload(path="/app/main.py", execution_id="e", max_size=102400)
+        p = FsReadRequestPayload(path="/app/main.py", execution_id="e", max_size=102400)
         wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"path", "execution_id", "max_size", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
-        p = FsReadPayload(path="/var/log/app.log", execution_id="exec-test")
+        p = FsReadRequestPayload(path="/var/log/app.log", execution_id="exec-test")
         wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsReadPayload(path="/tmp/test.txt", execution_id="exec-test", user_id="u-1", source="tool_call")
+        p = FsReadRequestPayload(path="/tmp/test.txt", execution_id="exec-test", user_id="u-1", source="tool_call")
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire
 
 
 
-class TestFetchLogsPayload:
+class TestFetchLogsRequestPayload:
 
     def test_requiredexecution_id(self):
-        p = FetchLogsPayload(execution_id="exec-abc")
+        p = FetchLogsRequestPayload(execution_id="exec-abc")
         assert p.execution_id == "exec-abc"
 
     def test_missingexecution_id_raises(self):
         with pytest.raises(ValidationError):
-            FetchLogsPayload()
+            FetchLogsRequestPayload()
 
     def test_all_fields_set(self):
-        p = FetchLogsPayload(execution_id="exec-abc", sentinel_mode="scrubbed")
+        p = FetchLogsRequestPayload(execution_id="exec-abc", sentinel_mode="scrubbed")
         assert p.execution_id == "exec-abc"
         assert p.sentinel_mode == "scrubbed"
 
     def test_sentinel_mode_optional(self):
-        p = FetchLogsPayload(execution_id="exec-abc")
+        p = FetchLogsRequestPayload(execution_id="exec-abc")
         assert p.sentinel_mode is None
 
     def test_is_g8e_base_model(self):
-        assert issubclass(FetchLogsPayload, G8eBaseModel)
+        assert issubclass(FetchLogsRequestPayload, G8eBaseModel)
 
     def test_wire_dump_includes_set_fields(self):
-        p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="raw")
+        p = FetchLogsRequestPayload(execution_id="exec-xyz", sentinel_mode="raw")
         wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-xyz"
         assert wire["sentinel_mode"] == "raw"
 
     def test_wire_dump_excludes_none_sentinel_mode(self):
-        p = FetchLogsPayload(execution_id="exec-xyz")
+        p = FetchLogsRequestPayload(execution_id="exec-xyz")
         wire = p.model_dump(mode="json")
         assert wire["execution_id"] == "exec-xyz"
         assert "sentinel_mode" not in wire
 
     def test_wire_dump_only_canonical_fields(self):
-        p = FetchLogsPayload(execution_id="exec-xyz", sentinel_mode="scrubbed")
+        p = FetchLogsRequestPayload(execution_id="exec-xyz", sentinel_mode="scrubbed")
         wire = p.model_dump(mode="json")
         assert set(wire.keys()) <= {"execution_id", "sentinel_mode", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
-        p = FetchLogsPayload(execution_id="exec-xyz")
+        p = FetchLogsRequestPayload(execution_id="exec-xyz")
         wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FetchLogsPayload(execution_id="exec-xyz", source="tool_call", requested_at="2026-01-01T00:00:00Z")
+        p = FetchLogsRequestPayload(execution_id="exec-xyz", source="tool_call", requested_at="2026-01-01T00:00:00Z")
         wire = p.model_dump(mode="json")
         assert "source" not in wire
         assert "requested_at" not in wire
+
+
+class TestFetchFileHistoryRequestPayload:
+
+    def test_all_fields_set(self):
+        p = FetchFileHistoryRequestPayload(
+            execution_id="exec-abc",
+            file_path="/etc/hosts",
+            limit=50,
+            target_operator="op-123",
+        )
+        assert p.execution_id == "exec-abc"
+        assert p.file_path == "/etc/hosts"
+        assert p.limit == 50
+        assert p.target_operator == "op-123"
+
+    def test_target_operator_optional(self):
+        p = FetchFileHistoryRequestPayload(execution_id="exec-test", file_path="/etc/hosts")
+        assert p.target_operator is None
+
+    def test_inherits_from_targeted_operator_base(self):
+        assert issubclass(FetchFileHistoryRequestPayload, TargetedOperatorBase)
+
+    def test_is_g8e_base_model(self):
+        assert issubclass(FetchFileHistoryRequestPayload, G8eBaseModel)
+
+    def test_wire_dump_includes_target_operator(self):
+        p = FetchFileHistoryRequestPayload(execution_id="exec-1", file_path="/app/config.json", target_operator="op-456")
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert wire["file_path"] == "/app/config.json"
+        assert wire["target_operator"] == "op-456"
+
+    def test_wire_dump_excludes_none_target_operator(self):
+        p = FetchFileHistoryRequestPayload(execution_id="exec-1", file_path="/app/config.json")
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert "target_operator" not in wire
+
+
+class TestFetchFileDiffRequestPayload:
+
+    def test_all_fields_set(self):
+        p = FetchFileDiffRequestPayload(
+            execution_id="exec-abc",
+            diff_id="diff-123",
+            operator_session_id="session-456",
+            file_path="/etc/hosts",
+            limit=50,
+            target_operator="op-789",
+        )
+        assert p.execution_id == "exec-abc"
+        assert p.diff_id == "diff-123"
+        assert p.operator_session_id == "session-456"
+        assert p.file_path == "/etc/hosts"
+        assert p.limit == 50
+        assert p.target_operator == "op-789"
+
+    def test_target_operator_optional(self):
+        p = FetchFileDiffRequestPayload(execution_id="exec-test", diff_id="diff-123")
+        assert p.target_operator is None
+
+    def test_inherits_from_targeted_operator_base(self):
+        assert issubclass(FetchFileDiffRequestPayload, TargetedOperatorBase)
+
+    def test_is_g8e_base_model(self):
+        assert issubclass(FetchFileDiffRequestPayload, G8eBaseModel)
+
+    def test_wire_dump_includes_target_operator(self):
+        p = FetchFileDiffRequestPayload(execution_id="exec-1", diff_id="diff-1", target_operator="op-456")
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert wire["diff_id"] == "diff-1"
+        assert wire["target_operator"] == "op-456"
+
+    def test_wire_dump_excludes_none_target_operator(self):
+        p = FetchFileDiffRequestPayload(execution_id="exec-1", diff_id="diff-1")
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert "target_operator" not in wire
+
+
+class TestCheckPortRequestPayload:
+
+    def test_all_fields_set(self):
+        p = CheckPortRequestPayload(
+            execution_id="exec-abc",
+            port=8080,
+            host="192.168.1.1",
+            protocol="tcp",
+            target_operator="op-123",
+        )
+        assert p.execution_id == "exec-abc"
+        assert p.port == 8080
+        assert p.host == "192.168.1.1"
+        assert p.protocol == "tcp"
+        assert p.target_operator == "op-123"
+
+    def test_target_operator_optional(self):
+        p = CheckPortRequestPayload(execution_id="exec-test", port=443)
+        assert p.target_operator is None
+
+    def test_inherits_from_targeted_operator_base(self):
+        assert issubclass(CheckPortRequestPayload, TargetedOperatorBase)
+
+    def test_is_g8e_base_model(self):
+        assert issubclass(CheckPortRequestPayload, G8eBaseModel)
+
+    def test_wire_dump_includes_target_operator(self):
+        p = CheckPortRequestPayload(execution_id="exec-1", port=22, target_operator="op-456")
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert wire["port"] == 22
+        assert wire["target_operator"] == "op-456"
+
+    def test_wire_dump_excludes_none_target_operator(self):
+        p = CheckPortRequestPayload(execution_id="exec-1", port=22)
+        wire = p.model_dump(mode="json")
+        assert wire["execution_id"] == "exec-1"
+        assert "target_operator" not in wire
 

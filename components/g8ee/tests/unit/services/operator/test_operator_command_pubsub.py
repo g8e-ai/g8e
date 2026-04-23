@@ -217,14 +217,29 @@ class TestDispatchResultsMessage:
 
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
 
-    async def test_handles_exception_gracefully(self, command_service):
-        """Test does not raise on internal errors."""
+    async def test_propagates_downstream_handler_errors(self, command_service):
+        """Unexpected exceptions from the downstream handler must propagate.
+
+        The dispatcher only swallows parse failures (ValueError for channel
+        shape, JSONDecodeError for payload). Arbitrary handler errors indicate
+        real bugs and are caught upstream by PubSubClient._safe_dispatch so
+        they surface in logs with a traceback instead of being silently eaten.
+        """
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock(
             side_effect=Exception("boom")
         )
+        with pytest.raises(Exception, match="boom"):
+            await command_service._pubsub_service._dispatch_results_message(
+                PubSubChannel.results("op-1", "sess-1"), json.dumps({"event_type": "x"})
+            )
+
+    async def test_swallows_non_json_payload(self, command_service):
+        """Non-JSON string payloads are logged and dropped, never raised."""
+        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()
         await command_service._pubsub_service._dispatch_results_message(
-            PubSubChannel.results("op-1", "sess-1"), json.dumps({"event_type": "x"})
+            PubSubChannel.results("op-1", "sess-1"), "not-json-at-all"
         )
+        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
 
 
 class TestHandlePubSubResultMessage:

@@ -15,6 +15,7 @@ import express from 'express';
 import { ErrorResponse } from '../../models/response_models.js';
 import { OperatorDocument, OperatorSlot } from '../../models/operator_model.js';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
 import { OperatorStatus } from '../../constants/operator.js';
 
@@ -116,7 +117,7 @@ export function createOperatorStatusRouter({
             logger.info('[OPERATOR-STOP] Relaying stop command to g8ee', {
                 operator_id: operatorId,
                 user_id: userId,
-                operator_session_id: operatorSessionId.substring(0, 12) + '...'
+                operator_session_id_tag: sessionIdTag(operatorSessionId)
             });
 
             try {

@@ -42,7 +42,7 @@ from app.constants.intents import (
     CLOUD_INTENT_VERIFICATION_ACTIONS,
     CloudIntent,
 )
-from app.models.command_payloads import GrantIntentArgs, RevokeIntentArgs
+from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult

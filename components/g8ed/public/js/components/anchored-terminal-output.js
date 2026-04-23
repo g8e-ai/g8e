@@ -383,7 +383,14 @@ export class TerminalOutputMixin {
         const contentEl = entry.querySelector('.anchored-terminal__thinking-content');
         if (contentEl) {
             const existing = this.thinkingContentRaw.get(webSessionId);
-            const newRaw = existing ? existing + '\n' + text : text;
+            let newRaw;
+            if (existing) {
+                // Only add newline if existing doesn't already end with one and new chunk doesn't start with one
+                const needsSeparator = !existing.endsWith('\n') && !text.startsWith('\n');
+                newRaw = needsSeparator ? existing + '\n' + text : existing + text;
+            } else {
+                newRaw = text;
+            }
             this.thinkingContentRaw.set(webSessionId, newRaw);
 
             const title = this._extractThinkingTitle(newRaw);

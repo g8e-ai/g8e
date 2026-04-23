@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { SessionAuthResponse } from '../../models/request_models.js';
 import { ApiKeyError } from '../../constants/auth.js';
 import { SESSION_AUTH_LISTEN_TTL_MS } from '../../constants/auth.js';
@@ -100,7 +101,7 @@ export class SessionAuthListener {
 
                     logger.info('[SESSION-AUTH-LISTENER] Auth response published', {
                         operator_id,
-                        operator_session_id: operator_session_id.substring(0, 12) + '...',
+                        operator_session_id_tag: sessionIdTag(operator_session_id),
                     });
                 } catch (err) {
                     logger.error('[SESSION-AUTH-LISTENER] Failed to handle session auth request', { error: err.message });

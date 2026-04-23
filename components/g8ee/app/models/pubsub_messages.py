@@ -33,18 +33,18 @@ from .mcp import JSONRPCRequest
 from app.utils.timestamp import now, parse_iso
 
 # Import outbound payload types
-from app.models.command_payloads import (
-    CommandPayload,
-    CommandCancelPayload,
-    FileEditPayload,
-    FsListPayload,
-    FsReadPayload,
-    FetchLogsPayload,
-    FetchHistoryPayload,
-    FetchFileHistoryPayload,
-    FetchFileDiffPayload,
-    RestoreFilePayload,
-    DirectCommandAuditPayload,
+from app.models.command_request_payloads import (
+    CommandRequestPayload,
+    CommandCancelRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    FetchLogsRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    RestoreFileRequestPayload,
+    DirectCommandAuditRequestPayload,
 )
 
 
@@ -451,17 +451,17 @@ G8eoResultPayload = Union[
 # Union type for all outbound payloads from g8ee to g8eo
 # Uses discriminator field 'payload_type' for type-safe parsing
 G8eOutboundPayload = Union[
-    CommandPayload,
-    CommandCancelPayload,
-    FileEditPayload,
-    FsListPayload,
-    FsReadPayload,
-    FetchLogsPayload,
-    FetchHistoryPayload,
-    FetchFileHistoryPayload,
-    FetchFileDiffPayload,
-    RestoreFilePayload,
-    DirectCommandAuditPayload,
+    CommandRequestPayload,
+    CommandCancelRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    FetchLogsRequestPayload,
+    FetchHistoryRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    RestoreFileRequestPayload,
+    DirectCommandAuditRequestPayload,
     JSONRPCRequest,
 ]
 

@@ -87,3 +87,37 @@ func TestChannelPrefixes_AreDistinct(t *testing.T) {
 	assert.NotEqual(t, cmd, hb)
 	assert.NotEqual(t, results, hb)
 }
+
+func TestChannelContractRegression(t *testing.T) {
+	t.Run("results channel with realistic session ID", func(t *testing.T) {
+		opID := "op-abc123"
+		sessID := "operator_session_1764000000000_abc-123-def-456-ghi-789"
+		expected := "results:op-abc123:operator_session_1764000000000_abc-123-def-456-ghi-789"
+		actual := ResultsChannel(opID, sessID)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("cmd channel with realistic session ID", func(t *testing.T) {
+		opID := "op-xyz789"
+		sessID := "operator_session_1764000000000_987-fed-654-321-cba"
+		expected := "cmd:op-xyz789:operator_session_1764000000000_987-fed-654-321-cba"
+		actual := CmdChannel(opID, sessID)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("heartbeat channel with realistic session ID", func(t *testing.T) {
+		opID := "op-def456"
+		sessID := "operator_session_1764000000000_111-222-333-444-555"
+		expected := "heartbeat:op-def456:operator_session_1764000000000_111-222-333-444-555"
+		actual := HeartbeatChannel(opID, sessID)
+		assert.Equal(t, expected, actual)
+	})
+
+	t.Run("handles colon in session ID", func(t *testing.T) {
+		opID := "op-colon-test"
+		sessID := "operator_session_1764000000000_with:colon:inside"
+		expected := "cmd:op-colon-test:operator_session_1764000000000_with:colon:inside"
+		actual := CmdChannel(opID, sessID)
+		assert.Equal(t, expected, actual)
+	})
+}

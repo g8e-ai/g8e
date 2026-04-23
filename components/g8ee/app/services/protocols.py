@@ -77,15 +77,14 @@ from app.models.tool_results import (
     PortCheckToolResult,
     IntentPermissionResult,
 )
-from app.models.command_payloads import (
-    FileEditPayload,
-    FetchFileDiffArgs,
-    FetchFileHistoryArgs,
-    FsListArgs,
-    FsReadArgs,
-    GrantIntentArgs,
-    RevokeIntentArgs,
-    CheckPortArgs,
+from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
+from app.models.command_request_payloads import (
+    FileEditRequestPayload,
+    FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FsListRequestPayload,
+    FsReadRequestPayload,
+    CheckPortRequestPayload,
 )
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.utils.whitelist_validator import CommandWhitelistValidator
@@ -607,14 +606,14 @@ class LFAAServiceProtocol(Protocol):
 
 @runtime_checkable
 class FileServiceProtocol(Protocol):
-    async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult: ...
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileHistoryToolResult: ...
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FetchFileDiffToolResult: ...
+    async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult: ...
+    async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult: ...
+    async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult: ...
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsListToolResult: ...
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> FsReadToolResult: ...
+    async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult: ...
+    async def execute_fs_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult: ...
 
 @runtime_checkable
 class IntentServiceProtocol(Protocol):
@@ -636,7 +635,7 @@ class IntentServiceProtocol(Protocol):
 
 @runtime_checkable
 class PortServiceProtocol(Protocol):
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext, execution_id: str) -> PortCheckToolResult: ...
+    async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult: ...
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):

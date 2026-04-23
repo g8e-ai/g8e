@@ -34,7 +34,7 @@ from app.constants import (
     CLOUD_INTENT_VERIFICATION_ACTIONS,
     CloudIntent,
 )
-from app.models.command_payloads import GrantIntentArgs
+from app.models.tool_args import GrantIntentArgs
 from app.models.tool_results import IntentPermissionResult
 from app.services.operator.command_service import OperatorCommandService
 from tests.fakes.builder import build_command_service

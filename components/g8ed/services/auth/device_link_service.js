@@ -28,6 +28,7 @@
  */
 
 import crypto from 'crypto';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { now, addSeconds, toISOString } from '../../models/base.js';
 import { DeviceLinkData, DeviceLinkClaim } from '../../models/auth_models.js';
 import { logger } from '../../utils/logger.js';
@@ -291,7 +292,7 @@ class DeviceLinkService {
         logger.info('[DEVICE-LINK] Single-operator device registered', {
             token_prefix: token.substring(0, 20) + '...',
             operator_id: result.operator_id,
-            operator_session_id: result.operator_session_id.substring(0, 12) + '...'
+            operator_session_id_tag: sessionIdTag(result.operator_session_id)
         });
 
         return {

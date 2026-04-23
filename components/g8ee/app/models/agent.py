@@ -34,7 +34,7 @@ from app.models.investigations import EnrichedInvestigationContext, Conversation
 from app.models.memory import InvestigationMemory
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
-from app.models.command_payloads import TargetedOperatorArgs
+from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
     ToolResult,
@@ -55,7 +55,7 @@ _TARGET_OPERATORS_DESCRIPTION = (
 )
 
 
-class SageOperatorRequest(TargetedOperatorArgs):
+class SageOperatorRequest(TargetedOperatorBase):
     """Caller-facing request schema for run_commands_with_operator.
 
     The caller (Sage or Dash) does NOT propose shell commands. The caller
@@ -91,7 +91,7 @@ class SageOperatorRequest(TargetedOperatorArgs):
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
 
 
-class ExecutorCommandArgs(TargetedOperatorArgs):
+class ExecutorCommandArgs(TargetedOperatorBase):
     """Internal executor payload for run_commands_with_operator.
 
     This type is what the executor receives AFTER the Tribunal has produced

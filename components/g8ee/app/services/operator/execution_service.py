@@ -39,7 +39,7 @@ from app.services.protocols import (
 )
 
 from app.models.tool_results import CommandExecutionResult
-from app.models.command_payloads import CommandCancelPayload
+from app.models.command_request_payloads import CommandCancelRequestPayload
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,

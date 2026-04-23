@@ -39,6 +39,8 @@ from app.constants.agents import (
     TieBreakReason
 )
 from app.constants.channels import (
+    CHANNEL_SEGMENT_COUNT,
+    OperatorChannel,
     PubSubAction,
     PubSubChannel,
     PubSubField,
@@ -350,6 +352,8 @@ __all__ = [
     "TribunalMember",
     "AuditorReason",
     "TieBreakReason",
+    "CHANNEL_SEGMENT_COUNT",
+    "OperatorChannel",
     "PubSubAction",
     "PubSubChannel",
     "PubSubField",
