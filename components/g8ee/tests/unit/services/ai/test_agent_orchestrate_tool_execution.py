@@ -34,7 +34,7 @@ Tests:
 - No target_operator defaults to first operator
 
 Run with:
-    ./scripts/testing/run_tests.sh g8ee -- tests/unit/services/ai/test_agent_orchestrate_tool_execution.py
+    ./g8e test g8ee -- tests/unit/services/ai/test_agent_orchestrate_tool_execution.py
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -54,7 +54,7 @@ from app.services.ai.agent_tool_loop import orchestrate_tool_execution
 from app.services.ai.tool_service import AIToolService
 from tests.fakes.factories import (
     build_g8e_http_context,
-    build_enriched_context as create_enriched_context,
+    build_enriched_context,
     build_bound_operator,
 )
 
@@ -62,10 +62,12 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 
 # =============================================================================
-# HELPERS
+# FIXTURES
 # =============================================================================
 
-def _make_tool_executor() -> MagicMock:
+@pytest.fixture
+def mock_tool_executor():
+    """Mock AIToolService executor for unit tests."""
     executor = MagicMock(spec=AIToolService)
     executor.web_search_provider = None
     
@@ -87,6 +89,59 @@ def _make_tool_executor() -> MagicMock:
     return executor
 
 
+@pytest.fixture
+def request_settings():
+    """Sample request settings for testing."""
+    return G8eeUserSettings(llm=LLMSettings())
+
+
+@pytest.fixture
+def sample_investigation(unique_investigation_id, unique_case_id, unique_user_id, unique_operator_id, unique_session_id, unique_web_session_id):
+    """Sample investigation for testing with unique IDs."""
+    return build_enriched_context(
+        investigation_id=unique_investigation_id,
+        case_id=unique_case_id,
+        user_id=unique_user_id,
+        operator_documents=[
+            OperatorDocument(
+                id=unique_operator_id,
+                operator_session_id=unique_session_id,
+                status=OperatorStatus.AVAILABLE,
+                operator_type=OperatorType.SYSTEM,
+                system_info=OperatorSystemInfo(
+                    hostname="op-1-host",
+                    os="linux",
+                    architecture="amd64",
+                    cpu_count=2,
+                    memory_mb=4096,
+                ),
+                user_id=unique_user_id,
+                bound_web_session_id=unique_web_session_id,
+            )
+        ],
+    )
+
+
+@pytest.fixture
+def sample_g8e_context(unique_user_id, unique_case_id, unique_investigation_id, unique_web_session_id, unique_operator_id, unique_session_id):
+    """Sample g8e HTTP context for testing with unique IDs."""
+    bound_operator = build_bound_operator(
+        operator_id=unique_operator_id,
+        operator_session_id=unique_session_id,
+    )
+    return build_g8e_http_context(
+        user_id=unique_user_id,
+        case_id=unique_case_id,
+        investigation_id=unique_investigation_id,
+        web_session_id=unique_web_session_id,
+        bound_operators=[bound_operator],
+    )
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
 def _mock_executor_success(executor: MagicMock, output: str = "ok") -> None:
     result = CommandExecutionResult(success=True, output=output, exit_code=0, command_executed="mock")
     executor.execute_tool_call = AsyncMock(return_value=result)
@@ -104,7 +159,7 @@ def _noop_generate_command(request: str, **_kwargs):
     In production the Tribunal would never return the raw natural-language
     request as a shell command; tests only care that the pipeline flows.
     """
-    from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
+    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
         request=request,
         final_command=request,
@@ -114,7 +169,7 @@ def _noop_generate_command(request: str, **_kwargs):
 
 def _refining_generate_command(request: str, refined: str, **_kwargs):
     """Mock Tribunal that produces a refined command distinct from the request."""
-    from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
+    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
         request=request,
         final_command=refined,
@@ -124,39 +179,6 @@ def _refining_generate_command(request: str, refined: str, **_kwargs):
 
 NON_OPERATOR_FUNCTION = "some_unknown_tool_that_is_not_registered"
 
-REQUEST_SETTINGS = G8eeUserSettings(llm=LLMSettings())
-
-
-INVESTIGATION = create_enriched_context(
-    investigation_id="inv-exec-test",
-    case_id="case-exec-test",
-    user_id="user-exec-test",
-    operator_documents=[
-        OperatorDocument(
-            operator_id="op-1",
-            operator_session_id="session-op-1",
-            status=OperatorStatus.AVAILABLE,
-            operator_type=OperatorType.SYSTEM,
-            system_info=OperatorSystemInfo(
-                hostname="op-1-host",
-                os="linux",
-                architecture="amd64",
-                cpu_count=2,
-                memory_mb=4096,
-            ),
-            user_id="user-exec-test",
-            bound_web_session_id="web-001",
-        )
-    ],
-)
-
-G8E_CONTEXT = build_g8e_http_context(
-    user_id="user-exec-test",
-    case_id="case-exec-test",
-    investigation_id="inv-exec-test",
-    web_session_id="web-001",
-)
-
 
 # =============================================================================
 # TEST: execution_id generation
@@ -164,76 +186,75 @@ G8E_CONTEXT = build_g8e_http_context(
 
 class TestExecutionIdGeneration:
 
-    async def test_operator_tool_getsexecution_id(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_operator_tool_getsexecution_id(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.call_info.execution_id is not None
 
-    async def testexecution_id_unique_per_call(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_execution_id_unique_per_call(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         ids = []
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             for _ in range(3):
                 result = await orchestrate_tool_execution(
                     ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show current user"}),
-                    tool_executor=executor,
-                    investigation=INVESTIGATION,
-                    g8e_context=G8E_CONTEXT,
-                    web_session_id="web-001",
-                    investigation_id="inv-001",
-                    g8ed_event_service=AsyncMock(),
-                    request_settings=REQUEST_SETTINGS,
+                    tool_executor=mock_tool_executor,
+                    investigation=sample_investigation,
+                    g8e_context=sample_g8e_context,
+                    g8ed_event_service=mock_event_service,
+                    request_settings=request_settings,
                 )
                 ids.append(result.call_info.execution_id)
 
         assert len(set(ids)) == len(ids), "execution_ids must be unique across calls"
 
-    async def test_non_operator_tool_has_noexecution_id(self):
-        executor = _make_tool_executor()
+    async def test_non_operator_tool_has_execution_id(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         result = CommandExecutionResult(success=True, output="results")
-        executor.execute_tool_call = AsyncMock(return_value=result)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
-        assert result.call_info.execution_id is None
-
-    async def testexecution_id_format_matches_expected_pattern(self):
-        """execution_id must be 'exec_<12hex>_<timestamp_int>'."""
+        assert result.call_info.execution_id is not None
         import re
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        pattern = r"^cmd_[0-9a-f]{12}_\d+$"
+        assert re.match(pattern, result.call_info.execution_id), (
+            f"execution_id '{result.call_info.execution_id}' does not match expected format"
+        )
+
+    async def test_execution_id_format_matches_expected_pattern(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        """execution_id must be 'cmd_<12hex>_<timestamp_int>'."""
+        import re
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
-        pattern = r"^exec_[0-9a-f]{12}_\d+$"
+        pattern = r"^cmd_[0-9a-f]{12}_\d+$"
         assert re.match(pattern, result.call_info.execution_id), (
             f"execution_id '{result.call_info.execution_id}' does not match expected format"
         )
@@ -245,66 +266,62 @@ class TestExecutionIdGeneration:
 
 class TestOperatorToolDetection:
 
-    async def test_run_commands_detected_as_operator_tool(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_run_commands_detected_as_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.call_info.is_operator_tool is True
 
-    async def test_file_read_detected_as_operator_tool(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_file_read_detected_as_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=OperatorToolName.FILE_READ, args={"file_path": "/etc/hosts"}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.call_info.is_operator_tool is True
 
-    async def test_search_web_is_not_operator_tool(self):
+    async def test_search_web_is_not_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """search_web does not require an operator."""
-        executor = _make_tool_executor()
         result = CommandExecutionResult(success=True, output="results")
-        executor.execute_tool_call = AsyncMock(return_value=result)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=OperatorToolName.G8E_SEARCH_WEB, args={"query": "test"}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.call_info.is_operator_tool is False
 
-    async def test_unregistered_tool_not_operator_tool(self):
-        executor = _make_tool_executor()
+    async def test_unregistered_tool_not_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         result = CommandExecutionResult(success=True, output="ok")
-        executor.execute_tool_call = AsyncMock(return_value=result)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.call_info.is_operator_tool is False
@@ -316,86 +333,80 @@ class TestOperatorToolDetection:
 
 class TestToolArgsInjection:
 
-    async def testexecution_id_injected_for_operator_tool(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_execution_id_passed_as_kwarg_for_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        """The canonical per-tool execution_id is threaded to the executor via the
+        ``execution_id`` keyword — not stuffed into the LLM-facing tool_args dict.
+        This keeps the args validated by the typed Pydantic model clean while still
+        giving the executor (and every downstream operator service) an authoritative
+        id to use for the execution registry and UI lifecycle events.
+        """
+        _mock_executor_success(mock_tool_executor)
+        captured_kwargs = {}
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
+            nonlocal captured_args, captured_kwargs
+            captured_args = tool_args
+            captured_kwargs = kwargs
             return CommandExecutionResult(success=True, output="ok")
 
-        executor.execute_tool_call = AsyncMock(side_effect=capture_call)
+        mock_tool_executor.execute_tool_call = AsyncMock(side_effect=capture_call)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show disk usage"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
-        assert "execution_id" in captured_args
-        assert captured_args["execution_id"].startswith("exec_")
+        # execution_id is delivered as a typed kwarg, not silently stuffed into args.
+        assert captured_kwargs.get("execution_id") is not None
+        assert captured_kwargs["execution_id"].startswith("cmd_")
+        # LLM-facing args dict never carries internal routing fields.
+        assert "execution_id" not in captured_args
+        assert "_web_session_id" not in captured_args
 
-    async def test_web_session_id_injected_for_operator_tool(self):
-        executor = _make_tool_executor()
+    async def test_execution_id_kwarg_none_for_non_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        captured_kwargs = {}
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
+            nonlocal captured_args, captured_kwargs
+            captured_args = tool_args
+            captured_kwargs = kwargs
             return CommandExecutionResult(success=True, output="ok")
 
-        executor.execute_tool_call = AsyncMock(side_effect=capture_call)
-
-        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
-            await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show uptime"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
-            )
-
-        assert captured_args["_web_session_id"] == "web-001"
-
-    async def test_internal_fields_not_injected_for_non_operator_tool(self):
-        executor = _make_tool_executor()
-        captured_args = {}
-
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
-            nonlocal captured_args
-            captured_args = tool_args_with_id
-            return CommandExecutionResult(success=True, output="ok")
-
-        executor.execute_tool_call = AsyncMock(side_effect=capture_call)
+        mock_tool_executor.execute_tool_call = AsyncMock(side_effect=capture_call)
 
         await orchestrate_tool_execution(
             ToolCall(name=NON_OPERATOR_FUNCTION, args={"query": "linux memory usage"}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
+        # Non-operator tools do get an execution_id for tracking.
+        assert captured_kwargs.get("execution_id") is not None
         assert "execution_id" not in captured_args
 
-    async def test_original_args_preserved_alongside_injected_fields(self):
-        executor = _make_tool_executor()
+    async def test_original_args_preserved_without_hidden_injection(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        """The Tribunal adds ``command`` to the executor args; the caller's original
+        ``request``/``guidelines`` are preserved. Internal routing fields
+        (``execution_id``, ``_web_session_id``) MUST NOT be silently injected —
+        they are passed as typed parameters instead."""
         captured_args = {}
 
-        async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
+        async def capture_call(tool_name, tool_args, investigation, g8e_context, **kwargs):
             nonlocal captured_args
-            captured_args = tool_args_with_id
+            captured_args = tool_args
             return CommandExecutionResult(success=True, output="ok")
 
-        executor.execute_tool_call = AsyncMock(side_effect=capture_call)
+        mock_tool_executor.execute_tool_call = AsyncMock(side_effect=capture_call)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
@@ -403,19 +414,18 @@ class TestToolArgsInjection:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "echo hello", "guidelines": "prefer minimal output"},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
-        # Tribunal injects `command` from its final_command; `request`/`guidelines` pass through.
         assert captured_args["request"] == "echo hello"
         assert captured_args["guidelines"] == "prefer minimal output"
         assert "command" in captured_args
-        assert "execution_id" in captured_args
-        assert "_web_session_id" in captured_args
+        assert "execution_id" not in captured_args
+        assert "_web_session_id" not in captured_args
 
 
 # =============================================================================
@@ -424,123 +434,165 @@ class TestToolArgsInjection:
 
 class TestToolCallResultStructure:
 
-    async def test_result_is_tool_call_result_model(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_result_is_tool_call_result_model(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert isinstance(result, ToolCallResult)
 
-    async def test_call_info_is_stream_from_model_chunk_data(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_call_info_is_stream_from_model_chunk_data(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert isinstance(result.call_info, StreamChunkData)
         assert isinstance(result.result_info, StreamChunkData)
 
-    async def test_tool_name_propagated_to_result(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_tool_name_propagated_to_result(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show working directory"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.tool_name == OperatorToolName.RUN_COMMANDS
         assert result.call_info.tool_name == OperatorToolName.RUN_COMMANDS
 
-    async def test_result_carries_raw_handler_result(self):
-        executor = _make_tool_executor()
+    async def test_result_carries_raw_handler_result(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         raw = CommandExecutionResult(success=True, output="hello from cmd", exit_code=0, command_executed="echo hello")
-        executor.execute_tool_call = AsyncMock(return_value=raw)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=raw)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo hello"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.result is raw
         assert result.result.output == "hello from cmd"
 
-    async def test_result_info_success_reflects_handler_success(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_result_info_success_reflects_handler_success(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.result_info.success is True
         assert result.result_info.error_type is None
 
-    async def test_result_info_error_type_set_on_failure(self):
-        executor = _make_tool_executor()
-        _mock_executor_failure(executor, error_type=CommandErrorType.EXECUTION_FAILED)
+    async def test_result_info_error_type_set_on_failure(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_failure(mock_tool_executor, error_type=CommandErrorType.EXECUTION_FAILED)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "run a bad command"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.result_info.success is False
         assert result.result_info.error_type == CommandErrorType.EXECUTION_FAILED
 
-    async def testexecution_id_consistent_in_call_info_and_result_info(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_execution_id_consistent_in_call_info_and_result_info(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.call_info.execution_id == result.result_info.execution_id
+
+
+    async def test_event_id_invariant_through_execution_threading(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings):
+        """Regression: event IDs must remain invariant through execution_id threading.
+        
+        This test verifies that when execution_id is threaded through the tool
+        execution pipeline (Report 1), the event IDs generated for call_info
+        and result_info events remain consistent and don't change mid-stream.
+        """
+        _mock_executor_success(mock_tool_executor)
+
+        mock_event_service = AsyncMock()
+        captured_events = []
+
+        def _capture_event(event):
+            captured_events.append(event)
+            return "success"
+
+        mock_event_service.publish = _capture_event
+        mock_event_service.publish_investigation_event = _capture_event
+
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
+            result = await orchestrate_tool_execution(
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo test"}),
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
+            )
+
+        # Verify execution_id is consistent across call_info and result_info
+        assert result.call_info.execution_id == result.result_info.execution_id
+        
+        # Verify execution_id was used in event emission (if events were captured)
+        # The exact event structure depends on the SSE event format, but the key
+        # invariant is that the same execution_id appears in related events
+        if captured_events:
+            execution_ids_in_events = []
+            for event in captured_events:
+                if hasattr(event, 'execution_id'):
+                    execution_ids_in_events.append(event.execution_id)
+            
+            # All events for this tool call should share the same execution_id
+            if execution_ids_in_events:
+                assert len(set(execution_ids_in_events)) == 1, (
+                    f"Events for single tool call have different execution_ids: {execution_ids_in_events}"
+                )
+                assert execution_ids_in_events[0] == result.call_info.execution_id
 
 
 # =============================================================================
@@ -549,39 +601,34 @@ class TestToolCallResultStructure:
 
 class TestTribunalResultSurfaced:
 
-    async def test_tribunal_result_present_on_noop(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_tribunal_result_present_on_noop(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.tribunal_result is not None
         assert result.tribunal_result.request == "list files"
         assert result.tribunal_result.final_command == "list files"
 
-    async def test_tribunal_result_carries_refined_command(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_tribunal_result_carries_refined_command(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
-        async def refining_generate(request, **kwargs):
-            return _refining_generate_command(request, refined="ls -lhR")
-
-        with patch.object(agent_tool_loop_module, "generate_command", new=refining_generate):
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=lambda request, **kwargs: _refining_generate_command(request, refined="ls -lhR"))):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files recursively"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.tribunal_result is not None
@@ -590,41 +637,38 @@ class TestTribunalResultSurfaced:
         from app.constants import CommandGenerationOutcome
         assert result.tribunal_result.outcome == CommandGenerationOutcome.CONSENSUS
 
-    async def test_tribunal_result_none_for_non_command_tool(self):
-        executor = _make_tool_executor()
+    async def test_tribunal_result_none_for_non_command_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         result_raw = CommandExecutionResult(success=True, output="ok")
-        executor.execute_tool_call = AsyncMock(return_value=result_raw)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result_raw)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=OperatorToolName.FILE_READ, args={"file_path": "/etc/hosts"}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.tribunal_result is None
 
-    async def test_tribunal_result_none_for_non_operator_tool(self):
-        executor = _make_tool_executor()
+    async def test_tribunal_result_none_for_non_operator_tool(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         result_raw = CommandExecutionResult(success=True, output="ok")
-        executor.execute_tool_call = AsyncMock(return_value=result_raw)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result_raw)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.tribunal_result is None
 
-    async def test_tribunal_result_none_on_system_error(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_tribunal_result_none_on_system_error(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized"],
@@ -633,28 +677,27 @@ class TestTribunalResultSurfaced:
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.tribunal_result is None
 
-    async def test_tribunal_result_none_when_request_missing(self):
+    async def test_tribunal_result_none_when_request_missing(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """Empty args => empty request => Tribunal is skipped and tribunal_result is None."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert result.tribunal_result is None
@@ -666,27 +709,25 @@ class TestTribunalResultSurfaced:
 
 class TestToolNameExtraction:
 
-    async def test_name_extracted_from_name_attribute(self):
-        executor = _make_tool_executor()
+    async def test_name_extracted_from_name_attribute(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         result = CommandExecutionResult(success=True, output="ok")
-        executor.execute_tool_call = AsyncMock(return_value=result)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
         result = await orchestrate_tool_execution(
             ToolCall(name=NON_OPERATOR_FUNCTION, args={}),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.tool_name == NON_OPERATOR_FUNCTION
 
-    async def test_name_none_uses_empty_string(self):
+    async def test_name_none_uses_empty_string(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """When .name is None, tool_name is an empty string."""
-        executor = _make_tool_executor()
         result = CommandExecutionResult(success=True, output="ok")
-        executor.execute_tool_call = AsyncMock(return_value=result)
+        mock_tool_executor.execute_tool_call = AsyncMock(return_value=result)
 
         class NoNameToolCall:
             name = None
@@ -694,11 +735,11 @@ class TestToolNameExtraction:
 
         result = await orchestrate_tool_execution(
             NoNameToolCall(),
-            tool_executor=executor,
-            investigation=INVESTIGATION,
-            g8e_context=G8E_CONTEXT,
-            g8ed_event_service=AsyncMock(),
-            request_settings=REQUEST_SETTINGS,
+            tool_executor=mock_tool_executor,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            g8ed_event_service=mock_event_service,
+            request_settings=request_settings,
         )
 
         assert result.tool_name == ""
@@ -710,9 +751,8 @@ class TestToolNameExtraction:
 
 class TestTribunalRefinement:
 
-    async def test_generate_command_called_for_run_commands(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_generate_command_called_for_run_commands(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -721,11 +761,11 @@ class TestTribunalRefinement:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files in long format", "guidelines": "favour -la flags"},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         mock_generate.assert_awaited_once()
@@ -733,9 +773,8 @@ class TestTribunalRefinement:
         assert call_kwargs["request"] == "list files in long format"
         assert call_kwargs["guidelines"] == "favour -la flags"
 
-    async def test_generate_command_not_called_for_file_read(self):
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+    async def test_generate_command_not_called_for_file_read(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -744,17 +783,16 @@ class TestTribunalRefinement:
                     name=OperatorToolName.FILE_READ,
                     args={"file_path": "/etc/hosts"},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         mock_generate.assert_not_awaited()
 
-    async def test_refined_command_replaces_original_in_handler_call(self):
-        executor = _make_tool_executor()
+    async def test_refined_command_replaces_original_in_handler_call(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         captured_args = {}
 
         async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
@@ -762,22 +800,19 @@ class TestTribunalRefinement:
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
 
-        executor.execute_tool_call = capture_call
+        mock_tool_executor.execute_tool_call = capture_call
 
-        async def refining_generate(request, **kwargs):
-            return _refining_generate_command(request, refined="df -h --output=source,size,avail")
-
-        with patch.object(agent_tool_loop_module, "generate_command", new=refining_generate):
+        with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=lambda request, **kwargs: _refining_generate_command(request, refined="df -h --output=source,size,avail"))):
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "check disk usage", "guidelines": "human-readable"},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # The Tribunal-produced final_command is what the executor sees, not
@@ -786,13 +821,12 @@ class TestTribunalRefinement:
         assert captured_args["request"] == "check disk usage"
         assert captured_args["guidelines"] == "human-readable"
 
-    async def test_noop_tribunal_passes_request_as_command(self):
+    async def test_noop_tribunal_passes_request_as_command(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """The noop mock Tribunal returns request verbatim as final_command.
 
         Verifies that whatever the Tribunal produces is what the executor sees,
         even when the noop mock does not refine.
         """
-        executor = _make_tool_executor()
         captured_args = {}
 
         async def capture_call(tool_name, tool_args_with_id, investigation, g8e_context, **kwargs):
@@ -800,7 +834,7 @@ class TestTribunalRefinement:
             captured_args = tool_args_with_id
             return CommandExecutionResult(success=True, output="ok")
 
-        executor.execute_tool_call = capture_call
+        mock_tool_executor.execute_tool_call = capture_call
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
@@ -808,37 +842,33 @@ class TestTribunalRefinement:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "uptime", "guidelines": "show uptime"},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert captured_args["command"] == "uptime"
 
-    async def test_generate_command_receives_operator_os_context(self):
+    async def test_generate_command_receives_operator_os_context(self, mock_tool_executor, unique_user_id, unique_investigation_id, unique_case_id, unique_operator_id, unique_session_id, unique_web_session_id, request_settings, mock_event_service):
         """os_name and shell must come from the investigation's operator context."""
-        from app.constants import OperatorType
-        from app.models.operators import OperatorDocument, OperatorSystemInfo
-
         op = OperatorDocument(
-            operator_id="op-linux",
-            user_id="user-os-test",
-            operator_session_id="session-op-linux",
+            id=unique_operator_id,
+            user_id=unique_user_id,
+            operator_session_id=unique_session_id,
             operator_type=OperatorType.SYSTEM,
             status=OperatorStatus.BOUND,
             system_info=OperatorSystemInfo(os="ubuntu", hostname="srv-01"),
         )
-        investigation = create_enriched_context(
-            investigation_id="inv-os-test",
-            case_id="case-os-test",
-            user_id="user-os-test",
+        investigation = build_enriched_context(
+            investigation_id=unique_investigation_id,
+            case_id=unique_case_id,
+            user_id=unique_user_id,
             operator_documents=[op],
         )
 
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -847,31 +877,31 @@ class TestTribunalRefinement:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "guidelines": "detailed view"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=investigation,
                 g8e_context=build_g8e_http_context(
-                    user_id="user-os-test",
-                    case_id="case-os-test",
-                    investigation_id="inv-os-test",
+                    user_id=unique_user_id,
+                    case_id=unique_case_id,
+                    investigation_id=unique_investigation_id,
+                    web_session_id=unique_web_session_id,
                 ),
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         call_kwargs = mock_generate.call_args.kwargs
         op_ctx = call_kwargs["operator_context"]
         assert op_ctx is not None
         assert op_ctx.os == "ubuntu"
-        assert op_ctx.operator_id == "op-linux"
+        assert op_ctx.operator_id == unique_operator_id
 
-    async def test_generate_command_skipped_when_request_missing(self):
+    async def test_generate_command_skipped_when_request_missing(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """Tribunal refinement must be skipped when there is no 'request' key in args.
 
         Sage is the sole writer of ``request``; an empty request means Sage
         had nothing to ask, so there is nothing for the Tribunal to produce.
         """
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -880,11 +910,11 @@ class TestTribunalRefinement:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={},
                 ),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         mock_generate.assert_not_awaited()
@@ -896,10 +926,9 @@ class TestTribunalRefinement:
 
 class TestTribunalSystemErrorHaltsExecution:
 
-    async def test_system_error_returns_failed_tool_call_result(self):
+    async def test_system_error_returns_failed_tool_call_result(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """TribunalSystemError must produce a failed ToolCallResult, not propagate."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized", "Connection refused"],
@@ -908,11 +937,11 @@ class TestTribunalSystemErrorHaltsExecution:
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "delete the filesystem root"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         assert isinstance(result, ToolCallResult)
@@ -922,10 +951,9 @@ class TestTribunalSystemErrorHaltsExecution:
         assert "Connection refused" in result.result.error
         assert result.result.error_type == CommandErrorType.EXECUTION_ERROR
 
-    async def test_system_error_prevents_tool_executor_call(self):
+    async def test_system_error_prevents_tool_executor_call(self, mock_tool_executor, sample_investigation, sample_g8e_context, request_settings, mock_event_service):
         """When TribunalSystemError fires, the underlying executor must NOT be called."""
-        executor = _make_tool_executor()
-        executor.execute_tool_call = AsyncMock()
+        mock_tool_executor.execute_tool_call = AsyncMock()
 
         exc = TribunalSystemError(
             pass_errors=["401 Unauthorized"],
@@ -934,14 +962,14 @@ class TestTribunalSystemErrorHaltsExecution:
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             await orchestrate_tool_execution(
                 ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
-                tool_executor=executor,
-                investigation=INVESTIGATION,
-                g8e_context=G8E_CONTEXT,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                tool_executor=mock_tool_executor,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
-        executor.execute_tool_call.assert_not_awaited()
+        mock_tool_executor.execute_tool_call.assert_not_awaited()
 
 
 
@@ -954,13 +982,13 @@ class TestTargetOperatorResolution:
 
     def setup_method(self):
         """Setup multi-operator investigation for target operator tests."""
-        self.multi_op_investigation = create_enriched_context(
+        self.multi_op_investigation = build_enriched_context(
             investigation_id="inv-multi-test",
             case_id="case-multi-test", 
             user_id="user-multi-test",
             operator_documents=[
                 OperatorDocument(
-                    operator_id="op-linux",
+                    id="op-linux",
                     operator_session_id="session-linux",
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
@@ -975,7 +1003,7 @@ class TestTargetOperatorResolution:
                     bound_web_session_id="web-001",
                 ),
                 OperatorDocument(
-                    operator_id="op-ubuntu",
+                    id="op-ubuntu",
                     operator_session_id="session-ubuntu", 
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
@@ -1004,10 +1032,9 @@ class TestTargetOperatorResolution:
             ],
         )
 
-    async def test_target_operator_by_id_linux(self):
+    async def test_target_operator_by_id_linux(self, mock_tool_executor, request_settings, mock_event_service):
         """Test Tribunal uses Linux operator context when targeting by operator_id."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1016,11 +1043,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "target_operator": "op-linux"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Verify Tribunal received Linux operator's OS context
@@ -1030,10 +1057,9 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
 
-    async def test_target_operator_by_id_ubuntu(self):
+    async def test_target_operator_by_id_ubuntu(self, mock_tool_executor, request_settings, mock_event_service):
         """Test Tribunal uses Ubuntu operator context when targeting by operator_id."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1042,11 +1068,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "target_operator": "op-ubuntu"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Verify Tribunal received Ubuntu operator's OS context
@@ -1056,10 +1082,9 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
 
-    async def test_target_operator_by_hostname(self):
+    async def test_target_operator_by_hostname(self, mock_tool_executor, request_settings, mock_event_service):
         """Test Tribunal resolves operator by hostname."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1068,11 +1093,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "target_operator": "ubuntu-host"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Should resolve to ubuntu operator by hostname
@@ -1082,10 +1107,9 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
 
-    async def test_target_operator_by_index(self):
+    async def test_target_operator_by_index(self, mock_tool_executor, request_settings, mock_event_service):
         """Test Tribunal resolves operator by index."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1094,11 +1118,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "target_operator": "1"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Index 1 should resolve to second operator (ubuntu)
@@ -1108,10 +1132,9 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-ubuntu"
         assert op_ctx.os == "ubuntu"
 
-    async def test_target_operator_fallback_to_first(self):
+    async def test_target_operator_fallback_to_first(self, mock_tool_executor, request_settings, mock_event_service):
         """Test Tribunal falls back to first operator when target not found."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1120,11 +1143,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files", "target_operator": "nonexistent-operator"},
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Should fall back to first operator (linux)
@@ -1134,10 +1157,9 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
 
-    async def test_no_target_operator_uses_first(self):
+    async def test_no_target_operator_uses_first(self, mock_tool_executor, request_settings, mock_event_service):
         """Test that no target_operator defaults to first operator (backward compatibility)."""
-        executor = _make_tool_executor()
-        _mock_executor_success(executor)
+        _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
         with patch.object(agent_tool_loop_module, "generate_command", new=mock_generate):
@@ -1146,11 +1168,11 @@ class TestTargetOperatorResolution:
                     name=OperatorToolName.RUN_COMMANDS,
                     args={"request": "list files"},  # No target_operator
                 ),
-                tool_executor=executor,
+                tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
                 g8e_context=self.multi_op_g8e_context,
-                g8ed_event_service=AsyncMock(),
-                request_settings=REQUEST_SETTINGS,
+                g8ed_event_service=mock_event_service,
+                request_settings=request_settings,
             )
 
         # Should use first operator (linux) by default

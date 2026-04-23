@@ -5,13 +5,11 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-g8e is designed to run with zero cloud dependencies at **runtime** when configured with a local LLM provider. This document catalogs all external dependencies, categorizes them by lifecycle phase, and describes the air-gap deployment path.
-
-> **Current state — not yet a fully offline build.** Container images must be built on an internet-connected machine today. The `docker build` pipeline still fetches from Docker Hub (base images), PyPI (`g8ee` and `g8ep` Python packages), npmjs (`npm ci` for `g8ed`), and the Alpine/Debian package mirrors. See the **Vendoring Status** table below for what has been vendored and what has not. The intended air-gap deployment flow is: build images on a connected host, then `docker save` / `docker load` onto the target.
+g8e supports air-gapped deployment with zero runtime internet dependencies when configured with a local LLM provider. Container images must be built on an internet-connected machine, then transferred to the air-gapped environment.
 
 ---
 
-## Runtime Dependencies (Zero External)
+## Runtime Dependencies
 
 The platform has **no runtime internet dependencies** when configured correctly:
 
@@ -55,42 +53,32 @@ All external fetches occur exclusively at `docker build` time. Once images are b
 
 **Node.js (npm):**
 - `components/g8ed/package.json` — runtime dependencies from npmjs.org
-- `node_modules` and `package-lock.json` are committed to the repo (partially air-gap ready)
+- `node_modules` and `package-lock.json` are committed to the repo
 - The builder stage runs `npm ci` to install from the lockfile
 
 **Air-gap path:** Use the committed lockfile with a local npm registry (Verdaccio), or pre-populate `node_modules` in the build context.
 
 **Go:**
-- `components/g8eo/vendor/` — all operator dependencies vendored, builds use `-mod=vendor` (air-gap ready)
-- `components/g8eo/tools/vendor/` — gotestsum and its dependencies vendored for test runner (air-gap ready)
+- `components/g8eo/vendor/` — all operator dependencies vendored, builds use `-mod=vendor`
+- `components/g8eo/tools/vendor/` — gotestsum and its dependencies vendored for test runner
 
 ---
 
-## Vendoring Status
+## Vendoring State
 
-| Component | Package Manager | Vendored | Notes |
-|---|---|---|---|
-| g8eo (operator) | Go modules | Yes | `vendor/` directory, `-mod=vendor` builds |
-| g8eo (test tools) | Go modules | Yes | `tools/vendor/` directory, gotestsum built from source |
-| g8ed (dashboard) | npm | Partial | `package-lock.json` committed; `npm ci` still fetches from registry |
-| g8ee (engine) | pip | No | `requirements.txt` fetches from PyPI at build time |
-| g8ep (node) | pip | No | Two packages installed at build time |
-
----
-
-## Eliminated Internet Fetches
-
-The following internet-dependent patterns have been removed from the build:
-
-1. **g8ed/Dockerfile** — Removed `curl -fsSL https://www.npmjs.com/install.sh | sh` npm upgrade from the final stage. npm is only used in the builder stage; the runtime image runs `node server.js` directly.
-2. **g8ed/Dockerfile.test** — Same npm upgrade pattern removed.
-3. **g8eo/Dockerfile.test** — Replaced `go install gotest.tools/gotestsum@v1.12.1` (fetches from proxy.golang.org) with a vendored build from `components/g8eo/tools/`.
+| Component | Package Manager | Vendored |
+|---|---|---|
+| g8eo (operator) | Go modules | Yes |
+| g8eo (test tools) | Go modules | Yes |
+| g8ed (dashboard) | npm | Partial — lockfile committed |
+| g8ee (engine) | pip | No |
+| g8ep (node) | pip | No |
 
 ---
 
-## UI Links to External Sites
+## External UI Links
 
-These are informational `<a href>` links in the dashboard, not functional dependencies. They will be dead links in an air-gapped environment but do not affect platform operation:
+The dashboard contains informational links to external sites. These are not functional dependencies and will be dead links in an air-gapped environment:
 
 - GitHub repository links in navigation menus
 - Google AI Studio link in the setup wizard
@@ -98,7 +86,9 @@ These are informational `<a href>` links in the dashboard, not functional depend
 
 ---
 
-## Air-Gap Deployment Checklist
+## Air-Gap Deployment
+
+### Standard Deployment
 
 1. **Build images on an internet-connected machine** using `./g8e platform setup`
 2. **Export images:** `docker save g8es g8ee g8ed g8ep | gzip > g8e-images.tar.gz`
@@ -107,3 +97,15 @@ These are informational `<a href>` links in the dashboard, not functional depend
 5. **Configure LLM provider** to use Ollama or an OpenAI-compatible local endpoint
 6. **Disable web search grounding** in user settings
 7. **Start the platform:** `./g8e platform start`
+
+### Fully Offline Build
+
+For environments that cannot run `docker build` with internet access, set up the following infrastructure:
+
+1. **Local container registry** (Harbor, registry:2) — pre-populate with base images
+2. **Local PyPI mirror** (devpi, bandersnatch) — host Python packages
+3. **Local npm registry** (Verdaccio) — host Node.js packages
+4. **Local APK/APT mirror** — host OS packages
+5. **Configure Dockerfile build args** to point to local mirrors
+
+Once local mirrors are configured, build images on an air-gapped machine and deploy normally.

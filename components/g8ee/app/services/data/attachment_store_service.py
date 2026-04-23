@@ -137,7 +137,7 @@ class AttachmentService:
         if not attachment_metadata:
             return []
 
-        attachments = []
+        attachments: list[AttachmentData] = []
         for meta in attachment_metadata:
             store_key = meta.store_key
             if not store_key:
@@ -213,7 +213,7 @@ class AttachmentService:
             extra={"count": len(attachments)}
         )
 
-        processed_files = []
+        processed_files: list[ProcessedAttachment] = []
 
         for attachment in attachments:
             try:

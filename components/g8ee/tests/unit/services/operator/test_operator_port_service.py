@@ -32,7 +32,7 @@ import pytest
 
 from app.constants import CommandErrorType, EventType, OperatorStatus
 from app.errors import BusinessLogicError, ValidationError
-from app.models.command_payloads import CheckPortArgs
+from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.operators import OperatorDocument, OperatorSystemInfo
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
 from app.services.operator.port_service import OperatorPortService
@@ -58,7 +58,7 @@ def _make_operator(
     hostname: str = "host-1",
 ) -> OperatorDocument:
     return OperatorDocument(
-        operator_id=operator_id,
+        id=operator_id,
         user_id="user-1",
         bound_web_session_id="ws-1",
         operator_session_id=operator_session_id,
@@ -94,12 +94,14 @@ def _make_args(
     host: str = "google.com",
     protocol: str = "tcp",
     target_operator: str | None = None,
-) -> CheckPortArgs:
-    return CheckPortArgs(
+    execution_id: str | None = None,
+) -> CheckPortRequestPayload:
+    return CheckPortRequestPayload(
         port=port,
         host=host,
         protocol=protocol,
         target_operator=target_operator,
+        execution_id=execution_id or _exec_id(),
     )
 
 
@@ -109,6 +111,11 @@ def _make_investigation(operators: list[OperatorDocument] | None = None):
 
 def _make_context():
     return build_g8e_http_context()
+
+
+def _exec_id(tag: str = "") -> str:
+    from uuid import uuid4
+    return f"test-exec-{tag or uuid4().hex[:8]}"
 
 
 def _make_success_envelope(
@@ -133,12 +140,13 @@ def _make_success_envelope(
     )
 
 
-def _make_failed_envelope(error: str = "Connection refused") -> G8eoResultEnvelope:
+def _make_failed_envelope(error: str = "Connection refused", execution_id: str = "test") -> G8eoResultEnvelope:
     return G8eoResultEnvelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         operator_id="op-1",
         operator_session_id="session-1",
         payload=PortCheckResultPayload(
+            execution_id=execution_id,
             host="google.com",
             port=443,
             protocol="tcp",
@@ -454,11 +462,12 @@ class TestG8eoResultHandling:
     async def test_failed_event_type_returns_port_check_failed(self, task_tracker):
         service, pubsub, registry, _ = _make_service()
         investigation = _make_investigation()
+        exec_id = _exec_id()
 
         async def _simulate():
             await asyncio.sleep(0.01)
             for eid in list(registry._events):
-                registry.complete(eid, _make_failed_envelope("Connection refused"))
+                registry.complete(eid, _make_failed_envelope("Connection refused", execution_id=eid))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
         result = await service.execute_port_check(_make_args(), investigation, _make_context())
@@ -477,7 +486,7 @@ class TestG8eoResultHandling:
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
             operator_id="op-1",
             operator_session_id="session-1",
-            payload=PortCheckResultPayload(is_open=False, error=None),
+            payload=PortCheckResultPayload(execution_id="exec-test", is_open=False, error=None),
         )
 
         async def _simulate():

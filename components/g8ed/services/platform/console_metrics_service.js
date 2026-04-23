@@ -196,10 +196,10 @@ class ConsoleMetricsService {
                         healthyCount++;
                     }
 
-                    // latest_heartbeat_snapshot is the persisted g8ee OperatorHeartbeat
-                    // (nested: performance.*). Fall back to flat keys for snapshots
-                    // written by the in-memory SSE HeartbeatMetrics envelope shape.
-                    const perf = heartbeat.performance || heartbeat;
+                    // latest_heartbeat_snapshot is the canonical OperatorHeartbeat shape
+                    // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
+                    // and SSE envelope both carry the same nested shape.
+                    const perf = heartbeat.performance || {};
 
                     if (perf.network_latency !== null && perf.network_latency !== undefined) {
                         totalLatency += perf.network_latency;

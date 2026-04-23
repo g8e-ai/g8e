@@ -74,15 +74,18 @@ export const TribunalMember = Object.freeze({
 });
 
 /**
- * Verifier Reason
- * The Verifier's stated reason for its verdict in Tribunal SSE payloads.
+ * Auditor Reason
+ * The Auditor's stated reason for its verdict in Tribunal SSE payloads.
  */
-export const VerifierReason = Object.freeze({
-    OK:                _AGENTS['tribunal.verifier_reason'].ok,
-    REVISED:           _AGENTS['tribunal.verifier_reason'].revised,
-    EMPTY_RESPONSE:    _AGENTS['tribunal.verifier_reason'].empty_response,
-    NO_VALID_REVISION: _AGENTS['tribunal.verifier_reason'].no_valid_revision,
-    VERIFIER_ERROR:    _AGENTS['tribunal.verifier_reason'].verifier_error,
+export const AuditorReason = Object.freeze({
+    OK:                   _AGENTS['tribunal.auditor_reason'].ok,
+    REVISED:              _AGENTS['tribunal.auditor_reason'].revised,
+    EMPTY_RESPONSE:       _AGENTS['tribunal.auditor_reason'].empty_response,
+    NO_VALID_REVISION:    _AGENTS['tribunal.auditor_reason'].no_valid_revision,
+    AUDITOR_ERROR:        _AGENTS['tribunal.auditor_reason'].auditor_error,
+    SWAPPED_TO_DISSENTER: _AGENTS['tribunal.auditor_reason'].swapped_to_dissenter,
+    REVISED_FROM_DISSENT: _AGENTS['tribunal.auditor_reason'].revised_from_dissent,
+    WHITELIST_VIOLATION:  _AGENTS['tribunal.auditor_reason'].whitelist_violation,
 });
 
 /**
@@ -93,5 +96,17 @@ export const TribunalOutcome = Object.freeze({
     CONSENSUS:           _AGENTS['tribunal.outcome'].consensus,
     VERIFIED:            _AGENTS['tribunal.outcome'].verified,
     VERIFICATION_FAILED: _AGENTS['tribunal.outcome'].verification_failed,
+});
+
+/**
+ * Tribunal Member Icons
+ * Icon names for each tribunal member, indexed by pass number.
+ */
+export const TribunalMemberIcons = Object.freeze({
+    0: _AGENTS['agent.metadata'].axiom.icon,
+    1: _AGENTS['agent.metadata'].concord.icon,
+    2: _AGENTS['agent.metadata'].variance.icon,
+    3: _AGENTS['agent.metadata'].pragma.icon,
+    4: _AGENTS['agent.metadata'].nemesis.icon,
 });
 

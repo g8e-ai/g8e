@@ -29,14 +29,18 @@ from app.constants.shared import (
 )
 from app.constants.api_paths import API_PATHS, InternalApiPaths
 from app.constants.agents import (
+    AgentName,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
     TriageRequestPosture,
     TribunalMember,
-    VerifierReason,
+    AuditorReason,
+    TieBreakReason
 )
 from app.constants.channels import (
+    CHANNEL_SEGMENT_COUNT,
+    OperatorChannel,
     PubSubAction,
     PubSubChannel,
     PubSubField,
@@ -45,6 +49,7 @@ from app.constants.channels import (
 )
 from app.constants.collections import (
     DB_COLLECTION_API_KEYS,
+    DB_COLLECTION_AGENT_ACTIVITY_METADATA,
     DB_COLLECTION_CASES,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
@@ -339,18 +344,23 @@ __all__ = [
     "_AGENTS",
     "API_PATHS",
     "InternalApiPaths",
+    "AgentName",
     "TriageComplexityClassification",
     "TriageConfidence",
     "TriageIntentClassification",
     "TriageRequestPosture",
     "TribunalMember",
-    "VerifierReason",
+    "AuditorReason",
+    "TieBreakReason",
+    "CHANNEL_SEGMENT_COUNT",
+    "OperatorChannel",
     "PubSubAction",
     "PubSubChannel",
     "PubSubField",
     "PubSubMessageType",
     "PubSubWireEventType",
     "DB_COLLECTION_API_KEYS",
+    "DB_COLLECTION_AGENT_ACTIVITY_METADATA",
     "DB_COLLECTION_CASES",
     "DB_COLLECTION_INVESTIGATIONS",
     "DB_COLLECTION_MEMORIES",

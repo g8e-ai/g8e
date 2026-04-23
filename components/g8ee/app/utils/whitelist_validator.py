@@ -311,6 +311,41 @@ class CommandWhitelistValidator:
         match = re.search(r"<(\w+)>", safe_option)
         return match.group(1) if match else None
 
+    def get_command_metadata(self, command: str, platform: Platform = Platform.LINUX) -> dict[str, Any] | None:
+        """Get full metadata for a command, including safe options and validation."""
+        command_config = self._find_command_config(command)
+        if not command_config:
+            return None
+        
+        category, config = command_config
+        
+        safe_options = config.get("safe_options", {})
+        if isinstance(safe_options, dict):
+            platform_options = safe_options.get(platform, [])
+        else:
+            platform_options = safe_options
+            
+        return {
+            "command": config.get("command", command),
+            "category": category,
+            "description": config.get("description"),
+            "safe_options": platform_options,
+            "validation": config.get("validation", {}),
+            "examples": config.get("examples", []),
+            "max_execution_time": config.get("max_execution_time")
+        }
+
+    def get_available_commands_with_metadata(self, platform: Platform = Platform.LINUX) -> list[dict[str, Any]]:
+        """Get list of all available commands for a platform with their metadata."""
+        available = []
+        for category_name, commands in self.commands_by_category.items():
+            for exec_name, config in commands.items():
+                if platform in config.get("platforms", []):
+                    metadata = self.get_command_metadata(config.get("command", exec_name), platform)
+                    if metadata:
+                        available.append(metadata)
+        return sorted(available, key=lambda x: x["command"])
+
     def get_available_commands(self, platform: Platform = Platform.LINUX) -> list[str]:
         """Get list of all available commands for a platform."""
         available = []

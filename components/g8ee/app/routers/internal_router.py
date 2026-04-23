@@ -315,7 +315,7 @@ async def stop_ai_processing(
     )
 
     cancelled = await chat_task_manager.cancel(
-        investigation_id=investigation_id,
+        task_id=investigation_id,
         reason=reason,
         web_session_id=web_session_id,
         user_id=g8e_context.user_id,

@@ -3170,8 +3170,8 @@ const (
 	SystemRegistryQuotaInformation
 	SystemExtendServiceTableInformation
 	SystemPrioritySeperation
-	SystemVerifierAddDriverInformation
-	SystemVerifierRemoveDriverInformation
+	SystemAuditorAddDriverInformation
+	SystemAuditorRemoveDriverInformation
 	SystemProcessorIdleInformation
 	SystemLegacyDriverInformation
 	SystemCurrentTimeZoneInformation
@@ -3181,8 +3181,8 @@ const (
 	SystemSessionDetach
 	SystemSessionInformation
 	SystemRangeStartInformation
-	SystemVerifierInformation
-	SystemVerifierThunkExtend
+	SystemAuditorInformation
+	SystemAuditorThunkExtend
 	SystemSessionProcessInformation
 	SystemLoadGdiDriverInSystemSpace
 	SystemNumaProcessorMap
@@ -3208,13 +3208,13 @@ const (
 	SystemRegisterFirmwareTableInformationHandler
 	SystemFirmwareTableInformation
 	SystemModuleInformationEx
-	SystemVerifierTriageInformation
+	SystemAuditorTriageInformation
 	SystemSuperfetchInformation
 	SystemMemoryListInformation
 	SystemFileCacheInformationEx
 	SystemThreadPriorityClientIdInformation
 	SystemProcessorIdleCycleTimeInformation
-	SystemVerifierCancellationInformation
+	SystemAuditorCancellationInformation
 	SystemProcessorPowerInformationEx
 	SystemRefTraceInformation
 	SystemSpecialPoolInformation
@@ -3222,12 +3222,12 @@ const (
 	SystemErrorPortInformation
 	SystemBootEnvironmentInformation
 	SystemHypervisorInformation
-	SystemVerifierInformationEx
+	SystemAuditorInformationEx
 	SystemTimeZoneInformation
 	SystemImageFileExecutionOptionsInformation
 	SystemCoverageInformation
 	SystemPrefetchPatchInformation
-	SystemVerifierFaultsInformation
+	SystemAuditorFaultsInformation
 	SystemSystemPartitionInformation
 	SystemSystemDiskInformation
 	SystemProcessorPerformanceDistribution
@@ -3248,7 +3248,7 @@ const (
 	systemSpare1
 	SystemLowPriorityIoInformation
 	SystemTpmBootEntropyInformation
-	SystemVerifierCountersInformation
+	SystemAuditorCountersInformation
 	SystemPagedPoolInformationEx
 	SystemSystemPtesInformationEx
 	SystemNodeDistanceInformation

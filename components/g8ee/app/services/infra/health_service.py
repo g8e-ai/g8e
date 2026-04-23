@@ -13,6 +13,7 @@
 
 import logging
 from collections.abc import Coroutine
+from typing import Any
 from fastapi import Request
 
 from app.constants import ComponentName, HealthStatus
@@ -45,7 +46,7 @@ class HealthService:
 
         dependencies: dict[str, DependencyStatus] = {}
 
-        async def _check(name: str, coro: Coroutine) -> None:
+        async def _check(name: str, coro: Coroutine[Any, Any, Any]) -> None:
             try:
                 await coro
                 dependencies[name] = DependencyStatus(status=HealthStatus.HEALTHY)

@@ -179,6 +179,15 @@ async def test_agent_accuracy(
             investigation_id=created_investigation.id
         )
 
+        # E2E/benchmark assertion: verify multi-row shape survives real runs
+        ai_primary_rows = [msg for msg in conversation_history if msg.sender == EventType.EVENT_SOURCE_AI_PRIMARY]
+        # Count tool iterations by checking for messages with execution_id (tool calls)
+        tool_iterations = [msg for msg in conversation_history if msg.metadata.execution_id is not None]
+        assert len(ai_primary_rows) >= len(tool_iterations), (
+            f"AI primary rows ({len(ai_primary_rows)}) must be >= tool iterations ({len(tool_iterations)}) "
+            f"for scenario {scenario['id']}"
+        )
+
         # Find the last AI response (should be the most recent EVENT_SOURCE_AI_PRIMARY message)
         ai_response_text = ""
         for msg in reversed(conversation_history):

@@ -164,6 +164,20 @@ class G8esPubSubClient {
         }
     }
 
+    removeListener(event, handler) {
+        if (event === 'message') {
+            const index = this._messageHandlers.indexOf(handler);
+            if (index !== -1) {
+                this._messageHandlers.splice(index, 1);
+            }
+        } else if (event === 'pmessage') {
+            const index = this._pmessageHandlers.indexOf(handler);
+            if (index !== -1) {
+                this._pmessageHandlers.splice(index, 1);
+            }
+        }
+    }
+
     /**
      * Create an independent pub/sub connection for isolated subscriptions.
      */

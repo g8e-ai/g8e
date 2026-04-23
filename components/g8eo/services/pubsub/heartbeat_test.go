@@ -205,18 +205,15 @@ func TestBuildHeartbeat_CapabilityFlagsSerializeAsNestedObject(t *testing.T) {
 	data, err := json.Marshal(hb)
 	require.NoError(t, err)
 
-	var raw map[string]interface{}
+	var raw models.Heartbeat
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	capFlags, ok := raw["capability_flags"].(map[string]interface{})
-	require.True(t, ok, "capability_flags must serialize as a nested JSON object")
+	assert.True(t, raw.CapabilityFlags.LocalStorageEnabled)
+	assert.True(t, raw.CapabilityFlags.GitAvailable)
 
-	lse, ok := capFlags["local_storage_enabled"].(bool)
-	require.True(t, ok)
-	assert.True(t, lse)
-
-	_, topLevelLSE := raw["local_storage_enabled"]
-	assert.False(t, topLevelLSE, "local_storage_enabled must NOT appear as a top-level field")
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, `"capability_flags":{`, "capability_flags must be a nested object")
+	assert.Contains(t, jsonStr, `"local_storage_enabled":true`, "local_storage_enabled must be nested within capability_flags")
 }
 
 // ---------------------------------------------------------------------------
@@ -424,17 +421,17 @@ func TestHeartbeatWire_CapabilityFlagsJSONKeys(t *testing.T) {
 	data, err := json.Marshal(hb)
 	require.NoError(t, err)
 
-	var raw map[string]interface{}
+	var raw models.Heartbeat
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	caps, ok := raw["capability_flags"].(map[string]interface{})
-	require.True(t, ok, "capability_flags must be a nested JSON object")
+	assert.True(t, raw.CapabilityFlags.LocalStorageEnabled)
+	assert.True(t, raw.CapabilityFlags.GitAvailable)
+	assert.False(t, raw.CapabilityFlags.LedgerMirrorEnabled)
 
-	assert.True(t, caps["local_storage_enabled"].(bool))
-	assert.True(t, caps["git_available"].(bool))
-	ledger, ledgerOK := caps["ledger_enabled"].(bool)
-	require.True(t, ledgerOK)
-	assert.False(t, ledger)
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, `"local_storage_enabled":`)
+	assert.Contains(t, jsonStr, `"git_available":`)
+	assert.Contains(t, jsonStr, `"ledger_enabled":`)
 }
 
 func TestHeartbeatWire_UptimeSecondsIsInteger(t *testing.T) {
@@ -448,16 +445,13 @@ func TestHeartbeatWire_UptimeSecondsIsInteger(t *testing.T) {
 	data, err := json.Marshal(hb)
 	require.NoError(t, err)
 
-	var raw map[string]interface{}
+	var raw models.Heartbeat
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	uptimeInfo, ok := raw["uptime_info"].(map[string]interface{})
-	require.True(t, ok)
+	assert.Equal(t, int64(432000), raw.UptimeInfo.UptimeSeconds)
 
-	secsFloat, ok := uptimeInfo["uptime_seconds"].(float64)
-	require.True(t, ok)
-	assert.Equal(t, float64(432000), secsFloat)
-	assert.Equal(t, secsFloat, float64(int64(secsFloat)))
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, `"uptime_seconds":432000`)
 }
 
 func TestHeartbeatWire_NetworkLatencyFieldName(t *testing.T) {
@@ -470,17 +464,14 @@ func TestHeartbeatWire_NetworkLatencyFieldName(t *testing.T) {
 	data, err := json.Marshal(hb)
 	require.NoError(t, err)
 
-	var raw map[string]interface{}
+	var raw models.Heartbeat
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	perf, ok := raw["performance_metrics"].(map[string]interface{})
-	require.True(t, ok)
+	assert.Equal(t, 12.5, raw.PerformanceMetrics.NetworkLatency)
 
-	_, hasNetworkLatency := perf["network_latency"]
-	assert.True(t, hasNetworkLatency)
-
-	_, hasNetworkLatencyMs := perf["network_latency_ms"]
-	assert.False(t, hasNetworkLatencyMs)
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, `"network_latency":`)
+	assert.NotContains(t, jsonStr, `"network_latency_ms":`)
 }
 
 func TestHeartbeatWire_ConnectivityStatusShape(t *testing.T) {
@@ -495,27 +486,18 @@ func TestHeartbeatWire_ConnectivityStatusShape(t *testing.T) {
 	data, err := json.Marshal(hb)
 	require.NoError(t, err)
 
-	var raw map[string]interface{}
+	var raw models.Heartbeat
 	require.NoError(t, json.Unmarshal(data, &raw))
 
-	netInfo, ok := raw["network_info"].(map[string]interface{})
-	require.True(t, ok)
+	require.Len(t, raw.NetworkInfo.ConnectivityStatus, 1)
+	assert.Equal(t, "eth0", raw.NetworkInfo.ConnectivityStatus[0].Name)
+	assert.Equal(t, "192.168.1.5", raw.NetworkInfo.ConnectivityStatus[0].IP)
+	assert.Equal(t, 1500, raw.NetworkInfo.ConnectivityStatus[0].MTU)
 
-	connStatus, ok := netInfo["connectivity_status"].([]interface{})
-	require.True(t, ok, "connectivity_status must be an array")
-	require.Len(t, connStatus, 1)
-
-	iface, ok := connStatus[0].(map[string]interface{})
-	require.True(t, ok)
-
-	assert.Equal(t, "eth0", iface["name"])
-	assert.Equal(t, "192.168.1.5", iface["ip"])
-	assert.Equal(t, float64(1500), iface["mtu"])
-
-	_, hasHost := iface["host"]
-	assert.False(t, hasHost)
-	_, hasReachable := iface["reachable"]
-	assert.False(t, hasReachable)
+	jsonStr := string(data)
+	assert.Contains(t, jsonStr, `"connectivity_status":[`)
+	assert.NotContains(t, jsonStr, `"host":`)
+	assert.NotContains(t, jsonStr, `"reachable":`)
 }
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,10 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from app.constants import (
     ErrorCode,
+    OPENAI_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
+    ANTHROPIC_DEFAULT_ENDPOINT,
+    LogLevel,
 )
 from app.constants.collections import (
     DB_COLLECTION_SETTINGS,
@@ -80,7 +84,22 @@ class SettingsService:
         This replaces legacy configuration with platform defaults and
         secure bootstrap service for secrets from g8es volume.
         """
-        settings = G8eePlatformSettings(port=443)
+        settings = G8eePlatformSettings(
+            host="0.0.0.0",
+            port=443,
+            log_level=LogLevel.INFO,
+            enable_logging=True,
+            docker_gid="988",
+            session_ttl=3600,
+            absolute_session_timeout=86400,
+            docs_dir="/docs",
+            supervisor_port=9001,
+            app_url="http://localhost:443",
+            allowed_origins="*",
+            passkey_rp_name="g8e",
+            passkey_rp_id="g8e",
+            passkey_origin="http://localhost:443",
+        )
         
         # Load secrets from bootstrap service
         internal_token = self._bootstrap.load_internal_auth_token()
@@ -173,7 +192,23 @@ class SettingsService:
             platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
             
             return G8eeUserSettings(
-                llm=LLMSettings(),
+                llm=LLMSettings(
+                    llm_model=None,
+                    llm_assistant_model=None,
+                    llm_lite_model=None,
+                    openai_endpoint=OPENAI_DEFAULT_ENDPOINT,
+                    openai_api_key=None,
+                    ollama_endpoint=None,
+                    ollama_api_key=None,
+                    gemini_api_key=None,
+                    anthropic_endpoint=ANTHROPIC_DEFAULT_ENDPOINT,
+                    anthropic_api_key=None,
+                    ollama_assistant_model=None,
+                    llm_max_tokens=4096,
+                    llm_command_gen_enabled=False,
+                    llm_command_gen_auditor=True,
+                    llm_command_gen_passes=3,
+                ),
                 search=self._build_search_settings(platform_doc.settings)
             )
 

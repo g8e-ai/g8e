@@ -34,7 +34,7 @@ from app.models.investigations import EnrichedInvestigationContext, Conversation
 from app.models.memory import InvestigationMemory
 from app.models.settings import G8eeUserSettings
 from app.models.agents import TriageResult
-from app.models.command_payloads import TargetedOperatorArgs
+from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
     ToolResult,
@@ -55,33 +55,35 @@ _TARGET_OPERATORS_DESCRIPTION = (
 )
 
 
-class SageOperatorRequest(TargetedOperatorArgs):
-    """Sage-facing request schema for run_commands_with_operator.
+class SageOperatorRequest(TargetedOperatorBase):
+    """Caller-facing request schema for run_commands_with_operator.
 
-    Sage does NOT propose shell commands. Sage articulates what it needs to
-    accomplish and any creative guidelines; the Tribunal is the sole authority
-    on the exact command string. The Tribunal-produced command is then routed
-    to the Operator via ExecutorCommandArgs.
+    The caller (Sage or Dash) does NOT propose shell commands. The caller
+    articulates what it needs to accomplish and any constraints on the shape
+    of the command; the Tribunal is the sole authority on the exact command
+    string. The Tribunal-produced command is then routed to the Operator via
+    ExecutorCommandArgs.
 
-    This type has NO command field — Sage literally cannot pass a command.
-    The invariant is structural, not conventional.
+    This type has NO command field — the caller literally cannot pass a
+    command. The invariant is structural, not conventional.
     """
     request: str = Field(
         default="",
         description=(
-            "Natural-language description of what Sage needs the Operator to accomplish "
-            "to maximise confidence in identifying the solution. Focus on investigative "
-            "intent — what you want to learn, verify, or change — NOT shell syntax. "
-            "The Tribunal will translate this into a precise command for the target OS/shell."
+            "Natural-language description of what the Operator must accomplish — "
+            "what to learn, verify, or change. Focus on investigative intent, "
+            "not shell syntax. The Tribunal translates this into a precise command "
+            "for the target OS/shell."
         ),
     )
     guidelines: str = Field(
         default="",
         description=(
-            "Optional creative guidance for the Tribunal: flags to favour, behaviours to avoid, "
-            "edge cases to cover, output formats preferred, or tradeoffs Sage considers important. "
-            "Leave empty when no guidance is needed. Never include shell syntax here — express "
-            "preferences in plain language so the Tribunal can choose the correct realisation."
+            "Optional constraints on the command itself: tools or flags to prefer "
+            "or avoid, portability requirements, edge cases the command must handle "
+            "(e.g. spaces in paths), or whitelist/blacklist restrictions surfaced by "
+            "get_command_constraints. Plain language, never shell syntax. Guidelines "
+            "describe the command, not its output."
         ),
     )
     target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
@@ -89,7 +91,7 @@ class SageOperatorRequest(TargetedOperatorArgs):
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
 
 
-class ExecutorCommandArgs(TargetedOperatorArgs):
+class ExecutorCommandArgs(TargetedOperatorBase):
     """Internal executor payload for run_commands_with_operator.
 
     This type is what the executor receives AFTER the Tribunal has produced
@@ -101,13 +103,11 @@ class ExecutorCommandArgs(TargetedOperatorArgs):
     orchestrate_tool_execution after Tribunal generates the command.
     """
     command: str = Field(..., description="Shell command produced by the Tribunal (required).")
-    request: str = Field(default="", description="Sage's natural-language request passed to the Tribunal (shown to the user as justification).")
-    guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal.")
+    request: str = Field(default="", description="Caller's natural-language request passed to the Tribunal (shown to the user as justification).")
+    guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal.")
     target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
-    execution_id: str | None = Field(default=None, alias="execution_id")
-    web_session_id: str | None = Field(default=None, alias="_web_session_id")
 
 class OperatorContext(G8eBaseModel):
     """Typed system context extracted from a single OperatorDocument model."""
@@ -143,11 +143,17 @@ class OperatorContext(G8eBaseModel):
     memory_available_mb: float | None = None
 
 
-class AgentStreamContext(G8eBaseModel):
-    """Typed context passed through g8eEngine stream methods. """
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class AgentInputs(G8eBaseModel):
+    """Immutable, request-scoped inputs to a single g8eEngine run.
 
-    # Core context fields
+    Everything in this model is set once when the chat turn is prepared and
+    is read-only for the duration of the streaming run. Mutable per-run
+    outputs (response text, token usage, finish reason, grounding) live on
+    AgentStreamState; splitting the two prevents load-bearing writes to
+    request inputs from sneaking in unnoticed.
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+
     case_id: str | None = None
     investigation_id: str | None = None
     investigation: EnrichedInvestigationContext
@@ -158,7 +164,6 @@ class AgentStreamContext(G8eBaseModel):
     agent_mode: AgentMode
     request_settings: G8eeUserSettings
 
-    # Chat pipeline fields
     operator_bound: bool = False
     model_to_use: str | None = None
     max_tokens: int | None = None
@@ -170,18 +175,25 @@ class AgentStreamContext(G8eBaseModel):
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
+
+
+class AgentStreamState(G8eBaseModel):
+    """Mutable sinks populated by deliver_via_sse during a g8eEngine run.
+
+    These are the only fields the SSE delivery layer is permitted to write.
+    After the run completes, the chat pipeline reads the final values from
+    this object to persist the AI response. Keeping the sinks isolated from
+    AgentInputs makes the authoritative post-run fields obvious at every
+    call site and prevents accidental in-place mutation of request inputs.
+    """
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+
     response_text: str = ""
     token_usage: TokenUsage | None = None
     finish_reason: str | None = None
     grounding_metadata: GroundingMetadata | None = None
-
-    def set_thinking_started(self) -> None:
-        """Mark thinking as started."""
-        pass
-
-    def set_thinking_ended(self) -> None:
-        """Mark thinking as ended."""
-        pass
+    tool_call_count: int = 0
+    tool_types_used: list[str] = Field(default_factory=list)
 
 
 class StreamChunkData(G8eBaseModel):

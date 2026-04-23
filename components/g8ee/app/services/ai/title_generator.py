@@ -21,6 +21,7 @@ Uses a lightweight model optimized for quick text generation tasks.
 import logging
 
 from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
+from app.errors import OllamaEmptyResponseError
 from app.llm import get_llm_provider, Role
 from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
@@ -72,6 +73,7 @@ async def generate_case_title(
         logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
 
         from app.models.model_configs import get_model_config
+
         model_config = get_model_config(model)
         max_output_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
         lite_llm_settings = LiteLLMSettings(
@@ -83,8 +85,6 @@ async def generate_case_title(
             response_format=None,
         )
         try:
-            from app.errors import OllamaEmptyResponseError
-
             response = await provider.generate_content_lite(
                 model=model,
                 contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],

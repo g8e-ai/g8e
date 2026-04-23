@@ -82,9 +82,9 @@ export class UserMeResponse extends G8eBaseModel {
 
 export class OperatorApiKeyResponse extends G8eBaseModel {
     static fields = {
-        success:     { type: F.boolean, required: true },
-        operator_id: { type: F.string,  required: true },
-        api_key:     { type: F.string,  required: true },
+        success: { type: F.boolean, required: true },
+        id:      { type: F.string,  required: true },
+        api_key: { type: F.string,  required: true },
     };
 }
 

@@ -93,7 +93,7 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that refines ever
    │
    ├── Tribunal Pass 0 · Axiom     ──┐
    ├── Tribunal Pass 1 · Concord   ──┤
-   ├── Tribunal Pass 2 · Variance  ──┼── Weighted Vote ── Verifier
+   ├── Tribunal Pass 2 · Variance  ──┼── Weighted Vote ── Auditor
    ├── Tribunal Pass 3 · Pragma    ──┤         │
    └── Tribunal Pass 4 · Nemesis   ──┘         ▼
                                     ┌─── Your Approval ───┐

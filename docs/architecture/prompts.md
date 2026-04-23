@@ -114,20 +114,25 @@ Sections are concatenated in this fixed order:
 | # | Section | Source | Conditional on |
 |---|---------|--------|----------------|
 | 1 | `identity` | `PromptFile.CORE_IDENTITY` | always |
-| 2 | `safety` | `PromptFile.CORE_SAFETY` | always |
-| 3 | `loyalty` | `PromptFile.CORE_LOYALTY` | always |
-| 4 | `dissent` | `PromptFile.CORE_DISSENT` | always |
-| 5 | `capabilities` | mode file | loaded file is non-empty |
-| 6 | `execution` | mode file | loaded file is non-empty |
-| 7 | `tools` | mode file | `operator_bound or g8e_web_search_available` |
-| 8 | `system_context` | rendered from `OperatorContext` | an Operator context was provided |
-| 9 | `sentinel_mode` | `PromptFile.SYSTEM_SENTINEL_MODE` | `investigation.sentinel_mode is True` |
-| 10 | `triage_context` | rendered from `TriageResult` | a triage result was provided |
-| 11 | `investigation_context` | rendered from `EnrichedInvestigationContext` | investigation context provided |
-| 12 | `response_constraints` | `PromptFile.SYSTEM_RESPONSE_CONSTRAINTS` | always |
-| 13 | `learned_context` | rendered from user + case memories | any memory is present |
+| 2 | `persona` | `get_agent_persona(agent_name.value).get_system_prompt()` | `agent_name` argument is supplied |
+| 3 | `safety` | `PromptFile.CORE_SAFETY` | always |
+| 4 | `loyalty` | `PromptFile.CORE_LOYALTY` | always |
+| 5 | `dissent` | `PromptFile.CORE_DISSENT` | always |
+| 6 | `capabilities` | mode file | loaded file is non-empty |
+| 7 | `execution` | mode file | loaded file is non-empty |
+| 8 | `tools` | mode file | `operator_bound or g8e_web_search_available` |
+| 9 | `system_context` | rendered from `OperatorContext` | an Operator context was provided |
+| 10 | `sentinel_mode` | `PromptFile.SYSTEM_SENTINEL_MODE` | `investigation.sentinel_mode is True` |
+| 11 | `triage_context` | rendered from `TriageResult` | a triage result was provided |
+| 12 | `investigation_context` | rendered from `EnrichedInvestigationContext` | investigation context provided |
+| 13 | `response_constraints` | `PromptFile.SYSTEM_RESPONSE_CONSTRAINTS` | always |
+| 14 | `learned_context` | rendered from user + case memories | any memory is present |
 
-Section order is deliberate. Identity and safety come first because everything after them should be interpreted inside that envelope. Loyalty and dissent come before mode-specific capabilities so that the doctrine governs how capabilities are exercised. `response_constraints` comes last among the static sections so its formatting rules are the most recent instruction in the prompt before learned context and the user turn.
+Section order is deliberate. Identity comes first because everything after it should be interpreted inside that envelope. The agent-specific persona (`sage` or `dash`) loads immediately after identity so the voice is established before safety, doctrine, and mode-specific capabilities are read. Loyalty and dissent come before mode-specific capabilities so that the doctrine governs how capabilities are exercised. `response_constraints` comes last among the static sections so its formatting rules are the most recent instruction in the prompt before learned context and the user turn.
+
+### Agent persona selection
+
+`ChatPipelineService` resolves an `AgentName` based on the tier selected for the turn: `AgentName.SAGE` when the primary (reasoning) model is in use, `AgentName.DASH` when the assistant (fast-path) model is in use. That value is threaded into `build_modular_system_prompt(agent_name=...)`. The loader returns a `<role>` / `<voice>` / `<operating_mode>` block that prepends after identity. When `agent_name` is `None` (e.g. in unit tests that don't exercise the persona injection) the section is skipped entirely — no persona is ever invented at prompt-assembly time.
 
 ---
 

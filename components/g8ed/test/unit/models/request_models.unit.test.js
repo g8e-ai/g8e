@@ -1347,6 +1347,40 @@ describe('SessionAuthResponse [UNIT - PURE LOGIC]', () => {
         expect(() => SessionAuthResponse.parse({}))
             .toThrow('success is required');
     });
+
+    // Contract test: the forKV() output is published on the pub/sub auth
+    // response channel and decoded by g8eo's AuthServicesResponse struct in
+    // components/g8eo/services/auth/bootstrap.go. Its JSON tags are the
+    // authoritative wire contract. If this test breaks, do NOT rename the
+    // fields on either side independently — coordinate both.
+    it('emits the exact wire keys expected by g8eo AuthServicesResponse', () => {
+        const wire = new SessionAuthResponse({
+            success: true,
+            operator_session_id: 'ops-123',
+            operator_id: 'op-456',
+            user_id: 'user-789',
+            organization_id: 'org-abc',
+            api_key: 'key-def',
+            config: { timeout: 300 },
+            operator_cert: 'cert-data',
+            operator_cert_key: 'key-data',
+        }).forKV();
+
+        expect(Object.keys(wire).sort()).toEqual([
+            'api_key',
+            'config',
+            'error',
+            'operator_cert',
+            'operator_cert_key',
+            'operator_id',
+            'operator_session_id',
+            'organization_id',
+            'success',
+            'user_id',
+        ]);
+        expect(wire.operator_id).toBe('op-456');
+        expect(wire.operator_session_id).toBe('ops-123');
+    });
 });
 
 describe('BoundOperatorContext [UNIT - PURE LOGIC]', () => {

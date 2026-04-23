@@ -24,9 +24,9 @@ import logging
 import random
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
@@ -53,6 +53,15 @@ from app.utils.aiohttp_session import new_component_http_session
 from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
+
+JSONPayload = Union[Mapping[str, Any], G8eBaseModel]
+"""Typed JSON request body: a Pydantic model or a dict-shaped mapping.
+
+HTTPClient callers must pass a typed model or a mapping already serialized to
+JSON-safe primitives (e.g. via ``model.model_dump(mode=\"json\")``). Raw
+``Any`` is rejected per the developer guide (no ``Any`` in signatures)."""
+
+QueryParams = Mapping[str, Union[str, int, float, bool]]
 
 DEFAULT_RETRY_METHODS: set[str] = {"GET", "PUT", "DELETE", "HEAD", "OPTIONS"}
 DEFAULT_RETRY_STATUS_CODES: set[int] = {408, 429, 500, 502, 503, 504}
@@ -201,7 +210,12 @@ class AiohttpResponse:
     def text(self) -> str:
         return self._body.decode("utf-8", errors="replace")
 
-    def json(self) -> Any:
+    def json(self) -> object:
+        """Parse response body as JSON.
+
+        Returns ``object`` (not ``Any``) to force callers to validate the
+        decoded payload through a typed model at the boundary.
+        """
         return json.loads(self._body)
 
 
@@ -292,22 +306,20 @@ class HTTPClient:
         self,
         method: str,
         url: str,
-        headers: dict[str, str],
+        headers: dict[str, str] | None,
         context: Optional["G8eHttpContext"],
-        **kwargs
-    ) -> tuple[str, dict[str, str], dict[str, object], RequestTrace]:
+    ) -> tuple[str, dict[str, str], RequestTrace]:
         """
-        Prepare the request URL, headers, and other parameters.
+        Prepare the request URL and headers.
 
         Args:
             method: HTTP method
             url: Request URL or path (will be joined with base_url if provided)
             headers: Optional headers to add to the request
             context: Optional G8eHttpContext to propagate as X-G8E-* headers
-            **kwargs: Additional request parameters
 
         Returns:
-            Tuple of (final_url, headers, kwargs, trace)
+            Tuple of (final_url, headers, trace)
         """
         final_url = urljoin(self.base_url, url) if self.base_url else url
 
@@ -326,7 +338,21 @@ class HTTPClient:
         trace = RequestTrace.from_headers(request_headers, self.component_id)
         request_headers.update(trace.as_headers)
 
-        return final_url, request_headers, kwargs, trace
+        return final_url, request_headers, trace
+
+    @staticmethod
+    def _serialize_json_payload(json_data: JSONPayload | None) -> Mapping[str, Any] | None:
+        """Coerce a typed payload to a JSON-safe mapping for aiohttp.
+
+        G8eBaseModel instances serialize through ``model_dump(mode=\"json\")`` to
+        honour the application-boundary rule: models flatten to plain dicts
+        only when crossing a wire boundary.
+        """
+        if json_data is None:
+            return None
+        if isinstance(json_data, G8eBaseModel):
+            return json_data.model_dump(mode="json")
+        return json_data
 
     def _should_retry(
         self,
@@ -363,34 +389,38 @@ class HTTPClient:
         self,
         method: str,
         url: str,
-        headers: dict[str, str],
-        json_data: Any,
-        context: Optional["G8eHttpContext"],
-        **kwargs
+        headers: dict[str, str] | None = None,
+        json_data: JSONPayload | None = None,
+        context: Optional["G8eHttpContext"] = None,
+        params: QueryParams | None = None,
     ) -> "AiohttpResponse":
         """
         Make an HTTP request with automatic retry and circuit breaking.
-        
+
         Args:
             method: HTTP method (GET, POST, etc.)
             url: URL or path to request
             headers: Optional headers to include
-            json_data: Optional JSON data to send
+            json_data: Optional typed JSON body (Pydantic model or JSON-safe mapping)
             context: Optional G8eHttpContext to propagate as X-G8E-* headers
-            **kwargs: Additional parameters to pass to aiohttp
-            
+            params: Optional query-string parameters
+
         Returns:
             AiohttpResponse wrapper with status_code, json(), text properties
-            
+
         Raises:
             NetworkError: On connection or response errors
         """
-        final_url, request_headers, request_kwargs, trace = await self._prepare_request(
-            method, url, headers, context=context, **kwargs
+        final_url, request_headers, trace = await self._prepare_request(
+            method, url, headers, context=context
         )
 
-        if json_data is not None:
-            request_kwargs["json"] = json_data
+        request_kwargs: dict[str, Any] = {}
+        json_body = self._serialize_json_payload(json_data)
+        if json_body is not None:
+            request_kwargs["json"] = json_body
+        if params is not None:
+            request_kwargs["params"] = dict(params)
 
         circuit_breaker = self._get_circuit_breaker(final_url)
 
@@ -631,47 +661,49 @@ class HTTPClient:
 
                 raise error
 
-    async def get(self, url: str, params, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
-        return await self.request("GET", url, params=params, context=context, **kwargs)
+    async def post(
+        self,
+        url: str,
+        json_data: JSONPayload | None = None,
+        headers: dict[str, str] | None = None,
+        context: Optional["G8eHttpContext"] = None,
+    ) -> "AiohttpResponse":
+        return await self.request(
+            "POST", url, headers=headers, json_data=json_data, context=context
+        )
 
-    async def post(self, url: str, json_data=None, data=None, context: Optional[G8eHttpContext] = None, **kwargs) -> AiohttpResponse:
-        if json_data is not None:
-            return await self.request("POST", url, json_data=json_data, context=context, **kwargs)
-        return await self.request("POST", url, json_data=None, context=context, **kwargs) if data is None else await self.request("POST", url, data=data, context=context, **kwargs)
-
-    async def put(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
-        if json_data is not None:
-            return await self.request("PUT", url, json_data=json_data, context=context, **kwargs)
-        return await self.request("PUT", url, data=data, context=context, **kwargs)
-
-    async def delete(self, url: str, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
-        return await self.request("DELETE", url, context=context, **kwargs)
-
-    async def patch(self, url: str, json_data, data, context: G8eHttpContext, **kwargs) -> AiohttpResponse:
-        if json_data is not None:
-            return await self.request("PATCH", url, json_data=json_data, context=context, **kwargs)
-        return await self.request("PATCH", url, data=data, context=context, **kwargs)
+    async def get(
+        self,
+        url: str,
+        params: QueryParams | None = None,
+        headers: dict[str, str] | None = None,
+        context: Optional["G8eHttpContext"] = None,
+    ) -> "AiohttpResponse":
+        return await self.request(
+            "GET", url, headers=headers, context=context, params=params
+        )
 
     async def stream(
         self,
         method: str,
         url: str,
-        headers: dict[str, str],
-        json_data: Any,
-        context: Optional["G8eHttpContext"],
+        headers: dict[str, str] | None = None,
+        json_data: JSONPayload | None = None,
+        context: Optional["G8eHttpContext"] = None,
         chunk_size: int = 8192,
-        **kwargs
     ) -> AsyncIterator[bytes]:
         """Stream response content chunk-by-chunk without buffering the full body.
 
         Raises:
             NetworkError: On connection or response errors
         """
-        final_url, request_headers, request_kwargs, trace = await self._prepare_request(
-            method, url, headers, context=context, **kwargs
+        final_url, request_headers, trace = await self._prepare_request(
+            method, url, headers, context=context
         )
-        if json_data is not None:
-            request_kwargs["json"] = json_data
+        request_kwargs: dict[str, Any] = {}
+        json_body = self._serialize_json_payload(json_data)
+        if json_body is not None:
+            request_kwargs["json"] = json_body
 
         circuit_breaker = self._get_circuit_breaker(final_url)
         if not await circuit_breaker.allow_request():

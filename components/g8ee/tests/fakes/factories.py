@@ -254,7 +254,7 @@ def build_minimal_operator_document(
         user_id = user_id or f"test-user-{unique_suffix}"
 
     return OperatorDocument(
-        operator_id=operator_id,
+        id=operator_id,
         operator_session_id=f"sess-{operator_id}",
         user_id=user_id,
         status=status,
@@ -289,7 +289,7 @@ def build_production_operator_document(
     operator_session_id = f"test-sess-{uuid.uuid4().hex[:8]}"
     user_id = f"test-user-{uuid.uuid4().hex[:8]}"
     return OperatorDocument(
-        operator_id=operator_id,
+        id=operator_id,
         operator_session_id=operator_session_id,
         user_id=user_id,
         status=OperatorStatus.BOUND,

@@ -14,58 +14,101 @@
 package pubsub
 
 import (
-	"encoding/json"
 	"testing"
 
+	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// Wire contract: every LFAA result payload must carry an execution_id so g8ee
-// can correlate operator responses back to the originating request. Typed
-// payloads (ExecutionResultsPayload, FsReadResultPayload, ...) set it
-// explicitly; this helper injects it for payloads that don't (LFAAErrorPayload,
-// FetchFileHistoryResultPayload, FetchFileDiffResultPayload, ...).
-func TestMergeExecutionID_InjectsWhenMissing(t *testing.T) {
-	raw := json.RawMessage(`{"success":false,"error":"history handler not available on this operator"}`)
-
-	merged := mergeExecutionID(raw, "msg-abc")
-
-	var got map[string]interface{}
-	require.NoError(t, json.Unmarshal(merged, &got))
-	assert.Equal(t, "msg-abc", got["execution_id"])
-	assert.Equal(t, false, got["success"])
-	assert.Equal(t, "history handler not available on this operator", got["error"])
+func TestSetExecutionIDOnPayload_LFAAErrorPayload(t *testing.T) {
+	payload := &models.LFAAErrorPayload{
+		Success: false,
+		Error:   "test error",
+	}
+	setExecutionIDOnPayload(payload, "msg-abc")
+	assert.Equal(t, "msg-abc", payload.ExecutionID)
 }
 
-func TestMergeExecutionID_PreservesExistingValue(t *testing.T) {
-	raw := json.RawMessage(`{"execution_id":"typed-value","stdout":"hi"}`)
-
-	merged := mergeExecutionID(raw, "msg-abc")
-
-	var got map[string]interface{}
-	require.NoError(t, json.Unmarshal(merged, &got))
-	assert.Equal(t, "typed-value", got["execution_id"], "typed payload's own execution_id must win")
+func TestSetExecutionIDOnPayload_FileEditResultPayload(t *testing.T) {
+	payload := &models.FileEditResultPayload{
+		ExecutionID: "original-id",
+		Status:      constants.ExecutionStatusCompleted,
+	}
+	setExecutionIDOnPayload(payload, "msg-abc")
+	assert.Equal(t, "msg-abc", payload.ExecutionID)
 }
 
-func TestMergeExecutionID_OverwritesEmptyString(t *testing.T) {
-	raw := json.RawMessage(`{"execution_id":"","stdout":"hi"}`)
-
-	merged := mergeExecutionID(raw, "msg-abc")
-
-	var got map[string]interface{}
-	require.NoError(t, json.Unmarshal(merged, &got))
-	assert.Equal(t, "msg-abc", got["execution_id"])
+func TestSetExecutionIDOnPayload_FsListResultPayload(t *testing.T) {
+	payload := &models.FsListResultPayload{
+		ExecutionID: "",
+		Status:      constants.ExecutionStatusCompleted,
+	}
+	setExecutionIDOnPayload(payload, "msg-abc")
+	assert.Equal(t, "msg-abc", payload.ExecutionID)
 }
 
-func TestMergeExecutionID_NoOpOnEmptyInputs(t *testing.T) {
-	assert.Equal(t, json.RawMessage(nil), mergeExecutionID(nil, "msg-abc"))
-
-	raw := json.RawMessage(`{"a":1}`)
-	assert.Equal(t, raw, mergeExecutionID(raw, ""), "empty execution_id must leave payload untouched")
+func TestSetExecutionIDOnPayload_PortCheckResultPayload(t *testing.T) {
+	payload := &models.PortCheckResultPayload{
+		ExecutionID: "existing-id",
+		Status:      constants.ExecutionStatusCompleted,
+	}
+	setExecutionIDOnPayload(payload, "msg-abc")
+	assert.Equal(t, "msg-abc", payload.ExecutionID)
 }
 
-func TestMergeExecutionID_NonObjectPayloadUntouched(t *testing.T) {
-	raw := json.RawMessage(`[1,2,3]`)
-	assert.Equal(t, raw, mergeExecutionID(raw, "msg-abc"))
+func TestSetExecutionIDOnPayload_EmptyExecutionID(t *testing.T) {
+	payload := &models.LFAAErrorPayload{
+		Success: false,
+		Error:   "test error",
+	}
+	setExecutionIDOnPayload(payload, "")
+	assert.Equal(t, "", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_UnsupportedType(t *testing.T) {
+	type unsupportedPayload struct {
+		Field string
+	}
+	payload := &unsupportedPayload{Field: "value"}
+	setExecutionIDOnPayload(payload, "msg-abc")
+	assert.Equal(t, "value", payload.Field)
+}
+
+func TestSetExecutionIDOnPayload_FetchFileDiffResultPayload(t *testing.T) {
+	payload := &models.FetchFileDiffResultPayload{
+		Success:     true,
+		Error:       nil,
+		ExecutionID: "original-id",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_FetchHistoryResultPayload(t *testing.T) {
+	payload := &models.FetchHistoryResultPayload{
+		Success:     true,
+		ExecutionID: "",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_FetchFileHistoryResultPayload(t *testing.T) {
+	payload := &models.FetchFileHistoryResultPayload{
+		Success:     false,
+		Error:       "test error",
+		ExecutionID: "old-id",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_RestoreFileResultPayload(t *testing.T) {
+	payload := &models.RestoreFileResultPayload{
+		Success:     true,
+		ExecutionID: "",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
 }

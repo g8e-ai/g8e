@@ -255,7 +255,7 @@ class TestBuildInvestigationContext:
         investigation = await gateway._build_investigation_context(ctx)
 
         assert len(investigation.operator_documents) == 1
-        assert investigation.operator_documents[0].operator_id == "op-1"
+        assert investigation.operator_documents[0].id == "op-1"
         assert investigation.user_id == ctx.user_id
 
     async def test_skips_non_bound_operators(self):

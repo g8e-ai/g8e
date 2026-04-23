@@ -39,7 +39,7 @@ from app.services.protocols import (
 )
 
 from app.models.tool_results import CommandExecutionResult
-from app.models.command_payloads import CommandCancelPayload
+from app.models.command_request_payloads import CommandCancelRequestPayload
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
@@ -156,7 +156,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         if not target_operator:
             available = [
                 f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} "
-                f"({op.operator_id}) - {op.operator_type}"
+                f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
             raise ValidationError(
@@ -168,7 +168,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         for op in operator_documents:
-            if op.operator_id == target_operator:
+            if op.id == target_operator:
                 return op
 
         for op in operator_documents:
@@ -186,7 +186,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         available = [
-            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.operator_id})"
+            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.id})"
             for i, op in enumerate(operator_documents)
         ]
         raise ValidationError(
@@ -210,7 +210,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         # This rescues LLMs that pass e.g. ['all', 'web-1'] or ['*'] and makes whole-fleet
         # intent robust against enumeration mistakes.
         _fleet_sentinels = {"all", "*", "fleet", "every", "everyone"}
-        if any(isinstance(t, str) and t.strip().lower() in _fleet_sentinels for t in target_operators):
+        if any(t.strip().lower() in _fleet_sentinels for t in target_operators):
             return operator_documents
 
         resolved: list[OperatorDocument] = []
@@ -222,9 +222,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                     operator_documents=operator_documents,
                     target_operator=target,
                 )
-                if op.operator_id and op.operator_id not in resolved_ids:
+                if op.id and op.id not in resolved_ids:
                     resolved.append(op)
-                    resolved_ids.add(op.operator_id)
+                    resolved_ids.add(op.id)
             except (ValidationError, BusinessLogicError):
                 continue
 
@@ -240,7 +240,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         for op in operator_documents:
             hostname: str = op.current_hostname or (op.system_info.hostname if op.system_info else None) or "None"
             systems.append(TargetSystem(
-                operator_id=op.operator_id or "None",
+                operator_id=op.id,
                 hostname=hostname,
                 operator_type=op.operator_type,
             ))
@@ -266,7 +266,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         timeout_seconds: int = 60,
     ) -> CommandInternalResult:
         """Authors authoritative execution for any G8eMessage."""
-        execution_id = g8e_message.id
+        execution_id = g8e_context.execution_id
         operator_id = g8e_message.operator_id
         operator_session_id = g8e_message.operator_session_id
 
@@ -291,8 +291,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         )
 
         if subscribers == 0:
-            error_msg = f"No Operator listening on command channel for {operator_id}"
-            logger.error("[NO-SUBSCRIBERS] %s", error_msg)
+            channel = f"cmd:{operator_id}:{operator_session_id}"
+            error_msg = f"No Operator listening on command channel '{channel}'"
+            logger.error("[NO-SUBSCRIBERS] %s", error_msg, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
             self.execution_registry.release(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
@@ -356,7 +357,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 operator_id=operator_id,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
-                payload=CommandCancelPayload(execution_id=execution_id),
+                payload=CommandCancelRequestPayload(execution_id=execution_id),
             )
 
             await self.pubsub_service.publish_command(
@@ -414,6 +415,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         )
 
         if subscribers == 0:
+            channel = f"cmd:{operator_id}:{operator_session_id}"
+            logger.error("[NO-SUBSCRIBERS] No Operator listening on command channel '%s'", channel, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
             return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.FAILED, error="No Operator listening")
 
         return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.EXECUTING)

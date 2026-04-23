@@ -45,6 +45,36 @@ func MCPToolNameToEventType(toolName string) string {
 	}
 }
 
+// validateToolArguments validates MCP tool arguments against the expected g8e payload structure.
+// This prevents malformed payloads from bypassing typed deserialization.
+func validateToolArguments(toolName string, arguments json.RawMessage) error {
+	switch toolName {
+	case "run_commands_with_operator":
+		var payload models.CommandRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator":
+		var payload models.FileEditRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "check_port_status":
+		var payload models.PortCheckRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "list_files_and_directories_with_detailed_metadata":
+		var payload models.FsListRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "fetch_file_history":
+		var payload models.FetchFileHistoryRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "fetch_file_diff":
+		var payload models.FetchFileDiffRequestPayload
+		return json.Unmarshal(arguments, &payload)
+	case "grant_intent_permission":
+		var payload map[string]interface{}
+		return json.Unmarshal(arguments, &payload)
+	default:
+		return fmt.Errorf("unsupported tool for validation: %s", toolName)
+	}
+}
+
 // TranslateToolCallToCommand converts an MCP JSON-RPC tool call into an internal g8e message.
 func TranslateToolCallToCommand(req *JSONRPCRequest) (*models.G8eMessage, error) {
 	if req.Method != "tools/call" {
@@ -59,6 +89,10 @@ func TranslateToolCallToCommand(req *JSONRPCRequest) (*models.G8eMessage, error)
 	eventType := MCPToolNameToEventType(params.Name)
 	if eventType == "" {
 		return nil, fmt.Errorf("unsupported tool: %s", params.Name)
+	}
+
+	if err := validateToolArguments(params.Name, params.Arguments); err != nil {
+		return nil, fmt.Errorf("invalid tool arguments for %s: %w", params.Name, err)
 	}
 
 	// For the first pass, we map the MCP request ID as the g8e message ID.

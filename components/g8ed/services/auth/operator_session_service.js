@@ -31,7 +31,6 @@
  * 2. Delete from g8es KV cache
  */
 
-import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger.js';
 import { now, addSeconds, secondsBetween } from '../../models/base.js';
 import { OperatorSessionDocument } from '../../models/auth_models.js';
@@ -40,7 +39,8 @@ import { KVScanPattern } from '../../constants/kv_keys.js';
 import { SessionType, SessionEventType, SessionEndReason } from '../../constants/session.js';
 import { ABSOLUTE_SESSION_TIMEOUT_SECONDS } from '../../constants/session.js';
 import { Collections } from '../../constants/collections.js';
-import { BaseSessionService } from './base_session_service.js';
+import { BaseSessionService, generateSessionId } from './base_session_service.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 
 export class OperatorSessionService extends BaseSessionService {
     constructor(options = {}) {
@@ -51,7 +51,7 @@ export class OperatorSessionService extends BaseSessionService {
     }
 
     _generateSessionId() {
-        return `operator_session_${Date.now()}_${randomUUID()}`;
+        return generateSessionId(SessionType.OPERATOR);
     }
 
     /**
@@ -114,7 +114,7 @@ export class OperatorSessionService extends BaseSessionService {
         }
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session created', {
-            sessionId: sessionId.substring(0, 12) + '...',
+            sessionId_tag: sessionIdTag(sessionId),
             ttl,
             operatorId: sessionData.operator_id,
             userId: sessionData.user_id,
@@ -147,7 +147,7 @@ export class OperatorSessionService extends BaseSessionService {
 
         if (!data || data.session_type !== SessionType.OPERATOR) {
             logger.info('[OPERATOR-SESSION-SERVICE] Operator session not found or wrong type', {
-                operatorSessionId: operatorSessionId.substring(0, 12) + '...'
+                operatorSessionId_tag: sessionIdTag(operatorSessionId)
             });
             return null;
         }
@@ -158,7 +158,7 @@ export class OperatorSessionService extends BaseSessionService {
         const integrityCheck = this._validateSessionIntegrity(session, operatorSessionId);
         if (!integrityCheck.valid) {
             logger.error('[OPERATOR-SESSION-SERVICE] Operator session integrity check failed', {
-                operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+                operatorSessionId_tag: sessionIdTag(operatorSessionId),
                 reason: integrityCheck.reason
             });
             await this.endSession(operatorSessionId, SessionEndReason.INTEGRITY_FAILURE);
@@ -171,7 +171,7 @@ export class OperatorSessionService extends BaseSessionService {
             const absoluteExpiry = session.absolute_expires_at instanceof Date ? session.absolute_expires_at : new Date(session.absolute_expires_at);
             if (checkTime > absoluteExpiry) {
                 logger.warn('[OPERATOR-SESSION-SERVICE] Operator session exceeded absolute timeout', {
-                    operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+                    operatorSessionId_tag: sessionIdTag(operatorSessionId),
                     absoluteExpiresAt: session.absolute_expires_at
                 });
                 await this.endSession(operatorSessionId);
@@ -184,7 +184,7 @@ export class OperatorSessionService extends BaseSessionService {
             const idleExpiry = session.idle_expires_at instanceof Date ? session.idle_expires_at : new Date(session.idle_expires_at);
             if (checkTime > idleExpiry) {
                 logger.warn('[OPERATOR-SESSION-SERVICE] Operator session exceeded idle timeout', {
-                    operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+                    operatorSessionId_tag: sessionIdTag(operatorSessionId),
                     idleExpiresAt: session.idle_expires_at
                 });
                 await this.endSession(operatorSessionId);
@@ -218,7 +218,7 @@ export class OperatorSessionService extends BaseSessionService {
             const absoluteExpiry = new Date(session.absolute_expires_at);
             if (checkTime > absoluteExpiry) {
                 logger.warn('[OPERATOR-SESSION-SERVICE] Cannot refresh - absolute timeout exceeded', {
-                    operatorSessionId: operatorSessionId.substring(0, 12) + '...'
+                    operatorSessionId_tag: sessionIdTag(operatorSessionId)
                 });
                 await this.endSession(operatorSessionId);
                 return false;
@@ -239,7 +239,7 @@ export class OperatorSessionService extends BaseSessionService {
         );
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session refreshed', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
             ttl,
             timeUntilAbsoluteExpiry
         });
@@ -258,7 +258,7 @@ export class OperatorSessionService extends BaseSessionService {
         );
         if (!session || session.session_type !== SessionType.OPERATOR) {
             logger.warn('[OPERATOR-SESSION-SERVICE] Cannot update non-existent operator session', {
-                operatorSessionId: operatorSessionId.substring(0, 12) + '...'
+                operatorSessionId_tag: sessionIdTag(operatorSessionId)
             });
             return null;
         }
@@ -291,7 +291,7 @@ export class OperatorSessionService extends BaseSessionService {
         );
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session updated', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
             updatedFields: Object.keys(updates)
         });
 
@@ -309,7 +309,7 @@ export class OperatorSessionService extends BaseSessionService {
         );
         if (!session || session.session_type !== SessionType.OPERATOR) {
             logger.warn('[OPERATOR-SESSION-SERVICE] Cannot extend non-existent operator session', {
-                operatorSessionId: operatorSessionId.substring(0, 12) + '...'
+                operatorSessionId_tag: sessionIdTag(operatorSessionId)
             });
             return false;
         }
@@ -328,7 +328,7 @@ export class OperatorSessionService extends BaseSessionService {
         );
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session TTL extended to full duration', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
             newTTL: this.sessionTTL
         });
 
@@ -347,7 +347,7 @@ export class OperatorSessionService extends BaseSessionService {
 
         if (!session) {
             logger.info('[OPERATOR-SESSION-SERVICE] Operator session not found for end', {
-                operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+                operatorSessionId_tag: sessionIdTag(operatorSessionId),
                 reason
             });
             return false;
@@ -361,7 +361,7 @@ export class OperatorSessionService extends BaseSessionService {
         await this._logSessionEvent(SessionEventType.SESSION_ENDED, session, { reason });
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session ended', {
-            operatorSessionId: operatorSessionId.substring(0, 12) + '...',
+            operatorSessionId_tag: sessionIdTag(operatorSessionId),
             reason
         });
 
@@ -375,13 +375,13 @@ export class OperatorSessionService extends BaseSessionService {
     async regenerateOperatorSession(oldSessionId, requestContext = {}) {
         const raw = await this._cache_aside.getDocument(this.sessionsCollection, oldSessionId);
         if (raw && raw.session_type !== SessionType.OPERATOR) {
-            throw new Error(`[OPERATOR-SESSION-SERVICE] Cannot regenerate web session as operator session: ${oldSessionId.substring(0, 12)}...`);
+            throw new Error(`[OPERATOR-SESSION-SERVICE] Cannot regenerate web session as operator session: tag=${sessionIdTag(oldSessionId)}`);
         }
 
         const session = await this.validateSession(oldSessionId, requestContext);
         if (!session) {
             logger.warn('[OPERATOR-SESSION-SERVICE] Cannot regenerate non-existent operator session', {
-                oldSessionId: oldSessionId.substring(0, 12) + '...'
+                oldSessionId_tag: sessionIdTag(oldSessionId)
             });
             return null;
         }
@@ -398,8 +398,8 @@ export class OperatorSessionService extends BaseSessionService {
         await this.endSession(oldSessionId, SessionEndReason.SESSION_REGENERATION);
 
         logger.info('[OPERATOR-SESSION-SERVICE] Operator session regenerated', {
-            oldSessionId: oldSessionId.substring(0, 12) + '...',
-            newSessionId: newSession.id.substring(0, 12) + '...'
+            oldSessionId_tag: sessionIdTag(oldSessionId),
+            newSessionId_tag: sessionIdTag(newSession.id)
         });
 
         await this._logSessionEvent(SessionEventType.SESSION_REGENERATED, newSession, {

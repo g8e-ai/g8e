@@ -17,7 +17,6 @@ Unit tests for OperatorCommandService (command_service.py).
 Covers the service's own responsibilities:
 - Initialization validation (ValidationError on missing required deps)
 - set_pubsub_client guards
-- operator_service_available
 - Pending commands store CRUD delegation
 - _broadcast_command_event (success + swallowed SSE failure)
 - _resolve_intent_dependencies (dependency graph)
@@ -118,23 +117,6 @@ class TestClientSetters:
         with pytest.raises(ValidationError):
             service.set_pubsub_client(0)
 
-
-# ---------------------------------------------------------------------------
-# operator_service_available
-# ---------------------------------------------------------------------------
-
-class TestOperatorServiceAvailable:
-
-    pytestmark = pytest.mark.unit
-
-    def test_returns_true_when_operator_service_set(self):
-        service = _make_service()
-        assert service.operator_service_available() is True
-
-    def test_returns_false_when_operator_service_is_none(self):
-        service = _make_service()
-        service.operator_data_service = None
-        assert service.operator_service_available() is False
 
 # ---------------------------------------------------------------------------
 # publish_command_event (formerly _broadcast_command_event)
@@ -283,7 +265,7 @@ class TestExecuteCommandTargetSystems:
     def _make_operator(self, operator_id: str, session_id: str, hostname: str):
         from app.models.operators import OperatorDocument, OperatorType
         return OperatorDocument(
-            operator_id=operator_id,
+            id=operator_id,
             user_id="user-1",
             operator_session_id=session_id,
             current_hostname=hostname,

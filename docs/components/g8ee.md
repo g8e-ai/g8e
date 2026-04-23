@@ -33,6 +33,7 @@ ChatPipelineService
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
   ├── BackgroundTaskManager     — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates
+  ├── AgentActivityDataService — AI agent activity metadata recording for data science
   ├── MemoryGenerationService — Background memory updates from conversation
   ├── AttachmentService       — Attachment storage and retrieval
   └── EventService           — Internal SSE event delivery to g8ed
@@ -66,7 +67,7 @@ flowchart LR
 
 - **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
 - **g8es** -- Multi-purpose persistence layer:
-    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings.
+    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings, agent activity metadata.
     - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
     - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
     - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
@@ -186,24 +187,42 @@ Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TE
 
 `deliver_via_sse` chunk dispatch:
 
-| `StreamChunkFromModelType` | SSE event published | Side effect |
+| `StreamChunkFromModelType` | SSE event(s) published | Side effect |
 |-------------------|--------------------|--------------|
-| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `LLMStreamingContext.response_text` |
-| `THINKING` | none | `AgentStreamContext.set_thinking_started()` |
-| `THINKING_UPDATE` | none | — |
-| `THINKING_END` | none | `AgentStreamContext.set_thinking_ended()` |
-| `TOOL_CALL` | `LLM_TOOL_SEARCH_WEB_REQUESTED` (search_web only); `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` (check_port only); none for all other tools | — |
-| `TOOL_RESULT` | `LLM_TOOL_SEARCH_WEB_COMPLETED` or `LLM_TOOL_SEARCH_WEB_FAILED` (search_web only); always `OPERATOR_COMMAND_COMPLETED` (command result) or `LLM_CHAT_ITERATION_COMPLETED` (turn tick) | — |
-| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamContext` |
-| `COMPLETE` | none (triggers `LLM_CHAT_ITERATION_TEXT_COMPLETED` after loop) | Stores `token_usage` and `finish_reason` on `AgentStreamContext` |
-| `ERROR` | none | Raises appropriate G8eError subclass (e.g., BusinessLogicError, ExternalServiceError) |
-| `RETRY` | none | — |
+| `TEXT` | `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` | Appends to `AgentStreamState.response_text` |
+| `THINKING` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=START` on the first chunk of a thinking burst, `UPDATE` thereafter) | Sets `thinking_started=True` on `AgentStreamState` |
+| `THINKING_END` | `LLM_CHAT_ITERATION_THINKING_STARTED` (`action_type=END`) | Sets `thinking_ended=True` on `AgentStreamState` |
+| `RETRY` | `LLM_CHAT_ITERATION_RETRY` (carries `attempt`, `max_attempts`) | — |
+| `TOOL_CALL` | `LLM_CHAT_ITERATION_TOOL_CALL_STARTED` (always, for every tool); plus `LLM_TOOL_G8E_WEB_SEARCH_REQUESTED` (search_web only). `OPERATOR_NETWORK_PORT_CHECK_REQUESTED` is intentionally NOT emitted here: the TOOL_CALL chunk is yielded after the port check has already executed, so a sidecar REQUESTED event would arrive after `port_service`'s STARTED / COMPLETED / FAILED and would only create an orphaned UI indicator. The port-check indicator lifecycle is owned by STARTED / COMPLETED / FAILED (emitted from `port_service`). | — |
+| `TOOL_RESULT` | `LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED` (always, for every tool); `LLM_TOOL_G8E_WEB_SEARCH_COMPLETED` / `_FAILED` (search_web only); `LLM_CHAT_ITERATION_COMPLETED` (turn tick, increments `_turn`) | Awaits `on_iteration_text(response_text)` if provided and the buffer is non-whitespace, then clears `AgentStreamState.response_text` so the next iteration's text starts fresh |
+| `CITATIONS` | `LLM_CHAT_ITERATION_CITATIONS_RECEIVED` (only when `grounding_used=True`) | Stores `grounding_metadata` on `AgentStreamState` |
+| `COMPLETE` | none in-loop; `LLM_CHAT_ITERATION_TEXT_COMPLETED` is emitted once after the loop exits with the post-loop `response_text`, finish reason, citation metadata, and aggregate token usage | Stores `token_usage` and `finish_reason` on `AgentStreamState` |
+| `ERROR` | `LLM_CHAT_ITERATION_FAILED` (carries provider error message) | Sets internal `error_occurred=True` and breaks the loop; the post-loop `LLM_CHAT_ITERATION_TEXT_COMPLETED` is suppressed |
 
-`deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive.
+`deliver_via_sse` initializes `grounding_metadata` and `token_usage` to `None` before the loop to prevent `UnboundLocalError` if the stream is empty or ends before those chunks arrive. Wrapping `try/except` translates `asyncio.CancelledError` and any uncaught `Exception` raised by the generator into `LLM_CHAT_ITERATION_FAILED` events; `CancelledError` is re-raised after the event is published, all other exceptions are swallowed so the SSE channel remains usable.
 
-`THINKING`, `THINKING_UPDATE`, and `THINKING_END` chunks produce an SSE push (`LLM_CHAT_ITERATION_THINKING_RECEIVED`, etc.) when supported. They also update `AgentStreamContext` state.
+#### Per-Iteration AI Text Persistence
 
-`AgentStreamContext` accumulates `response_text` across all `TEXT` chunks for DB persistence after the stream completes. It is not involved in delivery — it is write-only during streaming.
+`response_text` is **not** a single buffer for the whole stream — it is a per-iteration accumulator. `deliver_via_sse` accepts an optional `on_iteration_text: Callable[[str], Awaitable[None]] | None` parameter. On every `TOOL_RESULT` chunk (i.e., at the end of each ReAct iteration), if the callback was supplied and `response_text.strip()` is non-empty, it is awaited with the accumulated pre-tool text **before** the buffer is cleared. Persistence failures inside the callback are caught and logged so they cannot break the live SSE stream.
+
+`ChatPipelineService._run_chat_impl` wires this callback into a closure that writes each iteration's commentary as a `MessageSender.AI_PRIMARY` row via `InvestigationService.add_chat_message`. The post-stream `_persist_ai_response` writes the final segment (still in `response_text`) as another `AI_PRIMARY` row, attaching the aggregate `grounding_metadata` and `token_usage` collected over the whole stream; it skips the write when `response_text` is whitespace-only (e.g., when the agent ends on a tool result with no closing narration).
+
+The resulting chronological shape of `conversation_history` for a multi-turn tool loop is:
+
+```
+user_chat
+  -> ai_primary (iteration 1 commentary)         <- via on_iteration_text
+  -> system     (operator.command.approval.*)    <- via approval_service._audit
+  -> user_terminal (operator command result)
+  -> ai_primary (iteration 2 commentary)         <- via on_iteration_text
+  -> system     (operator.command.approval.*)
+  -> user_terminal (operator command result)
+  -> ...
+  -> ai_primary (final answer, with token_usage + grounding_metadata)
+                                                  <- via _persist_ai_response
+```
+
+Intermediate rows carry `AIResponseMetadata(source=EVENT_SOURCE_AI_PRIMARY)` with no grounding or token-usage fields; only the final row carries the aggregate totals for the entire stream. Frontend restore (`chat-history.js`) renders each `AI_PRIMARY` row through the same `appendDirectHtmlResponse` path used for live chunks, so a restored conversation looks identical to the live stream.
 
 ### Error Handling
 
@@ -298,7 +317,7 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 The resulting `EnrichedInvestigationContext` carries:
 - `operator_documents` — list of live `OperatorDocument` records
 - `memory` — the attached `InvestigationMemory` (or `None`)
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user and AI messages (persisted via `add_chat_message` on each turn)
+- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. See [SSE Delivery Pipeline → Per-Iteration AI Text Persistence](#per-iteration-ai-text-persistence).
 
 For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
 
@@ -671,15 +690,15 @@ For complete schema DDL, exact table/column definitions, vault encryption detail
 
 ---
 
-## Sentinel: Data Protection & Threat Detection
+## Sentinel: Platform-Wide Protection
 
-Sentinel is a dual-purpose security system that performs data scrubbing and pre-execution threat detection in a single scan pass.
+Sentinel is the platform-wide protector that runs on both the AI Engine (`g8ee`) and the Operator (`g8eo`), providing multiple layers of security for the user's remote systems and data.
 
-- **g8ee Python scrubber** — scrubs sensitive data from user messages before they reach the AI (27 patterns: service tokens, cloud credentials, PII, connection strings, private keys).
-- **g8eo Go sentinel** — scrubs command output before it leaves the Operator, and performs pre-execution threat detection mapped to MITRE ATT&CK categories. Threat detection is Go-only.
-- **`sentinel_mode`** on an investigation controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary — never pass the raw bool to g8eo payloads. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for the conversion mapping.
+- **AI Engine Side (`g8ee`)** — Performs **ingress scrubbing** as a redundant layer of protection for all Operator data (command results, file contents) before it is transmitted to any model provider. It also scrubs sensitive data from user messages (27 patterns).
+- **Operator Side (`g8eo`)** — Performs **pre-execution threat detection** (46 MITRE ATT&CK-mapped categories) to block dangerous commands on the host, and **egress scrubbing** to ensure raw sensitive data never leaves the system of record.
+- **`sentinel_mode`** — Controls whether the AI reads from the scrubbed vault or the raw vault. The Python bool is converted to the wire string format at the pub/sub boundary. See [architecture/storage.md — Sentinel Mode and Vault Mode](../architecture/storage.md#sentinel-mode-and-vault-mode) for details.
 
-For the full pattern list, threat categories, and scrubbed-vs-preserved data breakdown, see [architecture/security.md — Sentinel Output Scrubbing](../architecture/security.md#sentinel-output-scrubbing) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo).
+Sentinel ensures that sensitive information is replaced with safe placeholders (e.g., `[AWS_KEY]`, `[EMAIL]`) across the entire pipeline, standing guard on both the operator and the application side.
 
 ---
 
@@ -980,20 +999,29 @@ The following sections are read from the `settings` map inside the settings docu
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `command_gen_enabled` | `true` | Master switch for Tribunal command generation |
-| `command_gen_passes` | `3` | Number of independent generation passes (1–10) |
+| `command_gen_passes` | `5` | Number of independent generation passes (1–10) |
 | `command_gen_verifier` | `true` | Enable the SLM verifier pass |
 
-Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature` (resolved via `_temperature_for_pass` → `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Hardcoding per-member temperatures is incompatible with providers that require fixed temperatures (e.g. Gemini 3+ requires 1.0). Per-member diversity comes from the distinct Axiom/Concord/Variance personas in `shared/constants/agents.json`, not from sampling temperature.
+The Tribunal implements a four-stage pipeline for producing safe, valid shell commands:
 
-**Model resolution:** The Tribunal uses the assistant model. If `assistant_model` is not configured, it falls back to `primary_model`, then to the provider's default model. A concrete model string is always resolved before the pipeline starts.
+1.  **Generation**: N independent parallel passes using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
+2.  **Voting**: Uniform per-member voting over normalised candidates to reach consensus, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
+3.  **Verification**: Optional verifier pass that evaluates the winner and can suggest a safer revision.
+4.  **Safety Enforcement**: Final structural and security validation before returning the command.
 
-**Forbidden patterns:** Tribunal prompts dynamically include the canonical `FORBIDDEN_COMMAND_PATTERNS` constant from `app.constants.settings.py`. This ensures that forbidden command patterns (e.g., `sudo`, `su `, `pkexec`, `doas`, etc.) are always reflected in Tribunal prompts without hardcoding. The `_format_forbidden_patterns_message()` helper generates this message dynamically.
+**Enhanced Normalization & Syntax Validation:**
+Tribunal uses robust normalization to extract commands from LLM responses, handling markdown fences, common conversational prefixes (e.g., "Command:"), and trailing explanatory text. It validates shell syntax using `shlex` to ensure balanced quotes and escapes, preventing malformed commands from reaching execution.
 
-**Command constraints:** Tribunal prompts can include command whitelist/blacklist constraints when passed to `generate_command()`. These constraints are formatted by `_format_command_constraints_message()` and injected into prompts via the `{command_constraints_message}` placeholder. The `generate_command()` function accepts these optional parameters:
-- `whitelisting_enabled` (bool): Whether command whitelisting is active
-- `blacklisting_enabled` (bool): Whether command blacklisting is active
-- `whitelisted_commands` (list[str] | None): List of whitelisted command patterns
-- `blacklisted_commands` (list[dict[str, str]] | None): List of blacklisted command patterns with metadata
+**Structured Output:**
+When supported by the underlying model, Tribunal uses JSON schema structured output to enforce the response format at the API level, minimizing reliance on prompt instructions and reducing parsing errors.
+
+**Security Constraints:**
+- **Forbidden Patterns**: Always blocks privilege escalation wrappers (`sudo`, `su`, etc.).
+- **Blacklist/Whitelist**: Dynamically enforces environment-specific command constraints.
+- **Revision Safety**: The verifier's suggested revisions are strictly validated against all safety constraints before acceptance.
+- **Final Guard**: A final safety check is performed on the resulting command before completion, ensuring no unsafe command ever leaves the Tribunal.
+
+Tribunal passes do not use member-specific temperatures. All passes use the configured model's `default_temperature`. Diversity comes from the distinct personas in `shared/constants/agents.json`.
 
 The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_settings.command_validation` and passes them to `generate_command()`, ensuring Tribunal is aware of downstream command validation rules configured per-user.
 

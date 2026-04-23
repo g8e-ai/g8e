@@ -1,0 +1,42 @@
+<!-- Inline Unbind All Operators Overlay for Operator Deployment Section -->
+<div class="operator-unbind-all-overlay" id="operator-unbind-all-overlay">
+    <div class="operator-unbind-all-header">
+        <div class="operator-unbind-all-header-content">
+            <span class="material-symbols-outlined operator-unbind-all-icon">link_off</span>
+            <div class="operator-unbind-all-title-section">
+                <h3 class="operator-unbind-all-title">Unbind All Operators</h3>
+                <span class="operator-unbind-all-count" id="operator-unbind-all-count"></span>
+            </div>
+        </div>
+        <button class="operator-unbind-all-close-btn" id="operator-unbind-all-close-btn">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+
+    <div class="operator-unbind-all-description">
+        The following operators will be unbound from your current web session. You will no longer be able to interact with them until they are rebound.
+    </div>
+
+    <div class="operator-unbind-all-operators-container">
+        <div class="operator-unbind-all-operators-list" id="operator-unbind-all-operators-list">
+            <!-- Operator items inserted here -->
+        </div>
+    </div>
+
+    <div class="operator-unbind-all-actions">
+        <button class="operator-unbind-all-action-btn cancel-btn" id="operator-unbind-all-cancel-btn">
+            <span class="material-symbols-outlined">cancel</span>
+            <span>Cancel</span>
+        </button>
+        <button class="operator-unbind-all-action-btn confirm-btn" id="operator-unbind-all-confirm-btn">
+            <span class="material-symbols-outlined">link_off</span>
+            <span>Unbind All</span>
+        </button>
+    </div>
+
+    <div class="operator-unbind-all-processing initially-hidden" id="operator-unbind-all-processing">
+        <div class="spinner"></div>
+        <span id="operator-unbind-all-processing-label">Unbinding operators...</span>
+    </div>
+    <div class="operator-unbind-all-actions-feedback" id="operator-unbind-all-feedback"></div>
+</div>

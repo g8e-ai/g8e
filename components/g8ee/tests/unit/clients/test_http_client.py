@@ -364,33 +364,33 @@ class TestG8eHTTPClientPrepareRequest:
     """_prepare_request must build correct headers from config and context."""
 
     async def test_prepare_request_injects_request_id(self, client):
-        _url, headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert G8eHeaders.EXECUTION_ID in headers
 
     async def test_prepare_request_never_injects_component_id_header(self, client):
-        _url, headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert "X-G8E-Component-ID" not in headers
 
     async def test_prepare_request_auth_token_formatted_as_bearer(self, authed_client):
-        _url, headers, _kw, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert headers["Authorization"] == "Bearer test-token"
 
     async def test_prepare_request_api_key_set_in_header(self, authed_client):
-        _url, headers, _kw, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, _trace = await authed_client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert headers[HTTP_API_KEY_HEADER] == "test-api-key"
 
     async def test_prepare_request_joins_base_url_with_path(self, client):
-        url, _headers, _kw, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        url, _headers, _trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert url == "https://g8ed/api/health"
 
     async def test_prepare_request_caller_headers_override_defaults(self, client):
-        _url, headers, _kw, _trace = await client._prepare_request(
+        _url, headers, _trace = await client._prepare_request(
             "GET", "/api/health", headers={"X-Custom": "override"}, context=None
         )
         assert headers["X-Custom"] == "override"
 
     async def test_prepare_request_trace_id_propagated_to_headers(self, client):
-        _url, headers, _kw, trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
+        _url, headers, trace = await client._prepare_request("GET", "/api/health", headers={}, context=None)
         assert headers[G8eHeaders.EXECUTION_ID] == trace.execution_id
 
     async def test_prepare_request_g8e_context_headers_propagated(self, client):
@@ -401,7 +401,7 @@ class TestG8eHTTPClientPrepareRequest:
             case_id="case-456",
             investigation_id="inv-789",
         )
-        _url, headers, _kw, _trace = await client._prepare_request(
+        _url, headers, _trace = await client._prepare_request(
             "POST", "/api/internal/chat/stream", headers={}, context=ctx
         )
         assert headers[G8eHeaders.WEB_SESSION_ID] == "sess-abc"

@@ -62,10 +62,10 @@ describe('OperatorService', () => {
     describe('calculateSlotUsage', () => {
         it('should correctly count active and bound operators', () => {
             const operators = [
-                { operator_id: 'op-1', status: OperatorStatus.ACTIVE },
-                { operator_id: 'op-2', status: OperatorStatus.BOUND },
-                { operator_id: 'op-3', status: OperatorStatus.OFFLINE },
-                { operator_id: 'op-4', status: OperatorStatus.TERMINATED },
+                { id: 'op-1', status: OperatorStatus.ACTIVE },
+                { id: 'op-2', status: OperatorStatus.BOUND },
+                { id: 'op-3', status: OperatorStatus.OFFLINE },
+                { id: 'op-4', status: OperatorStatus.TERMINATED },
             ];
 
             const result = service.calculateSlotUsage(operators);
@@ -78,7 +78,7 @@ describe('OperatorService', () => {
     describe('getOperator', () => {
         it('should return OperatorDocument if found via Data service', async () => {
             const opDoc = new OperatorDocument({ 
-                operator_id: 'op-1', 
+                id: 'op-1', 
                 user_id: 'u-1', 
                 status: OperatorStatus.ACTIVE 
             });
@@ -94,7 +94,7 @@ describe('OperatorService', () => {
     describe('getOperatorWithSessionContext', () => {
         it('should return combined context for operator and its sessions', async () => {
             const operator = new OperatorDocument({ 
-                operator_id: 'op-1', 
+                id: 'op-1', 
                 user_id: 'u-1',
                 status: OperatorStatus.ACTIVE,
                 operator_session_id: 'os-1', 
@@ -111,7 +111,7 @@ describe('OperatorService', () => {
             const result = await service.getOperatorWithSessionContext('op-1');
 
             expect(result).toBeInstanceOf(OperatorWithSessionContext);
-            expect(result.operator_id).toBe('op-1');
+            expect(result.id).toBe('op-1');
             expect(result.operator_session_id).toBe('os-1');
             expect(result.bound_web_session_id).toBe('ws-1');
         });
@@ -119,7 +119,7 @@ describe('OperatorService', () => {
 
     describe('Lifecycle & Relay Orchestration', () => {
         it('should relay stop command to g8ee', async () => {
-            const operator = new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE });
+            const operator = new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE });
             const context = OperatorWithSessionContext.create(operator);
             
             vi.spyOn(service.relay, 'relayStopCommandToG8ee').mockResolvedValue(true);
@@ -134,8 +134,8 @@ describe('OperatorService', () => {
     describe('getUserOperators', () => {
         it('should return OperatorSlot projections for the panel list', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
-                new OperatorDocument({ operator_id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 
@@ -168,8 +168,8 @@ describe('OperatorService', () => {
             const userId = 'u-1';
             const webSessionId = 'ws-new';
             const operators = [
-                { operator_id: 'op-1', status: OperatorStatus.BOUND, bound_web_session_id: 'ws-old' },
-                { operator_id: 'op-2', status: OperatorStatus.ACTIVE }
+                { id: 'op-1', status: OperatorStatus.BOUND, bound_web_session_id: 'ws-old' },
+                { id: 'op-2', status: OperatorStatus.ACTIVE }
             ];
             
             vi.spyOn(service, 'getUserVisibleOperatorStats').mockResolvedValue({ operators });
@@ -191,7 +191,7 @@ describe('OperatorService', () => {
     describe('resetOperator', () => {
         it('should delete and recreate operator document', async () => {
             const existing = {
-                operator_id: 'op-1',
+                id: 'op-1',
                 user_id: 'u-1',
                 organization_id: 'org-1',
                 name: 'op-1',
@@ -212,7 +212,7 @@ describe('OperatorService', () => {
     describe('terminateOperator', () => {
         it('should delete operator document without recreating', async () => {
             const existing = {
-                operator_id: 'op-1',
+                id: 'op-1',
                 user_id: 'u-1',
                 organization_id: 'org-1',
                 name: 'op-1',
@@ -225,7 +225,7 @@ describe('OperatorService', () => {
             const result = await service.terminateOperator('op-1');
 
             expect(result.success).toBe(true);
-            expect(result.operator_id).toBe('op-1');
+            expect(result.id).toBe('op-1');
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
         });
@@ -244,7 +244,7 @@ describe('OperatorService', () => {
     describe('getOperatorFresh', () => {
         it('should return fresh OperatorDocument via Data service', async () => {
             const opDoc = new OperatorDocument({ 
-                operator_id: 'op-1', 
+                id: 'op-1', 
                 user_id: 'u-1', 
                 status: OperatorStatus.ACTIVE 
             });
@@ -260,7 +260,7 @@ describe('OperatorService', () => {
     describe('getOperatorStatusInfo', () => {
         it('should return OperatorStatusInfo if operator exists', async () => {
             const opDoc = new OperatorDocument({ 
-                operator_id: 'op-1', 
+                id: 'op-1', 
                 user_id: 'u-1', 
                 status: OperatorStatus.ACTIVE 
             });
@@ -269,7 +269,7 @@ describe('OperatorService', () => {
             const result = await service.getOperatorStatusInfo('op-1');
 
             expect(result).not.toBeNull();
-            expect(result.operator_id).toBe('op-1');
+            expect(result.id).toBe('op-1');
             expect(result.status).toBe(OperatorStatus.ACTIVE);
         });
 
@@ -283,23 +283,23 @@ describe('OperatorService', () => {
     describe('getOperatorByUserId', () => {
         it('should return active/bound operator first', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE }),
-                new OperatorDocument({ operator_id: 'op-active', user_id: 'u-1', status: OperatorStatus.ACTIVE })
+                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE }),
+                new OperatorDocument({ id: 'op-active', user_id: 'u-1', status: OperatorStatus.ACTIVE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 
             const result = await service.getOperatorByUserId('u-1');
-            expect(result.operator_id).toBe('op-active');
+            expect(result.id).toBe('op-active');
         });
 
         it('should return available operator if no active/bound', async () => {
             const operators = [
-                new OperatorDocument({ operator_id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
+                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 
             const result = await service.getOperatorByUserId('u-1');
-            expect(result.operator_id).toBe('op-avail');
+            expect(result.id).toBe('op-avail');
         });
 
         it('should return null if no matches', async () => {
@@ -310,7 +310,7 @@ describe('OperatorService', () => {
     });
 
     describe('Relay Methods', () => {
-        const g8eContext = { operator_id: 'op-1' };
+        const g8eContext = { id: 'op-1' };
 
         it('should delegate deregisterOperatorSessionInG8ee to relay subservice', async () => {
             vi.spyOn(service.relay, 'deregisterOperatorSessionInG8ee').mockResolvedValue(true);

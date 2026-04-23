@@ -20,6 +20,8 @@
     "settings": "settings",
     "console_audit": "console_audit",
     "bound_sessions": "bound_sessions",
-    "passkey_challenges": "passkey_challenges"
+    "passkey_challenges": "passkey_challenges",
+    "tribunal_commands": "tribunal_commands",
+    "agent_activity_metadata": "agent_activity_metadata"
   }
 }

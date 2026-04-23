@@ -13,7 +13,11 @@
 
 import ipaddress
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from app.llm.llm_types import Schema
 
 
 @dataclass(frozen=True)
@@ -48,12 +52,12 @@ class ModelOverrideResolver:
         return self.primary_model if needs_primary else self.assistant_model
 
 
-def schema_to_dict(schema) -> dict:
+def schema_to_dict(schema: "Schema | dict[str, Any]") -> dict[str, Any]:
     """Recursively convert a ToolDeclaration parameter schema to a plain dictionary."""
     if isinstance(schema, dict):
         return schema
 
-    result = {}
+    result: dict[str, Any] = {}
     if hasattr(schema, "type") and schema.type is not None:
         t = schema.type
         result["type"] = t.value.lower() if hasattr(t, "value") else str(t).lower()

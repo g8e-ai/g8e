@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { getInternalHttpClient } from '../clients/internal_http_client.js';
 import { ApiPaths } from '../../constants/api_paths.js';
 import {
@@ -48,7 +49,7 @@ export class OperatorRelayService {
         
         logger.info('[OPERATOR-RELAY] Relaying stop command to g8ee', {
             operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...'
+            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id)
         });
 
         const request = new StopOperatorRequest({
@@ -74,7 +75,7 @@ export class OperatorRelayService {
 
         logger.info('[OPERATOR-RELAY] Deregistering operator session heartbeat subscription in g8ee', {
             operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id?.substring(0, 12) + '...',
+            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id),
         });
 
         const request = new OperatorSessionRegistrationRequest({
@@ -121,7 +122,7 @@ export class OperatorRelayService {
 
         logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in g8ee', {
             operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id?.substring(0, 20) + '...',
+            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id),
         });
 
         // Use the context fields for the request

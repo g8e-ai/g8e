@@ -146,6 +146,41 @@ class TestCacheAsideService:
         cached = await mock_kv_cache_client.get_json(key)
         assert cached is None
 
+    async def test_update_document_invalidates_query_cache_for_collection(self, service, mock_kv_cache_client):
+        """Regression: a single-doc write must also invalidate the shared
+        `g8e:cache:query:<collection>:*` cache so downstream readers (e.g.
+        g8ed's HeartbeatMonitorService) never serve a stale snapshot."""
+        query_params = {"filters": []}
+        query_str = json.dumps(query_params, sort_keys=True)
+        filter_hash = hashlib.md5(query_str.encode()).hexdigest()
+        query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
+        mock_kv_cache_client.seed_json(query_key, [{"id": "user-5", "last_heartbeat": "stale"}])
+
+        await service.update_document(DB_COLLECTION_USERS, "user-5", {"last_heartbeat": "fresh"})
+
+        assert await mock_kv_cache_client.get_json(query_key) is None
+
+    async def test_create_document_invalidates_query_cache_for_collection(self, service, mock_kv_cache_client, mock_db_client):
+        mock_db_client.get_document.return_value = DocumentResult(success=True, data=None)
+        query_params = {"filters": []}
+        filter_hash = hashlib.md5(json.dumps(query_params, sort_keys=True).encode()).hexdigest()
+        query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
+        mock_kv_cache_client.seed_json(query_key, [{"id": "other"}])
+
+        await service.create_document(DB_COLLECTION_USERS, "user-new", {"id": "user-new"})
+
+        assert await mock_kv_cache_client.get_json(query_key) is None
+
+    async def test_delete_document_invalidates_query_cache_for_collection(self, service, mock_kv_cache_client):
+        query_params = {"filters": []}
+        filter_hash = hashlib.md5(json.dumps(query_params, sort_keys=True).encode()).hexdigest()
+        query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
+        mock_kv_cache_client.seed_json(query_key, [{"id": "user-5"}])
+
+        await service.delete_document(DB_COLLECTION_USERS, "user-5")
+
+        assert await mock_kv_cache_client.get_json(query_key) is None
+
     async def test_update_document_db_failure_raises_database_error(self, service, mock_db_client):
         mock_db_client.update_document.side_effect = None
         mock_db_client.update_document.return_value = CacheOperationResult(

@@ -16,6 +16,7 @@ import re
 
 import app.llm.llm_types as types
 from app.constants.message_sender import MessageSender
+from app.errors import OllamaEmptyResponseError
 from app.llm import get_llm_provider, Role
 from app.llm.structured import parse_structured_response
 from app.utils.agent_persona_loader import get_agent_persona
@@ -26,6 +27,25 @@ from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.services.protocols import MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
+
+# Codex template scaffolding - holds the response format structure
+# separate from the persona voice in agents.json
+
+CODEX_ANALYSIS_TEMPLATE = """\
+Analyze the conversation above and populate the memory fields.
+
+<output_format>
+Return a JSON object with these fields:
+- "investigation_summary": high-level summary (no hostnames/IPs)
+- "communication_preferences": how the user prefers to communicate
+- "technical_background": user's technical experience and skills
+- "response_style": how they want information presented
+- "problem_solving_approach": how they debug and investigate
+- "interaction_style": meta-preferences about questions and context
+
+All fields are optional but try to populate each one.
+</output_format>
+"""
 
 CONVERSATION_HISTORY_LIMIT = 20
 FALLBACK_TEXT_LIMIT = 2000
@@ -130,6 +150,7 @@ class MemoryGenerationService:
             return
 
         provider = get_llm_provider(settings.llm, is_assistant=True)
+
         config = AIGenerationConfigBuilder.build_assistant_settings(
             model=assistant_model,
             max_tokens=None,
@@ -137,8 +158,6 @@ class MemoryGenerationService:
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
         try:
-            from app.errors import OllamaEmptyResponseError
-
             response = await provider.generate_content_assistant(
                 model=assistant_model,
                 contents=contents,
@@ -195,7 +214,7 @@ class MemoryGenerationService:
         conversation_history: list[ConversationHistoryMessage],
         memory: InvestigationMemory,
     ) -> list[types.Content]:
-        contents = []
+        contents: list[types.Content] = []
         
         # Add existing memory context first
         memory_context = (
@@ -235,7 +254,7 @@ class MemoryGenerationService:
         # Add the analysis request
         contents.append(types.Content(
             role=Role.USER,
-            parts=[types.Part.from_text(text="Analyze the conversation above and populate the memory fields. Return a JSON object with these fields:\n- \"investigation_summary\": high-level summary (no hostnames/IPs)\n- \"communication_preferences\": how the user prefers to communicate\n- \"technical_background\": user's technical experience and skills\n- \"response_style\": how they want information presented\n- \"problem_solving_approach\": how they debug and investigate\n- \"interaction_style\": meta-preferences about questions and context\nAll fields are optional but try to populate each one.")],
+            parts=[types.Part.from_text(text=CODEX_ANALYSIS_TEMPLATE)],
         ))
         return contents
 

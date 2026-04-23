@@ -5,229 +5,245 @@
     "prefix": "g8e.v1",
     "rule": "Wire value = {prefix}.{dot-joined path from domain key to leaf}. Every leaf is a past-tense action or state."
   },
-
   "app": {
     "case": {
-      "created":   "g8e.v1.app.case.created",
-      "updated":   "g8e.v1.app.case.updated",
-      "assigned":  "g8e.v1.app.case.assigned",
+      "created": "g8e.v1.app.case.created",
+      "updated": "g8e.v1.app.case.updated",
+      "assigned": "g8e.v1.app.case.assigned",
       "escalated": "g8e.v1.app.case.escalated",
       "resolved": "g8e.v1.app.case.resolved",
-      "closed":    "g8e.v1.app.case.closed",
-      "selected":  "g8e.v1.app.case.selected",
-      "cleared":   "g8e.v1.app.case.cleared",
-      "switched":  "g8e.v1.app.case.switched",
-      "creation":  { "requested": "g8e.v1.app.case.creation.requested" },
-      "update":    { "requested": "g8e.v1.app.case.update.requested" }
+      "closed": "g8e.v1.app.case.closed",
+      "selected": "g8e.v1.app.case.selected",
+      "cleared": "g8e.v1.app.case.cleared",
+      "switched": "g8e.v1.app.case.switched",
+      "creation": {
+        "requested": "g8e.v1.app.case.creation.requested"
+      },
+      "update": {
+        "requested": "g8e.v1.app.case.update.requested"
+      }
     },
     "task": {
-      "created":   "g8e.v1.app.task.created",
-      "updated":   "g8e.v1.app.task.updated",
-      "assigned":  "g8e.v1.app.task.assigned",
-      "started":   "g8e.v1.app.task.started",
+      "created": "g8e.v1.app.task.created",
+      "updated": "g8e.v1.app.task.updated",
+      "assigned": "g8e.v1.app.task.assigned",
+      "started": "g8e.v1.app.task.started",
       "completed": "g8e.v1.app.task.completed",
-      "failed":    "g8e.v1.app.task.failed"
+      "failed": "g8e.v1.app.task.failed"
     },
     "investigation": {
-      "created":   "g8e.v1.app.investigation.created",
-      "updated":   "g8e.v1.app.investigation.updated",
-      "loaded":    "g8e.v1.app.investigation.loaded",
+      "created": "g8e.v1.app.investigation.created",
+      "updated": "g8e.v1.app.investigation.updated",
+      "loaded": "g8e.v1.app.investigation.loaded",
       "requested": "g8e.v1.app.investigation.requested",
-      "started":   "g8e.v1.app.investigation.started",
-      "closed":    "g8e.v1.app.investigation.closed",
+      "started": "g8e.v1.app.investigation.started",
+      "closed": "g8e.v1.app.investigation.closed",
       "escalated": "g8e.v1.app.investigation.escalated",
       "list": {
         "requested": "g8e.v1.app.investigation.list.requested",
-        "received":  "g8e.v1.app.investigation.list.received",
+        "received": "g8e.v1.app.investigation.list.received",
         "completed": "g8e.v1.app.investigation.list.completed",
-        "failed":    "g8e.v1.app.investigation.list.failed"
+        "failed": "g8e.v1.app.investigation.list.failed"
       },
       "status": {
         "updated": {
-          "open":      "g8e.v1.app.investigation.status.updated.open",
-          "closed":    "g8e.v1.app.investigation.status.updated.closed",
+          "open": "g8e.v1.app.investigation.status.updated.open",
+          "closed": "g8e.v1.app.investigation.status.updated.closed",
           "escalated": "g8e.v1.app.investigation.status.updated.escalated",
-          "resolved":  "g8e.v1.app.investigation.status.updated.resolved"
+          "resolved": "g8e.v1.app.investigation.status.updated.resolved"
         }
       },
       "chat": {
         "message": {
-          "user":   "g8e.v1.app.investigation.chat.message.user",
-          "ai":     "g8e.v1.app.investigation.chat.message.ai",
+          "user": "g8e.v1.app.investigation.chat.message.user",
+          "ai": "g8e.v1.app.investigation.chat.message.ai",
           "system": "g8e.v1.app.investigation.chat.message.system"
         }
       }
     }
   },
-
   "operator": {
     "heartbeat": {
-      "sent":      "g8e.v1.operator.heartbeat.sent",
+      "sent": "g8e.v1.operator.heartbeat.sent",
       "requested": "g8e.v1.operator.heartbeat.requested",
-      "received":  "g8e.v1.operator.heartbeat.received",
-      "missed":    "g8e.v1.operator.heartbeat.missed"
+      "received": "g8e.v1.operator.heartbeat.received",
+      "missed": "g8e.v1.operator.heartbeat.missed"
     },
     "shutdown": {
-      "requested":    "g8e.v1.operator.shutdown.requested",
+      "requested": "g8e.v1.operator.shutdown.requested",
       "acknowledged": "g8e.v1.operator.shutdown.acknowledged"
     },
     "panel": {
-      "list": { "updated": "g8e.v1.operator.panel.list.updated" }
+      "list": {
+        "updated": "g8e.v1.operator.panel.list.updated"
+      }
     },
     "status": {
       "updated": {
-        "active":      "g8e.v1.operator.status.updated.active",
-        "available":   "g8e.v1.operator.status.updated.available",
+        "active": "g8e.v1.operator.status.updated.active",
+        "available": "g8e.v1.operator.status.updated.available",
         "unavailable": "g8e.v1.operator.status.updated.unavailable",
-        "bound":       "g8e.v1.operator.status.updated.bound",
-        "offline":     "g8e.v1.operator.status.updated.offline",
-        "stale":       "g8e.v1.operator.status.updated.stale",
-        "stopped":     "g8e.v1.operator.status.updated.stopped",
-        "terminated":  "g8e.v1.operator.status.updated.terminated"
+        "bound": "g8e.v1.operator.status.updated.bound",
+        "offline": "g8e.v1.operator.status.updated.offline",
+        "stale": "g8e.v1.operator.status.updated.stale",
+        "stopped": "g8e.v1.operator.status.updated.stopped",
+        "terminated": "g8e.v1.operator.status.updated.terminated"
       }
     },
     "api": {
-      "key": { "refreshed": "g8e.v1.operator.api.key.refreshed" }
+      "key": {
+        "refreshed": "g8e.v1.operator.api.key.refreshed"
+      }
     },
     "device": {
       "registered": "g8e.v1.operator.device.registered"
     },
     "command": {
       "requested": "g8e.v1.operator.command.requested",
-      "started":   "g8e.v1.operator.command.started",
+      "started": "g8e.v1.operator.command.started",
       "completed": "g8e.v1.operator.command.completed",
-      "failed":    "g8e.v1.operator.command.failed",
+      "failed": "g8e.v1.operator.command.failed",
       "cancelled": "g8e.v1.operator.command.cancelled",
       "execution": "g8e.v1.operator.command.execution",
-      "result":    "g8e.v1.operator.command.result",
-      "output":    { "received": "g8e.v1.operator.command.output.received" },
+      "result": "g8e.v1.operator.command.result",
+      "output": {
+        "received": "g8e.v1.operator.command.output.received"
+      },
       "status": {
         "updated": {
-          "queued":    "g8e.v1.operator.command.status.updated.queued",
-          "running":   "g8e.v1.operator.command.status.updated.running",
+          "queued": "g8e.v1.operator.command.status.updated.queued",
+          "running": "g8e.v1.operator.command.status.updated.running",
           "completed": "g8e.v1.operator.command.status.updated.completed",
-          "failed":    "g8e.v1.operator.command.status.updated.failed",
+          "failed": "g8e.v1.operator.command.status.updated.failed",
           "cancelled": "g8e.v1.operator.command.status.updated.cancelled"
         }
       },
       "cancel": {
-        "requested":    "g8e.v1.operator.command.cancel.requested",
+        "requested": "g8e.v1.operator.command.cancel.requested",
         "acknowledged": "g8e.v1.operator.command.cancel.acknowledged",
-        "failed":       "g8e.v1.operator.command.cancel.failed"
+        "failed": "g8e.v1.operator.command.cancel.failed"
       },
       "approval": {
         "requested": "g8e.v1.operator.command.approval.requested",
-        "granted":   "g8e.v1.operator.command.approval.granted",
-        "rejected":  "g8e.v1.operator.command.approval.rejected",
-        "preparing":  "g8e.v1.operator.command.approval.preparing"
+        "granted": "g8e.v1.operator.command.approval.granted",
+        "rejected": "g8e.v1.operator.command.approval.rejected",
+        "preparing": "g8e.v1.operator.command.approval.preparing"
       }
     },
     "file": {
       "edit": {
         "requested": "g8e.v1.operator.file.edit.requested",
-        "started":   "g8e.v1.operator.file.edit.started",
+        "started": "g8e.v1.operator.file.edit.started",
         "completed": "g8e.v1.operator.file.edit.completed",
-        "failed":    "g8e.v1.operator.file.edit.failed",
-        "timeout":   "g8e.v1.operator.file.edit.timeout",
+        "failed": "g8e.v1.operator.file.edit.failed",
+        "timeout": "g8e.v1.operator.file.edit.timeout",
         "approval": {
           "requested": "g8e.v1.operator.file.edit.approval.requested",
-          "granted":   "g8e.v1.operator.file.edit.approval.granted",
-          "rejected":  "g8e.v1.operator.file.edit.approval.rejected",
-          "feedback":  "g8e.v1.operator.file.edit.approval.feedback"
+          "granted": "g8e.v1.operator.file.edit.approval.granted",
+          "rejected": "g8e.v1.operator.file.edit.approval.rejected",
+          "feedback": "g8e.v1.operator.file.edit.approval.feedback"
         }
       },
       "history": {
         "fetch": {
-          "started":   "g8e.v1.operator.file.history.fetch.started",
+          "started": "g8e.v1.operator.file.history.fetch.started",
           "requested": "g8e.v1.operator.file.history.fetch.requested",
-          "received":  "g8e.v1.operator.file.history.fetch.received",
+          "received": "g8e.v1.operator.file.history.fetch.received",
           "completed": "g8e.v1.operator.file.history.fetch.completed",
-          "failed":    "g8e.v1.operator.file.history.fetch.failed"
+          "failed": "g8e.v1.operator.file.history.fetch.failed"
         }
       },
       "diff": {
         "fetch": {
-          "started":   "g8e.v1.operator.file.diff.fetch.started",
+          "started": "g8e.v1.operator.file.diff.fetch.started",
           "requested": "g8e.v1.operator.file.diff.fetch.requested",
-          "received":  "g8e.v1.operator.file.diff.fetch.received",
+          "received": "g8e.v1.operator.file.diff.fetch.received",
           "completed": "g8e.v1.operator.file.diff.fetch.completed",
-          "failed":    "g8e.v1.operator.file.diff.fetch.failed"
+          "failed": "g8e.v1.operator.file.diff.fetch.failed"
         }
       },
       "restore": {
         "requested": "g8e.v1.operator.file.restore.requested",
-        "received":  "g8e.v1.operator.file.restore.received",
+        "received": "g8e.v1.operator.file.restore.received",
         "completed": "g8e.v1.operator.file.restore.completed",
-        "failed":    "g8e.v1.operator.file.restore.failed"
+        "failed": "g8e.v1.operator.file.restore.failed"
       }
     },
     "filesystem": {
       "list": {
-        "started":   "g8e.v1.operator.filesystem.list.started",
+        "started": "g8e.v1.operator.filesystem.list.started",
         "requested": "g8e.v1.operator.filesystem.list.requested",
-        "received":  "g8e.v1.operator.filesystem.list.received",
+        "received": "g8e.v1.operator.filesystem.list.received",
         "completed": "g8e.v1.operator.filesystem.list.completed",
-        "failed":    "g8e.v1.operator.filesystem.list.failed"
+        "failed": "g8e.v1.operator.filesystem.list.failed"
       },
       "read": {
-        "started":   "g8e.v1.operator.filesystem.read.started",
+        "started": "g8e.v1.operator.filesystem.read.started",
         "requested": "g8e.v1.operator.filesystem.read.requested",
-        "received":  "g8e.v1.operator.filesystem.read.received",
+        "received": "g8e.v1.operator.filesystem.read.received",
         "completed": "g8e.v1.operator.filesystem.read.completed",
-        "failed":    "g8e.v1.operator.filesystem.read.failed"
+        "failed": "g8e.v1.operator.filesystem.read.failed"
       }
     },
     "logs": {
       "fetch": {
         "requested": "g8e.v1.operator.logs.fetch.requested",
-        "received":  "g8e.v1.operator.logs.fetch.received",
+        "received": "g8e.v1.operator.logs.fetch.received",
         "completed": "g8e.v1.operator.logs.fetch.completed",
-        "failed":    "g8e.v1.operator.logs.fetch.failed"
+        "failed": "g8e.v1.operator.logs.fetch.failed"
       }
     },
     "history": {
       "fetch": {
         "requested": "g8e.v1.operator.history.fetch.requested",
-        "received":  "g8e.v1.operator.history.fetch.received",
+        "received": "g8e.v1.operator.history.fetch.received",
         "completed": "g8e.v1.operator.history.fetch.completed",
-        "failed":    "g8e.v1.operator.history.fetch.failed"
+        "failed": "g8e.v1.operator.history.fetch.failed"
       }
     },
     "intent": {
-      "granted":  "g8e.v1.operator.intent.granted",
-      "denied":   "g8e.v1.operator.intent.denied",
-      "revoked":  "g8e.v1.operator.intent.revoked",
+      "granted": "g8e.v1.operator.intent.granted",
+      "denied": "g8e.v1.operator.intent.denied",
+      "revoked": "g8e.v1.operator.intent.revoked",
       "approval": {
         "requested": "g8e.v1.operator.intent.approval.requested",
-        "granted":   "g8e.v1.operator.intent.approval.granted",
-        "rejected":  "g8e.v1.operator.intent.approval.rejected"
+        "granted": "g8e.v1.operator.intent.approval.granted",
+        "rejected": "g8e.v1.operator.intent.approval.rejected"
       }
     },
     "network": {
       "ping": {
         "requested": "g8e.v1.operator.network.ping.requested",
-        "received":  "g8e.v1.operator.network.ping.received",
+        "received": "g8e.v1.operator.network.ping.received",
         "completed": "g8e.v1.operator.network.ping.completed",
-        "failed":    "g8e.v1.operator.network.ping.failed"
+        "failed": "g8e.v1.operator.network.ping.failed"
       },
       "port": {
         "check": {
           "requested": "g8e.v1.operator.network.port.check.requested",
-          "started":   "g8e.v1.operator.network.port.check.started",
-          "received":  "g8e.v1.operator.network.port.check.received",
+          "started": "g8e.v1.operator.network.port.check.started",
+          "received": "g8e.v1.operator.network.port.check.received",
           "completed": "g8e.v1.operator.network.port.check.completed",
-          "failed":    "g8e.v1.operator.network.port.check.failed"
+          "failed": "g8e.v1.operator.network.port.check.failed"
         }
       }
     },
     "audit": {
-      "user":    { "recorded": "g8e.v1.operator.audit.user.recorded" },
-      "ai":      { "recorded": "g8e.v1.operator.audit.ai.recorded" },
-      "command": { "recorded": "g8e.v1.operator.audit.command.recorded" },
+      "user": {
+        "recorded": "g8e.v1.operator.audit.user.recorded"
+      },
+      "ai": {
+        "recorded": "g8e.v1.operator.audit.ai.recorded"
+      },
+      "command": {
+        "recorded": "g8e.v1.operator.audit.command.recorded"
+      },
       "direct": {
         "command": {
           "recorded": "g8e.v1.operator.audit.direct.command.recorded",
-          "result":   { "recorded": "g8e.v1.operator.audit.direct.command.result.recorded" }
+          "result": {
+            "recorded": "g8e.v1.operator.audit.direct.command.result.recorded"
+          }
         }
       }
     },
@@ -235,88 +251,101 @@
       "requested": "g8e.v1.operator.bootstrap.requested",
       "received": "g8e.v1.operator.bootstrap.received",
       "completed": "g8e.v1.operator.bootstrap.completed",
-      "failed":    "g8e.v1.operator.bootstrap.failed",
-      "config":    { "received": "g8e.v1.operator.bootstrap.config.received" }
+      "failed": "g8e.v1.operator.bootstrap.failed",
+      "config": {
+        "received": "g8e.v1.operator.bootstrap.config.received"
+      }
     },
-    "bound":   "g8e.v1.operator.bound",
+    "bound": "g8e.v1.operator.bound",
     "unbound": "g8e.v1.operator.unbound",
     "terminal": {
       "thinking": {
-        "append":   "g8e.v1.operator.terminal.thinking.append",
+        "append": "g8e.v1.operator.terminal.thinking.append",
         "complete": "g8e.v1.operator.terminal.thinking.complete"
       },
-      "approval": { "denied": "g8e.v1.operator.terminal.approval.denied" },
-      "auth": { "state": { "changed": "g8e.v1.operator.terminal.auth.state.changed" } }
+      "approval": {
+        "denied": "g8e.v1.operator.terminal.approval.denied"
+      },
+      "auth": {
+        "state": {
+          "changed": "g8e.v1.operator.terminal.auth.state.changed"
+        }
+      }
     },
     "mcp": {
       "tools": {
-        "call":   "g8e.v1.operator.mcp.tools.call",
+        "call": "g8e.v1.operator.mcp.tools.call",
         "result": "g8e.v1.operator.mcp.tools.result"
       }
     }
   },
-
   "ai": {
     "agent": {
       "continue": {
         "approval": {
           "requested": "g8e.v1.ai.agent.continue.approval.requested",
-          "granted":   "g8e.v1.ai.agent.continue.approval.granted",
-          "rejected":  "g8e.v1.ai.agent.continue.approval.rejected"
+          "granted": "g8e.v1.ai.agent.continue.approval.granted",
+          "rejected": "g8e.v1.ai.agent.continue.approval.rejected"
         }
       }
     },
     "tribunal": {
       "session": {
-        "started":               "g8e.v1.ai.tribunal.session.started",
-        "completed":             "g8e.v1.ai.tribunal.session.completed",
-        "disabled":              "g8e.v1.ai.tribunal.session.disabled",
-        "model_not_configured":  "g8e.v1.ai.tribunal.session.model.not_configured",
-        "provider_unavailable":  "g8e.v1.ai.tribunal.session.provider.unavailable",
-        "system_error":          "g8e.v1.ai.tribunal.session.system.error",
-        "generation_failed":     "g8e.v1.ai.tribunal.session.generation.failed",
-        "verifier_failed":       "g8e.v1.ai.tribunal.session.verifier.failed"
+        "started": "g8e.v1.ai.tribunal.session.started",
+        "completed": "g8e.v1.ai.tribunal.session.completed",
+        "disabled": "g8e.v1.ai.tribunal.session.disabled",
+        "model_not_configured": "g8e.v1.ai.tribunal.session.model.not_configured",
+        "provider_unavailable": "g8e.v1.ai.tribunal.session.provider.unavailable",
+        "system_error": "g8e.v1.ai.tribunal.session.system.error",
+        "generation_failed": "g8e.v1.ai.tribunal.session.generation.failed",
+        "auditor_failed": "g8e.v1.ai.tribunal.session.auditor.failed"
       },
       "voting": {
         "started": "g8e.v1.ai.tribunal.voting.started",
-        "failed":  "g8e.v1.ai.tribunal.voting.failed",
+        "failed": "g8e.v1.ai.tribunal.voting.failed",
         "pass": {
           "completed": "g8e.v1.ai.tribunal.voting.pass.completed",
-          "failed":    "g8e.v1.ai.tribunal.voting.pass.failed"
+          "failed": "g8e.v1.ai.tribunal.voting.pass.failed"
         },
         "consensus": {
-          "reached":     "g8e.v1.ai.tribunal.voting.consensus.reached",
-          "not_reached": "g8e.v1.ai.tribunal.voting.consensus.not_reached"
+          "reached": "g8e.v1.ai.tribunal.voting.consensus.reached",
+          "not_reached": "g8e.v1.ai.tribunal.voting.consensus.not_reached",
+          "failed": "g8e.v1.ai.tribunal.voting.consensus.failed"
         },
-        "review": {
-          "started":   "g8e.v1.ai.tribunal.voting.review.started",
-          "completed": "g8e.v1.ai.tribunal.voting.review.completed",
-          "failed":    "g8e.v1.ai.tribunal.voting.review.failed"
+        "audit": {
+          "started": "g8e.v1.ai.tribunal.voting.audit.started",
+          "completed": "g8e.v1.ai.tribunal.voting.audit.completed",
+          "failed": "g8e.v1.ai.tribunal.voting.audit.failed"
+        },
+        "dissent": {
+          "recorded": "g8e.v1.ai.tribunal.voting.dissent.recorded"
         }
       }
     },
     "llm": {
       "config": {
         "requested": "g8e.v1.ai.llm.config.requested",
-        "received":  "g8e.v1.ai.llm.config.received",
-        "failed":    "g8e.v1.ai.llm.config.failed"
+        "received": "g8e.v1.ai.llm.config.received",
+        "failed": "g8e.v1.ai.llm.config.failed"
       },
       "lifecycle": {
         "requested": "g8e.v1.ai.llm.lifecycle.requested",
-        "started":   "g8e.v1.ai.llm.lifecycle.started",
+        "started": "g8e.v1.ai.llm.lifecycle.started",
         "completed": "g8e.v1.ai.llm.lifecycle.completed",
-        "failed":    "g8e.v1.ai.llm.lifecycle.failed",
-        "stopped":   "g8e.v1.ai.llm.lifecycle.stopped",
-        "error":     { "occurred": "g8e.v1.ai.llm.lifecycle.error.occurred" }
+        "failed": "g8e.v1.ai.llm.lifecycle.failed",
+        "stopped": "g8e.v1.ai.llm.lifecycle.stopped",
+        "error": {
+          "occurred": "g8e.v1.ai.llm.lifecycle.error.occurred"
+        }
       },
       "tool": {
         "g8e": {
           "web": {
             "search": {
               "requested": "g8e.v1.ai.llm.tool.g8e.web.search.requested",
-              "received":  "g8e.v1.ai.llm.tool.g8e.web.search.received",
+              "received": "g8e.v1.ai.llm.tool.g8e.web.search.received",
               "completed": "g8e.v1.ai.llm.tool.g8e.web.search.completed",
-              "failed":    "g8e.v1.ai.llm.tool.g8e.web.search.failed"
+              "failed": "g8e.v1.ai.llm.tool.g8e.web.search.failed"
             }
           }
         }
@@ -327,121 +356,154 @@
           "show": "g8e.v1.ai.llm.chat.stop.show",
           "hide": "g8e.v1.ai.llm.chat.stop.hide"
         },
-        "filter": { "event": "g8e.v1.ai.llm.chat.filter.event" },
+        "filter": {
+          "event": "g8e.v1.ai.llm.chat.filter.event"
+        },
         "message": {
-          "sent":       "g8e.v1.ai.llm.chat.message.sent",
-          "replayed":   "g8e.v1.ai.llm.chat.message.replayed",
-          "processing": { "failed":   "g8e.v1.ai.llm.chat.message.processing.failed" },
-          "dead":       { "lettered": "g8e.v1.ai.llm.chat.message.dead.lettered" }
+          "sent": "g8e.v1.ai.llm.chat.message.sent",
+          "replayed": "g8e.v1.ai.llm.chat.message.replayed",
+          "processing": {
+            "failed": "g8e.v1.ai.llm.chat.message.processing.failed"
+          },
+          "dead": {
+            "lettered": "g8e.v1.ai.llm.chat.message.dead.lettered"
+          }
         },
         "iteration": {
-          "started":   "g8e.v1.ai.llm.chat.iteration.started",
+          "started": "g8e.v1.ai.llm.chat.iteration.started",
           "completed": "g8e.v1.ai.llm.chat.iteration.completed",
-          "failed":    "g8e.v1.ai.llm.chat.iteration.failed",
-          "stopped":   "g8e.v1.ai.llm.chat.iteration.stopped",
-          "retry":     "g8e.v1.ai.llm.chat.iteration.retry",
-          "thinking":  { "started":  "g8e.v1.ai.llm.chat.iteration.thinking.started" },
-          "citations": { "received": "g8e.v1.ai.llm.chat.iteration.citations.received" },
+          "failed": "g8e.v1.ai.llm.chat.iteration.failed",
+          "stopped": "g8e.v1.ai.llm.chat.iteration.stopped",
+          "retry": "g8e.v1.ai.llm.chat.iteration.retry",
+          "thinking": {
+            "started": "g8e.v1.ai.llm.chat.iteration.thinking.started"
+          },
+          "citations": {
+            "received": "g8e.v1.ai.llm.chat.iteration.citations.received"
+          },
           "tool": {
             "call": {
-              "started":   "g8e.v1.ai.llm.chat.iteration.tool.call.started",
+              "started": "g8e.v1.ai.llm.chat.iteration.tool.call.started",
               "completed": "g8e.v1.ai.llm.chat.iteration.tool.call.completed"
             }
           },
           "text": {
-            "received":  "g8e.v1.ai.llm.chat.iteration.text.received",
-            "chunk":     { "received": "g8e.v1.ai.llm.chat.iteration.text.chunk.received" },
+            "received": "g8e.v1.ai.llm.chat.iteration.text.received",
+            "chunk": {
+              "received": "g8e.v1.ai.llm.chat.iteration.text.chunk.received"
+            },
             "completed": "g8e.v1.ai.llm.chat.iteration.text.completed",
             "truncated": "g8e.v1.ai.llm.chat.iteration.text.truncated"
           },
           "stream": {
-            "started":   "g8e.v1.ai.llm.chat.iteration.stream.started",
-            "delta":     { "received": "g8e.v1.ai.llm.chat.iteration.stream.delta.received" },
+            "started": "g8e.v1.ai.llm.chat.iteration.stream.started",
+            "delta": {
+              "received": "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
+            },
             "completed": "g8e.v1.ai.llm.chat.iteration.stream.completed",
-            "failed":    "g8e.v1.ai.llm.chat.iteration.stream.failed"
+            "failed": "g8e.v1.ai.llm.chat.iteration.stream.failed"
           }
         }
       }
     }
   },
-
   "platform": {
-    "usage":    { "updated": "g8e.v1.platform.usage.updated" },
+    "usage": {
+      "updated": "g8e.v1.platform.usage.updated"
+    },
     "notification": "g8e.v1.platform.notification",
     "auth": {
       "login": {
         "requested": "g8e.v1.platform.auth.login.requested",
         "succeeded": "g8e.v1.platform.auth.login.succeeded",
-        "failed":    "g8e.v1.platform.auth.login.failed"
+        "failed": "g8e.v1.platform.auth.login.failed"
       },
       "logout": {
         "requested": "g8e.v1.platform.auth.logout.requested",
         "succeeded": "g8e.v1.platform.auth.logout.succeeded",
-        "failed":    "g8e.v1.platform.auth.logout.failed"
+        "failed": "g8e.v1.platform.auth.logout.failed"
       },
       "session": {
         "validation": {
           "requested": "g8e.v1.platform.auth.session.validation.requested",
           "succeeded": "g8e.v1.platform.auth.session.validation.succeeded",
-          "failed":    "g8e.v1.platform.auth.session.validation.failed"
+          "failed": "g8e.v1.platform.auth.session.validation.failed"
         },
         "expired": "g8e.v1.platform.auth.session.expired"
       },
       "user": {
-        "authenticated":   "g8e.v1.platform.auth.user.authenticated",
+        "authenticated": "g8e.v1.platform.auth.user.authenticated",
         "unauthenticated": "g8e.v1.platform.auth.user.unauthenticated"
       },
       "component": {
         "initialized": {
           "authstate": "g8e.v1.platform.auth.component.initialized.authstate",
-          "chat":      "g8e.v1.platform.auth.component.initialized.chat",
-          "operator":  "g8e.v1.platform.auth.component.initialized.operator"
+          "chat": "g8e.v1.platform.auth.component.initialized.chat",
+          "operator": "g8e.v1.platform.auth.component.initialized.operator"
         }
       },
       "info": "g8e.v1.platform.auth.info"
     },
     "sse": {
-      "keepalive":  { "sent": "g8e.v1.platform.sse.keepalive.sent" },
+      "keepalive": {
+        "sent": "g8e.v1.platform.sse.keepalive.sent"
+      },
       "connection": {
         "established": "g8e.v1.platform.sse.connection.established",
-        "opened":      "g8e.v1.platform.sse.connection.opened",
-        "closed":      "g8e.v1.platform.sse.connection.closed",
-        "failed":      "g8e.v1.platform.sse.connection.failed",
-        "error":       "g8e.v1.platform.sse.connection.error"
+        "opened": "g8e.v1.platform.sse.connection.opened",
+        "closed": "g8e.v1.platform.sse.connection.closed",
+        "failed": "g8e.v1.platform.sse.connection.failed",
+        "error": "g8e.v1.platform.sse.connection.error"
       }
     },
     "terminal": {
-      "opened":   "g8e.v1.platform.terminal.opened",
+      "opened": "g8e.v1.platform.terminal.opened",
       "minimized": "g8e.v1.platform.terminal.minimized",
       "maximized": "g8e.v1.platform.terminal.maximized",
-      "closed":   "g8e.v1.platform.terminal.closed"
+      "closed": "g8e.v1.platform.terminal.closed"
     },
     "sentinel": {
-      "mode": { "changed": "g8e.v1.platform.sentinel.mode.changed" }
+      "mode": {
+        "changed": "g8e.v1.platform.sentinel.mode.changed"
+      }
     },
     "external": {
-      "service": { "configured": "g8e.v1.platform.external.service.configured" }
+      "service": {
+        "configured": "g8e.v1.platform.external.service.configured"
+      }
     },
     "telemetry": {
-      "health":      { "reported": "g8e.v1.platform.telemetry.health.reported" },
-      "performance": { "recorded": "g8e.v1.platform.telemetry.performance.recorded" },
-      "error":       { "logged":   "g8e.v1.platform.telemetry.error.logged" },
-      "audit":       { "logged":   "g8e.v1.platform.telemetry.audit.logged" }
+      "health": {
+        "reported": "g8e.v1.platform.telemetry.health.reported"
+      },
+      "performance": {
+        "recorded": "g8e.v1.platform.telemetry.performance.recorded"
+      },
+      "error": {
+        "logged": "g8e.v1.platform.telemetry.error.logged"
+      },
+      "audit": {
+        "logged": "g8e.v1.platform.telemetry.audit.logged"
+      }
     },
     "console": {
       "log": {
-        "entry":     { "received":  "g8e.v1.platform.console.log.entry.received" },
-        "connected": { "confirmed": "g8e.v1.platform.console.log.connected.confirmed" }
+        "entry": {
+          "received": "g8e.v1.platform.console.log.entry.received"
+        },
+        "connected": {
+          "confirmed": "g8e.v1.platform.console.log.connected.confirmed"
+        }
       }
     }
   },
   "source": {
     "user": {
-      "chat":     "g8e.v1.source.user.chat",
+      "chat": "g8e.v1.source.user.chat",
       "terminal": "g8e.v1.source.user.terminal"
     },
     "ai": {
-      "primary":   "g8e.v1.source.ai.primary",
+      "primary": "g8e.v1.source.ai.primary",
       "assistant": "g8e.v1.source.ai.assistant"
     },
     "system": "g8e.v1.source.system"

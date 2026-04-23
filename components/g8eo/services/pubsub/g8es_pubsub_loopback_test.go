@@ -409,8 +409,9 @@ func TestLoopback_ResultsService_PublishExecutionResult(t *testing.T) {
 		DurationSeconds: 0.01,
 	}
 	originalMsg := PubSubCommandMessage{
-		ID:     "exec-loop-1",
-		CaseID: "case-r1",
+		ID:                "exec-loop-1",
+		CaseID:            "case-r1",
+		OperatorSessionID: cfg.OperatorSessionId,
 	}
 
 	require.NoError(t, resultsSvc.PublishExecutionResult(context.Background(), result, originalMsg))

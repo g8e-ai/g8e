@@ -9,18 +9,26 @@ The g8e platform must be running (`./g8e platform start` from the project root).
 ## Quick Start
 
 ```bash
+# Start the platform
+./g8e platform setup
+
 # Start the fleet
 ./g8e demo up
 
 # Deploy operators (pick one method)
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token      # Method 1: API download (device link)
-./g8e demo stream DEVICE_TOKEN=dlk_your_token      # Method 2: SSH streaming (recommended)
+./g8e demo deploy -d dlk_your_token               # Method 1: API download (device link)
+./g8e demo stream -d dlk_your_token               # Method 2: SSH streaming (recommended)
+# Or use full syntax:
+./g8e demo deploy DEVICE_TOKEN=dlk_your_token
+./g8e demo stream DEVICE_TOKEN=dlk_your_token
 
 # Open http://localhost:3000 for the fleet status dashboard
 # Use g8e to find and fix broken nodes
 
 ./g8e demo vanish                                  # Remove all operators (zero trace)
 ```
+
+**Note:** You must authenticate with the platform and provide a device link token (`-d dlk_...` or `DEVICE_TOKEN=dlk_...`) to deploy operators. Log in via `./g8e login --api-key <key>` or `./g8e login --device-token <token>`, then generate a device link token from the dashboard.
 
 ## The Fleet
 
@@ -97,11 +105,15 @@ Things to ask g8e once operators are deployed:
 ### Operator Deployment
 | Command | Description |
 |---------|-------------|
-| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download |
-| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
+| `./g8e demo deploy -d dlk_xxx` | Deploy operators via API download |
+| `./g8e demo stream -d dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
+| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download (full syntax) |
+| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (full syntax) |
 | `./g8e demo discover-hosts` | List discovered demo fleet hosts |
 | `./g8e demo operators` | Show operator status |
 | `./g8e demo vanish` | Remove all operators (zero trace) |
+
+**Note:** Device token is required for deploy/stream commands. Use `-d dlk_xxx` shorthand or `DEVICE_TOKEN=dlk_xxx`. Generate a device link token from the g8e dashboard after logging in.
 
 ### Inspection
 | Command | Description |

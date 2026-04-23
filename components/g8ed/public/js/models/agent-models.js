@@ -66,10 +66,10 @@ export class CommandGenerationResult extends FrontendBaseModel {
 }
 
 /**
- * VerifierResult - Syntactic validation outcome.
+ * AuditorResult - Syntactic validation outcome.
  * Matches @shared/models/agents/verifier.json
  */
-export class VerifierResult extends FrontendBaseModel {
+export class AuditorResult extends FrontendBaseModel {
     static fields = {
         passed:      { type: F.boolean, required: true },
         revision:    { type: F.string,  default: null },

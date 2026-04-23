@@ -27,11 +27,13 @@ Does NOT own:
 
 import asyncio
 import logging
+import time
 
 import app.llm.llm_types as types
 from app.models.settings import G8eeUserSettings
 from app.errors import BusinessLogicError, ConfigurationError
 from app.constants import (
+    AgentName,
     AITaskId,
     NEW_CASE_ID,
     EventType,
@@ -43,13 +45,15 @@ from app.constants import (
 )
 from app.constants.message_sender import MessageSender
 from app.llm import get_llm_provider
-from app.models.agent import AgentStreamContext
+from app.models.agent import AgentInputs, AgentStreamState
 from app.models.attachments import AttachmentMetadata, ProcessedAttachment
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import (
-    AIResponseMetadata,
     ConversationMessageMetadata,
+    ConversationHistoryMessage,
+    EnrichedInvestigationContext,
 )
+from app.models.agent_activity import AgentActivityMetadata
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
 
@@ -61,6 +65,7 @@ from .memory_generation_service import MemoryGenerationService
 from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
+from ..data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
 from app.models.g8ed_client import (
     ChatErrorPayload,
@@ -86,6 +91,7 @@ class ChatPipelineService:
         g8e_agent: g8eEngine,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
+        agent_activity_data_service: AgentActivityDataService,
     ) -> None:
         self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
@@ -93,6 +99,7 @@ class ChatPipelineService:
         self.g8e_agent = g8e_agent
         self.memory_service = memory_service
         self.memory_generation_service = memory_generation_service
+        self.agent_activity_data_service = agent_activity_data_service
         self.triage_agent = TriageAgent()
 
         logger.info("ChatPipelineService initialized")
@@ -105,8 +112,8 @@ class ChatPipelineService:
         attachments: list[AttachmentMetadata],
         sentinel_mode: bool,
         model_overrides: ModelOverrideResolver,
-    ) -> AgentStreamContext:
-        """Assemble all inputs required for a chat turn.
+    ) -> AgentInputs:
+        """Assemble all immutable, request-scoped inputs for a chat turn.
 
         Sequence:
         1. Fetch and enrich investigation context (operators, memory)
@@ -123,7 +130,13 @@ class ChatPipelineService:
         12. Build generation config
         13. Format attachment parts
         14. Build contents from history
-        15. Assemble AgentStreamContext
+        15. Assemble AgentInputs
+
+        Returns an ``AgentInputs`` instance. The caller is responsible for
+        pairing it with a fresh ``AgentStreamState`` when running the agent;
+        the stream sinks (response_text, token_usage, finish_reason,
+        grounding_metadata) are intentionally absent from the inputs to
+        keep request inputs immutable.
         """
         case_id = g8e_context.case_id
         investigation_id = g8e_context.investigation_id
@@ -235,6 +248,7 @@ class ChatPipelineService:
             logger.warning("Failed to retrieve memories for chat context: %s", e, exc_info=True)
 
         all_operator_contexts = extract_all_operators_context(investigation)
+        active_agent = AgentName.SAGE if needs_main_model else AgentName.DASH
         system_instructions = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
@@ -243,6 +257,7 @@ class ChatPipelineService:
             investigation=investigation,
             g8e_web_search_available=self.g8e_agent.g8e_web_search_available,
             triage_result=triage_result,
+            agent_name=active_agent,
         )
 
         generation_config = self.request_builder.get_generation_config(
@@ -271,7 +286,7 @@ class ChatPipelineService:
             sentinel_mode=investigation_sentinel_mode
         )
 
-        return AgentStreamContext(
+        return AgentInputs(
             case_id=g8e_context.case_id,
             investigation_id=g8e_context.investigation_id,
             investigation=investigation,
@@ -296,33 +311,122 @@ class ChatPipelineService:
     async def _persist_ai_response(
         self,
         g8e_context: G8eHttpContext,
-        ctx: AgentStreamContext,
+        inputs: AgentInputs,
+        state: AgentStreamState,
         user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None = None,
     ) -> None:
-        """Persist AI response to database and trigger memory updates."""
+        """Persist the final AI response and schedule memory update off the response path.
+
+        Memory generation is dispatched as a tracked background task so it cannot
+        block SSE completion or swallow errors silently. If ``task_manager`` is
+        provided, the task is registered (and thus awaitable during cleanup);
+        otherwise it is fired as a detached asyncio task with a done-callback
+        that surfaces failures at WARNING level.
+        """
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
             getattr(g8e_context, 'investigation_id', 'unknown') if g8e_context else 'None',
-            len(ctx.response_text) if ctx else 0
+            len(state.response_text),
         )
+
+        persisted = await self.investigation_service.persist_ai_message(
+            investigation_id=g8e_context.investigation_id,
+            text=state.response_text,
+            grounding_metadata=state.grounding_metadata,
+            token_usage=state.token_usage,
+        )
+        if persisted:
+            logger.info("[SSE-CHAT] Final AI response persisted to database")
+        else:
+            logger.info("[SSE-CHAT] Skipping final AI response persistence (empty response_text)")
+
+        if inputs.investigation and g8e_context.investigation_id:
+            self._dispatch_memory_update(
+                investigation=inputs.investigation,
+                conversation_history=inputs.conversation_history,
+                user_settings=user_settings,
+                task_manager=task_manager,
+            )
+
+    async def _record_agent_activity_metadata(
+        self,
+        inputs: AgentInputs,
+        state: AgentStreamState,
+        start_time: float,
+        attachments: list[AttachmentMetadata],
+        error: str | None = None,
+    ) -> None:
+        """Record agent activity metadata for data science analysis.
         
-        response_text = ctx.response_text
+        This is called after each chat turn completes to capture comprehensive
+        telemetry including model usage, token consumption, tool execution,
+        triage classification, and performance metrics.
+        """
+        try:
+            duration_seconds = time.time() - start_time
+            
+            metadata = AgentActivityMetadata(
+                user_id=inputs.user_id,
+                user_email=inputs.investigation.user_email if inputs.investigation else None,
+                investigation_id=inputs.investigation_id,
+                case_id=inputs.case_id,
+                web_session_id=inputs.web_session_id,
+                agent_mode=inputs.agent_mode,
+                model_name=inputs.model_to_use,
+                provider=inputs.request_settings.llm.primary_provider.value if inputs.request_settings.llm.primary_provider else None,
+                token_usage=state.token_usage,
+                finish_reason=state.finish_reason,
+                triage_complexity=inputs.triage_result.complexity if inputs.triage_result else None,
+                triage_complexity_confidence=inputs.triage_result.complexity_confidence if inputs.triage_result else None,
+                triage_intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else None,
+                triage_intent_confidence=inputs.triage_result.intent_confidence if inputs.triage_result else None,
+                triage_request_posture=inputs.triage_result.request_posture if inputs.triage_result else None,
+                triage_posture_confidence=inputs.triage_result.posture_confidence if inputs.triage_result else None,
+                tool_call_count=state.tool_call_count,
+                tool_types_used=state.tool_types_used,
+                duration_seconds=duration_seconds,
+                has_attachments=len(attachments) > 0,
+                attachment_count=len(attachments),
+                grounding_used=state.grounding_metadata is not None,
+                citation_count=len(state.grounding_metadata.citations) if state.grounding_metadata and state.grounding_metadata.citations else 0,
+                operator_bound=inputs.operator_bound,
+                bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
+                response_length=len(state.response_text),
+                error=error,
+            )
 
-        await self.investigation_service.add_chat_message(
-            investigation_id=g8e_context.investigation_id or "",
-            content=response_text,
-            sender=MessageSender.AI_PRIMARY,
-            metadata=AIResponseMetadata(
-                source=EventType.EVENT_SOURCE_AI_PRIMARY,
-                grounding_metadata=ctx.grounding_metadata,
-                token_usage=ctx.token_usage,
-            ),
-        )
-        logger.info("[SSE-CHAT] AI response persisted to database")
+            await self.agent_activity_data_service.record_activity(metadata)
+            logger.info(
+                "Agent activity metadata recorded",
+                extra={
+                    "activity_id": metadata.id,
+                    "investigation_id": metadata.investigation_id,
+                    "model": metadata.model_name,
+                    "duration_seconds": metadata.duration_seconds,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record agent activity metadata: {e}", exc_info=True)
 
-        if ctx.investigation and g8e_context.investigation_id:
-            investigation = ctx.investigation
-            conversation_history = ctx.conversation_history
+    def _dispatch_memory_update(
+        self,
+        investigation: EnrichedInvestigationContext,
+        conversation_history: list[ConversationHistoryMessage],
+        user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None,
+    ) -> None:
+        """Schedule memory generation as a background task so it never blocks persistence.
+
+        Note: ``conversation_history`` is a snapshot from ``_prepare_chat_context``
+        and does NOT include the final AI response row written above — any memory
+        generation that needs the very latest turn must re-read from the DB. The
+        staleness is intentional: we trade a one-turn lag for keeping memory
+        generation off the response path. See ``docs/architecture/ai_agents.md``.
+        """
+        investigation_id = investigation.id
+
+        async def _run_memory_update() -> None:
             try:
                 await self.memory_generation_service.update_memory_from_conversation(
                     conversation_history=conversation_history,
@@ -331,15 +435,40 @@ class ChatPipelineService:
                 )
                 logger.info(
                     "Background memory update completed for investigation %s",
-                    investigation.id,
-                    extra={"investigation_id": investigation.id, "operation": "memory_update_background_complete"},
+                    investigation_id,
+                    extra={
+                        "investigation_id": investigation_id,
+                        "operation": "memory_update_background_complete",
+                    },
                 )
             except Exception as e:
-                logger.info(
+                logger.warning(
                     "Background memory update failed for investigation %s: %s",
-                    investigation.id, e,
-                    extra={"investigation_id": investigation.id, "error": str(e), "operation": "memory_update_background_failed"},
+                    investigation_id, e,
+                    exc_info=True,
+                    extra={
+                        "investigation_id": investigation_id,
+                        "error": str(e),
+                        "operation": "memory_update_background_failed",
+                    },
                 )
+
+        task = asyncio.create_task(_run_memory_update())
+        if task_manager is not None:
+            task_manager.track_detached(f"memory:{investigation_id}", task)
+        else:
+            def _log_uncaught(t: asyncio.Task[None]) -> None:
+                if t.cancelled():
+                    return
+                exc = t.exception()
+                if exc is not None:
+                    logger.warning(
+                        "Detached memory update task crashed for investigation %s: %s",
+                        investigation_id, exc,
+                        exc_info=exc,
+                    )
+
+            task.add_done_callback(_log_uncaught)
 
     async def run_chat(
         self,
@@ -392,6 +521,7 @@ class ChatPipelineService:
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
                 user_settings=user_settings,
+                task_manager=_task_manager,
             )
             logger.info("[SSE-CHAT] _run_chat_impl completed successfully")
         except asyncio.CancelledError:
@@ -432,8 +562,10 @@ class ChatPipelineService:
         llm_primary_model: str,
         llm_assistant_model: str,
         user_settings: G8eeUserSettings,
+        task_manager: BackgroundTaskManager | None = None,
     ) -> None:
         """Run the chat implementation - main logic flow."""
+        start_time = time.time()
         logger.info(
             "[SSE-CHAT] _run_chat_impl started: g8e_context=%s attachments_count=%d",
             f"case_id={getattr(g8e_context, 'case_id', 'missing')}",
@@ -451,15 +583,12 @@ class ChatPipelineService:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
 
-        llm_provider = get_llm_provider(resolved_settings.llm)
-        logger.info("[SSE-CHAT] LLM provider resolved: %s", type(llm_provider).__name__)
-
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
             primary_model=llm_primary_model,
             assistant_model=llm_assistant_model,
         )
-        ctx = await self._prepare_chat_context(
+        inputs = await self._prepare_chat_context(
             message=message,
             g8e_context=g8e_context,
             request_settings=resolved_settings,
@@ -469,22 +598,32 @@ class ChatPipelineService:
         )
         logger.info("[SSE-CHAT] _prepare_chat_context completed successfully")
 
+        state = AgentStreamState()
+
+        is_assistant_provider = (
+            inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+            if inputs.triage_result
+            else False
+        )
+        llm_provider = get_llm_provider(resolved_settings.llm, is_assistant=is_assistant_provider)
+        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_assistant=%s)", type(llm_provider).__name__, is_assistant_provider)
+
         logger.info(
             "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
-            ctx.model_to_use, ctx.agent_mode, len(ctx.contents), ctx.max_tokens
+            inputs.model_to_use, inputs.agent_mode, len(inputs.contents), inputs.max_tokens
         )
 
-        if ctx.triage_result and ctx.triage_result.follow_up_question and (
-            ctx.triage_result.complexity_confidence == TriageConfidence.LOW or
-            ctx.triage_result.intent_confidence == TriageConfidence.LOW
+        if inputs.triage_result and inputs.triage_result.follow_up_question and (
+            inputs.triage_result.complexity_confidence == TriageConfidence.LOW or
+            inputs.triage_result.intent_confidence == TriageConfidence.LOW
         ):
-            follow_up = ctx.triage_result.follow_up_question
+            follow_up = inputs.triage_result.follow_up_question
             logger.info("[SSE-CHAT] Triage short-circuit: delivering follow-up question")
 
             await self.g8ed_event_service.publish_investigation_event(
                 investigation_id=g8e_context.investigation_id,
                 event_type=EventType.LLM_CHAT_ITERATION_STARTED,
-                payload=ChatProcessingStartedPayload(agent_mode=ctx.agent_mode),
+                payload=ChatProcessingStartedPayload(agent_mode=inputs.agent_mode),
                 web_session_id=g8e_context.web_session_id,
                 case_id=g8e_context.case_id,
                 user_id=g8e_context.user_id,
@@ -510,32 +649,46 @@ class ChatPipelineService:
                 case_id=g8e_context.case_id,
                 user_id=g8e_context.user_id,
             )
-            ctx.response_text = follow_up
-        elif ctx.model_to_use and ctx.generation_config:
+            state.response_text = follow_up
+        elif inputs.model_to_use and inputs.generation_config:
             logger.info("[SSE-CHAT] Running full agent execution")
+
+            async def _persist_iteration_text(text: str) -> None:
+                await self.investigation_service.persist_ai_message(
+                    investigation_id=inputs.investigation_id,
+                    text=text,
+                )
+
             await self.g8e_agent.run_with_sse(
-                contents=ctx.contents,
-                generation_config=ctx.generation_config,
-                model_name=ctx.model_to_use,
-                agent_streaming_context=ctx,
-                context=ctx,
+                inputs=inputs,
+                state=state,
                 g8ed_event_service=self.g8ed_event_service,
                 llm_provider=llm_provider,
+                on_iteration_text=_persist_iteration_text,
             )
             logger.info("[SSE-CHAT] Agent execution completed")
 
-        if ctx.token_usage:
+        if state.token_usage:
             logger.info(
-                "[TOKEN_USAGE] SSE-CHAT final: %s", ctx.token_usage
+                "[TOKEN_USAGE] SSE-CHAT final: %s", state.token_usage
             )
 
         await self._persist_ai_response(
             g8e_context=g8e_context,
-            ctx=ctx,
+            inputs=inputs,
+            state=state,
             user_settings=user_settings,
+            task_manager=task_manager,
+        )
+
+        await self._record_agent_activity_metadata(
+            inputs=inputs,
+            state=state,
+            start_time=start_time,
+            attachments=attachments,
         )
 
         logger.info(
             "[SSE-CHAT] Completed: %d chars",
-            len(ctx.response_text)
+            len(state.response_text)
         )

@@ -31,7 +31,6 @@
  * 2. Delete from g8es KV cache
  */
 
-import { randomUUID } from 'crypto';
 import { logger } from '../../utils/logger.js';
 import { now, addSeconds, secondsBetween } from '../../models/base.js';
 import { WebSessionDocument } from '../../models/auth_models.js';
@@ -40,7 +39,8 @@ import { SessionType, SessionEventType, SessionEndReason, SessionSuspiciousReaso
 import { KVKey, KVScanPattern } from '../../constants/kv_keys.js';
 import { ABSOLUTE_SESSION_TIMEOUT_SECONDS } from '../../constants/session.js';
 import { Collections } from '../../constants/collections.js';
-import { BaseSessionService } from './base_session_service.js';
+import { BaseSessionService, generateSessionId } from './base_session_service.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 
 export class WebSessionService extends BaseSessionService {
     constructor(options = {}) {
@@ -51,7 +51,7 @@ export class WebSessionService extends BaseSessionService {
     }
 
     _generateSessionId() {
-        return `web_session_${Date.now()}_${randomUUID()}`;
+        return generateSessionId(SessionType.WEB);
     }
 
     /**
@@ -164,7 +164,7 @@ export class WebSessionService extends BaseSessionService {
         await this._cache_aside.kvExpire(KVKey.userWebSessions(sessionData.user_id), this.sessionTTL);
 
         logger.info('[WEB-SESSION-SERVICE] Web session created', {
-            sessionId: sessionId.substring(0, 25) + '...',
+            sessionId_tag: sessionIdTag(sessionId),
             ttl,
             userEmail: sessionData.user_data?.email,
             userId: sessionData.user_id,
@@ -198,7 +198,7 @@ export class WebSessionService extends BaseSessionService {
 
         if (!data || data.session_type !== SessionType.WEB) {
             logger.info('[WEB-SESSION-SERVICE] Web session not found or wrong type', {
-                webSessionId: webSessionId.substring(0, 12) + '...'
+                webSessionId_tag: sessionIdTag(webSessionId)
             });
             return null;
         }
@@ -209,7 +209,7 @@ export class WebSessionService extends BaseSessionService {
         const integrityCheck = this._validateSessionIntegrity(session, webSessionId);
         if (!integrityCheck.valid) {
             logger.error('[WEB-SESSION-SERVICE] Web session integrity check failed', {
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
                 reason: integrityCheck.reason
             });
             await this.endSession(webSessionId, SessionEndReason.INTEGRITY_FAILURE);
@@ -222,7 +222,7 @@ export class WebSessionService extends BaseSessionService {
             const absoluteExpiry = session.absolute_expires_at instanceof Date ? session.absolute_expires_at : new Date(session.absolute_expires_at);
             if (checkTime > absoluteExpiry) {
                 logger.warn('[WEB-SESSION-SERVICE] Web session exceeded absolute timeout', {
-                    webSessionId: webSessionId.substring(0, 12) + '...',
+                    webSessionId_tag: sessionIdTag(webSessionId),
                     absoluteExpiresAt: session.absolute_expires_at
                 });
                 await this.endSession(webSessionId);
@@ -235,7 +235,7 @@ export class WebSessionService extends BaseSessionService {
             const idleExpiry = session.idle_expires_at instanceof Date ? session.idle_expires_at : new Date(session.idle_expires_at);
             if (checkTime > idleExpiry) {
                 logger.warn('[WEB-SESSION-SERVICE] Web session exceeded idle timeout', {
-                    webSessionId: webSessionId.substring(0, 12) + '...',
+                    webSessionId_tag: sessionIdTag(webSessionId),
                     idleExpiresAt: session.idle_expires_at
                 });
                 await this.endSession(webSessionId);
@@ -246,7 +246,7 @@ export class WebSessionService extends BaseSessionService {
 
         if (requestContext.ip && session.client_ip && requestContext.ip !== session.client_ip) {
             logger.warn('[WEB-SESSION-SERVICE] IP mismatch detected - potential session hijacking', {
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
                 originalIp: session.client_ip,
                 currentIp: requestContext.ip
             });
@@ -311,7 +311,7 @@ export class WebSessionService extends BaseSessionService {
             const absoluteExpiry = new Date(session.absolute_expires_at);
             if (checkTime > absoluteExpiry) {
                 logger.warn('[WEB-SESSION-SERVICE] Cannot refresh - absolute timeout exceeded', {
-                    webSessionId: webSessionId.substring(0, 12) + '...'
+                    webSessionId_tag: sessionIdTag(webSessionId)
                 });
                 await this.endSession(webSessionId);
                 return false;
@@ -332,7 +332,7 @@ export class WebSessionService extends BaseSessionService {
         );
 
         logger.info('[WEB-SESSION-SERVICE] Web session refreshed', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             ttl,
             timeUntilAbsoluteExpiry
         });
@@ -349,7 +349,7 @@ export class WebSessionService extends BaseSessionService {
         const session = await this._cache_aside.getDocument(this.sessionsCollection, webSessionId);
         if (!session || session.session_type !== SessionType.WEB) {
             logger.warn('[WEB-SESSION-SERVICE] Cannot bind operator to non-existent web session', {
-                webSessionId: webSessionId.substring(0, 12) + '...'
+                webSessionId_tag: sessionIdTag(webSessionId)
             });
             return false;
         }
@@ -367,7 +367,7 @@ export class WebSessionService extends BaseSessionService {
         );
 
         logger.info('[WEB-SESSION-SERVICE] Operator bound to web session document', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             operatorId
         });
 
@@ -383,7 +383,7 @@ export class WebSessionService extends BaseSessionService {
         const session = await this._cache_aside.getDocument(this.sessionsCollection, webSessionId);
         if (!session || session.session_type !== SessionType.WEB) {
             logger.warn('[WEB-SESSION-SERVICE] Cannot unbind operator from non-existent web session', {
-                webSessionId: webSessionId.substring(0, 12) + '...'
+                webSessionId_tag: sessionIdTag(webSessionId)
             });
             return false;
         }
@@ -401,7 +401,7 @@ export class WebSessionService extends BaseSessionService {
         );
 
         logger.info('[WEB-SESSION-SERVICE] Operator unbound from web session document', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             operatorId
         });
 
@@ -420,7 +420,7 @@ export class WebSessionService extends BaseSessionService {
         );
         if (!session || session.session_type !== SessionType.WEB) {
             logger.warn('[WEB-SESSION-SERVICE] Cannot update non-existent web session', {
-                webSessionId: webSessionId.substring(0, 12) + '...'
+                webSessionId_tag: sessionIdTag(webSessionId)
             });
             return null;
         }
@@ -455,7 +455,7 @@ export class WebSessionService extends BaseSessionService {
         );
 
         logger.info('[WEB-SESSION-SERVICE] Web session updated', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             updatedFields: Object.keys(updates)
         });
 
@@ -473,7 +473,7 @@ export class WebSessionService extends BaseSessionService {
         );
         if (!session || session.session_type !== SessionType.WEB) {
             logger.warn('[WEB-SESSION-SERVICE] Cannot extend non-existent web session', {
-                webSessionId: webSessionId.substring(0, 12) + '...'
+                webSessionId_tag: sessionIdTag(webSessionId)
             });
             return false;
         }
@@ -492,7 +492,7 @@ export class WebSessionService extends BaseSessionService {
         );
 
         logger.info('[WEB-SESSION-SERVICE] Web session TTL extended to full duration', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             newTTL: this.sessionTTL
         });
 
@@ -511,7 +511,7 @@ export class WebSessionService extends BaseSessionService {
 
         if (!session) {
             logger.info('[WEB-SESSION-SERVICE] Web session not found for end', {
-                webSessionId: webSessionId.substring(0, 12) + '...',
+                webSessionId_tag: sessionIdTag(webSessionId),
                 reason
             });
             return false;
@@ -531,7 +531,7 @@ export class WebSessionService extends BaseSessionService {
         await this._logSessionEvent(SessionEventType.SESSION_ENDED, session, { reason });
 
         logger.info('[WEB-SESSION-SERVICE] Web session ended', {
-            webSessionId: webSessionId.substring(0, 12) + '...',
+            webSessionId_tag: sessionIdTag(webSessionId),
             cleanedUserTracking: !!userId,
             reason
         });
@@ -546,13 +546,13 @@ export class WebSessionService extends BaseSessionService {
     async regenerateWebSession(oldSessionId, requestContext = {}) {
         const raw = await this._cache_aside.getDocument(this.sessionsCollection, oldSessionId);
         if (raw && raw.session_type !== SessionType.WEB) {
-            throw new Error(`[WEB-SESSION-SERVICE] Cannot regenerate operator session as web session: ${oldSessionId.substring(0, 12)}...`);
+            throw new Error(`[WEB-SESSION-SERVICE] Cannot regenerate operator session as web session: tag=${sessionIdTag(oldSessionId)}`);
         }
 
         const session = await this.validateSession(oldSessionId, requestContext);
         if (!session) {
             logger.warn('[WEB-SESSION-SERVICE] Cannot regenerate non-existent web session', {
-                oldSessionId: oldSessionId.substring(0, 12) + '...'
+                oldSessionId_tag: sessionIdTag(oldSessionId)
             });
             return null;
         }
@@ -567,8 +567,8 @@ export class WebSessionService extends BaseSessionService {
         await this.endSession(oldSessionId, SessionEndReason.SESSION_REGENERATION);
 
         logger.info('[WEB-SESSION-SERVICE] Web session regenerated', {
-            oldSessionId: oldSessionId.substring(0, 12) + '...',
-            newSessionId: newSession.id.substring(0, 12) + '...'
+            oldSessionId_tag: sessionIdTag(oldSessionId),
+            newSessionId_tag: sessionIdTag(newSession.id)
         });
 
         await this._logSessionEvent(SessionEventType.SESSION_REGENERATED, newSession, {
@@ -591,7 +591,7 @@ export class WebSessionService extends BaseSessionService {
                 updatedCount++;
             } catch (error) {
                 logger.warn('[WEB-SESSION-SERVICE] Failed to update session', {
-                    sessionId: sessionId.substring(0, 12) + '...',
+                    sessionId_tag: sessionIdTag(sessionId),
                     error: error.message
                 });
             }

@@ -17,9 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,31 +46,31 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 		{
 			name:      "FetchLogs",
 			eventType: constants.Event.Operator.FetchLogs.Requested,
-			payload:   map[string]interface{}{"execution_id": "exec-1"},
+			payload:   models.FetchLogsRequestPayload{ExecutionID: "exec-1"},
 			expected:  constants.Event.Operator.FetchLogs.Failed,
 		},
 		{
 			name:      "FetchHistory",
 			eventType: constants.Event.Operator.FetchHistory.Requested,
-			payload:   map[string]interface{}{"limit": 10},
+			payload:   models.FetchHistoryRequestPayload{},
 			expected:  constants.Event.Operator.FetchHistory.Failed,
 		},
 		{
 			name:      "FetchFileHistory",
 			eventType: constants.Event.Operator.FetchFileHistory.Requested,
-			payload:   map[string]interface{}{"file_path": "test.txt"},
+			payload:   models.FetchFileHistoryRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileHistory.Failed,
 		},
 		{
 			name:      "FetchFileDiff",
 			eventType: constants.Event.Operator.FetchFileDiff.Requested,
-			payload:   map[string]interface{}{"file_path": "test.txt"},
+			payload:   models.FetchFileDiffRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileDiff.Failed,
 		},
 		{
 			name:      "RestoreFile",
 			eventType: constants.Event.Operator.RestoreFile.Requested,
-			payload:   map[string]interface{}{"file_path": "test.txt", "commit_hash": "abc"},
+			payload:   models.RestoreFileRequestPayload{FilePath: "test.txt", CommitHash: "abc"},
 			expected:  constants.Event.Operator.RestoreFile.Failed,
 		},
 	}
@@ -80,14 +80,10 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 			payloadBytes, err := json.Marshal(tt.payload)
 			require.NoError(t, err)
 
-			injectCmd(t, f, svc, PubSubCommandMessage{
-				ID:              fmt.Sprintf("id-%s", tt.name),
-				EventType:       tt.eventType,
-				CaseID:          "case-1",
-				InvestigationID: "inv-1",
-				Payload:         payloadBytes,
-				Timestamp:       time.Now().UTC(),
-			})
+			cmdMsg := newTestG8eMessage(t, svc.config, tt.eventType, "case-1", payloadBytes)
+			cmdMsg.ID = fmt.Sprintf("id-%s", tt.name)
+			cmdMsg.InvestigationID = "inv-1"
+			injectCmd(t, f, svc, cmdMsg)
 
 			msg := drainOne(t, resultsSub)
 			assert.Contains(t, string(msg), tt.expected, "expected event type %s in result", tt.expected)
@@ -106,13 +102,10 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 		}
 
 		for _, tt := range auditTests {
-			injectCmd(t, f, svc, PubSubCommandMessage{
-				ID:        fmt.Sprintf("audit-%s", tt.name),
-				EventType: tt.eventType,
-				CaseID:    "case-1",
-				Payload:   json.RawMessage(`{}`),
-				Timestamp: time.Now().UTC(),
-			})
+			payload := json.RawMessage(`{}`)
+			cmdMsg := newTestG8eMessage(t, svc.config, tt.eventType, "case-1", payload)
+			cmdMsg.ID = fmt.Sprintf("audit-%s", tt.name)
+			injectCmd(t, f, svc, cmdMsg)
 			// Audit events are fire-and-forget in the dispatcher,
 			// they don't necessarily publish a "Completed" event back to results
 			// unless the specific handler does so. We verify no panic.

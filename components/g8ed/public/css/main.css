@@ -126,8 +126,8 @@
     /* Chat variables moved to chat.css */
 
     /* Text Colors */
-    --text-primary: #c9d1d9;
-    --text-bright: #e6edf3;
+    --text-primary: #c9d1d9c5;
+    --text-bright: #e6edf3c5;
     --text-dim: #8b949e;
     --text-secondary: #7d8590;
     --text-muted: #656d76;

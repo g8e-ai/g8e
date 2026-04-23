@@ -50,7 +50,7 @@ class HTTPService:
     def __init__(self) -> None:
         self._http_ready: bool = False
         self._active_clients: dict[str, HTTPClient] = {}
-        self._session: "aiohttp.ClientSession" | None = None
+        self._session: aiohttp.ClientSession | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -177,7 +177,7 @@ class HTTPService:
         Returns:
             Dictionary mapping service names to their client status
         """
-        status = {}
+        status: dict[str, HTTPClientStatus] = {}
         for service_name, client in self._active_clients.items():
             client_status = HTTPClientStatus(
                 service_name=service_name,

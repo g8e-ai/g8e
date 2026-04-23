@@ -1,18 +1,12 @@
 <tools mode="operator_not_bound">
 
-<instructions>
-Use `query_investigation_context` to gather investigation state since no operator is bound to provide real-time system context.
-</instructions>
+<available>
+query_investigation_context, g8e_web_search
+</available>
 
-<context>
-[query_investigation_context]
-Retrieve investigation data on-demand. Use when you need to see earlier conversation turns, check the full history of operator actions, or verify the investigation's current status and metadata.
-- data_type: "conversation_history", "investigation_status", "history_trail", or "operator_actions"
-- limit: Number of items to retrieve (optional)
-
-[g8e_web_search]
-Your PRIMARY tool. Use liberally. Search for: technical questions, version-specific info, commands/configs/syntax, error messages, security practices, any doubt about accuracy.
-Accuracy over speed. Cross-reference with official vendor docs. Trust search results over your own knowledge when they conflict.
-</context>
+<rules>
+1. No Operator is bound — `g8e_web_search` is your primary tool. Use it liberally for technical questions, version-specific info, syntax, error messages, security practices, and any doubt about accuracy. Trust authoritative vendor docs over prior knowledge when they conflict.
+2. Use `query_investigation_context` to gather investigation state since no live system context is available.
+</rules>
 
 </tools>

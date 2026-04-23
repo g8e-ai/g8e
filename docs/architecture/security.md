@@ -29,7 +29,7 @@ Human control is a first-class architectural property. Every enforcement mechani
 2. **Human-in-the-Loop** — The AI proposes; the human approves. No state-changing operation executes without explicit, informed user consent — enforced at the platform level, not bypassable by the AI or any API call.
 3. **Least Privilege** — Every actor has the minimum access required to perform its function. Cloud Operators for AWS start with zero AWS access. Permissions are granted Just-in-Time and revoked immediately after use.
 4. **Data Sovereignty** — Sensitive operational data stays on the Operator host by default. The platform is a stateless relay; it never stores raw command output. Only Sentinel-scrubbed metadata crosses component boundaries toward the AI.
-5. **Defense in Depth** — No single control is relied upon. Authentication is layered (passkeys + sessions + context binding). Data protection is layered (TLS in transit + AES-256-GCM at rest + Sentinel scrubbing before AI). If one control fails, others hold.
+5. **Defense in Depth** — No single control is relied upon. Authentication is layered (passkeys + sessions + context binding). Data protection is layered through Sentinel's platform-wide coverage — egress scrubbing on the Operator ensures raw data never leaves the host, while redundant ingress scrubbing on the Engine adds a final protector for all Operator data before it crosses any network boundary toward a model provider.
 
 ---
 
@@ -73,9 +73,9 @@ Host Filesystem / AWS / Target System
 | **g8ed → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
 | **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
-| **g8ee → LLM (AI)** | Sentinel-scrubbed data only — raw output, credentials, and PII never transmitted to any AI provider |
+| **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all Operator data before it is transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
-| **Operator → Host** | Sentinel pre-execution threat blocking, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
+| **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
 | **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
 
@@ -376,8 +376,9 @@ Device links are pre-signed, time-bounded authorization tokens that solve the bo
 
 - Tokens are cryptographically random with the `dlk_` prefix and a strict, verifiable format (`dlk_[A-Za-z0-9_-]{32}`).
 - Every token has both a `max_uses` ceiling and an absolute `expires_at` timestamp.
+- When a device link is created, g8ed automatically provisions the required operator slots upfront to fulfill the `max_uses` limit.
+- Slot provisioning during device registration is atomic — concurrent multi-system deployments cannot race at the database level.
 - Once consumed, the token is invalidated. Replaying a used token yields a rejection.
-- Slot provisioning is atomic — concurrent multi-system deployments cannot race at the database level.
 - After a device link is consumed, the only credential that matters is the Operator's API key — and that key lives only in process memory, never on disk.
 - g8ep device links embed a `web_session_id` so `OPERATOR_STATUS_UPDATED` SSE events route to the correct browser tab.
 
@@ -438,7 +439,7 @@ Called by g8eo when it first presents a `--device-token dlk_...` token. This pha
 2. **Fingerprint dedup** — fingerprint added to `deviceLinkFingerprints(token)` SET via `kvSadd`. Returns 0 if already present → `DEVICE_ALREADY_REGISTERED`.
 3. **Use counter** — atomic `kvIncr` on `deviceLinkUses(token)`. If count exceeds `max_uses`, counter and fingerprint are rolled back → `LINK_EXHAUSTED`.
 4. **Distributed lock** — `kvSet(lockKey, value, PX, 10000, NX)` with retry loop (25 attempts × 200ms) prevents concurrent races on slot selection → `REGISTRATION_BUSY` on lock timeout.
-5. **Slot assignment** — Finds an `AVAILABLE` operator slot for the user; creates a new slot if none exist. Both paths use `DeviceRegistrationService.registerDevice`.
+5. **Slot assignment** — Finds an `AVAILABLE` operator slot from the pre-provisioned slots (created when the device link was generated). Uses `DeviceRegistrationService.registerDevice`.
 6. **Claim tracking** — Claim appended to `linkData.claims`; `status` set to `EXHAUSTED` when `claims.length >= max_uses`.
 7. Lock released in `finally` block (only if the lock value still matches — prevents stale release).
 
@@ -477,6 +478,50 @@ g8e uses passkey-only authentication. No passwords are stored anywhere in the pl
 - Authenticator signature counters are tracked on every authentication to detect cloned credentials.
 - Rate limits enforced on challenge generation and verification endpoints.
 - Authentication events logged for anomaly detection.
+
+### CLI Authentication (g8e login)
+
+The `g8e` CLI provides a local credential store for command-line operations, allowing users to authenticate once and reuse their session across multiple CLI commands without repeatedly passing credentials.
+
+**Login flow:**
+1. User runs `./g8e login --api-key <key>` or `./g8e login --device-token <token>` (or enters interactively).
+2. The CLI authenticates via `/api/auth/operator` endpoint using the provided credential.
+3. On success, the platform returns `operator_session_id`, `user_id`, `operator_id`, and `api_key`.
+4. The CLI stores these credentials in `~/.g8e/credentials` with `0600` filesystem permissions.
+5. Subsequent CLI commands automatically load and validate the stored credentials.
+
+**Credential Store Security:**
+- **Location**: `~/.g8e/credentials` (user home directory).
+- **Permissions**: `0600` (read/write by owner only).
+- **Contents**: `OPERATOR_SESSION_ID`, `USER_ID`, `OPERATOR_ID`, and `G8E_AUTH_TIMESTAMP`.
+- **Format**: Shell script that exports environment variables when sourced.
+
+**Session Validation:**
+- On every CLI command execution, the credential store is loaded via `_load_credentials`.
+- If the platform is running, the stored `OPERATOR_SESSION_ID` is validated against `/api/auth/operator/validate` endpoint.
+- The validation endpoint authenticates via the session ID itself (no internal auth token required).
+- Invalid or expired sessions trigger automatic credential clearing with a clear error message.
+- Validation uses the platform's self-signed certificate (`-k` flag for curl).
+
+**Logout flow:**
+- User runs `./g8e logout`.
+- The credential file `~/.g8e/credentials` is deleted.
+- Environment variables (`OPERATOR_SESSION_ID`, `USER_ID`, `OPERATOR_ID`, `G8E_AUTH_TIMESTAMP`) are unset.
+
+**Authentication Methods:**
+- **API Key**: Long-running operator authentication via `--api-key` or `-k` flag.
+- **Device Token**: One-time or multi-use device link token via `--device-token` flag.
+- **Interactive**: If no flag is provided, the CLI prompts for the credential and auto-detects format (`dlk_*` for device tokens, `g8e_*` for API keys).
+
+**Fallback Authentication:**
+- If the credential store is empty or invalid, CLI commands accept inline `--api-key` or `--device-token` flags.
+- Commands requiring authentication (e.g., `operator deploy`, `operator stream`, `security`, `data`, `mcp`) fail with clear instructions if no credentials are available.
+
+**Security Properties:**
+- Credentials are never logged or echoed to stdout.
+- The credential file is atomically written with restrictive permissions.
+- Session validation prevents use of stale or revoked sessions.
+- The credential store is local-only — no synchronization with any remote service.
 
 ---
 
@@ -619,7 +664,7 @@ Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes
   Members cycle through Axiom / Concord / Variance
   │
   ▼
-Weighted majority vote — earlier passes weighted higher (weight 1/(i+1))
+Uniform per-member voting — each member contributes exactly 1 vote per candidate
   │
   ▼
 SLM Verifier (same model, temperature: model default; disabled via `llm_command_gen_verifier=false`)

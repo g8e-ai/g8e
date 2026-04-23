@@ -22,9 +22,27 @@ import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from 'crypt
 import { logger } from '../../utils/logger.js';
 import { now } from '../../models/base.js';
 import { SessionDocument, WebSessionDocument, OperatorSessionDocument } from '../../models/auth_models.js';
-import { SessionType, SessionEventType } from '../../constants/session.js';
+import { SessionType, SessionEventType, SessionKeyPrefix } from '../../constants/session.js';
 import { Environment } from '../../constants/ai.js';
 import { SESSION_TTL_SECONDS } from '../../constants/session.js';
+
+/**
+ * Build a canonical session ID of the form `{prefix}_{ms}_{uuid}` where the
+ * prefix is the shared wire constant in `status.json::session.key.prefix`.
+ *
+ * Single source of truth for session-id format; used by every session service
+ * and by test helpers so no caller can drift from the production shape.
+ *
+ * @param {string} sessionType One of `SessionType.WEB|OPERATOR|CLI`.
+ * @returns {string} Canonical session id.
+ */
+export function generateSessionId(sessionType) {
+    const prefix = SessionKeyPrefix[sessionType];
+    if (!prefix) {
+        throw new Error(`generateSessionId: unknown session type ${JSON.stringify(sessionType)}`);
+    }
+    return `${prefix}_${Date.now()}_${randomUUID()}`;
+}
 
 export class BaseSessionService {
     constructor(options = {}) {

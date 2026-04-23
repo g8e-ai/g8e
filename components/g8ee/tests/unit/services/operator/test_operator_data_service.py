@@ -46,7 +46,7 @@ class TestOperatorDataService:
     async def test_get_operator_success(self, service, mock_cache):
         operator_id = "op-123"
         mock_cache.get_document.return_value = {
-            "operator_id": operator_id,
+            "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
             "system_info": {"hostname": "test-host"},
@@ -57,7 +57,7 @@ class TestOperatorDataService:
 
         assert result is not None
         assert isinstance(result, OperatorDocument)
-        assert result.operator_id == operator_id
+        assert result.id == operator_id
         assert result.status == OperatorStatus.ACTIVE
         mock_cache.get_document.assert_called_once_with(service.collection, operator_id)
 
@@ -87,7 +87,7 @@ class TestOperatorDataService:
         operator_id = "op-hb-existing"
         existing_hb = now()
         mock_cache.get_document.return_value = {
-            "operator_id": operator_id,
+            "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.BOUND,
             "last_heartbeat": existing_hb

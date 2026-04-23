@@ -52,7 +52,7 @@ def mock_settings():
     from app.constants import LLMProvider
     return G8eeUserSettings(
         llm=LLMSettings(
-            provider=LLMProvider.OLLAMA,
+            primary_provider=LLMProvider.OLLAMA,
             primary_model="main-model",
             assistant_model="lite-model"
         )

@@ -27,8 +27,8 @@ import (
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
 
-func (rr *PubSubResultsService) resultsChannel() string {
-	return constants.ResultsChannel(rr.config.OperatorID, rr.config.OperatorSessionId)
+func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
+	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
 // PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
@@ -50,9 +50,21 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 }
 
 func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
+	rr.logger.Debug("Checking if MCP wrapping is necessary",
+		"original_event_type", originalMsg.EventType,
+		"target_event_type", eventType,
+		"mcp_tools_call", constants.Event.Operator.MCP.ToolsCall)
+
 	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
+		rr.logger.Debug("Skipping MCP wrapping - not an MCP tools call")
 		return nil
 	}
+
+	rr.logger.Info("MCP wrapping triggered - wrapping result as MCP JSON-RPC response",
+		"original_event_type", originalMsg.EventType,
+		"target_event_type", eventType,
+		"original_msg_id", originalMsg.ID,
+		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
 
 	// If it was an MCP request, we wrap the entire result payload as an MCP JSON-RPC response
 	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, originalMsg.ID, eventType, payload)
@@ -65,6 +77,11 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 	}
 	msg.EventType = constants.Event.Operator.MCP.ToolsResult
 	msg.Payload = mcpRaw
+
+	rr.logger.Info("MCP wrapping completed",
+		"new_event_type", msg.EventType,
+		"payload_size", len(mcpRaw))
+
 	return nil
 }
 
@@ -130,7 +147,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	if result.ReturnCode != nil {
 		logArgs = append(logArgs, "return_code", *result.ReturnCode)
 	}
-	rr.logger.Info("Result transmitted to g8e", logArgs...)
+	rr.logger.Debug("Result transmitted to g8e", logArgs...)
 	return nil
 }
 
@@ -405,11 +422,11 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	if err != nil {
 		return fmt.Errorf("failed to marshal heartbeat: %w", err)
 	}
-	channelName := constants.HeartbeatChannel(rr.config.OperatorID, rr.config.OperatorSessionId)
+	channelName := constants.HeartbeatChannel(rr.config.OperatorID, heartbeat.OperatorSessionID)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
-	rr.logger.Info("Heartbeat transmitted", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("Heartbeat transmitted", "operator_session_id", heartbeat.OperatorSessionID)
 	return nil
 }
 
@@ -419,7 +436,12 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 	if err != nil {
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
-	return rr.client.Publish(ctx, rr.resultsChannel(), data)
+	channel := rr.resultsChannel(msg.OperatorSessionID)
+	rr.logger.Debug("Publishing result",
+		"channel", channel,
+		"event_type", msg.EventType,
+		"message_id", msg.ID)
+	return rr.client.Publish(ctx, channel, data)
 }
 
 // timeNowNano returns the current time as a Unix nanosecond timestamp.

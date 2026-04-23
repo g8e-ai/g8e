@@ -15,8 +15,9 @@ from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.constants import (
     CommandGenerationOutcome,
+    TieBreakReason,
     TribunalMember,
-    VerifierReason,
+    AuditorReason,
 )
 
 
@@ -43,6 +44,33 @@ class TribunalError(Exception):
         self.request = request
         self.user_message = user_message
         super().__init__(user_message)
+
+
+class TribunalConsensusFailedError(TribunalError):
+    """Raised when no two Tribunal members agree on a command.
+
+    Emitted when the winning cluster's support is below
+    TRIBUNAL_MIN_CONSENSUS. The error message includes a structured
+    summary of the candidate set so Sage can decide how to proceed.
+    """
+
+    def __init__(self, request: str, vote_breakdown: "VoteBreakdown") -> None:
+        self.vote_breakdown = vote_breakdown
+        
+        # Build a structured summary of candidates by member for the LLM
+        candidates = [
+            f"- {member}: {cmd}" 
+            for member, cmd in vote_breakdown.candidates_by_member.items()
+        ]
+        summary = "\n".join(candidates)
+        
+        user_message = (
+            "Tribunal consensus failed: no two members agreed on a command. "
+            f"Candidates produced:\n{summary}\n\n"
+            "Please rephrase your request, provide more explicit guidelines, "
+            "or choose one of the candidates above if appropriate."
+        )
+        super().__init__(request=request, user_message=user_message)
 
 
 class TribunalSystemError(TribunalError):
@@ -92,17 +120,17 @@ class TribunalGenerationFailedError(TribunalError):
         )
 
 
-class TribunalVerifierFailedError(TribunalError):
-    """Raised when the verifier fails and cannot validate the candidate.
+class TribunalAuditorFailedError(TribunalError):
+    """Raised when the auditor fails and cannot validate the candidate.
 
     This includes empty responses, exceptions, or non-ok answers without
-    valid revisions. The verifier's failure means we cannot trust the
+    valid revisions. The auditor's failure means we cannot trust the
     candidate and must halt execution.
     """
 
     def __init__(
         self,
-        reason: VerifierReason,
+        reason: AuditorReason,
         error: str | None,
         candidate_command: str,
         request: str,
@@ -113,7 +141,7 @@ class TribunalVerifierFailedError(TribunalError):
         super().__init__(
             request=request,
             user_message=(
-                f"Tribunal verifier failed ({reason.value}): "
+                f"Tribunal auditor failed ({reason.value}): "
                 f"{error or 'no error details'}"
             ),
         )
@@ -172,11 +200,118 @@ class CandidateCommand(G8eBaseModel):
     reasoning: str | None = Field(default=None, description="The reasoning behind this candidate")
 
 
+class VoteBreakdown(G8eBaseModel):
+    """Full attribution of a uniform Tribunal vote.
+
+    Every member contributes exactly one vote to the normalised command
+    they produced. This model captures who agreed with whom, how strong
+    the consensus was, and (when applicable) how a tie was resolved.
+    Consumed by SSE events for audit and future analytics; never used
+    for re-weighting.
+    """
+    candidates_by_member: dict[str, str] = Field(
+        default_factory=dict,
+        description="member_id -> normalised command string",
+    )
+    candidates_by_command: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="normalised command -> list of member_ids that produced it",
+    )
+    winner: str | None = Field(
+        default=None,
+        description="Normalised command that won the vote; None on consensus_failed",
+    )
+    winner_supporters: list[str] = Field(
+        default_factory=list,
+        description="member_ids that produced the winner",
+    )
+    dissenters_by_command: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="losing normalised command -> list of member_ids that produced it",
+    )
+    consensus_strength: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Ratio of winning-cluster member count to total Tribunal members, regardless of whether consensus was reached. A winner of None indicates consensus failure irrespective of strength value.",
+    )
+    tie_broken: bool = Field(
+        default=False,
+        description="True when more than one cluster held the highest vote and a tie-break rule resolved it",
+    )
+    tie_break_reason: TieBreakReason | None = Field(
+        default=None,
+        description="Which tie-break rule resolved the tie (if any)",
+    )
+
+
+class ConsensusConfidence:
+    """Descriptor for qualitative consensus confidence levels.
+
+    Qualitative levels derived from quantitative metrics:
+    - unanimous_verified: 5/5 agreement, auditor passed
+    - unanimous_unverified: 5/5 agreement, auditor disabled
+    - strong_verified: 4/5 agreement, auditor passed
+    - strong_with_intervention: 4/5 agreement, auditor revised/swapped
+    - majority_verified: 3/5 agreement, auditor passed
+    - majority_with_intervention: 3/5 agreement, auditor revised/swapped
+    - tied_resolved: tie broken by ladder, auditor passed
+    - tied_auditor_resolved: tie broken by ladder, auditor disambiguated
+    - consensus_failed: no two members agreed
+    """
+
+    @staticmethod
+    def from_breakdown_and_result(
+        vote_breakdown: VoteBreakdown,
+        auditor_passed: bool | None,
+        auditor_reason: AuditorReason | None,
+    ) -> str:
+        """Compute qualitative confidence level from quantitative metrics."""
+        if vote_breakdown.winner is None:
+            return "consensus_failed"
+
+        strength = vote_breakdown.consensus_strength
+        total_members = len(vote_breakdown.candidates_by_member)
+
+        if strength == 1.0:
+            if auditor_passed is True:
+                return "unanimous_verified"
+            return "unanimous_unverified"
+
+        if strength >= 0.8:  # 4/5
+            if auditor_passed is True:
+                return "strong_verified"
+            if auditor_reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT, AuditorReason.SWAPPED_TO_DISSENTER):
+                return "strong_with_intervention"
+
+        if strength >= 0.6:  # 3/5
+            if auditor_passed is True:
+                return "majority_verified"
+            if auditor_reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT, AuditorReason.SWAPPED_TO_DISSENTER):
+                return "majority_with_intervention"
+
+        if vote_breakdown.tie_broken:
+            if vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
+                return "tied_auditor_resolved"
+            return "tied_resolved"
+
+        return "consensus_failed"
+
+
 class CommandGenerationResult(G8eBaseModel):
-    """Result of the Tribunal command generation pipeline for a single tool call."""
-    request: str = Field(description="Sage's natural-language request that seeded the Tribunal")
-    guidelines: str = Field(default="", description="Sage's optional creative guidelines passed to the Tribunal")
-    final_command: str = Field(description="Command string produced by the Tribunal pipeline")
+    """Result of the Tribunal command generation pipeline for a single tool call.
+
+    `final_command`, `vote_winner`, and `vote_score` are all nullable so
+    the result model can faithfully represent a `CONSENSUS_FAILED` outcome
+    (no two members agreed and no command was selected). Callers MUST
+    inspect `outcome` before consuming the command fields.
+    """
+    request: str = Field(description="Caller's natural-language request that seeded the Tribunal")
+    guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal")
+    final_command: str | None = Field(
+        default=None,
+        description="Command string produced by the Tribunal pipeline; None when outcome=CONSENSUS_FAILED",
+    )
     outcome: CommandGenerationOutcome
     candidates: list[CandidateCommand] = Field(
         default_factory=list,
@@ -184,23 +319,27 @@ class CommandGenerationResult(G8eBaseModel):
     )
     vote_winner: str | None = Field(
         default=None,
-        description="Command string that won the weighted majority vote",
+        description="Command string that won the uniform majority vote; None when outcome=CONSENSUS_FAILED",
     )
     vote_score: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0,
-        description="Normalised vote weight of the winner (0.0-1.0)",
+        description="Fraction of members who voted for the winner (winner_count / total_members); None when outcome=CONSENSUS_FAILED",
     )
-    verifier_passed: bool | None = Field(
+    vote_breakdown: VoteBreakdown | None = Field(
         default=None,
-        description="True if the verifier approved the vote winner",
+        description="Full per-member vote attribution, dissent clusters, and tie-break record",
     )
-    verifier_revision: str | None = Field(
+    auditor_passed: bool | None = Field(
         default=None,
-        description="Revised command produced by the verifier when verifier_passed=False",
+        description="True if the auditor approved the vote winner (or an equivalent dissenter cluster)",
     )
-    verifier_reason: str | None = Field(default=None, description="The verifier's stated reason.")
+    auditor_revision: str | None = Field(
+        default=None,
+        description="Revised command produced by the auditor when auditor_passed=False",
+    )
+    auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason.")
 
 
 class TribunalPassCompletedPayload(G8eBaseModel):
@@ -212,17 +351,25 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     error: str | None = None
 
 
-class TribunalVerifierStartedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_VOTING_REVIEW_STARTED events."""
+class TribunalAuditorStartedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_AUDIT_STARTED events."""
     candidate_command: str
 
 
-class TribunalVerifierCompletedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_VOTING_REVIEW_COMPLETED events."""
+class TribunalAuditorCompletedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_AUDIT_COMPLETED events."""
     passed: bool
     revision: str | None = None
-    reason: VerifierReason
+    reason: AuditorReason
     error: str | None = None
+    swap_to_cluster: str | None = Field(
+        default=None,
+        description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)",
+    )
+    swap_to_member: str | None = Field(
+        default=None,
+        description="TribunalMember id resolved from swap_to_cluster (internal mapping, safe to surface downstream)",
+    )
 
 
 class TribunalSessionStartedPayload(G8eBaseModel):
@@ -290,25 +437,69 @@ class TribunalSessionGenerationFailedPayload(G8eBaseModel):
     pass_errors: list[str]
 
 
-class TribunalSessionVerifierFailedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_SESSION_VERIFIER_FAILED.
+class TribunalAuditorFailedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_AUDITOR_FAILED.
 
-    Emitted when voting produced a candidate but the verifier rejected
+    Emitted when voting produced a candidate but the auditor rejected
     it and produced no valid revision. The tool call fails because no
     trusted command was produced.
     """
     request: str
-    reason: VerifierReason
+    reason: AuditorReason
     error: str | None = None
     candidate_command: str
 
 
 class TribunalVotingCompletedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_VOTING_CONSENSUS_REACHED events."""
+    """SSE payload for TRIBUNAL_VOTING_CONSENSUS_REACHED events.
+
+    Backward-compatible fields (`vote_winner`, `vote_score`,
+    `num_candidates`) remain alongside the new `vote_breakdown` so
+    existing downstream consumers do not break.
+    """
     vote_winner: str
     vote_score: float
     num_candidates: int = Field(ge=0)
     request: str
+    vote_breakdown: VoteBreakdown
+
+
+class TribunalConsensusFailedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_CONSENSUS_FAILED events.
+
+    Emitted when the winning cluster's support is below
+    TRIBUNAL_MIN_CONSENSUS (no two members agreed). The auditor is
+    skipped; Sage receives the full candidate set and decides whether
+    to rephrase, ask the user for clarification, or abort.
+    """
+    request: str
+    vote_breakdown: VoteBreakdown
+    reason: str = Field(
+        default="no_agreement",
+        description="Short machine-readable reason (always 'no_agreement' today)",
+    )
+
+
+class TribunalDissentRecordedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_DISSENT_RECORDED events.
+
+    Fired once per losing cluster (distinct normalised command that
+    lost the vote). Audit / analytics only; does not affect execution.
+    Both `losing_command` and `dissenting_member_ids` are required
+    and must be non-empty — these events are never emitted for empty
+    clusters.
+    """
+    request: str
+    losing_command: str = Field(
+        min_length=1,
+        description="The cluster's normalised command string",
+    )
+    dissenting_member_ids: list[str] = Field(
+        min_length=1,
+        description="Tribunal member ids that produced the losing command",
+    )
+    winner: str = Field(description="The winning command, for context")
+    vote_breakdown: VoteBreakdown
 
 
 class TribunalSessionCompletedPayload(G8eBaseModel):

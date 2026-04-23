@@ -15,8 +15,19 @@ import express from 'express';
 import { ErrorResponse } from '../../models/response_models.js';
 import { OperatorDocument, OperatorSlot } from '../../models/operator_model.js';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
 import { OperatorStatus } from '../../constants/operator.js';
+
+// NOTE: Frontend operator selection mechanism is currently disabled
+// The frontend no longer allows users to select a single bound operator for metrics display
+// This was disabled because the UX for selecting one operator out of a list of bound operators needs improvement
+// To re-enable when UX is better established:
+// 1. Uncomment the click handler in operator-list-mixin.js that calls _selectMetricsOperator
+// 2. Uncomment the _applyDefaultMetricsSelection call in operator-list-mixin.js
+// 3. Uncomment the automatic selection on bind in operator-bind-mixin.js
+// The backend here supports operator selection via the selectedMetricsOperatorId pattern
+// See: operator-panel.js (heartbeat and status_updated handlers) and operator-list-mixin.js (_selectMetricsOperator)
 
 /**
  * @param {Object} options
@@ -58,7 +69,7 @@ export function createOperatorStatusRouter({
             return res.json({
                 success: true,
                 message: 'g8ep reauth initiated',
-                operator_id: result.operator_id
+                id: result.id
             });
 
         } catch (error) {
@@ -106,7 +117,7 @@ export function createOperatorStatusRouter({
             logger.info('[OPERATOR-STOP] Relaying stop command to g8ee', {
                 operator_id: operatorId,
                 user_id: userId,
-                operator_session_id: operatorSessionId.substring(0, 12) + '...'
+                operator_session_id_tag: sessionIdTag(operatorSessionId)
             });
 
             try {

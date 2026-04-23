@@ -73,7 +73,7 @@ describe('BindOperatorsService', () => {
         });
 
         it('should fail if operator belongs to different user', async () => {
-            mocks.operatorService.getOperator.mockResolvedValue(new OperatorDocument({ operator_id: 'op-123', user_id: 'u-456', status: OperatorStatus.ACTIVE }));
+            mocks.operatorService.getOperator.mockResolvedValue(new OperatorDocument({ id: 'op-123', user_id: 'u-456', status: OperatorStatus.ACTIVE }));
 
             const bindReq = new BindOperatorsRequest({ 
                 operator_ids: ['op-123'], 
@@ -89,9 +89,9 @@ describe('BindOperatorsService', () => {
         });
 
         it('should successfully bind and relay to g8ee', async () => {
-            const operator = new OperatorDocument({ 
-                operator_id: 'op-123', 
-                user_id: 'u-123', 
+            const operator = new OperatorDocument({
+                id: 'op-123',
+                user_id: 'u-123',
                 operator_session_id: 'os-123',
                 status: OperatorStatus.ACTIVE
             });
@@ -124,7 +124,7 @@ describe('BindOperatorsService', () => {
     describe('unbindOperators', () => {
         it('should unbind and relay to g8ee', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-123',
+                id: 'op-123',
                 user_id: 'u-123',
                 operator_session_id: 'os-123',
                 status: OperatorStatus.BOUND
@@ -158,15 +158,15 @@ describe('BindOperatorsService', () => {
 
     describe('bindOperators', () => {
         it('should successfully bind multiple operators and return BindOperatorsResponse', async () => {
-            const op1 = new OperatorDocument({ 
-                operator_id: 'op-1', 
-                user_id: 'u-123', 
+            const op1 = new OperatorDocument({
+                id: 'op-1',
+                user_id: 'u-123',
                 operator_session_id: 'os-1',
                 status: OperatorStatus.ACTIVE
             });
-            const op2 = new OperatorDocument({ 
-                operator_id: 'op-2', 
-                user_id: 'u-123', 
+            const op2 = new OperatorDocument({
+                id: 'op-2',
+                user_id: 'u-123',
                 operator_session_id: 'os-2',
                 status: OperatorStatus.ACTIVE
             });
@@ -207,9 +207,9 @@ describe('BindOperatorsService', () => {
         });
 
         it('should handle partial failures in multiple operator bind', async () => {
-            const op1 = new OperatorDocument({ 
-                operator_id: 'op-1', 
-                user_id: 'u-123', 
+            const op1 = new OperatorDocument({
+                id: 'op-1',
+                user_id: 'u-123',
                 operator_session_id: 'os-1',
                 status: OperatorStatus.ACTIVE
             });
@@ -239,13 +239,13 @@ describe('BindOperatorsService', () => {
     describe('unbindOperators', () => {
         it('should successfully unbind multiple operators and return OperatorUnbindResponse', async () => {
             const op1 = new OperatorDocument({ 
-                operator_id: 'op-1', 
+                id: 'op-1', 
                 user_id: 'u-123', 
                 operator_session_id: 'os-1',
                 status: OperatorStatus.BOUND
             });
             const op2 = new OperatorDocument({ 
-                operator_id: 'op-2', 
+                id: 'op-2', 
                 user_id: 'u-123', 
                 operator_session_id: 'os-2',
                 status: OperatorStatus.BOUND
@@ -286,7 +286,7 @@ describe('BindOperatorsService', () => {
     describe('status transitions (regression)', () => {
         it('bind transitions operator status from ACTIVE to BOUND', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-reg-1',
+                id: 'op-reg-1',
                 user_id: 'u-1',
                 operator_session_id: 'os-reg-1',
                 status: OperatorStatus.ACTIVE
@@ -311,7 +311,7 @@ describe('BindOperatorsService', () => {
 
         it('unbind transitions operator status from BOUND to ACTIVE', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-reg-2',
+                id: 'op-reg-2',
                 user_id: 'u-1',
                 operator_session_id: 'os-reg-2',
                 status: OperatorStatus.BOUND,
@@ -338,7 +338,7 @@ describe('BindOperatorsService', () => {
     describe('bindOperator wrapper method', () => {
         it('should delegate to bindOperators', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-wrapper-1',
+                id: 'op-wrapper-1',
                 user_id: 'u-123',
                 operator_session_id: 'os-wrapper-1',
                 status: OperatorStatus.ACTIVE
@@ -396,14 +396,14 @@ describe('BindOperatorsService', () => {
 
         it('should handle mix of already bound and new operators', async () => {
             const op1 = new OperatorDocument({
-                operator_id: 'op-already-1',
+                id: 'op-already-1',
                 user_id: 'u-123',
                 operator_session_id: 'os-already-1',
                 status: OperatorStatus.BOUND,
                 bound_web_session_id: 'ws-123'
             });
             const op2 = new OperatorDocument({
-                operator_id: 'op-new-2',
+                id: 'op-new-2',
                 user_id: 'u-123',
                 operator_session_id: 'os-new-2',
                 status: OperatorStatus.ACTIVE
@@ -438,7 +438,7 @@ describe('BindOperatorsService', () => {
     describe('operator with no active session', () => {
         it('should fail if operator has no active session', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-no-session',
+                id: 'op-no-session',
                 user_id: 'u-123',
                 operator_session_id: null,
                 status: OperatorStatus.ACTIVE
@@ -464,7 +464,7 @@ describe('BindOperatorsService', () => {
     describe('unbindOperator wrapper method', () => {
         it('should parse and delegate to unbindOperators', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-unbind-wrapper',
+                id: 'op-unbind-wrapper',
                 user_id: 'u-123',
                 operator_session_id: 'os-unbind-wrapper',
                 status: OperatorStatus.BOUND
@@ -492,7 +492,7 @@ describe('BindOperatorsService', () => {
 
         it('should accept UnbindOperatorsRequest instance directly', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-unbind-instance',
+                id: 'op-unbind-instance',
                 user_id: 'u-123',
                 operator_session_id: 'os-unbind-instance',
                 status: OperatorStatus.BOUND
@@ -536,7 +536,7 @@ describe('BindOperatorsService', () => {
 
         it('should fail if operator belongs to different user', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-wrong-user',
+                id: 'op-wrong-user',
                 user_id: 'u-456',
                 operator_session_id: 'os-wrong-user',
                 status: OperatorStatus.BOUND
@@ -560,7 +560,7 @@ describe('BindOperatorsService', () => {
 
         it('should handle partial failures in multiple operator unbind', async () => {
             const op1 = new OperatorDocument({
-                operator_id: 'op-unbind-1',
+                id: 'op-unbind-1',
                 user_id: 'u-123',
                 operator_session_id: 'os-unbind-1',
                 status: OperatorStatus.BOUND
@@ -589,7 +589,7 @@ describe('BindOperatorsService', () => {
 
         it('should handle operator with no session_id in unbind', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-no-session-unbind',
+                id: 'op-no-session-unbind',
                 user_id: 'u-123',
                 operator_session_id: null,
                 status: OperatorStatus.BOUND
@@ -620,7 +620,7 @@ describe('BindOperatorsService', () => {
     describe('relay and broadcast failure handling', () => {
         it('should continue bind when relayRegisterOperatorSessionToG8ee fails', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-relay-fail',
+                id: 'op-relay-fail',
                 user_id: 'u-123',
                 operator_session_id: 'os-relay-fail',
                 status: OperatorStatus.ACTIVE
@@ -648,7 +648,7 @@ describe('BindOperatorsService', () => {
 
         it('should continue bind when broadcastOperatorListToSession fails', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-broadcast-fail',
+                id: 'op-broadcast-fail',
                 user_id: 'u-123',
                 operator_session_id: 'os-broadcast-fail',
                 status: OperatorStatus.ACTIVE
@@ -674,7 +674,7 @@ describe('BindOperatorsService', () => {
 
         it('should continue unbind when relayRegisterOperatorSessionToG8ee fails', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-unbind-relay-fail',
+                id: 'op-unbind-relay-fail',
                 user_id: 'u-123',
                 operator_session_id: 'os-unbind-relay-fail',
                 status: OperatorStatus.BOUND
@@ -701,7 +701,7 @@ describe('BindOperatorsService', () => {
 
         it('should continue unbind when broadcastOperatorListToSession fails', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-unbind-broadcast-fail',
+                id: 'op-unbind-broadcast-fail',
                 user_id: 'u-123',
                 operator_session_id: 'os-unbind-broadcast-fail',
                 status: OperatorStatus.BOUND
@@ -728,7 +728,7 @@ describe('BindOperatorsService', () => {
     describe('context wrapper null handling', () => {
         it('should handle null context wrapper in bind without error', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-null-context',
+                id: 'op-null-context',
                 user_id: 'u-123',
                 operator_session_id: 'os-null-context',
                 status: OperatorStatus.ACTIVE
@@ -752,7 +752,7 @@ describe('BindOperatorsService', () => {
 
         it('should handle null context wrapper in unbind without error', async () => {
             const operator = new OperatorDocument({
-                operator_id: 'op-null-context-unbind',
+                id: 'op-null-context-unbind',
                 user_id: 'u-123',
                 operator_session_id: 'os-null-context-unbind',
                 status: OperatorStatus.BOUND

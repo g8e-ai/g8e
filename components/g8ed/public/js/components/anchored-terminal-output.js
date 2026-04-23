@@ -21,6 +21,7 @@
 
 import { templateLoader } from '../utils/template-loader.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
+import { TribunalMemberIcons } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -382,7 +383,14 @@ export class TerminalOutputMixin {
         const contentEl = entry.querySelector('.anchored-terminal__thinking-content');
         if (contentEl) {
             const existing = this.thinkingContentRaw.get(webSessionId);
-            const newRaw = existing ? existing + '\n' + text : text;
+            let newRaw;
+            if (existing) {
+                // Only add newline if existing doesn't already end with one and new chunk doesn't start with one
+                const needsSeparator = !existing.endsWith('\n') && !text.startsWith('\n');
+                newRaw = needsSeparator ? existing + '\n' + text : existing + text;
+            } else {
+                newRaw = text;
+            }
             this.thinkingContentRaw.set(webSessionId, newRaw);
 
             const title = this._extractThinkingTitle(newRaw);
@@ -555,9 +563,12 @@ export class TerminalOutputMixin {
         widget.id = id;
         widget.className = 'tribunal';
 
-        const dots = Array.from({ length: numPasses || 3 }, (_, i) =>
-            `<span class="tribunal__dot" data-pass="${i}" title="Pass ${i + 1}"></span>`
-        ).join('');
+        const dots = Array.from({ length: numPasses || 3 }, (_, i) => {
+            const icon = TribunalMemberIcons[i] || 'circle';
+            return `<span class="tribunal__dot" data-pass="${i}" title="Pass ${i + 1}">
+                <span class="material-symbols-outlined tribunal__dot-icon">${icon}</span>
+            </span>`;
+        }).join('');
 
         await templateLoader.renderTo(widget, 'tribunal', { dots });
 
@@ -574,12 +585,15 @@ export class TerminalOutputMixin {
         return id;
     }
 
-    updateTribunalPass(id, { passIndex, success }) {
+    updateTribunalPass(id, { passIndex, success, candidate }) {
         const widget = document.getElementById(id);
         if (!widget) return;
         const dot = widget.querySelector(`.tribunal__dot[data-pass="${passIndex}"]`);
         if (dot) {
             dot.classList.add(success ? 'tribunal__dot--ok' : 'tribunal__dot--fail');
+            if (candidate) {
+                dot.setAttribute('title', `Pass ${passIndex + 1}: ${candidate}`);
+            }
         }
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
@@ -656,7 +670,7 @@ export class TerminalOutputMixin {
             case EventType.TRIBUNAL_SESSION_GENERATION_FAILED:
                 return 'All generation passes failed — no candidate produced';
             case EventType.TRIBUNAL_SESSION_VERIFIER_FAILED:
-                return 'Verifier rejected the candidate — no trusted command';
+                return 'Auditor rejected the candidate — no trusted command';
             default:
                 return 'Tribunal halted — no command produced';
         }

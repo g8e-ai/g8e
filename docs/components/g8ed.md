@@ -594,7 +594,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 **Key rules:**
 - `available` is the default state — operator has been provisioned but never authenticated
-- `stale` is set by g8ee when a heartbeat has not been received within the stale threshold (60s)
+- `stale` is set by g8ed's `HeartbeatMonitorService` when a heartbeat has not been received within the stale threshold (`OperatorStaleThreshold.SECONDS`, default 60s). g8ed owns operator bind/auth state and is therefore authoritative for the staleness of that binding.
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -608,7 +608,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 | Subservice | Responsibility |
 |------------|----------------|
-| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login or on-demand via Device Link. |
+| `slots` | Slot initialization, claiming, and API key management. Operator slots are provisioned during user login or upfront when Device Links are created to fulfill the slot limit. |
 | `relay` | Outbound communication to g8ee (Stop, Direct Command, Heartbeat Registration, Approvals). |
 | `notifications` | SSE event broadcasting to browser sessions (Operator list updates). |
 
@@ -656,7 +656,14 @@ Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handl
 
 ### Heartbeat Architecture
 
-g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, persists to g8es document store, detects staleness, and manages all operator status transitions. g8ee then notifies g8ed via HTTP POST. g8ed's only role is to invalidate the KV cache and broadcast an SSE event to the bound web session — it does **not** write heartbeat data to g8es and does **not** run its own stale detection.
+g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `last_heartbeat` / `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
+
+Staleness reconciliation is owned by g8ed, not g8ee: `HeartbeatMonitorService` (`services/operator/heartbeat_monitor_service.js`) runs on a timer inside g8ed and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
+
+- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > OperatorStaleThreshold.SECONDS`
+- `STALE → BOUND` and `OFFLINE → ACTIVE` when a fresh heartbeat resumes
+
+On each transition the updated status is persisted via `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is fanned out to the owning user's active sessions.
 
 ```
 g8eo (every 30s)
@@ -664,11 +671,13 @@ g8eo (every 30s)
     ▼
 g8es pub/sub  →  g8ee (OperatorHeartbeatService)
                       │ write last_heartbeat, latest_heartbeat_snapshot to g8es
-                      │ detect staleness, set offline status (g8ee is source of truth)
                       │ HTTP POST /api/internal/sse/push
                       ▼
                     g8ed
                       │ broadcast SSE operator.heartbeat
+                      │ HeartbeatMonitorService (timer) reconciles status:
+                      │   BOUND↔STALE, ACTIVE↔OFFLINE based on last_heartbeat age
+                      │ broadcast SSE operator.status.updated.{stale|bound|offline|active}
                       ▼
                     Browser (operator-panel.js)
                       └── uses data.status + data.status_class directly
@@ -743,11 +752,13 @@ Device Link is the **recommended** way to deploy operators. The user generates a
 
 **User flow:**
 1. User clicks "Add Operator" → "Device Link" in the Operator Panel
-2. g8ed generates a `dlk_<32-char>` token and returns an operator command
-3. User runs the command on the target system
-4. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
-5. g8ed resolves or provisions a slot, then provides the `operator_id` to the binary during the bootstrap response
-6. Operator activates immediately — no browser approval needed
+2. User specifies the number of operator slots needed (`max_uses`)
+3. g8ed generates a `dlk_<32-char>` token and automatically provisions any missing operator slots to fulfill the requested slot limit
+4. g8ed returns an operator command with the device link token
+5. User runs the command on the target system
+6. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
+7. g8ed assigns an available operator slot and provides the `operator_id` to the binary during the bootstrap response
+8. Operator activates immediately — no browser approval needed
 7. Operator appears in the panel as active
 
 **Token format:** `dlk_[A-Za-z0-9_-]{32}` — 24 cryptographically random bytes, validated by regex before any g8es operations.

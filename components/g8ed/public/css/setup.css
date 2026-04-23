@@ -222,7 +222,7 @@ body[data-theme="light"] .wizard-panel-icon { color: var(--accent-blue); }
 .wizard-panel-title {
     font-size: 1.125rem;
     font-weight: 700;
-    color: var(--text-bright);
+    color: var(--text-primary);
     margin: 0 0 0.2rem;
 }
 

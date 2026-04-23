@@ -35,12 +35,12 @@ from app.constants.events import (
     EventType,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.command_payloads import FsListArgs, FsReadArgs
+from app.models.tool_args import FsListArgs
+from app.models.command_request_payloads import FsListRequestPayload, FsReadRequestPayload
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
 from app.models.pubsub_messages import G8eMessage
-from app.utils.ids import generate_command_execution_id
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +62,23 @@ class OperatorFilesystemService:
 
     async def execute_fs_list(
         self,
-        args: FsListArgs,
+        args: FsListRequestPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsListToolResult:
+        """List files on an operator.
 
+        ``execution_id`` is extracted from args.execution_id and
+        is used as the registry key and in UI lifecycle events.
+        """
+        exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
         )
-        
-        execution_id = generate_command_execution_id()
-        self.execution_registry.allocate(execution_id)
+
+        self.execution_registry.allocate(exec_id)
 
         try:
             mcp_payload = build_tool_call_request(
@@ -83,11 +87,11 @@ class OperatorFilesystemService:
                     "path": args.path,
                     "target_operator": args.target_operator,
                 },
-                request_id=execution_id,
+                request_id=exec_id,
             )
 
             g8e_message = G8eMessage(
-                id=execution_id,
+                id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
                 case_id=g8e_context.case_id,
@@ -95,7 +99,7 @@ class OperatorFilesystemService:
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
-                operator_id=resolved_operator.operator_id,
+                operator_id=resolved_operator.id,
                 payload=mcp_payload,
             )
 
@@ -104,7 +108,7 @@ class OperatorFilesystemService:
                 EventType.OPERATOR_FILESYSTEM_LIST_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"ls {args.path}",
-                    execution_id=execution_id,
+                    execution_id=exec_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,
@@ -119,20 +123,15 @@ class OperatorFilesystemService:
 
             # Extract typed payload data from execution registry
             from app.models.pubsub_messages import FsListResultPayload
-            envelope = self.execution_registry.get_result(execution_id)
+            envelope = self.execution_registry.get_result(exec_id)
             entries = []
             if envelope and isinstance(envelope.payload, FsListResultPayload):
                 entries = envelope.payload.entries or []
 
             # Notify completion/failure
-            if internal_result is None:
-                status = ExecutionStatus.FAILED
-                output = None
-                error = "Execution returned no result"
-            else:
-                status = internal_result.status
-                output = internal_result.output
-                error = internal_result.error
+            status = internal_result.status
+            output = internal_result.output
+            error = internal_result.error
 
             completion_event_type = (
                 EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED
@@ -143,12 +142,12 @@ class OperatorFilesystemService:
             await self.execution_service.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
-                    execution_id=execution_id,
+                    execution_id=exec_id,
                     command=f"ls {args.path}",
                     status=status if status is not None else ExecutionStatus.FAILED,
                     output=output,
                     error=error,
-                    operator_id=resolved_operator.operator_id,
+                    operator_id=resolved_operator.id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,
@@ -162,23 +161,27 @@ class OperatorFilesystemService:
                 error=error,
             )
         finally:
-            self.execution_registry.release(execution_id)
+            self.execution_registry.release(exec_id)
 
     async def execute_fs_read(
         self,
-        args: FsReadArgs,
+        args: FsReadRequestPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
+        """Read a file from an operator.
 
+        ``execution_id`` is extracted from args.execution_id and
+        is used as the registry key and in UI lifecycle events.
+        """
+        exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
         )
-        
-        execution_id = generate_command_execution_id()
-        self.execution_registry.allocate(execution_id)
+
+        self.execution_registry.allocate(exec_id)
 
         try:
             mcp_payload = build_tool_call_request(
@@ -187,11 +190,11 @@ class OperatorFilesystemService:
                     "path": args.path,
                     "target_operator": args.target_operator,
                 },
-                request_id=execution_id,
+                request_id=exec_id,
             )
 
             g8e_message = G8eMessage(
-                id=execution_id,
+                id=exec_id,
                 source_component=ComponentName.G8EE,
                 event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
                 case_id=g8e_context.case_id,
@@ -199,7 +202,7 @@ class OperatorFilesystemService:
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
-                operator_id=resolved_operator.operator_id,
+                operator_id=resolved_operator.id,
                 payload=mcp_payload,
             )
 
@@ -208,7 +211,7 @@ class OperatorFilesystemService:
                 EventType.OPERATOR_FILESYSTEM_READ_STARTED,
                 CommandExecutingBroadcastEvent(
                     command=f"cat {args.path}",
-                    execution_id=execution_id,
+                    execution_id=exec_id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,
@@ -223,20 +226,15 @@ class OperatorFilesystemService:
 
             # Extract typed payload data from execution registry
             from app.models.pubsub_messages import FsReadResultPayload
-            envelope = self.execution_registry.get_result(execution_id)
+            envelope = self.execution_registry.get_result(exec_id)
             content = None
             if envelope and isinstance(envelope.payload, FsReadResultPayload):
                 content = envelope.payload.content
 
             # Notify completion/failure
-            if internal_result is None:
-                status = ExecutionStatus.FAILED
-                output = None
-                error = "Execution returned no result"
-            else:
-                status = internal_result.status
-                output = internal_result.output
-                error = internal_result.error
+            status = internal_result.status
+            output = internal_result.output
+            error = internal_result.error
 
             completion_event_type = (
                 EventType.OPERATOR_FILESYSTEM_READ_COMPLETED
@@ -247,12 +245,12 @@ class OperatorFilesystemService:
             await self.execution_service.g8ed_event_service.publish_command_event(
                 completion_event_type,
                 CommandResultBroadcastEvent(
-                    execution_id=execution_id,
+                    execution_id=exec_id,
                     command=f"cat {args.path}",
                     status=status if status is not None else ExecutionStatus.FAILED,
                     output=output,
                     error=error,
-                    operator_id=resolved_operator.operator_id,
+                    operator_id=resolved_operator.id,
                     operator_session_id=resolved_operator.operator_session_id,
                 ),
                 g8e_context,
@@ -266,4 +264,4 @@ class OperatorFilesystemService:
                 error=error,
             )
         finally:
-            self.execution_registry.release(execution_id)
+            self.execution_registry.release(exec_id)

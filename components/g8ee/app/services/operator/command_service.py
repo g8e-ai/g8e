@@ -20,13 +20,21 @@ from app.constants.status import ComponentName, CommandErrorType, ExecutionStatu
 from app.constants.events import EventType
 from app.constants.status import AITaskId
 from app.models.agent import ExecutorCommandArgs
-from app.models.command_payloads import (
+from app.models.tool_args import (
     CheckPortArgs,
-    FileEditPayload,
+    FetchFileHistoryArgs,
+    FetchFileDiffArgs,
     FsListArgs,
     FsReadArgs,
     GrantIntentArgs,
     RevokeIntentArgs,
+)
+from app.models.command_request_payloads import (
+    CheckPortRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchFileDiffRequestPayload,
+    FileEditRequestPayload,
+    FsListRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -51,10 +59,6 @@ from app.models.tool_results import (
     PortCheckToolResult,
     CommandRiskContext,
 )
-from app.models.command_payloads import (
-    FetchFileHistoryArgs,
-    FetchFileDiffArgs,
-)
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
@@ -71,6 +75,7 @@ from app.services.protocols import (
     G8edClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
+from app.services.investigation.investigation_service import _extract_single_operator_context
 from .operator_data_service import OperatorDataService
 
 from .execution_service import OperatorExecutionService
@@ -81,7 +86,8 @@ from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.services.mcp.adapter import build_tool_call_request
-from app.utils.ids import generate_batch_id, generate_command_execution_id
+from app.utils.safety import validate_command_safety
+from app.utils.ids import generate_command_execution_id, generate_batch_id
 from app.errors import ValidationError, BusinessLogicError
 import asyncio
 
@@ -126,11 +132,11 @@ class OperatorCommandService:
         self._CommandResultBroadcastEvent = CommandResultBroadcastEvent
         self._CommandExecutingBroadcastEvent = CommandExecutingBroadcastEvent
 
-        _cv = settings.command_validation
+        self._cv = settings.command_validation
         logger.info(
             "OperatorCommandService initialized - whitelisting: %s, blacklisting: %s",
-            "ENABLED" if _cv.enable_whitelisting else "DISABLED",
-            "ENABLED" if _cv.enable_blacklisting else "DISABLED",
+            "ENABLED" if self._cv.enable_whitelisting else "DISABLED",
+            "ENABLED" if self._cv.enable_blacklisting else "DISABLED",
         )
 
     @classmethod
@@ -196,21 +202,12 @@ class OperatorCommandService:
         )
 
         async def _on_g8eo_result(envelope: G8eoResultEnvelope) -> None:
-            # The transport-level correlation key is envelope.id, which g8eo echoes
-            # verbatim from the outbound g8e_message.id (see publishLFAATypedResponseTo
-            # in components/g8eo/services/pubsub/publish_helpers.go). Some typed
-            # payloads also carry an execution_id field that mirrors the same id; for
-            # LFAA payloads (FetchFileHistoryResultPayload, FetchHistoryResultPayload,
-            # RestoreFileResultPayload, FetchFileDiffResultPayload) that field is
-            # absent. We prefer payload.execution_id when set to preserve legacy
-            # behaviour for command results and status updates, and fall back to
-            # envelope.id so LFAA results actually complete their waiter instead of
-            # timing out at 60 s.
             payload = envelope.payload
             if payload is None:
                 return
-            execution_id = getattr(payload, "execution_id", None) or envelope.id
+            execution_id = payload.execution_id
             if not execution_id:
+                logger.error("[G8EO_RESULT] Missing execution_id in payload type %s - cannot complete execution registry entry. Envelope ID: %s. The corresponding waiter will timeout.", type(payload).__name__, envelope.id)
                 return
             execution_registry.complete(execution_id, envelope)
 
@@ -241,15 +238,13 @@ class OperatorCommandService:
     async def stop_pubsub_listeners(self) -> None:
         await self._pubsub_service.stop()
 
-    def operator_service_available(self) -> bool:
-        return self.operator_data_service is not None
-
     async def execute_command(
         self,
         args: ExecutorCommandArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
         request_settings: G8eeUserSettings,
+        execution_id: str | None = None,
     ) -> CommandExecutionResult:
         """Orchestrate command execution: resolve -> validate -> approve -> fan-out dispatch.
 
@@ -285,42 +280,35 @@ class OperatorCommandService:
             return CommandExecutionResult(
                 success=False,
                 error="Operator session not found for: "
-                      + ", ".join(op.operator_id or "<unknown>" for op in missing_session),
+                      + ", ".join(op.id for op in missing_session),
                 error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
             )
 
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
         is_batch = len(target_operator_docs) > 1
 
-        # 2. Command validation (whitelist/blacklist enforcement) — once for the whole batch.
-        cv = self._settings.command_validation
-        if cv.enable_whitelisting:
-            whitelist_result = self._execution_service.whitelist_validator.validate_command(command)
-            if not whitelist_result.is_valid:
-                logger.warning("[COMMAND] Whitelist validation failed: %s", whitelist_result.reason)
-                return CommandExecutionResult(
-                    success=False,
-                    error=whitelist_result.reason,
-                    error_type=CommandErrorType.WHITELIST_VIOLATION,
-                    blocked_command=command,
-                    validation_details={"reason": whitelist_result.reason, "violations": whitelist_result.violations or []},
-                )
-
-        if cv.enable_blacklisting:
-            blacklist_result = self._execution_service.blacklist_validator.validate_command(command)
-            if not blacklist_result.is_allowed:
-                logger.warning("[COMMAND] Blacklist validation failed: %s - %s", blacklist_result.rule, blacklist_result.reason)
-                return CommandExecutionResult(
-                    success=False,
-                    error=blacklist_result.reason or f"Command blocked by blacklist rule: {blacklist_result.rule}",
-                    error_type=CommandErrorType.BLACKLIST_VIOLATION,
-                    blocked_command=command,
-                    rule=blacklist_result.rule,
-                )
-
         # Primary operator is the first resolved — used for approval identity fields.
         primary = target_operator_docs[0]
-        primary_operator_id = primary.operator_id or ""
+
+        # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
+        operator_context = _extract_single_operator_context(primary) if primary else None
+        is_safe, safety_err = validate_command_safety(
+            command,
+            whitelisting_enabled=self._cv.enable_whitelisting,
+            blacklisting_enabled=self._cv.enable_blacklisting,
+            operator_context=operator_context
+        )
+        if not is_safe:
+            error_type = CommandErrorType.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else CommandErrorType.BLACKLIST_VIOLATION
+            logger.warning("[COMMAND] Technical safety validation failed: %s", safety_err)
+            return CommandExecutionResult(
+                success=False,
+                error=safety_err,
+                error_type=error_type,
+                blocked_command=command,
+                validation_details={"reason": safety_err},
+            )
+        primary_operator_id = primary.id
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
         approval_execution_id = generate_command_execution_id()
@@ -372,8 +360,8 @@ class OperatorCommandService:
             )
 
         # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
-        max_concurrency = cv.max_batch_concurrency
-        fail_fast = cv.batch_fail_fast
+        max_concurrency = self._cv.max_batch_concurrency
+        fail_fast = self._cv.batch_fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 
@@ -405,7 +393,7 @@ class OperatorCommandService:
 
         async def _dispatch(op: OperatorDocument) -> BatchOperatorExecutionResult:
             exec_id = generate_command_execution_id()
-            op_id = op.operator_id or ""
+            op_id = op.id
             op_session_id = op.operator_session_id or ""
             hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
 
@@ -590,7 +578,7 @@ class OperatorCommandService:
         def _section(r: BatchOperatorExecutionResult) -> str:
             header = f"===== {r.hostname} ({r.operator_id}) ====="
             if r.result is not None:
-                body_parts = []
+                body_parts: list[str] = []
                 if r.result.output:
                     body_parts.append(r.result.output)
                 if r.result.stderr:
@@ -625,16 +613,16 @@ class OperatorCommandService:
             error=aggregate_error,
         )
 
-    async def execute_file_edit(self, args: FileEditPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext, execution_id: str) -> FileEditResult:
-        return await self._file_service.execute_file_edit(args, g8e_context, investigation, execution_id)
+    async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult:
+        return await self._file_service.execute_file_edit(args, g8e_context, investigation)
 
-    async def execute_port_check(self, args: CheckPortArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
+    async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
         return await self._port_service.execute_port_check(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_list(self, args: FsListArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
+    async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
         return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_read(self, args: FsReadArgs, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+    async def execute_fs_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
         return await self._filesystem_service.execute_fs_read(args, investigation, g8e_context=g8e_context)
 
     async def execute_intent_permission_request(self, args: GrantIntentArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
@@ -647,10 +635,10 @@ class OperatorCommandService:
             args=args, g8e_context=g8e_context, investigation=investigation
         )
 
-    async def execute_fetch_file_history(self, args: FetchFileHistoryArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
+    async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
         return await self._file_service.execute_fetch_file_history(args, g8e_context, investigation)
 
-    async def execute_fetch_file_diff(self, args: FetchFileDiffArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
+    async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
         return await self._file_service.execute_fetch_file_diff(args, g8e_context, investigation)
 
     async def send_command_to_operator(

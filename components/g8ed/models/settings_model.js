@@ -265,7 +265,7 @@ export const USER_SETTINGS = Object.freeze([
     Object.freeze({
         key: 'llm_command_gen_verifier',
         section: 'llm_internal',
-        label: 'Command Generation Verifier',
+        label: 'Command Generation Auditor',
         description: 'Enable verifier pass in the command generation tribunal.',
         type: 'select',
         group: 'universal',

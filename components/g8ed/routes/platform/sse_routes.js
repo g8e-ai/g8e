@@ -201,7 +201,8 @@ export function createSSERouter({
             const isQuickFailure = connectionDuration < 5000;
             const isIdleTimeout = error.code === 'ECONNRESET' && connectionDuration > 300000; // >5min
             
-            logger.error(`[G8ED-SSE] SSE connection error`, {
+            const logLevel = isQuickFailure ? 'error' : 'warn';
+            logger[logLevel](`[G8ED-SSE] SSE connection error`, {
                 webSessionId: redactWebSessionId(connectionId),
                 error: error.message,
                 errorCode: error.code,

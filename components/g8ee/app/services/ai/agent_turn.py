@@ -33,7 +33,6 @@ from app.constants import (
     DEFAULT_FINISH_REASON,
     StreamChunkFromModelType,
 )
-from app.llm.llm_types import ToolCall
 from app.models.agent import (
     StreamChunkData,
     StreamChunkFromModel,
@@ -46,10 +45,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TurnState:
     """Mutable state for a single LLM stream turn."""
-    model_response_parts: list[types.Part] = field(default_factory=list)
-    pending_tool_calls: list[ToolCall] = field(default_factory=list)
+    model_response_parts: list[types.Part] = field(default_factory=list[types.Part])
+    pending_tool_calls: list[types.ToolCall] = field(default_factory=list[types.ToolCall])
     thinking_active: bool = False
-    thinking_text_parts: list[str] = field(default_factory=list)
+    thinking_text_parts: list[str] = field(default_factory=list[str])
     thinking_signature: Optional[types.ThoughtSignature] = None
     finish_reason: str = DEFAULT_FINISH_REASON
     input_tokens: int = 0

@@ -21,6 +21,7 @@
 
 import express from 'express';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { HTTP_G8E_SERVICE_HEADER } from '../../constants/headers.js';
 import { SessionType } from '../../constants/session.js';
 import { ErrorResponse, InternalSessionValidationResponse } from '../../models/response_models.js';
@@ -52,7 +53,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
             }
 
             logger.info('[INTERNAL-SESSION] WebSession validation request', {
-                sessionId: sessionId.substring(0, 12) + '...',
+                sessionId_tag: sessionIdTag(sessionId),
                 callingService
             });
 
@@ -60,7 +61,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
 
             if (!session) {
                 logger.info('[INTERNAL-SESSION] WebSession not found', {
-                    sessionId: sessionId.substring(0, 12) + '...'
+                    sessionId_tag: sessionIdTag(sessionId)
                 });
                 return res.status(200).json(new ErrorResponse({
                     error: 'WebSession not found or expired'
@@ -69,7 +70,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
 
             if (session.session_type !== SessionType.WEB) {
                 logger.info('[INTERNAL-SESSION] Invalid session type for console', {
-                    sessionId: sessionId.substring(0, 12) + '...',
+                    sessionId_tag: sessionIdTag(sessionId),
                     sessionType: session.session_type
                 });
                 return res.status(200).json(new ErrorResponse({
@@ -79,7 +80,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
 
             if (!session.is_active) {
                 logger.info('[INTERNAL-SESSION] WebSession is inactive', {
-                    sessionId: sessionId.substring(0, 12) + '...'
+                    sessionId_tag: sessionIdTag(sessionId)
                 });
                 return res.status(200).json(new ErrorResponse({
                     error: 'WebSession is inactive'
@@ -96,7 +97,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
             }
 
             logger.info('[INTERNAL-SESSION] WebSession validated successfully', {
-                sessionId: sessionId.substring(0, 12) + '...',
+                sessionId_tag: sessionIdTag(sessionId),
                 userId: session.user_id,
                 email: session.user_data?.email,
                 roles: userRoles,
@@ -128,7 +129,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
             logger.error('[INTERNAL-SESSION] WebSession validation failed', {
                 error: error.message,
                 stack: error.stack,
-                sessionId: req.params.sessionId?.substring(0, 12) + '...'
+                sessionId_tag: sessionIdTag(req.params.sessionId)
             });
 
             return res.status(500).json(new ErrorResponse({

@@ -32,6 +32,7 @@ from app.models.internal_api import (
 from app.models.cases import CaseUpdateRequest
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.http_context import BoundOperator, G8eHttpContext
+from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.errors import ResourceNotFoundError
 from tests.fakes.factories import build_case_model, create_investigation_data
 
@@ -124,18 +125,28 @@ async def test_internal_chat_missing_investigation(g8e_context, task_tracker):
 @pytest.mark.asyncio
 async def test_stop_ai_processing(g8e_context):
     request = StopAIRequest(investigation_id="inv-123", reason="user cancel", web_session_id="session-123")
-    mock_task_manager = MagicMock()
+    # Use spec so an incorrect kwarg name to cancel() raises TypeError in tests,
+    # matching production behavior and preventing regressions like the stop-button 500.
+    mock_task_manager = MagicMock(spec=BackgroundTaskManager)
     mock_task_manager.cancel = AsyncMock(return_value=True)
     mock_pipeline = MagicMock()
-    
+
     response = await stop_ai_processing(
         request=request,
         g8e_context=g8e_context,
         chat_task_manager=mock_task_manager,
         chat_pipeline=mock_pipeline
     )
-    
+
     assert response.success is True
+    mock_task_manager.cancel.assert_awaited_once_with(
+        task_id="inv-123",
+        reason="user cancel",
+        web_session_id="session-123",
+        user_id=g8e_context.user_id,
+        case_id=g8e_context.case_id,
+        g8ed_event_service=mock_pipeline.g8ed_event_service,
+    )
 
 @pytest.mark.asyncio
 async def test_generate_and_update_title_success():

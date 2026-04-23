@@ -1,50 +1,26 @@
 <tools mode="cloud_operator_bound">
 
-<instructions>
-1. BEFORE calling `run_commands_with_operator`, you MUST call `get_command_constraints` to check current command validation rules (whitelist/blacklist). The Tribunal receives these constraints when it generates the command; surface them in your `guidelines` when they should shape the request. Violations will be blocked downstream with a validation error.
-2. Search before any cloud operation using `g8e_web_search`. AWS errors, CloudFormation failures, Terraform errors, API syntax, security best practices. Use `site:docs.aws.amazon.com`. Include service names and API versions. Cloud mistakes are costly — search early.
-</instructions>
+<available>
+query_investigation_context, run_commands_with_operator, g8e_web_search,
+grant_intent_permission, revoke_intent_permission, get_command_constraints
+</available>
 
-<query_investigation_context>
-Retrieve investigation data on-demand. Use when you need to see earlier conversation turns, check the full history of operator actions, or verify the investigation's current status and metadata.
-- data_type: "conversation_history", "investigation_status", "history_trail", or "operator_actions"
-- limit: Number of items to retrieve (optional)
+<rules>
+1. Call `get_command_constraints` before the first `run_commands_with_operator` of each turn. Surface shape-affecting whitelist/blacklist restrictions through the `guidelines` parameter; Tribunal will receive the constraints, but your guidelines sharpen the request.
+2. Search before any cloud operation with `g8e_web_search`. Use `site:docs.aws.amazon.com` for AWS. Include service names and API versions. Cloud mistakes are costly — search early.
+3. `grant_intent_permission` enables an AWS capability and executes one command in a single user approval. Always include `pending_command` when the operation is known.
+4. Emit a conversational text response before every tool call and another analysing the result afterwards.
+</rules>
 
-<run_commands_with_operator>
-Execute commands on the Cloud Operator (EC2 inside customer VPC). `aws` CLI is authenticated via IAM role. Direct VPC network access available for internal service checks. You describe the intent in natural language; the Tribunal (five-member AI panel) produces the actual command — do NOT write shell/AWS CLI syntax yourself.
-- request: REQUIRED — natural-language description of what the Cloud Operator must accomplish. No shell or aws-cli syntax.
-- guidelines: OPTIONAL — plain-language preferences (output format, region scoping, pagination strategy, safety tradeoffs). No shell syntax.
-- timeout_seconds: 300 (increase for long ops)
-- target_operator: REQUIRED when multiple operators bound (optional for single)
-</run_commands_with_operator>
+<intent_examples>
+<example>User: "List my EC2 instances" → grant_intent_permission(intent_name="ec2_discovery", pending_command="aws ec2 describe-instances --output table", …)</example>
+<example>User: "Read CloudWatch logs" → grant_intent_permission(intent_name="cloudwatch_logs", pending_command="aws logs describe-log-groups", …)</example>
+</intent_examples>
 
-<g8e_web_search>
-Search before any cloud operation. AWS errors, CloudFormation failures, Terraform errors, API syntax, security best practices. Use `site:docs.aws.amazon.com`. Include service names and API versions. Cloud mistakes are costly — search early.
-</g8e_web_search>
-
-<grant_intent_permission>
-Enable AWS capability AND execute command in ONE user approval. Always include pending_command when you know what to run.
-- intent_name: ec2_discovery | ec2_management | s3_read | s3_write | terraform_state | cloudwatch_logs | secrets_read
-- justification, pending_command, pending_command_justification
-
-<examples>
-<example>User: "List my EC2 instances" → grant_intent_permission(intent_name="ec2_discovery", justification="List EC2 instances", pending_command="aws ec2 describe-instances --output table", pending_command_justification="List EC2 instances")</example>
-<example>User: "Read CloudWatch logs" → grant_intent_permission(intent_name="cloudwatch_logs", justification="Read CloudWatch logs", pending_command="aws logs describe-log-groups", pending_command_justification="List log groups")</example>
-</examples>
-</grant_intent_permission>
-
-<revoke_intent_permission>
-Detach a previously granted IAM policy from the Operator Role.
-- intent_name: e.g., ec2_discovery, s3_read | justification: REQUIRED
-</revoke_intent_permission>
-
-<aws_commands>
-Investigation: sts get-caller-identity | ec2 describe-instances/vpcs/subnets/security-groups/network-interfaces/route-tables | rds describe-db-instances/db-clusters | ecs list-clusters/describe-services | eks describe-cluster/list-nodegroups | logs describe-log-groups/filter-log-events | cloudwatch get-metric-statistics/describe-alarms | cloudformation describe-stacks/stack-events | iam get-role/list-attached-role-policies | s3 ls/s3api get-bucket-policy | secretsmanager describe-secret
-Operations: ec2 start/stop/reboot-instances | s3 cp/sync/rm | secretsmanager get-secret-value
-</aws_commands>
-
-<infrastructure_tools>
-terraform plan/apply/state/destroy | tofu plan/apply | kubectl get/apply/describe/delete | helm list/install/upgrade/uninstall
-</infrastructure_tools>
+<capability_surface>
+AWS investigation: sts get-caller-identity | ec2 describe-* | rds describe-db-* | ecs/eks list/describe | logs describe/filter | cloudwatch get-metric-statistics/describe-alarms | cloudformation describe-stacks | iam get-role/list-attached-role-policies | s3 ls | secretsmanager describe-secret
+AWS operations: ec2 start/stop/reboot-instances | s3 cp/sync/rm | secretsmanager get-secret-value
+Infra: terraform plan/apply/state/destroy | tofu plan/apply | kubectl get/apply/describe/delete | helm list/install/upgrade/uninstall
+</capability_surface>
 
 </tools>

@@ -226,11 +226,11 @@ describe('CertInfo [UNIT - PURE LOGIC]', () => {
 describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields with defaults', () => {
         const info = OperatorStatusInfo.parse({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
-        expect(info.operator_id).toBe('op-123');
+        expect(info.id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
         expect(info.bound_web_session_id).toBeNull();
@@ -239,7 +239,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
 
     it('is_active is computed by fromOperator() based on status', () => {
         const activeOp = new OperatorDocument({
-            operator_id: 'op-1',
+            id: 'op-1',
             user_id: 'user-1',
             status: OperatorStatus.ACTIVE,
         });
@@ -247,7 +247,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
         expect(active.is_active).toBe(true);
 
         const boundOp = new OperatorDocument({
-            operator_id: 'op-2',
+            id: 'op-2',
             user_id: 'user-2',
             status: OperatorStatus.BOUND,
         });
@@ -257,7 +257,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
 
     it('fromOperator() maps OperatorDocument to status info', () => {
         const operator = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             bound_web_session_id: 'ws-789',
@@ -271,7 +271,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
             cloud_subtype: CloudOperatorSubtype.AWS,
         });
         const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.operator_id).toBe('op-123');
+        expect(info.id).toBe('op-123');
         expect(info.user_id).toBe('user-456');
         expect(info.status).toBe(OperatorStatus.ACTIVE);
         expect(info.bound_web_session_id).toBe('ws-789');
@@ -287,7 +287,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
 
     it('fromOperator() handles plain object system_info', () => {
         const operator = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             system_info: { hostname: 'plain-host' },
@@ -301,7 +301,7 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
 describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
     it('parse() migrates system_fingerprint from system_info', () => {
         const raw = {
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             system_fingerprint: null,
@@ -317,7 +317,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forWire() removes operator_cert, api_key, and operator_api_key fields', () => {
         const doc = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             operator_cert: 'cert-data',
@@ -332,12 +332,12 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(wire.operator_api_key).toBeUndefined();
         expect(wire.operator_api_key_created_at).toBeUndefined();
         expect(wire.operator_api_key_updated_at).toBeUndefined();
-        expect(wire.operator_id).toBe('op-123');
+        expect(wire.id).toBe('op-123');
     });
 
     it('forClient() removes sensitive fields and adds has_api_key flag', () => {
         const doc = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             operator_cert: 'cert-data',
@@ -361,7 +361,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forInternal() preserves all sensitive fields including api_key and operator_api_key', () => {
         const doc = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             operator_cert: 'cert-data',
@@ -376,12 +376,12 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(internal.operator_api_key).toBe('operator-secret-key');
         expect(internal.operator_api_key_created_at).toBe('2026-01-01T00:00:00.000Z');
         expect(internal.operator_api_key_updated_at).toBe('2026-01-15T00:00:00.000Z');
-        expect(internal.operator_id).toBe('op-123');
+        expect(internal.id).toBe('op-123');
     });
 
     it('forClient() sets has_api_key to false when api_key is null', () => {
         const doc = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             api_key: null,
@@ -397,19 +397,19 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('fromDB() parses valid raw document', () => {
         const raw = {
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
         };
         const doc = OperatorDocument.fromDB(raw);
         expect(doc).toBeInstanceOf(OperatorDocument);
-        expect(doc.operator_id).toBe('op-123');
+        expect(doc.id).toBe('op-123');
     });
 
     it('forCreate() creates operator with AVAILABLE status', () => {
         const systemInfo = new SystemInfo({ hostname: 'test-host' });
         const doc = OperatorDocument.forCreate({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             system_info: systemInfo,
             name: 'Test Operator',
@@ -422,7 +422,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             cloud_subtype: CloudOperatorSubtype.AWS,
             is_g8ep: true,
         });
-        expect(doc.operator_id).toBe('op-123');
+        expect(doc.id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
         expect(doc.component).toBe(SourceComponent.G8EO);
@@ -439,7 +439,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forCreate() handles plain object system_info', () => {
         const doc = OperatorDocument.forCreate({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             system_info: { hostname: 'test-host', system_fingerprint: 'fp-123' },
         });
@@ -450,7 +450,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forCreate() creates history entry with truncated session IDs', () => {
         const doc = OperatorDocument.forCreate({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             operator_session_id: 'very-long-operator-session-id-12345',
             bound_web_session_id: 'very-long-web-session-id-67890',
@@ -461,7 +461,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forCreate() handles null session IDs in history', () => {
         const doc = OperatorDocument.forCreate({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
         });
         expect(doc.history_trail[0].details.operator_session_id).toBeNull();
@@ -470,14 +470,14 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forSlot() creates slot with is_slot=true', () => {
         const doc = OperatorDocument.forSlot({
-            operator_id: 'op-123',
+            id: 'op-123',
             userId: 'user-456',
             namePrefix: 'operator',
             slotNumber: 1,
             operatorType: OperatorType.SYSTEM,
             operatorApiKey: 'key-abc',
         });
-        expect(doc.operator_id).toBe('op-123');
+        expect(doc.id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
         expect(doc.name).toBe('operator-1');
         expect(doc.is_slot).toBe(true);
@@ -489,7 +489,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forSlot() creates cloud operator with SystemInfo.forCloudOperator()', () => {
         const doc = OperatorDocument.forSlot({
-            operator_id: 'op-123',
+            id: 'op-123',
             userId: 'user-456',
             namePrefix: 'cloud-operator',
             slotNumber: 1,
@@ -502,7 +502,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forSlot() uses regular SystemInfo for non-cloud operators', () => {
         const doc = OperatorDocument.forSlot({
-            operator_id: 'op-123',
+            id: 'op-123',
             userId: 'user-456',
             namePrefix: 'operator',
             slotNumber: 1,
@@ -514,7 +514,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forSlot() forces name to "g8ep" for g8ep operators', () => {
         const doc = OperatorDocument.forSlot({
-            operator_id: 'op-123',
+            id: 'op-123',
             userId: 'user-456',
             namePrefix: 'operator',
             slotNumber: 1,
@@ -535,17 +535,17 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             not_after: new Date('2027-01-01T00:00:00.000Z'),
         };
         const doc = OperatorDocument.forRefresh({
-            newOperatorId: 'op-new',
+            id: 'op-new',
             userId: 'user-456',
             name: 'Refreshed Operator',
             slotNumber: 1,
             operatorType: OperatorType.SYSTEM,
             newApiKey: 'new-key',
             certInfo: certInfo,
-            oldOperatorId: 'op-old',
+            oldId: 'op-old',
             oldCertSerial: 'old-serial-456',
         });
-        expect(doc.operator_id).toBe('op-new');
+        expect(doc.id).toBe('op-new');
         expect(doc.api_key).toBe('new-key');
         expect(doc.operator_cert).toBe('cert-data');
         expect(doc.operator_cert_serial).toBe('serial-123');
@@ -573,13 +573,13 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
 
     it('forReset() creates operator with reset history', () => {
         const doc = OperatorDocument.forReset({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             name: 'Reset Operator',
             slot_number: 1,
             api_key: 'key-abc',
         });
-        expect(doc.operator_id).toBe('op-123');
+        expect(doc.id).toBe('op-123');
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
         expect(doc.history_trail[0].event_type).toBe(HistoryEventType.RESET);
         expect(doc.history_trail[0].details.reset_type).toBe('demo_reset');
@@ -621,13 +621,13 @@ describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
     it('forWire() splits type from data fields', () => {
         const event = new OperatorListUpdatedEvent({
             type: 'operator.list.updated',
-            operators: [{ id: 'op-1' }],
+            operators: [{ operator_id: 'op-1' }],
             total_count: 5,
         });
         const wire = event.forWire();
         expect(wire.type).toBe('operator.list.updated');
         expect(wire.data).toBeDefined();
-        expect(wire.data.operators).toEqual([{ id: 'op-1' }]);
+        expect(wire.data.operators).toEqual([{ operator_id: 'op-1' }]);
         expect(wire.data.total_count).toBe(5);
         expect(wire.operators).toBeUndefined();
         expect(wire.total_count).toBeUndefined();
@@ -864,11 +864,11 @@ describe('UnbindOperatorsResponse [UNIT - PURE LOGIC]', () => {
 describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
     it('accepts valid required fields with defaults', () => {
         const context = OperatorWithSessionContext.parse({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
-        expect(context.operator_id).toBe('op-123');
+        expect(context.id).toBe('op-123');
         expect(context.user_id).toBe('user-456');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
         expect(context.operator_session_id).toBeNull();
@@ -883,7 +883,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('system_info defaults to empty SystemInfo', () => {
         const context = new OperatorWithSessionContext({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
@@ -893,7 +893,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('create() builds context from operator and sessions', () => {
         const operator = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             operator_session_id: 'os-789',
@@ -909,7 +909,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         const webSession = { id: 'ws-new-101' };
 
         const context = OperatorWithSessionContext.create(operator, operatorSession, webSession);
-        expect(context.operator_id).toBe('op-123');
+        expect(context.id).toBe('op-123');
         expect(context.operator_session_id).toBe('os-new-789');
         expect(context.bound_web_session_id).toBe('ws-new-101');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
@@ -924,7 +924,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('create() falls back to operator session IDs when sessions not provided', () => {
         const operator = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
             operator_session_id: 'os-789',
@@ -937,7 +937,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('create() handles missing operator session ID', () => {
         const operator = new OperatorDocument({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });
@@ -948,7 +948,7 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
 
     it('forWire() delegates to forDB()', () => {
         const context = new OperatorWithSessionContext({
-            operator_id: 'op-123',
+            id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.ACTIVE,
         });

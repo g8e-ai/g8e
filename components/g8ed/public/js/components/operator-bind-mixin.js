@@ -18,7 +18,6 @@ import { templateLoader } from '../utils/template-loader.js';
 import { EventType } from '../constants/events.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { escapeHtml } from '../utils/html.js';
-import { showConfirmationModal } from '../utils/ui-utils.js';
 import { webSessionService } from '../utils/web-session-service.js';
 
 /**
@@ -149,7 +148,7 @@ export const BindOperatorsMixin = {
         const isStale = mode === 'unbind-stale';
         
         const title = isStale ? 'Unbind Stale Operator' : 
-                     (isUnbind ? 'Unbind Operator from WebSession' : 'Bind an Operator to your chat session');
+                     (isUnbind ? 'Unbind Operator from WebSession' : 'Bind Selected Operators');
         
         const message = isStale ? 'This Operator is stale (bound but offline). Unbinding will free it so it can be rebound when it comes back online.' :
                        (isUnbind ? 'This will disconnect the Operator from your current web session. You will no longer be able to interact with it through the chat interface.' :
@@ -158,43 +157,67 @@ export const BindOperatorsMixin = {
         const confirmLabel = isUnbind || isStale ? 'Unbind Operator' : 'Bind Operator';
         const confirmIcon = isUnbind || isStale ? 'link_off' : 'link';
         const icon = isUnbind || isStale ? 'link_off' : 'link';
-        const iconClass = isUnbind || isStale ? 'unbind-all-icon' : '';
-        const confirmClass = isUnbind || isStale ? 'unbind-all-confirm-btn' : '';
-        const descriptionClass = isUnbind || isStale ? 'unbind-all-description' : '';
+        const processingLabel = isUnbind || isStale ? 'Unbinding operator...' : 'Binding operator...';
 
-        const htmlContent = `
-            <div class="bind-all-operators-container">
-                <div class="bind-all-operators-list">
-                    ${this._createBindAllOperatorItem(operator || { 
-                        operator_id: operatorId, 
-                        system_info: { 
-                            hostname: operator?.system_info?.hostname || 'Unknown', 
-                            os: operator?.system_info?.os || '-', 
-                            internal_ip: operator?.system_info?.internal_ip || '-' 
-                        } 
-                    })}
-                </div>
-            </div>
-            <div class="bind-all-processing initially-hidden" data-processing-indicator>
-                <div class="spinner"></div>
-                <span data-processing-label>${isUnbind || isStale ? 'Unbinding operator...' : 'Binding operator...'}</span>
-            </div>
-            <div class="bind-all-actions-feedback"></div>
-        `;
+        if (!this.downloadCollapsibleContent) {
+            devLogger.error('[OPERATOR] Download collapsible content not found');
+            notificationService.error('Unable to show bind overlay. Please try again.');
+            return;
+        }
 
-        await showConfirmationModal({
-            title,
-            message,
-            confirmLabel,
-            confirmIcon,
-            icon,
-            iconClass,
-            confirmClass,
-            descriptionClass,
-            htmlContent,
-            onConfirm: async (overlay) => {
-                const processingIndicator = overlay.querySelector('[data-processing-indicator]');
-                const feedbackContainer = overlay.querySelector('.bind-all-actions-feedback');
+        this.expandDownloadSection();
+
+        const operatorItemHtml = this._createBindAllOperatorItem(operator || { 
+            operator_id: operatorId, 
+            system_info: { 
+                hostname: operator?.system_info?.hostname || 'Unknown', 
+                os: operator?.system_info?.os || '-', 
+                internal_ip: operator?.system_info?.internal_ip || '-' 
+            } 
+        });
+
+        const template = templateLoader.cache.get('operator-bind-single-overlay');
+        const overlayHtml = templateLoader.replace(template, {});
+        
+        const overlayContainer = document.createElement('div');
+        overlayContainer.innerHTML = overlayHtml;
+        const overlay = overlayContainer.firstElementChild;
+
+        // Update overlay content based on mode
+        const titleEl = overlay.querySelector('[data-modal-title]');
+        const iconEl = overlay.querySelector('[data-bind-icon]');
+        const confirmIconEl = overlay.querySelector('[data-confirm-icon]');
+        const confirmLabelEl = overlay.querySelector('[data-confirm-label]');
+        const processingLabelEl = overlay.querySelector('[data-processing-label]');
+
+        if (titleEl) titleEl.textContent = title;
+        if (iconEl) iconEl.textContent = icon;
+        if (confirmIconEl) confirmIconEl.textContent = confirmIcon;
+        if (confirmLabelEl) confirmLabelEl.textContent = confirmLabel;
+        if (processingLabelEl) processingLabelEl.textContent = processingLabel;
+
+        const operatorsList = overlay.querySelector('#operator-bind-single-operators-list');
+        if (operatorsList) {
+            operatorsList.innerHTML = operatorItemHtml;
+        }
+
+        this.downloadCollapsibleContent.prepend(overlay);
+        overlay.classList.add('active');
+
+        const cancelBtn = overlay.querySelector('#operator-bind-single-cancel-btn');
+        const confirmBtn = overlay.querySelector('#operator-bind-single-confirm-btn');
+
+        const closeOverlay = () => {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 300);
+        };
+
+        if (cancelBtn) cancelBtn.addEventListener('click', closeOverlay);
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
+                const processingIndicator = overlay.querySelector('#operator-bind-single-processing');
+                const feedbackContainer = overlay.querySelector('#operator-bind-single-feedback');
 
                 if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
@@ -217,6 +240,7 @@ export const BindOperatorsMixin = {
                     
                     // Keep open for a moment to show success feedback
                     await new Promise(r => setTimeout(r, 1200));
+                    closeOverlay();
                 } catch (error) {
                     devLogger.error('[OPERATOR] Single bind/unbind modal action failed:', error);
                     if (feedbackContainer) {
@@ -230,10 +254,12 @@ export const BindOperatorsMixin = {
                     
                     // Keep open longer to show error feedback
                     await new Promise(r => setTimeout(r, 3000));
-                    throw error; // Let showConfirmationModal know it failed
                 }
-            }
-        });
+            });
+        }
+
+        this.updateBindAllButtonVisibility();
+        this.updateUnbindAllButtonVisibility();
     },
 
     async showBindAllConfirmationOverlay() {
@@ -250,62 +276,79 @@ export const BindOperatorsMixin = {
             return;
         }
 
+        if (!this.downloadCollapsibleContent) {
+            devLogger.error('[OPERATOR] Download collapsible content not found');
+            notificationService.error('Unable to show bind overlay. Please try again.');
+            return;
+        }
+
+        this.expandDownloadSection();
+
         const operatorsListHtml = activeOperators.map(op => this._createBindAllOperatorItem(op)).join('');
-        const htmlContent = `
-            <div class="bind-all-operators-container">
-                <div class="bind-all-operators-header">
-                    <input type="checkbox" id="select-all-operators" class="select-all-checkbox" checked>
-                    <label for="select-all-operators">Select All</label>
-                </div>
-                <div class="bind-all-operators-list">
-                    ${operatorsListHtml}
-                </div>
-            </div>
-            <div class="bind-all-processing initially-hidden" data-processing-indicator>
-                <div class="spinner"></div>
-                <span data-processing-label>Binding operators...</span>
-            </div>
-            <div class="bind-all-actions-feedback"></div>
-        `;
+        
+        const template = templateLoader.cache.get('operator-bind-all-overlay');
+        const overlayHtml = templateLoader.replace(template, {});
+        
+        const overlayContainer = document.createElement('div');
+        overlayContainer.innerHTML = overlayHtml;
+        const overlay = overlayContainer.firstElementChild;
+        
+        const countSpan = overlay.querySelector('#operator-bind-all-count');
+        if (countSpan) {
+            countSpan.textContent = `${activeOperators.length} operator${activeOperators.length !== 1 ? 's' : ''}`;
+        }
 
-        await showConfirmationModal({
-            title: 'Bind All Active Operators',
-            message: `The following ${activeOperators.length} active operator${activeOperators.length !== 1 ? 's' : ''} will be bound to your current web session. You will be able to interact with all of them through the chat interface.`,
-            confirmLabel: 'Bind All',
-            confirmIcon: 'link',
-            icon: 'link',
-            htmlContent,
-            onConfirm: async (overlay) => {
+        const operatorsList = overlay.querySelector('#operator-bind-all-operators-list');
+        if (operatorsList) {
+            operatorsList.innerHTML = operatorsListHtml;
+        }
+
+        this.downloadCollapsibleContent.prepend(overlay);
+        overlay.classList.add('active');
+
+        const selectAllCheckbox = overlay.querySelector('#operator-select-all-operators');
+        const operatorCheckboxes = overlay.querySelectorAll('.operator-select-checkbox');
+        const closeBtn = overlay.querySelector('#operator-bind-all-close-btn');
+        const cancelBtn = overlay.querySelector('#operator-bind-all-cancel-btn');
+        const confirmBtn = overlay.querySelector('#operator-bind-all-confirm-btn');
+
+        if (selectAllCheckbox && operatorCheckboxes.length > 0) {
+            selectAllCheckbox.addEventListener('change', (e) => {
+                operatorCheckboxes.forEach(cb => {
+                    cb.checked = e.target.checked;
+                });
+            });
+
+            operatorCheckboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const allChecked = Array.from(operatorCheckboxes).every(c => c.checked);
+                    selectAllCheckbox.checked = allChecked;
+                });
+            });
+        }
+
+        const closeOverlay = () => {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 300);
+        };
+
+        if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeOverlay);
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
                 await this.executeBindAll(overlay, activeOperators);
-            },
-            onRender: (overlay) => {
-                const selectAllCheckbox = overlay.querySelector('#select-all-operators');
-                const operatorCheckboxes = overlay.querySelectorAll('.operator-select-checkbox');
-
-                if (selectAllCheckbox && operatorCheckboxes.length > 0) {
-                    selectAllCheckbox.addEventListener('change', (e) => {
-                        operatorCheckboxes.forEach(cb => {
-                            cb.checked = e.target.checked;
-                        });
-                    });
-
-                    operatorCheckboxes.forEach(cb => {
-                        cb.addEventListener('change', () => {
-                            const allChecked = Array.from(operatorCheckboxes).every(c => c.checked);
-                            selectAllCheckbox.checked = allChecked;
-                        });
-                    });
-                }
-            }
-        });
+                closeOverlay();
+            });
+        }
 
         this.updateBindAllButtonVisibility();
         this.updateUnbindAllButtonVisibility();
     },
 
     async executeBindAll(overlay, activeOperators) {
-        const processingIndicator = overlay.querySelector('[data-processing-indicator]');
-        const feedbackContainer = overlay.querySelector('.bind-all-actions-feedback');
+        const processingIndicator = overlay.querySelector('#operator-bind-all-processing');
+        const feedbackContainer = overlay.querySelector('#operator-bind-all-feedback');
 
         if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
@@ -423,7 +466,7 @@ export const BindOperatorsMixin = {
         if (unboundActiveCount > 0) {
             this.bindAllBtn.classList.remove('initially-hidden');
             const textSpan = this.bindAllBtn.querySelector('span:last-child');
-            if (textSpan) textSpan.textContent = `Bind All (${unboundActiveCount})`;
+            if (textSpan) textSpan.textContent = `Bind (${unboundActiveCount})`;
         } else {
             this.bindAllBtn.classList.add('initially-hidden');
         }
@@ -436,7 +479,7 @@ export const BindOperatorsMixin = {
 
         const boundOperators = this.operators.filter(op =>
             (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
-            (op.status === OperatorStatus.STALE && this.boundOperatorIds.includes(op.operator_id))
+            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id)))
         );
 
         if (boundOperators.length === 0) {
@@ -445,42 +488,62 @@ export const BindOperatorsMixin = {
             return;
         }
 
-        const operatorsListHtml = boundOperators.map(op => this._createUnbindAllOperatorItem(op)).join('');
-        const htmlContent = `
-            <div class="bind-all-operators-container">
-                <div class="bind-all-operators-list">
-                    ${operatorsListHtml}
-                </div>
-            </div>
-            <div class="bind-all-processing initially-hidden" data-processing-indicator>
-                <div class="spinner"></div>
-                <span data-processing-label>Unbinding operators...</span>
-            </div>
-            <div class="bind-all-actions-feedback"></div>
-        `;
+        if (!this.downloadCollapsibleContent) {
+            devLogger.error('[OPERATOR] Download collapsible content not found');
+            notificationService.error('Unable to show unbind overlay. Please try again.');
+            return;
+        }
 
-        await showConfirmationModal({
-            title: 'Unbind All Operators',
-            message: `The following ${boundOperators.length} operator${boundOperators.length !== 1 ? 's' : ''} will be unbound from your current web session. You will no longer be able to interact with them until they are rebound.`,
-            confirmLabel: 'Unbind All',
-            confirmIcon: 'link_off',
-            icon: 'link_off',
-            iconClass: 'unbind-all-icon',
-            confirmClass: 'unbind-all-confirm-btn',
-            descriptionClass: 'unbind-all-description',
-            htmlContent,
-            onConfirm: async (overlay) => {
+        this.expandDownloadSection();
+
+        const operatorsListHtml = boundOperators.map(op => this._createUnbindAllOperatorItem(op)).join('');
+        
+        const template = templateLoader.cache.get('operator-unbind-all-overlay');
+        const overlayHtml = templateLoader.replace(template, {});
+        
+        const overlayContainer = document.createElement('div');
+        overlayContainer.innerHTML = overlayHtml;
+        const overlay = overlayContainer.firstElementChild;
+        
+        const countSpan = overlay.querySelector('#operator-unbind-all-count');
+        if (countSpan) {
+            countSpan.textContent = `${boundOperators.length} operator${boundOperators.length !== 1 ? 's' : ''}`;
+        }
+
+        const operatorsList = overlay.querySelector('#operator-unbind-all-operators-list');
+        if (operatorsList) {
+            operatorsList.innerHTML = operatorsListHtml;
+        }
+
+        this.downloadCollapsibleContent.prepend(overlay);
+        overlay.classList.add('active');
+
+        const closeBtn = overlay.querySelector('#operator-unbind-all-close-btn');
+        const cancelBtn = overlay.querySelector('#operator-unbind-all-cancel-btn');
+        const confirmBtn = overlay.querySelector('#operator-unbind-all-confirm-btn');
+
+        const closeOverlay = () => {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 300);
+        };
+
+        if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeOverlay);
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
                 await this.executeUnbindAll(overlay, boundOperators);
-            }
-        });
+                closeOverlay();
+            });
+        }
 
         this.updateBindAllButtonVisibility();
         this.updateUnbindAllButtonVisibility();
     },
 
     async executeUnbindAll(overlay, boundOperators) {
-        const processingIndicator = overlay.querySelector('[data-processing-indicator]');
-        const feedbackContainer = overlay.querySelector('.bind-all-actions-feedback');
+        const processingIndicator = overlay.querySelector('#operator-unbind-all-processing');
+        const feedbackContainer = overlay.querySelector('#operator-unbind-all-feedback');
 
         if (processingIndicator) processingIndicator.classList.remove('initially-hidden');
 
@@ -576,12 +639,19 @@ export const BindOperatorsMixin = {
             return;
         }
 
-        const boundToMeCount = this.boundOperatorIds.length;
+        const currentWebSessionId = window.authState?.getWebSessionId();
+
+        const boundOperators = this.operators.filter(op =>
+            (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
+            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id)))
+        );
+
+        const boundToMeCount = boundOperators.length;
 
         if (boundToMeCount > 0) {
             this.unbindAllBtn.classList.remove('initially-hidden');
             const textSpan = this.unbindAllBtn.querySelector('span:last-child');
-            if (textSpan) textSpan.textContent = `Unbind All (${boundToMeCount})`;
+            if (textSpan) textSpan.textContent = `Unbind (${boundToMeCount})`;
         } else {
             this.unbindAllBtn.classList.add('initially-hidden');
         }

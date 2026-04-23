@@ -35,8 +35,8 @@ export default defineConfig({
       // TestCleanupHelper, so files can safely run in parallel forks.
       // Within a single file, tests still run sequentially (default).
       pool: 'forks',
-      maxWorkers: 4,
-      minWorkers: 2,
+      maxWorkers: 8,
+      minWorkers: 4,
       fileParallelism: true,
       reporters: ['dot'],
       // Suppress stdout/stderr output during tests

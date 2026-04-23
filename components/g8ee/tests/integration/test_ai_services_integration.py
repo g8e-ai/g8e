@@ -17,29 +17,11 @@ Integration tests: AI Services Real LLM Calls
 These tests exercise AI services with real LLM providers to verify end-to-end functionality.
 All tests use real services and infrastructure - no mocks allowed per testing guidelines.
 
-    Segment 1 — Memory Generation Service
-      Test AI-powered memory analysis and updates from conversation history.
-
-    Segment 2 — Title Generation Service  
-      Test AI-powered case title generation from descriptions.
-
-    Segment 3 — Triage Service
-      Test AI-powered case triage and complexity classification.
-
-    Segment 4 — Command Generation Service
-      Test AI-powered command generation from user requests.
-
-    Segment 5 — Response Analysis Service
-      Test AI-powered response analysis and validation.
-
-Real code under test:
-    MemoryGenerationService (app/services/ai/memory_generation_service.py)
-    generate_case_title (app/services/ai/title_generator.py)
-    TriageService (app/services/ai/triage.py)
-    CommandGeneratorService (app/services/ai/command_generator.py)
-    ResponseAnalyzer (app/services/ai/response_analyzer.py)
-
-All tests use real LLM providers and services — no mocks allowed per testing guidelines.
+Segment 1: Memory Generation Service
+Segment 2: Title Generation Service
+Segment 3: Triage Service
+Segment 4: Command Generation Service
+Segment 5: Response Analysis Service
 """
 
 import pytest
@@ -56,10 +38,9 @@ from app.constants import (
 
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
-from app.models.settings import G8eeUserSettings
 from app.models.tool_results import CommandRiskContext
 from app.models.agents.triage import TriageRequest, TriageResult
-from app.services.ai.command_generator import generate_command
+from app.services.ai.generator import generate_command
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
@@ -82,9 +63,12 @@ class TestMemoryGenerationServiceIntegration:
     """Test AI-powered memory generation with real LLM calls."""
 
     async def test_memory_generation_from_conversation(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService analyzes conversation and updates memory."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -125,9 +109,6 @@ class TestMemoryGenerationServiceIntegration:
         ]
 
         # Test memory generation
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
@@ -166,9 +147,12 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(result_memory.investigation_id)
 
     async def test_memory_generation_with_existing_memory(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService updates existing memory with new conversation data."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -226,9 +210,6 @@ class TestMemoryGenerationServiceIntegration:
         assert "RPM" in all_text, "Conversation content missing from LLM payload"
 
         # Test memory update
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         updated_memory = await memory_service.update_memory_from_conversation(
             conversation_history=conversation_history,
             investigation=created_investigation,
@@ -305,9 +286,12 @@ class TestMemoryGenerationServiceIntegration:
         cleanup.track_memory(updated_memory.investigation_id)
 
     async def test_memory_generation_empty_conversation(
-        self, cache_aside_service, test_settings, all_services, cleanup
+        self, cache_aside_service, test_settings, all_services, user_settings, cleanup
     ):
         """MemoryGenerationService handles empty conversation gracefully."""
+        if not user_settings.llm.assistant_model:
+            pytest.skip("LLM assistant_model is not configured")
+
         # Get real services from all_services fixture
         memory_data_service = all_services['memory_data_service']
         investigation_data_service = all_services['investigation_data_service']
@@ -320,9 +304,6 @@ class TestMemoryGenerationServiceIntegration:
         )
 
         # Test with empty conversation
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result_memory = await memory_service.update_memory_from_conversation(
             conversation_history=[],
             investigation=created_investigation,
@@ -349,17 +330,13 @@ class TestMemoryGenerationServiceIntegration:
 class TestTitleGenerationIntegration:
     """Test AI-powered title generation with real LLM calls."""
 
-    async def test_generate_case_title_from_description(self, test_settings):
+    async def test_generate_case_title_from_description(self, user_settings):
         """generate_case_title creates meaningful titles from descriptions."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with unique technical description
         description = "Our 'Crimson-Edge' router in Singapore is experiencing a 'Purple-Pulse' synchronization error. This usually happens during the monsoon season when humidity is over 85%. We need to verify the fiber optic signal strength on Port 7."
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
@@ -377,17 +354,13 @@ class TestTitleGenerationIntegration:
         # Look for router, network, or connectivity concepts
         assert any(keyword in title_lower for keyword in ["router", "crimson", "edge", "purple", "pulse", "sync", "singapore", "fiber", "optic", "signal", "port", "network", "connection"])
 
-    async def test_generate_case_title_from_short_description(self, test_settings):
+    async def test_generate_case_title_from_short_description(self, user_settings):
         """generate_case_title handles short descriptions well."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
 
         # Test with very short description
         description = "Help with Kubernetes"
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         title = await generate_case_title(
             description=description,
             max_length=80,
@@ -418,14 +391,10 @@ class TestTitleGenerationIntegration:
         # Should be truncated version of description
         assert title.generated_title.lower().startswith("complex technical")
 
-    async def test_generate_case_title_empty_description(self, test_settings):
+    async def test_generate_case_title_empty_description(self, user_settings):
         """generate_case_title handles empty/None descriptions."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.assistant_model:
+        if not user_settings.llm.assistant_model:
             pytest.skip("LLM provider is not configured")
-
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
 
         # Test with None description
         title = await generate_case_title(
@@ -470,11 +439,9 @@ class TestTitleGenerationIntegration:
 class TestTriageServiceIntegration:
     """Test AI-powered triage with real LLM calls."""
 
-    async def test_triage_complexity_classification(self, test_settings):
+    async def test_triage_complexity_classification(self, user_settings):
         """TriageService correctly classifies case complexity."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test complex technical issue with specific entities
@@ -486,7 +453,6 @@ class TestTriageServiceIntegration:
         """
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=complex_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -503,18 +469,15 @@ class TestTriageServiceIntegration:
         # Helsinki bunker with Borealis-7 chipset and Silver-Scream panic is definitely not simple.
         assert result.complexity == TriageComplexityClassification.COMPLEX
 
-    async def test_triage_simple_issue(self, test_settings):
+    async def test_triage_simple_issue(self, user_settings):
         """TriageService correctly classifies simple issues."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test simple issue
         simple_message = "What time is it?"
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=simple_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -527,26 +490,17 @@ class TestTriageServiceIntegration:
         # Verify triage result
         assert isinstance(result, TriageResult)
         
-        # Simple factual question should be classified as SIMPLE complexity, but JSON parsing is failing
-        # TODO: Fix triage service JSON parsing issue with truncated responses
-        # The model correctly returns "simple" but the JSON is truncated, causing fallback to COMPLEX
-        assert result.complexity in [
-            TriageComplexityClassification.SIMPLE,  # Expected when JSON parsing works
-            TriageComplexityClassification.COMPLEX,  # Current fallback due to JSON parsing failure
-        ]
+        assert result.complexity == TriageComplexityClassification.SIMPLE
 
-    async def test_triage_password_reset_complexity(self, test_settings):
+    async def test_triage_password_reset_complexity(self, user_settings):
         """TriageService correctly classifies password reset as complex due to security implications."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test password reset (security-sensitive)
         security_message = "I need help resetting my password. I forgot it and can't log in."
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=security_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -562,18 +516,15 @@ class TestTriageServiceIntegration:
         # Password reset involves account access and security, so should be classified as COMPLEX
         assert result.complexity == TriageComplexityClassification.COMPLEX
 
-    async def test_triage_ambiguous_request(self, test_settings):
+    async def test_triage_ambiguous_request(self, user_settings):
         """TriageService handles ambiguous requests appropriately."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test ambiguous request
         ambiguous_message = "help"
 
         agent = TriageAgent()
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         request = TriageRequest(
             message=ambiguous_message,
             agent_mode=AgentMode.OPERATOR_NOT_BOUND,
@@ -607,11 +558,9 @@ class TestTriageServiceIntegration:
 class TestCommandGenerationIntegration:
     """Test AI-powered command generation with real LLM calls."""
 
-    async def test_command_generation_interface(self, test_settings):
+    async def test_command_generation_interface(self, user_settings, all_services):
         """Test that command generation interface exists and can be called."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
         assert callable(generate_command)
 
@@ -622,19 +571,17 @@ class TestCommandGenerationIntegration:
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
 
-    async def test_forbidden_patterns_dynamic_integration(self, test_settings):
+    async def test_forbidden_patterns_dynamic_integration(self, user_settings):
         """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""
-        from app.llm.factory import get_llm_settings
         from app.constants import FORBIDDEN_COMMAND_PATTERNS
-        from app.services.ai.command_generator import _format_forbidden_patterns_message
+        from app.llm.prompts import build_forbidden_patterns_message
         
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
         
         # The platform forbids privilege-escalation tokens unconditionally (see
         # tool_service.execute_tool_call); the Tribunal prompt must reflect that regardless of uid.
-        message = _format_forbidden_patterns_message()
+        message = build_forbidden_patterns_message()
 
         # Check that all patterns in FORBIDDEN_COMMAND_PATTERNS are reflected in the message
         for pattern in FORBIDDEN_COMMAND_PATTERNS:
@@ -645,16 +592,15 @@ class TestCommandGenerationIntegration:
                 )
 
         # Verify the message contains critical keywords
-        assert "CRITICAL" in message
-        assert "NEVER" in message
-        assert "privilege escalation" in message
+        assert "FORBIDDEN" in message
+        assert "rejected" in message
 
     async def test_command_constraints_message_formatting(self, test_settings):
         """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
-        from app.services.ai.command_generator import _format_command_constraints_message
+        from app.llm.prompts import build_command_constraints_message
         
         # Test with no constraints
-        message = _format_command_constraints_message(
+        message = build_command_constraints_message(
             whitelisting_enabled=False,
             blacklisting_enabled=False,
             whitelisted_commands=None,
@@ -662,40 +608,117 @@ class TestCommandGenerationIntegration:
         )
         assert "No whitelist or blacklist constraints are active" in message
         
-        # Test with whitelist only
-        message = _format_command_constraints_message(
+        # Test with metadata-rich whitelist
+        whitelisted_metadata = [
+            {
+                "command": "ping",
+                "category": "network",
+                "safe_options": ["-c <count>", "-W <timeout>"],
+                "validation": {"count": r"^\d+$", "timeout": r"^\d+$"}
+            },
+            {
+                "command": "ls",
+                "category": "filesystem",
+                "safe_options": ["-la", "-lh"],
+                "validation": {}
+            }
+        ]
+        message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=False,
-            whitelisted_commands=["ls -la", "pwd", "whoami"],
+            whitelisted_commands=whitelisted_metadata,
             blacklisted_commands=None,
         )
-        assert "COMMAND WHITELIST ACTIVE" in message
-        assert "Only these 3 commands are permitted" in message
+        assert "Whitelisting is ENABLED" in message
+        assert "ping" in message
+        assert "ls" in message
+        assert "safe_options" in message
+        assert "validation_patterns" in message
+        
+        # Test with whitelist only
+        message = build_command_constraints_message(
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            whitelisted_commands=[{"command": "ls -la"}, {"command": "pwd"}, {"command": "whoami"}],
+            blacklisted_commands=None,
+        )
+        assert "Whitelisting is ENABLED" in message
+        assert "Only these commands are allowed" in message
         assert "ls -la" in message
         assert "pwd" in message
         assert "whoami" in message
         
         # Test with blacklist only
-        message = _format_command_constraints_message(
+        message = build_command_constraints_message(
             whitelisting_enabled=False,
             blacklisting_enabled=True,
             whitelisted_commands=None,
-            blacklisted_commands=[{"pattern": "rm -rf"}, {"pattern": "sudo"}],
+            blacklisted_commands=[{"command": "rm -rf"}, {"command": "sudo"}],
         )
-        assert "COMMAND BLACKLIST ACTIVE" in message
-        assert "Commands matching these patterns are forbidden" in message
+        assert "Blacklisting is ENABLED" in message
+        assert "These commands are FORBIDDEN" in message
         assert "rm -rf" in message
         assert "sudo" in message
         
         # Test with both whitelist and blacklist
-        message = _format_command_constraints_message(
+        message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=True,
-            whitelisted_commands=["ls", "cat"],
-            blacklisted_commands=[{"pattern": "rm"}],
+            whitelisted_commands=[{"command": "ls"}],
+            blacklisted_commands=[{"command": "rm -rf"}],
         )
-        assert "COMMAND WHITELIST ACTIVE" in message
-        assert "COMMAND BLACKLIST ACTIVE" in message
+        assert "Whitelisting is ENABLED" in message
+        assert "Blacklisting is ENABLED" in message
+
+    async def test_l1_safety_validation_whitelist_violation(self, test_settings):
+        """Test that L1 safety validation correctly detects whitelist violations.
+        
+        This verifies the technical bedrock layer (validate_command_safety) properly
+        blocks commands that violate whitelist constraints, ensuring the Auditor
+        has the correct context to flag WHITELIST_VIOLATION reasons.
+        """
+        from app.utils.safety import validate_command_safety, map_os_string_to_platform
+        from app.models.agent import OperatorContext
+        from app.constants.status import Platform
+        
+        # Create a mock operator context
+        operator_context = OperatorContext(
+            operator_id="test-operator",
+            operator_session_id="test-session",
+            os="linux",
+            hostname="test-host",
+            username="testuser",
+            uid=1000,
+            shell="/bin/bash",
+            working_directory="/home/testuser",
+            architecture="x86_64",
+        )
+        
+        # Test 1: Valid whitelisted command should pass
+        is_safe, error = validate_command_safety(
+            command="ping -c 4 google.com",
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            operator_context=operator_context,
+        )
+        
+        # Test 2: Command with forbidden flag should fail
+        is_safe, error = validate_command_safety(
+            command="sudo ls",
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            operator_context=operator_context,
+        )
+        assert not is_safe, "sudo command should be blocked by forbidden patterns"
+        assert "forbidden" in error.lower() or "sudo" in error.lower()
+        
+        # Test 3: Platform mapping works correctly
+        assert map_os_string_to_platform("linux") == Platform.LINUX
+        assert map_os_string_to_platform("windows") == Platform.WINDOWS
+        assert map_os_string_to_platform("darwin") == Platform.DARWIN
+        assert map_os_string_to_platform("macos") == Platform.DARWIN
+        assert map_os_string_to_platform(None) == Platform.LINUX
+        assert map_os_string_to_platform("unknown") == Platform.LINUX
 
 
 # ---------------------------------------------------------------------------
@@ -707,16 +730,14 @@ class TestCommandGenerationIntegration:
 class TestResponseAnalysisIntegration:
     """Test AI-powered response analysis with real LLM calls."""
 
-    async def test_analyze_command_risk(self, test_settings):
+    async def test_analyze_command_risk(self, user_settings):
         """AIResponseAnalyzer correctly analyzes command risk."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
 
-        # Test low-risk command: specifically checking it's NOT high
+        # Test low-risk command
         low_risk_command = "ls -la /home/user/Alpine-Delta/logs"
         justification = "Checking logs for the Alpine-Delta node thermal event"
 
@@ -726,7 +747,6 @@ class TestResponseAnalysisIntegration:
             username="dc-tech",
         )
 
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=low_risk_command,
             justification=justification,
@@ -738,20 +758,16 @@ class TestResponseAnalysisIntegration:
         assert result is not None
         assert hasattr(result, 'risk_level')
         
-        # Reading logs is LOW risk. We'll accept MEDIUM if the LLM is cautious, 
-        # but HIGH is a failure of the risk model for an 'ls' command.
-        assert result.risk_level in ['LOW', 'MEDIUM']
+        assert result.risk_level == 'LOW'
 
-    async def test_analyze_high_risk_command(self, test_settings):
+    async def test_analyze_high_risk_command(self, user_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         analyzer = AIResponseAnalyzer()
 
-        # Test high-risk command: wiping a specific important directory
+        # Test high-risk command
         high_risk_command = "rm -rf /data/Zurich/Alpine-Alpha/backups"
         justification = "Wiping the Zurich backups for the Alpine-Alpha node because we're decommissioning the rack."
 
@@ -761,7 +777,6 @@ class TestResponseAnalysisIntegration:
             username="root",
         )
 
-        user_settings = G8eeUserSettings(llm=llm, search=test_settings.search)
         result = await analyzer.analyze_command_risk(
             command=high_risk_command,
             justification=justification,
@@ -776,11 +791,9 @@ class TestResponseAnalysisIntegration:
         # rm -rf /data/... as root is HIGH risk.
         assert result.risk_level == 'HIGH'
 
-    async def test_analyzer_interface_exists(self, test_settings):
+    async def test_analyzer_interface_exists(self, user_settings):
         """Test that AIResponseAnalyzer interface exists and can be instantiated."""
-        from app.llm.factory import get_llm_settings
-        llm = get_llm_settings()
-        if not llm or not llm.primary_model:
+        if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
 
         # Test that the class can be instantiated

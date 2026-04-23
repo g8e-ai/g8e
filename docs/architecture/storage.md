@@ -342,6 +342,8 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `bound_sessions` | g8ed | Operator–web session binding records — one document per web session |
 | `console_audit` | g8ed | Console / admin action audit trail |
 | `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID. Challenges are single-use nonces consumed on read during verification (see `PasskeyAuthService._consumeChallenge`), so rows are always deleted after verification regardless of outcome. |
+| `tribunal_commands` | g8ee | Tribunal command history — stores Tribunal-generated commands for audit and replay |
+| `agent_activity_metadata` | g8ee | Agent activity tracking metadata — records agent execution context and performance metrics |
 
 ### Session Documents
 
@@ -686,7 +688,7 @@ At the Python application layer, `sentinel_mode` is a `bool` on
 `InvestigationModel` and on the chat/MCP request models. At the pub/sub wire
 boundary it is serialized into `CommandPayload.sentinel_mode` as a `str | None`
 holding one of the `VaultMode` values (`"raw"` or `"scrubbed"`) — see
-`components/g8ee/app/models/command_payloads.py`.
+`components/g8ee/app/models/command_request_payloads.py`.
 
 g8eo is the defaulting authority: when `CommandPayload.sentinel_mode` is
 absent or empty on the wire, `CommandService.HandleExecutionRequest`
@@ -811,7 +813,7 @@ TTLs are defined in `TTL_STRATEGIES` (g8ee) and `CacheTTL` (g8ed). Collections a
 5. g8ee → g8es Doc: Read/create `cases` and `investigations` documents
 6. g8ee → LLM Provider: Stream request with assembled context
 7. g8ee → g8ed SSE: Push each `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event per text chunk
-8. g8ee → g8es Doc: Persist final AI response to `investigations`
+8. g8ee → g8es Doc: At each ReAct tool boundary (`TOOL_RESULT` chunk), append the iteration's accumulated AI text as an `AI_PRIMARY` row in `investigations.conversation_history` via `_run_chat_impl`'s `on_iteration_text` callback. After the stream closes, append the final segment as another `AI_PRIMARY` row via `_persist_ai_response` (carrying aggregate `token_usage` and `grounding_metadata`).
 9. g8ee → g8es Doc: Dispatch LFAA events via pub/sub to the bound g8eo
 
 ### Command Execution Flow

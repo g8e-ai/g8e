@@ -122,8 +122,6 @@ def test_build_modular_system_prompt_basic(mock_loader, operator_context, enrich
     assert "Capabilities prompt" in prompt
     assert "<system_context>" in prompt
     assert "Hostname: test-host" in prompt
-    assert "Naming Conventions: Standard naming" in prompt
-    assert "custom_field: Custom value" in prompt
     assert "<investigation_context>" in prompt
 
 

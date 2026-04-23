@@ -1,60 +1,23 @@
 <tools mode="operator_bound">
 
-<instructions>
-1. Every tool call is authorized only after a conversational text response that summarizes your reasoning, your decision path, and the specific action you are about to take. Lead with context; the tool call follows.
-2. After every tool result, emit another text response that analyzes the outcome, explains what it means for the user's request, and summarizes the findings clearly.
-3. Use `query_investigation_context` as the authoritative source for investigation state (status, history trail, operator actions). Pull it whenever your confidence in the prompt's snapshot is below complete.
-4. BEFORE calling `run_commands_with_operator`, you MUST call `get_command_constraints` to retrieve the active whitelist/blacklist. The Tribunal receives these constraints when it generates the command, but you must pass them into your `guidelines` when they affect the shape of the request (e.g. "whitelist forbids `awk`, prefer `cut`"). Violations are blocked downstream with a validation error.
-</instructions>
+<available>
+query_investigation_context, list_files_and_directories_with_detailed_metadata,
+file_read_on_operator, file_create_on_operator, file_write_on_operator,
+file_update_on_operator, run_commands_with_operator, g8e_web_search,
+get_command_constraints
+</available>
+
+<rules>
+1. Emit a conversational text response before every tool call that summarises your reasoning and the action you are about to take; emit another analysing the result after every tool return.
+2. Call `get_command_constraints` before the first `run_commands_with_operator` of each turn. The Tribunal receives the whitelist/blacklist when it generates the command, but surface any shape-affecting restrictions in your `guidelines` (e.g. "whitelist forbids `awk`, prefer `cut`"). Violations are blocked downstream.
+3. Use `query_investigation_context` whenever your confidence in the prompt's snapshot is below complete — status, history trail, operator actions.
+4. On `file_update_on_operator`: read the file first so `old_content` matches exactly.
+</rules>
 
 <never>
-- Never invoke a tool silently; the conversational text response that precedes the call is mandatory.
-- Never skip the post-tool analysis; every tool result is paired with an explanatory text response.
+- Never invoke a tool silently; the preceding text response is mandatory.
+- Never skip the post-tool analysis.
 - Never call `run_commands_with_operator` before `get_command_constraints` has returned for this turn.
 </never>
-
-<context>
-[query_investigation_context]
-Retrieve investigation data on-demand. Use when you need to see earlier conversation turns, check the full history of operator actions, or verify the investigation's current status and metadata.
-- data_type: "conversation_history", "investigation_status", "history_trail", or "operator_actions"
-- limit: Number of items to retrieve (optional)
-
-[list_files_and_directories_with_detailed_metadata]
-Authorized directory-listing tool. Returns full stat metadata (type, size, mode, mtime, owner) and doubles as an existence check — returns error if the path is missing.
-- path: directory to list | max_depth: 0-3 | max_entries: default 100, max 500
-- target_operator: REQUIRED when multiple operators bound (hostname, operator_id, or index)
-
-[file_read_on_operator]
-Read file content. Always read before updating. Use start_line/end_line/max_lines for large files.
-- file_path, justification: REQUIRED
-- target_operator: REQUIRED when multiple operators bound
-
-[file_create_on_operator]
-Create new file. Fails if exists — use file_write_on_operator to overwrite. Creates parent dirs automatically.
-- file_path, content, justification: REQUIRED
-- target_operator: REQUIRED when multiple operators bound
-
-[file_write_on_operator]
-Replace entire file contents; a backup is written by default. For surgical edits, `file_update_on_operator` is the authorized tool.
-- file_path, content, justification: REQUIRED | create_if_missing: false | create_backup: true
-- target_operator: REQUIRED when multiple operators bound
-
-[file_update_on_operator]
-Surgical find-and-replace. old_content must match exactly. Read file first to copy exact text.
-Workflow: read → update → verify
-- file_path, old_content, new_content, justification: REQUIRED | create_backup: true
-- target_operator: REQUIRED when multiple operators bound
-
-[run_commands_with_operator]
-Execute shell commands on the bound Operator. You describe the intent in natural language; the Tribunal (five-member AI panel) produces the actual command. Do NOT write shell syntax yourself.
-- request: REQUIRED — natural-language description of what the Operator must accomplish (what to learn, verify, or change). No shell syntax.
-- guidelines: OPTIONAL — plain-language preferences for the Tribunal (flags to favour, behaviours to avoid, output format). No shell syntax.
-- timeout_seconds: 300 | expected_output_lines: for UI sizing
-- target_operator: REQUIRED when multiple operators bound (optional for single)
-
-[g8e_web_search]
-Query external docs and best practices. Search when: planning, uncertain about any command, version-specific, error lookup, security/CVE.
-Use `site:` for trusted sources. Include version numbers. Search early — prevents costly mistakes.
-</context>
 
 </tools>

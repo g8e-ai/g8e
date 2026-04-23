@@ -19,6 +19,14 @@ networks:
   g8e-network:
     external: true
 
+# Shared operator env — merged into each node's environment map below.
+# When DEVICE_TOKEN is set (via `make up DEVICE_TOKEN=dlk_xxx`), each node
+# auto-downloads the operator and runs it supervised in-container.
+# When empty, the node boots healthy with no operator attached.
+x-operator-env: &operator-env
+  DEVICE_TOKEN: ${DEVICE_TOKEN:-}
+  G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+
 x-web-node: &web-node
   build:
     context: ./containers/web-node
@@ -44,6 +52,7 @@ services:
     container_name: web-node-01
     hostname: node-01
     environment:
+      <<: *operator-env
       NODE_ID: node-01
       NODE_PROFILE: healthy
 
@@ -52,6 +61,7 @@ services:
     container_name: web-node-02
     hostname: node-02
     environment:
+      <<: *operator-env
       NODE_ID: node-02
       NODE_PROFILE: healthy
 
@@ -60,6 +70,7 @@ services:
     container_name: web-node-03
     hostname: node-03
     environment:
+      <<: *operator-env
       NODE_ID: node-03
       NODE_PROFILE: healthy
 
@@ -68,6 +79,7 @@ services:
     container_name: web-node-04
     hostname: node-04
     environment:
+      <<: *operator-env
       NODE_ID: node-04
       NODE_PROFILE: healthy
 
@@ -76,6 +88,7 @@ services:
     container_name: web-node-05
     hostname: node-05
     environment:
+      <<: *operator-env
       NODE_ID: node-05
       NODE_PROFILE: healthy
 
@@ -84,6 +97,7 @@ services:
     container_name: web-node-06
     hostname: node-06
     environment:
+      <<: *operator-env
       NODE_ID: node-06
       NODE_PROFILE: bad_upstream
 
@@ -92,6 +106,7 @@ services:
     container_name: web-node-07
     hostname: node-07
     environment:
+      <<: *operator-env
       NODE_ID: node-07
       NODE_PROFILE: ssl_expired
 
@@ -100,6 +115,7 @@ services:
     container_name: web-node-08
     hostname: node-08
     environment:
+      <<: *operator-env
       NODE_ID: node-08
       NODE_PROFILE: wrong_root
 
@@ -108,6 +124,7 @@ services:
     container_name: web-node-09
     hostname: node-09
     environment:
+      <<: *operator-env
       NODE_ID: node-09
       NODE_PROFILE: high_load
 
@@ -116,6 +133,7 @@ services:
     container_name: web-node-10
     hostname: node-10
     environment:
+      <<: *operator-env
       NODE_ID: node-10
       NODE_PROFILE: crashed
 

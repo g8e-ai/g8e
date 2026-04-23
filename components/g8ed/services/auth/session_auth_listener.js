@@ -13,6 +13,7 @@
 
 import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
+import { sessionIdTag } from '../../utils/session_log.js';
 import { SessionAuthResponse } from '../../models/request_models.js';
 import { ApiKeyError } from '../../constants/auth.js';
 import { SESSION_AUTH_LISTEN_TTL_MS } from '../../constants/auth.js';
@@ -48,37 +49,45 @@ export class SessionAuthListener {
         const authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         const responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
 
-        let subscriber = null;
-        const cleanup = () => { try { subscriber?.terminate(); } catch (_) {} };
+        const pubSubClient = this._pubSubClient;
+        const operatorSessionService = this._operatorSessionService;
+        const operatorService = this._operatorService;
+
+        let messageHandler = null;
+        const cleanup = () => {
+            try {
+                if (messageHandler) {
+                    pubSubClient.removeListener('message', messageHandler);
+                }
+                pubSubClient.unsubscribe(authChannel);
+            } catch (_) {}
+        };
         const timer = setTimeout(cleanup, SESSION_AUTH_LISTEN_TTL_MS);
 
-        // `duplicate()` and `subscribe()` on G8esPubSubClient are synchronous.
         // This method is invoked fire-and-forget from the device-register
         // HTTP handler, so ANY synchronous error here must be swallowed —
         // otherwise it would bubble up and turn a successful registration
         // into a 500. See session_auth_listener.unit.test.js.
         try {
-            subscriber = this._pubSubClient.duplicate();
-
-            subscriber.on('message', async (channel, _data) => {
+            messageHandler = async (channel, _data) => {
                 if (channel !== authChannel) return;
                 clearTimeout(timer);
 
                 try {
-                    const sessionData = await this._operatorSessionService.validateSession(operator_session_id);
+                    const sessionData = await operatorSessionService.validateSession(operator_session_id);
 
                     if (!sessionData || !sessionData.is_active) {
-                        await subscriber.publish(responseChannel, new SessionAuthResponse({
+                        await pubSubClient.publish(responseChannel, new SessionAuthResponse({
                             success: false,
                             error:   'Session not found or expired',
                         }).forKV());
                         return;
                     }
 
-                    const operator = await this._operatorService.getOperator(operator_id);
+                    const operator = await operatorService.getOperator(operator_id);
                     const api_key  = operator?.api_key || null;
 
-                    await subscriber.publish(responseChannel, new SessionAuthResponse({
+                    await pubSubClient.publish(responseChannel, new SessionAuthResponse({
                         success:            true,
                         operator_session_id,
                         operator_id,
@@ -92,12 +101,12 @@ export class SessionAuthListener {
 
                     logger.info('[SESSION-AUTH-LISTENER] Auth response published', {
                         operator_id,
-                        operator_session_id: operator_session_id.substring(0, 12) + '...',
+                        operator_session_id_tag: sessionIdTag(operator_session_id),
                     });
                 } catch (err) {
                     logger.error('[SESSION-AUTH-LISTENER] Failed to handle session auth request', { error: err.message });
                     try {
-                        await subscriber.publish(responseChannel, new SessionAuthResponse({
+                        await pubSubClient.publish(responseChannel, new SessionAuthResponse({
                             success: false,
                             error:   ApiKeyError.AUTH_FAILED,
                         }).forKV());
@@ -105,9 +114,10 @@ export class SessionAuthListener {
                 } finally {
                     cleanup();
                 }
-            });
+            };
 
-            subscriber.subscribe(authChannel);
+            pubSubClient.on('message', messageHandler);
+            pubSubClient.subscribe(authChannel);
             logger.info('[SESSION-AUTH-LISTENER] Listening for session auth', {
                 operator_id,
                 channel: authChannel,

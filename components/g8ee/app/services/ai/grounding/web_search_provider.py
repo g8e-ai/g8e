@@ -387,7 +387,7 @@ class WebSearchProvider:
         while attempt <= WEB_SEARCH_CLIENT_MAX_RETRIES:
             try:
                 pager = await self._execute_search_lite(request)
-                results = []
+                results: list[WebSearchResultItem] = []
                 for result in pager:
                     derived = result.document.derived_struct_data
                     snippets = derived.get("snippets", [])

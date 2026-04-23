@@ -41,18 +41,12 @@ class AgentPersona(BaseModel):
     identity: str = Field(..., alias="identity")
     purpose: str = Field(..., alias="purpose")
     autonomy: str = Field(..., alias="autonomy")
-    persona: str = Field(default="", alias="persona")
 
     model_config = ConfigDict(populate_by_name=True)
 
     def get_system_prompt(self) -> str:
-        """Build a system prompt from identity and persona fields."""
-        if not self.persona or self.persona.strip().startswith("TODO:"):
-            # Fallback to identity if persona is not yet defined
-            return f"<identity>\n{self.identity}\n</identity>\n\n<purpose>\n{self.purpose}\n</purpose>"
-
-        # Use the full persona when defined
-        return self.persona
+        """Build a system prompt from identity, purpose, role, and autonomy fields."""
+        return f"<role>\n{self.role}\n</role>\n\n<identity>\n{self.identity}\n</identity>\n\n<purpose>\n{self.purpose}\n</purpose>\n\n<autonomy>\n{self.autonomy}\n</autonomy>"
 
 
 def _load_agents_json() -> dict[str, Any]:

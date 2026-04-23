@@ -27,7 +27,7 @@ from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
-from app.models.base import G8eBaseModel
+from app.models.base import ConfigDict, G8eBaseModel
 
 
 @dataclass(frozen=True)
@@ -242,9 +242,22 @@ def schema_from_model(model_cls: type, required_override: list[str] | None = Non
 
 
 class ToolDeclaration(G8eBaseModel):
+    """Provider-agnostic function/tool schema.
+
+    ``parameters`` is either:
+    - A ``Schema`` dataclass (canonical in-memory form for tool schemas derived
+      from Pydantic models via ``schema_from_model``), or
+    - A plain JSON-schema ``dict[str, Any]`` (used when callers pre-build a
+      JSON Schema fragment directly, e.g. MCP adapters and tests).
+
+    Providers consume the union via ``schema_to_dict`` before making wire calls.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     name: str
     description: str
-    parameters: Any
+    parameters: dict[str, Any] | Schema
 
 
 class ToolGroup(G8eBaseModel):
@@ -365,17 +378,17 @@ class StreamChunkFromModel:
 
 
 class ResponseJsonSchema(G8eBaseModel):
-    json_schema_dict: dict
+    json_schema_dict: dict[str, Any]
     name: str = "response"
     strict: bool = False
 
-    def flatten_for_ollama(self) -> dict:
+    def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema_dict
 
-    def flatten_for_gemini(self) -> dict:
+    def flatten_for_gemini(self) -> dict[str, Any]:
         return self.json_schema_dict
 
-    def flatten_for_openai(self) -> dict:
+    def flatten_for_openai(self) -> dict[str, Any]:
         return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
 
 
@@ -383,16 +396,16 @@ class ResponseFormat(G8eBaseModel):
     json_schema: ResponseJsonSchema
 
     @classmethod
-    def from_pydantic_schema(cls, json_schema: dict, name: str = "response") -> "ResponseFormat":
+    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> "ResponseFormat":
         return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
 
-    def flatten_for_ollama(self) -> dict:
+    def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema.flatten_for_ollama()
 
-    def flatten_for_gemini(self) -> dict:
+    def flatten_for_gemini(self) -> dict[str, Any]:
         return self.json_schema.flatten_for_gemini()
 
-    def flatten_for_openai(self) -> dict:
+    def flatten_for_openai(self) -> dict[str, Any]:
         return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}
 
 

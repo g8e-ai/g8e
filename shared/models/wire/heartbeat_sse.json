@@ -1,12 +1,14 @@
 {
-  "_comment": "Canonical wire envelope for the OPERATOR_HEARTBEAT_RECEIVED SSE event pushed from g8ee to g8ed (and fanned out to the browser). Authorship split: g8eo authors the telemetry inside `metrics`; g8ee owns the envelope (`operator_id`, `status`). Producers: g8ee `HeartbeatSSEEnvelope` (components/g8ee/app/models/operators.py). Consumers: g8ed `EventService` forwards the envelope unchanged to the browser; the browser reads `data.operator_id`, `data.status`, and `data.metrics.*`.",
+  "_comment": "Canonical wire envelope for the OPERATOR_HEARTBEAT_RECEIVED SSE event pushed from g8ee to g8ed (and fanned out to the browser). Authorship split: g8eo authors the telemetry inside `metrics`; g8ee owns the envelope (`operator_id`, `status`). `metrics` is the same nested OperatorHeartbeat shape that is persisted on the operator document — no flat projection, no divergence. Producers: g8ee `HeartbeatSSEEnvelope` (components/g8ee/app/models/operators.py). Consumers: g8ed `EventService` forwards the envelope unchanged to the browser; the browser parses `data.metrics` as a HeartbeatSnapshot (mirror of OperatorHeartbeat).",
+
+  "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
 
   "envelope": {
     "_description": "Top-level envelope authored by g8ee.",
     "operator_id": {
       "type": "string",
       "required": true,
-      "description": "Operator identifier. Matches the `operator_id` field on the persisted OperatorDocument."
+      "description": "Operator identifier. Maps from OperatorDocument.core_identity.id."
     },
     "status": {
       "type": "string",
@@ -16,54 +18,12 @@
     "metrics": {
       "type": "object",
       "required": true,
-      "$ref": "#metrics",
-      "description": "Telemetry snapshot authored by g8eo, projected by g8ee from the most recent OperatorHeartbeat."
+      "$ref": "heartbeat.json#operator_heartbeat",
+      "description": "The persisted OperatorHeartbeat instance, serialized as-is. Canonical shape: shared/models/wire/heartbeat.json#operator_heartbeat (nested: system_identity, performance, network, uptime, version_info, os_details, user_details, disk_details, memory_details, environment, plus top-level fingerprint/capability flags)."
     }
   },
 
-  "metrics": {
-    "_description": "Telemetry projected from OperatorHeartbeat. All fields are authored by g8eo (see wire/heartbeat.json) — g8ee only normalizes shape and names. No g8ee-owned state (status, routing, correlation) lives here.",
-
-    "timestamp": { "type": "string", "format": "iso8601", "required": true, "description": "When g8ee received the source heartbeat." },
-    "heartbeat_type": { "type": "string", "required": true, "values": ["automatic", "bootstrap", "requested"], "description": "See status.json heartbeat.type." },
-
-    "hostname": { "type": "string" },
-    "os": { "type": "string" },
-    "architecture": { "type": "string" },
-    "cpu_count": { "type": "integer" },
-    "memory_mb": { "type": "integer" },
-    "current_user": { "type": "string" },
-
-    "cpu_percent": { "type": "number", "description": "0-100" },
-    "memory_percent": { "type": "number", "description": "0-100" },
-    "disk_percent": { "type": "number", "description": "0-100" },
-    "network_latency": { "type": "number", "description": "Milliseconds" },
-    "memory_used_mb": { "type": "number" },
-    "memory_total_mb": { "type": "number" },
-    "disk_used_gb": { "type": "number" },
-    "disk_total_gb": { "type": "number" },
-
-    "public_ip": { "type": "string" },
-    "internal_ip": { "type": "string" },
-    "interfaces": { "type": "array", "items": "string" },
-
-    "uptime": { "type": "string", "description": "Human-readable uptime display." },
-    "uptime_seconds": { "type": "integer" },
-
-    "operator_version": { "type": "string" },
-    "version_status": { "type": "string", "values": ["stable", "beta", "dev"] },
-
-    "local_storage_enabled": { "type": "boolean", "default": false },
-    "git_available": { "type": "boolean", "default": false },
-    "ledger_enabled": { "type": "boolean", "default": false },
-
-    "os_details": { "$ref": "system_info.json#system_info/fields/os_details" },
-    "user_details": { "$ref": "system_info.json#system_info/fields/user_details" },
-    "disk_details": { "$ref": "system_info.json#system_info/fields/disk_details" },
-    "memory_details": { "$ref": "system_info.json#system_info/fields/memory_details" },
-    "environment": { "$ref": "system_info.json#system_info/fields/environment" }
-  },
-
-  "_comment.ownership": "Authorship boundary is enforced by the type split: HeartbeatMetrics (g8eo-authored telemetry) vs HeartbeatSSEEnvelope (g8ee-owned `operator_id` + `status` + `metrics`). Mutating `status` on the envelope after construction is explicitly disallowed — the authoritative value comes from OperatorDocument at the call site in heartbeat_service.py.",
-  "_comment.routing": "Routing fields (`web_session_id`, `user_id`, `case_id`, `investigation_id`) are added by the surrounding SessionEvent/BackgroundEvent envelope in app/models/events.py. They are NOT part of this wire schema and must never be placed inside `metrics`."
+  "_comment.ownership": "Authorship boundary: HeartbeatSSEEnvelope is g8ee-owned (`operator_id` + `status`); `metrics` is the g8eo-authored OperatorHeartbeat snapshot, unchanged from its persisted form. Mutating `status` on the envelope after construction is explicitly disallowed — the authoritative value comes from OperatorDocument at the call site in heartbeat_service.py.",
+  "_comment.routing": "Routing fields (`web_session_id`, `user_id`, `case_id`, `investigation_id`) are added by the surrounding SessionEvent/BackgroundEvent envelope in app/models/events.py. They are NOT part of this wire schema and must never be placed inside `metrics`.",
+  "_comment.alignment": "Alignment rule: the frontend HeartbeatSnapshot model must mirror OperatorHeartbeat exactly. There is no flat projection and no fallback reads — adding flat-key accessors at the call site is prohibited per docs/developer.md (No Deduplicators, Arbitrary Guards, or Unions)."
 }

@@ -3,17 +3,19 @@ Execute shell commands on the connected system through the g8e Operator.
 IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-member AI panel — is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
 
 <parameters>
-- request: REQUIRED — natural-language description of what the Operator must accomplish. Focus on investigative intent (what to learn, verify, or change). DO NOT write shell syntax here.
-- guidelines: OPTIONAL — creative guidance for the Tribunal expressed in plain language: flags to favour, behaviours to avoid, edge cases to cover, tradeoffs you consider important. NEVER include shell syntax. Leave empty when no guidance is needed.
+- request: REQUIRED — natural-language description of what the Operator must accomplish: what to learn, verify, or change. Investigative intent, not shell syntax.
+- guidelines: OPTIONAL — constraints on the command itself: tools or flags to prefer or avoid, portability requirements, edge cases the command must handle (e.g. spaces in paths), whitelist/blacklist restrictions surfaced by get_command_constraints. Plain language, never shell syntax. Guidelines describe the command, not its output. Leave empty when none apply.
 - target_operator: hostname, operator_id, or index ("0","1") — REQUIRED when multiple operators bound
 - target_operators: run the Tribunal-generated command on multiple operators simultaneously (["all"] or ["host-1","host-2"] or ["0","1"])
 - timeout_seconds: default 300 | expected_output_lines: for UI sizing
 </parameters>
 
 <examples>
-GOOD request: "Show disk usage under /home broken down per-user, sorted largest first, top 10."
-GOOD request with guidelines: request="Find all files modified in the last 24 hours under /var/log"; guidelines="Prefer a portable find invocation over locate; exclude compressed archives."
-BAD (do not do this): request="du -sh /home/*/ | sort -rh | head -10"  — that is a command string, which is the Tribunal's job to write.
+GOOD: request="Show disk usage under /home broken down per-user, sorted largest first, top 10."
+GOOD: request="Find all files modified in the last 24 hours under /var/log"; guidelines="Prefer a portable find invocation over locate; exclude compressed archives."
+GOOD: request="Locate the nginx binary and list running nginx processes and listening ports." (one intent per call; do not bundle unrelated operations behind output labels)
+BAD: request="du -sh /home/*/ | sort -rh | head -10"  — that is a command string, which is the Tribunal's job to write.
+BAD: guidelines="Keep output organized with echo headers."  — guidelines describe the command, not its output.
 </examples>
 
 <batch_execution>

@@ -144,7 +144,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
-	c.Logger.Info("g8e connectivity initialized")
+	c.Logger.Info("g8e connectivity initialized",
+		"config_operator_id", c.Config.OperatorID,
+		"config_operator_session_id", c.Config.OperatorSessionId)
 	return rs, nil
 }
 
@@ -187,7 +189,8 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 	rs.logger.Info("Establishing connection with g8ed",
 		"operator_id", rs.config.OperatorID,
-		"operator_session_id", rs.config.OperatorSessionId)
+		"operator_session_id", rs.config.OperatorSessionId,
+		"cmd_channel", channelName)
 
 	rs.wg.Add(1)
 	go func() {
@@ -257,7 +260,9 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 			return
 		}
 
-		rs.logger.Info("Subscribing to operator command channel", "operator_session_id", rs.config.OperatorSessionId)
+		rs.logger.Info("Subscribing to operator command channel",
+			"operator_session_id", rs.config.OperatorSessionId,
+			"channel_name", channelName)
 
 		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
 		if err != nil {
@@ -377,38 +382,52 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Error: &mcp.JSONRPCError{
-				Code:    mcp.MethodNotFound, // Or InvalidParams depending on err
+				Code:    mcp.MethodNotFound,
 				Message: err.Error(),
 			},
 		}
 
-		// We need a way to publish this back. We can use rs.results.PublishResult
-		// but we need to build a G8eMessage for it.
 		if msg.OperatorID == nil {
 			rs.logger.Error("Cannot send MCP error response: operator_id is nil (required for routing)")
 			return
 		}
-		payloadRaw, _ := json.Marshal(errResp)
-		respMsg := &models.G8eMessage{
-			ID:                req.ID,
-			EventType:         constants.Event.Operator.MCP.ToolsResult,
-			CaseID:            msg.CaseID,
-			InvestigationID:   msg.InvestigationID,
-			OperatorID:        *msg.OperatorID,
-			OperatorSessionID: msg.OperatorSessionID,
-			Payload:           payloadRaw,
+
+		respMsg, err := models.NewG8eMessage(
+			req.ID,
+			constants.Event.Operator.MCP.ToolsResult,
+			msg.CaseID,
+			*msg.OperatorID,
+			msg.OperatorSessionID,
+			rs.config.SystemFingerprint,
+			errResp,
+		)
+		if err != nil {
+			rs.logger.Error("Failed to build MCP error response message", "error", err)
+			return
 		}
+		respMsg.InvestigationID = msg.InvestigationID
+		respMsg.TaskID = msg.TaskID
+
 		if rs.results != nil {
 			_ = rs.results.PublishResult(ctx, respMsg)
 		}
 		return
 	}
 
+	rs.logger.Info("MCP tool call translated successfully",
+		"original_event_type", msg.EventType,
+		"translated_event_type", g8eMsg.EventType,
+		"mcp_request_id", req.ID)
+
 	// Update the message with translated data but keep the EventType as MCP.ToolsCall
 	// so the results publisher knows to wrap the result.
 	// We only change the Payload to what the handlers expect.
 	msg.Payload = g8eMsg.Payload
 	msg.ID = g8eMsg.ID // MCP request ID
+
+	rs.logger.Info("Dispatching to handler",
+		"handler_event_type", g8eMsg.EventType,
+		"preserving_original_event_type", msg.EventType)
 
 	// Now dispatch based on the translated EventType using the same dispatch table
 	handler, ok := rs.handlers[g8eMsg.EventType]

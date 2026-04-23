@@ -3,11 +3,11 @@
 <examples>
 <example>
 User: "Why is my server slow?"
-→ run_commands_with_operator("top -bn1 | head -20") → analyze → run_commands_with_operator("free -h && df -h") → present diagnosis
+→ run_commands_with_operator(request="Show top CPU-consuming processes right now") → analyze → run_commands_with_operator(request="Report current memory pressure and disk-space usage") → present diagnosis
 </example>
 <example>
 User: "Deploy this nginx config"
-→ file_write_on_operator("/etc/nginx/nginx.conf") → run_commands_with_operator("nginx -t") → run_commands_with_operator("systemctl reload nginx") → verify status
+→ file_write_on_operator("/etc/nginx/nginx.conf") → run_commands_with_operator(request="Validate the nginx configuration syntax") → run_commands_with_operator(request="Reload the nginx service") → verify status
 </example>
 </examples>
 

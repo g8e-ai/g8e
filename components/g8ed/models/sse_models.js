@@ -13,7 +13,7 @@
 
 import { G8eBaseModel, F, now } from './base.js';
 import { OperatorSlot } from './operator_model.js';
-import { VerifierReason, TribunalOutcome } from '../constants/agents.js';
+import { AuditorReason, TribunalOutcome } from '../constants/agents.js';
 
 // ---------------------------------------------------------------------------
 // SSE event models
