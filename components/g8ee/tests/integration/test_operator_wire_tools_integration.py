@@ -493,6 +493,25 @@ class TestFetchFileHistoryWire:
         ), result
         assert "execution_id" in result["payload"]
 
+    async def test_fetch_history_payload_has_execution_id_field(self, publish_and_wait: PublishAndWait):
+        from app.models.pubsub_messages import FetchFileHistoryResultPayload
+
+        probe_path = _unique_path("hist-exec-id", ".txt")
+        result = await publish_and_wait(
+            EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED,
+            {"file_path": probe_path},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
+        payload = FetchFileHistoryResultPayload.model_validate(result["payload"])
+        assert payload.execution_id is not None, "FetchFileHistoryResultPayload must have execution_id field"
+
 
 class TestFetchFileDiffWire:
     """Local store is optional — skip cleanly when the operator did not enable it."""
@@ -513,3 +532,179 @@ class TestFetchFileDiffWire:
             EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED.value,
             EventType.OPERATOR_FILE_DIFF_FETCH_FAILED.value,
         ), result
+        assert "execution_id" in result["payload"]
+
+    async def test_fetch_diff_payload_has_execution_id_field(self, publish_and_wait: PublishAndWait):
+        from app.models.pubsub_messages import FetchFileDiffResultPayload
+
+        probe_path = _unique_path("diff-exec-id", ".txt")
+        result = await publish_and_wait(
+            EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED,
+            {"file_path": probe_path, "limit": 5},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_FILE_DIFF_FETCH_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err:
+                pytest.skip("g8ep operator was started without a local store")
+        payload = FetchFileDiffResultPayload.model_validate(result["payload"])
+        assert payload.execution_id is not None, "FetchFileDiffResultPayload must have execution_id field"
+
+
+class TestRestoreFileWire:
+    """History handler is optional — skip cleanly when the operator did not enable it."""
+
+    async def test_restore_file_returns_completed_or_disabled(self, publish_and_wait: PublishAndWait):
+        probe_path = _unique_path("restore-probe", ".txt")
+        result = await publish_and_wait(
+            EventType.OPERATOR_FILE_RESTORE_REQUESTED,
+            {"file_path": probe_path, "commit_hash": "deadbeef"},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_FILE_RESTORE_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
+        assert event_type in (
+            EventType.OPERATOR_FILE_RESTORE_COMPLETED.value,
+            EventType.OPERATOR_FILE_RESTORE_FAILED.value,
+        ), result
+        assert "execution_id" in result["payload"]
+
+    async def test_restore_file_payload_has_execution_id_field(self, publish_and_wait: PublishAndWait):
+        from app.models.pubsub_messages import RestoreFileResultPayload
+
+        probe_path = _unique_path("restore-exec-id", ".txt")
+        result = await publish_and_wait(
+            EventType.OPERATOR_FILE_RESTORE_REQUESTED,
+            {"file_path": probe_path, "commit_hash": "deadbeef"},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_FILE_RESTORE_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
+        payload = RestoreFileResultPayload.model_validate(result["payload"])
+        assert payload.execution_id is not None, "RestoreFileResultPayload must have execution_id field"
+
+
+class TestFetchHistoryWire:
+    """Audit history fetch tests."""
+
+    async def test_fetch_history_returns_completed_or_disabled(self, publish_and_wait: PublishAndWait):
+        result = await publish_and_wait(
+            EventType.OPERATOR_HISTORY_FETCH_REQUESTED,
+            {"limit": 10, "offset": 0},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_HISTORY_FETCH_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
+        assert event_type in (
+            EventType.OPERATOR_HISTORY_FETCH_COMPLETED.value,
+            EventType.OPERATOR_HISTORY_FETCH_FAILED.value,
+        ), result
+        assert "execution_id" in result["payload"]
+
+    async def test_fetch_history_payload_has_execution_id_field(self, publish_and_wait: PublishAndWait):
+        from app.models.pubsub_messages import FetchHistoryResultPayload
+
+        result = await publish_and_wait(
+            EventType.OPERATOR_HISTORY_FETCH_REQUESTED,
+            {"limit": 10, "offset": 0},
+        )
+        event_type = result["event_type"]
+        if event_type == EventType.OPERATOR_HISTORY_FETCH_FAILED.value:
+            payload = result["payload"]
+            err = (payload.get("error_message") or payload.get("error") or "").lower()
+            if "not available" in err or "ledger is disabled" in err:
+                pytest.skip(
+                    "g8ep operator was started without a file-history-capable ledger"
+                )
+        payload = FetchHistoryResultPayload.model_validate(result["payload"])
+        assert payload.execution_id is not None, "FetchHistoryResultPayload must have execution_id field"
+
+
+class TestLFAAExecutionIdContract:
+    """Contract tests ensuring all LFAA result payloads have execution_id field.
+
+    This test class verifies that g8eo and g8ee models are aligned for execution_id.
+    The bug was that g8eo Go models had ExecutionID field but g8ee Python models
+    were missing execution_id for LFAA payloads, requiring fallback logic.
+    """
+
+    async def test_all_lfaa_payloads_have_execution_id_in_raw_response(self, publish_and_wait: PublishAndWait):
+        """Verify all LFAA payloads include execution_id in raw JSON response from g8eo."""
+        probe_path = _unique_path("lfaa-contract", ".txt")
+
+        lfaa_requests = [
+            (EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED, {"file_path": probe_path}),
+            (EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED, {"file_path": probe_path, "limit": 5}),
+            (EventType.OPERATOR_FILE_RESTORE_REQUESTED, {"file_path": probe_path, "commit_hash": "deadbeef"}),
+            (EventType.OPERATOR_HISTORY_FETCH_REQUESTED, {"limit": 10, "offset": 0}),
+        ]
+
+        for event_type, payload in lfaa_requests:
+            result = await publish_and_wait(event_type, payload)
+            assert "execution_id" in result["payload"], (
+                f"LFAA payload for {event_type} missing execution_id in raw response"
+            )
+
+    async def test_all_lfaa_payloads_parse_execution_id_field(self, publish_and_wait: PublishAndWait):
+        """Verify all LFAA payloads can be parsed and have execution_id field accessible."""
+        from app.models.pubsub_messages import (
+            FetchFileHistoryResultPayload,
+            FetchFileDiffResultPayload,
+            RestoreFileResultPayload,
+            FetchHistoryResultPayload,
+        )
+
+        probe_path = _unique_path("lfaa-parse", ".txt")
+
+        test_cases = [
+            (
+                EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED,
+                {"file_path": probe_path},
+                FetchFileHistoryResultPayload,
+            ),
+            (
+                EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED,
+                {"file_path": probe_path, "limit": 5},
+                FetchFileDiffResultPayload,
+            ),
+            (
+                EventType.OPERATOR_FILE_RESTORE_REQUESTED,
+                {"file_path": probe_path, "commit_hash": "deadbeef"},
+                RestoreFileResultPayload,
+            ),
+            (
+                EventType.OPERATOR_HISTORY_FETCH_REQUESTED,
+                {"limit": 10, "offset": 0},
+                FetchHistoryResultPayload,
+            ),
+        ]
+
+        for event_type, request_payload, model_class in test_cases:
+            result = await publish_and_wait(event_type, request_payload)
+            result_event_type = result["event_type"]
+
+            if "FAILED" in result_event_type:
+                err = (result["payload"].get("error_message") or result["payload"].get("error") or "").lower()
+                if "not available" in err or "ledger is disabled" in err:
+                    pytest.skip(f"g8ep operator was started without a file-history-capable ledger for {event_type}")
+
+            parsed = model_class.model_validate(result["payload"])
+            assert parsed.execution_id is not None, (
+                f"{model_class.__name__} must have execution_id field after parsing"
+            )

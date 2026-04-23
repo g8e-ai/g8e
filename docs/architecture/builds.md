@@ -152,7 +152,7 @@ g8ee is an internal-only service. g8ed proxies all traffic to it; g8ee is never 
 **Why after g8es:**
 
 - g8ed reads its TLS certificates from the `g8es-ssl` volume (mounted read-only at `/g8es`) to terminate HTTPS on ports 443/80. Without g8es having initialized and written those certs, g8ed cannot serve TLS.
-- g8ed's entrypoint additionally verifies that `platform_settings` has been initialized in g8es by fetching `https://g8es:9001/db/settings/platform_settings` with the internal auth token before launching `node server.js`.
+- g8ed's entrypoint additionally verifies that `platform_settings` has been initialized in g8es by fetching `https://g8es:9000/db/settings/platform_settings` with the internal auth token before launching `node server.js`.
 - At runtime, g8ed proxies all AI requests to g8ee's internal HTTPS API and subscribes to g8es pub/sub to receive operator events (heartbeats, command results, status changes) for SSE fan-out to the browser.
 
 **What it runs:**

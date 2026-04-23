@@ -179,8 +179,8 @@
 .bind-all-operator-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: 8px;
+    padding: 8px;
     background: var(--surface-secondary);
     border: 1px solid var(--border-color);
     border-radius: 0.25rem;
@@ -205,8 +205,8 @@
 
 .bind-all-operator-icon {
     flex-shrink: 0;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -217,7 +217,7 @@
 }
 
 .bind-all-operator-icon .material-symbols-outlined {
-    font-size: 20px;
+    font-size: 16px;
 }
 
 .bind-all-operator-icon.cloud {
@@ -235,7 +235,7 @@
 }
 
 .bind-all-operator-hostname {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
@@ -246,26 +246,26 @@
 .bind-all-operator-details {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 11px;
     color: var(--text-secondary);
 }
 
 .bind-all-operator-detail {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
 }
 
 .bind-all-operator-detail .material-symbols-outlined {
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .bind-all-operator-status {
     flex-shrink: 0;
-    padding: 4px 10px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     background: rgba(16, 185, 129, 0.15);
@@ -466,12 +466,12 @@
 .operator-bind-single-overlay {
     background: var(--surface-color);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 12px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     animation: slideIn 0.3s ease-out;
 }
 
@@ -513,14 +513,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     background: transparent;
     border: 1px solid var(--border-color);
     border-radius: 0.25rem;
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
+    align-self: flex-end;
+    margin-bottom: 8px;
 }
 
 .operator-bind-single-close-btn:hover {
@@ -530,7 +532,7 @@
 }
 
 .operator-bind-single-close-btn .material-symbols-outlined {
-    font-size: 20px;
+    font-size: 18px;
 }
 
 .operator-bind-single-description {
@@ -547,7 +549,7 @@
 .operator-bind-single-operators-container {
     flex: 1;
     min-height: 0;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
     display: flex;
     flex-direction: column;
 }
@@ -557,32 +559,32 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    max-height: 300px;
+    gap: 6px;
+    max-height: 200px;
     padding-right: 4px;
 }
 
 .operator-bind-single-actions {
     display: flex;
-    gap: 12px;
+    gap: 8px;
     justify-content: flex-end;
 }
 
 .operator-bind-single-action-btn {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
+    gap: 6px;
+    padding: 6px 12px;
     border: none;
     border-radius: 0.25rem;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .operator-bind-single-action-btn .material-symbols-outlined {
-    font-size: 20px;
+    font-size: 18px;
 }
 
 .operator-bind-single-action-btn.cancel-btn {
@@ -616,17 +618,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 10px;
     background: var(--surface-secondary);
     border-radius: 0.25rem;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-secondary);
 }
 
 .operator-bind-single-processing .spinner {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border: 2px solid rgba(16, 185, 129, 0.3);
     border-top-color: #10b981;
     border-radius: 0.25rem;

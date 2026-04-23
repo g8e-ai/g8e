@@ -23,7 +23,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         INTERNAL_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
         # Check if g8es is responding on the health endpoint
         # AND check if platform_settings is initialized (returns 200 instead of 401)
-        if curl -s -f --cacert "${SSL_DIR}/ca.crt" -H "X-Internal-Auth: ${INTERNAL_TOKEN}" https://g8es:9001/db/settings/platform_settings > /dev/null; then
+        if curl -s -f --cacert "${SSL_DIR}/ca.crt" -H "X-Internal-Auth: ${INTERNAL_TOKEN}" https://g8es:9000/db/settings/platform_settings > /dev/null; then
             echo "[G8ED-ENTRYPOINT] g8es is ready and platform_settings are initialized"
             break
         fi

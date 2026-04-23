@@ -205,6 +205,7 @@ class FetchLogsResultPayload(G8eBaseModel):
 
 class FetchHistoryResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.history.completed / operator.fetch.history.failed."""
+    execution_id: str | None = Field(default=None, description="Execution identifier for request-response correlation")
     success: bool = Field(..., description="Whether the fetch succeeded")
     operator_session_id: str | None = Field(default=None, description="Operator session ID that was queried")
     session: AuditSessionMetadata | None = Field(default=None, description="Session metadata")
@@ -222,6 +223,7 @@ class FetchHistoryResultPayload(G8eBaseModel):
 
 class FetchFileHistoryResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.history.completed / operator.fetch.file.history.failed."""
+    execution_id: str | None = Field(default=None, description="Execution identifier for request-response correlation")
     success: bool = Field(..., description="Whether the fetch succeeded")
     file_path: str | None = Field(default=None, description="Absolute path of the file queried")
     history: list[FileHistoryEntry] = Field(default_factory=list, description="Commit history entries")
@@ -230,6 +232,7 @@ class FetchFileHistoryResultPayload(G8eBaseModel):
 
 class RestoreFileResultPayload(G8eBaseModel):
     """Typed payload for operator.restore.file.completed / operator.restore.file.failed."""
+    execution_id: str | None = Field(default=None, description="Execution identifier for request-response correlation")
     success: bool = Field(..., description="Whether the restore succeeded")
     file_path: str | None = Field(default=None, description="Absolute path of the restored file")
     commit_hash: str | None = Field(default=None, description="Git commit hash the file was restored to")
@@ -238,6 +241,7 @@ class RestoreFileResultPayload(G8eBaseModel):
 
 class FetchFileDiffResultPayload(G8eBaseModel):
     """Typed payload for operator.fetch.file.diff.completed / operator.fetch.file.diff.failed."""
+    execution_id: str | None = Field(default=None, description="Execution identifier for request-response correlation")
     success: bool = Field(..., description="Whether the fetch succeeded")
     diff: FileDiffEntry | None = Field(default=None, description="Single file diff entry")
     diffs: list[FileDiffEntry] = Field(default_factory=list, description="Multiple file diff entries")

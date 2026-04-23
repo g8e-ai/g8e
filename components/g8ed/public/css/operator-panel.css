@@ -1828,6 +1828,11 @@
   text-decoration: underline;
 }
 
+.operator-download-separator {
+  margin: 12px 0;
+  border-top: 1px solid var(--border-color);
+}
+
 .operator-deploy-section {
   margin-top: 12px;
   display: flex;

@@ -201,10 +201,9 @@ export const BindOperatorsMixin = {
             operatorsList.innerHTML = operatorItemHtml;
         }
 
-        this.downloadCollapsibleContent.appendChild(overlay);
+        this.downloadCollapsibleContent.prepend(overlay);
         overlay.classList.add('active');
 
-        const closeBtn = overlay.querySelector('#operator-bind-single-close-btn');
         const cancelBtn = overlay.querySelector('#operator-bind-single-cancel-btn');
         const confirmBtn = overlay.querySelector('#operator-bind-single-confirm-btn');
 
@@ -213,7 +212,6 @@ export const BindOperatorsMixin = {
             setTimeout(() => overlay.remove(), 300);
         };
 
-        if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
         if (cancelBtn) cancelBtn.addEventListener('click', closeOverlay);
 
         if (confirmBtn) {
@@ -305,7 +303,7 @@ export const BindOperatorsMixin = {
             operatorsList.innerHTML = operatorsListHtml;
         }
 
-        this.downloadCollapsibleContent.appendChild(overlay);
+        this.downloadCollapsibleContent.prepend(overlay);
         overlay.classList.add('active');
 
         const selectAllCheckbox = overlay.querySelector('#operator-select-all-operators');
@@ -517,7 +515,7 @@ export const BindOperatorsMixin = {
             operatorsList.innerHTML = operatorsListHtml;
         }
 
-        this.downloadCollapsibleContent.appendChild(overlay);
+        this.downloadCollapsibleContent.prepend(overlay);
         overlay.classList.add('active');
 
         const closeBtn = overlay.querySelector('#operator-unbind-all-close-btn');
