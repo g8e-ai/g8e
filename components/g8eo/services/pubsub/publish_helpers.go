@@ -24,25 +24,44 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
-// executionIDFromMessage resolves the execution_id for a command by inspecting
-// the inbound payload's execution_id field, falling back to the command
-// envelope's id only when the payload does not carry one.
+// executionIDFromMessage resolves the execution_id for a command from the
+// inbound payload's execution_id field. If the payload does not carry one it
+// falls back to the envelope id (msg.ID) for native g8e envelopes, where g8ee
+// sets id == execution_id by convention.
 //
-// The envelope id (msg.ID) is the message/correlation id of the command itself
-// and is NOT guaranteed to equal the execution_id of the in-flight operation;
-// g8ee may generate envelope ids independently (e.g. as fresh UUIDs). Use this
-// helper anywhere a result needs to be stamped with the execution_id of the
-// originating command rather than the envelope id.
+// For MCP-translated envelopes (EventType == operator.mcp.tools.call) the
+// envelope id has been rewritten to the JSON-RPC request id by
+// handleMCPToolsCall and is NOT the execution_id; in that case the fallback
+// is suppressed and "" is returned so callers surface the missing id rather
+// than stamp results with the wrong value. Well-formed MCP tool arguments
+// from g8ee always include execution_id, so an empty return here indicates
+// a protocol violation upstream.
 func executionIDFromMessage(msg PubSubCommandMessage) string {
-	if len(msg.Payload) > 0 {
-		var probe struct {
-			ExecutionID string `json:"execution_id"`
-		}
-		if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
-			return probe.ExecutionID
-		}
+	var probe struct {
+		ExecutionID string `json:"execution_id"`
+	}
+	if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
+		return probe.ExecutionID
+	}
+	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
+		return ""
 	}
 	return msg.ID
+}
+
+// warnIfMCPExecutionIDMissing logs a warning when an MCP-translated envelope
+// resolves to an empty execution_id. Well-formed MCP tool arguments from g8ee
+// always include execution_id, so an empty value here indicates an upstream
+// protocol violation. Logged fields are kept to a minimum for signal density.
+func warnIfMCPExecutionIDMissing(logger *slog.Logger, msg PubSubCommandMessage, resolvedID, eventType string) {
+	if msg.EventType != constants.Event.Operator.MCP.ToolsCall || resolvedID != "" {
+		return
+	}
+	logger.Warn("MCP envelope missing execution_id in tool arguments; result metadata will be empty",
+		"envelope_event_type", msg.EventType,
+		"jsonrpc_request_id", msg.ID,
+		"case_id", msg.CaseID,
+		"result_event_type", eventType)
 }
 
 // setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
@@ -67,7 +86,8 @@ func publishLFAATypedResponseTo(
 	eventType string,
 	payload interface{},
 ) {
-	setExecutionIDOnPayload(payload, executionIDFromMessage(msg))
+	executionID := executionIDFromMessage(msg)
+	setExecutionIDOnPayload(payload, executionID)
 
 	resultMsg, err := models.NewG8eMessage(
 		eventType, msg.CaseID,
@@ -80,7 +100,8 @@ func publishLFAATypedResponseTo(
 	}
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, payload)
+		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
+		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, payload)
 		if err != nil {
 			logger.Error("Failed to wrap result for MCP", "error", err)
 		} else {
@@ -89,6 +110,7 @@ func publishLFAATypedResponseTo(
 		}
 	}
 
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID
@@ -117,10 +139,11 @@ func publishLFAAErrorTo(
 	msg PubSubCommandMessage,
 	eventType, errorMsg string,
 ) {
+	executionID := executionIDFromMessage(msg)
 	payload := models.LFAAErrorPayload{
 		Success:           false,
 		Error:             errorMsg,
-		ExecutionID:       executionIDFromMessage(msg),
+		ExecutionID:       executionID,
 		OperatorID:        cfg.OperatorID,
 		OperatorSessionID: cfg.OperatorSessionId,
 	}
@@ -136,7 +159,8 @@ func publishLFAAErrorTo(
 	}
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, &payload)
+		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
+		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, &payload)
 		if err != nil {
 			logger.Error("Failed to wrap error for MCP", "error", err)
 		} else {
@@ -145,6 +169,7 @@ func publishLFAAErrorTo(
 		}
 	}
 
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID
@@ -183,7 +208,9 @@ func publishLFAAResponseTo(
 	}
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, responseJSON)
+		executionID := executionIDFromMessage(msg)
+		warnIfMCPExecutionIDMissing(logger, msg, executionID, eventType)
+		mcpRaw, err := mcp.WrapResult(msg.ID, executionID, eventType, responseJSON)
 		if err != nil {
 			logger.Error("Failed to wrap result for MCP", "error", err)
 		} else {
@@ -192,6 +219,7 @@ func publishLFAAResponseTo(
 		}
 	}
 
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID

@@ -230,12 +230,11 @@ class OperatorIntentService:
             exec_id = generate_iam_execution_id(intent)
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.RUN_COMMANDS,
+                execution_id=exec_id,
                 arguments={
-                    "execution_id": exec_id,
                     "command": attach_cmd,
                     "justification": "IAM Policy Update",
                 },
-                request_id=exec_id,
             )
             msg = G8eMessage(
                 id=exec_id,
@@ -262,12 +261,11 @@ class OperatorIntentService:
                     v_exec_id = generate_iam_verify_execution_id(intent)
                     v_mcp_payload = build_tool_call_request(
                         tool_name=OperatorToolName.RUN_COMMANDS,
+                        execution_id=v_exec_id,
                         arguments={
-                            "execution_id": v_exec_id,
                             "command": v_cmd,
                             "justification": "IAM Verification",
                         },
-                        request_id=v_exec_id,
                     )
                     v_msg = G8eMessage(
                         id=v_exec_id,
@@ -341,12 +339,11 @@ class OperatorIntentService:
             exec_id = generate_iam_revoke_intent_execution_id(intent)
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.RUN_COMMANDS,
+                execution_id=exec_id,
                 arguments={
-                    "execution_id": exec_id,
                     "command": detach_cmd,
                     "justification": "IAM Revoke",
                 },
-                request_id=exec_id,
             )
             msg = G8eMessage(
                 id=exec_id,

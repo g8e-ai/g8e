@@ -20,6 +20,7 @@ import pytest
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants import ComponentName, PubSubAction, PubSubField, PubSubMessageType, PubSubWireEventType
+from tests.fakes.async_helpers import async_iter
 
 pytestmark = pytest.mark.unit
 
@@ -202,7 +203,7 @@ class TestWsReaderReconnection:
     async def test_reader_nulls_ws_on_exit(self, connected_client, task_tracker):
         """_ws_reader must set self._ws = None so _ensure_ws knows to reconnect."""
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
         connected_client._pubsub_task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
         await connected_client._pubsub_task
         assert connected_client._ws is None
@@ -212,7 +213,7 @@ class TestWsReaderReconnection:
         _reconnect_loop to restore the connection."""
         connected_client._subscribed_channels.add("heartbeat:op-1:sess-1")
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
 
         reconnect_called = asyncio.Event()
         original_reconnect = connected_client._reconnect_loop
@@ -229,7 +230,7 @@ class TestWsReaderReconnection:
     async def test_reader_does_not_reconnect_without_subscriptions(self, connected_client, task_tracker):
         """No reconnect if there are no active subscriptions (clean shutdown)."""
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
 
         reconnect_called = False
 
@@ -246,7 +247,7 @@ class TestWsReaderReconnection:
     async def test_disconnect_handler_failure_is_logged_not_swallowed(self, connected_client, task_tracker):
         """Disconnect handlers that raise should log at WARNING, not silently pass."""
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([]))
 
         async def broken_handler():
             raise RuntimeError("handler bug")
@@ -320,7 +321,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
             }
         )
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([result_frame]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([result_frame]))
 
         reader_task = asyncio.create_task(connected_client._ws_reader())
         try:
@@ -369,7 +370,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
             }
         )
         mock_ws = connected_client._ws
-        mock_ws.__aiter__ = MagicMock(return_value=iter([pmsg_frame]))
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([pmsg_frame]))
 
         reader_task = asyncio.create_task(connected_client._ws_reader())
         try:
@@ -384,6 +385,98 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         assert channel == results_channel
         assert isinstance(data, dict)
         assert data["id"] == exec_id
+
+
+@pytest.mark.asyncio
+class TestWsReaderPerMessageErrorHandling:
+    """The per-message exception handler in _ws_reader must be narrow.
+
+    Shape errors (KeyError / ValueError / AttributeError) on a single frame
+    should be logged and the reader should continue processing subsequent
+    frames. Unexpected errors (e.g. a typo in dispatch code raising
+    NameError / RuntimeError) MUST propagate so they are not silently eaten
+    by a broad ``except Exception``.
+    """
+
+    @staticmethod
+    def _text_frame(payload) -> MagicMock:
+        msg = MagicMock()
+        msg.type = aiohttp.WSMsgType.TEXT
+        msg.data = json.dumps(payload)
+        return msg
+
+    async def test_malformed_shape_is_logged_and_reader_continues(
+        self, connected_client, task_tracker
+    ):
+        # json.loads of a list is valid JSON but not a dict, so .get() will
+        # raise AttributeError inside the per-message try -- it should be
+        # caught and logged, then the reader proceeds to the next frame.
+        bad_frame = self._text_frame(["not", "a", "dict"])
+
+        delivered = asyncio.Event()
+
+        async def handler(channel: str, data: object) -> None:
+            delivered.set()
+
+        connected_client.on_channel_message("results:ok", handler)
+        good_frame = self._text_frame(
+            {
+                "type": PubSubWireEventType.MESSAGE.value,
+                "channel": "results:ok",
+                "data": {"id": "x"},
+            }
+        )
+
+        mock_ws = connected_client._ws
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([bad_frame, good_frame]))
+
+        with patch("app.clients.pubsub_client.logger") as mock_logger:
+            reader_task = task_tracker.track(
+                asyncio.create_task(connected_client._ws_reader())
+            )
+            try:
+                await asyncio.wait_for(delivered.wait(), timeout=1.0)
+            finally:
+                reader_task.cancel()
+                await asyncio.gather(reader_task, return_exceptions=True)
+
+            shape_logged = any(
+                "Malformed event shape" in str(call.args[0])
+                for call in mock_logger.error.call_args_list
+                if call.args
+            )
+            assert shape_logged, (
+                "Shape errors (AttributeError on non-dict frame) must be logged"
+            )
+
+    async def test_unexpected_exception_propagates(self, connected_client, task_tracker):
+        """A RuntimeError from dispatch code (e.g. a typo surfacing as
+        NameError at runtime) must NOT be swallowed by the per-message
+        except block. It should propagate out of the reader so the task
+        fails loudly and reconnect logic runs."""
+
+        # Force a RuntimeError to surface during dispatch by making
+        # _channel_handlers.get raise -- simulates a bug in handler code.
+        broken_handlers = MagicMock()
+        broken_handlers.get = MagicMock(side_effect=RuntimeError("dispatch typo"))
+        broken_handlers.copy = MagicMock(return_value=broken_handlers)
+        connected_client._channel_handlers = broken_handlers
+
+        frame = self._text_frame(
+            {
+                "type": PubSubWireEventType.MESSAGE.value,
+                "channel": "results:op",
+                "data": {"id": "x"},
+            }
+        )
+        mock_ws = connected_client._ws
+        mock_ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
+
+        reader_task = task_tracker.track(
+            asyncio.create_task(connected_client._ws_reader())
+        )
+        with pytest.raises(RuntimeError, match="dispatch typo"):
+            await asyncio.wait_for(reader_task, timeout=1.0)
 
 
 @pytest.mark.asyncio

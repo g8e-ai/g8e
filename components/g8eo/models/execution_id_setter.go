@@ -34,3 +34,4 @@ func (p *FetchFileDiffResultPayload) SetExecutionID(id string)    { p.ExecutionI
 func (p *FetchHistoryResultPayload) SetExecutionID(id string)     { p.ExecutionID = id }
 func (p *FetchFileHistoryResultPayload) SetExecutionID(id string) { p.ExecutionID = id }
 func (p *RestoreFileResultPayload) SetExecutionID(id string)      { p.ExecutionID = id }
+func (p *AuditDirectCmdResultPayload) SetExecutionID(id string)   { p.ExecutionID = id }

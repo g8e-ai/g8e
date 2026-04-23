@@ -69,12 +69,12 @@ You describe what you want in natural language. The AI fans out across your boun
 
 ### The Tribunal
 
-The Tribunal is a heterogeneous multi-model consensus pipeline that refines every proposed command before human review:
+The Tribunal is a heterogeneous multi-model consensus pipeline that translates the reasoning agent's **intent** into an executable command before human review. The reasoning agent (Sage or Dash) never writes a command directly — it articulates a natural-language request plus optional guidelines, and the Tribunal translates:
 
-1. **Parallel Generation** — Up to five independent AI passes — Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), Nemesis (The Adversary) — each propose a candidate command for the same intent. Diversity comes from the distinct personas, not from per-pass temperature overrides (three passes are enabled by default).
-2. **Weighted Vote** — Candidates are normalized, grouped, and scored by position-decay weighting. The strongest consensus wins.
-3. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent and either confirms it (`ok`) or emits a minimal revision.
-4. **Human Approval** — The refined command halts. You see exactly what will run, on which system, and why. You approve or deny.
+1. **Parallel Generation** — Five independent AI passes — Axiom (The Composer), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), Nemesis (The Adversary) — each translate the same intent into a candidate command. All five run every round; Nemesis is always present as the adversarial pressure against the other four. Diversity comes from the distinct personas, not from per-pass temperature overrides.
+2. **Uniform Per-Member Vote** — Each member contributes exactly one vote per candidate. Identical candidates accumulate votes. A minimum consensus threshold (two members) gates the winner; below threshold, the round returns `CONSENSUS_FAILED` and the reasoning agent decides whether to rephrase or abort. Ties resolve deterministically: shortest command wins, then non-Nemesis cluster wins over Nemesis-including cluster, then alphabetical.
+3. **Auditor Verification** — The Auditor evaluates the winner against the articulated intent using **anonymized cluster IDs** (the Auditor cannot see which member produced which candidate). It operates in one of three modes based on consensus strength: *unanimous* (accept or revise), *majority* (accept, revise, or swap to a dissenting cluster), or *tied* (must swap or revise — cannot passively accept). The Auditor knows with certainty that one of the five candidates is Nemesis's adversarial output.
+4. **Human Approval** — The verified command halts. You see exactly what will run, on which system, and why. You approve or deny.
 5. **Execution** — The Operator executes locally, records the full output to an encrypted local vault, scrubs the output through Sentinel, and returns only the sanitized result to the AI for its next reasoning step.
 
 ```
@@ -87,17 +87,19 @@ The Tribunal is a heterogeneous multi-model consensus pipeline that refines ever
    └── simple turn  ──►  Dash    (fast path, narrow tool loop)
                           │
                           ▼
-                 investigates · reasons · proposes a command
+                 investigates · reasons · articulates intent
                           │
                           ▼
   The Tribunal ── heterogeneous personas, parallel generation
    │
-   ├── Pass 0 · Axiom     (Minimalist)     ──┐
+   ├── Pass 0 · Axiom     (Composer)       ──┐
    ├── Pass 1 · Concord   (Guardian)       ──┤
-   ├── Pass 2 · Variance  (Exhaustive)     ──┼──► Weighted Vote
-   ├── Pass 3 · Pragma    (Conventional)   ──┤          │
-   └── Pass 4 · Nemesis   (Adversary)      ──┘          ▼
-                                                     Auditor ── `ok` or minimal revision
+   ├── Pass 2 · Variance  (Exhaustive)     ──┼──► Uniform Per-Member Vote
+   ├── Pass 3 · Pragma    (Conventional)   ──┤   (deterministic tie-break)
+   └── Pass 4 · Nemesis   (Adversary)      ──┘          │
+                                                        ▼
+                                              Auditor ── anonymized clusters
+                                                         ok / revised / swap
                                                         │
                                                         ▼
                                            ┌──── Your Approval ────┐
@@ -203,25 +205,6 @@ That is a single command. It downloads the CA, fetches the binary over HTTPS, an
 
 ---
 
-## What Can Be Built On This
-
-g8e is a governance primitive. The current implementation covers infrastructure investigation and remediation, but the architecture is designed to be extended far beyond what exists today.
-
-- **Fleet-scale incident response** — Bind dozens of Operators across environments. The AI correlates signals across your entire fleet in a single conversation.
-- **Cloud governance** — The Cloud Operator for AWS implements Zero Standing Privileges with intent-based IAM. The AI requests permissions through you, with automatic 1-hour expiration. GCP and Azure follow the same pattern.
-- **MCP gateway** — External MCP clients (Claude Code, etc.) can execute g8e tools through the full governance pipeline. Standards-based wire format, same human-in-the-loop enforcement.
-- **Compliance automation** — Every action is audited locally with encrypted, append-only ledgers and git-backed file versioning. SIEM-ready threat signals with MITRE ATT&CK mapping.
-- **Air-gapped environments** — Run the entire platform disconnected from the internet with a local Ollama instance. No external API calls required.
-- **Custom Operators** — The Operator is a protocol, not just a binary. Any client that speaks the g8e event protocol can act as an Operator. Build specialized agents for databases, network devices, or any system that needs governed AI interaction.
-
-We have built the foundation, but we want to be fully transparent about the current state of the codebase and platform: it is admittedly raw and the edges are rough. Because a large portion of this code was written by human-driven AI, some of it is rubbish... you will find joined ends that go nowhere, dead code, and areas needing significant cleanup.
-
-Our primary objective right now and for the foreseeable future is hardening the platform and protocol. This means focusing on code refactors for a quality foundation, deep and robust testing, industry-standard accuracy and safety measurements, and third-party security reviews. 
-
-We aim to someday drive the standards for secure, private, and safe human-driven, AI-powered infrastructure management that always keeps humans in control. If you share this vision and are not afraid of rough edges, we welcome you to contribute.
-
----
-
 ## CLI Reference
 
 ```bash
@@ -244,9 +227,6 @@ We aim to someday drive the standards for secure, private, and safe human-driven
 **Alpha.** This is a research project built with a paranoia-first security mindset. It has not undergone external audit. Use in production at your own risk and evaluate the [security architecture](docs/architecture/security.md) for yourself.
 
 A significant portion of this codebase was written with AI assistance. If you have been around long enough to know what that means in practice, you already know: there are bugs. There is hallucinated logic. There are abstractions that a human would not have chosen. We built a platform to govern AI agents because we experienced firsthand how dangerous unconstrained agents are — while building this very platform with those same agents.
-
-The irony is not lost on us. It is, in fact, the point.
-
 ---
 
 ## Contributing

@@ -200,15 +200,15 @@ class PubSubClient:
                             
                     except json.JSONDecodeError:
                         logger.error("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", msg.data[:200])
-                    except Exception as e:
-                        logger.error("[PUBSUB-CLIENT] Error processing message: %s", e, exc_info=True)
+                    except (KeyError, ValueError, AttributeError) as e:
+                        logger.error("[PUBSUB-CLIENT] Malformed event shape from pub/sub: %s", e, exc_info=True)
                         
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     logger.info("[PUBSUB-CLIENT] WebSocket closed or error: %s", msg.type)
                     break
-        except Exception as e:
+        except (aiohttp.ClientError, ConnectionError, OSError, asyncio.IncompleteReadError) as e:
             if not self._closing:
-                logger.error("[PUBSUB-CLIENT] WS reader crashed: %s", e, exc_info=True)
+                logger.error("[PUBSUB-CLIENT] WS reader transport error: %s", e, exc_info=True)
         finally:
             await self._handle_disconnect()
 

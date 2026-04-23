@@ -436,10 +436,7 @@ func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionReque
 		return nil, fmt.Errorf("missing command in payload")
 	}
 
-	executionID := msg.ID
-	if p.ExecutionID != "" {
-		executionID = p.ExecutionID
-	}
+	executionID := executionIDFromMessage(msg)
 
 	timeoutSeconds := 300
 	if p.TimeoutSeconds > 0 {

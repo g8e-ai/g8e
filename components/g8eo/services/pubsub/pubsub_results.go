@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
-	"github.com/google/uuid"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
@@ -49,12 +48,50 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
+// publishResultEnvelope builds a G8eMessage for a typed result payload,
+// applies MCP wrapping when the originating command was an MCP tools/call,
+// stamps the envelope metadata copied from the originating command, and
+// publishes it on the results channel. All result-publishing paths that carry
+// an originalMsg (command-completed, command-cancelled, file-edit, fs-list)
+// share this helper so none can drift out of sync on API key, task/investigation
+// propagation, or MCP wrapping.
+func (rr *PubSubResultsService) publishResultEnvelope(
+	ctx context.Context,
+	eventType, caseID string,
+	taskID *string,
+	investigationID string,
+	originalMsg PubSubCommandMessage,
+	payload interface{},
+) error {
+	msg, err := models.NewG8eMessage(
+		eventType, caseID,
+		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
+		payload,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to build %s message: %w", eventType, err)
+	}
+
+	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, payload); err != nil {
+		return err
+	}
+
+	msg.APIKey = rr.config.APIKey
+	msg.TaskID = taskID
+	msg.InvestigationID = investigationID
+	msg.OperatorSessionID = originalMsg.OperatorSessionID
+
+	return rr.publish(ctx, msg)
+}
+
 func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
 	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
 		return nil
 	}
 
-	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, originalMsg.ID, eventType, payload)
+	executionID := executionIDFromMessage(originalMsg)
+	warnIfMCPExecutionIDMissing(rr.logger, originalMsg, executionID, eventType)
+	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, executionID, eventType, payload)
 	if err != nil {
 		return fmt.Errorf("failed to wrap result for MCP: %w", err)
 	}
@@ -65,7 +102,7 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 	msg.EventType = constants.Event.Operator.MCP.ToolsResult
 	msg.Payload = mcpRaw
 
-	rr.logger.Debug("Wrapped result as MCP JSON-RPC response",
+	rr.logger.Info("Wrapped result as MCP JSON-RPC response",
 		"original_msg_id", originalMsg.ID,
 		"new_event_type", msg.EventType,
 		"payload_size", len(mcpRaw))
@@ -106,25 +143,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 			"stderr_size", len(result.Stderr))
 	}
 
-	msg, err := models.NewG8eMessage(
-		eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build result message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
 	}
 
@@ -151,25 +170,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 		ErrorType:         result.ErrorType,
 	}
 
-	msg, err := models.NewG8eMessage(
-		eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build cancellation message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish cancellation result: %w", err)
 	}
 
@@ -223,25 +224,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 			"content_size", len(contentStr))
 	}
 
-	msg, err := models.NewG8eMessage(
-		eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build file edit message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish file edit result: %w", err)
 	}
 
@@ -292,25 +275,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 			"entries_count", result.TotalCount)
 	}
 
-	msg, err := models.NewG8eMessage(
-		eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build fs list message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish fs list result: %w", err)
 	}
 
@@ -397,9 +362,6 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *model
 	if result.OperatorID == "" {
 		result.OperatorID = rr.config.OperatorID
 	}
-	if result.ID == "" {
-		result.ID = uuid.NewString()
-	}
 	return rr.publish(ctx, result)
 }
 
@@ -424,7 +386,7 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
 	channel := rr.resultsChannel(msg.OperatorSessionID)
-	rr.logger.Debug("Publishing result",
+	rr.logger.Info("Publishing result",
 		"channel", channel,
 		"event_type", msg.EventType,
 		"message_id", msg.ID)

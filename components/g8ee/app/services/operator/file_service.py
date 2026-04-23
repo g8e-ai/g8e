@@ -42,7 +42,6 @@ from app.constants.events import (
 from app.constants.settings import (
     ApprovalErrorType,
 )
-from app.models.tool_args import FetchFileHistoryArgs, FetchFileDiffArgs
 from app.models.command_request_payloads import (
     FileEditRequestPayload,
     FetchFileHistoryRequestPayload,
@@ -204,6 +203,7 @@ class OperatorFileService:
             # 5. Dispatch
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.FILE_READ if op_name == FileOperation.READ else (OperatorToolName.FILE_CREATE if op_name == FileOperation.WRITE and getattr(args, "create_if_missing", False) else (OperatorToolName.FILE_WRITE if op_name == FileOperation.WRITE else OperatorToolName.FILE_UPDATE)),
+                execution_id=exec_id,
                 arguments={
                     "file_path": args.file_path,
                     "content": args.content,
@@ -211,7 +211,6 @@ class OperatorFileService:
                     "create_if_missing": getattr(args, "create_if_missing", False),
                     "target_operator": args.target_operator,
                 },
-                request_id=exec_id,
             )
 
             g8e_message = G8eMessage(
@@ -318,11 +317,11 @@ class OperatorFileService:
             try:
                 mcp_payload = build_tool_call_request(
                     tool_name=OperatorToolName.FETCH_FILE_HISTORY,
+                    execution_id=exec_id,
                     arguments={
                         "file_path": args.file_path,
                         "target_operator": args.target_operator,
                     },
-                    request_id=exec_id,
                 )
 
                 g8e_message = G8eMessage(
@@ -443,11 +442,11 @@ class OperatorFileService:
             try:
                 mcp_payload = build_tool_call_request(
                     tool_name=OperatorToolName.FETCH_FILE_DIFF,
+                    execution_id=exec_id,
                     arguments={
                         "file_path": args.file_path,
                         "target_operator": args.target_operator,
                     },
-                    request_id=exec_id,
                 )
 
                 g8e_message = G8eMessage(

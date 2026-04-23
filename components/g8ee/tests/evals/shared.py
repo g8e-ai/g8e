@@ -20,7 +20,6 @@ the agent, Gemini, and Ollama accuracy tests.
 import json
 import logging
 import os
-import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -149,20 +148,20 @@ def load_and_validate_gold_set(
         valid.append(scenario)
 
     if skipped_operator_bound:
-        warnings.warn(
-            f"SKIPPED {len(skipped_operator_bound)} OPERATOR_BOUND scenarios: {', '.join(skipped_operator_bound)}. "
-            f"These high-value scenarios require a real operator and are not being tested. "
-            f"Set filter_operator_bound=False to include them.",
-            UserWarning,
-            stacklevel=2,
+        logger.warning(
+            "SKIPPED %d OPERATOR_BOUND scenarios: %s. "
+            "These high-value scenarios require a real operator and are not being tested. "
+            "Set filter_operator_bound=False to include them.",
+            len(skipped_operator_bound),
+            ", ".join(skipped_operator_bound),
         )
 
     if skipped_expected_tools:
-        warnings.warn(
-            f"SKIPPED {len(skipped_expected_tools)} scenarios with expected_tools: {', '.join(skipped_expected_tools)}. "
-            f"Set filter_expected_tools=False to include them.",
-            UserWarning,
-            stacklevel=2,
+        logger.warning(
+            "SKIPPED %d scenarios with expected_tools: %s. "
+            "Set filter_expected_tools=False to include them.",
+            len(skipped_expected_tools),
+            ", ".join(skipped_expected_tools),
         )
 
     logger.info("Loaded %d valid scenarios from gold set (%s)", len(valid), gold_set_path)

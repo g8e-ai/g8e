@@ -169,7 +169,12 @@ class FsReadResultPayload(G8eBaseModel):
 
 
 class FetchLogsResultPayload(G8eBaseModel):
-    """Typed payload for operator.fetch.logs.completed / operator.fetch.logs.failed."""
+    """Typed payload for operator.fetch.logs.completed.
+
+    Failures are published separately as FetchLogsErrorPayload on
+    operator.fetch.logs.failed, matching the unified LFAA error envelope
+    used by FetchHistory / FetchFileHistory / RestoreFile / FetchFileDiff.
+    """
     execution_id: str = Field(..., description="Execution identifier whose logs were fetched")
     command: str | None = Field(default=None, description="Original command string")
     exit_code: int | None = Field(default=None)
@@ -192,6 +197,15 @@ class FetchLogsResultPayload(G8eBaseModel):
         if isinstance(v, str):
             return parse_iso(v)
         raise ValueError(f"timestamp must be a datetime or ISO string, got {type(v).__name__}")
+
+
+class FetchLogsErrorPayload(G8eBaseModel):
+    """Typed payload for operator.fetch.logs.failed.
+
+    Matches the g8eo LFAAErrorPayload wire shape published via publishLFAAErrorTo.
+    """
+    execution_id: str = Field(..., description="Execution identifier for request-response correlation")
+    error: str = Field(..., description="Error description")
 
 
 class FetchHistorySuccessPayload(G8eBaseModel):
@@ -266,11 +280,6 @@ class PortCheckResultPayload(G8eBaseModel):
     is_open: bool = Field(default=False, description="True if port is reachable")
     latency_ms: float | None = Field(default=None, description="Round-trip latency in milliseconds")
     error: str | None = Field(default=None, description="Error message on failure")
-
-
-class ShutdownAckPayload(G8eBaseModel):
-    """Typed payload for operator.shutdown.acknowledged."""
-    status: str = Field("acknowledged")
 
 
 class G8eoHeartbeatSystemIdentity(G8eBaseModel):
@@ -434,6 +443,7 @@ G8eoResultPayload = Union[
     FsListResultPayload,
     FsReadResultPayload,
     FetchLogsResultPayload,
+    FetchLogsErrorPayload,
     FetchHistorySuccessPayload,
     FetchHistoryErrorPayload,
     FetchFileHistorySuccessPayload,
@@ -444,7 +454,6 @@ G8eoResultPayload = Union[
     FetchFileDiffBySessionSuccessPayload,
     FetchFileDiffErrorPayload,
     PortCheckResultPayload,
-    ShutdownAckPayload,
 ]
 
 

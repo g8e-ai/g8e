@@ -388,11 +388,10 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         mcp_payload = build_tool_call_request(
             tool_name="run_commands_with_operator",
+            execution_id=execution_id,
             arguments={
-                "execution_id": execution_id,
                 "command": command,
             },
-            request_id=execution_id,
         )
 
         command_data = G8eMessage(

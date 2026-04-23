@@ -45,13 +45,13 @@ from app.models.pubsub_messages import (
     FetchHistorySuccessPayload,
     FetchHistoryErrorPayload,
     FetchLogsResultPayload,
+    FetchLogsErrorPayload,
     FileEditResultPayload,
     FsListResultPayload,
     FsReadResultPayload,
     PortCheckResultPayload,
     RestoreFileSuccessPayload,
     RestoreFileErrorPayload,
-    ShutdownAckPayload,
     G8eoResultEnvelope,
     G8eoResultPayload,
     G8eMessage,
@@ -84,7 +84,7 @@ _PAYLOAD_MODELS = {
     EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED: FetchFileDiffByIdSuccessPayload,
     EventType.OPERATOR_FILE_DIFF_FETCH_FAILED: FetchFileDiffErrorPayload,
     EventType.OPERATOR_LOGS_FETCH_COMPLETED: FetchLogsResultPayload,
-    EventType.OPERATOR_LOGS_FETCH_FAILED: FetchLogsResultPayload,
+    EventType.OPERATOR_LOGS_FETCH_FAILED: FetchLogsErrorPayload,
     EventType.OPERATOR_HISTORY_FETCH_COMPLETED: FetchHistorySuccessPayload,
     EventType.OPERATOR_HISTORY_FETCH_FAILED: FetchHistoryErrorPayload,
 }
@@ -93,8 +93,6 @@ _PAYLOAD_MODELS = {
 def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, object]) -> G8eoResultPayload:
     event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw  # type: ignore[reportUnnecessaryIsInstance]
 
-    if event_type == EventType.OPERATOR_SHUTDOWN_ACKNOWLEDGED:
-        return ShutdownAckPayload.model_validate(payload_raw)
     if event_type == EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING:
         return ExecutionStatusPayload.model_validate(payload_raw)
     if event_type == EventType.OPERATOR_COMMAND_CANCELLED:
@@ -126,8 +124,8 @@ def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, 
         stderr = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and mcp_result.isError)
         
         # execution_id: try MCP metadata first, then the JSON-RPC envelope ID, finally a fresh UUID
-        _id_raw = payload_raw.get("id")
-        execution_id = mcp_result.execution_id
+        envelope_id = payload_raw.get("id")
+        execution_id = mcp_result.execution_id or (str(envelope_id) if envelope_id else None) or str(uuid4())
 
         return ExecutionResultsPayload(
             execution_id=execution_id,

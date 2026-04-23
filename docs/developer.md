@@ -293,9 +293,10 @@ type ExecutionIDSetter interface {
 When adding a new result payload type, do the following:
 1. Declare an `ExecutionID string` field with JSON tag `execution_id`.
 2. Implement `SetExecutionID(id string)` by adding a one-line method in `components/g8eo/models/execution_id_setter.go`.
-3. Register the type in `TestExecutionIDSetter_Implementations` and `TestExecutionIDSetter_CoversAllPayloads` in `components/g8eo/models/execution_id_setter_test.go` so the reflective guardrail catches regressions.
 
-The publisher does not need changes — it dispatches through the interface, not a concrete type switch.
+No test registration is required. The AST-based guardrails in `components/g8eo/models/execution_id_setter_test.go` auto-discover every struct whose name ends in `ResultPayload`, `StatusPayload`, or `ErrorPayload` and carries an `ExecutionID` field, and fail the build if its `SetExecutionID` method is missing or non-trivial. The publisher does not need changes — it dispatches through the interface, not a concrete type switch.
+
+All result publishers — both the consolidated `publishResultEnvelope` helper in `components/g8eo/services/pubsub/pubsub_results.go` (command/cancellation/file-edit/fs-list) and the `publishLFAA*` helpers in `components/g8eo/services/pubsub/publish_helpers.go` (file read, port check, fetch logs/history, restore file) — MUST stamp `msg.APIKey = cfg.APIKey` on the outbound `G8eMessage` for operator identity continuity across pub/sub. Regression coverage lives in `TestPublishLFAA_StampsAPIKeyFromConfig` (LFAA path) and the `api_key` assertions in `components/g8eo/services/pubsub/pubsub_results_test.go` (envelope path).
 
 ---
 

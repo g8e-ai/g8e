@@ -731,7 +731,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("auto-populates missing fields", func(t *testing.T) {
+	t.Run("populates missing operator fields", func(t *testing.T) {
 		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
@@ -746,7 +746,6 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 			struct{}{},
 		)
 		require.NoError(t, err)
-		result.ID = ""
 
 		err = svc.PublishResult(context.Background(), result)
 		require.NoError(t, err)

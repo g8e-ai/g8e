@@ -51,13 +51,13 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSub
 	var flrp models.FetchLogsRequestPayload
 	if err := json.Unmarshal(msg.Payload, &flrp); err != nil {
 		hs.logger.Error("Failed to decode fetch logs payload", "error", err)
-		hs.publishFetchLogsFailure(ctx, msg, "", "invalid request payload")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "invalid request payload")
 		return
 	}
 	executionID := flrp.ExecutionID
 	if executionID == "" {
 		hs.logger.Warn("Fetch logs request without execution_id")
-		hs.publishFetchLogsFailure(ctx, msg, "", "missing execution_id in request")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "missing execution_id in request")
 		return
 	}
 
@@ -87,13 +87,13 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 	record, err := hs.rawVault.GetRawExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from raw vault", "error", err)
-		hs.publishFetchLogsFailure(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in raw vault", "execution_id", executionID)
-		hs.publishFetchLogsFailure(ctx, msg, executionID, "execution not found in raw vault")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in raw vault")
 		return
 	}
 
@@ -103,20 +103,20 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
 		hs.logger.Warn("Scrubbed vault not available for fetch logs request")
-		hs.publishFetchLogsFailure(ctx, msg, executionID, "scrubbed vault is not enabled on this operator")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "scrubbed vault is not enabled on this operator")
 		return
 	}
 
 	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from scrubbed vault", "error", err)
-		hs.publishFetchLogsFailure(ctx, msg, executionID, fmt.Sprintf("failed to retrieve execution: %v", err))
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in scrubbed vault", "execution_id", executionID)
-		hs.publishFetchLogsFailure(ctx, msg, executionID, "execution not found in scrubbed vault")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in scrubbed vault")
 		return
 	}
 
@@ -165,26 +165,6 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 		"execution_id", record.ID,
 		"stdout_size", record.StdoutSize,
 		"stderr_size", record.StderrSize)
-}
-
-// publishFetchLogsFailure publishes a FetchLogs.Failed result with a fetch-logs
-// specific payload. We do NOT use publishLFAAErrorTo here because the g8ee side
-// expects a FetchLogsResultPayload-shaped message on this event type, not an
-// LFAAErrorPayload. The shape carries the (possibly empty) execution_id so
-// callers can correlate the error to their request. Wire-level MCP wrapping is
-// handled centrally via publishLFAAResponseTo.
-func (hs *HistoryService) publishFetchLogsFailure(ctx context.Context, msg PubSubCommandMessage, executionID, errorMsg string) {
-	payload, err := json.Marshal(models.FetchLogsResultPayload{
-		ExecutionID:       executionID,
-		Error:             errorMsg,
-		OperatorID:        hs.config.OperatorID,
-		OperatorSessionID: hs.config.OperatorSessionId,
-	})
-	if err != nil {
-		hs.logger.Error("Failed to marshal fetch logs failure payload", "error", err)
-		return
-	}
-	publishLFAAResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, payload)
 }
 
 // HandleFetchHistoryRequest processes a fetch history request.

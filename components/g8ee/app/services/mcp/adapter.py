@@ -16,15 +16,28 @@ from typing import Any
 from .types import CallToolResult, Content, JSONRPCRequest
 
 
-def build_tool_call_request(tool_name: str, arguments: dict[str, Any], request_id: str) -> JSONRPCRequest:
-    """Constructs an MCP CallToolRequest JSON-RPC payload."""
+def build_tool_call_request(
+    tool_name: str,
+    execution_id: str,
+    arguments: dict[str, Any] | None = None,
+) -> JSONRPCRequest:
+    """Constructs an MCP CallToolRequest JSON-RPC payload.
+
+    ``execution_id`` is required and is stamped into both the JSON-RPC envelope
+    ``id`` and ``params.arguments["execution_id"]`` so the g8eo side can always
+    correlate the tool call to its execution. Callers pass tool-specific
+    parameters via ``arguments``; any ``execution_id`` in ``arguments`` is
+    overwritten to guarantee it matches the envelope id.
+    """
+    merged_arguments: dict[str, Any] = dict(arguments or {})
+    merged_arguments["execution_id"] = execution_id
     return JSONRPCRequest(
-        id=request_id,
+        id=execution_id,
         method="tools/call",
         params={
             "name": tool_name,
-            "arguments": arguments
-        }
+            "arguments": merged_arguments,
+        },
     )
 
 

@@ -906,33 +906,35 @@ func TestPubSubCommandService_PublishLFAAError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// publishFetchLogsFailure — via HistoryService
+// FetchLogs.Failed — unified LFAA error envelope
 //
-// The fetch-logs failure path publishes a FetchLogsResultPayload-shaped
-// message (not an LFAAErrorPayload) because the g8ee side expects that
-// typed payload on this event type. This test pins the shape + the
-// FetchLogs.Failed routing.
+// FetchLogs failures publish the standard LFAAErrorPayload shape (via
+// publishLFAAErrorTo), matching FetchHistory.Failed / FetchFileHistory.Failed
+// and letting g8ee dispatch through the single LFAA error handler path.
+// executionIDFromMessage resolves the execution_id from the request payload
+// so correlation is preserved.
 // ---------------------------------------------------------------------------
 
 func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
-	t.Run("publishes fetch logs failure", func(t *testing.T) {
+	t.Run("publishes fetch logs failure via LFAA error envelope", func(t *testing.T) {
 		f := newPubsubFixture(t)
 
 		msg := PubSubCommandMessage{
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{}),
+			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{ExecutionID: "exec-123"}),
 			Timestamp: time.Now().UTC(),
 		}
 
-		f.Svc.history.publishFetchLogsFailure(context.Background(), msg, "exec-123", "execution not found")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected fetch logs failure to be published")
 		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
 		assert.Contains(t, string(published.Data), "execution not found")
 		assert.Contains(t, string(published.Data), "exec-123")
+		assert.Contains(t, string(published.Data), `"success":false`)
 	})
 }
 

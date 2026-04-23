@@ -35,7 +35,6 @@ from app.constants.events import (
     EventType,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.tool_args import FsListArgs
 from app.models.command_request_payloads import FsListRequestPayload, FsReadRequestPayload
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
@@ -83,11 +82,11 @@ class OperatorFilesystemService:
         try:
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.LIST_FILES,
+                execution_id=exec_id,
                 arguments={
                     "path": args.path,
                     "target_operator": args.target_operator,
                 },
-                request_id=exec_id,
             )
 
             g8e_message = G8eMessage(
@@ -186,11 +185,11 @@ class OperatorFilesystemService:
         try:
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.FILE_READ,
+                execution_id=exec_id,
                 arguments={
                     "path": args.path,
                     "target_operator": args.target_operator,
                 },
-                request_id=exec_id,
             )
 
             g8e_message = G8eMessage(

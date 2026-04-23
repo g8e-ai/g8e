@@ -346,8 +346,8 @@
   },
 
   "fetch_logs_result": {
-    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.completed | g8e.v1.operator.logs.fetch.failed. Contains stored execution output retrieved from the operator local vault.",
-    "_event_types": ["g8e.v1.operator.logs.fetch.completed", "g8e.v1.operator.logs.fetch.failed"],
+    "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.completed. Contains stored execution output retrieved from the operator local vault. Failure events (g8e.v1.operator.logs.fetch.failed) use the unified lfaa_error envelope.",
+    "_event_types": ["g8e.v1.operator.logs.fetch.completed"],
     "fields": {
       "execution_id": {
         "type": "string",

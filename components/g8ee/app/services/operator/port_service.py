@@ -40,7 +40,6 @@ from app.constants.settings import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
 )
 from app.errors import BusinessLogicError, ValidationError
-from app.models.tool_args import CheckPortArgs
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -141,8 +140,8 @@ class OperatorPortService:
 
             mcp_payload = build_tool_call_request(
                 tool_name=OperatorToolName.CHECK_PORT,
+                execution_id=exec_id,
                 arguments={
-                    "execution_id": exec_id,
                     "host": host,
                     "port": port,
                     "protocol": protocol,
@@ -150,7 +149,6 @@ class OperatorPortService:
                     "source": EventType.EVENT_SOURCE_AI_PRIMARY,
                     "user_id": user_id,
                 },
-                request_id=exec_id,
             )
 
             command_data = G8eMessage(

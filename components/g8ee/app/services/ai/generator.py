@@ -20,7 +20,7 @@ authority for shell command generation.
 
 import asyncio
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from app.errors import OllamaEmptyResponseError
 from app.models.settings import LLMSettings, G8eeUserSettings
@@ -71,10 +71,9 @@ from app.models.agents.tribunal import (
 from app.models.events import SessionEvent
 from app.models.model_configs import get_model_config
 from app.services.infra.g8ed_event_service import EventService
-from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 
-# Decomposed components
 from app.utils.command import normalise_command
 from app.services.ai.voter import (
     TRIBUNAL_MIN_CONSENSUS,
@@ -111,7 +110,7 @@ class TribunalEmitter:
         self.event_service = event_service
         self.g8e_context = g8e_context
 
-    async def emit(self, event_type: EventType, payload: Any) -> None:
+    async def emit(self, event_type: EventType, payload: G8eBaseModel) -> None:
         """Emit an SSE event. Re-raises if event_type is terminal."""
         try:
             if self.event_service is None or self.g8e_context is None:
@@ -183,7 +182,7 @@ async def _run_generation_pass(
     operator_context: OperatorContext | None,
     pass_index: int,
     emitter: TribunalEmitter,
-    pass_errors: List[str],
+    pass_errors: list[str],
     command_constraints_message: str,
 ) -> str | None:
     """Run a single Tribunal generation pass."""
@@ -216,7 +215,7 @@ async def _run_generation_pass(
     )
 
     model_config = get_model_config(model)
-    
+
     response_format = None
     if model_config.supports_structured_output:
         response_format = ResponseFormat.from_pydantic_schema(
@@ -239,7 +238,7 @@ async def _run_generation_pass(
             contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
             lite_llm_settings=settings,
         )
-        
+
         if not response.text or not response.text.strip():
             error_msg = f"Pass {pass_index} ({member.value}): empty response"
             pass_errors.append(error_msg)
@@ -247,14 +246,18 @@ async def _run_generation_pass(
             return None
 
         raw_command = response.text.strip()
-        
+
         if model_config.supports_structured_output:
             parsed = extract_json_from_text(raw_command)
-            if parsed and isinstance(parsed, dict) and "command" in parsed:
-                raw_command = parsed["command"]
+            if not (isinstance(parsed, dict) and isinstance(parsed.get("command"), str)):
+                error_msg = f"Pass {pass_index} ({member.value}): structured output missing 'command' field"
+                pass_errors.append(error_msg)
+                logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
+                return None
+            raw_command = parsed["command"]
 
         normalised = normalise_command(raw_command)
-        
+
         if not normalised:
             error_msg = f"Pass {pass_index} ({member.value}): normalisation failed"
             pass_errors.append(error_msg)
@@ -305,9 +308,9 @@ async def _run_generation_stage(
     num_passes: int,
     emitter: TribunalEmitter,
     command_constraints_message: str,
-) -> List[CandidateCommand]:
+) -> list[CandidateCommand]:
     """Stage 1: run N parallel generation passes and return successful candidates."""
-    pass_errors: List[str] = []
+    pass_errors: list[str] = []
     pass_tasks = [
         _run_generation_pass(
             provider=provider, model=model, request=request, guidelines=guidelines,
@@ -323,8 +326,11 @@ async def _run_generation_stage(
     ]
 
     if not candidates:
-        all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
-        if all_system:
+        if not pass_errors:
+            raise AssertionError(
+                "Tribunal invariant violated: all generation passes returned None but pass_errors is empty"
+            )
+        if all(_is_system_error(e) for e in pass_errors):
             logger.error(
                 "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
                 num_passes, pass_errors,
@@ -343,11 +349,11 @@ async def _run_generation_stage(
             EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
             TribunalSessionGenerationFailedPayload(
                 request=request,
-                pass_errors=pass_errors if pass_errors else ["No candidates produced"],
+                pass_errors=pass_errors,
             ),
         )
         raise TribunalGenerationFailedError(
-            pass_errors=pass_errors if pass_errors else ["No candidates produced"],
+            pass_errors=pass_errors,
             request=request,
         )
 
@@ -528,9 +534,9 @@ async def generate_command(
     whitelisted_commands: list[dict[str, Any]] | None = None,
     blacklisted_commands: list[dict[str, str]] | None = None,
 ) -> CommandGenerationResult:
-    """Run the Tribunal pipeline to generate a command from Sage's request."""
-    request = (request or "").strip()
-    guidelines = (guidelines or "").strip()
+    """Run the Tribunal pipeline to generate a command from the caller's request."""
+    request = request.strip()
+    guidelines = guidelines.strip()
     fields = build_tribunal_prompt_fields(
         operator_context,
         request=request,
@@ -565,7 +571,7 @@ async def generate_command(
 
     if not request:
         raise TribunalGenerationFailedError(
-            pass_errors=["Sage submitted an empty request; cannot generate command"],
+            pass_errors=["Empty request submitted; cannot generate command"],
             request=request,
         )
 
@@ -606,17 +612,18 @@ async def generate_command(
     try:
         provider = get_llm_provider(settings.llm, is_assistant=True)
     except Exception as exc:
-        provider_str = str(settings.llm.assistant_provider) if settings.llm.assistant_provider else "None"
+        assistant_provider = settings.llm.assistant_provider
+        provider_name = assistant_provider.value if assistant_provider else "not_configured"
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             TribunalSessionProviderUnavailablePayload(
                 request=request,
-                provider=provider_str,
+                provider=provider_name,
                 error=str(exc),
             ),
         )
         raise TribunalProviderUnavailableError(
-            provider=settings.llm.assistant_provider,
+            provider=assistant_provider,
             error=str(exc),
             request=request,
         ) from exc

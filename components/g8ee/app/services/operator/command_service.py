@@ -21,11 +21,6 @@ from app.constants.events import EventType
 from app.constants.status import AITaskId
 from app.models.agent import ExecutorCommandArgs
 from app.models.tool_args import (
-    CheckPortArgs,
-    FetchFileHistoryArgs,
-    FetchFileDiffArgs,
-    FsListArgs,
-    FsReadArgs,
     GrantIntentArgs,
     RevokeIntentArgs,
 )
@@ -35,6 +30,7 @@ from app.models.command_request_payloads import (
     FetchFileDiffRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
+    FsReadRequestPayload,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -75,7 +71,7 @@ from app.services.protocols import (
     G8edClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
-from app.services.investigation.investigation_service import _extract_single_operator_context
+from app.services.investigation.investigation_service import extract_single_operator_context
 from .operator_data_service import OperatorDataService
 
 from .execution_service import OperatorExecutionService
@@ -205,11 +201,7 @@ class OperatorCommandService:
             payload = envelope.payload
             if payload is None:
                 return
-            execution_id = payload.execution_id
-            if not execution_id:
-                logger.error("[G8EO_RESULT] Missing execution_id in payload type %s - cannot complete execution registry entry. Envelope ID: %s. The corresponding waiter will timeout.", type(payload).__name__, envelope.id)
-                return
-            execution_registry.complete(execution_id, envelope)
+            execution_registry.complete(payload.execution_id, envelope)
 
         pubsub_service.subscribe_results(_on_g8eo_result)
 
@@ -291,7 +283,7 @@ class OperatorCommandService:
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
-        operator_context = _extract_single_operator_context(primary) if primary else None
+        operator_context = extract_single_operator_context(primary) if primary else None
         is_safe, safety_err = validate_command_safety(
             command,
             whitelisting_enabled=self._cv.enable_whitelisting,
@@ -414,13 +406,12 @@ class OperatorCommandService:
 
                 mcp_payload = build_tool_call_request(
                     tool_name="run_commands_with_operator",
+                    execution_id=exec_id,
                     arguments={
-                        "execution_id": exec_id,
                         "command": command,
                         "justification": justification,
                         "timeout_seconds": args.timeout_seconds,
                     },
-                    request_id=exec_id,
                 )
                 g8e_message = G8eMessage(
                     id=exec_id,
