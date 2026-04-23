@@ -473,7 +473,7 @@ class G8eoResultEnvelope(G8eBaseModel):
     This is a parse-only boundary object — not a persisted document.
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), description="Message ID echoed from the outbound command")
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id. See shared/models/wire/envelope.json.")
     event_type: EventType = Field(..., description="Event type from g8eo")
     operator_id: str = Field(..., description="Operator ID from channel routing")
     operator_session_id: str = Field(..., description="Operator session ID from channel routing")

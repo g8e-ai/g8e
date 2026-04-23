@@ -72,7 +72,7 @@ func publishLFAATypedResponseTo(
 	setExecutionIDOnPayload(payload, msg.ID)
 
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
 	)
@@ -128,7 +128,7 @@ func publishLFAAErrorTo(
 	}
 
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
 	)
@@ -175,7 +175,7 @@ func publishLFAAResponseTo(
 	responseJSON []byte,
 ) {
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		json.RawMessage(responseJSON),
 	)

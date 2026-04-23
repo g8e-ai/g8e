@@ -18,13 +18,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/google/uuid"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
@@ -107,7 +107,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	}
 
 	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
+		eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -152,7 +152,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	}
 
 	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
+		eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -224,7 +224,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	}
 
 	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
+		eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -293,7 +293,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	}
 
 	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
+		eventType, result.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -365,9 +365,8 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		eventType = constants.Event.Operator.Command.StatusUpdated.Cancelled
 	}
 
-	msgID := fmt.Sprintf("%s_status_%d", status.ExecutionID, timeNowNano())
 	msg, err := models.NewG8eMessage(
-		msgID, eventType, status.CaseID,
+		eventType, status.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -399,7 +398,7 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *model
 		result.OperatorID = rr.config.OperatorID
 	}
 	if result.ID == "" {
-		result.ID = fmt.Sprintf("result_%d", timeNowNano())
+		result.ID = uuid.NewString()
 	}
 	return rr.publish(ctx, result)
 }
@@ -430,9 +429,4 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 		"event_type", msg.EventType,
 		"message_id", msg.ID)
 	return rr.client.Publish(ctx, channel, data)
-}
-
-// timeNowNano returns the current time as a Unix nanosecond timestamp.
-func timeNowNano() int64 {
-	return time.Now().UnixNano()
 }

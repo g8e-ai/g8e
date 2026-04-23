@@ -71,33 +71,41 @@ type PubSubEvent struct {
 
 // Publish sends a message to all subscribers of a channel (exact + pattern matches).
 func (b *PubSubBroker) Publish(channel string, data json.RawMessage) int {
+	// Snapshot targets and precomputed payloads under RLock, then release the
+	// broker lock before invoking trySend. trySend's drop path needs to take
+	// b.mu.Lock() synchronously (via removeSub) to evict zombies; holding the
+	// RLock here would deadlock.
+	type delivery struct {
+		sub *wsSubscriber
+		msg []byte
+	}
+	var deliveries []delivery
+
 	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	count := 0
-
 	if subs, ok := b.subscribers[channel]; ok {
 		event := PubSubEvent{Type: constants.PubSubEventMessage, Channel: channel, Data: data}
 		msg, _ := json.Marshal(event)
 		for sub := range subs {
-			if b.trySend(sub, msg) {
-				count++
-			}
+			deliveries = append(deliveries, delivery{sub: sub, msg: msg})
 		}
 	}
-
 	for pattern, subs := range b.patterns {
 		if globMatch(pattern, channel) {
 			event := PubSubEvent{Type: constants.PubSubEventPMessage, Channel: channel, Pattern: pattern, Data: data}
 			msg, _ := json.Marshal(event)
 			for sub := range subs {
-				if b.trySend(sub, msg) {
-					count++
-				}
+				deliveries = append(deliveries, delivery{sub: sub, msg: msg})
 			}
 		}
 	}
+	b.mu.RUnlock()
 
+	count := 0
+	for _, d := range deliveries {
+		if b.trySend(d.sub, d.msg) {
+			count++
+		}
+	}
 	return count
 }
 
@@ -126,11 +134,13 @@ type pubSubSessionHandler struct {
 }
 
 func (h *pubSubSessionHandler) run() {
-	// Start write loop
+	// Start write loop. On any exit path (write error or send channel
+	// closed externally by trySend/Close), evict from broker maps so the
+	// subscriber cannot linger as a zombie in the routing table.
 	go func() {
+		defer h.broker.removeSub(h.sub)
 		for msg := range h.sub.send {
 			if err := h.sub.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
-				h.broker.removeSub(h.sub)
 				return
 			}
 		}
@@ -247,21 +257,41 @@ func (b *PubSubBroker) removeSub(sub *wsSubscriber) {
 
 func (b *PubSubBroker) trySend(sub *wsSubscriber, msg []byte) bool {
 	sub.closeMu.Lock()
-	defer sub.closeMu.Unlock()
 
 	if sub.closed {
+		sub.closeMu.Unlock()
 		return false
 	}
 
 	select {
 	case sub.send <- msg:
+		sub.closeMu.Unlock()
 		return true
 	default:
 		sub.closed = true
 		close(sub.send)
+		remote := ""
+		if sub.ws != nil {
+			remote = sub.ws.RemoteAddr().String()
+		}
+		// Release sub.closeMu before taking b.mu to preserve the broker-lock
+		// -> sub-lock ordering used by Close(); otherwise we risk deadlock.
+		sub.closeMu.Unlock()
+
+		// Synchronously evict from broker routing tables so no zombie entry
+		// remains. Previously this relied on the write-loop observing the
+		// closed channel and the async ws.Close() eventually failing the read
+		// loop, leaving a window where Publish would still target this sub.
+		b.removeSub(sub)
+
 		if sub.ws != nil {
 			go sub.ws.Close()
 		}
+		b.logger.Warn("pubsub subscriber dropped: send buffer full (back-pressure)",
+			"remote", remote,
+			"buffer_capacity", cap(sub.send),
+			"message_bytes", len(msg),
+		)
 		return false
 	}
 }

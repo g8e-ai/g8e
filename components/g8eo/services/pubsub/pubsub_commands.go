@@ -393,7 +393,6 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 		}
 
 		respMsg, err := models.NewG8eMessage(
-			req.ID,
 			constants.Event.Operator.MCP.ToolsResult,
 			msg.CaseID,
 			*msg.OperatorID,

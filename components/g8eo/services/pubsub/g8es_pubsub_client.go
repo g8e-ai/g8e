@@ -45,6 +45,12 @@ type PubSubClient interface {
 //	cmd:{operator_id}:{operator_session_id}       (g8ee → Operator)
 //	results:{operator_id}:{operator_session_id}    (Operator → g8ee)
 //	heartbeat:{operator_id}:{operator_session_id}  (Operator → g8ee)
+
+// pubSubWriteTimeout bounds every WebSocket write so a half-open TCP
+// connection cannot block publishes (including heartbeats) indefinitely while
+// the client mutex is held. Exposed as a var so tests can shorten it.
+var pubSubWriteTimeout = 5 * time.Second
+
 type G8esPubSubClient struct {
 	baseURL    string // e.g. "wss://g8e.local"
 	logger     *slog.Logger
@@ -129,6 +135,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 		Channel: channel,
 	}
 	subJSON, _ := json.Marshal(subMsg)
+	_ = ws.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
 	if err := ws.WriteMessage(websocket.TextMessage, subJSON); err != nil {
 		ws.Close()
 		return nil, fmt.Errorf("failed to subscribe to channel %s: %w", channel, err)
@@ -290,12 +297,14 @@ func (c *G8esPubSubClient) Publish(ctx context.Context, channel string, data []b
 		return fmt.Errorf("failed to marshal publish payload: %w", err)
 	}
 
+	_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
 	if err := c.pubWs.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
 		c.pubWs.Close()
 		c.pubWs = nil
 		if err := c.connectPubWs(); err != nil {
 			return fmt.Errorf("failed to reconnect publish WebSocket: %w", err)
 		}
+		_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
 		if err := c.pubWs.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
 			c.pubWs.Close()
 			c.pubWs = nil
