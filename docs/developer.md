@@ -278,6 +278,29 @@ All datetime fields use the `UTCDatetime` type which serializes to ISO 8601 with
 
 Passing raw dicts between services, storing unvalidated JSON in the database, or constructing ad-hoc objects at call sites are all prohibited. If a shape crosses a wire boundary, it must have a corresponding entry in `shared/models/` and a typed model class in the consuming component.
 
+### LFAA Result Payload Requirements
+
+All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically injected by the `setExecutionIDOnPayload()` helper in `components/g8eo/services/pubsub/publish_helpers.go` before serialization.
+
+The following result payload types support execution_id injection:
+- CancellationResultPayload
+- FileEditResultPayload
+- FsListResultPayload
+- ExecutionStatusPayload
+- PortCheckResultPayload
+- FetchLogsResultPayload
+- FsReadResultPayload
+- LFAAErrorPayload
+- FetchFileDiffResultPayload
+- FetchHistoryResultPayload
+- FetchFileHistoryResultPayload
+- RestoreFileResultPayload
+
+When adding new result payload types, ensure they:
+1. Declare an `ExecutionID string` field with JSON tag `execution_id`
+2. Add a case in `setExecutionIDOnPayload()` to inject the execution_id
+3. Add a unit test in `publish_helpers_test.go` to verify injection works
+
 ---
 
 ## Code Quality Standards

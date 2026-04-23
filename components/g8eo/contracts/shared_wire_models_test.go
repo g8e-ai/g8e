@@ -459,7 +459,7 @@ func TestFileDiffEntryMatchesSchema(t *testing.T) {
 func TestFetchFileDiffResultPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.FetchFileDiffResultPayload{})
 
-	fields := []string{"success", "diffs", "diff", "total", "operator_session_id", "error"}
+	fields := []string{"success", "execution_id", "diffs", "diff", "total", "operator_session_id", "error"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "FetchFileDiffResultPayload")
 	}
@@ -504,9 +504,25 @@ func TestLFAAErrorPayloadMatchesSchema(t *testing.T) {
 
 func TestRestoreFileResultPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.RestoreFileResultPayload{})
-	fields := []string{"success", "file_path", "commit_hash", "error"}
+	fields := []string{"success", "execution_id", "file_path", "commit_hash", "error"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "RestoreFileResultPayload")
+	}
+}
+
+func TestFetchHistoryResultPayloadMatchesSchema(t *testing.T) {
+	tags := jsonTagsOf(models.FetchHistoryResultPayload{})
+	fields := []string{"success", "execution_id", "operator_session_id", "web_session", "events", "total", "limit", "offset", "error"}
+	for _, f := range fields {
+		assertFieldPresent(t, tags, f, "FetchHistoryResultPayload")
+	}
+}
+
+func TestFetchFileHistoryResultPayloadMatchesSchema(t *testing.T) {
+	tags := jsonTagsOf(models.FetchFileHistoryResultPayload{})
+	fields := []string{"success", "execution_id", "file_path", "history", "error"}
+	for _, f := range fields {
+		assertFieldPresent(t, tags, f, "FetchFileHistoryResultPayload")
 	}
 }
 

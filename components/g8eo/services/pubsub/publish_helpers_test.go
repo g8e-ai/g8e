@@ -74,3 +74,41 @@ func TestSetExecutionIDOnPayload_UnsupportedType(t *testing.T) {
 	setExecutionIDOnPayload(payload, "msg-abc")
 	assert.Equal(t, "value", payload.Field)
 }
+
+func TestSetExecutionIDOnPayload_FetchFileDiffResultPayload(t *testing.T) {
+	payload := &models.FetchFileDiffResultPayload{
+		Success:     true,
+		Error:       nil,
+		ExecutionID: "original-id",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_FetchHistoryResultPayload(t *testing.T) {
+	payload := &models.FetchHistoryResultPayload{
+		Success:     true,
+		ExecutionID: "",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_FetchFileHistoryResultPayload(t *testing.T) {
+	payload := &models.FetchFileHistoryResultPayload{
+		Success:     false,
+		Error:       "test error",
+		ExecutionID: "old-id",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
+
+func TestSetExecutionIDOnPayload_RestoreFileResultPayload(t *testing.T) {
+	payload := &models.RestoreFileResultPayload{
+		Success:     true,
+		ExecutionID: "",
+	}
+	setExecutionIDOnPayload(payload, "msg-xyz")
+	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+}
