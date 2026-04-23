@@ -93,7 +93,7 @@ class PromptFile(str, Enum):
 
     # Tribunal
     TRIBUNAL_GENERATOR = "tribunal/generator.txt"
-    TRIBUNAL_VERIFIER = "tribunal/verifier.txt"
+    TRIBUNAL_AUDITOR = "tribunal/auditor.txt"
 
     @property
     def path(self) -> str:

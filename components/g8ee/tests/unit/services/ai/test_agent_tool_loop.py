@@ -33,7 +33,7 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.services.ai.agent_tool_loop import TribunalInvoker
-from app.services.ai.command_generator import (
+from app.services.ai.generator import (
     CommandGenerationResult,
     TribunalDisabledError,
 )
@@ -218,8 +218,8 @@ class TestTribunalInvokerRun:
             final_command="ls -la /tmp",
             outcome="verified",
             vote_score=1.0,
-            verifier_passed=True,
-            verifier_revision=None,
+            auditor_passed=True,
+            auditor_revision=None,
             candidates=[],
         )
 
@@ -269,8 +269,8 @@ class TestTribunalInvokerRun:
             final_command="ls -la /tmp",
             outcome="verified",
             vote_score=1.0,
-            verifier_passed=True,
-            verifier_revision=None,
+            auditor_passed=True,
+            auditor_revision=None,
             candidates=[],
         )
 
@@ -317,8 +317,8 @@ class TestTribunalInvokerRun:
             final_command="ls -la /tmp",
             outcome="verified",
             vote_score=1.0,
-            verifier_passed=True,
-            verifier_revision=None,
+            auditor_passed=True,
+            auditor_revision=None,
             candidates=[],
         )
 

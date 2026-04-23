@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, VerifierReason, TribunalMemberIcons } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, AuditorReason, TribunalMemberIcons } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -86,21 +86,21 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
     });
 
-    describe('VerifierReason constants', () => {
+    describe('AuditorReason constants', () => {
         it('OK matches JSON', () => {
-            expect(VerifierReason.OK).toBe(_AGENTS['tribunal.verifier_reason'].ok);
+            expect(AuditorReason.OK).toBe(_AGENTS['tribunal.verifier_reason'].ok);
         });
         it('REVISED matches JSON', () => {
-            expect(VerifierReason.REVISED).toBe(_AGENTS['tribunal.verifier_reason'].revised);
+            expect(AuditorReason.REVISED).toBe(_AGENTS['tribunal.verifier_reason'].revised);
         });
         it('EMPTY_RESPONSE matches JSON', () => {
-            expect(VerifierReason.EMPTY_RESPONSE).toBe(_AGENTS['tribunal.verifier_reason'].empty_response);
+            expect(AuditorReason.EMPTY_RESPONSE).toBe(_AGENTS['tribunal.verifier_reason'].empty_response);
         });
         it('NO_VALID_REVISION matches JSON', () => {
-            expect(VerifierReason.NO_VALID_REVISION).toBe(_AGENTS['tribunal.verifier_reason'].no_valid_revision);
+            expect(AuditorReason.NO_VALID_REVISION).toBe(_AGENTS['tribunal.verifier_reason'].no_valid_revision);
         });
         it('VERIFIER_ERROR matches JSON', () => {
-            expect(VerifierReason.VERIFIER_ERROR).toBe(_AGENTS['tribunal.verifier_reason'].verifier_error);
+            expect(AuditorReason.VERIFIER_ERROR).toBe(_AGENTS['tribunal.verifier_reason'].verifier_error);
         });
     });
 

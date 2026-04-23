@@ -20,7 +20,7 @@ surfaces:
    purpose, autonomy). The system prompt is constructed from these fields.
    Scaffolding placeholders (``{request}``, ``{guidelines}``, ``{os}``, etc.)
    live in the *consumer* templates (``TRIBUNAL_PROMPT_TEMPLATE`` and
-   ``TRIBUNAL_VERIFIER_TEMPLATE`` in ``command_generator.py``), not in the
+   ``TRIBUNAL_AUDITOR_TEMPLATE`` in ``command_generator.py``), not in the
    agent metadata.
 
 2. ``components/g8ee/app/prompts_data/modes/<mode>/tools.txt`` carries
@@ -72,8 +72,8 @@ _PERSONA_PLACEHOLDER_ALLOWLIST: frozenset[str] = frozenset()
 
 
 # Agents whose system prompts must be pure voice — no ``{...}``
-# placeholders. Every Tribunal member plus the Auditor (Verifier) is
-# rendered through ``TRIBUNAL_PROMPT_TEMPLATE`` / ``TRIBUNAL_VERIFIER_TEMPLATE``
+# placeholders. Every Tribunal member plus the Auditor (Auditor) is
+# rendered through ``TRIBUNAL_PROMPT_TEMPLATE`` / ``TRIBUNAL_AUDITOR_TEMPLATE``
 # in ``command_generator.py``; the primary / fast-path agents (Sage, Dash)
 # are rendered through ``build_modular_system_prompt``. Codex, Judge, and
 # the Warden sub-agents are rendered from their own dedicated paths and
@@ -114,7 +114,7 @@ class TestPersonaPlaceholderHygiene:
             f"Agent '{agent_id}' leaked str.format placeholders back into "
             f"its system prompt: {sorted(set(matches))}. Scaffolding lives in "
             f"the consumer template (see command_generator.TRIBUNAL_PROMPT_TEMPLATE "
-            f"/ TRIBUNAL_VERIFIER_TEMPLATE), not in agents.json."
+            f"/ TRIBUNAL_AUDITOR_TEMPLATE), not in agents.json."
         )
 
     def test_placeholder_allowlist_is_shrinking(self) -> None:

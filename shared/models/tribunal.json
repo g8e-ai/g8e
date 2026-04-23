@@ -126,7 +126,7 @@
         },
         "tribunal_role": {
           "tool": "The Security Pressure",
-          "description": "Keeps the honest members honest by adversarial pressure. If Nemesis wins a vote, it means four honest personas were fooled \u2014 that is exactly what the Verifier exists to catch."
+          "description": "Keeps the honest members honest by adversarial pressure. If Nemesis wins a vote, it means four honest personas were fooled \u2014 that is exactly what the Auditor exists to catch."
         },
         "name_origin": "Nemesis is the goddess of retribution in Greek mythology \u2014 the inescapable agent of someone's downfall. Nemesis represents the inescapable consequences of security oversights."
       }
@@ -175,7 +175,7 @@
       },
       "stage_3_verification": {
         "name": "Verification",
-        "description": "A dissent-aware Verifier receives the winner plus all losing clusters (anonymised as cluster_a, cluster_b, ...). On a unanimous winner it checks syntactic correctness only. On a majority winner it may approve (ok), swap to a dissenting cluster, or issue a revision. On a tied set it must pick one cluster or revise.",
+        "description": "A dissent-aware Auditor receives the winner plus all losing clusters (anonymised as cluster_a, cluster_b, ...). On a unanimous winner it checks syntactic correctness only. On a majority winner it may approve (ok), swap to a dissenting cluster, or issue a revision. On a tied set it must pick one cluster or revise.",
         "sse_events": [
           "g8e.v1.ai.tribunal.voting.review.started",
           "g8e.v1.ai.tribunal.voting.review.completed"
@@ -185,9 +185,9 @@
     "outcomes": {
       "_description": "Possible CommandGenerationOutcome values. See status.json tribunal.outcome. Infrastructure/generation/verifier failures raise typed TribunalError subclasses and do not produce an outcome.",
       "consensus": "Vote winner accepted without verifier (verifier disabled).",
-      "verified": "Verifier approved the vote winner (or swapped to a dissenting cluster).",
-      "verification_failed": "Verifier found issues and produced a revision \u2014 final_command is the verifier's output.",
-      "consensus_failed": "No two members agreed on a command (winner_weight < TRIBUNAL_MIN_CONSENSUS). Verifier is skipped; Sage receives the full candidate set and chooses whether to rephrase, clarify, or abort."
+      "verified": "Auditor approved the vote winner (or swapped to a dissenting cluster).",
+      "verification_failed": "Auditor found issues and produced a revision \u2014 final_command is the verifier's output.",
+      "consensus_failed": "No two members agreed on a command (winner_weight < TRIBUNAL_MIN_CONSENSUS). Auditor is skipped; Sage receives the full candidate set and chooses whether to rephrase, clarify, or abort."
     },
     "failure_modes": {
       "_description": "When the Tribunal cannot produce a command the tool call fails with one of these typed errors. There is no command to fall back to because Sage never proposed one.",
@@ -195,7 +195,7 @@
       "provider_unavailable": "LLM provider threw an exception at startup \u2014 TribunalProviderUnavailableError raised.",
       "all_passes_failed": "Every Tribunal generation pass returned no candidate \u2014 TribunalGenerationFailedError or TribunalSystemError raised.",
       "no_model_configured": "Neither assistant_model nor primary_model is set \u2014 TribunalModelNotConfiguredError raised.",
-      "verifier_failed": "Verifier returned an empty or unusable response \u2014 TribunalVerifierFailedError raised."
+      "verifier_failed": "Auditor returned an empty or unusable response \u2014 TribunalAuditorFailedError raised."
     },
     "configuration": {
       "_description": "Environment variable configuration keys for the Tribunal pipeline.",

@@ -13,6 +13,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
+
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -181,6 +185,32 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     content: str = Field(default="", description="Message content")
     timestamp: UTCDatetime = Field(default_factory=now, description="When the message was sent")
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
+    hash: str | None = Field(default=None, description="Cryptographic hash of the message (The Blockchain)")
+
+    def calculate_hash(self, previous_hash: str | None = None) -> str:
+        """Calculate the cryptographic hash for this block (message).
+        
+        The hash is derived from:
+        - Content
+        - Sender
+        - Timestamp
+        - Metadata (serialized)
+        - Previous block hash (forming the chain)
+        """
+        hasher = hashlib.sha256()
+        
+        # Consistent ordering for metadata serialization
+        metadata_json = self.metadata.model_dump_json()
+        
+        hasher.update(str(self.content).encode('utf-8'))
+        hasher.update(str(self.sender).encode('utf-8'))
+        hasher.update(str(self.timestamp.isoformat()).encode('utf-8'))
+        hasher.update(metadata_json.encode('utf-8'))
+        
+        if previous_hash:
+            hasher.update(previous_hash.encode('utf-8'))
+            
+        return hasher.hexdigest()
 
 
 class ThinkingMessage(G8eBaseModel):

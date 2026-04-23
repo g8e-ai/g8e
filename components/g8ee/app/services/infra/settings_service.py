@@ -206,7 +206,7 @@ class SettingsService:
                     ollama_assistant_model=None,
                     llm_max_tokens=4096,
                     llm_command_gen_enabled=False,
-                    llm_command_gen_verifier=True,
+                    llm_command_gen_auditor=True,
                     llm_command_gen_passes=3,
                 ),
                 search=self._build_search_settings(platform_doc.settings)

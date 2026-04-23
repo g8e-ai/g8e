@@ -187,11 +187,11 @@ export const ChatSSEHandlersMixin = {
         });
 
         this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_STARTED, (data) => {
-            this.handleTribunalVerifierStarted(data);
+            this.handleTribunalAuditorStarted(data);
         });
 
         this.eventBus.on(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED, (data) => {
-            this.handleTribunalVerifierCompleted(data);
+            this.handleTribunalAuditorCompleted(data);
         });
 
         this.eventBus.on(EventType.TRIBUNAL_SESSION_COMPLETED, (data) => {
@@ -486,7 +486,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
     },
 
-    handleTribunalVerifierStarted(data) {
+    handleTribunalAuditorStarted(data) {
         if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
@@ -495,7 +495,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying\u2026');
     },
 
-    handleTribunalVerifierCompleted(data) {
+    handleTribunalAuditorCompleted(data) {
         if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
 
         const widgetId = this._tribunalWidgetIds.get(data.web_session_id);

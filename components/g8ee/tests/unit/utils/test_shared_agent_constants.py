@@ -27,7 +27,7 @@ from app.constants import (
     TriageIntentClassification,
     CommandGenerationOutcome,
     TribunalMember,
-    VerifierReason,
+    AuditorReason,
 )
 
 pytestmark = pytest.mark.unit
@@ -65,16 +65,16 @@ class TestAgentConstantsMatchSharedJSON:
         actual = set(_AGENTS["agent.metadata"].keys())
         assert actual == expected
 
-class TestVerifierReason:
-    """VerifierReason enum matches shared constants."""
+class TestAuditorReason:
+    """AuditorReason enum matches shared constants."""
 
-    def test_verifier_reason_matches_shared_constants(self):
-        json_vals = _AGENTS["tribunal.verifier_reason"]
-        assert VerifierReason.OK.value == json_vals["ok"]
-        assert VerifierReason.REVISED.value == json_vals["revised"]
-        assert VerifierReason.EMPTY_RESPONSE.value == json_vals["empty_response"]
-        assert VerifierReason.NO_VALID_REVISION.value == json_vals["no_valid_revision"]
-        assert VerifierReason.VERIFIER_ERROR.value == json_vals["verifier_error"]
+    def test_auditor_reason_matches_shared_constants(self):
+        json_vals = _AGENTS["tribunal.auditor_reason"]
+        assert AuditorReason.OK.value == json_vals["ok"]
+        assert AuditorReason.REVISED.value == json_vals["revised"]
+        assert AuditorReason.EMPTY_RESPONSE.value == json_vals["empty_response"]
+        assert AuditorReason.NO_VALID_REVISION.value == json_vals["no_valid_revision"]
+        assert AuditorReason.AUDITOR_ERROR.value == json_vals["auditor_error"]
 
 
 class TestAgentMetadataPersonaFields:
@@ -140,15 +140,15 @@ class TestSharedModelJSONEnumsMatchG8ee:
             f"TribunalMember {g8ee_members}"
         )
 
-    def test_verifier_reason_enum_matches(self):
-        """verifier.json reason_enum must match VerifierReason."""
-        model = _load_model_json("verifier.json")
+    def test_auditor_reason_enum_matches(self):
+        """auditor.json reason_enum must match AuditorReason."""
+        model = _load_model_json("auditor.json")
         json_reasons = model["result"]["reason_enum"]["enum"]
         
-        g8ee_reasons = [e.value for e in VerifierReason]
+        g8ee_reasons = [e.value for e in AuditorReason]
         assert set(json_reasons) == set(g8ee_reasons), (
-            f"verifier.json reason_enum {json_reasons} does not match "
-            f"VerifierReason {g8ee_reasons}"
+            f"auditor.json reason_enum {json_reasons} does not match "
+            f"AuditorReason {g8ee_reasons}"
         )
 
     def test_triage_complexity_enum_matches(self):

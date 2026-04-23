@@ -1,0 +1,684 @@
+# Copyright (c) 2026 Lateralus Labs, LLC.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Tribunal Command Generator (Orchestrator)
+
+Implements the five-member heterogeneous AI panel (The Tribunal) as the sole
+authority for shell command generation.
+"""
+
+import asyncio
+import logging
+from typing import Any, List, Optional
+
+from app.errors import OllamaEmptyResponseError
+from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.base import G8eBaseModel
+from app.models.http_context import G8eHttpContext
+from app.models.agent import OperatorContext
+from app.constants import (
+    CommandGenerationOutcome,
+    ComponentName,
+    DEFAULT_OS_NAME,
+    DEFAULT_SHELL,
+    DEFAULT_WORKING_DIRECTORY,
+    TribunalMember,
+    TieBreakReason,
+    EventType,
+    AuditorReason,
+)
+from app.llm.prompts import (
+    build_command_constraints_message,
+    build_tribunal_generator_prompt,
+    build_tribunal_prompt_fields,
+)
+from app.llm.factory import get_llm_provider
+from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
+from app.llm.provider import LLMProvider
+from app.models.agents.tribunal import (
+    CandidateCommand,
+    CommandGenerationResult,
+    TribunalDisabledError,
+    TribunalSystemError,
+    TribunalProviderUnavailableError,
+    TribunalGenerationFailedError,
+    TribunalModelNotConfiguredError,
+    TribunalConsensusFailedError,
+    TribunalPassCompletedPayload,
+    TribunalSessionStartedPayload,
+    TribunalSessionDisabledPayload,
+    TribunalSessionModelNotConfiguredPayload,
+    TribunalSessionProviderUnavailablePayload,
+    TribunalSessionSystemErrorPayload,
+    TribunalSessionGenerationFailedPayload,
+    TribunalVotingCompletedPayload,
+    TribunalConsensusFailedPayload,
+    TribunalDissentRecordedPayload,
+    TribunalSessionCompletedPayload,
+    VoteBreakdown,
+)
+from app.models.events import SessionEvent
+from app.models.model_configs import get_model_config
+from app.services.infra.g8ed_event_service import EventService
+from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
+from app.utils.json_utils import extract_json_from_text
+
+# Decomposed components
+from app.utils.command import normalise_command
+from app.services.ai.voter import (
+    TRIBUNAL_MIN_CONSENSUS,
+    weighted_vote,
+)
+from app.services.ai.auditor_service import (
+    run_auditor,
+    validate_command_safety,
+)
+
+logger = logging.getLogger(__name__)
+
+_MAX_TOKENS_GENERATION = 4096
+
+_TERMINAL_TRIBUNAL_EVENTS = {
+    EventType.TRIBUNAL_SESSION_STARTED,
+    EventType.TRIBUNAL_SESSION_COMPLETED,
+    EventType.TRIBUNAL_SESSION_DISABLED,
+    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+    EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+}
+
+class TribunalEmitter:
+    """Handles emission of Tribunal SSE events via EventService."""
+
+    def __init__(
+        self,
+        event_service: EventService,
+        g8e_context: G8eHttpContext,
+    ):
+        self.event_service = event_service
+        self.g8e_context = g8e_context
+
+    async def emit(self, event_type: EventType, payload: Any) -> None:
+        """Emit an SSE event. Re-raises if event_type is terminal."""
+        try:
+            if self.event_service is None or self.g8e_context is None:
+                return
+            event = SessionEvent(
+                event_type=event_type,
+                payload=payload,
+                web_session_id=self.g8e_context.web_session_id,
+                user_id=self.g8e_context.user_id,
+                case_id=self.g8e_context.case_id,
+                investigation_id=self.g8e_context.investigation_id,
+                source_component=ComponentName.G8EE,
+            )
+            await self.event_service.publish(event)
+        except Exception as exc:
+            if event_type in _TERMINAL_TRIBUNAL_EVENTS:
+                logger.error("[TRIBUNAL-EMIT] Terminal event %s failed: %s", event_type, exc)
+                raise
+            logger.warning("[TRIBUNAL-EMIT] Progress event %s failed (swallowed): %s", event_type, exc)
+
+def _is_system_error(error_message: str) -> bool:
+    """Classify an error message as a system error vs. a model error."""
+    error_lower = error_message.lower()
+    if "safety validation failed" in error_lower:
+        return False
+    system_indicators = [
+        "401", "403", "unauthorized", "forbidden",
+        "authentication", "api key",
+        "connection refused", "connectionerror", "timeout",
+        "dns", "ssl", "econnrefused",
+        "unsupported llm provider",
+    ]
+    return any(indicator in error_lower for indicator in system_indicators)
+
+def _member_for_pass(pass_index: int) -> TribunalMember:
+    """Map a pass index to a Tribunal member."""
+    members = [
+        TribunalMember.AXIOM,
+        TribunalMember.CONCORD,
+        TribunalMember.VARIANCE,
+        TribunalMember.PRAGMA,
+        TribunalMember.NEMESIS,
+    ]
+    return members[pass_index % len(members)]
+
+def _resolve_model(llm_settings: LLMSettings, request: str = "") -> str:
+    """Resolve the concrete model string from settings."""
+    if llm_settings.assistant_model:
+        return llm_settings.assistant_model
+
+    if llm_settings.primary_model:
+        return llm_settings.primary_model
+
+    provider = llm_settings.primary_provider or llm_settings.assistant_provider
+    raise TribunalModelNotConfiguredError(
+        provider=provider.value if provider else "unknown",
+        request=request,
+    )
+
+class TribunalResponse(G8eBaseModel):
+    """Structured response for Tribunal command generation."""
+    command: str
+
+async def _run_generation_pass(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    pass_index: int,
+    emitter: TribunalEmitter,
+    pass_errors: List[str],
+    command_constraints_message: str,
+) -> str | None:
+    """Run a single Tribunal generation pass."""
+    member = _member_for_pass(pass_index)
+    member_persona = get_agent_persona(member.value)
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
+
+    prompt = build_tribunal_generator_prompt(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=fields["forbidden_patterns_message"],
+        command_constraints_message=command_constraints_message,
+        os=fields["os"],
+        shell=fields["shell"],
+        user_context=fields["user_context"],
+        working_directory=fields["working_directory"],
+        operator_context_str=fields["operator_context"],
+    )
+
+    logger.info(
+        "[TRIBUNAL-PASS] pass=%d member=%s model=%s request_len=%d",
+        pass_index, member.value, model, len(request),
+    )
+
+    model_config = get_model_config(model)
+    
+    response_format = None
+    if model_config.supports_structured_output:
+        response_format = ResponseFormat.from_pydantic_schema(
+            TribunalResponse.model_json_schema(),
+            name="TribunalResponse"
+        )
+
+    settings = LiteLLMSettings(
+        max_output_tokens=_MAX_TOKENS_GENERATION,
+        top_p_nucleus_sampling=model_config.top_p,
+        top_k_filtering=model_config.top_k,
+        stop_sequences=model_config.stop_sequences,
+        system_instructions=member_persona.get_system_prompt(),
+        response_format=response_format,
+    )
+
+    try:
+        response = await provider.generate_content_lite(
+            model=model,
+            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
+            lite_llm_settings=settings,
+        )
+        
+        if not response.text or not response.text.strip():
+            error_msg = f"Pass {pass_index} ({member.value}): empty response"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s", error_msg)
+            return None
+
+        raw_command = response.text.strip()
+        
+        if model_config.supports_structured_output:
+            parsed = extract_json_from_text(raw_command)
+            if parsed and isinstance(parsed, dict) and "command" in parsed:
+                raw_command = parsed["command"]
+
+        normalised = normalise_command(raw_command)
+        
+        if not normalised:
+            error_msg = f"Pass {pass_index} ({member.value}): normalisation failed"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
+            return None
+
+        is_safe, safety_err = validate_command_safety(normalised, False, False, operator_context)
+        if not is_safe:
+            error_msg = f"Pass {pass_index} ({member.value}): safety validation failed: {safety_err}"
+            pass_errors.append(error_msg)
+            logger.error("[TRIBUNAL-PASS] %s", error_msg)
+            return None
+
+        logger.info(
+            "[TRIBUNAL-PASS] pass=%d member=%s success: cmd=%r",
+            pass_index, member.value, normalised[:80],
+        )
+
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
+            TribunalPassCompletedPayload(
+                pass_index=pass_index,
+                member=member,
+                candidate=normalised,
+                success=True,
+            ),
+        )
+
+        return normalised
+
+    except OllamaEmptyResponseError as exc:
+        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        pass_errors.append(error_msg)
+        logger.error("[TRIBUNAL-PASS] %s", error_msg)
+        return None
+    except Exception as exc:
+        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        pass_errors.append(error_msg)
+        logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
+        return None
+
+async def _run_generation_stage(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    num_passes: int,
+    emitter: TribunalEmitter,
+    command_constraints_message: str,
+) -> List[CandidateCommand]:
+    """Stage 1: run N parallel generation passes and return successful candidates."""
+    pass_errors: List[str] = []
+    pass_tasks = [
+        _run_generation_pass(
+            provider=provider, model=model, request=request, guidelines=guidelines,
+            operator_context=operator_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
+            command_constraints_message=command_constraints_message,
+        )
+        for i in range(num_passes)
+    ]
+    raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
+    candidates = [
+        CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
+        for i, res in enumerate(raw_results) if res
+    ]
+
+    if not candidates:
+        all_system = pass_errors and all(_is_system_error(e) for e in pass_errors)
+        if all_system:
+            logger.error(
+                "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
+                num_passes, pass_errors,
+            )
+            await emitter.emit(
+                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
+                TribunalSessionSystemErrorPayload(
+                    request=request,
+                    pass_errors=pass_errors,
+                ),
+            )
+            raise TribunalSystemError(pass_errors=pass_errors, request=request)
+
+        logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
+            TribunalSessionGenerationFailedPayload(
+                request=request,
+                pass_errors=pass_errors if pass_errors else ["No candidates produced"],
+            ),
+        )
+        raise TribunalGenerationFailedError(
+            pass_errors=pass_errors if pass_errors else ["No candidates produced"],
+            request=request,
+        )
+
+    return candidates
+
+async def _run_voting_stage(
+    candidates: list[CandidateCommand],
+    request: str,
+    emitter: TribunalEmitter,
+    total_members: int,
+) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
+    """Stage 2: compute weighted majority vote and emit consensus event."""
+    vote_winner, vote_score, vote_breakdown, tied_candidates = weighted_vote(candidates, total_members)
+
+    if vote_winner is None:
+        if vote_breakdown.consensus_strength > 0:
+            logger.warning("[TRIBUNAL] Consensus strength too low: %.2f < %d members", vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
+            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
+            for member, cmd in vote_breakdown.candidates_by_member.items():
+                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
+        elif vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
+            logger.info("[TRIBUNAL] Voting tied; auditor disambiguation required")
+        else:
+            logger.warning("[TRIBUNAL] Consensus failed: no agreement among members")
+            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
+            for member, cmd in vote_breakdown.candidates_by_member.items():
+                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
+            
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            TribunalConsensusFailedPayload(
+                request=request,
+                vote_breakdown=vote_breakdown,
+            ),
+        )
+    else:
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
+            TribunalVotingCompletedPayload(
+                vote_winner=vote_winner,
+                vote_score=vote_score,
+                num_candidates=len(candidates),
+                request=request,
+                vote_breakdown=vote_breakdown,
+            ),
+        )
+        
+        for cmd, members in vote_breakdown.dissenters_by_command.items():
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
+                TribunalDissentRecordedPayload(
+                    request=request,
+                    losing_command=cmd,
+                    dissenting_member_ids=members,
+                    winner=vote_winner,
+                    vote_breakdown=vote_breakdown,
+                )
+            )
+
+    return vote_winner, vote_score, vote_breakdown, tied_candidates
+
+async def _run_audit_stage(
+    provider: LLMProvider,
+    model: str,
+    request: str,
+    guidelines: str,
+    vote_winner: str | None,
+    vote_breakdown: VoteBreakdown,
+    operator_context: OperatorContext | None,
+    auditor_enabled: bool,
+    emitter: TribunalEmitter,
+    command_constraints_message: str,
+    tied_candidates: list[CandidateCommand] | None = None,
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason]:
+    """Stage 3: optionally audit the vote winner and determine outcome."""
+    if not auditor_enabled:
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK
+
+    if vote_breakdown.consensus_strength == 1.0:
+        mode = "unanimous"
+    elif vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
+        mode = "tied"
+    else:
+        mode = "majority"
+
+    auditor_passed, final_command, auditor_revision, auditor_reason, swap_to_cluster, swap_to_member = await run_auditor(
+        provider=provider,
+        model=model,
+        request=request,
+        guidelines=guidelines,
+        mode=mode,
+        vote_winner=vote_winner,
+        vote_breakdown=vote_breakdown,
+        tied_candidates=tied_candidates,
+        operator_context=operator_context,
+        emitter=emitter,
+        command_constraints_message=command_constraints_message,
+        auditor_persona=get_agent_persona("auditor"),
+    )
+
+    outcome = CommandGenerationOutcome.VERIFIED if auditor_passed else CommandGenerationOutcome.VERIFICATION_FAILED
+    
+    if not auditor_passed and auditor_reason == AuditorReason.REVISED:
+        outcome = CommandGenerationOutcome.VERIFICATION_FAILED
+
+    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason
+
+async def _build_and_emit_result(
+    request: str,
+    guidelines: str,
+    final_command: str | None,
+    outcome: CommandGenerationOutcome,
+    candidates: list[CandidateCommand],
+    vote_winner: str | None,
+    vote_score: float | None,
+    vote_breakdown: VoteBreakdown | None,
+    auditor_passed: bool | None,
+    auditor_revision: str | None,
+    auditor_reason: AuditorReason | None,
+    emitter: TribunalEmitter,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+    operator_context: OperatorContext | None = None,
+) -> CommandGenerationResult:
+    """Stage 4: assemble the result model and emit the session-completed event."""
+    is_safe = True
+    safety_error = None
+    if final_command:
+        is_safe, safety_error = validate_command_safety(
+            final_command,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            operator_context=operator_context,
+        )
+
+    if not is_safe:
+        logger.error("[TRIBUNAL] Final command safety validation failed: %s", safety_error)
+        outcome = CommandGenerationOutcome.CONSENSUS_FAILED
+        final_command = None
+
+    result = CommandGenerationResult(
+        request=request,
+        guidelines=guidelines,
+        final_command=final_command,
+        outcome=outcome,
+        candidates=candidates,
+        vote_winner=vote_winner,
+        vote_score=vote_score,
+        vote_breakdown=vote_breakdown,
+        auditor_passed=auditor_passed,
+        auditor_revision=auditor_revision,
+        auditor_reason=auditor_reason,
+    )
+
+    await emitter.emit(
+        EventType.TRIBUNAL_SESSION_COMPLETED,
+        TribunalSessionCompletedPayload(
+            request=request,
+            final_command=final_command or "",
+            outcome=outcome,
+            vote_score=vote_score or 0.0,
+        ),
+    )
+    return result
+
+async def generate_command(
+    request: str,
+    guidelines: str,
+    operator_context: OperatorContext | None,
+    g8ed_event_service: EventService,
+    web_session_id: str,
+    user_id: str,
+    case_id: str,
+    investigation_id: str,
+    settings: G8eeUserSettings,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
+    whitelisted_commands: list[dict[str, Any]] | None = None,
+    blacklisted_commands: list[dict[str, str]] | None = None,
+) -> CommandGenerationResult:
+    """Run the Tribunal pipeline to generate a command from Sage's request."""
+    request = (request or "").strip()
+    guidelines = (guidelines or "").strip()
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
+
+    logger.info(
+        "[TRIBUNAL-ENTRY] generate_command called: request_len=%d guidelines_len=%d os=%s shell=%s user=%s hostname=%s arch=%s",
+        len(request), len(guidelines), fields["os"], fields["shell"], fields["user_context"],
+        operator_context.hostname if operator_context else None,
+        operator_context.architecture if operator_context else None,
+    )
+
+    command_constraints_message = build_command_constraints_message(
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        whitelisted_commands=whitelisted_commands,
+        blacklisted_commands=blacklisted_commands,
+    )
+
+    g8e_context = G8eHttpContext(
+        web_session_id=web_session_id,
+        user_id=user_id,
+        case_id=case_id,
+        investigation_id=investigation_id,
+        source_component=ComponentName.G8EE,
+    )
+    emitter = TribunalEmitter(g8ed_event_service, g8e_context)
+
+    if not request:
+        raise TribunalGenerationFailedError(
+            pass_errors=["Sage submitted an empty request; cannot generate command"],
+            request=request,
+        )
+
+    if not settings.llm.llm_command_gen_enabled:
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_DISABLED,
+            TribunalSessionDisabledPayload(request=request),
+        )
+        raise TribunalDisabledError(request=request)
+
+    try:
+        model = _resolve_model(settings.llm, request=request)
+    except TribunalModelNotConfiguredError as exc:
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
+            TribunalSessionModelNotConfiguredPayload(
+                request=request,
+                provider=exc.provider,
+                error=exc.user_message,
+            ),
+        )
+        raise
+
+    num_passes = max(1, settings.llm.llm_command_gen_passes)
+    members = [_member_for_pass(i) for i in range(num_passes)]
+
+    await emitter.emit(
+        EventType.TRIBUNAL_SESSION_STARTED,
+        TribunalSessionStartedPayload(
+            request=request,
+            guidelines=guidelines,
+            model=model,
+            num_passes=num_passes,
+            members=members,
+        ),
+    )
+
+    try:
+        provider = get_llm_provider(settings.llm, is_assistant=True)
+    except Exception as exc:
+        provider_str = str(settings.llm.assistant_provider) if settings.llm.assistant_provider else "None"
+        await emitter.emit(
+            EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
+            TribunalSessionProviderUnavailablePayload(
+                request=request,
+                provider=provider_str,
+                error=str(exc),
+            ),
+        )
+        raise TribunalProviderUnavailableError(
+            provider=settings.llm.assistant_provider,
+            error=str(exc),
+            request=request,
+        ) from exc
+
+    candidates = await _run_generation_stage(
+        provider=provider, model=model, request=request, guidelines=guidelines,
+        operator_context=operator_context, num_passes=num_passes, emitter=emitter,
+        command_constraints_message=command_constraints_message,
+    )
+
+    vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
+        candidates=candidates, request=request, emitter=emitter, total_members=num_passes,
+    )
+
+    if vote_winner is None and vote_breakdown.tie_break_reason != TieBreakReason.AUDITOR_DISAMBIGUATION:
+        await _build_and_emit_result(
+            request=request,
+            guidelines=guidelines,
+            final_command=None,
+            outcome=CommandGenerationOutcome.CONSENSUS_FAILED,
+            candidates=candidates,
+            vote_winner=None,
+            vote_score=0.0,
+            vote_breakdown=vote_breakdown,
+            auditor_passed=None,
+            auditor_revision=None,
+            auditor_reason=None,
+            emitter=emitter,
+            whitelisting_enabled=whitelisting_enabled,
+            blacklisting_enabled=blacklisting_enabled,
+            operator_context=operator_context,
+        )
+        raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
+
+    final_command, outcome, auditor_passed, auditor_revision, auditor_reason = await _run_audit_stage(
+        provider=provider,
+        model=model,
+        request=request,
+        guidelines=guidelines,
+        vote_winner=vote_winner,
+        vote_breakdown=vote_breakdown,
+        tied_candidates=tied_candidates,
+        operator_context=operator_context,
+        auditor_enabled=settings.llm.llm_command_gen_auditor,
+        emitter=emitter,
+        command_constraints_message=command_constraints_message,
+    )
+
+    return await _build_and_emit_result(
+        request=request,
+        guidelines=guidelines,
+        final_command=final_command,
+        outcome=outcome,
+        candidates=candidates,
+        vote_winner=vote_winner,
+        vote_score=vote_score,
+        vote_breakdown=vote_breakdown,
+        auditor_passed=auditor_passed,
+        auditor_revision=auditor_revision,
+        auditor_reason=auditor_reason,
+        emitter=emitter,
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
+        operator_context=operator_context,
+    )

@@ -663,7 +663,7 @@ export class TerminalOutputMixin {
             case EventType.TRIBUNAL_SESSION_GENERATION_FAILED:
                 return 'All generation passes failed — no candidate produced';
             case EventType.TRIBUNAL_SESSION_VERIFIER_FAILED:
-                return 'Verifier rejected the candidate — no trusted command';
+                return 'Auditor rejected the candidate — no trusted command';
             default:
                 return 'Tribunal halted — no command produced';
         }

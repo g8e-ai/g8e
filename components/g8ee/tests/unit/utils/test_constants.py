@@ -1482,17 +1482,17 @@ class TestEventTypeMatchesSharedJSON:
     def test_tribunal_session_generation_failed(self, ev):
         assert ev["ai"]["tribunal"]["session"]["generation_failed"] == EventType.TRIBUNAL_SESSION_GENERATION_FAILED
 
-    def test_tribunal_session_verifier_failed(self, ev):
-        assert ev["ai"]["tribunal"]["session"]["verifier_failed"] == EventType.TRIBUNAL_SESSION_VERIFIER_FAILED
+    def test_tribunal_session_auditor_failed(self, ev):
+        assert ev["ai"]["tribunal"]["session"]["auditor_failed"] == EventType.TRIBUNAL_SESSION_AUDITOR_FAILED
 
     def test_tribunal_voting_pass_completed(self, ev):
         assert ev["ai"]["tribunal"]["voting"]["pass"]["completed"] == EventType.TRIBUNAL_VOTING_PASS_COMPLETED
 
-    def test_tribunal_voting_review_started(self, ev):
-        assert ev["ai"]["tribunal"]["voting"]["review"]["started"] == EventType.TRIBUNAL_VOTING_REVIEW_STARTED
+    def test_tribunal_voting_audit_started(self, ev):
+        assert ev["ai"]["tribunal"]["voting"]["audit"]["started"] == EventType.TRIBUNAL_VOTING_AUDIT_STARTED
 
-    def test_tribunal_voting_review_completed(self, ev):
-        assert ev["ai"]["tribunal"]["voting"]["review"]["completed"] == EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED
+    def test_tribunal_voting_audit_completed(self, ev):
+        assert ev["ai"]["tribunal"]["voting"]["audit"]["completed"] == EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED
 
     def test_tribunal_voting_consensus_reached(self, ev):
         assert ev["ai"]["tribunal"]["voting"]["consensus"]["reached"] == EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED

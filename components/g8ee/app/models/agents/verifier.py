@@ -13,19 +13,19 @@
 
 from pydantic import Field
 from app.models.base import G8eBaseModel
-from app.constants import VerifierReason
+from app.constants import AuditorReason
 
 
-class VerifierRequest(G8eBaseModel):
-    """Request model for the Verifier agent."""
+class AuditorRequest(G8eBaseModel):
+    """Request model for the Auditor agent."""
     intent: str = Field(description="The original user intent.")
     os: str = Field(description="The operating system of the target.")
     candidate_command: str = Field(description="The command string to be verified.")
 
 
-class VerifierResult(G8eBaseModel):
-    """The result of a Verifier agent operation."""
-    passed: bool = Field(description="True if the verifier approves the candidate.")
-    revision: str | None = Field(default=None, description="The revised command string if the verifier rejects the candidate.")
+class AuditorResult(G8eBaseModel):
+    """Result from the Tribunal auditor evaluation."""
+    passed: bool = Field(description="True if the auditor approves the candidate.")
+    revision: str | None = Field(default=None, description="The revised command string if the auditor rejects the candidate.")
     reason: str = Field(description="Reasoning for the approval or rejection.")
-    reason_enum: VerifierReason = Field(description="Canonical reason for the verifier result.")
+    reason_enum: AuditorReason = Field(description="Canonical reason for the auditor result.")

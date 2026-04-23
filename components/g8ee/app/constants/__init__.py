@@ -35,7 +35,7 @@ from app.constants.agents import (
     TriageIntentClassification,
     TriageRequestPosture,
     TribunalMember,
-    VerifierReason,
+    AuditorReason,
     TieBreakReason
 )
 from app.constants.channels import (
@@ -348,7 +348,7 @@ __all__ = [
     "TriageIntentClassification",
     "TriageRequestPosture",
     "TribunalMember",
-    "VerifierReason",
+    "AuditorReason",
     "TieBreakReason",
     "PubSubAction",
     "PubSubChannel",

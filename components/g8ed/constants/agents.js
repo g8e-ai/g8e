@@ -74,10 +74,10 @@ export const TribunalMember = Object.freeze({
 });
 
 /**
- * Verifier Reason
- * The Verifier's stated reason for its verdict in Tribunal SSE payloads.
+ * Auditor Reason
+ * The Auditor's stated reason for its verdict in Tribunal SSE payloads.
  */
-export const VerifierReason = Object.freeze({
+export const AuditorReason = Object.freeze({
     OK:                _AGENTS['tribunal.verifier_reason'].ok,
     REVISED:           _AGENTS['tribunal.verifier_reason'].revised,
     EMPTY_RESPONSE:    _AGENTS['tribunal.verifier_reason'].empty_response,

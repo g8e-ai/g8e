@@ -263,7 +263,7 @@
               "string",
               "null"
             ],
-            "description": "Opaque cluster id the Verifier swapped to"
+            "description": "Opaque cluster id the Auditor swapped to"
           },
           "swap_to_member": {
             "type": [

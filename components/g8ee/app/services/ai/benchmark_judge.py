@@ -93,8 +93,8 @@ class TribunalCapture(BaseModel):
     final_command: str = Field(description="Final command produced by the Tribunal")
     outcome: str = Field(description="Tribunal pipeline outcome (VERIFIED, CONSENSUS, VERIFICATION_FAILED)")
     vote_score: float | None = Field(default=None, ge=0.0, le=1.0)
-    verifier_passed: bool | None = Field(default=None)
-    verifier_revision: str | None = Field(default=None)
+    auditor_passed: bool | None = Field(default=None)
+    auditor_revision: str | None = Field(default=None)
 
 
 class BenchmarkScenario(BaseModel):

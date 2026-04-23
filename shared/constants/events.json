@@ -298,7 +298,7 @@
         "provider_unavailable": "g8e.v1.ai.tribunal.session.provider.unavailable",
         "system_error": "g8e.v1.ai.tribunal.session.system.error",
         "generation_failed": "g8e.v1.ai.tribunal.session.generation.failed",
-        "verifier_failed": "g8e.v1.ai.tribunal.session.verifier.failed"
+        "auditor_failed": "g8e.v1.ai.tribunal.session.auditor.failed"
       },
       "voting": {
         "started": "g8e.v1.ai.tribunal.voting.started",
@@ -312,10 +312,10 @@
           "not_reached": "g8e.v1.ai.tribunal.voting.consensus.not_reached",
           "failed": "g8e.v1.ai.tribunal.voting.consensus.failed"
         },
-        "review": {
-          "started": "g8e.v1.ai.tribunal.voting.review.started",
-          "completed": "g8e.v1.ai.tribunal.voting.review.completed",
-          "failed": "g8e.v1.ai.tribunal.voting.review.failed"
+        "audit": {
+          "started": "g8e.v1.ai.tribunal.voting.audit.started",
+          "completed": "g8e.v1.ai.tribunal.voting.audit.completed",
+          "failed": "g8e.v1.ai.tribunal.voting.audit.failed"
         },
         "dissent": {
           "recorded": "g8e.v1.ai.tribunal.voting.dissent.recorded"

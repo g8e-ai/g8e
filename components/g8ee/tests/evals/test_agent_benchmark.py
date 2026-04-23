@@ -126,8 +126,8 @@ def _extract_tribunal_from_events(
                     final_command=payload.final_command,
                     outcome=payload.outcome,
                     vote_score=payload.vote_score,
-                    verifier_passed=None,
-                    verifier_revision=None,
+                    auditor_passed=None,
+                    auditor_revision=None,
                 )
 
     return None
@@ -213,7 +213,7 @@ async def test_agent_benchmark(
 
         logger.info("[BENCH-SETTINGS] Tribunal configuration:")
         logger.info("[BENCH-SETTINGS]   llm_command_gen_enabled=%s", llm_settings.llm_command_gen_enabled)
-        logger.info("[BENCH-SETTINGS]   llm_command_gen_verifier=%s", llm_settings.llm_command_gen_verifier)
+        logger.info("[BENCH-SETTINGS]   llm_command_gen_auditor=%s", llm_settings.llm_command_gen_auditor)
         logger.info("[BENCH-SETTINGS]   llm_command_gen_passes=%d", llm_settings.llm_command_gen_passes)
         logger.info("[BENCH-SETTINGS]   assistant_provider=%s", llm_settings.assistant_provider)
         logger.info("[BENCH-SETTINGS]   assistant_model=%s", llm_settings.assistant_model)

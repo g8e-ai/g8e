@@ -217,7 +217,7 @@
     "data": {
       "request": "test request",
       "reason": "no_valid_revision",
-      "error": "Verifier could not produce valid revision",
+      "error": "Auditor could not produce valid revision",
       "candidate_command": "ls -la",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
@@ -265,7 +265,7 @@
     "data": {
       "request": "test request",
       "reason": "revised",
-      "error": "Verifier produced revision",
+      "error": "Auditor produced revision",
       "candidate_command": "ls -la",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
@@ -277,7 +277,7 @@
     "data": {
       "request": "test request",
       "reason": "empty_response",
-      "error": "Verifier returned empty response",
+      "error": "Auditor returned empty response",
       "candidate_command": "ls -la",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",
@@ -313,7 +313,7 @@
     "data": {
       "request": "test request",
       "reason": "invalid_reason",
-      "error": "Verifier could not produce valid revision",
+      "error": "Auditor could not produce valid revision",
       "candidate_command": "ls -la",
       "investigation_id": "test-investigation-id",
       "case_id": "test-case-id",

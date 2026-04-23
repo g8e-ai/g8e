@@ -19,6 +19,7 @@ tool call dispatch, and sequential turn-level execution loop.
 """
 
 import logging
+from typing import Any, List, Dict, Tuple
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
@@ -45,7 +46,7 @@ from app.models.agent import (
     StreamChunkFromModel,
 )
 
-from app.services.ai.command_generator import generate_command
+from app.services.ai.generator import generate_command
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -61,7 +62,7 @@ from app.services.investigation.investigation_service import extract_operator_co
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.ids import generate_command_execution_id
-
+from app.utils.safety import map_os_string_to_platform
 
 class TribunalInvoker:
     """Encapsulates Tribunal invocation logic for run_commands_with_operator.
@@ -73,11 +74,14 @@ class TribunalInvoker:
     @staticmethod
     def _fetch_command_constraints(
         tool_executor: AIToolService,
-    ) -> tuple[bool, bool, list[str], list[dict[str, str]]]:
-        """Fetch command validation constraints from tool executor settings."""
+    ) -> tuple[bool, bool, list[dict[str, Any]], list[dict[str, str]]]:
+        """Fetch command validation constraints from tool executor settings.
+        
+        Returns metadata-rich command list with safe_options and validation patterns.
+        """
         whitelisting_enabled = False
         blacklisting_enabled = False
-        whitelisted_commands: list[str] = []
+        whitelisted_commands: list[dict[str, Any]] = []
         blacklisted_commands: list[dict[str, str]] = []
 
         cv = tool_executor.user_settings
@@ -85,7 +89,11 @@ class TribunalInvoker:
             whitelisting_enabled = cv.command_validation.enable_whitelisting
             blacklisting_enabled = cv.command_validation.enable_blacklisting
             if whitelisting_enabled:
-                whitelisted_commands = sorted(tool_executor.whitelist_validator.all_commands)
+                # Map OS string to Platform enum using centralized function
+                os_name = tool_executor.user_settings.operator_context.os if tool_executor.user_settings and tool_executor.user_settings.operator_context else DEFAULT_OS_NAME
+                platform = map_os_string_to_platform(os_name)
+                
+                whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
             if blacklisting_enabled:
                 blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
 
@@ -302,9 +310,9 @@ async def orchestrate_tool_execution(
                 len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
             )
             logger.info(
-                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_verifier=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
                 request_settings.llm.llm_command_gen_enabled,
-                request_settings.llm.llm_command_gen_verifier,
+                request_settings.llm.llm_command_gen_auditor,
                 request_settings.llm.llm_command_gen_passes,
                 request_settings.llm.assistant_model,
                 request_settings.eval_judge.model,

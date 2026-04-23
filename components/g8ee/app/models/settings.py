@@ -177,7 +177,7 @@ class LLMSettings(G8eBaseModel):
 
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
-    llm_command_gen_verifier: bool = Field(default=True)
+    llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)
 
     @property

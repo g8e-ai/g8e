@@ -129,7 +129,7 @@ class TestGetAgentPersona:
 
 
 class TestPipelineTemplateContract:
-    """Tribunal members and Verifier personas are consumed by command_generator
+    """Tribunal members and Auditor personas are consumed by command_generator
     as str.format() templates. If anyone removes the placeholders during a
     persona rewrite, the formatted prompt silently loses the user's intent,
     os/shell context, or the candidate command — a hard-to-debug correctness
@@ -180,23 +180,23 @@ class TestPipelineTemplateContract:
             for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
                 assert needle in formatted, f"{member_id}: template dropped '{needle}'"
 
-    def test_verifier_template_renders_and_enforces_ok_contract(self):
-        """TRIBUNAL_VERIFIER_TEMPLATE must carry the terse
+    def test_auditor_template_renders_and_enforces_ok_contract(self):
+        """TRIBUNAL_AUDITOR_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
         from app.prompts_data.loader import load_prompt
-        from app.llm.prompts import PromptFile, build_tribunal_verifier_context
-        from app.services.ai.command_generator import VerifierInput
+        from app.llm.prompts import PromptFile, build_tribunal_auditor_context
+        from app.services.ai.auditor_service import AuditorInput
 
-        template = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
+        template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
 
-        verifier_input = VerifierInput(
+        auditor_input = AuditorInput(
             mode="unanimous",
             winner="ls -la",
             clusters=[],
             request="list files",
             guidelines="",
         )
-        verifier_context = build_tribunal_verifier_context(verifier_input.mode, verifier_input.winner, [])
+        auditor_context = build_tribunal_auditor_context(auditor_input.mode, auditor_input.winner, [])
 
         formatted = template.format(
             forbidden_patterns_message="FORBIDDEN",
@@ -208,7 +208,7 @@ class TestPipelineTemplateContract:
             working_directory="/home/user",
             user_context="root (uid=0)",
             operator_context="Hostname: host1\nOS: linux",
-            verifier_context=verifier_context,
+            auditor_context=auditor_context,
         )
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
             assert needle in formatted

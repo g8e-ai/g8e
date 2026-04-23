@@ -81,7 +81,7 @@ from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.services.mcp.adapter import build_tool_call_request
-from app.utils.ids import generate_batch_id, generate_command_execution_id
+from app.utils.safety import validate_command_safety
 from app.errors import ValidationError, BusinessLogicError
 import asyncio
 
@@ -126,11 +126,11 @@ class OperatorCommandService:
         self._CommandResultBroadcastEvent = CommandResultBroadcastEvent
         self._CommandExecutingBroadcastEvent = CommandExecutingBroadcastEvent
 
-        _cv = settings.command_validation
+        self._cv = settings.command_validation
         logger.info(
             "OperatorCommandService initialized - whitelisting: %s, blacklisting: %s",
-            "ENABLED" if _cv.enable_whitelisting else "DISABLED",
-            "ENABLED" if _cv.enable_blacklisting else "DISABLED",
+            "ENABLED" if self._cv.enable_whitelisting else "DISABLED",
+            "ENABLED" if self._cv.enable_blacklisting else "DISABLED",
         )
 
     @classmethod
@@ -289,34 +289,26 @@ class OperatorCommandService:
         target_systems: list[TargetSystem] = self._execution_service.build_target_systems_list(target_operator_docs)
         is_batch = len(target_operator_docs) > 1
 
-        # 2. Command validation (whitelist/blacklist enforcement) — once for the whole batch.
-        cv = self._settings.command_validation
-        if cv.enable_whitelisting:
-            whitelist_result = self._execution_service.whitelist_validator.validate_command(command)
-            if not whitelist_result.is_valid:
-                logger.warning("[COMMAND] Whitelist validation failed: %s", whitelist_result.reason)
-                return CommandExecutionResult(
-                    success=False,
-                    error=whitelist_result.reason,
-                    error_type=CommandErrorType.WHITELIST_VIOLATION,
-                    blocked_command=command,
-                    validation_details={"reason": whitelist_result.reason, "violations": whitelist_result.violations or []},
-                )
-
-        if cv.enable_blacklisting:
-            blacklist_result = self._execution_service.blacklist_validator.validate_command(command)
-            if not blacklist_result.is_allowed:
-                logger.warning("[COMMAND] Blacklist validation failed: %s - %s", blacklist_result.rule, blacklist_result.reason)
-                return CommandExecutionResult(
-                    success=False,
-                    error=blacklist_result.reason or f"Command blocked by blacklist rule: {blacklist_result.rule}",
-                    error_type=CommandErrorType.BLACKLIST_VIOLATION,
-                    blocked_command=command,
-                    rule=blacklist_result.rule,
-                )
-
         # Primary operator is the first resolved — used for approval identity fields.
         primary = target_operator_docs[0]
+
+        # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
+        is_safe, safety_err = validate_command_safety(
+            command,
+            whitelisting_enabled=_cv.enable_whitelisting,
+            blacklisting_enabled=_cv.enable_blacklisting,
+            operator_context=primary.operator_context if primary else None
+        )
+        if not is_safe:
+            error_type = CommandErrorType.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else CommandErrorType.BLACKLIST_VIOLATION
+            logger.warning("[COMMAND] Technical safety validation failed: %s", safety_err)
+            return CommandExecutionResult(
+                success=False,
+                error=safety_err,
+                error_type=error_type,
+                blocked_command=command,
+                validation_details={"reason": safety_err},
+            )
         primary_operator_id = primary.id
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
@@ -369,8 +361,8 @@ class OperatorCommandService:
             )
 
         # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
-        max_concurrency = cv.max_batch_concurrency
-        fail_fast = cv.batch_fail_fast
+        max_concurrency = self._cv.max_batch_concurrency
+        fail_fast = self._cv.batch_fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 

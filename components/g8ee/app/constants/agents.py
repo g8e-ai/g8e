@@ -86,20 +86,21 @@ class TribunalMember(str, Enum):
     NEMESIS = _AGENTS["tribunal.members"]["nemesis"]
 
 
-class VerifierReason(str, Enum):
-    """The Verifier's stated reason for its verdict.
+class AuditorReason(str, Enum):
+    """The Auditor's stated reason for its verdict.
 
     These values are emitted in Tribunal SSE payloads and must match
     the shared constants in shared/constants/agents.json.
     """
     __str__ = lambda self: self.value
-    OK                   = _AGENTS["tribunal.verifier_reason"]["ok"]
-    REVISED              = _AGENTS["tribunal.verifier_reason"]["revised"]
-    EMPTY_RESPONSE       = _AGENTS["tribunal.verifier_reason"]["empty_response"]
-    NO_VALID_REVISION    = _AGENTS["tribunal.verifier_reason"]["no_valid_revision"]
-    VERIFIER_ERROR       = _AGENTS["tribunal.verifier_reason"]["verifier_error"]
-    SWAPPED_TO_DISSENTER = _AGENTS["tribunal.verifier_reason"]["swapped_to_dissenter"]
-    REVISED_FROM_DISSENT = _AGENTS["tribunal.verifier_reason"]["revised_from_dissent"]
+    OK                   = _AGENTS["tribunal.auditor_reason"]["ok"]
+    REVISED              = _AGENTS["tribunal.auditor_reason"]["revised"]
+    EMPTY_RESPONSE       = _AGENTS["tribunal.auditor_reason"]["empty_response"]
+    NO_VALID_REVISION    = _AGENTS["tribunal.auditor_reason"]["no_valid_revision"]
+    AUDITOR_ERROR        = _AGENTS["tribunal.auditor_reason"]["auditor_error"]
+    SWAPPED_TO_DISSENTER = _AGENTS["tribunal.auditor_reason"]["swapped_to_dissenter"]
+    REVISED_FROM_DISSENT = _AGENTS["tribunal.auditor_reason"]["revised_from_dissent"]
+    WHITELIST_VIOLATION  = _AGENTS["tribunal.auditor_reason"]["whitelist_violation"]
 
 
 class TieBreakReason(str, Enum):
@@ -115,4 +116,4 @@ class TieBreakReason(str, Enum):
     FEWEST_OPERATIONS       = _AGENTS["tribunal.tie_break_reason"]["fewest_operations"]
     EXCLUDED_NEMESIS        = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
     ALPHABETICAL            = _AGENTS["tribunal.tie_break_reason"]["alphabetical"]
-    VERIFIER_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["verifier_disambiguation"]
+    AUDITOR_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["auditor_disambiguation"]

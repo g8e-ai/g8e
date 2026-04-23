@@ -17,7 +17,7 @@ from app.constants import (
     CommandGenerationOutcome,
     TieBreakReason,
     TribunalMember,
-    VerifierReason,
+    AuditorReason,
 )
 
 
@@ -120,17 +120,17 @@ class TribunalGenerationFailedError(TribunalError):
         )
 
 
-class TribunalVerifierFailedError(TribunalError):
-    """Raised when the verifier fails and cannot validate the candidate.
+class TribunalAuditorFailedError(TribunalError):
+    """Raised when the auditor fails and cannot validate the candidate.
 
     This includes empty responses, exceptions, or non-ok answers without
-    valid revisions. The verifier's failure means we cannot trust the
+    valid revisions. The auditor's failure means we cannot trust the
     candidate and must halt execution.
     """
 
     def __init__(
         self,
-        reason: VerifierReason,
+        reason: AuditorReason,
         error: str | None,
         candidate_command: str,
         request: str,
@@ -141,7 +141,7 @@ class TribunalVerifierFailedError(TribunalError):
         super().__init__(
             request=request,
             user_message=(
-                f"Tribunal verifier failed ({reason.value}): "
+                f"Tribunal auditor failed ({reason.value}): "
                 f"{error or 'no error details'}"
             ),
         )
@@ -249,22 +249,22 @@ class ConsensusConfidence:
     """Descriptor for qualitative consensus confidence levels.
 
     Qualitative levels derived from quantitative metrics:
-    - unanimous_verified: 5/5 agreement, verifier passed
-    - unanimous_unverified: 5/5 agreement, verifier disabled
-    - strong_verified: 4/5 agreement, verifier passed
-    - strong_with_intervention: 4/5 agreement, verifier revised/swapped
-    - majority_verified: 3/5 agreement, verifier passed
-    - majority_with_intervention: 3/5 agreement, verifier revised/swapped
-    - tied_resolved: tie broken by ladder, verifier passed
-    - tied_verifier_resolved: tie broken by ladder, verifier disambiguated
+    - unanimous_verified: 5/5 agreement, auditor passed
+    - unanimous_unverified: 5/5 agreement, auditor disabled
+    - strong_verified: 4/5 agreement, auditor passed
+    - strong_with_intervention: 4/5 agreement, auditor revised/swapped
+    - majority_verified: 3/5 agreement, auditor passed
+    - majority_with_intervention: 3/5 agreement, auditor revised/swapped
+    - tied_resolved: tie broken by ladder, auditor passed
+    - tied_auditor_resolved: tie broken by ladder, auditor disambiguated
     - consensus_failed: no two members agreed
     """
 
     @staticmethod
     def from_breakdown_and_result(
         vote_breakdown: VoteBreakdown,
-        verifier_passed: bool | None,
-        verifier_reason: VerifierReason | None,
+        auditor_passed: bool | None,
+        auditor_reason: AuditorReason | None,
     ) -> str:
         """Compute qualitative confidence level from quantitative metrics."""
         if vote_breakdown.winner is None:
@@ -274,25 +274,25 @@ class ConsensusConfidence:
         total_members = len(vote_breakdown.candidates_by_member)
 
         if strength == 1.0:
-            if verifier_passed is True:
+            if auditor_passed is True:
                 return "unanimous_verified"
             return "unanimous_unverified"
 
         if strength >= 0.8:  # 4/5
-            if verifier_passed is True:
+            if auditor_passed is True:
                 return "strong_verified"
-            if verifier_reason in (VerifierReason.REVISED, VerifierReason.REVISED_FROM_DISSENT, VerifierReason.SWAPPED_TO_DISSENTER):
+            if auditor_reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT, AuditorReason.SWAPPED_TO_DISSENTER):
                 return "strong_with_intervention"
 
         if strength >= 0.6:  # 3/5
-            if verifier_passed is True:
+            if auditor_passed is True:
                 return "majority_verified"
-            if verifier_reason in (VerifierReason.REVISED, VerifierReason.REVISED_FROM_DISSENT, VerifierReason.SWAPPED_TO_DISSENTER):
+            if auditor_reason in (AuditorReason.REVISED, AuditorReason.REVISED_FROM_DISSENT, AuditorReason.SWAPPED_TO_DISSENTER):
                 return "majority_with_intervention"
 
         if vote_breakdown.tie_broken:
-            if vote_breakdown.tie_break_reason == TieBreakReason.VERIFIER_DISAMBIGUATION:
-                return "tied_verifier_resolved"
+            if vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
+                return "tied_auditor_resolved"
             return "tied_resolved"
 
         return "consensus_failed"
@@ -331,15 +331,15 @@ class CommandGenerationResult(G8eBaseModel):
         default=None,
         description="Full per-member vote attribution, dissent clusters, and tie-break record",
     )
-    verifier_passed: bool | None = Field(
+    auditor_passed: bool | None = Field(
         default=None,
-        description="True if the verifier approved the vote winner (or an equivalent dissenter cluster)",
+        description="True if the auditor approved the vote winner (or an equivalent dissenter cluster)",
     )
-    verifier_revision: str | None = Field(
+    auditor_revision: str | None = Field(
         default=None,
-        description="Revised command produced by the verifier when verifier_passed=False",
+        description="Revised command produced by the auditor when auditor_passed=False",
     )
-    verifier_reason: VerifierReason | None = Field(default=None, description="The verifier's stated reason.")
+    auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason.")
 
 
 class TribunalPassCompletedPayload(G8eBaseModel):
@@ -351,20 +351,20 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     error: str | None = None
 
 
-class TribunalVerifierStartedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_VOTING_REVIEW_STARTED events."""
+class TribunalAuditorStartedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_AUDIT_STARTED events."""
     candidate_command: str
 
 
-class TribunalVerifierCompletedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_VOTING_REVIEW_COMPLETED events."""
+class TribunalAuditorCompletedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_VOTING_AUDIT_COMPLETED events."""
     passed: bool
     revision: str | None = None
-    reason: VerifierReason
+    reason: AuditorReason
     error: str | None = None
     swap_to_cluster: str | None = Field(
         default=None,
-        description="Opaque cluster id the Verifier swapped to (set only on reason=swapped_to_dissenter)",
+        description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)",
     )
     swap_to_member: str | None = Field(
         default=None,
@@ -437,15 +437,15 @@ class TribunalSessionGenerationFailedPayload(G8eBaseModel):
     pass_errors: list[str]
 
 
-class TribunalSessionVerifierFailedPayload(G8eBaseModel):
-    """SSE payload for TRIBUNAL_SESSION_VERIFIER_FAILED.
+class TribunalAuditorFailedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_AUDITOR_FAILED.
 
-    Emitted when voting produced a candidate but the verifier rejected
+    Emitted when voting produced a candidate but the auditor rejected
     it and produced no valid revision. The tool call fails because no
     trusted command was produced.
     """
     request: str
-    reason: VerifierReason
+    reason: AuditorReason
     error: str | None = None
     candidate_command: str
 
@@ -468,7 +468,7 @@ class TribunalConsensusFailedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_CONSENSUS_FAILED events.
 
     Emitted when the winning cluster's support is below
-    TRIBUNAL_MIN_CONSENSUS (no two members agreed). The verifier is
+    TRIBUNAL_MIN_CONSENSUS (no two members agreed). The auditor is
     skipped; Sage receives the full candidate set and decides whether
     to rephrase, ask the user for clarification, or abort.
     """

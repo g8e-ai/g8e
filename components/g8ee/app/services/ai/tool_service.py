@@ -73,6 +73,7 @@ from app.models.command_payloads import (
 
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.safety import map_os_string_to_platform
 from .grounding.web_search_provider import WebSearchProvider
 from ..investigation.investigation_service import InvestigationService
 
@@ -741,11 +742,15 @@ class AIToolService:
         whitelisting_enabled = cv.enable_whitelisting if cv else False
         blacklisting_enabled = cv.enable_blacklisting if cv else False
 
-        whitelisted_commands: list[str] = []
+        whitelisted_commands: list[dict[str, Any]] = []
         global_forbidden_patterns: list[str] = []
         global_forbidden_directories: list[str] = []
         if whitelisting_enabled:
-            whitelisted_commands = sorted(self._whitelist_validator.all_commands)
+            # Map OS string to Platform enum using centralized function
+            os_name = self._user_settings.operator_context.os if self._user_settings and self._user_settings.operator_context else DEFAULT_OS_NAME
+            platform = map_os_string_to_platform(os_name)
+
+            whitelisted_commands = self._whitelist_validator.get_available_commands_with_metadata(platform)
             global_forbidden_patterns = list(self._whitelist_validator.forbidden_patterns)
             global_forbidden_directories = list(self._whitelist_validator.forbidden_directories)
 
@@ -764,7 +769,8 @@ class AIToolService:
             if whitelisting_enabled:
                 parts.append(
                     f"Whitelisting ENABLED: only the {len(whitelisted_commands)} listed commands are permitted. "
-                    "Any command not in the whitelist will be blocked."
+                    "Each command has strict 'safe_options' and 'validation' patterns that MUST be followed. "
+                    "Any command or argument not explicitly allowed by these rules will be blocked by the technical (L1) validator."
                 )
             if blacklisting_enabled:
                 parts.append(

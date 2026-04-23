@@ -22,7 +22,7 @@ from app.constants import (
     TribunalMember,
     ComponentName,
     EventType,
-    VerifierReason,
+    AuditorReason,
     TieBreakReason,
 )
 from app.llm.llm_types import Role
@@ -39,22 +39,28 @@ from app.models.agents.tribunal import (
     TribunalSessionStartedPayload,
     TribunalSessionSystemErrorPayload,
     TribunalSystemError,
-    TribunalVerifierFailedError,
+    TribunalAuditorFailedError,
 )
-from app.services.ai.command_generator import (
+from app.services.ai.generator import (
     _build_and_emit_result,
     _is_system_error,
     _MAX_TOKENS_GENERATION,
-    _MAX_TOKENS_VERIFIER,
     _member_for_pass,
     _resolve_model,
     _run_generation_pass,
     _run_generation_stage,
-    _run_verification_stage,
-    _run_verifier,
+    _run_audit_stage,
     _run_voting_stage,
     generate_command,
     TribunalEmitter,
+)
+from app.services.ai.voter import (
+    normalise_command,
+    weighted_vote,
+)
+from app.services.ai.auditor_service import (
+    run_auditor,
+    _MAX_TOKENS_AUDITOR,
 )
 from app.llm.prompts import (
     build_tribunal_operator_context_string as _build_operator_context_string,
@@ -180,7 +186,7 @@ class TestTribunalSessionStartedPayloadRegression:
 class TestRoleImportRegression:
     """Regression: command_generator must use Role.USER, not types.Role.USER.
 
-    Before the fix, both _run_generation_pass and _run_verifier referenced
+    Before the fix, both _run_generation_pass and run_auditor referenced
     `types.Role.USER` without importing `types`, causing NameError on every
     Tribunal pass and silently falling back to the original command.
     """
@@ -219,7 +225,7 @@ class TestRoleImportRegression:
         assert contents[0].role == Role.USER
 
     @pytest.mark.asyncio
-    async def test_verifier_uses_role_user_in_content(self):
+    async def test_auditor_uses_role_user_in_content(self):
         mock_response = MagicMock()
         mock_response.text = '{"status": "ok"}'
 
@@ -237,7 +243,7 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        verifier_passed, final_cmd, verifier_revision, verifier_reason, swap_to_cluster, swap_to_member = await _run_verifier(
+        auditor_passed, final_cmd, auditor_revision, auditor_reason, swap_to_cluster, swap_to_member = await run_auditor(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -249,11 +255,11 @@ class TestRoleImportRegression:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-            verifier_persona=get_agent_persona("auditor"),
+            auditor_persona=get_agent_persona("auditor"),
         )
 
-        assert verifier_passed is True
-        assert verifier_revision is None
+        assert auditor_passed is True
+        assert auditor_revision is None
         call_kwargs = mock_provider.generate_content_lite.call_args
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
@@ -459,7 +465,7 @@ class TestGenerateCommandSystemError:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalSystemError) as exc_info:
@@ -495,7 +501,7 @@ class TestGenerateCommandSystemError:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
@@ -531,14 +537,14 @@ class TestGenerateCommandSystemError:
             mock_response = MagicMock()
             if call_count <= 3:  # 3 generation passes
                 mock_response.text = "ls -la"
-            else:  # verifier call
+            else:  # auditor call
                 mock_response.text = '{"status": "ok"}'
             return mock_response
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=mock_generate_content_lite)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ) as mock_factory:
             mock_event_service = MagicMock()
@@ -587,7 +593,7 @@ class TestMixedErrorFallback:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
@@ -614,7 +620,7 @@ class TestNewEnumValues:
         # Terminal states are distinguished by event type, not a reason enum.
         assert EventType.TRIBUNAL_SESSION_SYSTEM_ERROR != EventType.TRIBUNAL_SESSION_GENERATION_FAILED
         assert EventType.TRIBUNAL_SESSION_DISABLED != EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED
-        assert EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE != EventType.TRIBUNAL_SESSION_VERIFIER_FAILED
+        assert EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE != EventType.TRIBUNAL_SESSION_AUDITOR_FAILED
 
 
 class TestTribunalProviderUnavailableError:
@@ -633,7 +639,7 @@ class TestTribunalProviderUnavailableError:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             side_effect=RuntimeError("Unsupported LLM provider: foo"),
         ):
             with pytest.raises(TribunalProviderUnavailableError) as exc_info:
@@ -669,7 +675,7 @@ class TestTribunalModelNotConfiguredError:
         mock_event_service.publish = AsyncMock()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
         ):
             with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
                 await generate_command(
@@ -696,12 +702,12 @@ class TestTribunalModelNotConfiguredError:
             assert isinstance(event.payload, TribunalSessionModelNotConfiguredPayload)
 
 
-class TestTribunalVerifierFailedError:
-    """TribunalVerifierFailedError raised when verifier fails and cannot validate candidate."""
+class TestTribunalAuditorFailedError:
+    """TribunalAuditorFailedError raised when auditor fails and cannot validate candidate."""
 
     @pytest.mark.asyncio
-    async def test_raises_on_empty_verifier_response(self):
-        """Empty verifier response raises TribunalVerifierFailedError instead of treating as passed."""
+    async def test_raises_on_empty_auditor_response(self):
+        """Empty auditor response raises TribunalAuditorFailedError instead of treating as passed."""
         from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         mock_response.text = None
@@ -719,8 +725,8 @@ class TestTribunalVerifierFailedError:
             consensus_strength=1.0,
         )
 
-        with pytest.raises(TribunalVerifierFailedError) as exc_info:
-            await _run_verifier(
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await run_auditor(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -732,15 +738,15 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
-            verifier_persona=get_agent_persona("auditor"),
+            auditor_persona=get_agent_persona("auditor"),
         )
 
-        assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
+        assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
         assert exc_info.value.request == "list files"
 
     @pytest.mark.asyncio
     async def test_raises_on_no_valid_revision(self):
-        """Non-ok answer without valid revision raises TribunalVerifierFailedError instead of treating as passed."""
+        """Non-ok answer without valid revision raises TribunalAuditorFailedError instead of treating as passed."""
         from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         # Response that's not "ok" and normalizes to the same command (not a valid revision)
@@ -759,8 +765,8 @@ class TestTribunalVerifierFailedError:
             consensus_strength=1.0,
         )
 
-        with pytest.raises(TribunalVerifierFailedError) as exc_info:
-            await _run_verifier(
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await run_auditor(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -772,19 +778,19 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
-            verifier_persona=get_agent_persona("auditor"),
+            auditor_persona=get_agent_persona("auditor"),
         )
 
-        assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
+        assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
         assert exc_info.value.request == "list files"
 
     @pytest.mark.asyncio
-    async def test_raises_on_verifier_exception(self):
-        """Verifier exception raises TribunalVerifierFailedError instead of treating as passed."""
+    async def test_raises_on_auditor_exception(self):
+        """Auditor exception raises TribunalAuditorFailedError instead of treating as passed."""
         from app.models.agents.tribunal import VoteBreakdown
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(
-            side_effect=RuntimeError("Verifier API timeout")
+            side_effect=RuntimeError("Auditor API timeout")
         )
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         
@@ -797,8 +803,8 @@ class TestTribunalVerifierFailedError:
             consensus_strength=1.0,
         )
 
-        with pytest.raises(TribunalVerifierFailedError) as exc_info:
-            await _run_verifier(
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await run_auditor(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -810,10 +816,10 @@ class TestTribunalVerifierFailedError:
             operator_context=_make_mock_operator_context(os="linux"),
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active",
-            verifier_persona=get_agent_persona("auditor"),
+            auditor_persona=get_agent_persona("auditor"),
         )
 
-        assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
+        assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
         assert "timeout" in exc_info.value.error
         assert exc_info.value.request == "list files"
 
@@ -1190,7 +1196,7 @@ class TestRunVerificationStage:
     """_run_verification_stage determines final command and outcome."""
 
     @pytest.mark.asyncio
-    async def test_verifier_disabled_returns_consensus(self):
+    async def test_auditor_disabled_returns_consensus(self):
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1200,11 +1206,11 @@ class TestRunVerificationStage:
             dissenters_by_command={},
             consensus_strength=1.0,
         )
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=MagicMock(), model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=False, emitter=TribunalEmitter(None, None),
+            auditor_enabled=False, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1212,10 +1218,10 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.CONSENSUS
         assert passed is True
         assert revision is None
-        assert verifier_reason == VerifierReason.OK
+        assert auditor_reason == AuditorReason.OK
 
     @pytest.mark.asyncio
-    async def test_verifier_approves_returns_verified(self):
+    async def test_auditor_approves_returns_verified(self):
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1229,11 +1235,11 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1241,10 +1247,10 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFIED
         assert passed is True
         assert revision is None
-        assert verifier_reason == VerifierReason.OK
+        assert auditor_reason == AuditorReason.OK
 
     @pytest.mark.asyncio
-    async def test_verifier_revision_returns_verification_failed(self):
+    async def test_auditor_revision_returns_verification_failed(self):
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1258,11 +1264,11 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1270,11 +1276,11 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
         assert passed is False
         assert revision == "ls -la --color=auto"
-        assert verifier_reason == VerifierReason.REVISED
+        assert auditor_reason == AuditorReason.REVISED
 
     @pytest.mark.asyncio
-    async def test_verifier_swap_to_dissenter_returns_verified(self):
-        """Verifier swaps to a dissenting cluster."""
+    async def test_auditor_swap_to_dissenter_returns_verified(self):
+        """Auditor swaps to a dissenting cluster."""
         from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1292,11 +1298,11 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1304,11 +1310,11 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFIED
         assert passed is True
         assert revision is None
-        assert verifier_reason == VerifierReason.SWAPPED_TO_DISSENTER
+        assert auditor_reason == AuditorReason.SWAPPED_TO_DISSENTER
 
     @pytest.mark.asyncio
-    async def test_verifier_revise_from_dissent(self):
-        """Verifier revises from a dissenting cluster."""
+    async def test_auditor_revise_from_dissent(self):
+        """Auditor revises from a dissenting cluster."""
         from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1326,11 +1332,11 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1338,11 +1344,11 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
         assert passed is False
         assert revision == "ls -la --color=auto"
-        assert verifier_reason == VerifierReason.REVISED_FROM_DISSENT
+        assert auditor_reason == AuditorReason.REVISED_FROM_DISSENT
 
     @pytest.mark.asyncio
-    async def test_tied_mode_verifier_disambiguation(self):
-        """Verifier must disambiguate in tied mode (cannot return ok)."""
+    async def test_tied_mode_auditor_disambiguation(self):
+        """Auditor must disambiguate in tied mode (cannot return ok)."""
         from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1362,11 +1368,11 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1374,11 +1380,11 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFIED
         assert passed is True
         assert revision is None
-        assert verifier_reason == VerifierReason.SWAPPED_TO_DISSENTER
+        assert auditor_reason == AuditorReason.SWAPPED_TO_DISSENTER
 
     @pytest.mark.asyncio
-    async def test_malformed_verifier_response_retries_once(self):
-        """Verifier returns malformed JSON, retries once, then succeeds."""
+    async def test_malformed_auditor_response_retries_once(self):
+        """Auditor returns malformed JSON, retries once, then succeeds."""
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1402,11 +1408,11 @@ class TestRunVerificationStage:
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
 
-        final_cmd, outcome, passed, revision, verifier_reason = await _run_verification_stage(
+        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            verifier_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True, emitter=TribunalEmitter(None, None),
             command_constraints_message="No whitelist or blacklist constraints are active.",
         )
 
@@ -1415,10 +1421,10 @@ class TestRunVerificationStage:
         assert outcome == CommandGenerationOutcome.VERIFIED
         assert passed is True
         assert revision is None
-        assert verifier_reason == VerifierReason.OK
+        assert auditor_reason == AuditorReason.OK
 
     @pytest.mark.asyncio
-    async def test_verifier_exception_raises_verifier_failed_error(self):
+    async def test_auditor_exception_raises_auditor_failed_error(self):
         from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
@@ -1432,12 +1438,12 @@ class TestRunVerificationStage:
             generate_content_lite_side_effect=RuntimeError("timeout")
         )
 
-        with pytest.raises(TribunalVerifierFailedError):
-            await _run_verification_stage(
+        with pytest.raises(TribunalAuditorFailedError):
+            await _run_audit_stage(
                 provider=mock_provider, model="test-model", request="list files", guidelines="",
                 vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
                 operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-                verifier_enabled=True, emitter=TribunalEmitter(None, None),
+                auditor_enabled=True, emitter=TribunalEmitter(None, None),
                 command_constraints_message="No whitelist or blacklist constraints are active.",
             )
 
@@ -1466,7 +1472,7 @@ class TestBuildAndEmitResult:
             request="list files", guidelines="", final_command="ls -la",
             outcome=CommandGenerationOutcome.VERIFIED, candidates=candidates,
             vote_winner="ls -la", vote_score=1.0, vote_breakdown=vote_breakdown,
-            verifier_passed=True, verifier_revision=None, verifier_reason=VerifierReason.OK,
+            auditor_passed=True, auditor_revision=None, auditor_reason=AuditorReason.OK,
             emitter=emitter,
         )
 
@@ -1476,9 +1482,9 @@ class TestBuildAndEmitResult:
         assert result.vote_winner == "ls -la"
         assert result.vote_score == 1.0
         assert result.vote_breakdown is not None
-        assert result.verifier_passed is True
-        assert result.verifier_revision is None
-        assert result.verifier_reason == VerifierReason.OK
+        assert result.auditor_passed is True
+        assert result.auditor_revision is None
+        assert result.auditor_reason == AuditorReason.OK
 
 
 class TestGenerateCommandHappyPath:
@@ -1493,26 +1499,26 @@ class TestGenerateCommandHappyPath:
     def _settings(
         primary_provider=LLMProvider.OLLAMA,
         assistant_model="gemma3:1b",
+        auditor=True,
         passes=3,
-        verifier=True,
     ):
         llm = LLMSettings(
             primary_provider=primary_provider,
             assistant_model=assistant_model,
             llm_command_gen_passes=passes,
-            llm_command_gen_verifier=verifier,
+            llm_command_gen_auditor=auditor,
         )
         return G8eeUserSettings(llm=llm)
 
     @staticmethod
-    def _provider_returning(generation_text, verifier_text=None, *, passes=3):
+    def _provider_returning(generation_text, auditor_text=None, *, passes=3):
         """Build a mock provider for a full pipeline run.
 
         The first ``passes`` calls return ``generation_text`` (concurrent
-        generation stage). Subsequent calls return ``verifier_text`` (or
-        repeat ``generation_text`` when ``verifier_text`` is ``None``).
+        generation stage). Subsequent calls return ``auditor_text`` (or
+        repeat ``generation_text`` when ``auditor_text`` is ``None``).
         
-        Verifier responses are automatically converted to JSON format.
+        Auditor responses are automatically converted to JSON format.
         """
         call_count = 0
 
@@ -1523,14 +1529,14 @@ class TestGenerateCommandHappyPath:
             if call_count <= passes:
                 resp.text = generation_text
             else:
-                if verifier_text is not None:
-                    # Convert verifier text to JSON format
-                    if verifier_text == "ok":
+                if auditor_text is not None:
+                    # Convert auditor text to JSON format
+                    if auditor_text == "ok":
                         resp.text = '{"status": "ok"}'
                     else:
                         # Assume it's a revised command
                         import json
-                        resp.text = json.dumps({"status": "revised", "revised_command": verifier_text})
+                        resp.text = json.dumps({"status": "revised", "revised_command": auditor_text})
                 else:
                     resp.text = generation_text
             return resp
@@ -1538,16 +1544,16 @@ class TestGenerateCommandHappyPath:
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
 
     @pytest.mark.asyncio
-    async def test_consensus_path_verifier_disabled(self):
-        """All passes agree, verifier disabled -> CONSENSUS outcome."""
+    async def test_consensus_path_auditor_disabled(self):
+        """All passes agree, auditor disabled -> CONSENSUS outcome."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("ls -la")
-        settings = self._settings(verifier=False)
+        settings = self._settings(auditor=False)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1568,8 +1574,8 @@ class TestGenerateCommandHappyPath:
         assert len(result.candidates) == 3
         assert result.vote_winner == "ls -la"
         assert result.vote_score == 1.0
-        assert result.verifier_passed is True
-        assert result.verifier_revision is None
+        assert result.auditor_passed is True
+        assert result.auditor_revision is None
 
         emitted_types = [
             call.args[0].event_type
@@ -1580,19 +1586,19 @@ class TestGenerateCommandHappyPath:
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED not in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED not in emitted_types
 
     @pytest.mark.asyncio
-    async def test_verified_path_verifier_approves(self):
-        """All passes agree, verifier says 'ok' -> VERIFIED outcome."""
+    async def test_verified_path_auditor_approves(self):
+        """All passes agree, auditor says 'ok' -> VERIFIED outcome."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("find /var/log -name '*.log'", "ok")
-        settings = self._settings(verifier=True)
+        settings = self._settings(auditor=True)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1610,8 +1616,8 @@ class TestGenerateCommandHappyPath:
         assert result.outcome == CommandGenerationOutcome.VERIFIED
         assert result.final_command == "find /var/log -name '*.log'"
         assert result.vote_winner == "find /var/log -name '*.log'"
-        assert result.verifier_passed is True
-        assert result.verifier_revision is None
+        assert result.auditor_passed is True
+        assert result.auditor_revision is None
         assert len(result.candidates) == 3
 
         emitted_types = [
@@ -1622,21 +1628,21 @@ class TestGenerateCommandHappyPath:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
 
     @pytest.mark.asyncio
-    async def test_verification_failed_path_verifier_revises(self):
-        """All passes agree, verifier revises -> VERIFICATION_FAILED outcome with revised command."""
+    async def test_verification_failed_path_auditor_revises(self):
+        """All passes agree, auditor revises -> VERIFICATION_FAILED outcome with revised command."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("grep -r TODO .", "grep -rn TODO .")
-        settings = self._settings(verifier=True)
+        settings = self._settings(auditor=True)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1654,16 +1660,16 @@ class TestGenerateCommandHappyPath:
         assert result.outcome == CommandGenerationOutcome.VERIFICATION_FAILED
         assert result.final_command == "grep -rn TODO ."
         assert result.vote_winner == "grep -r TODO ."
-        assert result.verifier_passed is False
-        assert result.verifier_revision == "grep -rn TODO ."
+        assert result.auditor_passed is False
+        assert result.auditor_revision == "grep -rn TODO ."
 
         emitted_types = [
             call.args[0].event_type
             for call in mock_event_service.publish.call_args_list
         ]
         from app.constants import EventType
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED in emitted_types
 
     @pytest.mark.asyncio
@@ -1686,10 +1692,10 @@ class TestGenerateCommandHappyPath:
             return resp
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
-        settings = self._settings(verifier=True, passes=3)
+        settings = self._settings(auditor=True, passes=3)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1708,19 +1714,19 @@ class TestGenerateCommandHappyPath:
         assert result.final_command == "df -h"
         assert len(result.candidates) == 2
         assert result.vote_winner == "df -h"
-        assert result.verifier_passed is True
+        assert result.auditor_passed is True
 
     @pytest.mark.asyncio
-    async def test_single_pass_verifier_approved(self):
+    async def test_single_pass_auditor_approved(self):
         """Minimal configuration (passes=2) still exercises all four stages."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("whoami", "ok", passes=2)
-        settings = self._settings(verifier=True, passes=2)
+        settings = self._settings(auditor=True, passes=2)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1739,7 +1745,7 @@ class TestGenerateCommandHappyPath:
         assert result.final_command == "whoami"
         assert len(result.candidates) == 2
         assert result.vote_score == 1.0
-        assert result.verifier_passed is True
+        assert result.auditor_passed is True
 
     @pytest.mark.asyncio
     async def test_event_emission_order(self):
@@ -1748,10 +1754,10 @@ class TestGenerateCommandHappyPath:
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("uptime", "ok", passes=2)
-        settings = self._settings(verifier=True, passes=2)
+        settings = self._settings(auditor=True, passes=2)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             await generate_command(
@@ -1775,8 +1781,8 @@ class TestGenerateCommandHappyPath:
         started_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_STARTED)
         pass_indices = [i for i, t in enumerate(emitted_types) if t == EventType.TRIBUNAL_VOTING_PASS_COMPLETED]
         consensus_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED)
-        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_STARTED)
-        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED)
+        review_started_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_AUDIT_STARTED)
+        review_completed_idx = emitted_types.index(EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED)
         completed_idx = emitted_types.index(EventType.TRIBUNAL_SESSION_COMPLETED)
 
         assert started_idx < min(pass_indices)
@@ -1792,10 +1798,10 @@ class TestGenerateCommandHappyPath:
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("ls -la /tmp", "ok")
-        settings = self._settings(verifier=True, passes=3)
+        settings = self._settings(auditor=True, passes=3)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1821,8 +1827,8 @@ class TestGenerateCommandHappyPath:
         assert result.vote_winner == "ls -la /tmp"
         assert result.vote_score is not None
         assert 0.0 <= result.vote_score <= 1.0
-        assert result.verifier_passed is True
-        assert result.verifier_revision is None
+        assert result.auditor_passed is True
+        assert result.auditor_revision is None
 
     @pytest.mark.asyncio
     async def test_refined_command_differs_from_original(self):
@@ -1831,10 +1837,10 @@ class TestGenerateCommandHappyPath:
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("cat /etc/hostname", "ok")
-        settings = self._settings(verifier=True, passes=3)
+        settings = self._settings(auditor=True, passes=3)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1869,10 +1875,10 @@ class TestGenerateCommandHappyPath:
         mock_event_service.publish = AsyncMock()
 
         mock_provider = self._provider_returning("ls", "ok")
-        settings = self._settings(verifier=True, passes=3)
+        settings = self._settings(auditor=True, passes=3)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
             result = await generate_command(
@@ -1900,11 +1906,11 @@ class TestGenerateCommandHappyPath:
         assert payload.final_command == "ls"
 
 
-class TestGenerateCommandVerifierFailure:
-    """TribunalVerifierFailedError propagates through generate_command end-to-end.
+class TestGenerateCommandAuditorFailure:
+    """TribunalAuditorFailedError propagates through generate_command end-to-end.
 
     These tests exercise the full pipeline (generation -> voting -> verification)
-    where the verifier stage fails, verifying the error surfaces correctly to callers
+    where the auditor stage fails, verifying the error surfaces correctly to callers
     with the right attributes and that SSE events are emitted in the correct order
     before the exception propagates.
     """
@@ -1919,24 +1925,24 @@ class TestGenerateCommandVerifierFailure:
             primary_provider=primary_provider,
             assistant_model=assistant_model,
             llm_command_gen_passes=passes,
-            llm_command_gen_verifier=True,
+            llm_command_gen_auditor=True,
         )
         return G8eeUserSettings(llm=llm)
 
     @staticmethod
-    def _provider_with_verifier_behavior(
+    def _provider_with_auditor_behavior(
         generation_text: str,
-        verifier_side_effect=None,
-        verifier_return=None,
+        auditor_side_effect=None,
+        auditor_return=None,
         *,
         passes: int = 3,
     ):
-        """Build a mock provider where generation succeeds and verifier behaves as specified.
+        """Build a mock provider where generation succeeds and auditor behaves as specified.
 
         The first ``passes`` calls return ``generation_text`` (generation stage).
-        Subsequent calls use ``verifier_side_effect`` or ``verifier_return``.
+        Subsequent calls use ``auditor_side_effect`` or ``auditor_return``.
         
-        Verifier responses are automatically converted to JSON format if they are plain text.
+        Auditor responses are automatically converted to JSON format if they are plain text.
         """
         call_count = 0
 
@@ -1947,41 +1953,41 @@ class TestGenerateCommandVerifierFailure:
                 resp = MagicMock()
                 resp.text = generation_text
                 return resp
-            if verifier_side_effect is not None:
-                raise verifier_side_effect
-            if verifier_return is not None:
-                # Convert verifier response to JSON format if it's plain text
-                if hasattr(verifier_return, 'text'):
-                    text = verifier_return.text
+            if auditor_side_effect is not None:
+                raise auditor_side_effect
+            if auditor_return is not None:
+                # Convert auditor response to JSON format if it's plain text
+                if hasattr(auditor_return, 'text'):
+                    text = auditor_return.text
                     if text == "ok":
-                        verifier_return.text = '{"status": "ok"}'
+                        auditor_return.text = '{"status": "ok"}'
                     elif text and text != generation_text:
                         # Assume it's a revised command
                         import json
-                        verifier_return.text = json.dumps({"status": "revised", "revised_command": text})
-            return verifier_return
+                        auditor_return.text = json.dumps({"status": "revised", "revised_command": text})
+            return auditor_return
 
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
 
     @pytest.mark.asyncio
-    async def test_empty_verifier_response_raises_through_generate_command(self):
-        """Empty verifier response propagates TribunalVerifierFailedError from generate_command."""
+    async def test_empty_auditor_response_raises_through_generate_command(self):
+        """Empty auditor response propagates TribunalAuditorFailedError from generate_command."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         empty_response = MagicMock()
         empty_response.text = None
 
-        mock_provider = self._provider_with_verifier_behavior(
-            "ls -la", verifier_return=empty_response,
+        mock_provider = self._provider_with_auditor_behavior(
+            "ls -la", auditor_return=empty_response,
         )
         settings = self._settings()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
-            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+            with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
                     request="list files with details",
                     guidelines="",
@@ -1994,7 +2000,7 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
+            assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
             assert exc_info.value.request == "list files with details"
             assert "Provider returned empty response" in exc_info.value.error
 
@@ -2006,30 +2012,30 @@ class TestGenerateCommandVerifierFailure:
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 3
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
     async def test_no_valid_revision_raises_through_generate_command(self):
-        """Non-ok verifier answer without valid revision propagates TribunalVerifierFailedError."""
+        """Non-ok auditor answer without valid revision propagates TribunalAuditorFailedError."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         same_command_response = MagicMock()
         same_command_response.text = "ls -la"
 
-        mock_provider = self._provider_with_verifier_behavior(
-            "ls -la", verifier_return=same_command_response,
+        mock_provider = self._provider_with_auditor_behavior(
+            "ls -la", auditor_return=same_command_response,
         )
         settings = self._settings()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
-            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+            with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
                     request="list files with details",
                     guidelines="",
@@ -2042,7 +2048,7 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == VerifierReason.NO_VALID_REVISION
+            assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
             assert exc_info.value.request == "list files with details"
             assert "invalid JSON" in exc_info.value.error
 
@@ -2053,27 +2059,27 @@ class TestGenerateCommandVerifierFailure:
         ]
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
-    async def test_verifier_exception_raises_through_generate_command(self):
-        """Verifier exception propagates TribunalVerifierFailedError from generate_command."""
+    async def test_auditor_exception_raises_through_generate_command(self):
+        """Auditor exception propagates TribunalAuditorFailedError from generate_command."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
-        mock_provider = self._provider_with_verifier_behavior(
-            "ls -la", verifier_side_effect=RuntimeError("Verifier API timeout"),
+        mock_provider = self._provider_with_auditor_behavior(
+            "ls -la", auditor_side_effect=RuntimeError("Auditor API timeout"),
         )
         settings = self._settings()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
-            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+            with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
                     request="list files with details",
                     guidelines="",
@@ -2086,7 +2092,7 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
+            assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
             assert "timeout" in exc_info.value.error.lower()
             assert exc_info.value.request == "list files with details"
 
@@ -2097,30 +2103,30 @@ class TestGenerateCommandVerifierFailure:
         ]
         assert EventType.TRIBUNAL_SESSION_STARTED in emitted_types
         assert EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_STARTED in emitted_types
-        assert EventType.TRIBUNAL_SESSION_VERIFIER_FAILED in emitted_types
-        assert EventType.TRIBUNAL_VOTING_REVIEW_COMPLETED not in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_STARTED in emitted_types
+        assert EventType.TRIBUNAL_SESSION_AUDITOR_FAILED in emitted_types
+        assert EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED not in emitted_types
         assert EventType.TRIBUNAL_SESSION_COMPLETED not in emitted_types
 
     @pytest.mark.asyncio
-    async def test_verifier_failure_preserves_request_from_vote_winner(self):
-        """TribunalVerifierFailedError.request is the vote winner, not the caller's request."""
+    async def test_auditor_failure_preserves_request_from_vote_winner(self):
+        """TribunalAuditorFailedError.request is the vote winner, not the caller's request."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
         empty_response = MagicMock()
         empty_response.text = ""
 
-        mock_provider = self._provider_with_verifier_behavior(
-            "cat /etc/hostname", verifier_return=empty_response,
+        mock_provider = self._provider_with_auditor_behavior(
+            "cat /etc/hostname", auditor_return=empty_response,
         )
         settings = self._settings()
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
-            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+            with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
                     request="show system hostname",
                     guidelines="",
@@ -2134,26 +2140,26 @@ class TestGenerateCommandVerifierFailure:
                 )
 
             assert exc_info.value.request == "show system hostname"
-            assert exc_info.value.reason == VerifierReason.EMPTY_RESPONSE
+            assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
 
     @pytest.mark.asyncio
-    async def test_single_pass_verifier_failure_raises(self):
-        """Minimal configuration (passes=2) still raises TribunalVerifierFailedError on verifier failure."""
+    async def test_single_pass_auditor_failure_raises(self):
+        """Minimal configuration (passes=2) still raises TribunalAuditorFailedError on auditor failure."""
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
 
-        mock_provider = self._provider_with_verifier_behavior(
+        mock_provider = self._provider_with_auditor_behavior(
             "whoami",
-            verifier_side_effect=RuntimeError("Connection refused"),
+            auditor_side_effect=RuntimeError("Connection refused"),
             passes=2,
         )
         settings = self._settings(passes=2)
 
         with patch(
-            "app.services.ai.command_generator.get_llm_provider",
+            "app.services.ai.generator.get_llm_provider",
             return_value=mock_provider,
         ):
-            with pytest.raises(TribunalVerifierFailedError) as exc_info:
+            with pytest.raises(TribunalAuditorFailedError) as exc_info:
                 await generate_command(
                     request="show current user",
                     guidelines="",
@@ -2166,7 +2172,7 @@ class TestGenerateCommandVerifierFailure:
                     settings=settings,
                 )
 
-            assert exc_info.value.reason == VerifierReason.VERIFIER_ERROR
+            assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
             assert exc_info.value.request == "show current user"
 
         from app.constants import EventType
@@ -2178,7 +2184,7 @@ class TestGenerateCommandVerifierFailure:
 
 
 class TestMaxTokensConstants:
-    """_MAX_TOKENS constants are used by generation passes and verifier."""
+    """_MAX_TOKENS constants are used by generation passes and auditor."""
 
     @pytest.mark.asyncio
     async def test_generation_pass_uses_max_tokens(self):
@@ -2206,7 +2212,7 @@ class TestMaxTokensConstants:
         assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
 
     @pytest.mark.asyncio
-    async def test_verifier_uses_max_tokens(self):
+    async def test_auditor_uses_max_tokens(self):
         from unittest.mock import patch
         mock_response = MagicMock()
         mock_response.text = '{"status": "ok"}'
@@ -2214,11 +2220,11 @@ class TestMaxTokensConstants:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        # Mock get_model_config to return a config for verifier
+        # Mock get_model_config to return a config for auditor
         with patch('app.models.model_configs.get_model_config') as mock_get_config:
             mock_config = LLMModelConfig(
                 name="test-model",
-                max_output_tokens=_MAX_TOKENS_VERIFIER,
+                max_output_tokens=_MAX_TOKENS_AUDITOR,
                 top_p=1.0,
                 top_k=None,
                 stop_sequences=None,
@@ -2235,7 +2241,7 @@ class TestMaxTokensConstants:
                 consensus_strength=1.0,
             )
 
-            await _run_verifier(
+            await run_auditor(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -2247,12 +2253,12 @@ class TestMaxTokensConstants:
                 operator_context=_make_mock_operator_context(os="linux"),
                 emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
-                verifier_persona=get_agent_persona("auditor"),
+                auditor_persona=get_agent_persona("auditor"),
             )
 
             call_kwargs = mock_provider.generate_content_lite.call_args
             settings = call_kwargs.kwargs.get("lite_llm_settings")
-            assert settings.max_output_tokens == _MAX_TOKENS_VERIFIER
+            assert settings.max_output_tokens == _MAX_TOKENS_AUDITOR
 
 
 class TestForbiddenPatternsMessage:
@@ -2365,7 +2371,7 @@ class TestPromptFields:
         """Every Tribunal template (+ auditor) must render cleanly with _prompt_fields.
 
         After the scaffolding refactor, placeholders live in TRIBUNAL_PROMPT_TEMPLATE
-        and TRIBUNAL_VERIFIER_TEMPLATE — not in the persona text itself. This test
+        and TRIBUNAL_AUDITOR_TEMPLATE — not in the persona text itself. This test
         guards against drift in either the templates or _prompt_fields.
         """
         from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
@@ -2374,7 +2380,7 @@ class TestPromptFields:
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
 
         TRIBUNAL_PROMPT_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
-        TRIBUNAL_VERIFIER_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
+        TRIBUNAL_AUDITOR_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
 
         fields = _prompt_fields(
             OperatorContext(
@@ -2409,8 +2415,8 @@ class TestPromptFields:
             assert "FORBIDDEN" in rendered, f"{member_id}: forbidden_patterns missing"
 
         auditor = get_agent_persona("auditor")
-        rendered = TRIBUNAL_VERIFIER_TEMPLATE.format(
-            verifier_context="Verifier context placeholder",
+        rendered = TRIBUNAL_AUDITOR_TEMPLATE.format(
+            auditor_context="Auditor context placeholder",
             **common,
             **fields,
         )
@@ -2459,7 +2465,7 @@ class TestTribunalEmitter:
 
         with pytest.raises(RuntimeError, match="broker down"):
             await emitter.emit(
-                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+                EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             )
 
@@ -2503,7 +2509,7 @@ class TestTribunalEmitter:
             TribunalSessionModelNotConfiguredPayload,
             TribunalSessionProviderUnavailablePayload,
             TribunalSessionSystemErrorPayload,
-            TribunalSessionVerifierFailedPayload,
+            TribunalAuditorFailedPayload,
         )
 
         mock_event_service = MagicMock(spec=EventService)
@@ -2540,9 +2546,9 @@ class TestTribunalEmitter:
                 TribunalSessionGenerationFailedPayload(request="test", pass_errors=["error"]),
             ),
             (
-                EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
-                TribunalSessionVerifierFailedPayload(
-                    request="test", reason=VerifierReason.VERIFIER_ERROR, error="error", candidate_command="ls"
+                EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+                TribunalAuditorFailedPayload(
+                    request="test", reason=AuditorReason.AUDITOR_ERROR, error="error", candidate_command="ls"
                 ),
             ),
         ]

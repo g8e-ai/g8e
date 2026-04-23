@@ -16,7 +16,7 @@ import {
     TriageResult, 
     PrimaryResult, 
     CommandGenerationResult, 
-    VerifierResult, 
+    AuditorResult, 
     CaseTitleResult 
 } from '../../../../public/js/models/agent-models.js';
 
@@ -71,14 +71,14 @@ describe('Agent Models', () => {
         });
     });
 
-    describe('VerifierResult', () => {
+    describe('AuditorResult', () => {
         it('parses valid verifier result', () => {
             const raw = {
                 passed: true,
                 reason: 'Command is safe',
                 reason_enum: 'ok'
             };
-            const model = VerifierResult.parse(raw);
+            const model = AuditorResult.parse(raw);
             expect(model.passed).toBe(true);
             expect(model.reason_enum).toBe('ok');
         });

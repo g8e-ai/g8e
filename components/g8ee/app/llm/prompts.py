@@ -152,14 +152,40 @@ def build_learned_context_section(
 def build_command_constraints_message(
     whitelisting_enabled: bool,
     blacklisting_enabled: bool,
-    whitelisted_commands: List[str] | None,
+    whitelisted_commands: List[dict[str, Any]] | None,
     blacklisted_commands: List[dict[str, str]] | None,
 ) -> str:
-    """Generate a human-readable message describing active command constraints."""
+    """Generate a human-readable message describing active command constraints.
+    
+    Args:
+        whitelisting_enabled: Whether whitelist enforcement is active
+        blacklisting_enabled: Whether blacklist enforcement is active
+        whitelisted_commands: List of command metadata dicts with safe_options and validation patterns
+        blacklisted_commands: List of blacklisted command dicts
+    """
     parts = []
     if whitelisting_enabled:
         if whitelisted_commands:
-            parts.append(f"Whitelisting is ENABLED. Only these commands (and their subcommands) are allowed: {', '.join(whitelisted_commands)}")
+            command_names = [cmd.get("command", "unknown") for cmd in whitelisted_commands]
+            parts.append(f"Whitelisting is ENABLED. Only these commands are allowed: {', '.join(command_names)}")
+            
+            # Add detailed constraint information for each command
+            constraint_details = []
+            for cmd in whitelisted_commands:
+                cmd_name = cmd.get("command", "unknown")
+                safe_options = cmd.get("safe_options", [])
+                validation = cmd.get("validation", {})
+                
+                if safe_options or validation:
+                    details = f"{cmd_name}:"
+                    if safe_options:
+                        details += f" safe_options={safe_options}"
+                    if validation:
+                        details += f" validation_patterns={list(validation.keys())}"
+                    constraint_details.append(details)
+            
+            if constraint_details:
+                parts.append("Command-specific constraints: " + "; ".join(constraint_details))
         else:
             parts.append("Whitelisting is ENABLED, but no commands are whitelisted. ALL commands will be rejected.")
     
@@ -258,12 +284,12 @@ def build_tribunal_prompt_fields(
     }
 
 
-def build_tribunal_verifier_context(
+def build_tribunal_auditor_context(
     mode: str,
     winner: str | None,
     clusters: List[dict[str, Any]],
 ) -> str:
-    """Build the mode-specific context for the verifier prompt.
+    """Build the mode-specific context for the auditor prompt.
     
     Args:
         mode: "unanimous", "majority", or "tied"
@@ -333,7 +359,7 @@ def build_tribunal_generator_prompt(
     )
 
 
-def build_tribunal_verifier_prompt(
+def build_tribunal_auditor_prompt(
     request: str,
     guidelines: str,
     forbidden_patterns_message: str,
@@ -341,10 +367,10 @@ def build_tribunal_verifier_prompt(
     os: str,
     user_context: str,
     operator_context_str: str,
-    verifier_context: str,
+    auditor_context: str,
 ) -> str:
-    """Build the prompt for the Tribunal verifier."""
-    template = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
+    """Build the prompt for the Tribunal auditor."""
+    template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
     return template.format(
         request=request,
         guidelines=guidelines,
@@ -353,7 +379,7 @@ def build_tribunal_verifier_prompt(
         os=os,
         user_context=user_context,
         operator_context=operator_context_str,
-        verifier_context=verifier_context,
+        auditor_context=auditor_context,
     )
 
 

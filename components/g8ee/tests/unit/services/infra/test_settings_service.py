@@ -201,7 +201,7 @@ class TestSettingsService:
 
         assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is True
-        assert settings.llm.llm_command_gen_verifier is True
+        assert settings.llm.llm_command_gen_auditor is True
 
     async def test_command_gen_overrides_applied_when_db_has_values(self):
         """Explicit DB values for command_gen fields override the defaults."""
@@ -217,7 +217,7 @@ class TestSettingsService:
                 primary_model="gemma3:27b",
                 llm_command_gen_passes=5,
                 llm_command_gen_enabled=False,
-                llm_command_gen_verifier=False,
+                llm_command_gen_auditor=False,
             )
         )
         user_doc = UserSettingsDocument(
@@ -234,7 +234,7 @@ class TestSettingsService:
 
         assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is False
-        assert settings.llm.llm_command_gen_verifier is False
+        assert settings.llm.llm_command_gen_auditor is False
 
     async def test_user_settings_command_gen_defaults_preserved(self):
         """Regression: user settings with no command_gen values must preserve defaults."""
@@ -264,7 +264,7 @@ class TestSettingsService:
 
         assert settings.llm.llm_command_gen_passes == 5
         assert settings.llm.llm_command_gen_enabled is True
-        assert settings.llm.llm_command_gen_verifier is True
+        assert settings.llm.llm_command_gen_auditor is True
 
     async def test_llm_settings_provider_preserved(self):
         """Test that valid provider is preserved in user settings (explicitly set, not a default)."""

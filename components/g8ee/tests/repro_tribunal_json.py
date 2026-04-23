@@ -8,13 +8,14 @@ from app.constants import (
     TribunalMember,
     ComponentName,
     EventType,
-    VerifierReason,
+    AuditorReason,
 )
 from app.llm.llm_types import Role
-from app.models.agents.tribunal import VoteBreakdown, TribunalVerifierFailedError
-from app.services.ai.command_generator import _run_verifier, TribunalEmitter
+from app.models.agents.tribunal import VoteBreakdown, TribunalAuditorFailedError
+from app.services.ai.generator import TribunalEmitter
+from app.services.ai.auditor_service import run_auditor
 from app.models.http_context import G8eHttpContext
-from app.utils.agent_persona_loader import get_agent_persona
+from app.utils.agent_persona_loader import get_tribunal_member
 
 def _make_mock_g8e_context() -> G8eHttpContext:
     return G8eHttpContext(
@@ -26,7 +27,7 @@ def _make_mock_g8e_context() -> G8eHttpContext:
     )
 
 @pytest.mark.asyncio
-async def test_verifier_repro_json_failure():
+async def test_auditor_repro_json_failure():
     # Mock a response that is truncated or has prose prefix that might confuse parsing
     # as seen in the logs: raw_text='Here is the JSON requested:\n```json'
     mock_response = MagicMock()
@@ -48,8 +49,8 @@ async def test_verifier_repro_json_failure():
         consensus_strength=1.0,
     )
 
-    with pytest.raises(TribunalVerifierFailedError) as exc_info:
-        await _run_verifier(
+    with pytest.raises(TribunalAuditorFailedError) as exc_info:
+        await run_auditor(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -61,11 +62,11 @@ async def test_verifier_repro_json_failure():
             operator_context=MagicMock(),
             emitter=emitter,
             command_constraints_message="No constraints",
-            verifier_persona=get_agent_persona("auditor"),
+            auditor_persona=get_agent_persona("auditor"),
         )
     
     assert "no_valid_revision" in str(exc_info.value)
-    assert "Failed to parse verifier response" in str(exc_info.value)
+    assert "Failed to parse auditor response" in str(exc_info.value)
 
 if __name__ == "__main__":
-    asyncio.run(test_verifier_repro_json_failure())
+    asyncio.run(test_auditor_repro_json_failure())

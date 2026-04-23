@@ -159,7 +159,7 @@ def _noop_generate_command(request: str, **_kwargs):
     In production the Tribunal would never return the raw natural-language
     request as a shell command; tests only care that the pipeline flows.
     """
-    from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
+    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
         request=request,
         final_command=request,
@@ -169,7 +169,7 @@ def _noop_generate_command(request: str, **_kwargs):
 
 def _refining_generate_command(request: str, refined: str, **_kwargs):
     """Mock Tribunal that produces a refined command distinct from the request."""
-    from app.services.ai.command_generator import CommandGenerationOutcome, CommandGenerationResult
+    from app.services.ai.generator import CommandGenerationOutcome, CommandGenerationResult
     return CommandGenerationResult(
         request=request,
         final_command=refined,

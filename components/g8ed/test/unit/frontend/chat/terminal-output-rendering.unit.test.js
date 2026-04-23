@@ -1021,7 +1021,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_VERIFIER_FAILED });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe('Verifier rejected the candidate \u2014 no trusted command');
+            expect(status.textContent).toBe('Auditor rejected the candidate \u2014 no trusted command');
         });
 
         it('shows generic label for unknown event type', () => {

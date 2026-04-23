@@ -273,7 +273,7 @@ class EventType(str, Enum):
     TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE = "g8e.v1.ai.tribunal.session.provider.unavailable"
     TRIBUNAL_SESSION_SYSTEM_ERROR         = "g8e.v1.ai.tribunal.session.system.error"
     TRIBUNAL_SESSION_GENERATION_FAILED    = "g8e.v1.ai.tribunal.session.generation.failed"
-    TRIBUNAL_SESSION_VERIFIER_FAILED      = "g8e.v1.ai.tribunal.session.verifier.failed"
+    TRIBUNAL_SESSION_AUDITOR_FAILED       = "g8e.v1.ai.tribunal.session.auditor.failed"
 
     TRIBUNAL_VOTING_STARTED = "g8e.v1.ai.tribunal.voting.started"
     TRIBUNAL_VOTING_FAILED = "g8e.v1.ai.tribunal.voting.failed"
@@ -283,9 +283,8 @@ class EventType(str, Enum):
     TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED = "g8e.v1.ai.tribunal.voting.consensus.not_reached"
     TRIBUNAL_VOTING_CONSENSUS_FAILED = "g8e.v1.ai.tribunal.voting.consensus.failed"
     TRIBUNAL_VOTING_DISSENT_RECORDED = "g8e.v1.ai.tribunal.voting.dissent.recorded"
-    TRIBUNAL_VOTING_REVIEW_STARTED = "g8e.v1.ai.tribunal.voting.review.started"
-    TRIBUNAL_VOTING_REVIEW_COMPLETED = "g8e.v1.ai.tribunal.voting.review.completed"
-    TRIBUNAL_VOTING_REVIEW_FAILED = "g8e.v1.ai.tribunal.voting.review.failed"
+    TRIBUNAL_VOTING_AUDIT_STARTED = "g8e.v1.ai.tribunal.voting.audit.started"
+    TRIBUNAL_VOTING_AUDIT_COMPLETED = "g8e.v1.ai.tribunal.voting.audit.completed"
 
     # platform
     PLATFORM_USAGE_UPDATED = "g8e.v1.platform.usage.updated"
