@@ -28,7 +28,7 @@ Run with:
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 
-from app.models.agent import ExecutorCommandArgs, SageOperatorRequest
+from app.models.agent import ExecutorCommandArgs, OperatorContext, SageOperatorRequest
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
@@ -49,6 +49,8 @@ def mock_tool_executor():
     """Mock AIToolService with settings."""
     tool_executor = MagicMock(spec=AIToolService)
     tool_executor.user_settings = MagicMock(spec=G8eeUserSettings)
+    tool_executor.user_settings.operator_context = MagicMock(spec=OperatorContext)
+    tool_executor.user_settings.operator_context.os = "linux"
     tool_executor.whitelist_validator = MagicMock(spec=CommandWhitelistValidator)
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
     return tool_executor
@@ -89,7 +91,10 @@ def mock_g8e_context():
 @pytest.fixture
 def mock_request_settings():
     """Mock G8eeUserSettings."""
-    return MagicMock(spec=G8eeUserSettings)
+    settings = MagicMock(spec=G8eeUserSettings)
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
+    return settings
 
 
 @pytest.fixture
@@ -108,6 +113,7 @@ class TestTribunalInvokerFetchCommandConstraints:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         result = TribunalInvoker._fetch_command_constraints(mock_tool_executor)
@@ -121,6 +127,11 @@ class TestTribunalInvokerFetchCommandConstraints:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = ["cat", "ls", "ping"]
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[
+            {"command": "cat"},
+            {"command": "ls"},
+            {"command": "ping"},
+        ])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         result = TribunalInvoker._fetch_command_constraints(mock_tool_executor)
@@ -128,7 +139,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is True
         assert blacklisting_enabled is False
-        assert whitelisted == ["cat", "ls", "ping"]
+        assert whitelisted == [{"command": "cat"}, {"command": "ls"}, {"command": "ping"}]
         assert blacklisted == []
 
     def test_returns_blacklist_when_enabled(self, mock_tool_executor):
@@ -138,6 +149,7 @@ class TestTribunalInvokerFetchCommandConstraints:
             enable_blacklisting=True,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = [
             {"command": "rm", "reason": "Destructive"},
             {"command": "dd", "reason": "Disk destruction"},
@@ -174,6 +186,7 @@ class TestTribunalInvokerRun:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         with patch(
@@ -210,6 +223,7 @@ class TestTribunalInvokerRun:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         mock_gen_result = CommandGenerationResult(
@@ -259,6 +273,7 @@ class TestTribunalInvokerRun:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         mock_investigation.operator_documents = []
@@ -309,6 +324,7 @@ class TestTribunalInvokerRun:
             enable_blacklisting=False,
         )
         mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
         mock_gen_result = CommandGenerationResult(

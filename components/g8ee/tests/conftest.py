@@ -30,7 +30,7 @@ import pytest_asyncio
 
 from app.clients.kv_cache_client import KVCacheClient
 from app.clients.db_client import DBClient
-from app.models.settings import G8eePlatformSettings
+from app.models.settings import G8eePlatformSettings, ListenSettings
 from app.services.infra.settings_service import SettingsService
 from app.services.cache.cache_aside import CacheAsideService
 from app.db.kv_service import KVService
@@ -490,7 +490,8 @@ def mock_event_service():
 
 @pytest.fixture
 def mock_settings():
-    return G8eePlatformSettings(port=443)
+    from app.models.settings import AuthSettings
+    return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
 
 
 @pytest.fixture

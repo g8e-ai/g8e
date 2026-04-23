@@ -35,6 +35,7 @@ import logging
 import pytest
 
 from app.constants import AgentMode, OperatorToolName
+from app.models.agent import OperatorContext
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
@@ -58,6 +59,8 @@ def mock_user_settings_disabled():
         enable_whitelisting=False,
         enable_blacklisting=False,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -69,6 +72,8 @@ def mock_user_settings_whitelist_only():
         enable_whitelisting=True,
         enable_blacklisting=False,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -80,6 +85,8 @@ def mock_user_settings_blacklist_only():
         enable_whitelisting=False,
         enable_blacklisting=True,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -91,6 +98,8 @@ def mock_user_settings_both():
         enable_whitelisting=True,
         enable_blacklisting=True,
     )
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
     return settings
 
 
@@ -105,6 +114,11 @@ def mock_whitelist_validator():
         is_valid=True,
         command="ping",
     ))
+    validator.get_available_commands_with_metadata = MagicMock(return_value=[
+        "cat",
+        "ls",
+        "ping",
+    ])
     return validator
 
 
@@ -143,7 +157,10 @@ def mock_investigation():
 @pytest.fixture
 def mock_request_settings():
     """Mock G8eeUserSettings."""
-    return MagicMock(spec=G8eeUserSettings)
+    settings = MagicMock(spec=G8eeUserSettings)
+    settings.operator_context = MagicMock(spec=OperatorContext)
+    settings.operator_context.os = "linux"
+    return settings
 
 
 @pytest.fixture

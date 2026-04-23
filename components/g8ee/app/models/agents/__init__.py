@@ -42,7 +42,7 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.agents.title_generator import CaseTitleRequest, CaseTitleResult
-from app.models.agents.verifier import AuditorRequest, AuditorResult
+from app.models.agents.auditor import AuditorRequest, AuditorResult
 
 __all__ = [
     "PrimaryRequest",

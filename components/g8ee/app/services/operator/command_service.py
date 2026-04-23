@@ -71,6 +71,7 @@ from app.services.protocols import (
     G8edClientProtocol,
 )
 from app.services.cache.cache_aside import CacheAsideService
+from app.services.investigation.investigation_service import _extract_single_operator_context
 from .operator_data_service import OperatorDataService
 
 from .execution_service import OperatorExecutionService
@@ -82,6 +83,7 @@ from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.services.mcp.adapter import build_tool_call_request
 from app.utils.safety import validate_command_safety
+from app.utils.ids import generate_command_execution_id, generate_batch_id
 from app.errors import ValidationError, BusinessLogicError
 import asyncio
 
@@ -293,11 +295,12 @@ class OperatorCommandService:
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
+        operator_context = _extract_single_operator_context(primary) if primary else None
         is_safe, safety_err = validate_command_safety(
             command,
-            whitelisting_enabled=_cv.enable_whitelisting,
-            blacklisting_enabled=_cv.enable_blacklisting,
-            operator_context=primary.operator_context if primary else None
+            whitelisting_enabled=self._cv.enable_whitelisting,
+            blacklisting_enabled=self._cv.enable_blacklisting,
+            operator_context=operator_context
         )
         if not is_safe:
             error_type = CommandErrorType.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else CommandErrorType.BLACKLIST_VIOLATION
