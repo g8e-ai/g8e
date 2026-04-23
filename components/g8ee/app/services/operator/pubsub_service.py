@@ -59,6 +59,8 @@ logger = logging.getLogger(__name__)
 
 # Map event types to payload models for reconstruction
 _PAYLOAD_MODELS = {
+    EventType.OPERATOR_COMMAND_COMPLETED: ExecutionResultsPayload,
+    EventType.OPERATOR_COMMAND_FAILED: ExecutionResultsPayload,
     EventType.OPERATOR_FILE_EDIT_COMPLETED: FileEditResultPayload,
     EventType.OPERATOR_FILE_EDIT_FAILED: FileEditResultPayload,
     EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED: PortCheckResultPayload,

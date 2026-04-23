@@ -151,8 +151,7 @@ func TestSetExecutionIDOnPayload_RestoreFileResultPayload(t *testing.T) {
 // The LFAA publish path (file reads, port checks, fetch logs/history, restore)
 // must stamp the configured operator APIKey onto the outbound G8eMessage for
 // identity continuity, matching the PublishResultEnvelope path in
-// pubsub_results.go. Regression for the asymmetry flagged in the
-// mcp-pubsub-bug-fix branch status synthesis.
+// pubsub_results.go.
 func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
 	ctx := context.Background()
 	logger := testutil.NewTestLogger()

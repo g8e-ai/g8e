@@ -48,12 +48,11 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 }
 
 // publishResultEnvelope builds a G8eMessage for a typed result payload,
-// applies MCP wrapping when the originating command was an MCP tools/call,
 // stamps the envelope metadata copied from the originating command, and
 // publishes it on the results channel. All result-publishing paths that carry
 // an originalMsg (command-completed, command-cancelled, file-edit, fs-list)
 // share this helper so none can drift out of sync on API key, task/investigation
-// propagation, or MCP wrapping.
+// propagation.
 func (rr *PubSubResultsService) publishResultEnvelope(
 	ctx context.Context,
 	eventType, caseID string,

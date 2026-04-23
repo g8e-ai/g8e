@@ -64,6 +64,67 @@
       "web_session_id": "test-web-session-id"
     }
   },
+  "g8e_investigation_query_requested": {
+    "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.requested",
+    "data": {
+      "query": "test investigation query",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_investigation_query_completed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.completed",
+    "data": {
+      "query": "test investigation query",
+      "results": "Search results",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_investigation_query_failed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.investigation.query.failed",
+    "data": {
+      "query": "test investigation query",
+      "error": "Service unavailable",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_command_constraints_requested": {
+    "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.requested",
+    "data": {
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_command_constraints_completed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.completed",
+    "data": {
+      "constraints": ["constraint 1"],
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
+  "g8e_command_constraints_failed": {
+    "type": "g8e.v1.ai.llm.tool.g8e.command.constraints.failed",
+    "data": {
+      "error": "Constraint lookup failed",
+      "execution_id": "test-execution-id",
+      "investigation_id": "test-investigation-id",
+      "case_id": "test-case-id",
+      "web_session_id": "test-web-session-id"
+    }
+  },
   "port_check_requested": {
     "type": "g8e.v1.operator.network.port.check.requested",
     "data": {

@@ -54,13 +54,6 @@ export const ChatSSEHandlersMixin = {
             this.handleChatRetry(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, (data) => {
-            this.handleToolCallStarted(data);
-        });
-
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED, (data) => {
-            this.handleToolCallCompleted(data);
-        });
 
         this.eventBus.on(EventType.LLM_CHAT_ITERATION_STOPPED, (data) => {
             this.handleChatStopped(data);
@@ -69,17 +62,13 @@ export const ChatSSEHandlersMixin = {
         // IMPORTANT: Do NOT subscribe to OPERATOR_NETWORK_PORT_CHECK_REQUESTED for UI
         // indicator creation. STARTED owns the indicator lifecycle.
         //
-        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves two distinct roles:
-        //   1. MCP tool-call event dispatched to the operator (g8eo).
-        //   2. A frontend notification emitted by agent_sse when the LLM's TOOL_CALL
-        //      stream chunk is processed (see agent_sse.py).
+        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves as a frontend notification
+        // emitted by agent_sse when the LLM's tool call is processed.
         //
         // Although the execution_id on REQUESTED now matches the one used by
-        // port_service for STARTED/COMPLETED/FAILED (both originate from
-        // orchestrate_tool_execution's generate_command_execution_id), the TOOL_CALL
-        // chunk is yielded by execute_turn_tool_calls AFTER it awaits the full
-        // port-check, so REQUESTED arrives AFTER STARTED/COMPLETED. An indicator
-        // created from REQUESTED would therefore never be completed.
+        // port_service for STARTED/COMPLETED/FAILED, the tool call chunk is yielded
+        // after the port-check completes, so REQUESTED arrives AFTER STARTED/COMPLETED.
+        // An indicator created from REQUESTED would therefore never be completed.
         // Only STARTED/COMPLETED/FAILED drive the UI indicator lifecycle.
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, (data) => {
             this.handleNetworkPortCheckIndicator(data);
@@ -91,6 +80,43 @@ export const ChatSSEHandlersMixin = {
 
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED, (data) => {
             this.handleNetworkPortCheckFailed(data);
+        });
+
+        // Universal tool handlers for native lifecycle events
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'web-search', 'Searching web', 'search', ToolDisplayCategory.SEARCH);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'investigation-query', 'Querying investigation', 'search', ToolDisplayCategory.GENERAL);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'command-constraints', 'Checking constraints', 'tool', ToolDisplayCategory.EXECUTION);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
         });
 
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED, (data) => {
@@ -643,43 +669,45 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.appendSystemMessage(message);
     },
 
-    handleToolCallStarted(data) {
+    handleUniversalToolStarted(data, toolName, displayLabel, icon, category) {
         if (!this.shouldProcessEvent(data)) return;
         if (!this.anchoredTerminal) return;
 
         const executionId = data.execution_id;
         if (!executionId) return;
 
-        // check_port_status has a dedicated sidecar indicator driven by
-        // OPERATOR_NETWORK_PORT_CHECK_STARTED/COMPLETED/FAILED from port_service
-        // (which fires in the correct order relative to this generic STARTED event).
-        const toolName = data.tool_name;
-        if (toolName === 'check_port_status') {
-            return;
-        }
-
-        const indicatorId = `tool-${executionId}`;
-        if (!this._toolCallIndicators) this._toolCallIndicators = new Map();
-        this._toolCallIndicators.set(executionId, indicatorId);
+        const indicatorId = `${toolName}-${executionId}`;
+        if (!this._universalToolIndicators) this._universalToolIndicators = new Map();
+        this._universalToolIndicators.set(executionId, indicatorId);
 
         this.anchoredTerminal.appendActivityIndicator({
             id: indicatorId,
-            icon: data.display_icon || 'tool',
-            label: data.display_label || 'Processing',
-            detail: data.display_detail,
-            category: data.category,
+            icon: icon || 'tool',
+            label: displayLabel || 'Processing',
+            category: category || ToolDisplayCategory.GENERAL,
         });
     },
 
-    handleToolCallCompleted(data) {
+    handleUniversalToolCompleted(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._toolCallIndicators) return;
+        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
 
-        const indicatorId = this._toolCallIndicators.get(data.execution_id);
+        const indicatorId = this._universalToolIndicators.get(data.execution_id);
         if (!indicatorId) return;
 
         this.anchoredTerminal.completeActivityIndicator(indicatorId);
-        this._toolCallIndicators.delete(data.execution_id);
+        this._universalToolIndicators.delete(data.execution_id);
+    },
+
+    handleUniversalToolFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
+
+        const indicatorId = this._universalToolIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._universalToolIndicators.delete(data.execution_id);
     },
 
     handleCommandCancelled(data) {
@@ -692,7 +720,14 @@ export const ChatSSEHandlersMixin = {
         if (data.execution_id && this.anchoredTerminal) {
             const execId = data.execution_id;
             this.anchoredTerminal.completeActivityIndicator(`fn-${execId}`);
-            this.anchoredTerminal.completeActivityIndicator(`tool-${execId}`);
+            // Clear universal tool indicators
+            if (this._universalToolIndicators) {
+                const indicatorId = this._universalToolIndicators.get(execId);
+                if (indicatorId) {
+                    this.anchoredTerminal.completeActivityIndicator(indicatorId);
+                    this._universalToolIndicators.delete(execId);
+                }
+            }
         }
     },
 

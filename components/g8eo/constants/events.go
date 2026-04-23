@@ -101,17 +101,6 @@ type operatorRestoreFileEvents struct {
 	Failed    string
 }
 
-// operatorMcpEvents mirrors shared/constants/events.json g8e.mcp.*
-//
-// Roles:
-//   - ToolsCall: inbound request; dispatched by PubSubCommandService.handleCommand.
-//   - ToolsResult: outbound-only; set by the result publishers to wrap
-//     execution payloads before emitting back to g8ed.
-type operatorMcpEvents struct {
-	ToolsCall   string
-	ToolsResult string
-}
-
 // operatorFetchFileDiffEvents mirrors shared/constants/events.json g8e.fetch.file.diff.*
 type operatorFetchFileDiffEvents struct {
 	Requested string
