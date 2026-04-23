@@ -266,7 +266,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         timeout_seconds: int = 60,
     ) -> CommandInternalResult:
         """Authors authoritative execution for any G8eMessage."""
-        execution_id = g8e_message.id
+        execution_id = g8e_context.execution_id
         operator_id = g8e_message.operator_id
         operator_session_id = g8e_message.operator_session_id
 

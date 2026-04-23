@@ -203,6 +203,7 @@ class OperatorCommandService:
                 return
             execution_id = payload.execution_id
             if not execution_id:
+                logger.warning("[G8EO_RESULT] Missing execution_id in payload type %s", type(payload).__name__)
                 return
             execution_registry.complete(execution_id, envelope)
 

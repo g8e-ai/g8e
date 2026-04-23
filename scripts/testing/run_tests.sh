@@ -256,7 +256,7 @@ run_g8eo() {
     done
 
     if [[ "$COVERAGE" == "true" ]]; then
-        gotestsum --format dots-v2 -- -race -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
+        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
         local rc=$?
         if [[ -f coverage.out ]]; then
             echo ""
@@ -265,7 +265,7 @@ run_g8eo() {
         fi
         return $rc
     else
-        gotestsum --format dots-v2 -- -race -timeout 180s "$test_target" "${pass_through_args[@]}"
+        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s "$test_target" "${pass_through_args[@]}"
     fi
 }
 

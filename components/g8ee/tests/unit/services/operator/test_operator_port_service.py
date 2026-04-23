@@ -482,7 +482,7 @@ class TestG8eoResultHandling:
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
             operator_id="op-1",
             operator_session_id="session-1",
-            payload=PortCheckResultPayload(is_open=False, error=None),
+            payload=PortCheckResultPayload(execution_id="exec-test", is_open=False, error=None),
         )
 
         async def _simulate():

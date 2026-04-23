@@ -103,10 +103,10 @@ export const TribunalOutcome = Object.freeze({
  * Icon names for each tribunal member, indexed by pass number.
  */
 export const TribunalMemberIcons = Object.freeze({
-    0: 'minimize',
-    1: 'shield',
-    2: 'layers',
-    3: 'code',
-    4: 'warning',
+    0: _AGENTS['agent.metadata'].axiom.icon,
+    1: _AGENTS['agent.metadata'].concord.icon,
+    2: _AGENTS['agent.metadata'].variance.icon,
+    3: _AGENTS['agent.metadata'].pragma.icon,
+    4: _AGENTS['agent.metadata'].nemesis.icon,
 });
 

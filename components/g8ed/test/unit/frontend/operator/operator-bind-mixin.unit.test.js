@@ -908,6 +908,11 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
         it('shows button when bound operators exist', () => {
             const ctx = createMixinContext();
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
+            ctx.operators = [
+                { ...createMockOperator(), operator_id: TEST_OPERATOR_ID, status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID },
+                { ...createMockOperator(), operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND, bound_web_session_id: TEST_WEB_SESSION_ID },
+            ];
+            window.authState = { getWebSessionId: () => TEST_WEB_SESSION_ID };
 
             ctx.updateUnbindAllButtonVisibility();
 

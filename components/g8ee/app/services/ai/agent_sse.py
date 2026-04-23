@@ -183,7 +183,7 @@ async def deliver_via_sse(
 
             elif chunk.type == StreamChunkFromModelType.TOOL_CALL:
                 fn = chunk.data.tool_name or ""
-                exec_id = chunk.data.execution_id or ""
+                exec_id = chunk.data.execution_id
 
                 # Track tool call in state for metadata recording
                 state.tool_call_count += 1
@@ -211,7 +211,7 @@ async def deliver_via_sse(
                 # separately by port_service and keep their dedicated sidecar path.
 
             elif chunk.type == StreamChunkFromModelType.TOOL_RESULT:
-                exec_id = chunk.data.execution_id or ""
+                exec_id = chunk.data.execution_id
                 fn = chunk.data.tool_name or ""
 
                 # Emit generic tool call completed event for all tools

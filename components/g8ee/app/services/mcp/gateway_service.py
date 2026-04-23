@@ -166,7 +166,7 @@ class MCPGatewayService:
                 )
 
         return EnrichedInvestigationContext(
-            id=g8e_context.execution_id or "mcp-gateway",
+            id=g8e_context.execution_id,
             case_id=g8e_context.case_id or "mcp-gateway",
             user_id=g8e_context.user_id,
             organization_id=g8e_context.organization_id,

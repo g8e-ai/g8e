@@ -88,19 +88,19 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
 
     describe('AuditorReason constants', () => {
         it('OK matches JSON', () => {
-            expect(AuditorReason.OK).toBe(_AGENTS['tribunal.verifier_reason'].ok);
+            expect(AuditorReason.OK).toBe(_AGENTS['tribunal.auditor_reason'].ok);
         });
         it('REVISED matches JSON', () => {
-            expect(AuditorReason.REVISED).toBe(_AGENTS['tribunal.verifier_reason'].revised);
+            expect(AuditorReason.REVISED).toBe(_AGENTS['tribunal.auditor_reason'].revised);
         });
         it('EMPTY_RESPONSE matches JSON', () => {
-            expect(AuditorReason.EMPTY_RESPONSE).toBe(_AGENTS['tribunal.verifier_reason'].empty_response);
+            expect(AuditorReason.EMPTY_RESPONSE).toBe(_AGENTS['tribunal.auditor_reason'].empty_response);
         });
         it('NO_VALID_REVISION matches JSON', () => {
-            expect(AuditorReason.NO_VALID_REVISION).toBe(_AGENTS['tribunal.verifier_reason'].no_valid_revision);
+            expect(AuditorReason.NO_VALID_REVISION).toBe(_AGENTS['tribunal.auditor_reason'].no_valid_revision);
         });
-        it('VERIFIER_ERROR matches JSON', () => {
-            expect(AuditorReason.VERIFIER_ERROR).toBe(_AGENTS['tribunal.verifier_reason'].verifier_error);
+        it('AUDITOR_ERROR matches JSON', () => {
+            expect(AuditorReason.AUDITOR_ERROR).toBe(_AGENTS['tribunal.auditor_reason'].auditor_error);
         });
     });
 

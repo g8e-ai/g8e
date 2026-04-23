@@ -112,6 +112,32 @@ export const TEMPLATE_FIXTURES = {
     </div>
 </div>`,
 
+    'operator-bind-single-overlay': `<div class="operator-bind-single-overlay">
+    <div class="operator-bind-single-header">
+        <span class="material-symbols-outlined" data-bind-icon>link</span>
+        <h2 data-modal-title>Bind Operator to WebSession</h2>
+        <p data-modal-subtitle>Connect to current web session</p>
+    </div>
+    <div class="operator-bind-single-content">
+        <p data-modal-description>This will connect the Operator to your current web session.</p>
+        <div id="operator-bind-single-operators-list"></div>
+    </div>
+    <div class="operator-bind-single-actions">
+        <div id="operator-bind-single-processing" class="initially-hidden">
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            <span data-processing-label>Binding operator...</span>
+        </div>
+        <div class="operator-bind-single-buttons">
+            <button id="operator-bind-single-cancel-btn">Cancel</button>
+            <button id="operator-bind-single-confirm-btn">
+                <span class="material-symbols-outlined" data-confirm-icon>link</span>
+                <span data-confirm-label>Bind Operator</span>
+            </button>
+            <button class="operator-bind-single-close">✕</button>
+        </div>
+    </div>
+</div>`,
+
     'bind-all-confirmation-overlay': `<div class="bind-all-confirmation-overlay">
     <div class="bind-all-header">
         <h2>Bind All Active Operators</h2>

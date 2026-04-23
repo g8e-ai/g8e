@@ -123,7 +123,11 @@ describe('SSE Event Contract Tests [INTEGRATION]', () => {
                 'command', 'output', 'exit_code', 'success', 'agent_mode',
                 'request', 'guidelines', 'model', 'num_passes', 'members',
                 'reason', 'candidate_command', 'passed', 'revision',
-                'final_command', 'outcome', 'vote_score'
+                'final_command', 'outcome', 'vote_score', 'vote_winner',
+                'num_candidates', 'vote_breakdown', 'losing_command',
+                'dissenting_member_ids', 'winner', 'winner_supporters',
+                'dissenters_by_command', 'consensus_strength', 'tie_broken',
+                'tie_break_reason'
             ]);
 
             for (const [key, fixture] of Object.entries(sharedSSEEvents)) {

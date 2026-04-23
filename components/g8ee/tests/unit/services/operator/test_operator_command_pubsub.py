@@ -407,6 +407,7 @@ class TestParseG8eoPayloadMCPReconstruction:
         payload_raw = {
             "id": "exec-202",
             "result": {
+                "_metadata": {"execution_id": "exec-202"},
                 "content": [{"type": "text", "text": "Plain text output"}],
                 "isError": False
             }
@@ -424,6 +425,7 @@ class TestParseG8eoPayloadMCPReconstruction:
         payload_raw = {
             "id": "exec-404",
             "result": {
+                "_metadata": {"execution_id": "exec-404"},
                 "content": [{"type": "text", "text": "Tool execution failed"}],
                 "isError": True
             }

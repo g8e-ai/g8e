@@ -44,9 +44,9 @@ class TestFsListPayload:
         assert p.max_entries == 200
 
     def test_all_fields_optional(self):
-        p = FsListPayload()
+        p = FsListPayload(execution_id="exec-test")
         assert p.path is None
-        assert p.execution_id is None
+        assert p.execution_id == "exec-test"
         assert p.max_depth is None
         assert p.max_entries is None
 
@@ -62,9 +62,9 @@ class TestFsListPayload:
         assert wire["max_entries"] == 50
 
     def test_wire_dump_excludes_none_fields(self):
-        p = FsListPayload(path="/app")
+        p = FsListPayload(path="/app", execution_id="exec-1")
         wire = p.model_dump(mode="json")
-        assert "execution_id" not in wire
+        assert wire["execution_id"] == "exec-1"
         assert "max_depth" not in wire
         assert "max_entries" not in wire
 
@@ -74,14 +74,14 @@ class TestFsListPayload:
         assert set(wire.keys()) <= {"path", "execution_id", "max_depth", "max_entries", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
-        p = FsListPayload(path="/tmp")
+        p = FsListPayload(path="/tmp", execution_id="exec-test")
         wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsListPayload(path="/tmp", user_id="u-1", source="tool_call", requested_at="2026-01-01T00:00:00Z")
+        p = FsListPayload(path="/tmp", execution_id="exec-test", user_id="u-1", source="tool_call", requested_at="2026-01-01T00:00:00Z")
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire
@@ -92,7 +92,7 @@ class TestFsListPayload:
 class TestFsReadPayload:
 
     def test_required_path(self):
-        p = FsReadPayload(path="/etc/hosts")
+        p = FsReadPayload(path="/etc/hosts", execution_id="exec-test")
         assert p.path == "/etc/hosts"
 
     def test_missing_path_raises(self):
@@ -106,8 +106,8 @@ class TestFsReadPayload:
         assert p.max_size == 8192
 
     def test_optional_fields_default_to_none(self):
-        p = FsReadPayload(path="/app/config.json")
-        assert p.execution_id is None
+        p = FsReadPayload(path="/app/config.json", execution_id="exec-test")
+        assert p.execution_id == "exec-test"
         assert p.max_size is None
 
     def test_is_g8e_base_model(self):
@@ -121,9 +121,9 @@ class TestFsReadPayload:
         assert wire["max_size"] == 4096
 
     def test_wire_dump_excludes_none_optional_fields(self):
-        p = FsReadPayload(path="/app/log.txt")
+        p = FsReadPayload(path="/app/log.txt", execution_id="exec-test")
         wire = p.model_dump(mode="json")
-        assert "execution_id" not in wire
+        assert wire["execution_id"] == "exec-test"
         assert "max_size" not in wire
 
     def test_wire_dump_only_canonical_fields(self):
@@ -132,14 +132,14 @@ class TestFsReadPayload:
         assert set(wire.keys()) <= {"path", "execution_id", "max_size", "payload_type"}
 
     def test_wire_dump_no_non_canonical_fields(self):
-        p = FsReadPayload(path="/var/log/app.log")
+        p = FsReadPayload(path="/var/log/app.log", execution_id="exec-test")
         wire = p.model_dump(mode="json")
         assert "requested_at" not in wire
         assert "source" not in wire
         assert "user_id" not in wire
 
     def test_extra_fields_ignored(self):
-        p = FsReadPayload(path="/tmp/test.txt", user_id="u-1", source="tool_call")
+        p = FsReadPayload(path="/tmp/test.txt", execution_id="exec-test", user_id="u-1", source="tool_call")
         wire = p.model_dump(mode="json")
         assert "user_id" not in wire
         assert "source" not in wire

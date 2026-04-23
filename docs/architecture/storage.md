@@ -342,6 +342,8 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `bound_sessions` | g8ed | Operator–web session binding records — one document per web session |
 | `console_audit` | g8ed | Console / admin action audit trail |
 | `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID. Challenges are single-use nonces consumed on read during verification (see `PasskeyAuthService._consumeChallenge`), so rows are always deleted after verification regardless of outcome. |
+| `tribunal_commands` | g8ee | Tribunal command history — stores Tribunal-generated commands for audit and replay |
+| `agent_activity_metadata` | g8ee | Agent activity tracking metadata — records agent execution context and performance metrics |
 
 ### Session Documents
 

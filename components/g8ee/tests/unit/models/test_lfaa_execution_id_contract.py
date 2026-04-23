@@ -27,10 +27,15 @@ from __future__ import annotations
 import pytest
 
 from app.models.pubsub_messages import (
-    FetchFileHistoryResultPayload,
-    FetchFileDiffResultPayload,
-    RestoreFileResultPayload,
-    FetchHistoryResultPayload,
+    FetchFileHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffBySessionSuccessPayload,
+    FetchFileDiffErrorPayload,
+    FetchHistorySuccessPayload,
+    FetchHistoryErrorPayload,
+    RestoreFileSuccessPayload,
+    RestoreFileErrorPayload,
     CancellationResultPayload,
     FileEditResultPayload,
     FsListResultPayload,
@@ -45,29 +50,52 @@ from app.models.pubsub_messages import (
 class TestLFAAExecutionIdFieldPresence:
     """Verify all LFAA result payloads have execution_id field defined."""
 
-    def test_fetch_file_history_result_payload_has_execution_id(self):
-        """FetchFileHistoryResultPayload must have execution_id field."""
-        assert "execution_id" in FetchFileHistoryResultPayload.model_fields, (
-            "FetchFileHistoryResultPayload must have execution_id field for g8eo alignment"
+    def test_fetch_file_history_success_payload_has_execution_id(self):
+        """FetchFileHistorySuccessPayload must have execution_id field."""
+        assert "execution_id" in FetchFileHistorySuccessPayload.model_fields, (
+            "FetchFileHistorySuccessPayload must have execution_id field for g8eo alignment"
         )
 
-    def test_fetch_file_diff_result_payload_has_execution_id(self):
-        """FetchFileDiffResultPayload must have execution_id field."""
-        assert "execution_id" in FetchFileDiffResultPayload.model_fields, (
-            "FetchFileDiffResultPayload must have execution_id field for g8eo alignment"
+    def test_fetch_file_diff_by_id_success_payload_has_execution_id(self):
+        """FetchFileDiffByIdSuccessPayload must have execution_id field."""
+        assert "execution_id" in FetchFileDiffByIdSuccessPayload.model_fields, (
+            "FetchFileDiffByIdSuccessPayload must have execution_id field for g8eo alignment"
         )
 
-    def test_restore_file_result_payload_has_execution_id(self):
-        """RestoreFileResultPayload must have execution_id field."""
-        assert "execution_id" in RestoreFileResultPayload.model_fields, (
-            "RestoreFileResultPayload must have execution_id field for g8eo alignment"
+    def test_fetch_file_diff_by_session_success_payload_has_execution_id(self):
+        """FetchFileDiffBySessionSuccessPayload must have execution_id field."""
+        assert "execution_id" in FetchFileDiffBySessionSuccessPayload.model_fields, (
+            "FetchFileDiffBySessionSuccessPayload must have execution_id field for g8eo alignment"
         )
 
-    def test_fetch_history_result_payload_has_execution_id(self):
-        """FetchHistoryResultPayload must have execution_id field."""
-        assert "execution_id" in FetchHistoryResultPayload.model_fields, (
-            "FetchHistoryResultPayload must have execution_id field for g8eo alignment"
+    def test_restore_file_success_payload_has_execution_id(self):
+        """RestoreFileSuccessPayload must have execution_id field."""
+        assert "execution_id" in RestoreFileSuccessPayload.model_fields, (
+            "RestoreFileSuccessPayload must have execution_id field for g8eo alignment"
         )
+
+    def test_fetch_history_success_payload_has_execution_id(self):
+        """FetchHistorySuccessPayload must have execution_id field."""
+        assert "execution_id" in FetchHistorySuccessPayload.model_fields, (
+            "FetchHistorySuccessPayload must have execution_id field for g8eo alignment"
+        )
+
+    def test_error_payloads_require_execution_id(self):
+        """Error payloads should have required execution_id field for correlation."""
+        error_payloads = [
+            FetchFileHistoryErrorPayload,
+            FetchFileDiffErrorPayload,
+            RestoreFileErrorPayload,
+            FetchHistoryErrorPayload,
+        ]
+        for payload_type in error_payloads:
+            assert "execution_id" in payload_type.model_fields, (
+                f"{payload_type.__name__} must have execution_id field"
+            )
+            field = payload_type.model_fields["execution_id"]
+            assert field.is_required(), (
+                f"{payload_type.__name__} execution_id should be required for error correlation"
+            )
 
 
 class TestAllResultPayloadsHaveExecutionId:
@@ -88,10 +116,11 @@ class TestAllResultPayloadsHaveExecutionId:
             ExecutionStatusPayload,
             FetchLogsResultPayload,
             PortCheckResultPayload,
-            FetchFileHistoryResultPayload,
-            FetchFileDiffResultPayload,
-            RestoreFileResultPayload,
-            FetchHistoryResultPayload,
+            FetchFileHistorySuccessPayload,
+            FetchFileDiffByIdSuccessPayload,
+            FetchFileDiffBySessionSuccessPayload,
+            RestoreFileSuccessPayload,
+            FetchHistorySuccessPayload,
         ]
 
         missing_fields = []
@@ -108,60 +137,81 @@ class TestAllResultPayloadsHaveExecutionId:
 class TestLFAAExecutionIdFieldParsing:
     """Verify LFAA payloads can parse execution_id from g8eo JSON responses."""
 
-    def test_fetch_file_history_parses_execution_id(self):
-        """FetchFileHistoryResultPayload must accept execution_id in JSON."""
+    def test_fetch_file_history_success_parses_execution_id(self):
+        """FetchFileHistorySuccessPayload must accept execution_id in JSON."""
         payload_dict = {
             "execution_id": "test-exec-123",
-            "success": True,
             "file_path": "/etc/hosts",
             "history": [],
         }
-        payload = FetchFileHistoryResultPayload.model_validate(payload_dict)
+        payload = FetchFileHistorySuccessPayload(**payload_dict)
         assert payload.execution_id == "test-exec-123"
 
-    def test_fetch_file_diff_parses_execution_id(self):
-        """FetchFileDiffResultPayload must accept execution_id in JSON."""
+    def test_fetch_file_diff_by_id_parses_execution_id(self):
+        """FetchFileDiffByIdSuccessPayload must accept execution_id in JSON."""
+        from app.models.tool_results import FileDiffEntry
         payload_dict = {
             "execution_id": "test-exec-456",
-            "success": True,
-            "diffs": [],
-            "total": 0,
+            "diff": {
+                "id": "diff-1",
+                "timestamp": "2024-01-01T00:00:00Z",
+                "file_path": "/etc/hosts",
+                "operation": "WRITE",
+                "ledger_hash_before": "abc123",
+                "ledger_hash_after": "def456",
+                "diff_stat": "+1 -1",
+                "diff_size": 100,
+                "operator_session_id": "sess-1",
+            },
         }
-        payload = FetchFileDiffResultPayload.model_validate(payload_dict)
+        payload = FetchFileDiffByIdSuccessPayload(**payload_dict)
         assert payload.execution_id == "test-exec-456"
 
-    def test_restore_file_parses_execution_id(self):
-        """RestoreFileResultPayload must accept execution_id in JSON."""
+    def test_fetch_file_diff_by_session_parses_execution_id(self):
+        """FetchFileDiffBySessionSuccessPayload must accept execution_id in JSON."""
         payload_dict = {
             "execution_id": "test-exec-789",
-            "success": True,
+            "diffs": [],
+            "total": 0,
+            "operator_session_id": "sess-1",
+        }
+        payload = FetchFileDiffBySessionSuccessPayload(**payload_dict)
+        assert payload.execution_id == "test-exec-789"
+
+    def test_restore_file_success_parses_execution_id(self):
+        """RestoreFileSuccessPayload must accept execution_id in JSON."""
+        payload_dict = {
+            "execution_id": "test-exec-abc",
             "file_path": "/etc/hosts",
             "commit_hash": "deadbeef",
         }
-        payload = RestoreFileResultPayload.model_validate(payload_dict)
-        assert payload.execution_id == "test-exec-789"
+        payload = RestoreFileSuccessPayload(**payload_dict)
+        assert payload.execution_id == "test-exec-abc"
 
-    def test_fetch_history_parses_execution_id(self):
-        """FetchHistoryResultPayload must accept execution_id in JSON."""
+    def test_fetch_history_success_parses_execution_id(self):
+        """FetchHistorySuccessPayload must accept execution_id in JSON."""
+        from app.models.tool_results import AuditSessionMetadata
         payload_dict = {
-            "execution_id": "test-exec-abc",
-            "success": True,
+            "execution_id": "test-exec-def",
             "operator_session_id": "sess-1",
+            "session": {
+                "id": "session-1",
+                "title": "Test Session",
+                "user_identity": "test-user",
+            },
             "events": [],
             "total": 0,
             "limit": 50,
             "offset": 0,
         }
-        payload = FetchHistoryResultPayload.model_validate(payload_dict)
-        assert payload.execution_id == "test-exec-abc"
+        payload = FetchHistorySuccessPayload(**payload_dict)
+        assert payload.execution_id == "test-exec-def"
 
-    def test_lfaa_payloads_allow_null_execution_id(self):
-        """LFAA payloads should allow null execution_id for error cases."""
+    def test_error_payloads_require_non_null_execution_id(self):
+        """Error payloads should require non-null execution_id."""
         payload_dict = {
-            "execution_id": None,
-            "success": False,
+            "execution_id": "test-exec-error",
             "error": "test error",
         }
-        payload = FetchFileHistoryResultPayload.model_validate(payload_dict)
-        assert payload.execution_id is None
-        assert payload.success is False
+        payload = FetchFileHistoryErrorPayload(**payload_dict)
+        assert payload.execution_id == "test-exec-error"

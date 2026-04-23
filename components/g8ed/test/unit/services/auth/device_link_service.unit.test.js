@@ -534,8 +534,13 @@ describe('DeviceLinkService', () => {
             });
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-            mockCache.kvSadd.mockResolvedValue(0); 
+            mockCache.kvSadd.mockResolvedValue(0);
+            mockCache.kvSet.mockResolvedValue('OK');
+            mockCache.kvGet.mockResolvedValue(null);
+            mockCache.kvTtl.mockResolvedValue(3600);
             mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
+            mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
 
@@ -548,21 +553,18 @@ describe('DeviceLinkService', () => {
                 token: validToken,
                 user_id: mockG8eContext.user_id,
                 max_uses: 1,
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), 3600)
+                uses: 1,
+                status: DeviceLinkStatus.EXHAUSTED,
+                expires_at: addSeconds(now(), 3600),
+                claims: []
             });
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-            mockCache.kvSadd.mockResolvedValue(1); 
-            mockCache.kvIncr.mockResolvedValue(2); 
-            mockOperatorService.queryOperators.mockResolvedValue([]);
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
 
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.LINK_EXHAUSTED);
-            expect(mockCache.kvDecr).toHaveBeenCalled();
-            expect(mockCache.kvSrem).toHaveBeenCalled();
         });
 
         it('should fail if registration lock cannot be acquired', async () => {
@@ -576,17 +578,13 @@ describe('DeviceLinkService', () => {
             });
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-            mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
-            mockCache.kvSet.mockResolvedValue(null); 
+            mockCache.kvSet.mockResolvedValue(null);
             mockOperatorService.queryOperators.mockResolvedValue([]);
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
 
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.REGISTRATION_BUSY);
-            expect(mockCache.kvDecr).toHaveBeenCalled();
-            expect(mockCache.kvSrem).toHaveBeenCalled();
         });
 
         it('should create new operator slot when none available', async () => {
@@ -643,21 +641,17 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
-            mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
-            
-            mockOperatorService.queryOperators.mockResolvedValue([
-                { id: 'op-1', status: OperatorStatus.ACTIVE }
-            ]);
+            mockCache.kvGet.mockResolvedValue(null);
+            mockCache.kvTtl.mockResolvedValue(3600);
+
+            mockOperatorService.queryOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: false });
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
 
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.SLOT_CREATE_FAILED);
-            expect(mockCache.kvDecr).toHaveBeenCalled();
-            expect(mockCache.kvSrem).toHaveBeenCalled();
         });
 
         it('should fail if device registration fails', async () => {

@@ -329,6 +329,10 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.LINK_ALREADY_USED };
         }
 
+        if (linkData.status === DeviceLinkStatus.EXHAUSTED) {
+            return { success: false, error: DeviceLinkError.LINK_EXHAUSTED };
+        }
+
         if (linkData.status === DeviceLinkStatus.PENDING) {
             return this._registerSingleOperatorLink(token, linkData, deviceInfo, sanitizedFingerprint);
         }

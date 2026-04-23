@@ -376,15 +376,21 @@ class OperatorFileService:
                     task_id=AITaskId.FETCH_FILE_HISTORY,
                 )
 
-                from app.models.pubsub_messages import FetchFileHistoryResultPayload
+                from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
                 envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileHistoryResultPayload):
-                    history = envelope.payload.history or []
+                if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                     return FetchFileHistoryToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
+                        success=True,
+                        file_path=envelope.payload.file_path,
+                        history=envelope.payload.history,
+                        error=None,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+                    return FetchFileHistoryToolResult(
+                        success=False,
                         file_path=file_path,
-                        history=history,
-                        error=internal_result.error if internal_result else "Execution result is None",
+                        history=[],
+                        error=envelope.payload.error,
                     )
 
                 return FetchFileHistoryToolResult(
@@ -496,15 +502,34 @@ class OperatorFileService:
                     task_id=AITaskId.FETCH_FILE_DIFF,
                 )
 
-                from app.models.pubsub_messages import FetchFileDiffResultPayload
+                from app.models.pubsub_messages import (
+                    FetchFileDiffByIdSuccessPayload,
+                    FetchFileDiffBySessionSuccessPayload,
+                    FetchFileDiffErrorPayload,
+                )
                 envelope = self.execution_registry.get_result(exec_id)
-                if envelope and isinstance(envelope.payload, FetchFileDiffResultPayload):
-                    diff = envelope.payload.diff
+                if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
                     return FetchFileDiffToolResult(
-                        success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
-                        diff=diff,
-                        total=1 if diff else 0,
-                        error=internal_result.error if internal_result else "Execution result is None",
+                        success=True,
+                        diff=envelope.payload.diff,
+                        total=1,
+                        error=None,
+                        operator_session_id=operator_session_id,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+                    return FetchFileDiffToolResult(
+                        success=True,
+                        diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
+                        total=envelope.payload.total,
+                        error=None,
+                        operator_session_id=operator_session_id,
+                    )
+                if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
+                    return FetchFileDiffToolResult(
+                        success=False,
+                        diff=None,
+                        total=0,
+                        error=envelope.payload.error,
                         operator_session_id=operator_session_id,
                     )
 

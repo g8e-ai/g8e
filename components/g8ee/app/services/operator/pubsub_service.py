@@ -38,15 +38,19 @@ from app.models.pubsub_messages import (
     CancellationResultPayload,
     ExecutionResultsPayload,
     ExecutionStatusPayload,
-    FetchFileDiffResultPayload,
-    FetchFileHistoryResultPayload,
-    FetchHistoryResultPayload,
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffErrorPayload,
+    FetchFileHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    FetchHistorySuccessPayload,
+    FetchHistoryErrorPayload,
     FetchLogsResultPayload,
     FileEditResultPayload,
     FsListResultPayload,
     FsReadResultPayload,
     PortCheckResultPayload,
-    RestoreFileResultPayload,
+    RestoreFileSuccessPayload,
+    RestoreFileErrorPayload,
     ShutdownAckPayload,
     G8eoResultEnvelope,
     G8eoResultPayload,
@@ -73,16 +77,16 @@ _PAYLOAD_MODELS = {
     EventType.OPERATOR_FILESYSTEM_LIST_FAILED: FsListResultPayload,
     EventType.OPERATOR_FILESYSTEM_READ_COMPLETED: FsReadResultPayload,
     EventType.OPERATOR_FILESYSTEM_READ_FAILED: FsReadResultPayload,
-    EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED: FetchFileHistoryResultPayload,
-    EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED: FetchFileHistoryResultPayload,
-    EventType.OPERATOR_FILE_RESTORE_COMPLETED: RestoreFileResultPayload,
-    EventType.OPERATOR_FILE_RESTORE_FAILED: RestoreFileResultPayload,
-    EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED: FetchFileDiffResultPayload,
-    EventType.OPERATOR_FILE_DIFF_FETCH_FAILED: FetchFileDiffResultPayload,
+    EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED: FetchFileHistorySuccessPayload,
+    EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED: FetchFileHistoryErrorPayload,
+    EventType.OPERATOR_FILE_RESTORE_COMPLETED: RestoreFileSuccessPayload,
+    EventType.OPERATOR_FILE_RESTORE_FAILED: RestoreFileErrorPayload,
+    EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED: FetchFileDiffByIdSuccessPayload,
+    EventType.OPERATOR_FILE_DIFF_FETCH_FAILED: FetchFileDiffErrorPayload,
     EventType.OPERATOR_LOGS_FETCH_COMPLETED: FetchLogsResultPayload,
     EventType.OPERATOR_LOGS_FETCH_FAILED: FetchLogsResultPayload,
-    EventType.OPERATOR_HISTORY_FETCH_COMPLETED: FetchHistoryResultPayload,
-    EventType.OPERATOR_HISTORY_FETCH_FAILED: FetchHistoryResultPayload,
+    EventType.OPERATOR_HISTORY_FETCH_COMPLETED: FetchHistorySuccessPayload,
+    EventType.OPERATOR_HISTORY_FETCH_FAILED: FetchHistoryErrorPayload,
 }
 
 
@@ -123,7 +127,7 @@ def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, 
         
         # execution_id: try MCP metadata first, then the JSON-RPC envelope ID, finally a fresh UUID
         _id_raw = payload_raw.get("id")
-        execution_id = mcp_result.execution_id or (str(_id_raw) if _id_raw else str(uuid4()))
+        execution_id = mcp_result.execution_id
 
         return ExecutionResultsPayload(
             execution_id=execution_id,
