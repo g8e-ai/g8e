@@ -47,6 +47,14 @@ func setExecutionIDOnPayload(payload interface{}, executionID string) {
 		p.ExecutionID = executionID
 	case *models.LFAAErrorPayload:
 		p.ExecutionID = executionID
+	case *models.FetchFileDiffResultPayload:
+		p.ExecutionID = executionID
+	case *models.FetchHistoryResultPayload:
+		p.ExecutionID = executionID
+	case *models.FetchFileHistoryResultPayload:
+		p.ExecutionID = executionID
+	case *models.RestoreFileResultPayload:
+		p.ExecutionID = executionID
 	}
 }
 

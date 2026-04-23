@@ -134,6 +134,7 @@ type FileDiffEntry struct {
 
 type FetchFileDiffResultPayload struct {
 	Success           bool            `json:"success"`
+	ExecutionID       string          `json:"execution_id"`
 	Diffs             []FileDiffEntry `json:"diffs,omitempty"`
 	Diff              *FileDiffEntry  `json:"diff,omitempty"`
 	Total             *int            `json:"total,omitempty"`
@@ -185,6 +186,7 @@ type FetchLogsResultPayload struct {
 
 type FetchHistoryResultPayload struct {
 	Success           bool             `json:"success"`
+	ExecutionID       string           `json:"execution_id"`
 	OperatorSessionID string           `json:"operator_session_id,omitempty"`
 	WebSession        *AuditWebSession `json:"web_session,omitempty"`
 	Events            []AuditEvent     `json:"events,omitempty"`
@@ -234,17 +236,19 @@ type FileHistoryEntry struct {
 }
 
 type FetchFileHistoryResultPayload struct {
-	Success  bool               `json:"success"`
-	FilePath string             `json:"file_path,omitempty"`
-	History  []FileHistoryEntry `json:"history,omitempty"`
-	Error    string             `json:"error,omitempty"`
+	Success     bool               `json:"success"`
+	ExecutionID string             `json:"execution_id"`
+	FilePath    string             `json:"file_path,omitempty"`
+	History     []FileHistoryEntry `json:"history,omitempty"`
+	Error       string             `json:"error,omitempty"`
 }
 
 type RestoreFileResultPayload struct {
-	Success    bool   `json:"success"`
-	FilePath   string `json:"file_path,omitempty"`
-	CommitHash string `json:"commit_hash,omitempty"`
-	Error      string `json:"error,omitempty"`
+	Success     bool   `json:"success"`
+	ExecutionID string `json:"execution_id"`
+	FilePath    string `json:"file_path,omitempty"`
+	CommitHash  string `json:"commit_hash,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 type FsReadResultPayload struct {
